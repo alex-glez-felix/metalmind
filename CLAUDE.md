@@ -10,3 +10,5 @@ Reglas para agentes que trabajen en este repo.
 - Nunca reescribir el YAML del frontmatter del usuario salvo el campo editado. Guardado siempre atómico.
 - `cargo clippy -- -D warnings` y `cargo nextest run` en verde antes de cada commit.
 - Commits en español, estilo conventional commits.
+- Toda acción del usuario es una acción con nombre; atajos, paleta y `:` solo las invocan (base para plugins, ver `docs/IDEAS.md`).
+- Ningún color ni tamaño hardcodeado en la UI: todo sale de tokens del tema.
