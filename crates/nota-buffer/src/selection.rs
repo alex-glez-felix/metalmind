@@ -103,6 +103,34 @@ impl Selections {
     pub fn map(&self, f: impl FnMut(&Selection) -> Selection) -> Self {
         Self(normalized(self.0.iter().map(f).collect()))
     }
+
+    /// Un valor por selección, en el mismo orden.
+    #[must_use]
+    pub fn map_to<T>(&self, f: impl FnMut(&Selection) -> T) -> PerSelection<T> {
+        PerSelection(self.0.iter().map(f).collect())
+    }
+}
+
+/// Un valor por cada selección de un [`Selections`]. Solo se construye con
+/// [`Selections::map_to`], así que nunca está vacío.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PerSelection<T>(SmallVec<[T; 1]>);
+
+impl<T> PerSelection<T> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> {
+        self.0.iter()
+    }
+
+    #[must_use]
+    pub fn map<U>(&self, f: impl FnMut(&T) -> U) -> PerSelection<U> {
+        PerSelection(self.0.iter().map(f).collect())
+    }
+
+    /// Vuelve a selecciones, ordenadas y fusionadas.
+    #[must_use]
+    pub fn to_selections(&self, f: impl FnMut(&T) -> Selection) -> Selections {
+        Selections(normalized(self.0.iter().map(f).collect()))
+    }
 }
 
 fn normalized(mut selections: SmallVec<[Selection; 1]>) -> SmallVec<[Selection; 1]> {
@@ -163,6 +191,23 @@ mod tests {
     fn keeps_touching_ranges_apart() {
         let selections = Selections::new([range(0, 2), range(2, 4)]).unwrap();
         assert_eq!(selections.iter().len(), 2);
+    }
+
+    #[test]
+    fn per_selection_values_keep_their_order() {
+        let selections = Selections::new([cursor(1), cursor(5)]).unwrap();
+        let shifted = selections.map_to(|s| s.head.get() + 10);
+        assert_eq!(shifted.iter().copied().collect::<Vec<_>>(), [11, 15]);
+        let back = shifted.to_selections(|&at| cursor(at));
+        let heads: Vec<_> = back.iter().map(|s| s.head.get()).collect();
+        assert_eq!(heads, [11, 15]);
+    }
+
+    #[test]
+    fn per_selection_results_are_normalized() {
+        let selections = Selections::new([cursor(1), cursor(5)]).unwrap();
+        let collapsed = selections.map_to(|_| ()).to_selections(|()| cursor(3));
+        assert_eq!(collapsed.iter().len(), 1);
     }
 
     #[test]
