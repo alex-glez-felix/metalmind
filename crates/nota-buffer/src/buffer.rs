@@ -160,6 +160,7 @@ impl Buffer {
     /// no se aplica ninguna.
     pub fn apply(&mut self, mut edits: Vec<Edit>) -> Result<EditMap, BufferError> {
         self.history.ensure_open()?;
+        edits.retain(|edit| !(edit.range.is_empty() && edit.text.is_empty()));
         edits.sort_by_key(|edit| edit.range.start);
         self.check_edits(&edits)?;
         let mut applied = Vec::with_capacity(edits.len());
