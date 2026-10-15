@@ -1,0 +1,20 @@
+[package]
+name = "nota-buffer"
+description = "Buffer de texto sobre ropey: offsets en bytes, selecciones múltiples y undo por transacciones."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+ropey.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true
