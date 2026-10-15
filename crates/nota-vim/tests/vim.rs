@@ -10,7 +10,8 @@ use pretty_assertions::assert_eq;
 use rstest::rstest;
 use rstest_reuse::{self, apply, template};
 
-/// Cada caso es `(antes, teclas, después)`.
+/// Cada caso es `(antes, teclas, después)`. El mismo caso corre en el motor
+/// y en `nvim --clean`; si nvim no coincide con `después`, el caso está mal.
 #[template]
 #[rstest]
 // h l
@@ -242,6 +243,14 @@ fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 #[apply(cases)]
 fn engine(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
+}
+
+#[apply(cases)]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
+    let nvim = support::nvim::run(before, keys);
+    assert_eq!(nvim.text, after, "la tabla no coincide con nvim");
+    assert_eq!(nvim.mode, support::run_engine(before, keys).mode);
 }
 
 /// nvim no tiene multi-cursor: estos casos solo prueban el motor.

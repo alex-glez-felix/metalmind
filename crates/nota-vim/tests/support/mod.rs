@@ -1,6 +1,8 @@
 //! Notación de los tests: `|` marca cada cursor. En Normal va antes del
 //! carácter bajo el cursor; en Insert, entre caracteres.
 
+pub mod nvim;
+
 use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
 use nota_vim::{Key, Mode, Vim};
 
