@@ -114,6 +114,15 @@ fn empty_transactions_leave_no_history() {
 }
 
 #[test]
+fn no_op_edits_leave_no_history() {
+    let mut buffer = Buffer::from("abc");
+    let version = buffer.version();
+    edit(&mut buffer, vec![Edit::delete(at(1)..at(1))]);
+    assert_eq!(buffer.version(), version);
+    assert!(buffer.undo().unwrap().is_none());
+}
+
+#[test]
 fn new_edits_clear_redo() {
     let mut buffer = Buffer::from("abc");
     edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
@@ -178,8 +187,11 @@ proptest! {
         let mut states = vec![buffer.to_string()];
         for picks in &batches {
             let edits = arbitrary_edits(&buffer.to_string(), picks);
+            let changes = edits.iter().any(|e| !(e.range.is_empty() && e.text.is_empty()));
             edit(&mut buffer, edits);
-            states.push(buffer.to_string());
+            if changes {
+                states.push(buffer.to_string());
+            }
         }
         for expected in states.iter().rev().skip(1) {
             buffer.undo().unwrap();
