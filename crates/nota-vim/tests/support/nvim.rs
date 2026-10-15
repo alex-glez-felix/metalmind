@@ -1,4 +1,5 @@
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 use nota_buffer::{Buffer, ByteOffset};
 
@@ -6,8 +7,16 @@ use super::{State, parse, render};
 
 const SCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/oracle.lua");
 
+/// La tabla se valida contra esta versión; el CI instala la misma.
+const VERSION: &str = "NVIM v0.12.6";
+
 /// Corre las mismas teclas en `nvim --clean` y devuelve el estado final.
 pub fn run(before: &str, keys: &str) -> State {
+    assert_eq!(
+        installed_version(),
+        VERSION,
+        "el oráculo necesita {VERSION}; el `nvim` del PATH es otro"
+    );
     let (buffer, selections) = parse(before);
     assert_eq!(selections.iter().len(), 1, "nvim no tiene multi-cursor");
     let head = selections.primary().head;
@@ -39,4 +48,13 @@ pub fn run(before: &str, keys: &str) -> State {
         text: render(&result, [head]),
         mode,
     }
+}
+
+fn installed_version() -> &'static str {
+    static VERSION: OnceLock<String> = OnceLock::new();
+    VERSION.get_or_init(|| {
+        let output = Command::new("nvim").arg("--version").output().unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        stdout.lines().next().unwrap_or_default().to_owned()
+    })
 }

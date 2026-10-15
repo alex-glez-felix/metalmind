@@ -4,7 +4,7 @@ use crate::cursor::{Cursor, Step};
 use crate::lines::first_non_blank;
 use crate::span::{Span, SpanKind};
 
-/// `i(`, `a(`. Sin bloque alrededor, toma el siguiente, como nvim 0.10.
+/// `i(`, `a(`. Sin bloque alrededor, toma el siguiente, como nvim.
 pub(super) fn select(
     buffer: &Buffer,
     head: ByteOffset,

@@ -8,8 +8,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
   # La tabla de casos de vim se validó contra esta versión.
-  NVIM_VERSION: v0.10.4
-  NVIM_SHA256: 95aaa8e89473f5421114f2787c13ae0ec6e11ebbd1a13a1bd6fcf63420f8073f
+  # Debe coincidir con VERSION en crates/nota-vim/tests/support/nvim.rs.
+  # El sha256 sale del campo `digest` del asset en la API de releases.
+  NVIM_VERSION: v0.12.6
+  NVIM_SHA256: 474430d53e6264f6d6dd18db42d6dc9df3a1b56ca9e88a325bbf860e1a811d87
 
 jobs:
   fmt:
