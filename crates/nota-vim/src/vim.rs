@@ -201,14 +201,11 @@ impl Vim {
     ) -> Result<(), VimError> {
         let count = combined(self.operator_count.take(), self.count.take());
         self.reset();
-        let operands: Vec<Operand> = selections
-            .iter()
-            .map(|selection| Operand {
-                selection: *selection,
-                target: target(buffer, selection, object, operator, count),
-            })
-            .collect();
-        let Some(outcome) = operator.apply(buffer, selections, &operands)? else {
+        let operands = selections.map_to(|selection| Operand {
+            selection: *selection,
+            target: target(buffer, selection, object, operator, count),
+        });
+        let Some(outcome) = operator.apply(buffer, &operands)? else {
             return Ok(());
         };
         *selections = outcome.selections;

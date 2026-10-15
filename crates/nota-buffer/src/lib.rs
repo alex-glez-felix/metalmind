@@ -16,4 +16,4 @@ pub use edit::{Bias, Edit, EditMap};
 pub use error::BufferError;
 pub use history::Transaction;
 pub use offset::ByteOffset;
-pub use selection::{Goal, Selection, Selections};
+pub use selection::{Goal, PerSelection, Selection, Selections};
