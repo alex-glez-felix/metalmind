@@ -6,8 +6,7 @@ use crate::operator::Operand;
 use crate::register::Register;
 use crate::span::{Region, Target};
 use crate::{
-    Action, InsertAt, Key, Keymap, KeymapError, Motion, Operator, PasteSide, TextObject, VimError,
-    insert, paste,
+    Action, InsertAt, Key, Keymap, Motion, Operator, PasteSide, TextObject, VimError, insert, paste,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,11 +48,16 @@ pub struct Vim {
     register: Option<Register>,
 }
 
+impl Default for Vim {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Vim {
-    /// # Errors
-    /// Solo si el keymap embebido está mal escrito.
-    pub fn new() -> Result<Self, KeymapError> {
-        Keymap::vim().map(Self::with_keymap)
+    #[must_use]
+    pub fn new() -> Self {
+        Self::with_keymap(Keymap::vim())
     }
 
     #[must_use]

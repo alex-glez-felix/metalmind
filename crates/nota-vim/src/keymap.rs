@@ -1,4 +1,4 @@
-use crate::{Action, Key, KeymapError, Mode, Operator};
+use crate::{Action, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject};
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,11 +26,12 @@ impl Context {
     }
 }
 
+/// En `context`, la secuencia `keys` invoca `action`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Binding {
-    context: Context,
-    keys: Vec<Key>,
-    action: Action,
+pub struct Binding {
+    pub context: Context,
+    pub keys: Vec<Key>,
+    pub action: Action,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,29 +50,21 @@ pub struct Keymap {
 }
 
 impl Keymap {
-    /// # Errors
-    /// Si alguna secuencia de teclas o nombre de acción no existe.
-    pub fn new<'a>(
-        bindings: impl IntoIterator<Item = (Context, &'a str, &'a str)>,
-    ) -> Result<Self, KeymapError> {
-        let bindings = bindings
-            .into_iter()
-            .map(|(context, keys, action)| {
-                Ok(Binding {
-                    context,
-                    keys: Key::parse_sequence(keys)?,
-                    action: Action::from_name(action)
-                        .ok_or_else(|| KeymapError::UnknownAction(action.to_owned()))?,
-                })
-            })
-            .collect::<Result<_, KeymapError>>()?;
-        Ok(Self { bindings })
+    #[must_use]
+    pub fn new(bindings: impl IntoIterator<Item = Binding>) -> Self {
+        Self {
+            bindings: bindings.into_iter().collect(),
+        }
     }
 
-    /// # Errors
-    /// Solo si el keymap embebido está mal escrito; lo cubre un test.
-    pub fn vim() -> Result<Self, KeymapError> {
-        Self::new(VIM.iter().copied())
+    /// El keymap de vim por defecto.
+    #[must_use]
+    pub fn vim() -> Self {
+        Self::new(VIM.iter().map(|&(context, keys, action)| Binding {
+            context,
+            keys: keys.to_vec(),
+            action,
+        }))
     }
 
     pub(crate) fn lookup(&self, mode: Mode, keys: &[Key]) -> Lookup {
@@ -89,121 +82,189 @@ impl Keymap {
     }
 }
 
-const VIM: &[(Context, &str, &str)] = &[
-    (Context::VimControl, "h", "vim::left"),
-    (Context::VimControl, "j", "vim::down"),
-    (Context::VimControl, "k", "vim::up"),
-    (Context::VimControl, "l", "vim::right"),
-    (Context::VimControl, "w", "vim::next_word_start"),
-    (Context::VimControl, "W", "vim::next_big_word_start"),
-    (Context::VimControl, "e", "vim::next_word_end"),
-    (Context::VimControl, "E", "vim::next_big_word_end"),
-    (Context::VimControl, "b", "vim::previous_word_start"),
-    (Context::VimControl, "B", "vim::previous_big_word_start"),
-    (Context::VimControl, "0", "vim::start_of_line"),
-    (Context::VimControl, "^", "vim::first_non_blank"),
-    (Context::VimControl, "$", "vim::end_of_line"),
-    (Context::VimControl, "g g", "vim::start_of_document"),
-    (Context::VimControl, "G", "vim::end_of_document"),
-    (Context::VimControl, "escape", "vim::normal_mode"),
-    (Context::Normal, "d", "vim::delete"),
-    (Context::Normal, "c", "vim::change"),
-    (Context::Normal, "y", "vim::yank"),
-    (Context::Normal, "x", "vim::delete_right"),
-    (Context::Normal, "p", "vim::paste_after"),
-    (Context::Normal, "P", "vim::paste_before"),
-    (Context::Normal, "u", "vim::undo"),
-    (Context::Normal, "ctrl-r", "vim::redo"),
-    (Context::Normal, "i", "vim::insert_before"),
-    (Context::Normal, "a", "vim::insert_after"),
-    (Context::Normal, "I", "vim::insert_first_non_blank"),
-    (Context::Normal, "A", "vim::insert_end_of_line"),
-    (Context::Normal, "o", "vim::insert_line_below"),
-    (Context::Normal, "O", "vim::insert_line_above"),
-    (
-        Context::Operator(Operator::Delete),
-        "d",
-        "vim::current_line",
-    ),
-    (
-        Context::Operator(Operator::Change),
-        "c",
-        "vim::current_line",
-    ),
-    (Context::Operator(Operator::Yank), "y", "vim::current_line"),
-    (Context::OperatorPending, "i w", "vim::inner_word"),
-    (Context::OperatorPending, "a w", "vim::a_word"),
-    (Context::OperatorPending, "i W", "vim::inner_big_word"),
-    (Context::OperatorPending, "a W", "vim::a_big_word"),
-    (Context::OperatorPending, "i (", "vim::inner_parentheses"),
-    (Context::OperatorPending, "i )", "vim::inner_parentheses"),
-    (Context::OperatorPending, "i b", "vim::inner_parentheses"),
-    (Context::OperatorPending, "a (", "vim::a_parentheses"),
-    (Context::OperatorPending, "a )", "vim::a_parentheses"),
-    (Context::OperatorPending, "a b", "vim::a_parentheses"),
-    (Context::OperatorPending, "i \"", "vim::inner_double_quotes"),
-    (Context::OperatorPending, "a \"", "vim::a_double_quotes"),
-    (Context::Insert, "escape", "vim::normal_mode"),
-    (Context::Insert, "backspace", "editor::backspace"),
-    (Context::Insert, "enter", "editor::newline"),
-];
+const fn ch(c: char) -> Key {
+    Key::Char(c)
+}
+
+const fn motion(motion: Motion) -> Action {
+    Action::Motion(motion)
+}
+
+const fn object(object: TextObject) -> Action {
+    Action::TextObject(object)
+}
+
+const fn word(big: bool, around: bool) -> Action {
+    object(TextObject::Word { big, around })
+}
+
+const fn parentheses(around: bool) -> Action {
+    object(TextObject::Parentheses { around })
+}
+
+const fn quotes(around: bool) -> Action {
+    object(TextObject::DoubleQuotes { around })
+}
+
+const DELETE: Context = Context::Operator(Operator::Delete);
+const CHANGE: Context = Context::Operator(Operator::Change);
+const YANK: Context = Context::Operator(Operator::Yank);
+
+const VIM: &[(Context, &[Key], Action)] = {
+    use Context::{Insert, Normal, OperatorPending as Pending, VimControl as Control};
+    &[
+        (Control, &[ch('h')], motion(Motion::Left)),
+        (Control, &[ch('j')], motion(Motion::Down)),
+        (Control, &[ch('k')], motion(Motion::Up)),
+        (Control, &[ch('l')], motion(Motion::Right)),
+        (
+            Control,
+            &[ch('w')],
+            motion(Motion::NextWordStart { big: false }),
+        ),
+        (
+            Control,
+            &[ch('W')],
+            motion(Motion::NextWordStart { big: true }),
+        ),
+        (
+            Control,
+            &[ch('e')],
+            motion(Motion::NextWordEnd { big: false }),
+        ),
+        (
+            Control,
+            &[ch('E')],
+            motion(Motion::NextWordEnd { big: true }),
+        ),
+        (
+            Control,
+            &[ch('b')],
+            motion(Motion::PreviousWordStart { big: false }),
+        ),
+        (
+            Control,
+            &[ch('B')],
+            motion(Motion::PreviousWordStart { big: true }),
+        ),
+        (Control, &[ch('0')], motion(Motion::LineStart)),
+        (Control, &[ch('^')], motion(Motion::FirstNonBlank)),
+        (Control, &[ch('$')], motion(Motion::LineEnd)),
+        (Control, &[ch('g'), ch('g')], motion(Motion::DocumentStart)),
+        (Control, &[ch('G')], motion(Motion::DocumentEnd)),
+        (Control, &[Key::Escape], Action::NormalMode),
+        (Normal, &[ch('d')], Action::Operator(Operator::Delete)),
+        (Normal, &[ch('c')], Action::Operator(Operator::Change)),
+        (Normal, &[ch('y')], Action::Operator(Operator::Yank)),
+        (Normal, &[ch('x')], Action::DeleteRight),
+        (Normal, &[ch('p')], Action::Paste(PasteSide::After)),
+        (Normal, &[ch('P')], Action::Paste(PasteSide::Before)),
+        (Normal, &[ch('u')], Action::Undo),
+        (Normal, &[Key::Ctrl('r')], Action::Redo),
+        (Normal, &[ch('i')], Action::Insert(InsertAt::Before)),
+        (Normal, &[ch('a')], Action::Insert(InsertAt::After)),
+        (Normal, &[ch('I')], Action::Insert(InsertAt::FirstNonBlank)),
+        (Normal, &[ch('A')], Action::Insert(InsertAt::LineEnd)),
+        (Normal, &[ch('o')], Action::Insert(InsertAt::LineBelow)),
+        (Normal, &[ch('O')], Action::Insert(InsertAt::LineAbove)),
+        (DELETE, &[ch('d')], Action::CurrentLine),
+        (CHANGE, &[ch('c')], Action::CurrentLine),
+        (YANK, &[ch('y')], Action::CurrentLine),
+        (Pending, &[ch('i'), ch('w')], word(false, false)),
+        (Pending, &[ch('a'), ch('w')], word(false, true)),
+        (Pending, &[ch('i'), ch('W')], word(true, false)),
+        (Pending, &[ch('a'), ch('W')], word(true, true)),
+        (Pending, &[ch('i'), ch('(')], parentheses(false)),
+        (Pending, &[ch('i'), ch(')')], parentheses(false)),
+        (Pending, &[ch('i'), ch('b')], parentheses(false)),
+        (Pending, &[ch('a'), ch('(')], parentheses(true)),
+        (Pending, &[ch('a'), ch(')')], parentheses(true)),
+        (Pending, &[ch('a'), ch('b')], parentheses(true)),
+        (Pending, &[ch('i'), ch('"')], quotes(false)),
+        (Pending, &[ch('a'), ch('"')], quotes(true)),
+        (Insert, &[Key::Escape], Action::NormalMode),
+        (Insert, &[Key::Backspace], Action::Backspace),
+        (Insert, &[Key::Enter], Action::Newline),
+    ]
+};
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn keys(sequence: &str) -> Vec<Key> {
-        Key::parse_sequence(sequence).unwrap()
+    const MODES: [Mode; 5] = [
+        Mode::Normal,
+        Mode::Insert,
+        Mode::OperatorPending(Operator::Delete),
+        Mode::OperatorPending(Operator::Change),
+        Mode::OperatorPending(Operator::Yank),
+    ];
+
+    fn overlap(a: Context, b: Context) -> bool {
+        MODES.iter().any(|&mode| a.matches(mode) && b.matches(mode))
     }
 
+    /// Una secuencia que fuera exacta y a la vez prefijo de otra necesitaría
+    /// el timeout de vim para decidir; el default no debe tener ninguna.
     #[test]
-    fn default_keymap_parses() {
-        assert!(Keymap::vim().is_ok());
+    fn default_keymap_is_unambiguous() {
+        for (i, &(context, keys, action)) in VIM.iter().enumerate() {
+            for &(other_context, other_keys, other_action) in &VIM[i + 1..] {
+                if !overlap(context, other_context) {
+                    continue;
+                }
+                let shorter = keys.len().min(other_keys.len());
+                assert!(
+                    keys[..shorter] != other_keys[..shorter] || keys.len() == other_keys.len(),
+                    "{keys:?} y {other_keys:?} se pisan en {context:?}/{other_context:?}"
+                );
+                assert!(
+                    keys != other_keys,
+                    "{keys:?} está dos veces: {action:?} y {other_action:?}"
+                );
+            }
+        }
     }
 
     #[test]
     fn multi_key_sequences_wait_for_the_rest() {
-        let keymap = Keymap::vim().unwrap();
-        assert_eq!(keymap.lookup(Mode::Normal, &keys("g")), Lookup::Pending);
+        let keymap = Keymap::vim();
+        assert_eq!(keymap.lookup(Mode::Normal, &[ch('g')]), Lookup::Pending);
         assert_eq!(
-            keymap.lookup(Mode::Normal, &keys("g g")),
-            Lookup::Action(Action::Motion(crate::Motion::DocumentStart))
+            keymap.lookup(Mode::Normal, &[ch('g'), ch('g')]),
+            Lookup::Action(motion(Motion::DocumentStart))
         );
-        assert_eq!(keymap.lookup(Mode::Normal, &keys("g x")), Lookup::Unbound);
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch('g'), ch('x')]),
+            Lookup::Unbound
+        );
     }
 
     #[test]
     fn operator_context_only_matches_its_operator() {
-        let keymap = Keymap::vim().unwrap();
-        let pending = |op| Mode::OperatorPending(op);
+        let keymap = Keymap::vim();
+        let pending = Mode::OperatorPending;
         assert_eq!(
-            keymap.lookup(pending(Operator::Delete), &keys("d")),
+            keymap.lookup(pending(Operator::Delete), &[ch('d')]),
             Lookup::Action(Action::CurrentLine)
         );
         assert_eq!(
-            keymap.lookup(pending(Operator::Yank), &keys("d")),
+            keymap.lookup(pending(Operator::Yank), &[ch('d')]),
             Lookup::Unbound
         );
     }
 
     #[test]
     fn later_bindings_win() {
-        let keymap = Keymap::new([
-            (Context::Normal, "x", "vim::delete_right"),
-            (Context::Normal, "x", "vim::undo"),
-        ])
-        .unwrap();
+        let binding = |action| Binding {
+            context: Context::Normal,
+            keys: vec![ch('x')],
+            action,
+        };
+        let keymap = Keymap::new([binding(Action::DeleteRight), binding(Action::Undo)]);
         assert_eq!(
-            keymap.lookup(Mode::Normal, &keys("x")),
+            keymap.lookup(Mode::Normal, &[ch('x')]),
             Lookup::Action(Action::Undo)
-        );
-    }
-
-    #[test]
-    fn unknown_names_are_errors() {
-        assert_eq!(
-            Keymap::new([(Context::Normal, "x", "vim::nope")]),
-            Err(KeymapError::UnknownAction("vim::nope".into()))
         );
     }
 }
