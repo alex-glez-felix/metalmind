@@ -272,7 +272,7 @@ fn reports_what_each_key_did() {
     use nota_vim::{Action, InsertAt, Key, KeyOutcome, Motion, Vim};
 
     let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new().unwrap();
+    let mut vim = Vim::new();
     let mut feed = |key| vim.feed(key, &mut buffer, &mut selections).unwrap();
     assert_eq!(feed(Key::Char('g')), KeyOutcome::Pending);
     assert_eq!(
@@ -293,7 +293,7 @@ fn actions_run_by_name() {
     use nota_vim::{Action, Vim};
 
     let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new().unwrap();
+    let mut vim = Vim::new();
     let delete_right = Action::from_name("vim::delete_right").unwrap();
     vim.execute(delete_right, &mut buffer, &mut selections)
         .unwrap();
@@ -305,7 +305,7 @@ fn operators_wait_in_their_own_mode() {
     use nota_vim::{Key, Mode, Operator, Vim};
 
     let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new().unwrap();
+    let mut vim = Vim::new();
     vim.feed(Key::Char('d'), &mut buffer, &mut selections)
         .unwrap();
     assert_eq!(vim.mode(), Mode::OperatorPending(Operator::Delete));

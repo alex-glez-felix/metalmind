@@ -22,9 +22,9 @@ mod vim;
 mod word;
 
 pub use action::{Action, InsertAt, PasteSide};
-pub use error::{KeymapError, VimError};
+pub use error::VimError;
 pub use key::Key;
-pub use keymap::{Context, Keymap};
+pub use keymap::{Binding, Context, Keymap};
 pub use motion::Motion;
 pub use operator::Operator;
 pub use text_object::TextObject;
