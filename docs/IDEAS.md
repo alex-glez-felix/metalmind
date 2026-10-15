@@ -16,7 +16,7 @@ Opciones:
 Postura actual: **no decidir aún**. Probable: WASM para plugins "de verdad" y quizá Lua solo para config/scripts personales. Instalación: `:PluginInstall https://github.com/usuario/repo` clona, compila o descarga el `.wasm` del release, y lo registra en la config.
 
 **Impacto en el diseño temprano (esto sí desde M0):**
-- Todo lo que hace la app es una **acción con nombre** (`editor::DeleteLine`, `vault::OpenFile`). Los atajos, la paleta de comandos y los `:` comandos solo invocan acciones. Un plugin luego solo tiene que registrar acciones nuevas. Esto ya es el modelo de Zed que propone `03-core-architecture.md`.
+- Todo lo que hace la app es una **acción con nombre** (`editor::delete_line`, `vault::open_file`; siempre snake_case). Los atajos, la paleta de comandos y los `:` comandos solo invocan acciones. Un plugin luego solo tiene que registrar acciones nuevas. Esto ya es el modelo de Zed que propone `03-core-architecture.md`.
 - Eventos del núcleo explícitos (nota abierta, guardada, link creado…) en vez de llamadas directas entre módulos. Son los "hooks" a los que un plugin se suscribirá.
 - El núcleo no depende de la GUI: un plugin habla con el núcleo, nunca con GPUI.
 

@@ -124,7 +124,7 @@ KeyEvent ─▶ [Keymap: trie + contextos] ─▶ Action (nombre + args, serde)
                                             │
                      ┌──────────────────────┴───────────────┐
               acciones globales                      acciones de vim
-       (workspace::OpenFinder, pane::Split)    [VimState: modo, count, registro,
+       (workspace::open_finder, pane::split)   [VimState: modo, count, registro,
                                                 operador pendiente] ─▶ Command
                                                                          │
                                                        Command { op, motion|textobj, count }
@@ -165,8 +165,8 @@ El truco de Zed: **vim no es especial**; es un conjunto de bindings en contextos
 - Cada vista declara su contexto (`Editor`, `FileTree`, `Picker`, `CommandPalette`, `SearchBar`, `Backlinks`) y sus predicados (`mode == normal`, `editing`, `focused`).
 - `FileTree`: `j/k` mover, `h/l` colapsar/expandir, `gg/G`, `/` filtrar, `a` crear, `r` renombrar, `dd` borrar (con confirmación), `o` abrir en split.
 - `Picker`/paleta: el input es un `Editor` de una línea (contexto `Picker > Editor`) en insert por defecto; `Esc` pasa a normal y `j/k` mueve la lista.
-- `:` abre una línea de comandos que parsea a las **mismas** acciones (`:w` → `buffer::Save`, `:e nota` → `workspace::Open`, `:vsp`, `:q`, `:%s/a/b/g`). Un solo registro de acciones = paleta, `:` y keymap comparten nombres.
-- Leader: `"space f": "workspace::OpenFinder"` en el contexto `VimControl && !editing`; configurable por TOML.
+- `:` abre una línea de comandos que parsea a las **mismas** acciones (`:w` → `buffer::save`, `:e nota` → `workspace::open`, `:vsp`, `:q`, `:%s/a/b/g`). Un solo registro de acciones = paleta, `:` y keymap comparten nombres. Los nombres de `nota` van en snake_case (`vim::next_word_start`), a diferencia del CamelCase de Zed.
+- Leader: `"space f": "workspace::open_finder"` en el contexto `VimControl && !editing`; configurable por TOML.
 - Ventanas: `ctrl-w h/j/k/l/v/s/q` como acciones de `pane::`.
 
 Keymap del usuario en **TOML** (coherente con el resto de la config) que se fusiona sobre el default embebido:
