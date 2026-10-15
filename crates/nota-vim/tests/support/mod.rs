@@ -75,7 +75,7 @@ pub fn mode_name(mode: Mode) -> &'static str {
 
 pub fn run_engine(before: &str, keys: &str) -> State {
     let (mut buffer, mut selections) = parse(before);
-    let mut vim = Vim::new().unwrap();
+    let mut vim = Vim::new();
     for key in vim_keys(keys) {
         vim.feed(key, &mut buffer, &mut selections).unwrap();
     }
