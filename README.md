@@ -14,7 +14,12 @@ Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra h
 
 ## Estado
 
-Fase de investigación. Todavía no hay código.
+Núcleo sin GUI (rodaja M0a): `crates/nota-buffer` (texto, selecciones, undo) y `crates/nota-vim` (motor vim puro, verificado contra `nvim --headless`). La GUI todavía no existe.
+
+```sh
+cargo test          # incluye el oráculo contra nvim si `nvim` está en el PATH
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
 ## Investigación
 

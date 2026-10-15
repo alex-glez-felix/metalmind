@@ -151,6 +151,13 @@ struct Register(char);
 - **Dot-repeat** (`.`) = guardar el último `Command` + texto insertado. **Macros** (`q`) = guardar la secuencia de `KeyEvent`s y re-alimentar el keymap.
 - **Text objects markdown** (`il`/`al` link, `ih`/`ah` sección por heading, `ic` bloque de código) salen del árbol tree-sitter: diferenciador barato frente a Obsidian.
 
+### Estado (M0a, 2026-10-15)
+
+- `nota-vim` existe como máquina de estados pura: Normal, Insert y operador pendiente; motions `h j k l w W b B e E 0 ^ $ gg G` con counts; `d c y`, `dd cc yy`, `x`, `p P`, `u`, `ctrl-r`; text objects `iw aw iW aW i( a( i" a"`; registro sin nombre; multi-cursor en todas las operaciones.
+- El keymap vive por ahora dentro de `nota-vim` (tabla de `(contexto, teclas, nombre de acción)` que se resuelve por nombre). Se moverá a `nota-keymap` cuando haya más de un consumidor.
+- **Referencia de comportamiento = `nvim --clean` 0.10.4 con `noautoindent`.** Importa porque los defaults de nvim difieren de vim: `nostartofline` (`dd`, `G`, `gg` conservan la columna), `backspace=indent,eol,start`, `cpoptions=aABceFs_`. Las motions de palabra y los text objects portan la lógica de `textobject.c` (`fwd_word`, `current_word`, `current_block`, `current_quote`) para que los bordes coincidan.
+- Cada caso de la tabla (`crates/nota-vim/tests/vim.rs`) corre en el motor y en nvim (`tests/support/oracle.lua`); el CI instala esa versión exacta de nvim.
+
 ### Vim en toda la UI
 
 El truco de Zed: **vim no es especial**; es un conjunto de bindings en contextos.
@@ -245,9 +252,9 @@ nota/
 ├── Cargo.toml              # [workspace], [workspace.dependencies], [workspace.lints]
 ├── CLAUDE.md               # convenciones para agentes (ver §7)
 ├── crates/
-│   ├── nota-text/          # Buffer (ropey), Edit, Transaction, History, Selections, newtypes de offset
+│   ├── nota-buffer/        # Buffer (ropey), Edit, Transaction, History, Selections, newtypes de offset
 │   ├── nota-syntax/        # tree-sitter-md + scanner Obsidian (wikilinks, tags, embeds, frontmatter)
-│   ├── nota-vim/           # Mode, Motion, Operator, TextObject, VimState → Transaction. Depende solo de nota-text (+ nota-syntax para text objects md)
+│   ├── nota-vim/           # Mode, Motion, Operator, TextObject, VimState → Transaction. Depende solo de nota-buffer (+ nota-syntax para text objects md)
 │   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo TOML, registro de Actions
 │   ├── nota-vault/         # walk, watch, índice, resolución de links, backlinks, caché redb
 │   ├── nota-search/        # nucleo (fuzzy) y luego tantivy
@@ -322,7 +329,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 
 1. **Crates pequeños con frontera clara.** Un agente con `nota-vim` en contexto (pocos miles de líneas, sin GUI) acierta mucho más que con un crate de 30 k. Cada crate con su `README` de 10 líneas: qué hace, qué no hace, tipos públicos.
 2. **Tipos fuertes como barandal.** Newtypes (`ByteOffset`, `NoteId`, `Row`), enums exhaustivos para `Motion`/`Action`, `#[non_exhaustive]` donde vaya a crecer. El compilador rechaza lo que el agente inventa; el ciclo `cargo check` es el mejor revisor.
-3. **Tests como spec, escritos antes.** Para el motor vim, escribir (o pedir) primero la tabla de casos `antes / teclas / después` copiando el comportamiento real de nvim; luego "haz que pase". Se puede generar la verdad con `nvim --headless` desde un `xtask` y fijarla como snapshot: el oráculo es vim real, no el modelo.
+3. **Tests como spec, escritos antes.** Para el motor vim, escribir (o pedir) primero la tabla de casos `antes / teclas / después` copiando el comportamiento real de nvim; luego "haz que pase". Se puede generar la verdad con `nvim --headless` desde un `xtask` y fijarla como snapshot: el oráculo es vim real, no el modelo. *(Hecho en M0a de otra forma: cada caso de la tabla de `nota-vim` corre también en nvim dentro de `cargo test`; ver §3, "Estado".)*
 4. **Lógica pura, UI tonta.** Toda decisión en funciones `fn(&State, Input) -> Output`. La GUI es lo que peor genera un modelo y lo más difícil de testear; que tenga poca lógica.
 5. **`CLAUDE.md` (o `AGENTS.md`) con reglas cortas y verificables**:
    - "Offsets internos en bytes; convertir solo en el render."
@@ -342,7 +349,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 
 | Hito | Contenido | Hecho cuando… |
 |---|---|---|
-| **M0 — Ventana + texto** | Workspace, CI, `nota-text` (Buffer, Edit, History), ventana con un buffer editable (sin modo), abrir/guardar un archivo con escritura atómica. | Abres `nota archivo.md`, editas, guardas; proptest de undo/redo en verde; arranque < 100 ms **(objetivo, sin medir)**. |
+| **M0 — Ventana + texto** | Workspace, CI, `nota-buffer` (Buffer, Edit, History), ventana con un buffer editable (sin modo), abrir/guardar un archivo con escritura atómica. | Abres `nota archivo.md`, editas, guardas; proptest de undo/redo en verde; arranque < 100 ms **(objetivo, sin medir)**. |
 | **M1 — Vim normal/insert** | `nota-keymap` (trie + contextos), `nota-vim`: normal, insert, motions básicos (`hjkl wbe 0^$ gg G f t`), operadores `d c y` + `p`, `x`, `u`/`ctrl-r`, `.`, counts, text objects `iw aw i" i( ip`. Cursor bloque/línea por modo. | ~150 casos de tabla verificados contra nvim headless. |
 | **M2 — Vault + finder** | `nota-vault`: abrir carpeta, walk con `ignore`, watcher, árbol de archivos con navegación vim, fuzzy finder (`nucleo`) en `space f`, paleta de comandos, `:e`, `:w`, `:q`, splits `ctrl-w`. | Abre un vault real de Obsidian (≥ 5 k notas) en < 1 s **(objetivo)**; crear/renombrar/borrar desde el árbol. |
 | **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), tags, links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
