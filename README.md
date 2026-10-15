@@ -22,3 +22,8 @@ Fase de investigación. Todavía no hay código.
 - [02 — Stack de GUI en Rust](docs/research/02-gui-stack.md)
 - [03 — Arquitectura del núcleo](docs/research/03-core-architecture.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
+- [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
+
+## Licencia
+
+GPL-3.0-or-later. Ver `LICENSE`.
