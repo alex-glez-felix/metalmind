@@ -1,0 +1,10 @@
+# nota-vim
+
+Motor vim de `nota`: máquina de estados pura sobre `nota-buffer`, sin GUI ni I/O.
+
+- `Key` → `Keymap` (tabla declarativa de contexto + teclas + nombre de acción) → `Action`.
+- `Vim::feed(key, &mut buffer, &mut selections)` ejecuta; `Vim::execute(action, …)` permite invocar acciones por nombre desde la paleta o `:`.
+- `Mode`: Normal, Insert, operador pendiente.
+- Referencia: `nvim --clean` 0.10.4 con `noautoindent`. `tests/vim.rs` corre cada caso en el motor y en nvim.
+
+Fuera de alcance por ahora: Visual, `.`, macros, registros con nombre, `f/t`, autoindent.
