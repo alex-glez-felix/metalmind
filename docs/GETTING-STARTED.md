@@ -15,7 +15,7 @@ Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento 
 
 ## Pendiente de decidir (tuyo, Alex)
 
-1. **Licencia.** El editor y el vim de Zed probablemente son GPL. Si `nota` es MIT/Apache, se estudian pero no se copian. Si es GPL, se puede tomar código de Zed. Bloom es AGPL: solo ideas.
+1. **Licencia.** El motor vim es propio, pero los agentes van a querer copiar o adaptar trozos de Zed. Verificado 2026-10-15: `crates/vim` y `crates/editor` de Zed son **GPL-3.0-or-later**; `gpui` es Apache-2.0. Si `nota` es MIT/Apache, Zed se lee pero no se copia. Si es GPL, se puede adaptar código de Zed. Bloom es AGPL: solo ideas.
 2. **Nombre.** `nota` es provisional.
 3. **¿Embeber Neovim o emular vim?** Emular es lo recomendado (control de UX total). Embeber (como kimun) da fidelidad gratis pero ata la UX a nvim.
 
