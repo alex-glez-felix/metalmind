@@ -1,0 +1,21 @@
+[package]
+name = "nota-vim"
+description = "Motor vim puro: teclas a acciones con nombre, y acciones a ediciones sobre nota-buffer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nota-buffer.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+rstest.workspace = true
+rstest_reuse.workspace = true
+
+[lints]
+workspace = true
