@@ -10,7 +10,7 @@ Tres prioridades, en este orden cuando choquen:
 2. **UX**: pulida, sin fricción, que se sienta como herramienta y no como página web.
 3. **Modo vim en todo**: edición modal en el buffer *y* en el resto de la UI (árbol de archivos, búsqueda, paleta de comandos, `:` comandos, leader keys).
 
-Restricción de compatibilidad: abrir un vault de Obsidian existente tal cual (`.md` planos, `[[wikilinks]]`, `#tags`, frontmatter YAML, embeds `![[...]]`).
+Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra herramienta. Compatibilidad con vaults de Obsidian **no es requisito**: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
 
 ## Estado
 
