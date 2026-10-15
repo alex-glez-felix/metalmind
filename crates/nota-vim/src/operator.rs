@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, Selection, Selections};
+use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selection, Selections};
 
 use crate::VimError;
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
@@ -33,17 +33,16 @@ impl Operator {
     pub(crate) fn apply(
         self,
         buffer: &mut Buffer,
-        current: &Selections,
-        operands: &[Operand],
+        operands: &PerSelection<Operand>,
     ) -> Result<Option<Outcome>, VimError> {
         if operands.iter().all(|operand| operand.target.is_none()) {
             return Ok(None);
         }
-        let plans: Vec<Option<Plan>> = operands
-            .iter()
-            .map(|operand| Plan::new(buffer, self, operand))
-            .collect();
-        let regions = || plans.iter().flatten().map(|plan| &plan.region);
+        let steps = operands.map(|operand| Step {
+            selection: operand.selection,
+            plan: Plan::new(buffer, self, operand),
+        });
+        let regions = || steps.iter().filter_map(Step::region);
         let has_text = regions().any(|region| !region.is_empty());
         let register = if has_text || self == Self::Yank {
             Some(Register::from_regions(buffer, regions())?)
@@ -51,10 +50,10 @@ impl Operator {
             None
         };
         let selections = match self {
-            Self::Yank => at_starts(buffer, current, operands, &plans),
-            Self::Delete if !has_text => at_starts(buffer, current, operands, &plans),
+            Self::Yank => at_starts(buffer, &steps),
+            Self::Delete if !has_text => at_starts(buffer, &steps),
             Self::Delete | Self::Change => {
-                let selections = edit(buffer, current, operands, &plans)?;
+                let selections = edit(buffer, &steps)?;
                 if self == Self::Delete {
                     buffer.commit_transaction(selections.clone())?;
                 }
@@ -65,6 +64,18 @@ impl Operator {
             selections,
             register,
         }))
+    }
+}
+
+/// Una selección y su plan, si el operador aplica ahí.
+struct Step {
+    selection: Selection,
+    plan: Option<Plan>,
+}
+
+impl Step {
+    fn region(&self) -> Option<&Region> {
+        self.plan.as_ref().map(|plan| &plan.region)
     }
 }
 
@@ -119,53 +130,31 @@ impl Plan {
 }
 
 /// Vim mueve el cursor al inicio del objetivo aunque no edite nada.
-fn at_starts(
-    buffer: &Buffer,
-    current: &Selections,
-    operands: &[Operand],
-    plans: &[Option<Plan>],
-) -> Selections {
-    collect(
-        current,
-        operands
-            .iter()
-            .zip(plans)
-            .map(|(operand, plan)| match plan {
-                Some(plan) => Selection::cursor(clamp_normal(buffer, plan.start)),
-                None => operand.selection,
-            }),
-    )
+fn at_starts(buffer: &Buffer, steps: &PerSelection<Step>) -> Selections {
+    steps.to_selections(|step| match &step.plan {
+        Some(plan) => Selection::cursor(clamp_normal(buffer, plan.start)),
+        None => step.selection,
+    })
 }
 
 /// Abre la transacción, borra y devuelve los cursores resultantes.
-fn edit(
-    buffer: &mut Buffer,
-    current: &Selections,
-    operands: &[Operand],
-    plans: &[Option<Plan>],
-) -> Result<Selections, VimError> {
-    let before = collect(
-        current,
-        operands.iter().zip(plans).map(|(operand, plan)| {
-            plan.as_ref()
-                .map_or(operand.selection, |plan| Selection::cursor(plan.start))
-        }),
-    );
+fn edit(buffer: &mut Buffer, steps: &PerSelection<Step>) -> Result<Selections, VimError> {
+    let before = steps.to_selections(|step| {
+        step.plan
+            .as_ref()
+            .map_or(step.selection, |plan| Selection::cursor(plan.start))
+    });
     buffer.begin_transaction(before)?;
-    let map = buffer.apply(union(
-        plans.iter().flatten().map(|plan| plan.removal.clone()),
-    ))?;
+    let removals = steps
+        .iter()
+        .filter_map(|step| step.plan.as_ref())
+        .map(|plan| plan.removal.clone());
+    let map = buffer.apply(union(removals))?;
     let buffer = &*buffer;
-    Ok(collect(
-        current,
-        operands
-            .iter()
-            .zip(plans)
-            .map(|(operand, plan)| match plan {
-                Some(plan) => plan.cursor_after(buffer, &map),
-                None => Selection::cursor(map.map(operand.selection.head, Bias::Before)),
-            }),
-    ))
+    Ok(steps.to_selections(|step| match &step.plan {
+        Some(plan) => plan.cursor_after(buffer, &map),
+        None => Selection::cursor(map.map(step.selection.head, Bias::Before)),
+    }))
 }
 
 /// Un `d` multi-línea que va de la indentación a un final seguido solo de
@@ -202,11 +191,6 @@ fn removal(buffer: &Buffer, region: &Region) -> Range<ByteOffset> {
         Region::Lines { first, .. } if first > 0 => buffer.line_end(first - 1)..buffer.len(),
         Region::Lines { .. } => ByteOffset::ZERO..buffer.len(),
     }
-}
-
-/// Hay una selección por operando, así que nunca queda vacío.
-fn collect(current: &Selections, selections: impl Iterator<Item = Selection>) -> Selections {
-    Selections::new(selections).unwrap_or_else(|| current.clone())
 }
 
 /// Une rangos que se solapan para que varias selecciones no choquen.

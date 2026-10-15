@@ -17,10 +17,8 @@ pub(crate) fn paste(
     if text.is_empty() {
         return Ok(selections.clone());
     }
-    let insertions: Vec<ByteOffset> = selections
-        .iter()
-        .map(|selection| insertion_point(buffer, selection.head, register.linewise, side))
-        .collect();
+    let insertions = selections
+        .map_to(|selection| insertion_point(buffer, selection.head, register.linewise, side));
     let piece = match (register.linewise, side) {
         (true, PasteSide::After) => format!("\n{text}"),
         (true, PasteSide::Before) => format!("{text}\n"),
@@ -33,13 +31,8 @@ pub(crate) fn paste(
             .map(|&at| Edit::insert(at, piece.clone()))
             .collect(),
     )?;
-    // Una inserción por selección: nunca queda vacío.
-    let after = Selections::new(
-        insertions
-            .iter()
-            .map(|&at| Selection::cursor(cursor_after(buffer, &map, at, register, side))),
-    )
-    .unwrap_or_else(|| selections.clone());
+    let after = insertions
+        .to_selections(|&at| Selection::cursor(cursor_after(buffer, &map, at, register, side)));
     buffer.commit_transaction(after.clone())?;
     Ok(after)
 }
