@@ -23,14 +23,14 @@ Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento 
 
 Objetivo: confirmar GPUI antes de escribir el núcleo. Si falla, se cambia a iced sin haber perdido nada, porque el núcleo no depende de la GUI.
 
-1. Instalar Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-2. Clonar `gpui-kit` y correr sus ejemplos de editor y markdown.
-3. App mínima: ventana + editor de gpui-kit abriendo un `.md`.
-4. Probar en Hyprland y, si se puede, en GNOME/KDE en VM:
-   - archivo de 50 MB, scroll fluido
-   - IME (Fcitx5) y dead keys (`´` + `a` = `á` — importa para español)
+El spike ya está armado en [`spikes/gpui/`](../spikes/gpui/README.md): un proyecto aparte, fuera del workspace, con la vista propia (`nota-buffer` + `nota-vim`) y el editor de gpui-kit para comparar.
+
+1. Preparar la máquina de pruebas y correr `./spikes/gpui/run.sh`, como dice su README.
+2. Seguir la checklist del README en Hyprland y, si se puede, en GNOME/KDE en VM. Cubre:
+   - archivo de 50 MB, scroll fluido, con tiempos de frame medidos
+   - IME (Fcitx5) y dead keys (`´` + `a` = `á` — importa para español) traducidas a `nota-vim`
    - portapapeles normal y primario (selección con el mouse)
-5. Anotar resultados en `docs/research/04-spike-gpui.md`.
+3. Anotar resultados en `docs/research/04-spike-gpui.md`.
 
 ## Hitos después del spike
 

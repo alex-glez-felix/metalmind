@@ -1,0 +1,26 @@
+[package]
+name = "nota-spike-gpui"
+description = "Spike de GPUI: archivo grande, teclado real con nota-vim, portapapeles y medición de frames."
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+env_logger = "=0.11.11"
+gpui-kit = "=0.7.3"
+log = "=0.4.34"
+nota-buffer = { path = "../../crates/nota-buffer" }
+nota-vim = { path = "../../crates/nota-vim" }
+thiserror = "=2.0.21"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+dbg_macro = "deny"
+allow_attributes_without_reason = "deny"
