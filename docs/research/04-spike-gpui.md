@@ -182,7 +182,7 @@ El primer frame de la corrida chica incluye inicializar lavapipe la primera vez.
 
 ## Decisiones que salen del spike
 
-- **GPUI se queda como stack de GUI** (`gpui-pre` vía `gpui-kit`, fijado con `=`).
+- **GPUI se queda como stack de GUI** (`gpui-pre` vía `gpui-kit`, fijado con `=`). En M0b `gpui-kit` va con `default-features = false`: sin gpui-component ni sus assets, que el editor propio no usa.
 - **El editor es propio**: nota-buffer + nota-vim + un elemento que pinta solo las líneas visibles, como la vista vim del spike. El `EditorState` de gpui-component se descarta: su costo de abrir crece lineal con el documento y bloquea el hilo de la UI (108 s con 50 MB).
 - **Nada de `Root` de gpui-kit alrededor del editor** (riesgo 1). Si se usan widgets de gpui-component, en una raíz propia o con esos bindings sobreescritos.
 - **En Insert el texto entra siempre por el input handler** (riesgo 4): con esto funcionaron teclas muertas e IME sin casos especiales.

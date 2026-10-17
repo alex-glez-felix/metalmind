@@ -224,7 +224,7 @@ struct LinkIndex {
 
 ### Crash safety
 
-- **Escritura atómica**: `tempfile::NamedTempFile::new_in(misma_carpeta)` → escribir → `sync_all` → `persist(destino)` (rename atómico en el mismo filesystem). `atomicwrites` 0.4.4 hace lo mismo pero sin release desde 2024; `tempfile` (3.27) basta.
+- **Escritura atómica**: `tempfile::NamedTempFile::new_in(misma_carpeta)` → escribir → `sync_all` → `persist(destino)` (rename atómico en el mismo filesystem). `atomicwrites` 0.4.4 hace lo mismo pero sin release desde 2024; `tempfile` (3.27) basta. *(Hecho en M0b: `nota_vault::write_atomic`. Además hace `fsync` del directorio tras el rename, conserva los permisos, escribe en el destino si la ruta es un enlace simbólico y borra el temporal si algo falla. No conserva el dueño si el archivo es de otro usuario: haría falta `chown` y privilegios.)*
 - Preservar permisos y fin de línea / BOM del archivo original. Nunca reformatear lo que el usuario no tocó.
 - **Autosave** con debounce (~1 s tras dejar de teclear, y al perder foco), como Obsidian. Además un *swap/journal* en `$XDG_STATE_HOME/nota/` con el contenido no guardado, para recuperar tras un crash.
 - **Conflictos externos** (git pull, Syncthing): si `notify` avisa de cambio en un archivo con cambios locales sin guardar, no sobrescribir: mostrar diff (`similar` 3.2 o `imara-diff` 0.2) y elegir.
@@ -256,7 +256,7 @@ nota/
 │   ├── nota-syntax/        # tree-sitter-md + scanner Obsidian (wikilinks, tags, embeds, frontmatter)
 │   ├── nota-vim/           # Mode, Motion, Operator, TextObject, VimState → Transaction. Depende solo de nota-buffer (+ nota-syntax para text objects md)
 │   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo TOML, registro de Actions
-│   ├── nota-vault/         # walk, watch, índice, resolución de links, backlinks, caché redb
+│   ├── nota-vault/         # leer y guardar notas (atómico); luego walk, watch, índice, links, backlinks, caché redb
 │   ├── nota-search/        # nucleo (fuzzy) y luego tantivy
 │   ├── nota-config/        # settings, rutas XDG, temas
 │   ├── nota-ui/            # vistas sobre el framework elegido (editor, file tree, picker, paleta)
@@ -347,9 +347,18 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 
 ## 8. Hitos del MVP
 
+### Estado (M0b, 2026-10-17)
+
+- `nota-ui` (vista de editor sobre GPUI) y el binario `nota` existen; son los únicos que dependen de GPUI y el CI lo verifica con `cargo tree`. `gpui-kit` va sin features por defecto: solo `gpui-pre`, sin gpui-component ni su `Root` (04, riesgo 1).
+- La vista pinta solo las líneas visibles, guarda el scroll en líneas (04, riesgo 6) y en Insert y en la línea de comandos el texto entra siempre por el input handler (04, riesgo 4). Colores y tamaños salen de `Theme`; la fuente es la primera monoespaciada instalada de una lista, porque GPUI entra en pánico con una familia que no existe.
+- `nota-vim` tiene una línea de comandos mínima: `:w`, `:q`, `:q!`, `:wq`. El motor no hace I/O: devuelve el `Command` y la vista invoca la acción con nombre (`editor::save`, `editor::quit`, …).
+- "Modificado" compara la versión del buffer con la guardada: deshacer hasta lo guardado sigue marcando `[+]` (vim no). Para afinarlo, el historial en árbol (undotree) tendrá que exponer un identificador del estado actual.
+- Smoke en sage bajo `xvfb-run` (lavapipe, sin GPU), con XTest tecleando: archivo nuevo → `i…<Esc>:wq` lo crea; con cambios, `:q` y el cierre pedido por el gestor de ventanas se niegan; `:w` conserva permisos 0640; `:q!` sale sin guardar; no quedan temporales. Primer frame en release: 631 ms con un archivo chico y 762 ms con 50 MB (el spike midió 710 ms aquí y 293 ms en pc-oma). El número que vale es el de pc-oma.
+- Fuera de M0: autosave, journal de recuperación, conflictos con cambios externos, preservar el dueño del archivo.
+
 | Hito | Contenido | Hecho cuando… |
 |---|---|---|
-| **M0 — Ventana + texto** | Workspace, CI, `nota-buffer` (Buffer, Edit, History), ventana con un buffer editable (sin modo), abrir/guardar un archivo con escritura atómica. | Abres `nota archivo.md`, editas, guardas; proptest de undo/redo en verde; arranque < 100 ms **(objetivo, sin medir)**. |
+| **M0 — Ventana + texto** ✅ (2026-10-17) | Workspace, CI, `nota-buffer` (Buffer, Edit, History), ventana con un buffer editable (sin modo), abrir/guardar un archivo con escritura atómica. | Abres `nota archivo.md`, editas, guardas; proptest de undo/redo en verde; arranque al primer frame ≈ 300 ms. El objetivo original de < 100 ms no era realista: el spike midió 244–297 ms en pc-oma y casi todo es GPUI/Vulkan levantando la ventana (cargar 50 MB son 71 ms, un archivo chico 2 ms). |
 | **M1 — Vim normal/insert** | `nota-keymap` (trie + contextos), `nota-vim`: normal, insert, motions básicos (`hjkl wbe 0^$ gg G f t`), operadores `d c y` + `p`, `x`, `u`/`ctrl-r`, `.`, counts, text objects `iw aw i" i( ip`. Cursor bloque/línea por modo. | ~150 casos de tabla verificados contra nvim headless. |
 | **M2 — Vault + finder** | `nota-vault`: abrir carpeta, walk con `ignore`, watcher, árbol de archivos con navegación vim, fuzzy finder (`nucleo`) en `space f`, paleta de comandos, `:e`, `:w`, `:q`, splits `ctrl-w`. | Abre un vault real de Obsidian (≥ 5 k notas) en < 1 s **(objetivo)**; crear/renombrar/borrar desde el árbol. |
 | **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), tags, links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
