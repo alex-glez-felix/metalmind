@@ -1,0 +1,4 @@
+# Qodo revisa solo a pedido: comentar `/agentic_review` en PRs grandes
+# (features y fixes de lógica), no en docs ni cambios chicos.
+[github_app]
+pr_commands = []
