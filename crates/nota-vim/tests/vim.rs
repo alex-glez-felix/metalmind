@@ -248,6 +248,33 @@ use rstest_reuse::{self, apply, template};
 #[case("|abc", "3i<PasteStart>X\nY<PasteEnd><Esc>", "X\nYX\nYX\n|Yabc")]
 #[case("|abc", "ia<PasteStart>XY<PasteEnd><Esc>u", "|abc")]
 #[case("ab|c", ":<PasteStart>w<PasteEnd><Esc>x", "a|b")]
+// un clic en Insert descarta la repetición del count
+#[case(
+    "|abc def",
+    "3ihola<LeftMouse><10,0><LeftRelease><10,0><Esc>",
+    "holaabc d|ef"
+)]
+#[case(
+    "|abc def",
+    "3ihola<LeftMouse><2,0><LeftRelease><2,0><Esc>",
+    "h|olaabc def"
+)]
+#[case(
+    "|abc def",
+    "3ihola<LeftMouse><10,0><LeftRelease><10,0>x<Esc>",
+    "holaabc de|xf"
+)]
+#[case("|abc", "3ix<LeftMouse><20,0><LeftRelease><20,0>y<Esc>", "xabc|y")]
+#[case(
+    "|abc\ndef",
+    "3ix<LeftMouse><1,1><LeftRelease><1,1>y<Esc>",
+    "xabc\nd|yef"
+)]
+#[case(
+    "|abc",
+    "3ix<LeftMouse><2,0><LeftRelease><2,0><PasteStart>YZ<PasteEnd><Esc>",
+    "xaY|Zbc"
+)]
 // counts y cancelación
 #[case("|abc", "d<Esc>x", "|bc")]
 #[case("|abc", "3<Esc>x", "|bc")]
