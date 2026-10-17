@@ -2,13 +2,13 @@ use nota_buffer::{Buffer, Selection, Selections};
 
 use crate::insert::{Repeat, Typed};
 use crate::keymap::Lookup;
+use crate::object::Object;
 use crate::operator::Operand;
 use crate::register::Register;
-use crate::span::{Region, Target};
 use crate::travel::Travel;
 use crate::{
-    Action, Command, CommandError, InsertAt, Key, Keymap, Motion, Operator, PasteSide, TextObject,
-    VimError, insert, paste,
+    Action, Command, CommandError, InsertAt, Key, Keymap, Motion, Operator, PasteSide, VimError,
+    insert, paste,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,14 +43,6 @@ pub enum KeyOutcome {
     Command(Command),
     /// Se envió la línea de comandos con algo que no es un comando.
     InvalidCommand(CommandError),
-}
-
-/// Sobre qué actúa un operador.
-#[derive(Clone, Copy)]
-enum Object {
-    Motion(Motion),
-    TextObject(TextObject),
-    CurrentLine,
 }
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
@@ -268,7 +260,7 @@ impl Vim {
         self.reset();
         let operands = selections.map_to(|selection| Operand {
             selection: *selection,
-            target: target(buffer, selection, object, operator, count),
+            target: object.target(buffer, selection, operator, count),
         });
         let Some(outcome) = operator.apply(buffer, &operands)? else {
             return Ok(());
@@ -360,40 +352,6 @@ fn move_cursors(
             .map_or(*selection, |destination| {
                 Selection::cursor(destination.offset).with_goal(destination.goal)
             })
-    })
-}
-
-fn target(
-    buffer: &Buffer,
-    selection: &Selection,
-    object: Object,
-    operator: Operator,
-    count: Option<usize>,
-) -> Option<Target> {
-    let span = match object {
-        Object::Motion(motion) => motion
-            .resolve(buffer, selection, count, Some(operator))?
-            .span_from(selection.head),
-        Object::TextObject(object) => object.resolve(buffer, selection.head, count.unwrap_or(1))?,
-        Object::CurrentLine => return current_lines(buffer, selection, count.unwrap_or(1)),
-    };
-    Some(span.into_target(buffer))
-}
-
-/// `3dd` falla en la última línea, pero si hay menos de 3 toma las que haya.
-fn current_lines(buffer: &Buffer, selection: &Selection, count: usize) -> Option<Target> {
-    let first = buffer.line_of(selection.head);
-    let last_line = buffer.last_line();
-    if count > 1 && first >= last_line {
-        return None;
-    }
-    Some(Target {
-        region: Region::Lines {
-            first,
-            last: first.saturating_add(count - 1).min(last_line),
-        },
-        start: selection.head,
-        adjusted: false,
     })
 }
 
