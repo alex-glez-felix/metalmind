@@ -161,6 +161,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('P')], Action::Paste(PasteSide::Before)),
         (Normal, &[ch('u')], Action::Undo),
         (Normal, &[Key::Ctrl('r')], Action::Redo),
+        (Normal, &[ch('g'), ch('-')], Action::Earlier),
+        (Normal, &[ch('g'), ch('+')], Action::Later),
         (Normal, &[ch('i')], Action::Insert(InsertAt::Before)),
         (Normal, &[ch('a')], Action::Insert(InsertAt::After)),
         (Normal, &[ch('I')], Action::Insert(InsertAt::FirstNonBlank)),

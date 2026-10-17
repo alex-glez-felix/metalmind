@@ -1,4 +1,4 @@
-use nota_buffer::{Buffer, Selection, Selections};
+use nota_buffer::{Buffer, BufferError, Selection, Selections, Transaction};
 
 use crate::keymap::Lookup;
 use crate::lines::clamp_normal;
@@ -139,8 +139,10 @@ impl Vim {
             }
             (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
             (Action::Paste(side), Mode::Normal) => self.paste(side, buffer, selections)?,
-            (Action::Undo, Mode::Normal) => self.undo(buffer, selections, false)?,
-            (Action::Redo, Mode::Normal) => self.undo(buffer, selections, true)?,
+            (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, buffer, selections)?,
+            (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
+            (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
+            (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
             (Action::NormalMode, Mode::Insert) => {
                 *selections = insert::leave(buffer, selections)?;
                 self.mode = Mode::Normal;
@@ -248,27 +250,58 @@ impl Vim {
         Ok(())
     }
 
-    /// Como vim, undo y redo dejan el cursor donde empezó el cambio.
-    fn undo(
+    /// Como vim, moverse por el historial deja el cursor donde empezó el
+    /// último cambio recorrido.
+    fn travel(
         &mut self,
+        travel: Travel,
         buffer: &mut Buffer,
         selections: &mut Selections,
-        redo: bool,
     ) -> Result<(), VimError> {
         let times = self.count.take().unwrap_or(1);
         self.reset();
-        let mut restored = None;
-        for _ in 0..times {
-            let step = if redo { buffer.redo()? } else { buffer.undo()? };
-            let Some(transaction) = step else { break };
-            restored = Some(transaction.selections_before().clone());
-        }
+        let restored = match travel {
+            Travel::Undo => repeat(buffer, times, Buffer::undo)?,
+            Travel::Redo => repeat(buffer, times, Buffer::redo)?,
+            Travel::Earlier => buffer.earlier(times)?.map(cursors_before),
+            Travel::Later => buffer.later(times)?.map(cursors_before),
+        };
         if let Some(restored) = restored {
             *selections =
                 restored.map(|selection| Selection::cursor(clamp_normal(buffer, selection.head)));
         }
         Ok(())
     }
+}
+
+/// Cómo se mueve el cursor por el historial: `u`, `ctrl-r`, `g-`, `g+`.
+#[derive(Clone, Copy)]
+enum Travel {
+    Undo,
+    Redo,
+    Earlier,
+    Later,
+}
+
+/// Da `times` pasos con `step` mientras haya historial; devuelve las
+/// selecciones de antes del último cambio recorrido.
+fn repeat(
+    buffer: &mut Buffer,
+    times: usize,
+    step: fn(&mut Buffer) -> Result<Option<&Transaction>, BufferError>,
+) -> Result<Option<Selections>, BufferError> {
+    let mut restored = None;
+    for _ in 0..times {
+        let Some(transaction) = step(buffer)? else {
+            break;
+        };
+        restored = Some(cursors_before(transaction));
+    }
+    Ok(restored)
+}
+
+fn cursors_before(transaction: &Transaction) -> Selections {
+    transaction.selections_before().clone()
 }
 
 fn move_cursors(
