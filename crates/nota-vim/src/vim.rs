@@ -1,5 +1,6 @@
 use nota_buffer::{Buffer, Selection, Selections};
 
+use crate::insert::{Repeat, Typed};
 use crate::keymap::Lookup;
 use crate::operator::Operand;
 use crate::register::Register;
@@ -63,6 +64,7 @@ pub struct Vim {
     operator_count: Option<usize>,
     register: Option<Register>,
     command_line: String,
+    repeat: Repeat,
 }
 
 impl Default for Vim {
@@ -87,6 +89,7 @@ impl Vim {
             operator_count: None,
             register: None,
             command_line: String::new(),
+            repeat: Repeat::default(),
         }
     }
 
@@ -169,21 +172,24 @@ impl Vim {
             (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
             (Action::NormalMode, Mode::Insert) => {
-                *selections = insert::leave(buffer, selections)?;
-                self.mode = Mode::Normal;
+                *selections = self.repeat.replay(buffer, selections)?;
+                self.leave_insert(buffer, selections)?;
             }
+            (Action::Interrupt, Mode::Insert) => self.leave_insert(buffer, selections)?,
             (Action::Backspace, Mode::Insert) => {
-                *selections = insert::backspace(buffer, selections)?;
+                self.type_in_insert(&Typed::Backspace, buffer, selections)?;
             }
             (Action::Newline, Mode::Insert) => {
-                *selections = insert::type_text(buffer, selections, "\n")?;
+                self.type_in_insert(&Typed::Text("\n".to_owned()), buffer, selections)?;
             }
             (Action::CommandLine, Mode::Normal) => {
                 self.reset();
                 self.command_line.clear();
                 self.mode = Mode::CommandLine;
             }
-            (Action::NormalMode, Mode::CommandLine) => self.mode = Mode::Normal,
+            (Action::NormalMode | Action::Interrupt, Mode::CommandLine) => {
+                self.mode = Mode::Normal;
+            }
             (Action::Backspace, Mode::CommandLine) => {
                 if self.command_line.pop().is_none() {
                     self.mode = Mode::Normal;
@@ -228,7 +234,7 @@ impl Vim {
         if self.mode == Mode::CommandLine {
             self.command_line.push_str(&text);
         } else {
-            *selections = insert::type_text(buffer, selections, &text)?;
+            self.type_in_insert(&Typed::Text(text), buffer, selections)?;
         }
         Ok(KeyOutcome::Inserted)
     }
@@ -283,9 +289,33 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
+        let count = self.count.take();
         self.reset();
         *selections = insert::enter(buffer, selections, at)?;
+        self.repeat = Repeat::new(count, at);
         self.mode = Mode::Insert;
+        Ok(())
+    }
+
+    fn type_in_insert(
+        &mut self,
+        typed: &Typed,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        *selections = typed.apply(buffer, selections)?;
+        self.repeat.record(typed);
+        Ok(())
+    }
+
+    fn leave_insert(
+        &mut self,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        *selections = insert::leave(buffer, selections)?;
+        self.repeat = Repeat::default();
+        self.mode = Mode::Normal;
         Ok(())
     }
 

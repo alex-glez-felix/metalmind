@@ -193,6 +193,13 @@ mod tests {
                 Mode::Insert,
                 Route::Engine(Key::Ctrl('w')),
             ),
+            (
+                "c",
+                None,
+                Mods::Ctrl,
+                Mode::Insert,
+                Route::Engine(Key::Ctrl('c')),
+            ),
             ("[", None, Mods::None, Mode::Insert, Route::Ignored),
             ("[", None, Mods::None, Mode::Normal, Route::Ignored),
         ];
