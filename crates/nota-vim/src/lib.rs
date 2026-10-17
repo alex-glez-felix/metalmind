@@ -15,6 +15,7 @@ mod key;
 mod keymap;
 mod lines;
 mod motion;
+mod object;
 mod operator;
 mod paste;
 mod register;
