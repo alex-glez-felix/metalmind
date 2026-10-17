@@ -30,6 +30,11 @@ rstest_reuse = "0.7.0"
 pretty_assertions = "1.4.1"
 tempfile = "3.27.0"
 
+# Dependencias optimizadas en debug: GPUI sin optimizar no da los fps del spike.
+# Solo pesa en el build limpio; los crates propios siguen en opt-level 0.
+[profile.dev.package."*"]
+opt-level = 2
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 

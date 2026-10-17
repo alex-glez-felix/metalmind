@@ -54,6 +54,23 @@ cargo install --path crates/nota               # opcional: deja `nota` en ~/.car
 
 Dentro: vim normal/insert (lo de `nota-vim`), `:w` guarda, `:q` cierra (se niega si hay cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/nota-ui/src/theme.rs` (en Omarchy, JetBrainsMono Nerd Font).
 
+### Compilar rápido
+
+`.cargo/config.toml` enlaza con **mold** vía clang, así que hacen falta los dos (una sola vez):
+
+```sh
+sudo pacman -S --needed clang mold sccache     # Omarchy / Arch
+sudo apt-get install -y clang mold sccache     # Debian / Ubuntu
+```
+
+`sccache` no va en el config porque el CI no lo tiene; actívalo en tu shell:
+
+```sh
+export RUSTC_WRAPPER=sccache
+```
+
+Cachea dependencias entre checkouts y worktrees (cada agente tiene el suyo), no los crates propios en debug, que ya son incrementales.
+
 ## Hitos después del spike
 
 M0 ventana y texto → M1 vim normal/insert → M2 vault y finder → M3 wikilinks y backlinks → M4 live preview → M5 embeds y callouts → M6 búsqueda, pulido, primer release. Detalle en 03 §8.
