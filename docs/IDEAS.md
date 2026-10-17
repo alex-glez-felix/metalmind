@@ -31,6 +31,18 @@ Lo que quiere: personalizar colores, fuentes, algo de apariencia.
 **Impacto en el diseño temprano:**
 - **Ningún color ni tamaño de fuente hardcodeado** en la UI desde el primer commit. Todo sale de tokens de tema (`editor.background`, `text.muted`, `syntax.heading`). Arreglar esto después significa tocar cada vista.
 
+## Historial en árbol (undotree)
+
+Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **undotree** de vim. Si deshaces y luego editas, la rama que deshiciste no se pierde: queda como otra rama del árbol y puedes volver a ella.
+
+- Vista del árbol en un panel, navegable con `j`/`k`, con vista previa del diff de cada estado.
+- `g-` / `g+` como en vim: moverse por los estados en orden cronológico, cruzando ramas.
+- Posible después: historial persistente entre sesiones (como `undofile`).
+
+**Impacto en el diseño temprano:**
+- Hoy `History` en `nota-buffer` son dos pilas lineales (`undo` y `redo`): editar después de deshacer **borra** la pila de redo. Para el árbol, `History` tiene que pasar a ser un árbol de `Transaction` con un puntero al nodo actual. `undo`/`redo` siguen igual por fuera (padre / último hijo visitado), así que nota-vim no cambia.
+- Conviene hacerlo antes de que algo más dependa de la forma de `History` (persistencia, plugins).
+
 ## Pendientes de recoger
 
 El autor ha usado varias apps de notas y tiene ideas de qué le gusta de cada una. Anotarlas aquí conforme salgan.
