@@ -46,7 +46,10 @@ Ningún rope trae historial. Patrón que usan Helix y Zed:
 
 - Toda mutación es un `Transaction { edits: Vec<Edit>, selections_before, selections_after }`, con `Edit { range: Range<ByteOffset>, text: SmolStr }`.
 - `History` guarda transacciones invertibles. Undo = aplicar la inversa. Agrupar por "unidad vim": todo lo tecleado entre entrar y salir de insert es **una** transacción (así `u` deshace como en vim).
-- Bonus barato: como `ropey::Rope` clona en O(1) (comparte nodos), se puede guardar un snapshot por transacción para undo trivial y como base de un árbol de undo (`g-`/`g+`) más tarde.
+- **Árbol, no pilas** (implementado): como el undotree de vim, editar después de deshacer abre una rama nueva y la vieja sigue alcanzable. Los nodos viven en un arena (`Vec` + índice tipado `HistorySeq`, sin `Rc<RefCell>`): la raíz es el texto inicial y cada nodo guarda su padre, la transacción que lleva a él y sus hijos ordenados por visita. Se crean en orden y nunca se borran, así que el índice *es* el número de secuencia (`changenr()` en vim) y un padre siempre es menor que sus hijos.
+  - `undo` = ir al padre; `redo` = ir al hijo visitado más recientemente.
+  - `earlier(n)` / `later(n)` (`g-` / `g+`) van al estado con número `actual ∓ n`: suben deshaciendo hasta el ancestro común y bajan rehaciendo. El ancestro común sale de subir siempre el mayor de los dos números.
+  - Cada nodo guarda ediciones invertibles, no un snapshot del rope: recorrer el árbol solo toca lo que cambió, y es lo que serializaría un futuro `undofile`.
 - El mismo `Edit` alimenta `tree_sitter::InputEdit` → reparse incremental. Un solo tipo de edición para todo.
 
 ### Multi-cursor
@@ -292,7 +295,7 @@ dbg_macro = "deny"
 | Tipo | Herramienta | Para qué |
 |---|---|---|
 | Snapshot | `insta` 1.49 | Motor vim: `"hello |world" + "dw" → "hello |"` como snapshot legible. Parser Obsidian: AST de links/tags por fixture. Resolución de links por vault de prueba. |
-| Propiedades | `proptest` 1.12 | Invariantes: undo∘redo = id; aplicar `Transaction` y su inversa deja el rope igual; offsets siempre en frontera de char; `Selections` siempre ordenadas y sin solaparse; reindex incremental == reindex desde cero. |
+| Propiedades | `proptest` 1.12 | Invariantes: undo∘redo = id; cada número de secuencia del historial muestra siempre el mismo texto, se llegue por undo, redo, `g-` o `g+`; aplicar `Transaction` y su inversa deja el rope igual; offsets siempre en frontera de char; `Selections` siempre ordenadas y sin solaparse; reindex incremental == reindex desde cero. |
 | Tabla | `rstest` 0.27 | Casos parametrizados de motions/text objects. |
 | Diff legible | `pretty_assertions` 1.4 | |
 | Runner | `cargo-nextest` 0.9.148 | Paralelo, rápido en CI. |
