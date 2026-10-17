@@ -56,20 +56,17 @@ Dentro: vim normal/insert (lo de `nota-vim`), `:w` guarda, `:q` cierra (se niega
 
 ### Compilar rápido
 
-`.cargo/config.toml` enlaza con **mold** vía clang, así que hacen falta los dos (una sola vez):
+Las dependencias van con `opt-level = 2` en debug (`Cargo.toml`): el primer build tarda más, pero la app en debug corre fluida. Lo demás es opcional y vive en tu máquina, no en el repo, para que `cargo build` funcione en cualquier lado:
 
-```sh
-sudo pacman -S --needed clang mold sccache     # Omarchy / Arch
-sudo apt-get install -y clang mold sccache     # Debian / Ubuntu
-```
+- **mold** acorta el enlace de cada rebuild (en un escritorio de 16 hilos, de 1.5 s a 0.9 s). Con `clang` y `mold` instalados (`sudo pacman -S --needed clang mold` o `sudo apt-get install -y clang mold`), agrega a `~/.cargo/config.toml`:
 
-`sccache` no va en el config porque el CI no lo tiene; actívalo en tu shell:
+  ```toml
+  [target.x86_64-unknown-linux-gnu]
+  linker = "clang"
+  rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+  ```
 
-```sh
-export RUSTC_WRAPPER=sccache
-```
-
-Cachea dependencias entre checkouts y worktrees (cada agente tiene el suyo), no los crates propios en debug, que ya son incrementales.
+- **sccache** cachea las dependencias entre checkouts y worktrees (útil con varios agentes, cada uno con el suyo): `export RUSTC_WRAPPER=sccache`. No acelera los crates propios en debug, que ya son incrementales.
 
 ## Hitos después del spike
 
