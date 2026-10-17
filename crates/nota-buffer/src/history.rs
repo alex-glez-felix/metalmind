@@ -120,6 +120,12 @@ impl History {
         self.open.is_some()
     }
 
+    pub fn has_uncommitted_edits(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|open| !open.edits.is_empty())
+    }
+
     pub fn begin(&mut self, before: Selections) -> Result<(), BufferError> {
         if self.is_open() {
             return Err(BufferError::TransactionAlreadyOpen);

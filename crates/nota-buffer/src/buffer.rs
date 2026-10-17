@@ -159,6 +159,13 @@ impl Buffer {
         self.history.is_open()
     }
 
+    /// El texto ya no es el de [`Buffer::history_seq`]: la transacción
+    /// abierta tiene ediciones.
+    #[must_use]
+    pub fn has_uncommitted_edits(&self) -> bool {
+        self.history.has_uncommitted_edits()
+    }
+
     /// Aplica un lote de ediciones sin solapes, expresadas en coordenadas del
     /// texto actual, dentro de la transacción abierta.
     ///

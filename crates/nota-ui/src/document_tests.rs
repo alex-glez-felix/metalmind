@@ -194,3 +194,62 @@ fn si_guardar_falla_sigue_modificado() {
     assert!(document.is_modified());
     assert!(!document.exists_on_disk());
 }
+
+#[test]
+fn deshacer_hasta_lo_guardado_quita_el_modificado() {
+    let mut document = document("abc\n");
+    keys(&mut document, "x");
+    assert!(document.is_modified());
+    keys(&mut document, "xuu");
+    assert_eq!(document.buffer().to_string(), "abc\n");
+    assert!(!document.is_modified());
+}
+
+#[test]
+fn escribir_en_insert_marca_modificado_antes_de_salir() {
+    let mut document = document("abc\n");
+    keys(&mut document, "i");
+    assert!(!document.is_modified());
+    keys(&mut document, "x");
+    assert!(document.is_modified());
+    keys(&mut document, "⎋u");
+    assert!(!document.is_modified());
+}
+
+#[test]
+fn g_menos_y_g_mas_cruzan_ramas_hasta_lo_guardado() {
+    let dir = TempDir::new().unwrap();
+    let mut document = Document::open(&dir.path().join("nota.md")).unwrap();
+    keys(&mut document, "iabc⎋0x");
+    document.save().unwrap();
+    keys(&mut document, "u$x");
+    assert_eq!(document.buffer().to_string(), "ab");
+    assert!(document.is_modified());
+    keys(&mut document, "g-");
+    assert_eq!(document.buffer().to_string(), "bc");
+    assert!(!document.is_modified());
+    keys(&mut document, "g+");
+    assert!(document.is_modified());
+    keys(&mut document, "g-");
+    assert!(!document.is_modified());
+}
+
+#[test]
+fn el_mismo_texto_por_otra_edicion_sigue_modificado() {
+    let mut document = document("abc\n");
+    keys(&mut document, "xia⎋");
+    assert_eq!(document.buffer().to_string(), "abc\n");
+    assert!(document.is_modified());
+}
+
+#[test]
+fn guardar_a_mitad_del_insert_no_coincide_con_ningun_estado() {
+    let dir = TempDir::new().unwrap();
+    let mut document = Document::open(&dir.path().join("nota.md")).unwrap();
+    keys(&mut document, "ix");
+    document.save().unwrap();
+    assert!(document.is_modified());
+    keys(&mut document, "⎋u");
+    assert_eq!(document.buffer().to_string(), "");
+    assert!(document.is_modified());
+}

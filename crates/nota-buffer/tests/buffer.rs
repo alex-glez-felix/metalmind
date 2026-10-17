@@ -148,6 +148,19 @@ fn each_saved_transaction_is_a_new_history_seq() {
 }
 
 #[test]
+fn uncommitted_edits_are_visible_until_commit() {
+    let mut buffer = Buffer::from("abc");
+    buffer.begin_transaction(cursor(0)).unwrap();
+    assert!(!buffer.has_uncommitted_edits());
+    buffer.apply(vec![Edit::insert(at(0), "x")]).unwrap();
+    assert!(buffer.has_uncommitted_edits());
+    assert_eq!(buffer.history_seq(), HistorySeq::INITIAL);
+    buffer.commit_transaction(cursor(1)).unwrap();
+    assert!(!buffer.has_uncommitted_edits());
+    assert_eq!(seq(&buffer), 1);
+}
+
+#[test]
 fn editing_after_undo_keeps_the_undone_branch() {
     let mut buffer = branched();
     assert_eq!(buffer.to_string(), "ab");
