@@ -21,3 +21,7 @@ El formato (rustfmt), clippy con `-D warnings`, `unwrap_used`, `expect_used`, `t
 Si las decisiones de `docs/research/` contradicen el cambio, dilo y cita el documento.
 
 Sé concreto: archivo, línea, qué falla y con qué entrada. Si no estás seguro de que algo sea un bug, dilo así en vez de afirmarlo.
+
+## Datos personales
+
+El repo es público. Señala cualquier nombre de máquina, spec de hardware concreto, IP, ruta de un home o referencia a una persona en código, docs o mensajes; deben ir en términos genéricos.
