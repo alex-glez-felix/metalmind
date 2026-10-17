@@ -197,9 +197,9 @@ impl Document {
     }
 
     /// Pega en el cursor, o en la línea de comandos si está abierta. En
-    /// Insert se suma a la transacción abierta, así `u` lo deshace junto con
-    /// lo escrito; en Normal es un paso propio y el cursor queda sobre el
-    /// último carácter pegado.
+    /// Insert entra como lo tecleado: `u` lo deshace junto con lo escrito y
+    /// el count lo repite. En Normal es un paso propio y el cursor queda
+    /// sobre el último carácter pegado.
     ///
     /// # Errors
     /// Solo si la edición resulta inválida, lo que sería un bug.
@@ -207,13 +207,9 @@ impl Document {
         if text.is_empty() {
             return Ok(());
         }
-        if self.mode() == Mode::CommandLine {
-            self.type_text(text)?;
-            return Ok(());
-        }
-        if self.buffer.has_open_transaction() {
-            let end = self.insert_at_cursor(text)?;
-            self.selections = Selections::single(Selection::cursor(end));
+        if self.mode().takes_text() {
+            self.vim
+                .insert_text(text, &mut self.buffer, &mut self.selections)?;
             return Ok(());
         }
         self.buffer.begin_transaction(self.selections.clone())?;

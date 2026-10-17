@@ -4,7 +4,7 @@
 pub mod nvim;
 
 use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_vim::{Key, Mode, Vim};
+use nota_vim::{Key, KeyOutcome, Mode, Vim};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
@@ -36,20 +36,53 @@ pub fn render(buffer: &Buffer, heads: impl IntoIterator<Item = ByteOffset>) -> S
     text
 }
 
-/// Notación de vim (`<Esc>`, `<CR>`, `<BS>`, `<C-r>`), la misma que recibe nvim.
-pub fn vim_keys(notation: &str) -> Vec<Key> {
-    let mut keys = Vec::new();
+/// Lo que llega al motor: una tecla o un texto pegado entero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Input {
+    Key(Key),
+    Paste(String),
+}
+
+const PASTE_START: &str = "<PasteStart>";
+const PASTE_END: &str = "<PasteEnd>";
+
+/// Notación de vim (`<Esc>`, `<CR>`, `<BS>`, `<C-r>`), la misma que recibe
+/// nvim. `<PasteStart>texto<PasteEnd>` es un pegado de la terminal.
+pub fn inputs(notation: &str) -> Vec<Input> {
+    let mut inputs = Vec::new();
     let mut rest = notation;
     while let Some(c) = rest.chars().next() {
-        if let Some((key, len)) = special_key(rest) {
-            keys.push(key);
+        if let Some(pasted) = rest.strip_prefix(PASTE_START) {
+            let (text, after) = pasted.split_once(PASTE_END).expect("falta <PasteEnd>");
+            inputs.push(Input::Paste(text.to_owned()));
+            rest = after;
+        } else if let Some((key, len)) = special_key(rest) {
+            inputs.push(Input::Key(key));
             rest = &rest[len..];
         } else {
-            keys.push(Key::Char(c));
+            inputs.push(Input::Key(Key::Char(c)));
             rest = &rest[c.len_utf8()..];
         }
     }
-    keys
+    inputs
+}
+
+/// Pasa `notation` al motor y devuelve lo que pasó con la última entrada.
+pub fn feed(
+    vim: &mut Vim,
+    buffer: &mut Buffer,
+    selections: &mut Selections,
+    notation: &str,
+) -> Option<KeyOutcome> {
+    let mut last = None;
+    for input in inputs(notation) {
+        let outcome = match input {
+            Input::Key(key) => vim.feed(key, buffer, selections),
+            Input::Paste(text) => vim.insert_text(&text, buffer, selections),
+        };
+        last = Some(outcome.unwrap());
+    }
+    last
 }
 
 fn special_key(text: &str) -> Option<(Key, usize)> {
@@ -77,9 +110,7 @@ pub fn mode_name(mode: Mode) -> &'static str {
 pub fn run_engine(before: &str, keys: &str) -> State {
     let (mut buffer, mut selections) = parse(before);
     let mut vim = Vim::new();
-    for key in vim_keys(keys) {
-        vim.feed(key, &mut buffer, &mut selections).unwrap();
-    }
+    feed(&mut vim, &mut buffer, &mut selections, keys);
     State {
         text: render(&buffer, selections.iter().map(|s| s.head)),
         mode: mode_name(vim.mode()).to_owned(),
