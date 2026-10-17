@@ -259,6 +259,15 @@ use rstest_reuse::{self, apply, template};
 #[case("x \"ab|\" y", "ci\"Z<Esc>", "x \"|Z\" y")]
 #[case("|foo", "di\"", "|foo")]
 #[case("x \"a|b\" y", "d2i\"", "x | y")]
+// línea de comandos: entrar, editar y salir sin ejecutar nada
+#[case("ab|c", ":w", "ab|c")]
+#[case("ab|c", ":wq<BS>", "ab|c")]
+#[case("ab|c", ":<Esc>", "ab|c")]
+#[case("ab|c", ":w<BS><BS>", "ab|c")]
+#[case("ab|c", "3:<Esc>", "ab|c")]
+#[case("ab|c", ":q<Esc>x", "a|b")]
+#[case("ab|c", ":<BS>x", "a|b")]
+#[case("|abc", "i:<Esc>", "|:abc")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]
