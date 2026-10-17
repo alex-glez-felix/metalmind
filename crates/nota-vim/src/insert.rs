@@ -80,6 +80,74 @@ pub(crate) fn backspace(
     Ok(selections.map(|selection| Selection::cursor(map.map(selection.head, Bias::Before))))
 }
 
+/// Algo tecleado en Insert, tal como se repite con el count de `3ihola<Esc>`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Typed {
+    Text(String),
+    Backspace,
+}
+
+impl Typed {
+    pub(crate) fn apply(
+        &self,
+        buffer: &mut Buffer,
+        selections: &Selections,
+    ) -> Result<Selections, VimError> {
+        match self {
+            Self::Text(text) => type_text(buffer, selections, text),
+            Self::Backspace => backspace(buffer, selections),
+        }
+    }
+}
+
+/// Lo tecleado desde que se entró a Insert, si el count pide repetirlo.
+/// Como en vim, se repiten las teclas y no el texto que quedó, así que un
+/// `<BS>` también se repite.
+#[derive(Debug, Default)]
+pub(crate) struct Repeat {
+    extra: usize,
+    opens_line: bool,
+    typed: Vec<Typed>,
+}
+
+impl Repeat {
+    pub(crate) fn new(count: Option<usize>, at: InsertAt) -> Self {
+        Self {
+            extra: count.unwrap_or(1).saturating_sub(1),
+            opens_line: matches!(at, InsertAt::LineBelow | InsertAt::LineAbove),
+            typed: Vec::new(),
+        }
+    }
+
+    pub(crate) fn record(&mut self, typed: &Typed) {
+        if self.extra == 0 {
+            return;
+        }
+        match (self.typed.last_mut(), typed) {
+            (Some(Typed::Text(last)), Typed::Text(text)) => last.push_str(text),
+            _ => self.typed.push(typed.clone()),
+        }
+    }
+
+    /// Las repeticiones de `o` y `O` abren cada una su línea debajo de la
+    /// anterior.
+    pub(crate) fn replay(
+        &self,
+        buffer: &mut Buffer,
+        selections: &Selections,
+    ) -> Result<Selections, VimError> {
+        let newline = Typed::Text("\n".to_owned());
+        let opened = self.opens_line.then_some(&newline);
+        let mut selections = selections.clone();
+        for _ in 0..self.extra {
+            for typed in opened.into_iter().chain(&self.typed) {
+                selections = typed.apply(buffer, &selections)?;
+            }
+        }
+        Ok(selections)
+    }
+}
+
 /// Cierra la transacción y deja el cursor sobre el último carácter escrito.
 pub(crate) fn leave(buffer: &mut Buffer, selections: &Selections) -> Result<Selections, VimError> {
     let after = selections.map(|selection| {

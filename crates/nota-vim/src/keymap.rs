@@ -188,9 +188,11 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Pending, &[ch('i'), ch('"')], quotes(false)),
         (Pending, &[ch('a'), ch('"')], quotes(true)),
         (Insert, &[Key::Escape], Action::NormalMode),
+        (Insert, &[Key::Ctrl('c')], Action::Interrupt),
         (Insert, &[Key::Backspace], Action::Backspace),
         (Insert, &[Key::Enter], Action::Newline),
         (CommandLine, &[Key::Escape], Action::NormalMode),
+        (CommandLine, &[Key::Ctrl('c')], Action::Interrupt),
         (CommandLine, &[Key::Backspace], Action::Backspace),
         (CommandLine, &[Key::Enter], Action::SubmitCommand),
     ]
