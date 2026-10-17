@@ -1,0 +1,18 @@
+[package]
+name = "nota-vault"
+description = "Archivos de notas en disco: lectura y guardado atómico."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+tempfile.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

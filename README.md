@@ -14,18 +14,27 @@ Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra h
 
 ## Estado
 
-Núcleo sin GUI (rodaja M0a): `crates/nota-buffer` (texto, selecciones, undo) y `crates/nota-vim` (motor vim puro, verificado contra `nvim --headless`). La GUI todavía no existe.
+M0 hecho: `nota archivo.md` abre una ventana (GPUI) donde se edita con vim y se guarda con `:w` de forma atómica.
+
+- `crates/nota-buffer`: texto, selecciones, undo.
+- `crates/nota-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
+- `crates/nota-vault`: leer y guardar notas (escritura atómica).
+- `crates/nota-ui` y `crates/nota`: la vista de editor y el binario; los únicos que dependen de GPUI.
 
 ```sh
-cargo test          # incluye el oráculo contra nvim si `nvim` está en el PATH
+cargo run --release -p nota -- archivo.md
+cargo nextest run --workspace   # incluye el oráculo contra nvim si `nvim` está en el PATH
 cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Primeros pasos](docs/GETTING-STARTED.md#correr-nota-en-pc-oma).
 
 ## Investigación
 
 - [01 — Panorama: qué existe ya](docs/research/01-landscape.md)
 - [02 — Stack de GUI en Rust](docs/research/02-gui-stack.md)
 - [03 — Arquitectura del núcleo](docs/research/03-core-architecture.md)
+- [04 — Spike de GPUI: resultados](docs/research/04-spike-gpui.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
 - [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
 

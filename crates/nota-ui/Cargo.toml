@@ -1,0 +1,24 @@
+[package]
+name = "nota-ui"
+description = "Vistas de nota sobre GPUI: el editor de texto con nota-buffer y nota-vim."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gpui-kit.workspace = true
+log.workspace = true
+nota-buffer.workspace = true
+nota-vault.workspace = true
+nota-vim.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
