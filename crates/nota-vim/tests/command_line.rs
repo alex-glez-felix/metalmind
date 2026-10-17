@@ -22,10 +22,7 @@ use rstest::rstest;
 fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
     let (mut buffer, mut selections) = support::parse("ab|c");
     let mut vim = Vim::new();
-    let mut last = None;
-    for key in support::vim_keys(keys) {
-        last = Some(vim.feed(key, &mut buffer, &mut selections).unwrap());
-    }
+    let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
     let text = support::render(&buffer, [selections.primary().head]);
     (last.unwrap(), vim, text)
 }

@@ -69,6 +69,16 @@ fn pegar_en_insert_se_deshace_con_lo_escrito() {
 }
 
 #[test]
+fn lo_pegado_en_insert_se_repite_con_el_count() {
+    let mut document = document("bc\n");
+    keys(&mut document, "3ia");
+    document.paste("XY").unwrap();
+    keys(&mut document, "⎋");
+    assert_eq!(document.buffer().to_string(), "aXYaXYaXYbc\n");
+    assert_eq!(document.cursor(), ByteOffset::new(8));
+}
+
+#[test]
 fn pegar_en_la_linea_de_comandos_no_toca_el_texto() {
     let mut document = document("ab\n");
     keys(&mut document, ":");

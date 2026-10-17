@@ -241,6 +241,13 @@ use rstest_reuse::{self, apply, template};
 #[case("|abc", "<C-c>x", "|bc")]
 #[case("|abc", "d<C-c>x", "|bc")]
 #[case("ab|c", ":w<C-c>x", "a|b")]
+// lo pegado en Insert entra como lo tecleado
+#[case("|abc", "3ia<PasteStart>XY<PasteEnd><Esc>", "aXYaXYaX|Yabc")]
+#[case("|abc", "3ia<PasteStart>XY<PasteEnd>z<Esc>", "aXYzaXYzaXY|zabc")]
+#[case("|abc", "3ia<PasteStart>XY<PasteEnd><C-c>", "aX|Yabc")]
+#[case("|abc", "3i<PasteStart>X\nY<PasteEnd><Esc>", "X\nYX\nYX\n|Yabc")]
+#[case("|abc", "ia<PasteStart>XY<PasteEnd><Esc>u", "|abc")]
+#[case("ab|c", ":<PasteStart>w<PasteEnd><Esc>x", "a|b")]
 // counts y cancelación
 #[case("|abc", "d<Esc>x", "|bc")]
 #[case("|abc", "3<Esc>x", "|bc")]

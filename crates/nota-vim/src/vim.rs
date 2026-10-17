@@ -193,6 +193,28 @@ impl Vim {
         Ok(KeyOutcome::Executed(action))
     }
 
+    /// Texto que llega entero, como lo pegado: entra por el mismo camino que
+    /// lo tecleado, así que en Insert también se repite con el count. Fuera
+    /// de Insert y de la línea de comandos no hace nada.
+    ///
+    /// # Errors
+    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
+    pub fn insert_text(
+        &mut self,
+        text: &str,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<KeyOutcome, VimError> {
+        match self.mode {
+            Mode::Insert => {
+                self.type_in_insert(&Typed::Text(text.to_owned()), buffer, selections)?;
+            }
+            Mode::CommandLine => self.command_line.push_str(text),
+            Mode::Normal | Mode::OperatorPending(_) => return Ok(KeyOutcome::Unbound),
+        }
+        Ok(KeyOutcome::Inserted)
+    }
+
     /// Un `0` sin count previo es la motion `0`, no un dígito.
     fn push_count_digit(&mut self, key: Key) -> bool {
         let Key::Char(c) = key else { return false };
@@ -223,12 +245,7 @@ impl Vim {
         if text.is_empty() {
             return Ok(KeyOutcome::Unbound);
         }
-        if self.mode == Mode::CommandLine {
-            self.command_line.push_str(&text);
-        } else {
-            self.type_in_insert(&Typed::Text(text), buffer, selections)?;
-        }
-        Ok(KeyOutcome::Inserted)
+        self.insert_text(&text, buffer, selections)
     }
 
     fn submit_command(&mut self) -> KeyOutcome {
