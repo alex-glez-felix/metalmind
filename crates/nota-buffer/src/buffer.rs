@@ -3,8 +3,8 @@ use std::ops::Range;
 
 use ropey::Rope;
 
-use crate::history::{AppliedEdit, History};
-use crate::{BufferError, ByteOffset, Edit, EditMap, Selections, Transaction};
+use crate::history::{AppliedEdit, Direction, History, Step};
+use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Transaction};
 
 /// Texto editable. Las líneas se separan solo por `\n`.
 #[derive(Debug, Default)]
@@ -20,10 +20,17 @@ impl Buffer {
         Self::default()
     }
 
-    /// Crece con cada edición, undo o redo; sirve para descartar cálculos viejos.
+    /// Crece con cada edición o paso por el historial; sirve para descartar
+    /// cálculos viejos.
     #[must_use]
     pub fn version(&self) -> u64 {
         self.version
+    }
+
+    /// Estado del historial en el que está el texto.
+    #[must_use]
+    pub fn history_seq(&self) -> HistorySeq {
+        self.history.current()
     }
 
     #[must_use]
@@ -172,38 +179,51 @@ impl Buffer {
                 deleted,
                 inserted: edit.text.clone(),
             });
-            self.splice(edit.range.start, removed, &edit.text)?;
+            splice(&mut self.rope, edit.range.start, removed, &edit.text)?;
+            self.version += 1;
         }
         self.history.record(applied)?;
         Ok(EditMap::new(&edits))
     }
 
-    /// Deshace la última transacción y la devuelve.
+    /// Vuelve al estado anterior en la rama actual y devuelve la transacción
+    /// deshecha.
     ///
     /// # Errors
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn undo(&mut self) -> Result<Option<&Transaction>, BufferError> {
-        let Some(transaction) = self.history.take_undo()? else {
-            return Ok(None);
-        };
-        for edit in transaction.edits().iter().rev() {
-            self.splice(edit.start, edit.inserted.len(), &edit.deleted)?;
-        }
-        Ok(self.history.push_undone(transaction))
+        let steps = self.history.undo()?;
+        replay(&mut self.rope, &mut self.version, &steps)
     }
 
-    /// Rehace la última transacción deshecha y la devuelve.
+    /// Rehace la transacción deshecha o visitada más recientemente desde el
+    /// estado actual y la devuelve.
     ///
     /// # Errors
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn redo(&mut self) -> Result<Option<&Transaction>, BufferError> {
-        let Some(transaction) = self.history.take_redo()? else {
-            return Ok(None);
-        };
-        for edit in transaction.edits() {
-            self.splice(edit.start, edit.deleted.len(), &edit.inserted)?;
-        }
-        Ok(self.history.push_redone(transaction))
+        let steps = self.history.redo()?;
+        replay(&mut self.rope, &mut self.version, &steps)
+    }
+
+    /// Retrocede `steps` estados en orden cronológico, aunque estén en otra
+    /// rama, como `g-` en vim. Devuelve la última transacción recorrida.
+    ///
+    /// # Errors
+    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
+    pub fn earlier(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
+        let steps = self.history.earlier(steps)?;
+        replay(&mut self.rope, &mut self.version, &steps)
+    }
+
+    /// Avanza `steps` estados en orden cronológico, aunque estén en otra
+    /// rama, como `g+` en vim. Devuelve la última transacción recorrida.
+    ///
+    /// # Errors
+    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
+    pub fn later(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
+        let steps = self.history.later(steps)?;
+        replay(&mut self.rope, &mut self.version, &steps)
     }
 
     fn check_range(&self, range: &Range<ByteOffset>) -> Result<(), BufferError> {
@@ -242,27 +262,52 @@ impl Buffer {
         }
         Ok(())
     }
+}
 
-    fn splice(&mut self, start: ByteOffset, removed: usize, text: &str) -> Result<(), BufferError> {
-        let len = self.len();
-        let out_of_bounds = |_| BufferError::OutOfBounds {
-            start,
-            end: start + removed,
-            len,
-        };
-        let first = self
-            .rope
-            .try_byte_to_char(start.get())
-            .map_err(out_of_bounds)?;
-        let last = self
-            .rope
-            .try_byte_to_char(start.get() + removed)
-            .map_err(out_of_bounds)?;
-        self.rope.try_remove(first..last).map_err(out_of_bounds)?;
-        self.rope.try_insert(first, text).map_err(out_of_bounds)?;
-        self.version += 1;
-        Ok(())
+/// Deshace o rehace cada transacción del recorrido y devuelve la última.
+fn replay<'a>(
+    rope: &mut Rope,
+    version: &mut u64,
+    steps: &[Step<'a>],
+) -> Result<Option<&'a Transaction>, BufferError> {
+    for step in steps {
+        let edits = step.transaction.edits();
+        match step.direction {
+            Direction::Undo => {
+                for edit in edits.iter().rev() {
+                    splice(rope, edit.start, edit.inserted.len(), &edit.deleted)?;
+                }
+            }
+            Direction::Redo => {
+                for edit in edits {
+                    splice(rope, edit.start, edit.deleted.len(), &edit.inserted)?;
+                }
+            }
+        }
+        *version += 1;
     }
+    Ok(steps.last().map(|step| step.transaction))
+}
+
+fn splice(
+    rope: &mut Rope,
+    start: ByteOffset,
+    removed: usize,
+    text: &str,
+) -> Result<(), BufferError> {
+    let len = ByteOffset::new(rope.len_bytes());
+    let out_of_bounds = |_| BufferError::OutOfBounds {
+        start,
+        end: start + removed,
+        len,
+    };
+    let first = rope.try_byte_to_char(start.get()).map_err(out_of_bounds)?;
+    let last = rope
+        .try_byte_to_char(start.get() + removed)
+        .map_err(out_of_bounds)?;
+    rope.try_remove(first..last).map_err(out_of_bounds)?;
+    rope.try_insert(first, text).map_err(out_of_bounds)?;
+    Ok(())
 }
 
 impl From<&str> for Buffer {
