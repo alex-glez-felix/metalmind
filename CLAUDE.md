@@ -26,3 +26,7 @@ Que esté hecho con IA no es excusa. Se escribe como si lo fuera a revisar algui
 - **Nada se da por terminado sin test** que demuestre el comportamiento.
 
 Al crear el workspace, estas reglas se vuelven automáticas en `Cargo.toml` (`[workspace.lints.clippy]`): `unwrap_used`, `expect_used`, `todo`, `dbg_macro`, `allow_attributes_without_reason` en `deny`. Lo que la máquina puede revisar no depende de la buena voluntad del agente.
+
+## Repo público
+
+El repo es público. Commits, PRs, docs y comentarios no llevan datos personales: nada de nombres de máquinas, specs de hardware, IPs, rutas de un home, ni quién corrió qué. Se habla del proyecto, no de quien lo usa ("en una máquina con GPU NVIDIA", no "en la PC de X"). Los números de rendimiento sí van, con el tipo de máquina en términos genéricos.
