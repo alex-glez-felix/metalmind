@@ -32,6 +32,10 @@ pub enum Action {
     Paste(PasteSide),
     Undo,
     Redo,
+    /// Estado anterior en orden cronológico, cruzando ramas del historial.
+    Earlier,
+    /// Estado siguiente en orden cronológico, cruzando ramas del historial.
+    Later,
     Backspace,
     Newline,
 }
@@ -89,6 +93,8 @@ impl Action {
         Self::Paste(PasteSide::Before),
         Self::Undo,
         Self::Redo,
+        Self::Earlier,
+        Self::Later,
         Self::Backspace,
         Self::Newline,
     ];
@@ -117,6 +123,8 @@ impl Action {
             Self::Paste(PasteSide::Before) => "vim::paste_before",
             Self::Undo => "vim::undo",
             Self::Redo => "vim::redo",
+            Self::Earlier => "vim::earlier",
+            Self::Later => "vim::later",
             Self::Backspace => "editor::backspace",
             Self::Newline => "editor::newline",
         }
