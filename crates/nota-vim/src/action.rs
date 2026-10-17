@@ -34,6 +34,10 @@ pub enum Action {
     Redo,
     Backspace,
     Newline,
+    /// Abre la línea de comandos (`:`).
+    CommandLine,
+    /// Envía lo escrito en la línea de comandos.
+    SubmitCommand,
 }
 
 impl Action {
@@ -91,6 +95,8 @@ impl Action {
         Self::Redo,
         Self::Backspace,
         Self::Newline,
+        Self::CommandLine,
+        Self::SubmitCommand,
     ];
 
     #[must_use]
@@ -119,6 +125,8 @@ impl Action {
             Self::Redo => "vim::redo",
             Self::Backspace => "editor::backspace",
             Self::Newline => "editor::newline",
+            Self::CommandLine => "vim::command_line",
+            Self::SubmitCommand => "vim::submit_command",
         }
     }
 }

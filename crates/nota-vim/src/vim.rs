@@ -6,7 +6,8 @@ use crate::operator::Operand;
 use crate::register::Register;
 use crate::span::{Region, Target};
 use crate::{
-    Action, InsertAt, Key, Keymap, Motion, Operator, PasteSide, TextObject, VimError, insert, paste,
+    Action, Command, CommandError, InsertAt, Key, Keymap, Motion, Operator, PasteSide, TextObject,
+    VimError, insert, paste,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,18 +15,33 @@ pub enum Mode {
     Normal,
     Insert,
     OperatorPending(Operator),
+    /// Escribiendo tras `:`.
+    CommandLine,
 }
 
-/// Qué pasó con una tecla.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl Mode {
+    /// Las teclas de texto se escriben en vez de ser comandos.
+    #[must_use]
+    pub fn takes_text(self) -> bool {
+        matches!(self, Self::Insert | Self::CommandLine)
+    }
+}
+
+/// Qué pasó con una tecla o una acción.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum KeyOutcome {
     /// Falta el resto de la secuencia o del count.
     Pending,
     Executed(Action),
-    /// Texto escrito en modo Insert.
+    /// Texto escrito en modo Insert o en la línea de comandos.
     Inserted,
     /// Ningún binding la usa; la capa de arriba puede probar otro keymap.
     Unbound,
+    /// Se envió la línea de comandos con un comando que ejecuta quien aloja
+    /// el editor.
+    Command(Command),
+    /// Se envió la línea de comandos con algo que no es un comando.
+    InvalidCommand(CommandError),
 }
 
 /// Sobre qué actúa un operador.
@@ -46,6 +62,7 @@ pub struct Vim {
     count: Option<usize>,
     operator_count: Option<usize>,
     register: Option<Register>,
+    command_line: String,
 }
 
 impl Default for Vim {
@@ -69,12 +86,19 @@ impl Vim {
             count: None,
             operator_count: None,
             register: None,
+            command_line: String::new(),
         }
     }
 
     #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode
+    }
+
+    /// Lo escrito tras `:`, mientras se está en la línea de comandos.
+    #[must_use]
+    pub fn command_line(&self) -> Option<&str> {
+        (self.mode == Mode::CommandLine).then_some(self.command_line.as_str())
     }
 
     /// # Errors
@@ -93,8 +117,7 @@ impl Vim {
             Lookup::Pending => Ok(KeyOutcome::Pending),
             Lookup::Action(action) => {
                 self.pending.clear();
-                self.execute(action, buffer, selections)?;
-                Ok(KeyOutcome::Executed(action))
+                self.execute(action, buffer, selections)
             }
             Lookup::Unbound => self.unbound(buffer, selections),
         }
@@ -102,6 +125,8 @@ impl Vim {
 
     /// Ejecuta una acción por nombre ya resuelto, como harán la paleta y `:`.
     /// Las acciones que no aplican al modo actual solo cancelan lo pendiente.
+    /// Enviar la línea de comandos devuelve el comando para quien aloja el
+    /// editor.
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
@@ -110,7 +135,7 @@ impl Vim {
         action: Action,
         buffer: &mut Buffer,
         selections: &mut Selections,
-    ) -> Result<(), VimError> {
+    ) -> Result<KeyOutcome, VimError> {
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
                 self.operate(operator, Object::Motion(motion), buffer, selections)?;
@@ -151,16 +176,28 @@ impl Vim {
             (Action::Newline, Mode::Insert) => {
                 *selections = insert::type_text(buffer, selections, "\n")?;
             }
+            (Action::CommandLine, Mode::Normal) => {
+                self.reset();
+                self.command_line.clear();
+                self.mode = Mode::CommandLine;
+            }
+            (Action::NormalMode, Mode::CommandLine) => self.mode = Mode::Normal,
+            (Action::Backspace, Mode::CommandLine) => {
+                if self.command_line.pop().is_none() {
+                    self.mode = Mode::Normal;
+                }
+            }
+            (Action::SubmitCommand, Mode::CommandLine) => return Ok(self.submit_command()),
             _ => self.reset(),
         }
-        Ok(())
+        Ok(KeyOutcome::Executed(action))
     }
 
     /// Un `0` sin count previo es la motion `0`, no un dígito.
     fn push_count_digit(&mut self, key: Key) -> bool {
         let Key::Char(c) = key else { return false };
         let starts_count = c != '0' || self.count.is_some();
-        let accepts_count = self.mode != Mode::Insert && self.pending.is_empty();
+        let accepts_count = !self.mode.takes_text() && self.pending.is_empty();
         let Some(digit) = c.to_digit(10).filter(|_| starts_count && accepts_count) else {
             return false;
         };
@@ -175,16 +212,32 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
         let keys = std::mem::take(&mut self.pending);
-        if self.mode != Mode::Insert {
+        if !self.mode.takes_text() {
             self.reset();
             return Ok(KeyOutcome::Unbound);
         }
-        let text: String = keys.iter().filter_map(|key| typed_char(*key)).collect();
+        let text: String = keys
+            .iter()
+            .filter_map(|&key| typed_char(key, self.mode))
+            .collect();
         if text.is_empty() {
             return Ok(KeyOutcome::Unbound);
         }
-        *selections = insert::type_text(buffer, selections, &text)?;
+        if self.mode == Mode::CommandLine {
+            self.command_line.push_str(&text);
+        } else {
+            *selections = insert::type_text(buffer, selections, &text)?;
+        }
         Ok(KeyOutcome::Inserted)
+    }
+
+    fn submit_command(&mut self) -> KeyOutcome {
+        self.mode = Mode::Normal;
+        match Command::parse(&std::mem::take(&mut self.command_line)) {
+            Ok(Some(command)) => KeyOutcome::Command(command),
+            Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
+            Err(error) => KeyOutcome::InvalidCommand(error),
+        }
     }
 
     fn reset(&mut self) {
@@ -328,10 +381,10 @@ fn combined(operator: Option<usize>, motion: Option<usize>) -> Option<usize> {
     }
 }
 
-fn typed_char(key: Key) -> Option<char> {
+fn typed_char(key: Key, mode: Mode) -> Option<char> {
     match key {
         Key::Char(c) => Some(c),
-        Key::Tab => Some('\t'),
+        Key::Tab if mode == Mode::Insert => Some('\t'),
         _ => None,
     }
 }

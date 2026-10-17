@@ -10,6 +10,7 @@ pub enum Context {
     /// Con este operador pendiente, p. ej. la segunda `d` de `dd`.
     Operator(Operator),
     Insert,
+    CommandLine,
 }
 
 impl Context {
@@ -19,7 +20,8 @@ impl Context {
             (Self::VimControl, Mode::Normal | Mode::OperatorPending(_))
             | (Self::Normal, Mode::Normal)
             | (Self::OperatorPending, Mode::OperatorPending(_))
-            | (Self::Insert, Mode::Insert) => true,
+            | (Self::Insert, Mode::Insert)
+            | (Self::CommandLine, Mode::CommandLine) => true,
             (Self::Operator(wanted), Mode::OperatorPending(pending)) => wanted == pending,
             _ => false,
         }
@@ -111,7 +113,7 @@ const CHANGE: Context = Context::Operator(Operator::Change);
 const YANK: Context = Context::Operator(Operator::Yank);
 
 const VIM: &[(Context, &[Key], Action)] = {
-    use Context::{Insert, Normal, OperatorPending as Pending, VimControl as Control};
+    use Context::{CommandLine, Insert, Normal, OperatorPending as Pending, VimControl as Control};
     &[
         (Control, &[ch('h')], motion(Motion::Left)),
         (Control, &[ch('j')], motion(Motion::Down)),
@@ -167,6 +169,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('A')], Action::Insert(InsertAt::LineEnd)),
         (Normal, &[ch('o')], Action::Insert(InsertAt::LineBelow)),
         (Normal, &[ch('O')], Action::Insert(InsertAt::LineAbove)),
+        (Normal, &[ch(':')], Action::CommandLine),
         (DELETE, &[ch('d')], Action::CurrentLine),
         (CHANGE, &[ch('c')], Action::CurrentLine),
         (YANK, &[ch('y')], Action::CurrentLine),
@@ -185,6 +188,9 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Insert, &[Key::Escape], Action::NormalMode),
         (Insert, &[Key::Backspace], Action::Backspace),
         (Insert, &[Key::Enter], Action::Newline),
+        (CommandLine, &[Key::Escape], Action::NormalMode),
+        (CommandLine, &[Key::Backspace], Action::Backspace),
+        (CommandLine, &[Key::Enter], Action::SubmitCommand),
     ]
 };
 
@@ -192,9 +198,10 @@ const VIM: &[(Context, &[Key], Action)] = {
 mod tests {
     use super::*;
 
-    const MODES: [Mode; 5] = [
+    const MODES: [Mode; 6] = [
         Mode::Normal,
         Mode::Insert,
+        Mode::CommandLine,
         Mode::OperatorPending(Operator::Delete),
         Mode::OperatorPending(Operator::Change),
         Mode::OperatorPending(Operator::Yank),
