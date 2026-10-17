@@ -162,8 +162,10 @@ impl Document {
     }
 
     /// Selección hecha con el ratón, con `head` exclusivo. Un clic en Normal
-    /// no deja el cursor sobre el salto de línea, como en vim.
+    /// no deja el cursor sobre el salto de línea, y en Insert descarta la
+    /// repetición del count, como en vim.
     pub fn select(&mut self, anchor: ByteOffset, head: ByteOffset) {
+        self.vim.cursor_moved();
         let selection = if anchor == head {
             Selection::cursor(self.clamp_to_mode(head))
         } else {

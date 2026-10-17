@@ -193,6 +193,12 @@ impl Vim {
         Ok(KeyOutcome::Executed(action))
     }
 
+    /// El cursor se movió por fuera del motor, como con un clic. Igual que
+    /// en vim, lo tecleado hasta ahí ya no se repite con el count.
+    pub fn cursor_moved(&mut self) {
+        self.repeat = Repeat::default();
+    }
+
     /// Texto que llega entero, como lo pegado: entra por el mismo camino que
     /// lo tecleado, así que en Insert también se repite con el count. Fuera
     /// de Insert y de la línea de comandos no hace nada.

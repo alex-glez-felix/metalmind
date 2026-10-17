@@ -79,6 +79,16 @@ fn lo_pegado_en_insert_se_repite_con_el_count() {
 }
 
 #[test]
+fn un_clic_en_insert_descarta_la_repeticion_del_count() {
+    let mut document = document("abc def\n");
+    keys(&mut document, "3ihola");
+    document.select(ByteOffset::new(10), ByteOffset::new(10));
+    keys(&mut document, "x⎋");
+    assert_eq!(document.buffer().to_string(), "holaabc dexf\n");
+    assert_eq!(document.cursor(), ByteOffset::new(10));
+}
+
+#[test]
 fn pegar_en_la_linea_de_comandos_no_toca_el_texto() {
     let mut document = document("ab\n");
     keys(&mut document, ":");

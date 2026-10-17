@@ -36,18 +36,28 @@ pub fn render(buffer: &Buffer, heads: impl IntoIterator<Item = ByteOffset>) -> S
     text
 }
 
-/// Lo que llega al motor: una tecla o un texto pegado entero.
+/// Lo que llega al motor: una tecla, un texto pegado entero o el ratón.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Input {
     Key(Key),
     Paste(String),
+    /// Clic que pone el cursor en esa línea y columna (en caracteres).
+    Click {
+        line: usize,
+        column: usize,
+    },
+    /// Soltar el botón no le llega al motor; nvim lo necesita para que el
+    /// clic no quede como arrastre.
+    Release,
 }
 
 const PASTE_START: &str = "<PasteStart>";
 const PASTE_END: &str = "<PasteEnd>";
 
 /// Notación de vim (`<Esc>`, `<CR>`, `<BS>`, `<C-r>`), la misma que recibe
-/// nvim. `<PasteStart>texto<PasteEnd>` es un pegado de la terminal.
+/// nvim. `<PasteStart>texto<PasteEnd>` es un pegado de la terminal y
+/// `<LeftMouse><col,fila>` un clic, contando desde 0; en texto ASCII la
+/// columna de pantalla de nvim es la de caracteres.
 pub fn inputs(notation: &str) -> Vec<Input> {
     let mut inputs = Vec::new();
     let mut rest = notation;
@@ -56,6 +66,9 @@ pub fn inputs(notation: &str) -> Vec<Input> {
             let (text, after) = pasted.split_once(PASTE_END).expect("falta <PasteEnd>");
             inputs.push(Input::Paste(text.to_owned()));
             rest = after;
+        } else if let Some((input, len)) = mouse(rest) {
+            inputs.push(input);
+            rest = &rest[len..];
         } else if let Some((key, len)) = special_key(rest) {
             inputs.push(Input::Key(key));
             rest = &rest[len..];
@@ -79,10 +92,36 @@ pub fn feed(
         let outcome = match input {
             Input::Key(key) => vim.feed(key, buffer, selections),
             Input::Paste(text) => vim.insert_text(&text, buffer, selections),
+            Input::Click { line, column } => {
+                assert_eq!(vim.mode(), Mode::Insert, "el clic solo se modela en Insert");
+                let offset = buffer.offset_at_column(line, column);
+                *selections = Selections::single(Selection::cursor(offset));
+                vim.cursor_moved();
+                continue;
+            }
+            Input::Release => continue,
         };
         last = Some(outcome.unwrap());
     }
     last
+}
+
+fn mouse(text: &str) -> Option<(Input, usize)> {
+    let (button, rest) = text
+        .strip_prefix("<LeftMouse>")
+        .map(|rest| (true, rest))
+        .or_else(|| text.strip_prefix("<LeftRelease>").map(|rest| (false, rest)))?;
+    let end = rest.find('>')?;
+    let (column, line) = rest.strip_prefix('<')?[..end - 1].split_once(',')?;
+    let input = if button {
+        Input::Click {
+            line: line.parse().ok()?,
+            column: column.parse().ok()?,
+        }
+    } else {
+        Input::Release
+    };
+    Some((input, text.len() - rest.len() + end + 1))
 }
 
 fn special_key(text: &str) -> Option<(Key, usize)> {
