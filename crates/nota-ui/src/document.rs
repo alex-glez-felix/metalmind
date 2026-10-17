@@ -4,7 +4,9 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use nota_buffer::{Bias, Buffer, BufferError, ByteOffset, Edit, Goal, Selection, Selections};
+use nota_buffer::{
+    Bias, Buffer, BufferError, ByteOffset, Edit, Goal, HistorySeq, Selection, Selections,
+};
 use nota_vault::FileError;
 use nota_vim::{Key, KeyOutcome, Mode, Vim, VimError};
 
@@ -44,8 +46,9 @@ pub struct Document {
     buffer: Buffer,
     selections: Selections,
     vim: Vim,
-    /// Versión del buffer que coincide con el disco.
-    saved_version: u64,
+    /// Estado del historial que coincide con el disco; `None` si se guardó
+    /// a mitad de una transacción y ningún estado coincide.
+    saved: Option<HistorySeq>,
     exists_on_disk: bool,
 }
 
@@ -67,7 +70,7 @@ impl Document {
         let buffer = Buffer::from(text);
         Self {
             path: path.to_owned(),
-            saved_version: buffer.version(),
+            saved: Some(buffer.history_seq()),
             buffer,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
             vim: Vim::new(),
@@ -90,17 +93,19 @@ impl Document {
         FileStats::of(&self.buffer)
     }
 
-    /// Conservador: deshacer hasta lo guardado sigue contando como cambio.
+    /// Como vim, depende del estado del historial y no del texto: volver a
+    /// lo guardado con `u` o `g-` lo limpia, pero llegar al mismo texto por
+    /// otra edición no.
     #[must_use]
     pub fn is_modified(&self) -> bool {
-        self.buffer.version() != self.saved_version
+        self.buffer.has_uncommitted_edits() || self.saved != Some(self.buffer.history_seq())
     }
 
     /// # Errors
     /// Si no se pudo escribir; el archivo en disco queda como estaba.
     pub fn save(&mut self) -> Result<FileStats, FileError> {
         nota_vault::write_atomic(&self.path, |out| write!(out, "{}", self.buffer))?;
-        self.saved_version = self.buffer.version();
+        self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
         Ok(self.stats())
     }
