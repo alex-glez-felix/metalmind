@@ -1,10 +1,10 @@
-use nota_buffer::{Buffer, BufferError, Selection, Selections, Transaction};
+use nota_buffer::{Buffer, Selection, Selections};
 
 use crate::keymap::Lookup;
-use crate::lines::clamp_normal;
 use crate::operator::Operand;
 use crate::register::Register;
 use crate::span::{Region, Target};
+use crate::travel::Travel;
 use crate::{
     Action, Command, CommandError, InsertAt, Key, Keymap, Motion, Operator, PasteSide, TextObject,
     VimError, insert, paste,
@@ -303,8 +303,6 @@ impl Vim {
         Ok(())
     }
 
-    /// Como vim, moverse por el historial deja el cursor donde empezó el
-    /// último cambio recorrido.
     fn travel(
         &mut self,
         travel: Travel,
@@ -313,48 +311,11 @@ impl Vim {
     ) -> Result<(), VimError> {
         let times = self.count.take().unwrap_or(1);
         self.reset();
-        let restored = match travel {
-            Travel::Undo => repeat(buffer, times, Buffer::undo)?,
-            Travel::Redo => repeat(buffer, times, Buffer::redo)?,
-            Travel::Earlier => buffer.earlier(times)?.map(cursors_before),
-            Travel::Later => buffer.later(times)?.map(cursors_before),
-        };
-        if let Some(restored) = restored {
-            *selections =
-                restored.map(|selection| Selection::cursor(clamp_normal(buffer, selection.head)));
+        if let Some(restored) = travel.run(buffer, times)? {
+            *selections = restored;
         }
         Ok(())
     }
-}
-
-/// Cómo se mueve el cursor por el historial: `u`, `ctrl-r`, `g-`, `g+`.
-#[derive(Clone, Copy)]
-enum Travel {
-    Undo,
-    Redo,
-    Earlier,
-    Later,
-}
-
-/// Da `times` pasos con `step` mientras haya historial; devuelve las
-/// selecciones de antes del último cambio recorrido.
-fn repeat(
-    buffer: &mut Buffer,
-    times: usize,
-    step: fn(&mut Buffer) -> Result<Option<&Transaction>, BufferError>,
-) -> Result<Option<Selections>, BufferError> {
-    let mut restored = None;
-    for _ in 0..times {
-        let Some(transaction) = step(buffer)? else {
-            break;
-        };
-        restored = Some(cursors_before(transaction));
-    }
-    Ok(restored)
-}
-
-fn cursors_before(transaction: &Transaction) -> Selections {
-    transaction.selections_before().clone()
 }
 
 fn move_cursors(

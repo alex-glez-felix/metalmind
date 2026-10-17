@@ -20,6 +20,7 @@ mod paste;
 mod register;
 mod span;
 mod text_object;
+mod travel;
 mod vim;
 mod word;
 
