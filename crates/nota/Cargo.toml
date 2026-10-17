@@ -1,0 +1,17 @@
+[package]
+name = "nota"
+description = "Editor de notas markdown con vim, nativo para Linux."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+env_logger.workspace = true
+gpui-kit.workspace = true
+log.workspace = true
+nota-ui.workspace = true
+
+[lints]
+workspace = true

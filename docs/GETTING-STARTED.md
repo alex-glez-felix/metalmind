@@ -2,11 +2,11 @@
 
 Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento de investigación, gana el documento; este archivo solo ordena.
 
-## Decisiones tomadas (provisionales hasta el spike)
+## Decisiones tomadas
 
 | Tema | Decisión | Por qué | Detalle |
 |---|---|---|---|
-| GUI | **GPUI** vía `gpui-kit` (ex gpui-component, Longbridge), versión fijada exacta | Único stack probado en un editor de alto rendimiento en Linux (Zed). Trae editor de 200K líneas, render de markdown, listas virtuales | 02 |
+| GUI | **GPUI** vía `gpui-kit =0.7.3` sin features por defecto (solo `gpui-pre`, sin gpui-component), con **editor propio** | Único stack probado en un editor de alto rendimiento en Linux (Zed). El spike confirmó 240 fps, teclas muertas, IME y portapapeles en la máquina de pruebas; el editor de gpui-component no escala (108 s para abrir 50 MB) | 02, 04 |
 | Plan B | **iced 0.14 + cosmic-text** | La IA lo conoce mejor y crates.io no está desfasado; el editor habría que hacerlo a mano | 02 |
 | Buffer | `ropey` + undo/multi-cursor propios | Estándar, estable | 03 §1 |
 | Markdown | `tree-sitter-md` (editor, incremental) + `pulldown-cmark` (índice/export) | Cada uno para lo que sirve | 03 §2 |
@@ -19,7 +19,7 @@ Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento 
 2. **Nombre.** `nota` es provisional.
 3. **¿Embeber Neovim o emular vim?** Emular es lo recomendado (control de UX total). Embeber (como kimun) da fidelidad gratis pero ata la UX a nvim.
 
-## Fase 0 — Spike (1–2 semanas, en la máquina de pruebas)
+## Fase 0 — Spike (hecho, 2026-10-17)
 
 Objetivo: confirmar GPUI antes de escribir el núcleo. Si falla, se cambia a iced sin haber perdido nada, porque el núcleo no depende de la GUI.
 
@@ -31,6 +31,28 @@ El spike ya está armado en [`spikes/gpui/`](../spikes/gpui/README.md): un proye
    - IME (Fcitx5) y dead keys (`´` + `a` = `á` — importa para español) traducidas a `nota-vim`
    - portapapeles normal y primario (selección con el mouse)
 3. Anotar resultados en `docs/research/04-spike-gpui.md`.
+
+Resultado: GPUI sí, editor propio. Detalle en [04](research/04-spike-gpui.md).
+
+## Correr `nota`
+
+Las librerías de sistema son las mismas del spike (una sola vez):
+
+```sh
+sudo pacman -S --needed base-devel fontconfig freetype2 libxkbcommon libxkbcommon-x11 wayland libxcb vulkan-icd-loader
+```
+
+Desde la raíz del repo:
+
+```sh
+git pull
+cargo build --release
+./target/release/nota /tmp/prueba.md          # si no existe, abre vacío y se crea con :w
+RUST_LOG=nota_ui=info,gpui_wgpu=info ./target/release/nota /tmp/prueba.md   # GPU elegida y tiempo al primer frame
+cargo install --path crates/nota               # opcional: deja `nota` en ~/.cargo/bin
+```
+
+Dentro: vim normal/insert (lo de `nota-vim`), `:w` guarda, `:q` cierra (se niega si hay cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/nota-ui/src/theme.rs` (por ejemplo, JetBrainsMono Nerd Font).
 
 ## Hitos después del spike
 

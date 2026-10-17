@@ -12,6 +12,15 @@ publish = false
 
 [workspace.dependencies]
 nota-buffer = { path = "crates/nota-buffer" }
+nota-ui = { path = "crates/nota-ui" }
+nota-vault = { path = "crates/nota-vault" }
+nota-vim = { path = "crates/nota-vim" }
+anyhow = "1.0.104"
+env_logger = "0.11.11"
+# Fijado con `=`: gpui-pre cambia cada semana (04 §riesgo 9). Sin gpui-component
+# ni sus assets: el editor es propio y no usa el `Root` de gpui-kit (04 §riesgo 1).
+gpui-kit = { version = "=0.7.3", default-features = false }
+log = "0.4.34"
 ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
 smallvec = "1.16.3"
 thiserror = "2.0.21"
