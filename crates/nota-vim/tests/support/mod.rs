@@ -70,6 +70,7 @@ pub fn mode_name(mode: Mode) -> &'static str {
         Mode::Normal => "n",
         Mode::Insert => "i",
         Mode::OperatorPending(_) => "no",
+        Mode::CommandLine => "c",
     }
 }
 
