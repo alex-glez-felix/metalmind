@@ -43,7 +43,7 @@ pub struct Editor {
     marked: Option<String>,
     drag_anchor: Option<ByteOffset>,
     /// El cursor la última vez que se hizo visible, para mostrarlo de nuevo
-    /// si lo mueve una edición desde otro panel.
+    /// si lo mueve una edición desde otro panel o si el panel es nuevo.
     revealed: Option<ByteOffset>,
     /// Arranque del proceso, hasta que se pinta el primer frame.
     launched: Option<Instant>,
@@ -57,7 +57,7 @@ impl Editor {
         launched: Option<Instant>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let repaint = cx.observe(&workspace, |editor, _, cx| editor.follow_workspace(cx));
+        let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
         Self {
             workspace,
             pane,
@@ -198,23 +198,6 @@ impl Editor {
             self.revealed = Some(cursor);
         }
         cx.notify();
-    }
-
-    /// Otro panel pudo acortar el texto o mover este cursor: el scroll no
-    /// queda pasado el final y el cursor movido se ve, como en vim.
-    fn follow_workspace(&mut self, cx: &mut Context<Self>) {
-        let Some((cursor, last_line)) = self
-            .view(cx)
-            .map(|view| (view.cursor(), view.buffer().last_line()))
-        else {
-            return;
-        };
-        self.scroll.clamp(last_line);
-        if self.revealed == Some(cursor) {
-            cx.notify();
-        } else {
-            self.reveal_cursor(cx);
-        }
     }
 
     fn report_first_paint(&mut self) {
