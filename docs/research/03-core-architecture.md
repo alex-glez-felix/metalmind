@@ -376,6 +376,7 @@ dbg_macro = "deny"
 | Snapshot | `insta` 1.49 | Motor vim: `"hello |world" + "dw" → "hello |"` como snapshot legible. Scanner de sintaxis: links/tags por fixture. Resolución de links por vault de prueba. |
 | Propiedades | `proptest` 1.12 | Invariantes: undo∘redo = id; cada número de secuencia del historial muestra siempre el mismo texto, se llegue por undo, redo, `g-` o `g+`; aplicar `Transaction` y su inversa deja el rope igual; offsets siempre en frontera de char; `Selections` siempre ordenadas y sin solaparse; reindex incremental == reindex desde cero. |
 | Tabla | `rstest` 0.27 | Casos parametrizados de motions/text objects. |
+| Fuzzing | `cargo-fuzz` 0.13 (libFuzzer, nightly solo ahí) + `arbitrary` 1.5 | Lo inesperado: pánicos, offsets fuera de frontera de char, estados inválidos del motor vim. Crate `fuzz/` fuera del workspace; corre a diario en `fuzz.yml`, no en las PRs. Ver `docs/fuzzing.md`. |
 | Diff legible | `pretty_assertions` 1.4 | |
 | Runner | `cargo-nextest` 0.9.148 | Paralelo, rápido en CI. |
 | Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) | Indexar vault de 10 k notas, latencia por tecla. Guardar baseline. |

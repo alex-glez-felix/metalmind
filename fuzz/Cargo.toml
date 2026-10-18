@@ -1,0 +1,40 @@
+[package]
+name = "nota-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1.5.0", features = ["derive"] }
+libfuzzer-sys = "0.4.13"
+nota-buffer = { path = "../crates/nota-buffer" }
+nota-vim = { path = "../crates/nota-vim" }
+
+# Fuera del workspace del repo: se compila con nightly y sanitizers, y así no
+# entra a `cargo clippy --workspace` ni al CI de las PRs.
+[workspace]
+
+[[bin]]
+name = "buffer_edits"
+path = "fuzz_targets/buffer_edits.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vim_keys"
+path = "fuzz_targets/vim_keys.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vim_search_subst"
+path = "fuzz_targets/vim_search_subst.rs"
+test = false
+doc = false
+bench = false
