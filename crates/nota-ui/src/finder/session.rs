@@ -1,17 +1,19 @@
 //! El vault del finder mientras la ventana lo usa: el índice que mantiene el
 //! watcher y las notas recientes, guardadas en el directorio de estado del
-//! vault. Abrirlo y guardar pasan en el executor de fondo; los cambios del
-//! watcher llegan al hilo de la UI por un canal.
+//! vault. Abrirlo pasa en el executor de fondo y guardar en un hilo propio
+//! ([`RecentsWriter`]); los cambios del watcher llegan al hilo de la UI por
+//! un canal.
 
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, mpsc};
 use std::{fs, thread};
 
-use gpui_kit::{App, AppContext as _, Context, Entity, Task};
+use gpui_kit::{App, AppContext as _, Context, Entity, Subscription, Task};
 use nota_config::Paths;
 use nota_vault::{Vault, VaultError, VaultPath, VaultUpdate};
 
+use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
 
 /// El archivo de los recientes dentro del estado del vault.
@@ -29,11 +31,10 @@ pub struct VaultSession {
     vault: Vault,
     recents: Recents,
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
-    recents_file: Option<PathBuf>,
+    writer: Option<RecentsWriter>,
     notes: Arc<[Note]>,
     _updates: Task<()>,
-    /// La última escritura de los recientes; cada una espera a la anterior.
-    saving: Option<Task<()>>,
+    _quit: Subscription,
 }
 
 /// Lo que se lee del disco al abrir, fuera del hilo de la UI.
@@ -41,22 +42,23 @@ struct Opened {
     vault: Vault,
     updates: mpsc::Receiver<VaultUpdate>,
     recents: Recents,
-    recents_file: Option<PathBuf>,
+    writer: Option<RecentsWriter>,
 }
 
 impl Opened {
-    fn load(root: &Path, paths: Option<&Paths>) -> Result<Self, VaultError> {
+    fn load(root: &Path, paths: Option<&Paths>) -> Result<Self, SessionError> {
         let (vault, updates) = Vault::open(root)?;
-        let recents_file = paths.map(|paths| paths.vault_state(vault.root()).join(RECENTS_FILE));
-        let recents = recents_file
-            .as_deref()
-            .map(read_recents)
-            .unwrap_or_default();
+        let file = paths.map(|paths| paths.vault_state(vault.root()).join(RECENTS_FILE));
+        let recents = file.as_deref().map(read_recents).unwrap_or_default();
+        let writer = file
+            .map(RecentsWriter::spawn)
+            .transpose()
+            .map_err(SessionError::Thread)?;
         Ok(Self {
             vault,
             updates,
             recents,
-            recents_file,
+            writer,
         })
     }
 }
@@ -83,14 +85,19 @@ impl VaultSession {
                         }
                     }
                 });
+                // Al salir de la app se espera a la última escritura.
+                let quit = cx.on_app_quit(|this: &mut Self, _| {
+                    this.writer.take();
+                    async {}
+                });
                 let notes = notes(&opened.vault.snapshot(), &opened.recents);
                 Self {
                     vault: opened.vault,
                     recents: opened.recents,
-                    recents_file: opened.recents_file,
+                    writer: opened.writer,
                     notes,
                     _updates: updates,
-                    saving: None,
+                    _quit: quit,
                 }
             }))
         })
@@ -127,7 +134,7 @@ impl VaultSession {
             moved |= self.recents.apply(change);
         }
         if moved {
-            self.save(cx);
+            self.save();
         }
         self.notes = notes(&update.snapshot, &self.recents);
         cx.notify();
@@ -135,24 +142,14 @@ impl VaultSession {
 
     fn recents_changed(&mut self, cx: &mut Context<Self>) {
         self.notes = notes(&self.vault.snapshot(), &self.recents);
-        self.save(cx);
+        self.save();
         cx.notify();
     }
 
-    fn save(&mut self, cx: &mut Context<Self>) {
-        let Some(file) = self.recents_file.clone() else {
-            return;
-        };
-        let text = self.recents.to_text();
-        let previous = self.saving.take();
-        self.saving = Some(cx.background_spawn(async move {
-            if let Some(previous) = previous {
-                previous.await;
-            }
-            if let Err(error) = write_recents(&file, &text) {
-                log::warn!("no se guardaron las notas recientes: {error}");
-            }
-        }));
+    fn save(&self) {
+        if let Some(writer) = &self.writer {
+            writer.write(self.recents.to_text());
+        }
     }
 }
 
@@ -214,29 +211,17 @@ fn read_recents(file: &Path) -> Recents {
     }
 }
 
-fn write_recents(file: &Path, text: &str) -> Result<(), nota_vault::FileError> {
-    if let Some(folder) = file.parent()
-        && let Err(source) = fs::create_dir_all(folder)
-    {
-        return Err(nota_vault::FileError::Write {
-            path: folder.to_owned(),
-            source,
-        });
-    }
-    nota_vault::write_atomic(file, |out| out.write_all(text.as_bytes()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn los_recientes_se_guardan_y_se_leen_creando_la_carpeta() {
+    fn los_recientes_se_leen_de_lo_guardado() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("state/vaults/x/recientes");
         assert_eq!(read_recents(&file), Recents::default());
         let recents = Recents::parse("b.md\na.md\n");
-        write_recents(&file, &recents.to_text()).unwrap();
+        super::super::writer::write_recents(&file, &recents.to_text()).unwrap();
         assert_eq!(read_recents(&file), recents);
     }
 

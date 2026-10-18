@@ -2,6 +2,8 @@
 //! guardan en su directorio de estado (06 §8) como texto, una ruta del
 //! vault por línea, y siguen los renombres que trae el watcher (06 §1).
 
+use std::collections::HashSet;
+
 use nota_vault::{VaultChange, VaultPath};
 
 /// Cuántas se recuerdan.
@@ -68,6 +70,9 @@ impl Recents {
                         *path = moved;
                     }
                 }
+                // Mover encima de otra reciente deja la ruta dos veces: queda la primera.
+                let mut seen = HashSet::new();
+                self.paths.retain(|path| seen.insert(path.clone()));
             }
             VaultChange::Removed { path: removed, .. } => {
                 self.paths.retain(|path| !path.starts_with(removed));
@@ -148,6 +153,18 @@ mod tests {
         };
         assert!(recents.apply(&note));
         assert_eq!(recents.paths()[1], path("x/b.md"));
+    }
+
+    #[test]
+    fn mover_encima_de_otra_reciente_no_la_repite() {
+        let mut recents = recents(&["b.md", "a.md", "c.md"]);
+        let renamed = VaultChange::Renamed {
+            from: path("a.md"),
+            to: path("c.md"),
+            kind: EntryKind::Note,
+        };
+        assert!(recents.apply(&renamed));
+        assert_eq!(recents, self::recents(&["b.md", "c.md"]));
     }
 
     #[test]

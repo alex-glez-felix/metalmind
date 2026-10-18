@@ -3,6 +3,7 @@
 
 mod recents;
 mod session;
+mod writer;
 
 use std::collections::HashSet;
 use std::sync::Arc;

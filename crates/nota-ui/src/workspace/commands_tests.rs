@@ -408,3 +408,44 @@ fn abrir_el_finder_corta_la_macro() {
     assert_eq!(session.effect, Effect::OpenFinder);
     assert_eq!(session.workspace.vim.recording(), None);
 }
+
+#[test]
+fn open_in_split_abre_otro_archivo_en_un_panel_nuevo() {
+    let (dir, mut session) = two_files();
+    let before = session.pane();
+    session
+        .workspace
+        .open_in_split(Axis::Row, &path(&dir, "b.md"))
+        .unwrap();
+    assert_eq!(session.workspace.tree().len(), 2);
+    assert_ne!(session.pane(), before);
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.view(before).document.path(), path(&dir, "a.md"));
+}
+
+/// Abrir en split la nota del panel, con cambios, la comparte: no relee ni
+/// se niega como `:e` del mismo archivo.
+#[test]
+fn open_in_split_de_la_nota_del_panel_la_comparte_aunque_tenga_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("ix⎋");
+    session
+        .workspace
+        .open_in_split(Axis::Column, &path(&dir, "a.md"))
+        .unwrap();
+    assert_eq!(session.workspace.tree().len(), 2);
+    assert_eq!(error(&session), None);
+    assert_eq!(session.text(), "xa");
+}
+
+#[test]
+fn open_in_split_de_algo_ilegible_no_divide() {
+    let (dir, mut session) = two_files();
+    fs::write(path(&dir, "binario.md"), [0xff, 0xfe]).unwrap();
+    session
+        .workspace
+        .open_in_split(Axis::Row, &path(&dir, "binario.md"))
+        .unwrap();
+    assert_eq!(session.workspace.tree().len(), 1);
+    assert!(error(&session).is_some());
+}

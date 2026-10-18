@@ -101,8 +101,15 @@ impl WorkspaceView {
                 self.sync_editors(window, cx);
                 self.touch_focused(cx);
             }
-            Effect::OpenFinder => self.open_finder(window, cx),
-            Effect::OpenCommandPalette => self.open_palette(window, cx),
+            // Una macro pudo cambiar los paneles antes de abrir el picker.
+            Effect::OpenFinder => {
+                self.sync_editors(window, cx);
+                self.open_finder(window, cx);
+            }
+            Effect::OpenCommandPalette => {
+                self.sync_editors(window, cx);
+                self.open_palette(window, cx);
+            }
         }
     }
 
