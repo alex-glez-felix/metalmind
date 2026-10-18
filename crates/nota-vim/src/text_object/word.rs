@@ -1,24 +1,25 @@
 use nota_buffer::{Buffer, ByteOffset};
 
 use crate::cursor::{Class, Cursor, Step};
-use crate::span::{Span, SpanKind};
+use crate::span::{Missed, Span, SpanKind};
 use crate::word::{back_in_line, end, forward};
 
-/// `iw`, `aw`, `iW`, `aW`.
+/// `iw`, `aw`, `iW`, `aW`. Como `current_word`, si falla deja el cursor
+/// donde llegó buscando.
 pub(super) fn select(
     buffer: &Buffer,
     head: ByteOffset,
     count: usize,
     big: bool,
     around: bool,
-) -> Option<Span> {
+) -> Result<Span, Missed> {
     let mut cursor = Cursor::new(buffer, head);
     back_in_line(&mut cursor, big);
     let mut start = cursor.offset;
     let mut include_white = false;
     if (cursor.class(big) == Class::Blank) == around {
         if !end(&mut cursor, 1, big, true, true) {
-            return None;
+            return Err(Missed::at(buffer, cursor.offset));
         }
     } else {
         forward(&mut cursor, 1, big, true);
@@ -29,7 +30,8 @@ pub(super) fn select(
         }
         include_white = around;
     }
-    let inclusive = extend(&mut cursor, count, big, around)?;
+    let inclusive =
+        extend(&mut cursor, count, big, around).ok_or_else(|| Missed::at(buffer, cursor.offset))?;
     if include_white
         && (cursor.class(big) != Class::Blank || (cursor.at_line_start() && !inclusive))
     {
@@ -40,14 +42,15 @@ pub(super) fn select(
     } else {
         SpanKind::Exclusive
     };
-    Some(Span {
+    Ok(Span {
         start,
         end: cursor.offset,
         kind,
     })
 }
 
-/// Agrega `count - 1` objetos más; devuelve si el final es inclusivo.
+/// Agrega `count - 1` objetos más; devuelve si el final es inclusivo, o
+/// `None` con `cursor` donde se quedó.
 fn extend(cursor: &mut Cursor, count: usize, big: bool, around: bool) -> Option<bool> {
     let mut inclusive = true;
     for remaining in (1..count).rev() {
