@@ -48,6 +48,8 @@ pub enum Problem {
         field: &'static str,
         span: Range<usize>,
     },
+    #[error("`{name}` en `tags` del frontmatter no es un tag válido")]
+    InvalidTag { name: String, span: Range<usize> },
 }
 
 /// Escanea una nota completa.

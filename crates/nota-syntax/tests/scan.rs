@@ -246,6 +246,14 @@ fn empty_frontmatter() {
     "---\ntags: {a: 1}\n---\n",
     "el campo `tags` del frontmatter no es ni lista ni texto"
 )]
+#[case::text_with_commas(
+    "---\ntags: rust, nota\n---\n",
+    "`rust, nota` en `tags` del frontmatter no es un tag válido"
+)]
+#[case::only_digits(
+    "---\ntags: [a, 2024]\n---\n",
+    "`2024` en `tags` del frontmatter no es un tag válido"
+)]
 fn recoverable_frontmatter_problems(#[case] text: &str, #[case] message: &str) {
     let problems: Vec<String> = scan(text).problems.iter().map(Problem::to_string).collect();
     assert_eq!(problems, [message]);
@@ -261,6 +269,16 @@ fn deeply_nested_yaml_does_not_overflow() {
 
 /// nota lee solo los nombres en plural; los singulares de antes de Obsidian
 /// 1.4 son claves cualquiera.
+#[test]
+fn a_text_field_is_one_value() {
+    let frontmatter = scan("---\ntags: \"#rust\"\naliases: Uno, dos\ncssclasses: ancho\n---\n")
+        .frontmatter
+        .unwrap();
+    assert_eq!(frontmatter.tags, ["rust"]);
+    assert_eq!(frontmatter.aliases, ["Uno, dos"]);
+    assert_eq!(frontmatter.cssclasses, ["ancho"]);
+}
+
 #[test]
 fn singular_field_names_are_not_read() {
     let frontmatter = scan("---\ntag: a\nalias: b\ncssclass: c\n---\n")

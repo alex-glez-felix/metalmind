@@ -84,54 +84,39 @@ pub(crate) fn parse(text: &str, problems: &mut Vec<Problem>) -> (Option<Frontmat
 
 impl Frontmatter {
     fn read_fields(&mut self, fields: Fields, problems: &mut Vec<Problem>) {
-        let mut values = |name: &'static str,
-                          field: Option<Field>,
-                          split: fn(&str) -> Vec<String>| {
-            match field {
-                None => Vec::new(),
-                Some(Field::List(items)) => items
-                    .iter()
-                    .map(|item| item.trim())
-                    .filter(|item| !item.is_empty())
-                    .map(str::to_owned)
-                    .collect(),
-                Some(Field::Text(text)) => split(&text),
-                Some(Field::Invalid) => {
-                    problems.push(Problem::InvalidField {
-                        field: name,
-                        span: self.yaml.clone(),
-                    });
-                    Vec::new()
-                }
+        let span = self.yaml.clone();
+        let mut values = |name: &'static str, field: Option<Field>| match field {
+            None => Vec::new(),
+            Some(Field::List(items)) => items.iter().filter_map(|item| value(item)).collect(),
+            Some(Field::Text(text)) => value(&text).into_iter().collect(),
+            Some(Field::Invalid) => {
+                problems.push(Problem::InvalidField {
+                    field: name,
+                    span: span.clone(),
+                });
+                Vec::new()
             }
         };
-        let tags = values("tags", fields.tags, split_words);
-        let aliases = values("aliases", fields.aliases, split_commas);
-        let cssclasses = values("cssclasses", fields.cssclasses, split_words);
-        self.tags = tags
-            .into_iter()
-            .map(|tag| tag.trim_start_matches('#').to_owned())
-            .filter(|tag| is_valid_tag_name(tag))
-            .collect();
-        self.aliases = aliases;
-        self.cssclasses = cssclasses;
+        let tags = values("tags", fields.tags);
+        self.aliases = values("aliases", fields.aliases);
+        self.cssclasses = values("cssclasses", fields.cssclasses);
+        for tag in tags {
+            let name = tag.strip_prefix('#').unwrap_or(&tag);
+            if is_valid_tag_name(name) {
+                self.tags.push(name.to_owned());
+            } else {
+                problems.push(Problem::InvalidTag {
+                    name: tag.clone(),
+                    span: span.clone(),
+                });
+            }
+        }
     }
 }
 
-/// `tags: a, b c`: los tags no llevan espacios, así que separan las comas y
-/// los espacios.
-fn split_words(text: &str) -> Vec<String> {
-    text.split(|c: char| c == ',' || c.is_whitespace())
-        .filter(|word| !word.is_empty())
-        .map(str::to_owned)
-        .collect()
-}
-
-/// `aliases: a, b`: un alias puede llevar espacios, solo separan las comas.
-fn split_commas(text: &str) -> Vec<String> {
-    text.split(',')
-        .map(str::trim)
-        .filter(|alias| !alias.is_empty())
-        .map(str::to_owned)
-        .collect()
+/// Un texto es un solo valor, con o sin comas: partirlo adivinaría la
+/// intención, y renombrar un tag tendría que reescribir dentro de él.
+fn value(text: &str) -> Option<String> {
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_owned())
 }

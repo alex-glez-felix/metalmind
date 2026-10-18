@@ -6,7 +6,8 @@ input_file: crates/nota-syntax/tests/fixtures/frontmatter.md
 frontmatter 0..167 yaml 4..164
     tags ["proyecto", "con-almohadilla", "anidado/sub"]
     aliases ["Alias Uno", "Alias, con coma"]
-    cssclasses ["ancho", "limpio"]
+    cssclasses ["ancho limpio"]
+problem `2024` en `tags` del frontmatter no es un tag válido
 wikilink 199..210 "[[un link]]"
     target 201..208 "un link"
 tag 181..185 "#tag" name "tag"
