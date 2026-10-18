@@ -224,3 +224,7 @@ impl Workspace {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "editing_tests.rs"]
+mod tests;

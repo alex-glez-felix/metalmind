@@ -1,10 +1,12 @@
 //! Los tramos de [`spans`](super::spans) como rectángulos sobre las líneas
-//! ya pintadas.
+//! ya pintadas: la búsqueda y la selección.
 
 use gpui_kit::{Bounds, Hsla, PaintQuad, Pixels, fill, point, size};
 
 use super::layout::FrameLayout;
-use super::spans::{Span, SpanEnd};
+use super::spans::{Match, Span, SpanEnd, search_spans, selection_spans};
+use crate::theme::Theme;
+use crate::workspace::PaneView;
 
 /// Medidas que no salen de la línea: el ancho de una celda, para el salto
 /// de línea, y el borde derecho del panel.
@@ -14,7 +16,7 @@ pub struct Cells {
     pub edge: Pixels,
 }
 
-pub fn quads(
+fn quads(
     spans: impl IntoIterator<Item = Span>,
     layout: &FrameLayout,
     cells: Cells,
@@ -38,4 +40,37 @@ pub fn quads(
             ))
         })
         .collect()
+}
+
+pub fn search_quads(
+    view: &PaneView<'_>,
+    layout: &FrameLayout,
+    cells: Cells,
+    theme: &Theme,
+) -> Vec<PaintQuad> {
+    let Some(pattern) = view.search else {
+        return Vec::new();
+    };
+    let found = search_spans(
+        pattern,
+        view.buffer(),
+        layout.visible_lines(),
+        view.cursor(),
+    );
+    let (current, others): (Vec<_>, Vec<_>) = found.into_iter().partition(|found| found.current);
+    let spans = |matches: Vec<Match>| matches.into_iter().map(|found| found.span);
+    let mut painted = quads(spans(others), layout, cells, theme.search);
+    painted.extend(quads(spans(current), layout, cells, theme.search_current));
+    painted
+}
+
+pub fn selection_quads(
+    view: &PaneView<'_>,
+    layout: &FrameLayout,
+    cells: Cells,
+    theme: &Theme,
+) -> Vec<PaintQuad> {
+    let visible = layout.visible_lines();
+    let spans = selection_spans(view.buffer(), view.selection, view.mode, visible);
+    quads(spans, layout, cells, theme.selection)
 }
