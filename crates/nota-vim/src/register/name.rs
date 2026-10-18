@@ -44,6 +44,15 @@ impl RegisterName {
         Some(name)
     }
 
+    /// `"a`–`"z` o `"A`–`"Z`: el índice de la letra y si agrega.
+    pub fn letter(self) -> Option<(u8, bool)> {
+        match self {
+            Self::Named(letter) => Some((letter, false)),
+            Self::Append(letter) => Some((letter, true)),
+            _ => None,
+        }
+    }
+
     pub fn is_writable(self) -> bool {
         !matches!(self, Self::LastInsert | Self::LastSearch)
     }

@@ -22,6 +22,7 @@ impl Vim {
         self.reset();
         // Se clona porque repetirlo lo vuelve a grabar, ya con el count nuevo.
         let Some(dot) = self.last_change.clone() else {
+            self.fail();
             return Ok(());
         };
         self.count = count.or(dot.count);

@@ -63,6 +63,21 @@ impl Registers {
         }
     }
 
+    /// Lo grabado con `q` en `"a`–`"z`. Como en vim, no pasa por el
+    /// registro sin nombre, y con `qA` se pega al final de la última línea.
+    pub fn record(&mut self, letter: u8, append: bool, keys: String) {
+        let slot = &mut self.named[usize::from(letter)];
+        match slot {
+            Some(old) if append => old.text.push_str(&keys),
+            _ => {
+                *slot = Some(Register {
+                    text: keys,
+                    linewise: false,
+                });
+            }
+        }
+    }
+
     /// `None` si está vacío o no se puede leer como texto.
     pub fn read(
         &self,

@@ -12,6 +12,10 @@ pub(super) enum Awaiting {
     Find(CharSearch),
     /// `"`: el nombre del registro.
     Register,
+    /// `q`: el registro donde grabar.
+    Record,
+    /// `@`: el registro que reproducir.
+    Play,
 }
 
 impl Vim {
@@ -38,6 +42,14 @@ impl Vim {
                 self.select_register(c);
                 Action::SelectRegister
             }
+            Awaiting::Record => {
+                self.start_recording(c);
+                Action::RecordMacro
+            }
+            Awaiting::Play => {
+                self.play_macro(c, clipboard);
+                Action::PlayMacro
+            }
         };
         Ok(KeyOutcome::Executed(action))
     }
@@ -50,7 +62,7 @@ impl Vim {
                 self.operator_count = self.take_count();
                 self.selected = Some(name);
             }
-            None => self.reset(),
+            None => self.fail(),
         }
     }
 }

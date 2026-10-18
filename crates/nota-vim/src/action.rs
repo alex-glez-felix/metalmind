@@ -59,6 +59,12 @@ pub enum Action {
     Paste(PasteSide),
     /// `.`: repite el último cambio.
     RepeatChange,
+    /// `q`: graba en el registro que nombre la tecla siguiente, o termina
+    /// de grabar.
+    RecordMacro,
+    /// `@`: reproduce el registro que nombre la tecla siguiente; `@@`, el
+    /// último reproducido.
+    PlayMacro,
     Undo,
     Redo,
     /// Estado anterior en orden cronológico, cruzando ramas del historial.
@@ -172,6 +178,8 @@ impl Action {
         Self::Paste(PasteSide::After),
         Self::Paste(PasteSide::Before),
         Self::RepeatChange,
+        Self::RecordMacro,
+        Self::PlayMacro,
         Self::Undo,
         Self::Redo,
         Self::Earlier,
@@ -221,6 +229,8 @@ impl Action {
             Self::Paste(PasteSide::After) => "vim::paste_after",
             Self::Paste(PasteSide::Before) => "vim::paste_before",
             Self::RepeatChange => "vim::repeat_change",
+            Self::RecordMacro => "vim::record_macro",
+            Self::PlayMacro => "vim::play_macro",
             Self::Undo => "vim::undo",
             Self::Redo => "vim::redo",
             Self::Earlier => "vim::earlier",
