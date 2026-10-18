@@ -452,14 +452,17 @@ fn w_con_ruta_relativa_escribe_en_el_vault() {
 
 /// `--frame-log`, lo que lee el benchmark de la UI: el primer frame con su
 /// CPU y, en los siguientes, las teclas que muestra cada uno. `<Left>` no
-/// llega al motor y no cuenta: si contara, la suma sería 4.
+/// llega al motor y no cuenta: si contara, la suma sería 4. La ruta relativa
+/// del registro es la del directorio desde donde se lanza, no la del vault.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn el_registro_de_frames_anota_el_arranque_y_las_teclas() {
     let smoke = Smoke::new();
     smoke.write("a.md", "uno\n");
+    let file = smoke.notes().join("a.md");
+    let mut metalmind =
+        smoke.launch_from_home(&["--frame-log", "frames.log", file.to_str().unwrap()]);
     let log = smoke.home().join("frames.log");
-    let mut metalmind = smoke.launch(&["--frame-log", log.to_str().unwrap(), "a.md"]);
     let window = metalmind.window();
     window.type_keys("<Left>ix<Esc>");
     let lines = support::wait::until("los frames de 3 teclas", support::wait::TIMEOUT, || {

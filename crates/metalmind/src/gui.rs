@@ -89,19 +89,23 @@ pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError
     Ok(Prepared { startup, config })
 }
 
-/// Abre la ventana y vuelve cuando se cierra; con `frame_log`, escribe ahí
-/// los tiempos de cada frame.
+/// El reloj de los frames; con `frame_log`, escribe ahí los tiempos de
+/// cada uno. Va antes de [`prepare`], que entra en el vault: una ruta
+/// relativa es la del directorio desde donde se lanzó `metalmind`.
+///
+/// # Errors
+/// Si no se puede crear `frame_log`.
+pub fn frame_clock(launched: Instant, frame_log: Option<&Path>) -> Result<FrameClock, StartError> {
+    FrameClock::new(launched, frame_log).map_err(StartError::FrameLog)
+}
+
+/// Abre la ventana y vuelve cuando se cierra.
 ///
 /// # Errors
 /// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede
-/// abrir la ventana, o si no se puede crear `frame_log`.
-pub fn run(
-    prepared: Prepared,
-    frame_log: Option<&Path>,
-    launched: Instant,
-) -> Result<(), StartError> {
+/// abrir la ventana.
+pub fn run(prepared: Prepared, clock: FrameClock) -> Result<(), StartError> {
     let Prepared { startup, config } = prepared;
-    let clock = FrameClock::new(launched, frame_log).map_err(StartError::FrameLog)?;
     let failed = Rc::new(RefCell::new(None));
     let failed_in_app = Rc::clone(&failed);
     gpui_kit::application().run(move |cx| {
