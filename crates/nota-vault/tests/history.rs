@@ -151,13 +151,15 @@ fn un_renombre_en_medio_sigue_la_historia() {
     let (a, b) = (path("a.md"), path("carpeta/b.md"));
     history.record(&a, "uno", epoch()).unwrap();
     history.record(&a, "dos", epoch() + HOUR).unwrap();
-    history.rename(&a, &b).unwrap();
+    history.rename(&a, &b, epoch() + DAY).unwrap();
     history.record(&b, "tres", epoch() + 2 * HOUR).unwrap();
     assert_eq!(contents(&history, &b), ["uno", "dos", "tres"]);
     assert_eq!(history.versions(&a).unwrap(), Vec::<Version>::new());
 
     // Mover la carpeta mueve la historia de lo que tiene dentro.
-    history.rename(&path("carpeta"), &path("otra")).unwrap();
+    history
+        .rename(&path("carpeta"), &path("otra"), epoch() + DAY)
+        .unwrap();
     assert_eq!(
         contents(&history, &path("otra/b.md")),
         ["uno", "dos", "tres"]
@@ -171,7 +173,9 @@ fn mover_una_carpeta_no_toca_las_que_empiezan_igual() {
     for note in ["a/x.md", "a-b/x.md", "a.md", "ab/x.md"] {
         history.record(&path(note), note, epoch()).unwrap();
     }
-    history.rename(&path("a"), &path("z")).unwrap();
+    history
+        .rename(&path("a"), &path("z"), epoch() + DAY)
+        .unwrap();
     for (note, content) in [
         ("z/x.md", "a/x.md"),
         ("a-b/x.md", "a-b/x.md"),
@@ -187,20 +191,51 @@ fn mover_una_carpeta_no_toca_las_que_empiezan_igual() {
 }
 
 #[test]
-fn renombrar_encima_de_otra_historia_las_junta_por_fecha() {
+fn renombrar_encima_de_otra_historia_deja_la_vieja_aparte() {
     let dir = TempDir::new().unwrap();
     let history = history(&dir);
     let (a, b) = (path("a.md"), path("b.md"));
     history.record(&b, "b vieja", epoch()).unwrap();
     history.record(&a, "a uno", epoch() + HOUR).unwrap();
-    history.record(&b, "b nueva", epoch() + 2 * HOUR).unwrap();
-    history.record(&a, "a dos", epoch() + 3 * HOUR).unwrap();
-    history.rename(&a, &b).unwrap();
-    assert_eq!(
-        contents(&history, &b),
-        ["b vieja", "a uno", "b nueva", "a dos"]
-    );
+    // `b` se pisó desde fuera con `a`: su historia no se mezcla con la de `a`.
+    history.rename(&a, &b, epoch() + 2 * HOUR).unwrap();
+    assert_eq!(contents(&history, &b), ["a uno"]);
     assert_eq!(history.versions(&a).unwrap(), Vec::<Version>::new());
+    let [old] = history.deleted_notes().unwrap().try_into().unwrap();
+    assert_eq!((&old.path, old.deleted_at), (&b, epoch() + 2 * HOUR));
+    let versions = history.deleted_versions(old.id).unwrap();
+    assert_eq!(
+        history.deleted_content(old.id, versions[0].id).unwrap(),
+        "b vieja"
+    );
+}
+
+#[test]
+fn renombrar_encima_de_una_nota_borrada_la_deja_aparte_con_su_fecha() {
+    let dir = TempDir::new().unwrap();
+    let history = history(&dir);
+    let (a, b) = (path("a.md"), path("b.md"));
+    history.record(&b, "b borrada", epoch()).unwrap();
+    history.mark_deleted(&b, epoch() + HOUR).unwrap();
+    history.record(&a, "a", epoch() + 2 * HOUR).unwrap();
+    history.rename(&a, &b, epoch() + 3 * HOUR).unwrap();
+    assert_eq!(contents(&history, &b), ["a"]);
+    let [old] = history.deleted_notes().unwrap().try_into().unwrap();
+    assert_eq!((&old.path, old.deleted_at), (&b, epoch() + HOUR));
+    let [version] = history
+        .deleted_versions(old.id)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert_eq!(
+        history.deleted_content(old.id, version.id).unwrap(),
+        "b borrada"
+    );
+
+    // La retención la olvida como a cualquier borrada.
+    history.prune(epoch() + 92 * DAY).unwrap();
+    assert_eq!(history.deleted_notes().unwrap(), Vec::<DeletedNote>::new());
+    assert!(history.deleted_versions(old.id).is_err());
 }
 
 #[test]
@@ -266,13 +301,8 @@ fn la_historia_de_una_nota_borrada_dura_lo_que_dice_la_retencion() {
     let note = path("a.md");
     history.record(&note, "uno", epoch()).unwrap();
     history.mark_deleted(&note, epoch() + DAY).unwrap();
-    assert_eq!(
-        history.deleted_notes().unwrap(),
-        [DeletedNote {
-            path: note.clone(),
-            deleted_at: epoch() + DAY
-        }]
-    );
+    let [deleted] = history.deleted_notes().unwrap().try_into().unwrap();
+    assert_eq!((&deleted.path, deleted.deleted_at), (&note, epoch() + DAY));
     assert_eq!(contents(&history, &note), ["uno"], "se puede recuperar");
 
     assert_eq!(
@@ -361,7 +391,7 @@ fn renombrar_una_nota_borrada_que_volvio_la_deja_viva() {
     let (a, b) = (path("a.md"), path("b.md"));
     history.record(&a, "uno", epoch()).unwrap();
     history.mark_deleted(&a, epoch() + HOUR).unwrap();
-    history.rename(&a, &b).unwrap();
+    history.rename(&a, &b, epoch() + DAY).unwrap();
     assert_eq!(history.deleted_notes().unwrap(), Vec::<DeletedNote>::new());
     assert_eq!(contents(&history, &b), ["uno"]);
 }
@@ -374,7 +404,9 @@ fn las_borradas_de_una_carpeta_movida_siguen_borradas() {
     history
         .mark_deleted(&path("a/x.md"), epoch() + HOUR)
         .unwrap();
-    history.rename(&path("a"), &path("b")).unwrap();
+    history
+        .rename(&path("a"), &path("b"), epoch() + DAY)
+        .unwrap();
     let deleted: Vec<VaultPath> = history
         .deleted_notes()
         .unwrap()
@@ -457,36 +489,4 @@ fn una_nota_con_el_log_danado_sigue_guardando_versiones() {
     let mut aside = log.into_os_string();
     aside.push(".damaged");
     assert_eq!(fs::read_to_string(aside).unwrap(), "no es un historial");
-}
-
-#[test]
-fn renombrar_encima_de_una_historia_danada_conserva_la_sana() {
-    let dir = TempDir::new().unwrap();
-    let history = history(&dir);
-    let (a, b, c) = (path("a.md"), path("b.md"), path("c.md"));
-    history.record(&b, "b vieja", epoch()).unwrap();
-    history.mark_deleted(&b, epoch() + HOUR).unwrap();
-    history.record(&a, "a", epoch() + 2 * HOUR).unwrap();
-    history.record(&c, "c", epoch() + 3 * HOUR).unwrap();
-    fs::write(&logs(&dir)[0], "no es un historial").unwrap();
-    history.rename(&a, &b).unwrap();
-    assert_eq!(contents(&history, &b), ["a"]);
-    // Las demás historias no se tocan.
-    assert_eq!(contents(&history, &c), ["c"]);
-}
-
-#[test]
-fn juntar_dos_historias_no_cambia_los_ids_de_sus_versiones() {
-    let dir = TempDir::new().unwrap();
-    let history = history(&dir);
-    let (a, b) = (path("a.md"), path("b.md"));
-    let old = history.record(&b, "b vieja", epoch()).unwrap().unwrap();
-    history.mark_deleted(&b, epoch() + HOUR).unwrap();
-    let moved = history
-        .record(&a, "a", epoch() + 2 * HOUR)
-        .unwrap()
-        .unwrap();
-    history.rename(&a, &b).unwrap();
-    assert_eq!(history.content(&b, old).unwrap(), "b vieja");
-    assert_eq!(history.content(&b, moved).unwrap(), "a");
 }

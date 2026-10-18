@@ -6,6 +6,7 @@
 
 mod bytes;
 mod codec;
+mod deleted;
 mod delta;
 mod diff;
 mod follow;
@@ -24,6 +25,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use nota_config::HistoryRetention;
 
+pub use deleted::{DeletedId, DeletedNote};
 pub use diff::{ChunkKind, DiffChunk, RestoreEdit, RestorePlan, TextDiff};
 pub use prune::Pruned;
 
@@ -59,7 +61,7 @@ impl fmt::Debug for ContentHash {
 }
 
 /// Una versión de una nota: cuándo se guardó y qué tenía. No cambia al
-/// podar ni al juntar dos historias, que renumeran las versiones.
+/// podar, que renumera las versiones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VersionId {
     at: i64,
@@ -90,13 +92,6 @@ pub struct Version {
     pub len: usize,
 }
 
-/// Una nota borrada cuya historia todavía se guarda.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeletedNote {
-    pub path: VaultPath,
-    pub deleted_at: SystemTime,
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum HistoryError {
     #[error("historial: no se pudo {action} {}: {source}", path.display())]
@@ -111,6 +106,8 @@ pub enum HistoryError {
     File(Box<FileError>),
     #[error("{path} no tiene una versión {id} en el historial")]
     UnknownVersion { path: VaultPath, id: VersionId },
+    #[error("el historial ya no guarda esa nota borrada")]
+    UnknownDeleted,
 }
 
 impl HistoryError {
@@ -180,14 +177,23 @@ impl History {
     pub fn content(&self, path: &VaultPath, id: VersionId) -> Result<String, HistoryError> {
         let _lock = self.store.read_lock()?;
         let (entry, log) = self.find(path, id)?;
-        let record = log
-            .entries()
-            .iter()
-            .find(|version| VersionId::of(version) == id)
-            .map(|version| version.record)
-            .ok_or_else(|| unknown(path, id))?;
-        log.content(record)
-            .map_err(|corrupt| self.store.corrupt_log(entry.id, corrupt))
+        self.version_content(entry.id, &log, id)?
+            .ok_or_else(|| unknown(path, id))
+    }
+
+    /// El contenido de la versión `id` del log `log_id`, si la tiene.
+    fn version_content(
+        &self,
+        log_id: u64,
+        log: &NoteLog,
+        id: VersionId,
+    ) -> Result<Option<String>, HistoryError> {
+        let Some(version) = log.entries().iter().find(|e| VersionId::of(e) == id) else {
+            return Ok(None);
+        };
+        log.content(version.record)
+            .map(Some)
+            .map_err(|corrupt| self.store.corrupt_log(log_id, corrupt))
     }
 
     /// El diff por líneas de la versión `from` a la `to`.
@@ -219,25 +225,6 @@ impl History {
         current: &str,
     ) -> Result<RestorePlan, HistoryError> {
         Ok(RestorePlan::new(current, &self.content(path, id)?))
-    }
-
-    /// Las notas borradas cuya historia todavía se guarda.
-    ///
-    /// # Errors
-    /// Si no se puede leer el historial.
-    pub fn deleted_notes(&self) -> Result<Vec<DeletedNote>, HistoryError> {
-        let _lock = self.store.read_lock()?;
-        let index = self.store.read_index()?;
-        Ok(index
-            .notes
-            .into_iter()
-            .filter_map(|(path, entry)| {
-                Some(DeletedNote {
-                    path,
-                    deleted_at: from_millis(entry.deleted?),
-                })
-            })
-            .collect())
     }
 
     fn take_latest(&self, log_id: u64, log: &NoteLog) -> Option<Latest> {

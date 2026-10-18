@@ -66,7 +66,7 @@ editor:
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
-El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/nota/vaults/` en Linux (por default `~/.local/share/nota/vaults/`). La última versión de una nota se guarda siempre; las horas y los días se cuentan en UTC.
+El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/nota/vaults/` en Linux (por default `~/.local/share/nota/vaults/`). De cada hora o día se queda la última versión, con las horas y los días de la zona horaria del sistema; la última versión de una nota se guarda siempre, y la diaria es para siempre salvo que se ponga `daily_days`.
 
 Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
