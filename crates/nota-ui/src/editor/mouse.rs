@@ -33,6 +33,15 @@ impl Editor {
         let delta = event.delta.pixel_delta(line_height).y;
         self.scroll
             .scroll_by(-f64::from(delta / line_height), last_line);
+        let top = self.scroll.first_full_line();
+        if top != self.synced_top {
+            self.synced_top = top;
+            let scrolled =
+                self.update_workspace(cx, |workspace, pane, _| workspace.scroll_to(pane, top));
+            if let Err(error) = scrolled {
+                self.report(&error, cx);
+            }
+        }
         cx.notify();
     }
 
@@ -97,8 +106,6 @@ impl Editor {
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _window: &mut Window, cx: &mut Context<Self>) {
-        // Sin reveal: si el yank de Visual mueve el cursor, lo muestra el
-        // próximo frame, y si no, la vista se queda donde se dejó.
         let copied = self.update_workspace(cx, |workspace, pane, cx| {
             workspace.copy(pane, &mut SystemClipboard(cx))
         });
@@ -114,7 +121,6 @@ impl Editor {
         if let Err(error) = pasted {
             self.report(&error, cx);
         }
-        self.reveal_cursor(cx);
     }
 
     fn take_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -140,6 +146,5 @@ impl Editor {
         if let Err(error) = pasted {
             self.report(&error, cx);
         }
-        self.reveal_cursor(cx);
     }
 }

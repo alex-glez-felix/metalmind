@@ -21,25 +21,14 @@ impl Scroll {
         self.top = (self.top + lines).clamp(0.0, to_f64(last_line));
     }
 
-    /// Antes de pintar: no queda pasado el final aunque otro panel haya
-    /// acortado el texto y, si el cursor se movió desde que se mostró por
-    /// última vez (`moved` es su línea), se ve.
-    pub fn settle(&mut self, last_line: usize, moved: Option<usize>, rows: usize) {
-        self.top = self.top.min(to_f64(last_line));
-        if let Some(line) = moved {
-            self.reveal(line, rows);
-        }
+    /// La línea que puso el motor, sin fracción.
+    pub fn at_line(line: usize) -> Self {
+        Self { top: to_f64(line) }
     }
 
-    /// Lo mínimo para que `line` entre en las `rows` filas completas visibles.
-    pub fn reveal(&mut self, line: usize, rows: usize) {
-        let rows = rows.max(1);
-        let first = self.first_line();
-        if line < first || (line == first && self.fraction() > 0.0) {
-            self.top = to_f64(line);
-        } else if line >= first + rows {
-            self.top = to_f64(line + 1 - rows);
-        }
+    /// La primera línea que se ve entera: la de arriba si no hay fracción.
+    pub fn first_full_line(self) -> usize {
+        self.first_line() + usize::from(self.fraction() > 0.0)
     }
 }
 
@@ -76,23 +65,10 @@ mod tests {
     }
 
     #[test]
-    fn settle_acota_al_final_y_muestra_el_cursor_movido() {
-        let cases = [
-            (80.5, 100, None, 80.5),
-            (80.5, 10, None, 10.0),
-            (80.0, 10, Some(2), 2.0),
-            (0.0, 100, Some(50), 31.0),
-            (40.0, 100, Some(45), 40.0),
-        ];
-        for (top, last_line, moved, expected) in cases {
-            let mut scroll = at(top);
-            scroll.settle(last_line, moved, 20);
-            assert_eq!(
-                scroll,
-                at(expected),
-                "top={top} last={last_line} moved={moved:?}"
-            );
-        }
+    fn primera_linea_entera() {
+        assert_eq!(at(10.0).first_full_line(), 10);
+        assert_eq!(at(10.25).first_full_line(), 11);
+        assert_eq!(Scroll::at_line(7), at(7.0));
     }
 
     #[test]
@@ -101,22 +77,5 @@ mod tests {
         scroll.scroll_by(0.05, 1_000_000);
         assert_eq!(scroll.first_line(), 999_998);
         assert!((scroll.fraction() - 0.05).abs() < 1e-6);
-    }
-
-    #[test]
-    fn reveal_mueve_lo_minimo() {
-        let cases = [
-            (10.0, 12, 20, 10.0),
-            (10.0, 29, 20, 10.0),
-            (10.0, 30, 20, 11.0),
-            (10.0, 5, 20, 5.0),
-            (10.5, 10, 20, 10.0),
-            (10.5, 11, 20, 10.5),
-        ];
-        for (top, line, rows, expected) in cases {
-            let mut scroll = at(top);
-            scroll.reveal(line, rows);
-            assert_eq!(scroll, at(expected), "top={top} line={line}");
-        }
     }
 }

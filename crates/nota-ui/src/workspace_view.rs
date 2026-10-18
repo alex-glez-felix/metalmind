@@ -34,10 +34,11 @@ impl WorkspaceView {
     pub fn new(
         document: Document,
         numbers: LineNumbers,
+        scrolloff: usize,
         launched: Instant,
         cx: &mut Context<Self>,
     ) -> Self {
-        let workspace = cx.new(|_| Workspace::new(document, numbers));
+        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
         let pane = workspace.read(cx).focused();
         let first = cx.new(|cx| Editor::new(workspace.clone(), pane, Some(launched), cx));
@@ -55,7 +56,6 @@ impl WorkspaceView {
         if let Some(editor) = self.editors.get(&focused) {
             let handle = editor.read(cx).focus_handle().clone();
             window.focus(&handle, cx);
-            editor.update(cx, Editor::reveal_cursor);
         }
     }
 

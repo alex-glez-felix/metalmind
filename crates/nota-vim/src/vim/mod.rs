@@ -292,7 +292,7 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         self.reset();
         self.selected = Some(RegisterName::System(register));
-        self.run(action, buffer, selections, clipboard)
+        self.execute_with_clipboard(action, buffer, selections, clipboard)
     }
 
     fn with_detached<T>(&mut self, run: impl FnOnce(&mut Self, &mut Detached) -> T) -> T {

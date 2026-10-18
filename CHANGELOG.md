@@ -62,6 +62,19 @@ Los cambios que importan a quien usa nota. El formato sigue
 - La ventana todavía no pinta bien la selección: le falta el último carácter
   y, con `V`, las líneas completas.
 
+#### Scroll
+
+- `ctrl-d` y `ctrl-u` (media pantalla; con count fijan las líneas para los
+  siguientes), `ctrl-f` y `ctrl-b` (pantalla completa), `ctrl-e` y `ctrl-y`
+  (una línea), `zt zz zb` y `z<CR> z. z-`, como en Neovim. En Visual extienden
+  la selección.
+- `H`, `M` y `L` van a la primera, la de en medio y la última línea visible,
+  con count, y son motions de operador (`dL`).
+- `scrolloff` de la configuración deja líneas visibles alrededor del cursor,
+  también al moverlo con `j` y `k`. Cada panel tiene su propio scroll.
+- La rueda del ratón lleva el cursor consigo para que siempre se vea, como en
+  vim.
+
 #### Buffers y paneles (M2)
 
 - Varios archivos abiertos a la vez. `:e ruta` abre otro en el panel activo
