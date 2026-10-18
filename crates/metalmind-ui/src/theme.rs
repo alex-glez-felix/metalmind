@@ -1,6 +1,6 @@
 //! Tokens de tema: todo color y tamaño de la UI sale de aquí.
 
-use gpui_kit::{App, Global, Hsla, Pixels, SharedString, px, rgb};
+use gpui_kit::{App, FontWeight, Global, Hsla, Pixels, SharedString, px, rgb};
 use metalmind_config as config;
 
 /// Familias monoespaciadas, en orden de preferencia. GPUI no resuelve alias
@@ -19,6 +19,76 @@ const MONO_FONTS: &[&str] = &[
 #[derive(Debug, thiserror::Error)]
 #[error("no hay ninguna fuente monoespaciada instalada; se buscó: {}", MONO_FONTS.join(", "))]
 pub struct NoMonoFont;
+
+/// Cómo se ve el markdown en el editor (`syntax` y `headings` del tema).
+#[derive(Clone, Debug)]
+pub struct Markdown {
+    pub heading: Hsla,
+    pub bold: Hsla,
+    pub italic: Hsla,
+    pub link: Hsla,
+    pub link_unresolved: Hsla,
+    pub embed: Hsla,
+    pub tag: Hsla,
+    pub code: Hsla,
+    pub code_background: Hsla,
+    pub code_block_background: Hsla,
+    pub quote: Hsla,
+    pub list_marker: Hsla,
+    pub checkbox: Hsla,
+    pub task_done: Hsla,
+    pub highlight: Hsla,
+    pub comment: Hsla,
+    pub frontmatter: Hsla,
+    pub frontmatter_key: Hsla,
+    pub block_id: Hsla,
+    pub fence_info: Hsla,
+    pub code_keyword: Hsla,
+    pub code_string: Hsla,
+    pub code_number: Hsla,
+    pub code_comment: Hsla,
+    pub markup: Hsla,
+    /// Cada nivel, del `#` al `######`: veces la fuente del editor y peso.
+    pub headings: [(f32, FontWeight); 6],
+    /// El grosor del tachado.
+    pub strike_thickness: Pixels,
+}
+
+impl Markdown {
+    fn new(syntax: &config::SyntaxColors, headings: &config::Headings) -> Self {
+        Self {
+            heading: hsla(syntax.heading),
+            bold: hsla(syntax.bold),
+            italic: hsla(syntax.italic),
+            link: hsla(syntax.link),
+            link_unresolved: hsla(syntax.link_unresolved),
+            embed: hsla(syntax.embed),
+            tag: hsla(syntax.tag),
+            code: hsla(syntax.code),
+            code_background: hsla(syntax.code_background),
+            code_block_background: hsla(syntax.code_block_background),
+            quote: hsla(syntax.quote),
+            list_marker: hsla(syntax.list_marker),
+            checkbox: hsla(syntax.checkbox),
+            task_done: hsla(syntax.task_done),
+            highlight: hsla(syntax.highlight),
+            comment: hsla(syntax.comment),
+            frontmatter: hsla(syntax.frontmatter),
+            frontmatter_key: hsla(syntax.frontmatter_key),
+            block_id: hsla(syntax.block_id),
+            fence_info: hsla(syntax.fence_info),
+            code_keyword: hsla(syntax.code_keyword),
+            code_string: hsla(syntax.code_string),
+            code_number: hsla(syntax.code_number),
+            code_comment: hsla(syntax.code_comment),
+            markup: hsla(syntax.markup),
+            headings: headings
+                .0
+                .map(|heading| (heading.size, FontWeight(f32::from(heading.weight)))),
+            strike_thickness: px(1.),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Theme {
@@ -107,6 +177,7 @@ pub struct Theme {
     pub radius: Pixels,
     pub menu_width: Pixels,
     pub menu_padding: Pixels,
+    pub markdown: Markdown,
 }
 
 impl Global for Theme {}
@@ -124,7 +195,13 @@ impl Theme {
     }
 
     fn with_font(config: &config::Config, font_family: SharedString) -> Self {
-        let config::Theme { ui, cursor, .. } = &config.theme;
+        let config::Theme {
+            ui,
+            cursor,
+            syntax,
+            headings,
+            ..
+        } = &config.theme;
         let settings = &config.settings;
         let padding = settings.editor.padding;
         Self {
@@ -196,6 +273,7 @@ impl Theme {
             radius: px(4.),
             menu_width: px(240.),
             menu_padding: px(4.),
+            markdown: Markdown::new(syntax, headings),
         }
     }
 

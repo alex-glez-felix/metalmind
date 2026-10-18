@@ -9,7 +9,7 @@ use gpui_kit::{
 };
 
 use super::Editor;
-use super::element::cursor_position;
+use super::cursor::cursor_position;
 
 impl EntityInputHandler for Editor {
     fn text_for_range(
@@ -86,13 +86,12 @@ impl EntityInputHandler for Editor {
         }
         let layout = self.layout.as_ref()?;
         let (laid, column) = cursor_position(&view, layout)?;
-        let line_height = layout.viewport.line_height;
         Some(Bounds::new(
             point(
                 laid.origin.x + laid.shaped.x_for_index(column),
                 laid.origin.y,
             ),
-            size(line_height, line_height),
+            size(laid.height, laid.height),
         ))
     }
 

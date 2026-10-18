@@ -2,19 +2,21 @@
 //! que el scroll solo da forma a las líneas que entran.
 
 use gpui_kit::{
-    App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, Font, GlobalElementId, Hsla,
+    App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, GlobalElementId, Hsla,
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine, SharedString,
-    Style, TextAlign, TextRun, UnderlineStyle, Window, fill, point, px, relative, size,
+    Style, TextAlign, TextRun, UnderlineStyle, Window, point, px, relative, size,
 };
-use metalmind_vim::Mode;
+use metalmind_vim::{Mode, Rows};
 
 use super::Editor;
+use super::cursor::{Preedit, cursor_quad, em_width, preedit};
 use super::gutter::{Gutter, PaintedGutter};
 use super::highlight::{Cells, search_quads, selection_quads};
-use super::layout::{FrameLayout, LaidLine, Viewport};
+use super::layout::{FrameLayout, Viewport};
+pub use super::lines::Typeface;
+use super::lines::{code_block_quads, shape_visible_lines};
 use super::scroll::Scroll;
 use crate::theme::Theme;
-use crate::workspace::PaneView;
 
 pub struct EditorElement {
     editor: Entity<Editor>,
@@ -33,22 +35,11 @@ pub struct Prepainted {
     /// vertical, para que una fila a medio scroll no lo invada.
     clip: Bounds<Pixels>,
     gutter: Option<PaintedGutter>,
+    code_blocks: Vec<PaintQuad>,
     search: Vec<PaintQuad>,
     selection: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
     preedit: Option<Preedit>,
-}
-
-struct Preedit {
-    origin: Point<Pixels>,
-    background: PaintQuad,
-    shaped: ShapedLine,
-}
-
-/// Fuente y tamaño heredados del contenedor, resueltos para este frame.
-pub struct Typeface {
-    font: Font,
-    size: Pixels,
 }
 
 impl IntoElement for EditorElement {
@@ -105,13 +96,17 @@ impl gpui_kit::Element for EditorElement {
         );
         let line_height = window.line_height();
         let rows = Viewport::new(content, line_height, Scroll::default()).full_rows();
+        let measures = rows_of(line_height, &self.theme);
+        let height = to_units(f32::from(content.size.height).floor());
         let (workspace, pane) = {
             let editor = self.editor.read(cx);
             (editor.workspace.clone(), editor.pane)
         };
-        if let Err(error) = workspace.update(cx, |workspace, _| workspace.resize(pane, rows)) {
+        let resized = workspace.update(cx, |workspace, _| workspace.resize(pane, height, measures));
+        if let Err(error) = resized {
             log::error!("{error}");
         }
+        let vault_links = self.editor.update(cx, |editor, cx| editor.links(cx));
         let editor = self.editor.read(cx);
         let Some(view) = editor.view(cx) else {
             let viewport = Viewport::new(content, line_height, editor.scroll);
@@ -122,6 +117,7 @@ impl gpui_kit::Element for EditorElement {
                     lines: Vec::new(),
                 },
                 gutter: None,
+                code_blocks: Vec::new(),
                 search: Vec::new(),
                 selection: Vec::new(),
                 cursor: None,
@@ -133,7 +129,15 @@ impl gpui_kit::Element for EditorElement {
         let cell = em_width(&typeface, window);
         let gutter = Gutter::new(&view, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
-        let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
+        let lines = shape_visible_lines(
+            &view,
+            &viewport,
+            &typeface,
+            &self.theme,
+            &vault_links,
+            window,
+        );
+        let code_blocks = code_block_quads(&lines, bounds.right(), &self.theme);
         let layout = FrameLayout { viewport, lines };
         let painted_gutter = (gutter.columns > 0)
             .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
@@ -158,6 +162,7 @@ impl gpui_kit::Element for EditorElement {
             layout,
             clip,
             gutter: painted_gutter,
+            code_blocks,
             search,
             selection,
             cursor,
@@ -181,14 +186,20 @@ impl gpui_kit::Element for EditorElement {
             ElementInputHandler::new(bounds, self.editor.clone()),
             cx,
         );
-        let line_height = prepainted.layout.viewport.line_height;
         let clip = prepainted.clip;
         window.with_content_mask(Some(ContentMask { bounds: clip }), |window| {
             if let Some(gutter) = prepainted.gutter.take() {
                 window.paint_quad(gutter.background);
-                for (origin, shaped) in &gutter.labels {
-                    paint_line(shaped, *origin, line_height, window, cx);
+                for label in &gutter.labels {
+                    paint_line(&label.shaped, label.origin, label.height, window, cx);
                 }
+            }
+            for quad in prepainted.code_blocks.drain(..) {
+                window.paint_quad(quad);
+            }
+            // El fondo del código inline y del resaltado, bajo la selección.
+            for laid in &prepainted.layout.lines {
+                paint_background(&laid.shaped, laid.origin, laid.height, window, cx);
             }
             for quad in prepainted
                 .search
@@ -198,14 +209,14 @@ impl gpui_kit::Element for EditorElement {
                 window.paint_quad(quad);
             }
             for laid in &prepainted.layout.lines {
-                paint_line(&laid.shaped, laid.origin, line_height, window, cx);
+                paint_line(&laid.shaped, laid.origin, laid.height, window, cx);
             }
             if let Some(cursor) = prepainted.cursor.take() {
                 window.paint_quad(cursor);
             }
             if let Some(preedit) = prepainted.preedit.take() {
                 window.paint_quad(preedit.background);
-                paint_line(&preedit.shaped, preedit.origin, line_height, window, cx);
+                paint_line(&preedit.shaped, preedit.origin, preedit.height, window, cx);
             }
         });
         self.editor
@@ -237,30 +248,40 @@ fn paint_line(
     }
 }
 
-fn shape_visible_lines(
-    view: &PaneView<'_>,
-    viewport: &Viewport,
-    typeface: &Typeface,
-    theme: &Theme,
-    window: &Window,
-) -> Vec<LaidLine> {
-    let last_line = view.buffer().last_line();
-    (viewport.first_line..=last_line)
-        .take(viewport.painted_rows())
-        .enumerate()
-        .filter_map(|(row, line)| {
-            let text = view
-                .document
-                .line_text(line)
-                .inspect_err(|error| log::error!("línea {line} ilegible: {error}"))
-                .ok()?;
-            Some(LaidLine {
-                line,
-                origin: viewport.row_origin(row),
-                shaped: shape(text.into(), typeface, theme.foreground, None, window),
-            })
-        })
-        .collect()
+fn paint_background(
+    shaped: &ShapedLine,
+    origin: Point<Pixels>,
+    line_height: Pixels,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    if let Err(error) =
+        shaped.paint_background(origin, line_height, TextAlign::Left, None, window, cx)
+    {
+        log::error!("no se pudo pintar el fondo de una línea: {error:#}");
+    }
+}
+
+/// Lo que mide una línea de texto y cada heading, en píxeles enteros: las
+/// mismas medidas para el motor, que mueve la ventana, y para la vista.
+fn rows_of(line_height: Pixels, theme: &Theme) -> Rows {
+    let text = f32::from(line_height);
+    Rows {
+        text: to_units(text.round()),
+        headings: theme
+            .markdown
+            .headings
+            .map(|(scale, _)| to_units((text * scale).round())),
+    }
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "píxeles de un panel, ya redondeados y nunca negativos"
+)]
+fn to_units(pixels: f32) -> usize {
+    pixels.max(1.) as usize
 }
 
 pub fn shape(
@@ -281,119 +302,4 @@ pub fn shape(
     window
         .text_system()
         .shape_line(text, typeface.size, &[run], None)
-}
-
-/// Bloque en Normal y Visual, barra en Insert; en la línea de comandos el
-/// cursor está abajo, en la barra de estado. Un panel sin foco muestra un
-/// bloque tenue.
-fn cursor_quad(
-    view: &PaneView<'_>,
-    layout: &FrameLayout,
-    typeface: &Typeface,
-    theme: &Theme,
-    window: &Window,
-) -> Option<PaintQuad> {
-    let (width, color) = match view.mode {
-        Mode::CommandLine => return None,
-        Mode::Insert => (theme.caret_width, theme.caret),
-        Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => {
-            let color = match view.mode {
-                _ if !view.focused => theme.unfocused_cursor,
-                Mode::Visual(_) => theme.visual_cursor,
-                _ => theme.block_cursor,
-            };
-            (block_width(view, layout, typeface, window)?, color)
-        }
-    };
-    let (laid, column) = cursor_position(view, layout)?;
-    let left = laid.shaped.x_for_index(column);
-    Some(fill(
-        Bounds::new(
-            point(laid.origin.x + left, laid.origin.y),
-            size(width, layout.viewport.line_height),
-        ),
-        color,
-    ))
-}
-
-/// Ancho del carácter bajo el cursor; sobre el fin de línea, el de una `M`.
-fn block_width(
-    view: &PaneView<'_>,
-    layout: &FrameLayout,
-    typeface: &Typeface,
-    window: &Window,
-) -> Option<Pixels> {
-    let (laid, column) = cursor_position(view, layout)?;
-    let cursor = view.cursor();
-    let next = view.buffer().next_boundary(cursor);
-    if next > cursor && column < laid.shaped.len() {
-        let left = laid.shaped.x_for_index(column);
-        Some(
-            laid.shaped
-                .x_for_index(column + (next.get() - cursor.get()))
-                - left,
-        )
-    } else {
-        Some(em_width(typeface, window))
-    }
-}
-
-/// La línea pintada del cursor y su columna en bytes dentro de ella.
-pub fn cursor_position<'a>(
-    view: &PaneView<'_>,
-    layout: &'a FrameLayout,
-) -> Option<(&'a LaidLine, usize)> {
-    let cursor = view.cursor();
-    let buffer = view.buffer();
-    let line = buffer.line_of(cursor);
-    let laid = layout.line(line)?;
-    let column = cursor.get() - buffer.line_start(line).get();
-    Some((laid, column))
-}
-
-fn em_width(typeface: &Typeface, window: &Window) -> Pixels {
-    let text_system = window.text_system();
-    let font_id = text_system.resolve_font(&typeface.font);
-    text_system
-        .em_advance(font_id, typeface.size)
-        .inspect_err(|error| log::error!("sin ancho de M para el cursor: {error:#}"))
-        .unwrap_or(typeface.size)
-}
-
-/// El texto provisional del IME o de una tecla muerta, subrayado sobre el
-/// cursor; no entra al buffer hasta el commit.
-fn preedit(
-    view: &PaneView<'_>,
-    layout: &FrameLayout,
-    text: String,
-    typeface: &Typeface,
-    theme: &Theme,
-    window: &Window,
-) -> Option<Preedit> {
-    let (laid, column) = cursor_position(view, layout)?;
-    let underline = UnderlineStyle {
-        color: Some(theme.foreground),
-        thickness: theme.underline_thickness,
-        wavy: false,
-    };
-    let shaped = shape(
-        text.into(),
-        typeface,
-        theme.foreground,
-        Some(underline),
-        window,
-    );
-    let origin = point(
-        laid.origin.x + laid.shaped.x_for_index(column),
-        laid.origin.y,
-    );
-    let background = fill(
-        Bounds::new(origin, size(shaped.width(), layout.viewport.line_height)),
-        theme.background,
-    );
-    Some(Preedit {
-        origin,
-        background,
-        shaped,
-    })
 }

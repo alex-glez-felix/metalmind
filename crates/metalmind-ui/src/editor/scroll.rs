@@ -17,13 +17,14 @@ impl Scroll {
         self.top.fract()
     }
 
-    pub fn scroll_by(&mut self, lines: f64, last_line: usize) {
-        self.top = (self.top + lines).clamp(0.0, to_f64(last_line));
-    }
-
     /// La línea que puso el motor, sin fracción.
     pub fn at_line(line: usize) -> Self {
         Self { top: to_f64(line) }
+    }
+
+    /// En la línea `top`, con su fracción.
+    pub fn at(top: f64) -> Self {
+        Self { top: top.max(0.0) }
     }
 
     /// El scroll para pintar si el motor dejó la ventana en `top`. Solo se
@@ -66,17 +67,6 @@ mod tests {
     }
 
     #[test]
-    fn scroll_acotado_al_documento() {
-        let mut scroll = Scroll::default();
-        scroll.scroll_by(-3.0, 100);
-        assert_eq!(scroll, at(0.0));
-        scroll.scroll_by(2.5, 100);
-        assert_eq!((scroll.first_line(), scroll.fraction()), (2, 0.5));
-        scroll.scroll_by(1_000.0, 100);
-        assert_eq!(scroll, at(100.0));
-    }
-
-    #[test]
     fn primera_linea_entera() {
         assert_eq!(at(10.0).first_full_line(), 10);
         assert_eq!(at(10.25).first_full_line(), 11);
@@ -92,8 +82,7 @@ mod tests {
 
     #[test]
     fn precision_al_final_de_un_millon_de_lineas() {
-        let mut scroll = at(999_998.0);
-        scroll.scroll_by(0.05, 1_000_000);
+        let scroll = super::super::rows::scroll_by_pixels(at(999_998.0), 1.0, 1_000_000, |_| 20.0);
         assert_eq!(scroll.first_line(), 999_998);
         assert!((scroll.fraction() - 0.05).abs() < 1e-6);
     }

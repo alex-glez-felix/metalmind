@@ -16,7 +16,14 @@ pub struct Gutter {
 
 pub struct PaintedGutter {
     pub background: PaintQuad,
-    pub labels: Vec<(Point<Pixels>, ShapedLine)>,
+    pub labels: Vec<Label>,
+}
+
+/// Un número, centrado en lo que mide su línea: más alto junto a un heading.
+pub struct Label {
+    pub origin: Point<Pixels>,
+    pub height: Pixels,
+    pub shaped: ShapedLine,
 }
 
 impl Gutter {
@@ -69,7 +76,11 @@ impl Gutter {
                     theme.gutter_foreground
                 };
                 let shaped = shape(label.text.into(), typeface, color, None, window);
-                Some((point(left, laid.origin.y), shaped))
+                Some(Label {
+                    origin: point(left, laid.origin.y),
+                    height: laid.height,
+                    shaped,
+                })
             })
             .collect();
         PaintedGutter { background, labels }

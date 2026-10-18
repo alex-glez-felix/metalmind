@@ -46,6 +46,7 @@ pub struct WorkspaceView {
     /// Dónde guardar el estado de cada vault; `None` si no hay `HOME`.
     paths: Option<Paths>,
     vault: FinderVault,
+    session: Entity<VaultSession>,
     overlay: Option<Overlay>,
     _subscriptions: [Subscription; 2],
 }
@@ -65,8 +66,9 @@ impl WorkspaceView {
             view.on_sidebar_event(*event, window, cx);
         });
         let pane = workspace.read(cx).focused();
-        let first = cx.new(|cx| Editor::new(workspace.clone(), pane, Some(launched), cx));
-        let vault = FinderVault::new(session, &workspace, cx);
+        let first =
+            cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, Some(launched), cx));
+        let vault = FinderVault::new(session.clone(), &workspace, cx);
         Self {
             workspace,
             sidebar,
@@ -74,6 +76,7 @@ impl WorkspaceView {
             title: String::new(),
             paths,
             vault,
+            session,
             overlay: None,
             _subscriptions: [repaint, events],
         }
@@ -194,10 +197,10 @@ impl WorkspaceView {
         let panes = self.workspace.read(cx).tree().panes();
         self.editors.retain(|pane, _| panes.contains(pane));
         for pane in panes {
-            let workspace = &self.workspace;
-            self.editors
-                .entry(pane)
-                .or_insert_with(|| cx.new(|cx| Editor::new(workspace.clone(), pane, None, cx)));
+            let (workspace, session) = (&self.workspace, &self.session);
+            self.editors.entry(pane).or_insert_with(|| {
+                cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, None, cx))
+            });
         }
         cx.notify();
     }

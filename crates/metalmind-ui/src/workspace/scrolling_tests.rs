@@ -1,4 +1,4 @@
-use metalmind_vim::Mode;
+use metalmind_vim::{Mode, Rows};
 use pretty_assertions::assert_eq;
 
 use super::super::test_session::Session;
@@ -12,7 +12,10 @@ fn numbered(n: usize) -> String {
 fn ctrl_d_mueve_la_ventana_del_panel() {
     let mut session = Session::new(&numbered(100));
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("⌃d");
     assert_eq!((session.line(pane), session.top(pane)), (6, 6));
 }
@@ -21,10 +24,16 @@ fn ctrl_d_mueve_la_ventana_del_panel() {
 fn cada_panel_tiene_su_ventana() {
     let mut session = Session::new(&numbered(100));
     let left = session.pane();
-    session.workspace.resize(left, 10).unwrap();
+    session
+        .workspace
+        .resize(left, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("⌃wv");
     let right = session.pane();
-    session.workspace.resize(right, 20).unwrap();
+    session
+        .workspace
+        .resize(right, 20, Rows::uniform(1))
+        .unwrap();
     session.keys("⌃d");
     assert_eq!((session.line(right), session.top(right)), (11, 11));
     assert_eq!((session.line(left), session.top(left)), (1, 1));
@@ -37,10 +46,16 @@ fn cada_panel_tiene_su_ventana() {
 fn el_count_de_ctrl_d_es_de_cada_panel() {
     let mut session = Session::new(&numbered(100));
     let left = session.pane();
-    session.workspace.resize(left, 10).unwrap();
+    session
+        .workspace
+        .resize(left, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("⌃wv");
     let right = session.pane();
-    session.workspace.resize(right, 10).unwrap();
+    session
+        .workspace
+        .resize(right, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("2⌃d⌃wh⌃d");
     assert_eq!(session.top(right), 3);
     assert_eq!(session.top(left), 6);
@@ -50,10 +65,13 @@ fn el_count_de_ctrl_d_es_de_cada_panel() {
 fn un_split_nuevo_muestra_su_cursor() {
     let mut session = Session::new(&numbered(100));
     let top = session.pane();
-    session.workspace.resize(top, 40).unwrap();
+    session.workspace.resize(top, 40, Rows::uniform(1)).unwrap();
     session.keys("35G⌃ws");
     let bottom = session.pane();
-    session.workspace.resize(bottom, 10).unwrap();
+    session
+        .workspace
+        .resize(bottom, 10, Rows::uniform(1))
+        .unwrap();
     assert_eq!((session.line(bottom), session.top(bottom)), (35, 31));
     assert_eq!(session.top(top), 1);
 }
@@ -62,7 +80,10 @@ fn un_split_nuevo_muestra_su_cursor() {
 fn respeta_el_scrolloff_de_la_config() {
     let mut session = Session::with_scrolloff(&numbered(100), 3);
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("6j");
     assert_eq!((session.line(pane), session.top(pane)), (7, 1));
     session.keys("j");
@@ -73,7 +94,10 @@ fn respeta_el_scrolloff_de_la_config() {
 fn la_rueda_lleva_el_cursor_consigo() {
     let mut session = Session::with_scrolloff(&numbered(100), 2);
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.workspace.scroll_to(pane, 30).unwrap();
     assert_eq!((session.line(pane), session.top(pane)), (33, 31));
     session.workspace.scroll_to(pane, 0).unwrap();
@@ -84,7 +108,10 @@ fn la_rueda_lleva_el_cursor_consigo() {
 fn la_rueda_en_visual_extiende_la_seleccion() {
     let mut session = Session::new(&numbered(100));
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("v");
     session.workspace.scroll_to(pane, 20).unwrap();
     assert_eq!(
@@ -100,7 +127,10 @@ fn la_rueda_en_visual_extiende_la_seleccion() {
 fn la_rueda_en_insert_corta_la_repeticion() {
     let mut session = Session::new(&numbered(100));
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("3ix");
     session.workspace.scroll_to(pane, 20).unwrap();
     session.keys("⎋");
@@ -111,7 +141,10 @@ fn la_rueda_en_insert_corta_la_repeticion() {
 fn la_rueda_en_un_panel_sin_foco_no_le_da_el_foco() {
     let mut session = Session::new(&numbered(100));
     let left = session.pane();
-    session.workspace.resize(left, 10).unwrap();
+    session
+        .workspace
+        .resize(left, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("⌃wv");
     let right = session.pane();
     session.keys("i");
@@ -126,7 +159,10 @@ fn la_rueda_en_un_panel_sin_foco_no_le_da_el_foco() {
 fn una_edicion_en_otro_panel_muestra_el_cursor_que_movio() {
     let mut session = Session::new(&numbered(100));
     let left = session.pane();
-    session.workspace.resize(left, 10).unwrap();
+    session
+        .workspace
+        .resize(left, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("8G⌃wv");
     session.keys("gg20O.⎋");
     assert_eq!((session.line(left), session.top(left)), (28, 24));
@@ -136,7 +172,10 @@ fn una_edicion_en_otro_panel_muestra_el_cursor_que_movio() {
 fn si_otro_panel_acorta_el_texto_la_ventana_no_queda_pasada_del_final() {
     let mut session = Session::new(&numbered(100));
     let left = session.pane();
-    session.workspace.resize(left, 10).unwrap();
+    session
+        .workspace
+        .resize(left, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("G⌃wv");
     session.keys("gg50dd");
     assert!(session.top(left) <= 51);
@@ -147,10 +186,16 @@ fn si_otro_panel_acorta_el_texto_la_ventana_no_queda_pasada_del_final() {
 fn cambiar_la_altura_vuelve_a_mostrar_el_cursor() {
     let mut session = Session::new(&numbered(100));
     let pane = session.pane();
-    session.workspace.resize(pane, 40).unwrap();
+    session
+        .workspace
+        .resize(pane, 40, Rows::uniform(1))
+        .unwrap();
     session.keys("30G");
     assert_eq!(session.top(pane), 1);
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     assert_eq!(session.top(pane), 26);
 }
 
@@ -158,7 +203,10 @@ fn cambiar_la_altura_vuelve_a_mostrar_el_cursor() {
 fn la_rueda_cancela_un_operador_pendiente() {
     let mut session = Session::new(&numbered(100));
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     session.keys("2d");
     session.workspace.scroll_to(pane, 20).unwrap();
     session.keys("j");
@@ -170,7 +218,10 @@ fn la_rueda_cancela_un_operador_pendiente() {
 fn arrastrar_hasta_el_margen_no_mueve_la_ventana() {
     let mut session = Session::with_scrolloff(&numbered(100), 3);
     let pane = session.pane();
-    session.workspace.resize(pane, 10).unwrap();
+    session
+        .workspace
+        .resize(pane, 10, Rows::uniform(1))
+        .unwrap();
     let start = session.view(pane).buffer().line_start(0);
     for line in [7, 8, 9] {
         let head = session.view(pane).buffer().line_start(line);

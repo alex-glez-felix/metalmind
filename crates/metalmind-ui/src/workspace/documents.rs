@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
-use metalmind_vim::FileId;
+use metalmind_vim::{FileId, Rows};
 
 use crate::document::Document;
 
@@ -19,21 +19,52 @@ impl fmt::Display for DocumentId {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Documents {
     open: BTreeMap<DocumentId, Document>,
     /// El archivo de cada uno para el motor vim.
     files: BTreeMap<DocumentId, FileId>,
     next_id: u32,
+    /// Lo que mide cada línea en todos, en píxeles.
+    rows: Rows,
+}
+
+impl Default for Documents {
+    fn default() -> Self {
+        Self {
+            open: BTreeMap::new(),
+            files: BTreeMap::new(),
+            next_id: 0,
+            rows: Rows::uniform(1),
+        }
+    }
 }
 
 impl Documents {
-    pub fn insert(&mut self, document: Document, file: FileId) -> DocumentId {
+    pub fn insert(&mut self, mut document: Document, file: FileId) -> DocumentId {
+        document.set_rows(self.rows);
         let id = DocumentId(self.next_id);
         self.next_id += 1;
         self.open.insert(id, document);
         self.files.insert(id, file);
         id
+    }
+
+    #[must_use]
+    pub fn rows(&self) -> Rows {
+        self.rows
+    }
+
+    /// Lo que mide cada línea, en todos. Devuelve si cambió.
+    pub fn set_rows(&mut self, rows: Rows) -> bool {
+        if rows == self.rows {
+            return false;
+        }
+        self.rows = rows;
+        for document in self.open.values_mut() {
+            document.set_rows(rows);
+        }
+        true
     }
 
     pub fn remove(&mut self, id: DocumentId) -> Option<Document> {
