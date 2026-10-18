@@ -196,6 +196,8 @@ impl VaultIndex {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -213,6 +215,46 @@ mod tests {
             .children(&path(dir))
             .map(|entry| entry.path.name().to_owned())
             .collect()
+    }
+
+    /// Las rutas de `nota_perf::vault_paths` con sus carpetas.
+    fn vault_entries(notes: usize) -> Vec<(VaultPath, EntryKind)> {
+        let files: Vec<_> = nota_perf::vault_paths(notes)
+            .iter()
+            .map(|file| path(file))
+            .collect();
+        let folders: HashSet<_> = files
+            .iter()
+            .flat_map(|file| std::iter::successors(file.parent(), VaultPath::parent))
+            .filter(|folder| !folder.is_root())
+            .collect();
+        folders
+            .into_iter()
+            .map(|folder| (folder, EntryKind::Folder))
+            .chain(files.into_iter().map(|file| {
+                let kind = EntryKind::of_file(&file);
+                (file, kind)
+            }))
+            .collect()
+    }
+
+    #[test]
+    fn indexar_es_lineal() {
+        nota_perf::assert_linear(2_000, vault_entries, VaultIndex::from_entries);
+    }
+
+    #[test]
+    fn quitar_todo_el_contenido_es_lineal() {
+        nota_perf::assert_linear(
+            3_000,
+            |notes| VaultIndex::from_entries(vault_entries(notes)),
+            |mut index| {
+                for top in 0..10 {
+                    index.remove_subtree(&path(&format!("area-{top}")));
+                }
+                index
+            },
+        );
     }
 
     #[test]
