@@ -12,6 +12,7 @@ Reglas para agentes que trabajen en este repo.
 - Commits en español, estilo conventional commits.
 - Toda acción del usuario es una acción con nombre, en snake_case con espacio de nombres (`vim::next_word_start`, `editor::delete_line`); atajos, paleta y `:` solo las invocan (base para plugins, ver `docs/IDEAS.md`).
 - Ningún color ni tamaño hardcodeado en la UI: todo sale de tokens del tema.
+- nota no tiene usuarios todavía: los cambios de formato, API o nombres de archivo son directos. Nada de compatibilidad hacia atrás, migraciones, avisos de formatos viejos ni alias "por si acaso". Esto se revisa cuando haya un release público.
 
 ## Calidad de código
 
