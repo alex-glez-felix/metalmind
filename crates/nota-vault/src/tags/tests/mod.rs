@@ -3,6 +3,7 @@
 
 mod graph;
 mod query;
+mod rename;
 
 use std::collections::{BTreeMap, BTreeSet};
 
