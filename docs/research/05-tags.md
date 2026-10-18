@@ -101,6 +101,20 @@ struct TagGraph {                                              // sale solo de l
 - **Buffers abiertos**: el índice refleja el disco, no el buffer sin guardar. El tag que escribes aparece en el panel al guardar. Indexar cada tecla haría que el panel baile mientras escribes `#ru…` y obligaría a tener dos verdades.
 - **Invariante** (proptest, como el de archivos): índice y grafo incrementales tras cualquier secuencia de crear, editar, mover y borrar notas y páginas == índice y grafo construidos de cero sobre el resultado.
 
+### Estado (M2.5, 2026-10-18): núcleo, sin UI
+
+En `nota-vault`, módulo `tags`. Lo que se implementó distinto de lo de arriba, y por qué:
+
+- **La nota se identifica por su `VaultPath`**, no por un `NoteId`: el vault todavía no interna rutas, y la ruta ya es la identidad ([06](06-decisiones-de-fondo.md) §1). Cuando llegue el `NoteId` de M3, el cambio queda dentro del módulo.
+- **En frío**: `Vault::open` escanea los tags en hilos propios (`std::thread::scope`, uno por núcleo, sin crate de pool) y devuelve el vault con el índice ya armado. La UI no espera porque abre el vault fuera del hilo de la ventana, como ya hace falta para el walk. Medido abajo.
+- **Publicación**: no hay `IndexEvent` aparte; cada `VaultUpdate` del watcher trae el `Tags` nuevo (índice y grafo juntos, en el mismo `ArcSwap` que `Vault::tags()`) y `tag_changes`, las claves cuyas notas, formas o página pueden haber cambiado. Así cambios de archivos y de tags nunca se desfasan.
+- **Incremental**: `Created`/`Modified` reescanean la nota; `Removed` la quita; `Renamed` mueve sus ocurrencias sin releerla, salvo que entre o salga de la carpeta de tags. Si cambió alguna página, el grafo se rehace entero. El proptest de arriba corre sobre el mismo `refresh` del watcher.
+- **Una nota que no se puede leer** (permisos, no es UTF-8) cuenta como nota sin tags, con un aviso en el log, hasta que vuelva a cambiar.
+- **La carpeta de tags** llega por `VaultOptions::tags_folder` (`tags` por defecto); leerla de `tags_folder` en `<vault>/.nota/config.yaml` queda para cuando exista la config del vault.
+- **Ícono y color**: un `icon` es un emoji (símbolos con sus modificadores) o `set:nombre`; un `color` es un nombre (letras, números, `-`, `_`) o un hex de 3 o 6 dígitos. Si el nombre está en la paleta del tema lo decide la UI. Un valor que no es ninguno es un `TagProblem::InvalidValue` y el resto de la página vale.
+- **Planes**: `plan_rename`, `plan_merge` y `plan_use_main_name` devuelven un `TagPlan`: por archivo, las ediciones en orden y la huella del contenido escaneado (`FileEdit::apply` se niega si el archivo cambió), más el renombre de la página y los avisos (`Merges`, `RenamesAlias`, `AliasAbsorbs`, y los bloqueos `BothHavePages` y `AliasTaken`). Fusionar escribe la forma establecida del destino. Un padre que tras fusionar sería la página misma se quita, igual que un valor repetido en `tags:` o en `parents`. Aplicar, la vista previa y deshacer son de la UI. El renombre de un alias también reescribe los `parents` que lo nombran, para que sigan apuntando al mismo tag.
+- Falta: `Scope` y focus (§3), escribir metadata desde una acción (§3), autocompletado (§5) y todo lo de la UI.
+
 ## 3. UI
 
 ### Una GUI, no una TUI
