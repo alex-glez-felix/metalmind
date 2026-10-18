@@ -2,7 +2,7 @@
 //! resolución es función de los archivos del vault y de la nota de origen,
 //! así que aplicar cambios llega al mismo índice que armarlo de cero.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::thread;
@@ -60,9 +60,12 @@ impl LinkIndex {
             } => {}
             VaultChange::Created { path, .. } => self.add_file(path, &mut read),
             VaultChange::Removed { path, .. } => {
+                let mut keys = HashSet::new();
                 for file in self.names.within(path) {
-                    self.remove_file(&file);
+                    self.remove_note(&file);
+                    keys.extend(self.names.remove(&file));
                 }
+                self.resolve_again(&keys);
             }
             VaultChange::Renamed { from, to, .. } => self.rename(from, to, &mut read),
             VaultChange::Modified { path } => {
@@ -75,18 +78,13 @@ impl LinkIndex {
     }
 
     fn add_file(&mut self, path: &VaultPath, read: &mut impl FnMut(&VaultPath) -> Option<String>) {
-        self.remove_file(path);
-        let keys = self.names.insert(path);
+        self.remove_note(path);
+        let mut keys: HashSet<String> = self.names.remove(path).into_iter().collect();
+        keys.extend(self.names.insert(path));
         if EntryKind::of_file(path) == EntryKind::Note {
             let links = read(path).as_deref().map(scan_links).unwrap_or_default();
             self.add_note(path.clone(), links);
         }
-        self.resolve_again(&keys);
-    }
-
-    fn remove_file(&mut self, path: &VaultPath) {
-        self.remove_note(path);
-        let keys = self.names.remove(path);
         self.resolve_again(&keys);
     }
 
@@ -98,7 +96,7 @@ impl LinkIndex {
         to: &VaultPath,
         read: &mut impl FnMut(&VaultPath) -> Option<String>,
     ) {
-        let mut keys = Vec::new();
+        let mut keys = HashSet::new();
         let mut moved = Vec::new();
         for old in self.names.within(from) {
             let Some(new) = old.rebase(from, to) else {
@@ -155,8 +153,8 @@ impl LinkIndex {
         Some(links)
     }
 
-    /// Vuelve a resolver las notas con links a alguna de `keys`.
-    fn resolve_again(&mut self, keys: &[String]) {
+    /// Vuelve a resolver los links a alguna de `keys`.
+    fn resolve_again(&mut self, keys: &HashSet<String>) {
         let sources: BTreeSet<VaultPath> = keys
             .iter()
             .filter_map(|key| self.by_key.get(key))
@@ -168,6 +166,9 @@ impl LinkIndex {
                 continue;
             };
             for (ordinal, link) in Arc::make_mut(links).iter_mut().enumerate() {
+                if !key_of(&source, &link.target_text).is_some_and(|key| keys.contains(&key)) {
+                    continue;
+                }
                 let target = self.names.resolve(&source, &link.target_text);
                 if target != link.target {
                     remove_incoming(&mut self.incoming, &source, ordinal, &link.target);

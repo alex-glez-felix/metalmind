@@ -6,11 +6,13 @@
 //! Los números objetivo y cómo se miden están en `docs/performance.md`.
 
 mod growth;
+mod links;
 mod session;
 mod text;
 mod vault;
 
 pub use growth::{FACTOR, MAX_FLAT_GROWTH, MAX_LINEAR_GROWTH, assert_flat, assert_linear, growth};
+pub use links::{NoteNames, linked_vault};
 pub use session::Session;
 pub use text::{
     MISSING_WORD, WORD, backtick_runs, hash_runs, huge_line, note, unclosed_link_titles,
