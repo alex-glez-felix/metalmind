@@ -2,6 +2,7 @@
 
 Reglas para agentes que trabajen en este repo.
 
+- nota es una GUI con navegación estilo vim, no una TUI: toda función tiene que poder usarse desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
 - Antes de proponer arquitectura, leer `docs/GETTING-STARTED.md` y el documento de `docs/research/` relevante. Las decisiones viven ahí; si cambias una, actualiza el documento en el mismo commit.
 - Los documentos de `docs/research/` que digan "pendiente de revisión" no son decisiones: no implementes nada de ellos.
 - Antes de agregar un crate, verificar que existe y su última versión: `curl -s https://crates.io/api/v1/crates/<nombre> | jq .crate.max_version`. No inventar crates.
