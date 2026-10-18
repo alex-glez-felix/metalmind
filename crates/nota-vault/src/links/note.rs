@@ -11,20 +11,57 @@ const CONTEXT_BYTES: usize = 80;
 
 /// Los links de `text`, en orden de aparición y con `LinkTarget::Unresolved`.
 pub(super) fn scan_links(text: &str) -> Vec<IndexedLink> {
-    let mut line = 0;
-    let mut counted = 0;
+    let mut lines = Lines::new(text);
     nota_syntax::scan(text)
         .links
         .into_iter()
         .map(|link| {
-            line += text[counted..link.span.start].matches('\n').count();
-            counted = link.span.start;
-            indexed(text, &link, line)
+            let (number, line) = lines.at(link.span.start);
+            indexed(text, &link, number, &line)
         })
         .collect()
 }
 
-fn indexed(text: &str, link: &Link, line_number: usize) -> IndexedLink {
+/// Las líneas de un texto, recorridas hacia adelante: cada línea se busca
+/// una vez aunque tenga muchos links.
+struct Lines<'t> {
+    text: &'t str,
+    number: usize,
+    start: usize,
+    end: Option<usize>,
+    counted: usize,
+}
+
+impl<'t> Lines<'t> {
+    fn new(text: &'t str) -> Self {
+        Self {
+            text,
+            number: 0,
+            start: 0,
+            end: None,
+            counted: 0,
+        }
+    }
+
+    /// El número, desde cero, y el rango de la línea de `offset`, que no
+    /// puede ser menor que el de la llamada anterior.
+    fn at(&mut self, offset: usize) -> (usize, Range<usize>) {
+        let skipped = &self.text[self.counted..offset];
+        if let Some(last) = skipped.rfind('\n') {
+            self.number += skipped.matches('\n').count();
+            self.start = self.counted + last + 1;
+            self.end = None;
+        }
+        self.counted = offset;
+        let text = self.text;
+        let end = *self
+            .end
+            .get_or_insert_with(|| text[offset..].find('\n').map_or(text.len(), |i| offset + i));
+        (self.number, self.start..end)
+    }
+}
+
+fn indexed(text: &str, link: &Link, number: usize, bounds: &Range<usize>) -> IndexedLink {
     IndexedLink {
         syntax: link.syntax,
         embed: link.embed,
@@ -32,8 +69,8 @@ fn indexed(text: &str, link: &Link, line_number: usize) -> IndexedLink {
         target_span: link.target.clone(),
         target_text: link.target_text(text).into_owned(),
         subpath: subpath(text, link),
-        line: line_number,
-        context: context(text, &link.span),
+        line: number,
+        context: context(text, &link.span, bounds),
         bracketed: link.syntax == LinkSyntax::Markdown
             && text[link.span.start..link.target.start]
                 .trim_end()
@@ -52,11 +89,9 @@ pub(super) fn subpath(text: &str, link: &Link) -> Option<LinkSubpath> {
 
 /// La línea del link, recortada a [`CONTEXT_BYTES`] a cada lado. Un link
 /// nunca cruza un salto de línea, así que siempre entra entero.
-fn context(text: &str, span: &Range<usize>) -> LinkContext {
-    let line_start = text[..span.start].rfind('\n').map_or(0, |i| i + 1);
-    let line_end = text[span.end..]
-        .find('\n')
-        .map_or(text.len(), |i| span.end + i);
+fn context(text: &str, span: &Range<usize>, line: &Range<usize>) -> LinkContext {
+    let line_start = line.start;
+    let line_end = line.end;
     let line_end = if text[..line_end].ends_with('\r') {
         line_end - 1
     } else {

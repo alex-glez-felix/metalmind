@@ -65,6 +65,11 @@ pub enum AccessError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Interruption {
+    /// Otro programa lo guardó después de comprobar el plan; no se tocó.
+    #[error("{0} cambió mientras se aplicaba el renombre")]
+    Changed(VaultPath),
+    #[error(transparent)]
+    Access(AccessError),
     #[error(transparent)]
     Write(FileError),
     #[error(transparent)]
@@ -104,22 +109,37 @@ pub(crate) fn apply(root: &Path, plan: &RenamePlan) -> Result<AppliedRename, App
         files: Vec::with_capacity(files.len()),
     };
     for file in files {
+        // Sin locks de archivo (06 §2), comprobar justo antes de escribir es
+        // lo que deja más chica la ventana para un guardado de otro programa.
+        match read(root, &file.path) {
+            Ok(text) if text == file.before => {}
+            Ok(_) => return interrupted(applied, Interruption::Changed(file.path)),
+            Err(error) => return interrupted(applied, Interruption::Access(error)),
+        }
         if let Err(error) = write(root, &file.path, &file.after) {
-            return Err(ApplyRenameError::Interrupted {
-                applied: Box::new(applied),
-                cause: Interruption::Write(error),
-            });
+            // `write_atomic` puede fallar ya reemplazado el archivo, al bajar la carpeta a disco.
+            if read(root, &file.path).is_ok_and(|text| text == file.after) {
+                applied.files.push(file);
+            }
+            return interrupted(applied, Interruption::Write(error));
         }
         applied.files.push(file);
     }
     if let Err(error) = ops::rename(root, &plan.from, &plan.to) {
-        return Err(ApplyRenameError::Interrupted {
-            applied: Box::new(applied),
-            cause: Interruption::Rename(error),
-        });
+        return interrupted(applied, Interruption::Rename(error));
     }
     applied.renamed = true;
     Ok(applied)
+}
+
+fn interrupted(
+    applied: AppliedRename,
+    cause: Interruption,
+) -> Result<AppliedRename, ApplyRenameError> {
+    Err(ApplyRenameError::Interrupted {
+        applied: Box::new(applied),
+        cause,
+    })
 }
 
 /// Vuelve cada archivo a como estaba, salvo los que cambiaron desde que se
