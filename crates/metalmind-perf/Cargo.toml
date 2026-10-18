@@ -1,0 +1,26 @@
+[package]
+name = "metalmind-perf"
+description = "Soporte de rendimiento, solo para benchmarks y tests: notas sintéticas deterministas, la prueba de crecimiento lineal y los benchmarks por conteo de instrucciones."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+metalmind-buffer.workspace = true
+metalmind-vim.workspace = true
+
+[dev-dependencies]
+gungraun.workspace = true
+metalmind-search.workspace = true
+metalmind-syntax.workspace = true
+tempfile.workspace = true
+
+# Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
+[[bench]]
+name = "instrucciones"
+harness = false
+
+[lints]
+workspace = true

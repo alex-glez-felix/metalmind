@@ -1,0 +1,8 @@
+---
+source: crates/metalmind-syntax/tests/scan.rs
+expression: "support::render(&text, &scan(&text))"
+input_file: crates/metalmind-syntax/tests/fixtures/frontmatter-sin-cierre.md
+---
+wikilink 59..67 "[[link]]"
+    target 61..65 "link"
+tag 68..72 "#tag" name "tag"

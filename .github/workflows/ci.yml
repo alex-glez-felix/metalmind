@@ -10,7 +10,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   # La tabla de casos de vim se validó contra esta versión.
-  # Debe coincidir con VERSION en crates/nota-vim/tests/support/nvim.rs.
+  # Debe coincidir con VERSION en crates/metalmind-vim/tests/support/nvim.rs.
   # El sha256 sale del campo `digest` del asset en la API de releases.
   NVIM_VERSION: v0.12.6
   NVIM_SHA256: 474430d53e6264f6d6dd18db42d6dc9df3a1b56ca9e88a325bbf860e1a811d87
@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: rustup toolchain install
-      # Lo que GPUI necesita para compilar en Linux (nota-ui y el binario).
+      # Lo que GPUI necesita para compilar en Linux (metalmind-ui y el binario).
       - name: Librerías de sistema de GPUI
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev
       - uses: Swatinem/rust-cache@v2
@@ -37,15 +37,15 @@ jobs:
           # las dependencias, main seguía restaurando el caché viejo (full match,
           # sin guardar) y recompilaba ~500 crates en cada corrida. Subir este
           # prefijo cada vez que cambie un [profile] del Cargo.toml raíz.
-          prefix-key: v1-rust
+          prefix-key: v2-rust
           # Solo main escribe; las PRs restauran el de main. Así los cachés de
           # PR (~2 GB cada uno) no se comen el tope de 10 GB del repo.
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      # 03 §6: solo nota-ui y el binario dependen de la GUI.
+      # 03 §6: solo metalmind-ui y el binario dependen de la GUI.
       - name: El núcleo no depende de GPUI
         run: |
-          for crate in nota-buffer nota-config nota-syntax nota-vim nota-vault nota-search nota-template; do
+          for crate in metalmind-buffer metalmind-config metalmind-syntax metalmind-vim metalmind-vault metalmind-search metalmind-template; do
             if cargo tree -p "$crate" -e normal,build | grep -q gpui; then
               echo "$crate depende de GPUI" >&2
               exit 1
@@ -64,7 +64,7 @@ jobs:
           echo "/opt/nvim-linux-x86_64/bin" >> "$GITHUB_PATH"
       # Sin nvim los casos del oráculo se ignorarían en silencio.
       - run: nvim --version
-      # Lo que GPUI necesita para compilar en Linux (nota-ui y el binario).
+      # Lo que GPUI necesita para compilar en Linux (metalmind-ui y el binario).
       - name: Librerías de sistema de GPUI
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev
       - run: rustup toolchain install
@@ -74,7 +74,7 @@ jobs:
           # las dependencias, main seguía restaurando el caché viejo (full match,
           # sin guardar) y recompilaba ~500 crates en cada corrida. Subir este
           # prefijo cada vez que cambie un [profile] del Cargo.toml raíz.
-          prefix-key: v1-rust
+          prefix-key: v2-rust
           # Solo main escribe; las PRs restauran el de main. Así los cachés de
           # PR (~2 GB cada uno) no se comen el tope de 10 GB del repo.
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -98,14 +98,14 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
-          # Su propio caché: solo compila `nota` y sus tests, no el workspace.
-          # Subirlo junto con v1-rust cuando cambie un [profile].
-          prefix-key: v1-gui-smoke
+          # Su propio caché: solo compila `metalmind` y sus tests, no el workspace.
+          # Subirlo junto con v2-rust cuando cambie un [profile].
+          prefix-key: v2-gui-smoke
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-      - run: cargo nextest run -p nota --test gui_smoke --run-ignored only --no-tests=fail
+      - run: cargo nextest run -p metalmind --test gui_smoke --run-ignored only --no-tests=fail
 
   deny:
     runs-on: ubuntu-latest
@@ -118,6 +118,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y appstream desktop-file-utils libxml2-utils
-      - run: desktop-file-validate packaging/linux/nota.desktop
-      - run: appstreamcli validate --no-net packaging/linux/io.github.alex_glez_felix.nota.metainfo.xml
-      - run: xmllint --noout packaging/linux/nota.svg
+      - run: desktop-file-validate packaging/linux/metalmind.desktop
+      - run: appstreamcli validate --no-net packaging/linux/io.github.alex_glez_felix.metalmind.metainfo.xml
+      - run: xmllint --noout packaging/linux/metalmind.svg

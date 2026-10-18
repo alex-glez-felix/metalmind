@@ -1,6 +1,6 @@
-# 01 — Panorama: apps de notas markdown que se solapan con "nota"
+# 01 — Panorama: apps de notas markdown que se solapan con "Metalmind"
 
-Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (Linux primero), en Rust, centrada en (1) rendimiento, (2) UX y (3) edición modal vim y atajos de teclado en toda la app. La compatibilidad con vaults de Obsidian no es requisito: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
+Fecha: 2026-10-15. Objetivo de Metalmind: app de notas markdown open-source, nativa (Linux primero), en Rust, centrada en (1) rendimiento, (2) UX y (3) edición modal vim y atajos de teclado en toda la app. La compatibilidad con vaults de Obsidian no es requisito: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
 
 ## Cómo se verificó
 
@@ -11,7 +11,7 @@ Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (
 
 ---
 
-## 1. Rust nativo con GUI (lo más cercano a nota)
+## 1. Rust nativo con GUI (lo más cercano a Metalmind)
 
 ### Velotype — el más cercano en stack
 - **URL:** https://github.com/manyougz/velotype · hilo en el foro: https://users.rust-lang.org/t/140046
@@ -31,7 +31,7 @@ Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (
 - **Actividad:** unas 1.8k stars. Repo creado en diciembre de 2025, último push el 2026-10-08. Release v0.3.0 del 2026-05-22; la v0.3.1 está anunciada.
 - **Vim:** **opcional y básico.** Viene desactivado por defecto. Tiene modos Normal, Insert, Visual y V-Line con motions básicos (`hjkl w b e 0 $ gg G`, `dd yy x D`, `o/O`). Los atajos de egui (`Ctrl+C`/`Ctrl+V`) no los intercepta. Fuente: `docs/technical/editor/vim-mode.md` y `src/editor/ferrite/vim.rs`. No hay gramática de operadores con text objects completa (sin verificar en el código; la tabla de la doc es corta). Vim **solo funciona dentro del editor**.
 - **Compatibilidad con Obsidian:** la web anuncia wikilinks y backlinks; el README no los menciona (sin verificar en profundidad). Tiene Workspace Mode con árbol de archivos, `Ctrl+P` y búsqueda en todos los archivos. No hay grafo ni se menciona `.obsidian`.
-- **Lo bueno:** paquetes .deb, .rpm, AUR y tar.gz. Tiene Mermaid nativo, export a PDF/HTML y bloques de código ejecutables. **Está desarrollado con un flujo de IA documentado** (`docs/ai-workflow/`, PRDs por versión, implementación con "Claude Opus"). Es un precedente directo de lo que se quiere hacer con nota.
+- **Lo bueno:** paquetes .deb, .rpm, AUR y tar.gz. Tiene Mermaid nativo, export a PDF/HTML y bloques de código ejecutables. **Está desarrollado con un flujo de IA documentado** (`docs/ai-workflow/`, PRDs por versión, implementación con "Claude Opus"). Es un precedente directo de lo que se quiere hacer con Metalmind.
 - **Lo que falta:** es un editor de texto generalista (también abre JSON, YAML y TOML), no una herramienta PKM. En **GNOME/Wayland el teclado no funciona** y el README recomienda forzar X11. egui es de modo inmediato y no tiene shaping de texto avanzado comparable al de GPUI (sin verificar).
 
 ### Bloom — el más cercano en filosofía
@@ -68,9 +68,9 @@ Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (
 | **Onyx** | https://github.com/onyx-notes/onyx | Tauri v2 + SolidJS + **CodeMirror 6**; core en Rust (tantivy, SQLite, grafo de links) | AGPL-3.0 | 3 stars; último commit el 2026-07-18 | No mencionado | **Abre un vault de Obsidian tal cual** e importa `.obsidian` |
 | **outl** | https://outl.app · https://github.com/outlmd/outl | Outliner. Una crate `outl-core`/`outl-md` con varios frontends: TUI (vim-first), desktop (**Tauri**, beta en macOS) y móvil | MIT | unas 200 stars; v0.12.0-beta.218 del 2026-10-14, muy activo | Vim en la TUI ("vim-first, mouse-optional") | Markdown CommonMark sin IDs, `[[links]]` e importadores de Obsidian, Logseq y Roam. Su modelo es de outliner, no de documento |
 
-- **Qué aprender:** el core de Onyx (`onyx-core` y `onyx-md`: watcher, escrituras atómicas, tantivy, extracción de wikilinks, tags y frontmatter) se parece mucho a la capa de vault que necesita nota.
+- **Qué aprender:** el core de Onyx (`onyx-core` y `onyx-md`: watcher, escrituras atómicas, tantivy, extracción de wikilinks, tags y frontmatter) se parece mucho a la capa de vault que necesita Metalmind.
 - **Qué aprender:** de outl, el sync con CRDT de árbol en un sidecar que no ensucia el markdown, y la separación entre core y frontends.
-- **Qué evitar:** los tres renderizan con WebView, que es justo lo que nota quiere evitar.
+- **Qué evitar:** los tres renderizan con WebView, que es justo lo que Metalmind quiere evitar.
 
 ---
 
@@ -132,7 +132,7 @@ Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (
 - **GPUI**: el framework de Zed. En crates.io está la 0.2, que usa Velotype; la versión de Zed va por git. Le faltan piezas: IME y menús nativos, según el autor de Velotype.
 - **gpui-kit**: https://github.com/longbridge/gpui-kit (antes `gpui-component`, unas 17.6k stars, activo).
   - Incluye un **Code Editor "estable a 200K líneas"** con tree-sitter y LSP, render nativo de Markdown y HTML, y tests de integración de UI en ventanas headless.
-  - **Es probablemente la pieza que más acelera nota.**
+  - **Es probablemente la pieza que más acelera Metalmind.**
 - **iced**: unas 31.8k stars, activo; es la base de Bloom.
 - **egui**: unas 31.5k stars, activo; es la base de Ferrite. Tiene problemas de teclado en GNOME/Wayland, según el README de Ferrite.
 - **Floem**: el de Lapce; no se revisó a fondo.
@@ -163,7 +163,7 @@ Lo más cercano es **Bloom**: tiene la filosofía y el vim, pero está alfa, par
    - Text objects específicos de markdown y PKM.
    - Which-key, pickers unificados, splits, undo tree y un harness de tests.
    - Sus `docs/*.md` (ARCHITECTURE, UNIFIED_BUFFER, KEYBINDINGS, PICKER_SURFACES) sirven casi como plantilla de ADRs.
-   - Ojo: la licencia es AGPL. Si nota va a usar MIT o Apache, solo se pueden estudiar sus ideas, no copiar código.
+   - Ojo: la licencia es AGPL. Si Metalmind va a usar MIT o Apache, solo se pueden estudiar sus ideas, no copiar código.
 2. **Velotype** (`manyougz/velotype`) **y gpui-kit**: para **render rico sobre GPUI en Linux**.
    - Velotype muestra cómo hacer bloques WYSIWYG con fallback a la fuente, qué hubo que implementar a mano (IME, menús) y cómo serializa a markdown.
    - gpui-kit aporta el editor de código a 200K líneas y el render de markdown.

@@ -128,10 +128,10 @@ fn window_options(view: View, bench: bool) -> WindowOptions {
     WindowOptions {
         inactive_frame_interval: defaults.inactive_frame_interval.filter(|_| !bench),
         titlebar: Some(TitlebarOptions {
-            title: Some(format!("nota spike · {}", view.name()).into()),
+            title: Some(format!("Metalmind spike · {}", view.name()).into()),
             ..TitlebarOptions::default()
         }),
-        app_id: Some("nota-spike-gpui".to_owned()),
+        app_id: Some("metalmind-spike-gpui".to_owned()),
         ..defaults
     }
 }

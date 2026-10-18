@@ -1,4 +1,4 @@
-//! Spike de GPUI para `nota`. Ver `README.md` para correrlo y la checklist.
+//! Spike de GPUI para `metalmind`. Ver `README.md` para correrlo y la checklist.
 
 mod cli;
 mod document;
@@ -26,7 +26,7 @@ use cli::{Command, View};
 use session::{Session, SessionInfo};
 
 /// Muestra en la terminal qué GPU eligió wgpu y los eventos de teclado.
-const DEFAULT_LOG: &str = "warn,gpui_wgpu=info,nota_spike_gpui=info";
+const DEFAULT_LOG: &str = "warn,gpui_wgpu=info,metalmind_spike_gpui=info";
 
 fn main() -> ExitCode {
     let launched = Instant::now();

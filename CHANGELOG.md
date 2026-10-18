@@ -1,6 +1,6 @@
 # Changelog
 
-Los cambios que importan a quien usa nota. El formato sigue
+Los cambios que importan a quien usa Metalmind. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y las versiones,
 [SemVer](https://semver.org/lang/es/). Cómo se publica una versión:
 [docs/release.md](docs/release.md).
@@ -11,19 +11,19 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 #### CLI
 
-- `nota add`: crea una nota en el vault con el texto del argumento o de stdin,
+- `metalmind add`: crea una nota en el vault con el texto del argumento o de stdin,
   como `slug.md` (`idea-2.md` si ya existe) y sin pisar nunca otra. Sin `-t`, la nota queda
   en el buzón; con `-t`, los tags van al frontmatter.
-- `nota search`: búsqueda difusa sobre las rutas del vault.
-- `nota open`: abre la app en una nota del vault.
+- `metalmind search`: búsqueda difusa sobre las rutas del vault.
+- `metalmind open`: abre la app en una nota del vault.
 - `--json` en todos, con una forma estable, y códigos de salida fijos. El
-  vault sale de `--vault`, `NOTA_VAULT`, el último abierto o `vault:` de la
-  config, la misma regla que `nota` sin argumentos. Ninguno abre ventana
+  vault sale de `--vault`, `METALMIND_VAULT`, el último abierto o `vault:` de la
+  config, la misma regla que `metalmind` sin argumentos. Ninguno abre ventana
   salvo `open`. Ver [docs/cli.md](docs/cli.md).
 
 #### Editor (M0)
 
-- `nota archivo.md` abre el archivo en una ventana nativa (GPUI). Si no existe,
+- `metalmind archivo.md` abre el archivo en una ventana nativa (GPUI). Si no existe,
   empieza vacío y se crea al guardar.
 - Guardado atómico: temporal en el mismo directorio, fsync y rename. Conserva
   los permisos, sigue enlaces simbólicos y, si algo falla, el original queda
@@ -38,9 +38,9 @@ Los cambios que importan a quien usa nota. El formato sigue
 - Portapapeles con `ctrl-shift-c` y `ctrl-shift-v`, y selección primaria con
   el ratón y el clic medio.
 - La fuente es la primera monoespaciada instalada de una lista; si no hay
-  ninguna, nota lo dice y no abre.
+  ninguna, Metalmind lo dice y no abre.
 - Sin sesión gráfica (ni Wayland ni X11) o sin driver de Vulkan ni OpenGL,
-  nota dice qué falta y sale con error en vez de quedarse corriendo sin
+  Metalmind dice qué falta y sale con error en vez de quedarse corriendo sin
   ventana.
 
 #### Modo vim (M1)
@@ -124,9 +124,9 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 #### Vault y panel lateral (M2)
 
-- `nota carpeta/` abre la carpeta como vault; `nota archivo.md` abre el
-  archivo en el vault de la carpeta que lo contiene, y `nota` sin argumentos,
-  la carpeta de `NOTA_VAULT`, el último vault abierto o el `vault:` de la
+- `metalmind carpeta/` abre la carpeta como vault; `metalmind archivo.md` abre el
+  archivo en el vault de la carpeta que lo contiene, y `metalmind` sin argumentos,
+  la carpeta de `METALMIND_VAULT`, el último vault abierto o el `vault:` de la
   config, en ese orden.
 - Panel lateral con el árbol de carpetas del vault, que se actualiza solo
   cuando algo cambia en disco. Se muestra y se esconde con `space e` o con el
@@ -146,7 +146,7 @@ Los cambios que importan a quien usa nota. El formato sigue
   uno con archivo, `:w ruta` escribe una copia. Nunca pisan un archivo (`E13`)
   ni escriben en uno abierto en otro buffer (`E139`).
 - Las rutas relativas de `:e` y `:w` parten de la raíz del vault, no del
-  directorio desde el que se lanzó nota.
+  directorio desde el que se lanzó Metalmind.
 - El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
   con las claves `ui.panel_*` y `ui.menu_*` del tema.
 
@@ -158,16 +158,16 @@ Los cambios que importan a quien usa nota. El formato sigue
   con tipos equivocados se reemplaza por los defaults y el error dice la línea
   y la columna; una clave desconocida es solo un aviso. Detalle en
   [docs/config.md](docs/config.md).
-- Temas `nota-oscuro` y `nota-claro`, y temas propios en `themes/*.yaml` que
+- Temas `metalmind-oscuro` y `metalmind-claro`, y temas propios en `themes/*.yaml` que
   pueden extender a otro. `ui.pane_border`, `ui.status_unfocused_foreground`
   y `cursor.unfocused` pintan los paneles sin foco.
 
 #### Release
 
-- `nota --version` y `nota --help`.
+- `metalmind --version` y `metalmind --help`.
 - Entrada de escritorio para abrir archivos `text/markdown`, ícono y metainfo
   de AppStream.
 - Binarios para Linux x86_64 y aarch64 en cada GitHub Release, y paquetes
-  `nota-bin` y `nota-git` para el AUR.
+  `metalmind-bin` y `metalmind-git` para el AUR.
 
-[Unreleased]: https://github.com/alex-glez-felix/nota/commits/main
+[Unreleased]: https://github.com/alex-glez-felix/metalmind/commits/main

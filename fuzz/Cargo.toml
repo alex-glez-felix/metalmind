@@ -1,5 +1,5 @@
 [package]
-name = "nota-fuzz"
+name = "metalmind-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -11,8 +11,8 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = { version = "1.5.0", features = ["derive"] }
 libfuzzer-sys = "0.4.13"
-nota-buffer = { path = "../crates/nota-buffer" }
-nota-vim = { path = "../crates/nota-vim" }
+metalmind-buffer = { path = "../crates/metalmind-buffer" }
+metalmind-vim = { path = "../crates/metalmind-vim" }
 
 # Fuera del workspace del repo: se compila con nightly y sanitizers, y así no
 # entra a `cargo clippy --workspace` ni al CI de las PRs.

@@ -1,0 +1,22 @@
+---
+source: crates/metalmind-syntax/tests/scan.rs
+expression: "support::render(&text, &scan(&text))"
+input_file: crates/metalmind-syntax/tests/fixtures/pagina-de-tag.md
+---
+frontmatter 0..146 yaml 4..143
+    tags "meta" en 125..129 "meta" literal 125..129 quita "meta, "
+    tags "meta" en 131..135 "meta" literal 131..135 quita ", meta"
+    tags "otra" en 137..141 "otra" literal 137..141 quita ", otra"
+    aliases "rs" en 42..44 "rs" literal 42..44 quita "rs, "
+    aliases "#Rust-lang" en 46..58 "\"#Rust-lang\"" literal 47..57 quita ", \"#Rust-lang\""
+    aliases "ox'ido" en 60..69 "'ox''ido'" no literal quita ", 'ox''ido'"
+    parents "lenguajes" en 84..93 "lenguajes" literal 84..93 quita "  - lenguajes\n"
+    parents "programacion" en 98..117 "\"progr\\u0061macion\"" no literal quita "  - \"progr\\u0061macion\"\n"
+    color "#d97706" en 11..20 "\"#d97706\"" literal 12..19 quita "\"#d97706\""
+    icon "🦀" en 27..31 "🦀" literal 27..31 quita "🦀"
+    entry color 4..21 "color: \"#d97706\"\n"
+    entry icon 21..32 "icon: 🦀\n"
+    entry aliases 32..71 "aliases: [rs, \"#Rust-lang\", 'ox''ido']\n"
+    entry parents 71..118 "parents:\n  - lenguajes\n  - \"progr\\u0061macion\"\n"
+    entry tags 118..143 "tags: [meta, meta, otra]\n"
+tag 184..189 "#gpui" name "gpui"

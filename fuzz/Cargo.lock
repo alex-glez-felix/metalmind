@@ -99,7 +99,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "nota-buffer"
+name = "metalmind-buffer"
 version = "0.0.0"
 dependencies = [
  "ropey",
@@ -108,20 +108,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "nota-fuzz"
+name = "metalmind-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
  "libfuzzer-sys",
- "nota-buffer",
- "nota-vim",
+ "metalmind-buffer",
+ "metalmind-vim",
 ]
 
 [[package]]
-name = "nota-vim"
+name = "metalmind-vim"
 version = "0.0.0"
 dependencies = [
- "nota-buffer",
+ "metalmind-buffer",
  "regex",
  "smallvec",
  "thiserror",

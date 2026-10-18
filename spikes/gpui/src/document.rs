@@ -1,5 +1,5 @@
-use nota_buffer::{Bias, Buffer, BufferError, ByteOffset, Edit, Goal, Selection, Selections};
-use nota_vim::{Key, KeyOutcome, Mode, Vim, VimError};
+use metalmind_buffer::{Bias, Buffer, BufferError, ByteOffset, Edit, Goal, Selection, Selections};
+use metalmind_vim::{Key, KeyOutcome, Mode, Vim, VimError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -9,8 +9,8 @@ pub enum DocumentError {
     Buffer(#[from] BufferError),
 }
 
-/// Lo que la vista sabe del texto: `nota-buffer` con sus selecciones, y el
-/// estado de `nota-vim` que las edita.
+/// Lo que la vista sabe del texto: `metalmind-buffer` con sus selecciones, y el
+/// estado de `metalmind-vim` que las edita.
 #[derive(Debug)]
 pub struct Document {
     buffer: Buffer,

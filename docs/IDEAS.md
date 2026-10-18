@@ -24,7 +24,7 @@ Postura actual: **no decidir aún**. Probable: WASM para plugins "de verdad" y q
 
 Lo que quiere: personalizar colores, fuentes, algo de apariencia.
 
-- Temas como archivos (TOML o JSON) en `~/.config/nota/themes/`, con hot reload al guardar.
+- Temas como archivos (TOML o JSON) en `~/.config/metalmind/themes/`, con hot reload al guardar.
 - Instalables igual que los plugins: desde un repo.
 - Posible importar temas de Zed o de Base16, que ya tienen catálogo enorme.
 
@@ -35,7 +35,7 @@ Lo que quiere: personalizar colores, fuentes, algo de apariencia.
 
 Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **undotree** de vim. Si deshaces y luego editas, la rama que deshiciste no se pierde: queda como otra rama del árbol y puedes volver a ella.
 
-- ✅ **Hecho (17-oct-2026):** `History` en `nota-buffer` es un árbol de `Transaction` (ver 03 §1). `u` va al padre, `ctrl-r` al hijo visitado más recientemente, y `g-` / `g+` (`vim::earlier` / `vim::later`) recorren los estados en orden cronológico cruzando ramas, verificados contra nvim.
+- ✅ **Hecho (17-oct-2026):** `History` en `metalmind-buffer` es un árbol de `Transaction` (ver 03 §1). `u` va al padre, `ctrl-r` al hijo visitado más recientemente, y `g-` / `g+` (`vim::earlier` / `vim::later`) recorren los estados en orden cronológico cruzando ramas, verificados contra nvim.
 - Idea: vista del árbol en un panel, navegable con `j`/`k`, con vista previa del diff de cada estado.
 - Idea: historial persistente entre sesiones (como `undofile`).
 
@@ -61,11 +61,11 @@ Ver [06 — Decisiones de fondo](research/06-decisiones-de-fondo.md), que dice q
 - **Celular**: quizá una app simple de captura rápida; la principal es la de escritorio ([06 §2](research/06-decisiones-de-fondo.md#2-celular)).
 - **Cifrado de notas**: deseable, sin fecha; nada derivado guarda en claro una nota cifrada ([06 §4](research/06-decisiones-de-fondo.md#4-cifrado-de-notas)).
 - **Grafo**: deseable, prioridad baja ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
-- **Plantillas de notas** y **daily notes** (apagadas por defecto): el núcleo está en `nota-template`; faltan la UI y la CLI ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
+- **Plantillas de notas** y **daily notes** (apagadas por defecto): el núcleo está en `metalmind-template`; faltan la UI y la CLI ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
 
 ## Importador de Obsidian (y quizá de otros)
 
-nota no busca ser compatible con Obsidian: tiene su propio formato y puede diferir donde haya algo más eficiente o mejor. Si algún día hace falta, un importador convierte el vault (links, frontmatter, adjuntos) al formato de nota.
+Metalmind no busca ser compatible con Obsidian: tiene su propio formato y puede diferir donde haya algo más eficiente o mejor. Si algún día hace falta, un importador convierte el vault (links, frontmatter, adjuntos) al formato de Metalmind.
 
 ## Pendientes de recoger
 

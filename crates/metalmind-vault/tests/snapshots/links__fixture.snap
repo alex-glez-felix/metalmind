@@ -1,0 +1,37 @@
+---
+source: crates/metalmind-vault/tests/links.rs
+expression: "report(&model, &build(&model))"
+---
+Inicio.md
+  → [[nota]] → nota.md
+  → [[proyectos/Plan#Fechas]] → proyectos/Plan.md
+  → [[Plan#^tarea]] → proyectos/Plan.md
+  → ![[diagrama.png|300]] → adjuntos/diagrama.png
+  → [texto](proyectos/nota.md) → proyectos/nota.md
+  → [[No existe]] → sin resolver
+  → [[duplicada]] → ambiguo: a/duplicada.md, b/duplicada.md, proyectos/duplicada.md
+  → [[#Inicio]] → la misma nota
+  ← nota.md línea 1: Vuelvo a [[Inicio]] y a [[./proyectos/nota]].
+  ← proyectos/Plan.md línea 1: [a](<../Inicio.md>) [[Plan]]
+a/duplicada.md
+adjuntos/diagrama.png
+  ← Inicio.md línea 4: ![[diagrama.png|300]] [texto](proyectos/nota.md) [web](https://example.com)
+b/duplicada.md
+nota.md
+  → [[Inicio]] → Inicio.md
+  → [[./proyectos/nota]] → proyectos/nota.md
+  ← Inicio.md línea 3: Ver [[nota]], [[proyectos/Plan#Fechas]] y [[Plan#^tarea]].
+  ← proyectos/nota.md línea 1: [[../nota]] [[duplicada]]
+proyectos/Plan.md
+  → [a](<../Inicio.md>) → Inicio.md
+  → [[Plan]] → proyectos/Plan.md
+  ← Inicio.md línea 3: Ver [[nota]], [[proyectos/Plan#Fechas]] y [[Plan#^tarea]].
+  ← Inicio.md línea 3: Ver [[nota]], [[proyectos/Plan#Fechas]] y [[Plan#^tarea]].
+  ← proyectos/Plan.md línea 1: [a](<../Inicio.md>) [[Plan]]
+proyectos/duplicada.md
+  ← proyectos/nota.md línea 1: [[../nota]] [[duplicada]]
+proyectos/nota.md
+  → [[../nota]] → nota.md
+  → [[duplicada]] → proyectos/duplicada.md
+  ← Inicio.md línea 4: ![[diagrama.png|300]] [texto](proyectos/nota.md) [web](https://example.com)
+  ← nota.md línea 1: Vuelvo a [[Inicio]] y a [[./proyectos/nota]].

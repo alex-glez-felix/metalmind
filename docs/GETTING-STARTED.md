@@ -15,26 +15,26 @@ Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento 
 
 ## Pendiente de decidir (del autor)
 
-1. ~~Licencia~~ **Decidido 2026-10-15: GPL-3.0-or-later** (`LICENSE`). Contexto: el motor vim es propio, pero los agentes van a querer copiar o adaptar trozos de Zed. Verificado 2026-10-15: `crates/vim` y `crates/editor` de Zed son **GPL-3.0-or-later**; `gpui` es Apache-2.0. Si `nota` es MIT/Apache, Zed se lee pero no se copia. Si es GPL, se puede adaptar código de Zed. Bloom es AGPL: solo ideas.
-2. **Nombre.** `nota` es provisional.
+1. ~~Licencia~~ **Decidido 2026-10-15: GPL-3.0-or-later** (`LICENSE`). Contexto: el motor vim es propio, pero los agentes van a querer copiar o adaptar trozos de Zed. Verificado 2026-10-15: `crates/vim` y `crates/editor` de Zed son **GPL-3.0-or-later**; `gpui` es Apache-2.0. Si `metalmind` es MIT/Apache, Zed se lee pero no se copia. Si es GPL, se puede adaptar código de Zed. Bloom es AGPL: solo ideas.
+2. ~~Nombre~~ **Decidido 2026-10-18: Metalmind**, por las mentes de metal de la Feruquimia en *Mistborn*.
 3. **¿Embeber Neovim o emular vim?** Emular es lo recomendado (control de UX total). Embeber (como kimun) da fidelidad gratis pero ata la UX a nvim.
 
 ## Fase 0 — Spike (hecho, 2026-10-17)
 
 Objetivo: confirmar GPUI antes de escribir el núcleo. Si falla, se cambia a iced sin haber perdido nada, porque el núcleo no depende de la GUI.
 
-El spike ya está armado en [`spikes/gpui/`](../spikes/gpui/README.md): un proyecto aparte, fuera del workspace, con la vista propia (`nota-buffer` + `nota-vim`) y el editor de gpui-kit para comparar.
+El spike ya está armado en [`spikes/gpui/`](../spikes/gpui/README.md): un proyecto aparte, fuera del workspace, con la vista propia (`metalmind-buffer` + `metalmind-vim`) y el editor de gpui-kit para comparar.
 
 1. Preparar la máquina de pruebas y correr `./spikes/gpui/run.sh`, como dice su README.
 2. Seguir la checklist del README en Hyprland y, si se puede, en GNOME/KDE en VM. Cubre:
    - archivo de 50 MB, scroll fluido, con tiempos de frame medidos
-   - IME (Fcitx5) y dead keys (`´` + `a` = `á` — importa para español) traducidas a `nota-vim`
+   - IME (Fcitx5) y dead keys (`´` + `a` = `á` — importa para español) traducidas a `metalmind-vim`
    - portapapeles normal y primario (selección con el mouse)
 3. Anotar resultados en `docs/research/04-spike-gpui.md`.
 
 Resultado: GPUI sí, editor propio. Detalle en [04](research/04-spike-gpui.md).
 
-## Correr `nota`
+## Correr `metalmind`
 
 Las librerías de sistema son las mismas del spike (una sola vez):
 
@@ -47,14 +47,14 @@ Desde la raíz del repo:
 ```sh
 git pull
 cargo build --release
-./target/release/nota /tmp/prueba.md          # si no existe, abre vacío y se crea con :w
-RUST_LOG=nota_ui=info,gpui_wgpu=info ./target/release/nota /tmp/prueba.md   # GPU elegida y tiempo al primer frame
-cargo install --path crates/nota               # opcional: deja `nota` en ~/.cargo/bin
+./target/release/metalmind /tmp/prueba.md          # si no existe, abre vacío y se crea con :w
+RUST_LOG=metalmind_ui=info,gpui_wgpu=info ./target/release/metalmind /tmp/prueba.md   # GPU elegida y tiempo al primer frame
+cargo install --path crates/metalmind               # opcional: deja `metalmind` en ~/.cargo/bin
 ```
 
-Sin ventana, la CLI del vault ([cli.md](cli.md)): `NOTA_VAULT=/tmp/v ./target/release/nota add "idea"`, `nota search`, `nota open`, con `--json`.
+Sin ventana, la CLI del vault ([cli.md](cli.md)): `METALMIND_VAULT=/tmp/v ./target/release/metalmind add "idea"`, `metalmind search`, `metalmind open`, con `--json`.
 
-Dentro: vim normal/insert (lo de `nota-vim`; Visual con `v`, `V` y `ctrl-v` opera y se pinta como en vim), `:w` guarda, `:q` cierra el panel (se niega si se perderían cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `:e otra.md` abre otro archivo en el panel (relativo a la raíz del vault) y `:e!` descarta los cambios. `ctrl-w v`/`ctrl-w s` dividen, `ctrl-w h/j/k/l/w` mueven el foco, `ctrl-w q` cierra el panel y `ctrl-w o` deja solo este. Para el smoke sin GPU: `scripts/smoke-x11.sh` (necesita `xvfb-run`, `xdotool` y lavapipe). `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/nota-ui/src/theme.rs` (por ejemplo, JetBrainsMono Nerd Font).
+Dentro: vim normal/insert (lo de `metalmind-vim`; Visual con `v`, `V` y `ctrl-v` opera y se pinta como en vim), `:w` guarda, `:q` cierra el panel (se niega si se perderían cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `:e otra.md` abre otro archivo en el panel (relativo a la raíz del vault) y `:e!` descarta los cambios. `ctrl-w v`/`ctrl-w s` dividen, `ctrl-w h/j/k/l/w` mueven el foco, `ctrl-w q` cierra el panel y `ctrl-w o` deja solo este. Para el smoke sin GPU: `scripts/smoke-x11.sh` (necesita `xvfb-run`, `xdotool` y lavapipe). `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/metalmind-ui/src/theme.rs` (por ejemplo, JetBrainsMono Nerd Font).
 
 ### Compilar rápido
 

@@ -1,0 +1,18 @@
+---
+source: crates/metalmind-syntax/tests/scan.rs
+expression: "support::render(&text, &scan(&text))"
+input_file: crates/metalmind-syntax/tests/fixtures/codigo.md
+---
+wikilink 18..29 "[[visible]]"
+    target 20..27 "visible"
+wikilink 285..299 "[[sí-cuenta]]"
+    target 287..297 "sí-cuenta"
+wikilink 386..396 "[[afuera]]"
+    target 388..394 "afuera"
+wikilink 410..428 "[[párrafo-nuevo]]"
+    target 412..426 "párrafo-nuevo"
+wikilink 473..500 "[[después-del-comentario]]"
+    target 475..498 "después-del-comentario"
+wikilink 614..626 "[[al-final]]"
+    target 616..624 "al-final"
+tag 30..38 "#visible" name "visible"

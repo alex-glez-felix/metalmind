@@ -1,4 +1,4 @@
-# 02 — Stack de GUI en Rust para "nota"
+# 02 — Stack de GUI en Rust para "Metalmind"
 
 > Investigación del 2026-10-15. Datos de versiones y fechas sacados de la API de crates.io y de GitHub ese día; arquitectura de Zed leída de sus `Cargo.toml` en `main`. Lo que no pude comprobar va marcado **(sin verificar)**. La búsqueda web estuvo caída durante la investigación, así que todo salió de fetches directos a repos, manifests y APIs.
 
@@ -27,7 +27,7 @@ Una ventana con texto pasa por estas capas:
    - **Vello**: renderer 2D vectorial por compute shaders (Linebender), encima de wgpu.
    - **Skia**: el de Chrome/Flutter (Freya, Slint opcional). Es C++, así que el build pesa más.
    - **femtovg / tiny-skia**: OpenGL ES 2 y CPU respectivamente; sirven de fallback.
-6. **Texto.** Es la parte más difícil y la más importante para "nota":
+6. **Texto.** Es la parte más difícil y la más importante para "Metalmind":
    - **Font discovery**: encontrar qué fuentes hay instaladas y cuál usar como fallback (emoji, CJK). En Linux se resuelve con **fontconfig** (vía `font-kit` o `fontique`).
    - **Shaping**: convertir una cadena en glifos posicionados (ligaduras, árabe, kerning). El estándar es **HarfBuzz**; en Rust puro hay **rustybuzz** y **harfrust**.
    - **Layout**: saltos de línea, bidi, wrapping. Lo hacen **cosmic-text** (pop-os) y **parley** (Linebender).
@@ -72,7 +72,7 @@ Datos del 2026-10-15. "Conocimiento de la IA" es una estimación mía según vol
 - **`gpui-ce`**: fork comunitario, "mostly API compatible with upstream, but that is changing", Apache-2.0, sincroniza con upstream, gobernanza "still forming". Política "Made by Humans" (sigue la política de IA de la Rust Foundation): ojo si piensas **contribuir** código vibe-codeado a ese fork.
 - **`gpui-unofficial`**: espejo automático de upstream; según gpui-archipelago "needs a maintainer".
 - **gpui-archipelago.github.io**: hub comunitario que mapea los forks (también `kael`, `gpui-box`, WGPUI) y se describe como "still extremely alpha".
-- Licencia: `gpui` es Apache-2.0, pero **el `editor` y el `vim` de Zed son GPL** **(sin verificar crate por crate)**. Si "nota" no es GPL, no se puede copiar código de ahí, solo estudiarlo.
+- Licencia: `gpui` es Apache-2.0, pero **el `editor` y el `vim` de Zed son GPL** **(sin verificar crate por crate)**. Si "Metalmind" no es GPL, no se puede copiar código de ahí, solo estudiarlo.
 
 **iced.** Arquitectura Elm (state, message, update, view). Es predecible y a la IA le sale bien. 0.14 añadió IME, hot reloading y time-travel debugging. El `text_editor` sirve para formularios o un editor sencillo; para un vault enorme con vim y bloques renderizados en línea vas a escribir tu propio widget sobre cosmic-text. libcosmic (COSMIC) es un fork o extensión de iced con widgets extra. Tiene releases espaciadas (la última hace ~10 meses).
 
@@ -90,7 +90,7 @@ Datos del 2026-10-15. "Conocimiento de la IA" es una estimación mía según vol
 
 ### Elegido: GPUI vía GPUI Kit (`gpui-kit` / `gpui-component` sobre `gpui-pre`)
 
-Por qué encaja con las prioridades de "nota":
+Por qué encaja con las prioridades de "Metalmind":
 1. **Rendimiento probado justo en este dominio.** Zed es un editor que arranca rápido, renderiza a la tasa del monitor y abre archivos enormes. Ningún otro toolkit de la lista tiene una app de esa escala en Linux.
 2. **Linux de primera.** Wayland y X11 propios, IME por XIM y Wayland, portals, keyring. Ahora sobre wgpu, el backend más probado del ecosistema.
 3. **Keyboard-driven de serie.** El sistema de *actions* + *keymap* + *key contexts* de GPUI es exactamente la base para un modo vim y un command palette. Zed ya tiene un modo vim completo como referencia de diseño (aunque no se pueda copiar si es GPL).

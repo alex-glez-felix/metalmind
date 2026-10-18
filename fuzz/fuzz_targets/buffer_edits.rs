@@ -1,4 +1,4 @@
-//! Ediciones, undo/redo y `g-`/`g+` sobre `nota-buffer`. Cada estado del
+//! Ediciones, undo/redo y `g-`/`g+` sobre `metalmind-buffer`. Cada estado del
 //! historial guarda el texto que tenía al crearse, y volver a él con
 //! cualquier recorrido debe dar ese mismo texto.
 
@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use nota_buffer::{Buffer, ByteOffset, Edit, HistorySeq, Selection, Selections};
+use metalmind_buffer::{Buffer, ByteOffset, Edit, HistorySeq, Selection, Selections};
 
 #[derive(Debug, Arbitrary)]
 struct RawEdit {
@@ -44,7 +44,7 @@ struct State {
     buffer: Buffer,
     /// El texto de cada estado del historial.
     texts: HashMap<HistorySeq, String>,
-    anchors: Vec<nota_buffer::LineAnchor>,
+    anchors: Vec<metalmind_buffer::LineAnchor>,
 }
 
 fn cursor() -> Selections {
@@ -125,7 +125,7 @@ impl State {
         }
     }
 
-    fn travel(&mut self, step: impl FnOnce(&mut Buffer) -> Result<(), nota_buffer::BufferError>) {
+    fn travel(&mut self, step: impl FnOnce(&mut Buffer) -> Result<(), metalmind_buffer::BufferError>) {
         let open = self.buffer.has_open_transaction();
         let before = self.buffer.to_string();
         let moved = step(&mut self.buffer);

@@ -1,35 +1,35 @@
-# La CLI de nota
+# La CLI de Metalmind
 
-Capturar y consultar el vault desde la terminal, un script o un agente, sin abrir la ventana ([06](research/06-decisiones-de-fondo.md) §7). Los subcomandos no inicializan GPUI: funcionan sin `DISPLAY` ni `WAYLAND_DISPLAY`, por SSH y en CI, y `nota add` termina en milisegundos.
+Capturar y consultar el vault desde la terminal, un script o un agente, sin abrir la ventana ([06](research/06-decisiones-de-fondo.md) §7). Los subcomandos no inicializan GPUI: funcionan sin `DISPLAY` ni `WAYLAND_DISPLAY`, por SSH y en CI, y `metalmind add` termina en milisegundos.
 
 ```sh
-nota add "Llamar a la imprenta"               # crea llamar-a-la-imprenta.md
-wl-paste | nota add -t receta                 # el texto desde stdin
-nota add --title "Reunión" -t trabajo < acta.txt
-nota search imprenta                          # rutas, de la mejor a la peor
-nota open llamar-a-la-imprenta.md  # abre la app en esa nota
+metalmind add "Llamar a la imprenta"               # crea llamar-a-la-imprenta.md
+wl-paste | metalmind add -t receta                 # el texto desde stdin
+metalmind add --title "Reunión" -t trabajo < acta.txt
+metalmind search imprenta                          # rutas, de la mejor a la peor
+metalmind open llamar-a-la-imprenta.md  # abre la app en esa nota
 ```
 
 Si la app está abierta, la nota nueva aparece sola: el watcher ve el archivo como cualquier cambio externo. No hay comunicación entre procesos.
 
-`nota <archivo>` sigue abriendo un archivo. Los subcomandos son palabras reservadas: para abrir un archivo que se llama `add`, `nota -- add`.
+`metalmind <archivo>` sigue abriendo un archivo. Los subcomandos son palabras reservadas: para abrir un archivo que se llama `add`, `metalmind -- add`.
 
 ## Qué vault usa
 
-La misma regla que `nota` sin argumentos ([06](research/06-decisiones-de-fondo.md) §8), con `--vault` en el lugar del argumento:
+La misma regla que `metalmind` sin argumentos ([06](research/06-decisiones-de-fondo.md) §8), con `--vault` en el lugar del argumento:
 
 1. `--vault <carpeta>`.
-2. La variable `NOTA_VAULT` (vacía no cuenta).
-3. El último vault abierto en la app, guardado en `$XDG_STATE_HOME/nota/last-vault` (por defecto `~/.local/state/nota/`). Lo anota la app cada vez que abre un vault.
+2. La variable `METALMIND_VAULT` (vacía no cuenta).
+3. El último vault abierto en la app, guardado en `$XDG_STATE_HOME/metalmind/last-vault` (por defecto `~/.local/state/metalmind/`). Lo anota la app cada vez que abre un vault.
 4. `vault:` de `config.yaml` (ver [config](config.md)).
 
-`--vault` y `NOTA_VAULT` se eligieron a propósito: si no son una carpeta, es error (código 3) en vez de seguir con el siguiente, para que un `NOTA_VAULT` mal escrito no escriba en otro vault. Del último abierto y la config se usa el primero que siga siendo una carpeta. Si no queda ninguno, también es error (código 3).
+`--vault` y `METALMIND_VAULT` se eligieron a propósito: si no son una carpeta, es error (código 3) en vez de seguir con el siguiente, para que un `METALMIND_VAULT` mal escrito no escriba en otro vault. Del último abierto y la config se usa el primero que siga siendo una carpeta. Si no queda ninguno, también es error (código 3).
 
-## `nota add [TEXTO]... [-t TAG]... [--title TÍTULO]`
+## `metalmind add [TEXTO]... [-t TAG]... [--title TÍTULO]`
 
 Crea una nota en la **raíz** del vault. El texto sale de los argumentos (varias palabras se unen con espacios) o, si no hay, de stdin. Si stdin es una terminal no se espera a que alguien escriba: sin texto es error, salvo que haya `--title`.
 
-- **Sin `-t`, la nota cae en el buzón** ([06](research/06-decisiones-de-fondo.md) §9): nota nunca le pone un tag por su cuenta.
+- **Sin `-t`, la nota cae en el buzón** ([06](research/06-decisiones-de-fondo.md) §9): Metalmind nunca le pone un tag por su cuenta.
 - Con `-t`, los tags van en el frontmatter, entre comillas para que `2024` o `true` sigan siendo texto: `tags: ["rust", "gpui"]`. El `#` es opcional (`-t '#rust'` = `-t rust`) y los repetidos se juntan. Un tag inválido (`-t "con espacio"`) es error de uso y no se crea nada.
 - Si el texto ya trae frontmatter, se respeta tal cual; combinarlo con `-t` es error de uso (habría que reescribir el YAML del usuario).
 - `--title` va como `# Título` al principio del cuerpo, después del frontmatter si lo hay.
@@ -41,23 +41,23 @@ Crea una nota en la **raíz** del vault. El texto sale de los argumentos (varias
 
 Imprime la ruta creada, relativa al vault.
 
-## `nota search CONSULTA [-n N]`
+## `metalmind search CONSULTA [-n N]`
 
 Fuzzy sobre las rutas del vault (notas y adjuntos), el mismo de `space f`: palabras separadas por espacio que tienen que coincidir todas; mayúsculas y acentos cuentan solo si la consulta los lleva. Da los `N` mejores (50 si falta), del mejor al peor; con la consulta vacía (`""`), las primeras `N` ordenadas por ruta; para todo el vault, un `-n` grande.
 
-**Por ahora solo rutas.** La consulta de tags (`#rust -#archivado`, [05](research/05-tags.md) §4) llega con el índice de tags ([#47](https://github.com/alex-glez-felix/nota/issues/47)) y el texto completo con M6. Mientras tanto, un término que empieza con `#` o `-#` es error de uso en vez de buscarse como texto: así, cuando llegue, ninguna consulta que hoy funciona cambia de respuesta.
+**Por ahora solo rutas.** La consulta de tags (`#rust -#archivado`, [05](research/05-tags.md) §4) llega con el índice de tags ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)) y el texto completo con M6. Mientras tanto, un término que empieza con `#` o `-#` es error de uso en vez de buscarse como texto: así, cuando llegue, ninguna consulta que hoy funciona cambia de respuesta.
 
 Sin coincidencias no es error: sale vacío y con código 0. En texto, una ruta por línea; si un nombre trae caracteres de control (un salto de línea, una secuencia de escape), salen escapados como `\n` o `\u{1b}`. `--json` da siempre la ruta exacta.
 
-## `nota open RUTA`
+## `metalmind open RUTA`
 
-Abre la app en una nota del vault. `RUTA` es relativa a la raíz del vault (no al directorio actual: para eso está `nota <archivo>`) o absoluta dentro de él, así que `nota open "$(nota add idea)"` funciona. Tiene que ser una nota (`.md`) que exista; si no, error de uso sin abrir nada. La app lo anota como el último vault abierto al abrirlo.
+Abre la app en una nota del vault. `RUTA` es relativa a la raíz del vault (no al directorio actual: para eso está `metalmind <archivo>`) o absoluta dentro de él, así que `metalmind open "$(metalmind add idea)"` funciona. Tiene que ser una nota (`.md`) que exista; si no, error de uso sin abrir nada. La app lo anota como el último vault abierto al abrirlo.
 
 Este sí abre la ventana. Con `--json`, imprime qué va a abrir una vez leída la nota, justo antes de abrir la ventana, y el proceso dura lo que ella. Si después la ventana no puede abrirse (sin sesión gráfica, por ejemplo), el error sale en stderr con `kind: "io"` y código 1.
 
-## `nota tags`
+## `metalmind tags`
 
-Todavía no existe: espera al índice de tags ([#47](https://github.com/alex-glez-felix/nota/issues/47)).
+Todavía no existe: espera al índice de tags ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)).
 
 ## Salida para agentes: `--json`
 
@@ -77,13 +77,13 @@ Todos los subcomandos aceptan `--json` y `--vault`. Con `--json`:
 Ejemplos:
 
 ```sh
-$ echo "probar el watcher" | nota add -t nota --json
+$ echo "probar el watcher" | metalmind add -t metalmind --json
 {"vault":"/home/usuario/notas","path":"probar-el-watcher.md","tags":["nota"]}
 
-$ nota search watcher --json
+$ metalmind search watcher --json
 {"vault":"/home/usuario/notas","query":"watcher","results":[{"path":"probar-el-watcher.md","kind":"note"}]}
 
-$ nota search "#nota" --json
+$ metalmind search "#nota" --json
 {"error":{"kind":"usage","message":"`#nota`: la búsqueda por tags todavía no existe; por ahora solo se buscan rutas"}}
 ```
 
@@ -100,21 +100,21 @@ Las claves no cambian de significado; si se agrega una, los que no la conocen la
 
 ## Desde un agente
 
-Un agente puede usar el vault como memoria: capturar lo que aprende y consultarlo antes de preguntar. Con `NOTA_VAULT` en su entorno, todo funciona sin ventana:
+Un agente puede usar el vault como memoria: capturar lo que aprende y consultarlo antes de preguntar. Con `METALMIND_VAULT` en su entorno, todo funciona sin ventana:
 
 ```sh
-export NOTA_VAULT=~/notas
+export METALMIND_VAULT=~/notas
 
 # Guardar un hallazgo; el texto por stdin evita problemas de comillas.
 path=$(printf '%s\n' "El build falla sin libxkbcommon-x11-dev." "Se instala con apt." \
-  | nota add --json --title "Build: dependencias de GPUI" -t build | jq -r .path)
+  | metalmind add --json --title "Build: dependencias de GPUI" -t build | jq -r .path)
 
 # ¿Ya hay algo sobre esto?
-nota search --json "build gpui" | jq -r '.results[] | select(.kind == "note") | .path' \
-  | while read -r note; do cat "$NOTA_VAULT/$note"; done
+metalmind search --json "build gpui" | jq -r '.results[] | select(.kind == "note") | .path' \
+  | while read -r note; do cat "$METALMIND_VAULT/$note"; done
 
 # Un error se reconoce por el código, sin leer el mensaje.
-nota search --json "#build" 2>err.json; [ $? -eq 2 ] && jq -r .error.message err.json
+metalmind search --json "#build" 2>err.json; [ $? -eq 2 ] && jq -r .error.message err.json
 ```
 
 Lo que el agente crea sin `-t` queda en el buzón, para que una persona lo revise y lo etiquete.

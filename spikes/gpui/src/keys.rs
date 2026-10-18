@@ -1,4 +1,4 @@
-//! Borde entre las teclas de GPUI y las [`Key`] de `nota-vim`.
+//! Borde entre las teclas de GPUI y las [`Key`] de `metalmind-vim`.
 //!
 //! En Linux GPUI entrega el texto compuesto (teclas muertas, `AltGr`) en
 //! `key_char`, y solo manda al input handler los `key_char` sin más
@@ -6,7 +6,7 @@
 //! input handler.
 
 use gpui_kit::Keystroke;
-use nota_vim::{Key, Mode};
+use metalmind_vim::{Key, Mode};
 
 /// Por dónde debe entrar una tecla al motor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,7 +16,7 @@ pub enum Route {
     /// Texto en modo Insert: se deja pasar para que GPUI lo entregue por el
     /// input handler, el mismo camino que usan las teclas muertas y el IME.
     TextInput,
-    /// No tiene equivalente en `nota-vim`.
+    /// No tiene equivalente en `metalmind-vim`.
     Ignored,
 }
 

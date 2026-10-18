@@ -6,8 +6,8 @@ use gpui_kit::{
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, ShapedLine, SharedString, Style,
     TextAlign, TextRun, UnderlineStyle, Window, fill, point, relative, size,
 };
-use nota_buffer::{Buffer, Selection};
-use nota_vim::Mode;
+use metalmind_buffer::{Buffer, Selection};
+use metalmind_vim::Mode;
 
 use super::VimEditor;
 use super::layout::{FrameLayout, LaidLine, Viewport};

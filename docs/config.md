@@ -1,22 +1,22 @@
 # Configuración
 
-`nota` funciona sin configurar nada. Para cambiar algo, crea `config.yaml` en la carpeta de configuración:
+`metalmind` funciona sin configurar nada. Para cambiar algo, crea `config.yaml` en la carpeta de configuración:
 
 | Sistema | Carpeta |
 |---|---|
-| Linux | `$XDG_CONFIG_HOME/nota/`, por defecto `~/.config/nota/` |
-| macOS | `~/Library/Application Support/nota/` |
-| Windows | `%APPDATA%\nota\` |
+| Linux | `$XDG_CONFIG_HOME/metalmind/`, por defecto `~/.config/metalmind/` |
+| macOS | `~/Library/Application Support/metalmind/` |
+| Windows | `%APPDATA%\metalmind\` |
 
-Si el archivo tiene un error, `nota` arranca igual con los valores por defecto y reporta el error con archivo, línea y columna. Una clave que no existe (por ejemplo un typo) no tumba el archivo: se avisa y el resto se aplica.
+Si el archivo tiene un error, `metalmind` arranca igual con los valores por defecto y reporta el error con archivo, línea y columna. Una clave que no existe (por ejemplo un typo) no tumba el archivo: se avisa y el resto se aplica.
 
 ## `config.yaml`
 
 Todas las claves son opcionales; estos son los valores por defecto:
 
 ```yaml
-theme: nota-oscuro        # o nota-claro, o uno tuyo de themes/
-# vault: ~/Notas          # vault que se abre si no pasas ninguno, no hay NOTA_VAULT y no hay uno anterior
+theme: metalmind-oscuro        # o metalmind-claro, o uno tuyo de themes/
+# vault: ~/Notas          # vault que se abre si no pasas ninguno, no hay METALMIND_VAULT y no hay uno anterior
 
 font:
   # family: JetBrains Mono  # sin esto, la primera monoespaciada instalada
@@ -66,11 +66,11 @@ editor:
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
-El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/nota/vaults/` en Linux (por default `~/.local/share/nota/vaults/`). De cada hora o día se queda la última versión, con las horas y los días de la zona horaria del sistema; la última versión de una nota se guarda siempre, y la diaria es para siempre salvo que se ponga `daily_days`.
+El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/metalmind/vaults/` en Linux (por default `~/.local/share/metalmind/vaults/`). De cada hora o día se queda la última versión, con las horas y los días de la zona horaria del sistema; la última versión de una nota se guarda siempre, y la diaria es para siempre salvo que se ponga `daily_days`.
 
 Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
-Dentro de nota, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado nota desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `nota` sin argumentos elige el vault en este orden: la carpeta de la variable de entorno `NOTA_VAULT` (si está puesta tiene que ser una carpeta; si no, nota avisa y no abre), el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Un argumento gana a todo eso: `NOTA_VAULT=~/Notas nota` y `nota ~/Notas` abren lo mismo, pero `nota ~/otra/` abre `~/otra/` aunque la variable esté puesta. Lo que nota recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/nota/`, por defecto `~/.local/state/nota/`): no es configuración y se puede borrar sin perder nada.
+Dentro de Metalmind, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado Metalmind desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `metalmind` sin argumentos elige el vault en este orden: la carpeta de la variable de entorno `METALMIND_VAULT` (si está puesta tiene que ser una carpeta; si no, Metalmind avisa y no abre), el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Un argumento gana a todo eso: `METALMIND_VAULT=~/Notas metalmind` y `metalmind ~/Notas` abren lo mismo, pero `metalmind ~/otra/` abre `~/otra/` aunque la variable esté puesta. Lo que Metalmind recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/metalmind/`, por defecto `~/.local/state/metalmind/`): no es configuración y se puede borrar sin perder nada.
 
 ### En JSON
 
@@ -78,17 +78,17 @@ El archivo es YAML 1.2, que incluye a JSON: un `config.yaml` escrito en JSON pur
 
 ```json
 {
-  "theme": "nota-claro",
+  "theme": "metalmind-claro",
   "font": { "family": "Iosevka", "size": 14 },
   "editor": { "tabstop": 2, "expandtab": true }
 }
 ```
 
-### Trampas de YAML que nota evita
+### Trampas de YAML que Metalmind evita
 
-nota lee YAML 1.2, no 1.1, y además usa el tipo de cada ajuste como esquema:
+Metalmind lee YAML 1.2, no 1.1, y además usa el tipo de cada ajuste como esquema:
 
-- **El problema de Noruega.** En YAML 1.1, `NO`, `no`, `yes`, `on`, `off`, `y` y `n` se leen como booleanos aunque quisieras texto: `country: NO` daría `false`. En nota, en un campo de texto son ese texto (`theme: NO` busca un tema llamado `NO`), y en un booleano solo valen `true` y `false`: `expandtab: on` es un error que dice dónde está, nunca un `true` silencioso.
+- **El problema de Noruega.** En YAML 1.1, `NO`, `no`, `yes`, `on`, `off`, `y` y `n` se leen como booleanos aunque quisieras texto: `country: NO` daría `false`. En Metalmind, en un campo de texto son ese texto (`theme: NO` busca un tema llamado `NO`), y en un booleano solo valen `true` y `false`: `expandtab: on` es un error que dice dónde está, nunca un `true` silencioso.
 - **Números que parecen otra cosa.** `0755` no es octal y `1.10` en un campo de texto no se vuelve `1.1`: si el campo es texto, se guarda tal como lo escribiste.
 - **Claves repetidas.** Escribir dos veces la misma clave en el mismo nivel es un error, en vez de quedarse en silencio con la última.
 
@@ -111,8 +111,8 @@ Cada color semántico puede ser:
 Con `extends` un tema parte de otro y solo cambia lo que define. Los colores heredados que nombran la paleta usan la paleta final, así que cambiar `blue` cambia todo lo que era azul:
 
 ```yaml
-# ~/.config/nota/themes/mio.yaml
-extends: nota-oscuro
+# ~/.config/metalmind/themes/mio.yaml
+extends: metalmind-oscuro
 
 palette:
   blue: "#82aaff"
@@ -122,9 +122,9 @@ ui:
   selection: { color: blue, alpha: 0.25 }
 ```
 
-Para heredar un color, no pongas la clave: una clave vacía o `null` es un error, no una herencia. Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `nota-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/nota-oscuro.yaml` con `extends: nota-oscuro` parte del embebido.
+Para heredar un color, no pongas la clave: una clave vacía o `null` es un error, no una herencia. Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `metalmind-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/metalmind-oscuro.yaml` con `extends: metalmind-oscuro` parte del embebido.
 
-Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.yaml`](../crates/nota-config/themes/nota-oscuro.yaml) y [`nota-claro.yaml`](../crates/nota-config/themes/nota-claro.yaml).
+Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`metalmind-oscuro.yaml`](../crates/metalmind-config/themes/metalmind-oscuro.yaml) y [`metalmind-claro.yaml`](../crates/metalmind-config/themes/metalmind-claro.yaml).
 
 - `ui`: `background`, `foreground`, `selection`, `search` (las coincidencias de la búsqueda), `search_current` (la coincidencia donde está el cursor), `current_line`, `gutter`, `gutter_foreground`, `gutter_current` (el número de la línea del cursor), `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`, y los del finder y la paleta: `picker_background`, `picker_border`, `picker_selected` (la fila elegida), `picker_hover` (la fila bajo el ratón), `picker_match` (las letras que coinciden) y `picker_muted` (carpeta, atajo y texto de ayuda).
   - El panel lateral y su barra de botones: `panel_background`, `panel_foreground`, `panel_muted` (adjuntos, encabezado y botones), `panel_selection` (la fila seleccionada con el foco en el panel), `panel_selection_unfocused` (con el foco en otro lado), `panel_hover`, `panel_border`, `panel_folder` y `panel_note` (los íconos), `panel_match` (las letras que coinciden con el filtro).

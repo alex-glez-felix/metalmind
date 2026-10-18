@@ -59,9 +59,9 @@ crashes en `fuzz/artifacts/<target>/`; los dos están en el `.gitignore`.
    no se toca para esquivarlo.
 3. **Convertirlo en un test normal** en el crate que se arregló, con un commit
    por arreglo:
-   - `nota-buffer`: un `#[test]` en `crates/nota-buffer/tests/buffer.rs`.
-   - `nota-vim`: si nvim puede hacer lo mismo, un caso de la tabla del
-     oráculo en `crates/nota-vim/tests/vim.rs` (`"tex|to"`, teclas en
+   - `metalmind-buffer`: un `#[test]` en `crates/metalmind-buffer/tests/buffer.rs`.
+   - `metalmind-vim`: si nvim puede hacer lo mismo, un caso de la tabla del
+     oráculo en `crates/metalmind-vim/tests/vim.rs` (`"tex|to"`, teclas en
      notación de vim, resultado esperado); si depende de algo que nvim no
      tiene, como varios cursores, un caso en `multiple_cursors` o un test
      propio. Las teclas de `fmt` se escriben con la notación de

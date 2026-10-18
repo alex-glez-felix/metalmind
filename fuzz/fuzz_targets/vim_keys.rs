@@ -6,8 +6,8 @@
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use nota_fuzz::{CountLimit, Host, Input};
-use nota_vim::Vim;
+use metalmind_fuzz::{CountLimit, Host, Input};
+use metalmind_vim::Vim;
 
 #[derive(Debug, Arbitrary)]
 struct Case {
