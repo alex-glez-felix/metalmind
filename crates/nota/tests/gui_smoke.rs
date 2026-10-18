@@ -111,3 +111,19 @@ fn q_bang_sale_sin_guardar() {
     assert_eq!(smoke.read("a.md"), "uno\n");
     assert_eq!(smoke.files(), ["a.md"]);
 }
+
+/// `:e` cambia de archivo dentro de la misma ventana; cada uno se guarda aparte.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn e_edita_otro_archivo_en_la_misma_ventana() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("ix<Esc>:w<CR>:e b.md<CR>iy<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\n");
+    assert_eq!(smoke.read("b.md"), "ydos\n");
+    assert_eq!(smoke.files(), ["a.md", "b.md"]);
+}
