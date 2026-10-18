@@ -7,6 +7,7 @@ raiz (1) (solo como padre)
   a (1)
     b (1)
       a (1) ↻
+      · x.md
 tags:
   a: padres [b, raiz] alias [] trae [a, b]
   b: padres [a] alias [] trae [a, b]

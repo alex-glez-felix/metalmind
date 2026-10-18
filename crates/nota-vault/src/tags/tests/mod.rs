@@ -3,6 +3,7 @@
 
 mod graph;
 mod metadata;
+mod panel;
 mod query;
 mod rename;
 

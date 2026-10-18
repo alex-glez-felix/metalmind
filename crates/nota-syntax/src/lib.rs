@@ -69,6 +69,10 @@ pub struct TagSpot {
     /// El nombre, sin `#` ni comillas. Si el YAML lo escribe con escapes, el
     /// escalar entero.
     pub name: Range<usize>,
+    /// Lo que reemplaza el autocompletado: en el cuerpo, el nombre; en el
+    /// YAML, el escalar entero con sus comillas, para escribirlo con las
+    /// que haga falta.
+    pub replace: Range<usize>,
     pub place: TagPlace,
 }
 
@@ -99,7 +103,8 @@ impl Scan {
             return fields.into_iter().find_map(|(place, values)| {
                 let value = values.iter().find(|value| covers(&value.span))?.as_tag()?;
                 Some(TagSpot {
-                    name: value.literal.unwrap_or(value.span),
+                    name: value.literal.unwrap_or_else(|| value.span.clone()),
+                    replace: value.span,
                     place,
                 })
             });
@@ -108,6 +113,7 @@ impl Scan {
         let tag = self.tags.get(index).filter(|tag| covers(&tag.span))?;
         Some(TagSpot {
             name: tag.name.clone(),
+            replace: tag.name.clone(),
             place: TagPlace::Inline,
         })
     }

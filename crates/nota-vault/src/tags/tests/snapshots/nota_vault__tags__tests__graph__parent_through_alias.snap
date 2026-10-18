@@ -5,6 +5,7 @@ expression: render(&tags(files))
 panel:
 rust (1)
   gpui (1)
+    · a.md
 tags:
   gpui: padres [rust] alias [] trae [gpui]
   rust: padres [] alias [rs] trae [gpui, rs, rust]

@@ -1,6 +1,7 @@
 //! Los tags del vault (05): el índice de lo que escriben las notas, el grafo
 //! de las páginas de tag, las consultas y los planes de renombrar y fusionar.
 
+mod complete;
 mod cycles;
 mod graph;
 mod index;
@@ -11,14 +12,17 @@ mod page;
 mod query;
 mod refactor;
 mod rename;
+mod scope;
 #[cfg(test)]
 mod tests;
+mod tree;
 mod update;
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::thread;
 
+pub use complete::TagCompletion;
 pub use graph::{TagGraph, TagProblem};
 pub use index::{TagEntry, TagIndex};
 pub use key::{TagKey, tag_name};
@@ -27,6 +31,8 @@ pub use note::{FrontmatterSpot, NoteTags, TagOccurrence, TagSource};
 pub use page::{InvalidValue, PageField, PageLayout, TagColor, TagIcon, TagPage};
 pub use query::{ParsedQuery, TagQuery};
 pub use refactor::{PlanError, PlanNotice, TagPlan};
+pub use scope::{Scope, ScopeError, ScopeFilter};
+pub use tree::{TagNode, TagTree};
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
@@ -164,15 +170,7 @@ impl Tags {
     /// no desaparezcan. Los alias no son nodos. En orden de clave.
     #[must_use]
     pub fn roots(&self) -> Vec<TagKey> {
-        let nodes: BTreeSet<&TagKey> = self
-            .index
-            .keys()
-            .chain(self.graph.pages().map(|page| &page.key))
-            .chain(self.graph.parent_keys())
-            .filter(|key| self.graph.alias_of(key).is_none())
-            .collect();
-        nodes
-            .into_iter()
+        self.node_keys()
             .filter(|key| self.graph.parents(key).is_empty() || self.in_closed_cycle(key))
             .cloned()
             .collect()
@@ -195,6 +193,12 @@ impl Tags {
             }
         }
         on_cycle
+    }
+
+    /// Si `path` es una página de tag: no cuenta como nota normal (05 §7).
+    #[must_use]
+    pub fn is_page(&self, path: &VaultPath) -> bool {
+        matches!(self.pages.get(path), Some(PageFile::Page(_)))
     }
 
     /// Guarda lo escaneado de una nota y si es página de tag.

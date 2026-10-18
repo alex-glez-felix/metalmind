@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use super::{key, tags};
-use crate::tags::{TagKey, TagProblem, Tags};
+use crate::tags::{Scope, TagKey, TagProblem, TagTree, Tags};
 
 fn names<'k>(keys: impl IntoIterator<Item = &'k TagKey>) -> String {
     keys.into_iter()
@@ -16,36 +16,34 @@ fn names<'k>(keys: impl IntoIterator<Item = &'k TagKey>) -> String {
 
 /// El panel como texto: raíces y, bajo cada tag, sus hijos. Un tag que ya
 /// está en el camino se marca y no se expande otra vez (05 §7).
-fn panel(tags: &Tags) -> String {
+pub(super) fn panel(tree: &TagTree) -> String {
     let mut out = String::new();
-    for root in tags.roots() {
-        branch(tags, &root, 0, &mut Vec::new(), &mut out);
+    for root in tree.roots() {
+        branch(tree, root, 0, &mut Vec::new(), &mut out);
     }
     out
 }
 
-fn branch(tags: &Tags, key: &TagKey, depth: usize, path: &mut Vec<TagKey>, out: &mut String) {
-    let name = tags.display_name(key).unwrap_or("?");
+fn branch(tree: &TagTree, key: &TagKey, depth: usize, path: &mut Vec<TagKey>, out: &mut String) {
+    let node = tree.node(key).unwrap();
     let mark = if path.contains(key) {
         " ↻"
-    } else if tags.is_only_parent(key) {
+    } else if node.only_parent {
         " (solo como padre)"
     } else {
         ""
     };
-    writeln!(
-        out,
-        "{}{name} ({}){mark}",
-        "  ".repeat(depth),
-        tags.count(key)
-    )
-    .unwrap();
+    let indent = "  ".repeat(depth);
+    writeln!(out, "{indent}{} ({}){mark}", node.name, node.count).unwrap();
     if path.contains(key) {
         return;
     }
     path.push(key.clone());
-    for child in tags.graph().children(key) {
-        branch(tags, child, depth + 1, path, out);
+    for child in &node.children {
+        branch(tree, child, depth + 1, path, out);
+    }
+    for note in &node.notes {
+        writeln!(out, "{indent}  · {note}").unwrap();
     }
     path.pop();
 }
@@ -79,7 +77,7 @@ fn problem(problem: &TagProblem) -> String {
 
 fn render(tags: &Tags) -> String {
     let mut out = String::from("panel:\n");
-    out.push_str(&panel(tags));
+    out.push_str(&panel(&tags.tree(&Scope::default().filter(tags))));
     let nodes: BTreeSet<&TagKey> = tags
         .index()
         .keys()
