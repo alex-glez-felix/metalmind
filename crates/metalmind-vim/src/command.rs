@@ -10,16 +10,26 @@ pub enum Command {
     /// `:w [ruta]`; con ruta, le da archivo a un buffer sin nombre o
     /// escribe una copia.
     Save,
-    /// `:q`, que cierra el panel y se niega si se perderían cambios.
+    /// `:q`, que cierra el panel; en el último, se niega si algún buffer
+    /// tiene cambios.
     Quit,
     /// `:q!`
     ForceQuit,
     /// `:wq [ruta]`
     SaveAndQuit,
-    /// `:e [ruta]`, que se niega si se perderían cambios. Sin ruta, relee
-    /// el archivo del panel.
+    /// `:wa`, que guarda todos los buffers con cambios.
+    SaveAll,
+    /// `:qa`, que cierra la ventana si ningún buffer tiene cambios.
+    QuitAll,
+    /// `:qa!`, que cierra la ventana aunque haya cambios.
+    ForceQuitAll,
+    /// `:wqa` y `:xa`: guarda todos los buffers con cambios y cierra.
+    SaveAllAndQuit,
+    /// `:e [ruta]`. Con otra ruta, el buffer de antes queda oculto con sus
+    /// cambios, como con `hidden` de vim; sin ruta, relee el archivo del
+    /// panel y se niega si se perderían cambios.
     Edit,
-    /// `:e! [ruta]`, que descarta los cambios.
+    /// `:e! [ruta]`; sin ruta, relee el archivo y descarta los cambios.
     ForceEdit,
     /// `ctrl-w v`, `:vsplit`
     SplitRight,
@@ -142,6 +152,13 @@ const COMMANDS: &[(&str, usize, Command)] = &[
     ("quit", 1, Command::Quit),
     ("quit!", 1, Command::ForceQuit),
     ("wq", 2, Command::SaveAndQuit),
+    ("wall", 2, Command::SaveAll),
+    ("qall", 2, Command::QuitAll),
+    ("quitall", 5, Command::QuitAll),
+    ("qall!", 2, Command::ForceQuitAll),
+    ("quitall!", 5, Command::ForceQuitAll),
+    ("wqall", 3, Command::SaveAllAndQuit),
+    ("xall", 2, Command::SaveAllAndQuit),
     ("edit", 1, Command::Edit),
     ("edit!", 1, Command::ForceEdit),
     ("split", 2, Command::SplitDown),
@@ -156,6 +173,10 @@ impl Command {
         Self::Quit,
         Self::ForceQuit,
         Self::SaveAndQuit,
+        Self::SaveAll,
+        Self::QuitAll,
+        Self::ForceQuitAll,
+        Self::SaveAllAndQuit,
         Self::Edit,
         Self::ForceEdit,
         Self::SplitRight,
@@ -181,6 +202,10 @@ impl Command {
             Self::Quit => "editor::quit",
             Self::ForceQuit => "editor::force_quit",
             Self::SaveAndQuit => "editor::save_and_quit",
+            Self::SaveAll => "workspace::save_all",
+            Self::QuitAll => "workspace::quit_all",
+            Self::ForceQuitAll => "workspace::force_quit_all",
+            Self::SaveAllAndQuit => "workspace::save_all_and_quit",
             Self::Edit => "editor::edit",
             Self::ForceEdit => "editor::force_edit",
             Self::SplitRight => "pane::split_right",
@@ -220,6 +245,9 @@ impl Command {
     pub(crate) fn range_error(self, typed: &str) -> CommandError {
         match self {
             Self::Save | Self::SaveAndQuit => CommandError::PartialWrite,
+            Self::SaveAll | Self::QuitAll | Self::ForceQuitAll | Self::SaveAllAndQuit => {
+                CommandError::NoRangeAllowed
+            }
             Self::Edit | Self::ForceEdit | Self::Set => CommandError::NoRangeAllowed,
             _ => CommandError::UnsupportedRange(typed.to_owned()),
         }
@@ -321,6 +349,18 @@ mod tests {
             ("vs", Some(Command::SplitRight)),
             ("vsplit", Some(Command::SplitRight)),
             ("on", Some(Command::Only)),
+            ("wa", Some(Command::SaveAll)),
+            ("wall", Some(Command::SaveAll)),
+            ("qa", Some(Command::QuitAll)),
+            ("qall", Some(Command::QuitAll)),
+            ("quita", Some(Command::QuitAll)),
+            ("quitall", Some(Command::QuitAll)),
+            ("qa!", Some(Command::ForceQuitAll)),
+            ("quitall!", Some(Command::ForceQuitAll)),
+            ("wqa", Some(Command::SaveAllAndQuit)),
+            ("wqall", Some(Command::SaveAllAndQuit)),
+            ("xa", Some(Command::SaveAllAndQuit)),
+            ("xall", Some(Command::SaveAllAndQuit)),
             ("", None),
             ("   ", None),
         ];
@@ -359,7 +399,9 @@ mod tests {
 
     #[test]
     fn rejects_what_it_does_not_know() {
-        for line in ["x", "writes", "wq!", "w!", "!", "efoo", "s", "v", "o"] {
+        for line in [
+            "x", "writes", "wq!", "w!", "!", "efoo", "s", "v", "o", "qx", "xb",
+        ] {
             assert_eq!(
                 Invocation::parse(line),
                 Err(CommandError::Unknown(line.to_owned())),
@@ -370,7 +412,13 @@ mod tests {
 
     #[test]
     fn rejects_an_argument_it_does_not_take() {
-        let cases = [("q!!", "!"), ("q otro.md", "otro.md"), ("vs a.md", "a.md")];
+        let cases = [
+            ("q!!", "!"),
+            ("q otro.md", "otro.md"),
+            ("vs a.md", "a.md"),
+            ("wa otro.md", "otro.md"),
+            ("qa!x", "x"),
+        ];
         for (line, rest) in cases {
             assert_eq!(
                 Invocation::parse(line),
