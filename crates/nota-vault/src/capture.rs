@@ -10,6 +10,7 @@ use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
 use crate::file::{FileError, create_atomic};
 use crate::path::{InvalidPath, VaultPath};
+use crate::tags::TagKey;
 
 /// Lo que se le pide a la captura; todo tal como lo escribió el usuario.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -25,7 +26,8 @@ pub struct NewNote {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Captured {
     pub path: VaultPath,
-    /// Sin `#` ni repetidos, en el orden en que se pidieron.
+    /// Sin `#` ni repetidos (con la clave de 05 §6), en el orden en que se
+    /// pidieron.
     pub tags: Vec<String>,
 }
 
@@ -81,12 +83,16 @@ pub(crate) fn capture(
 
 fn tags(tags: &[String]) -> Result<Vec<String>, CaptureError> {
     let mut valid: Vec<String> = Vec::with_capacity(tags.len());
+    let mut seen: Vec<TagKey> = Vec::with_capacity(tags.len());
     for tag in tags {
         let name = tag.strip_prefix('#').unwrap_or(tag);
         if !nota_syntax::is_valid_tag_name(name) {
             return Err(CaptureError::InvalidTag(tag.clone()));
         }
-        if !valid.iter().any(|seen| seen == name) {
+        // `Rust` y `rust` son el mismo tag (05 §6): queda la primera forma.
+        let key = TagKey::new(name);
+        if !seen.contains(&key) {
+            seen.push(key);
             valid.push(name.to_owned());
         }
     }
@@ -285,8 +291,17 @@ mod tests {
     fn los_tags_se_validan_y_se_dejan_sin_almohadilla_ni_repetidos() {
         let input = |tags: &[&str]| tags.iter().map(|&t| t.to_owned()).collect::<Vec<_>>();
         assert_eq!(
-            tags(&input(&["#rust", "gpui", "rust"])).unwrap(),
-            ["rust", "gpui"]
+            tags(&input(&[
+                "#rust",
+                "gpui",
+                "rust",
+                "Rust",
+                "GPUI",
+                "cancio\u{301}n",
+                "canción"
+            ]))
+            .unwrap(),
+            ["rust", "gpui", "cancio\u{301}n"]
         );
         assert!(matches!(
             tags(&input(&["con espacio"])),
