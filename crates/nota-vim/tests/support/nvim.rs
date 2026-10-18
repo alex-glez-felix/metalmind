@@ -18,6 +18,23 @@ pub fn run(before: &str, keys: &str) -> State {
 /// Como [`run`], en una ventana como `screen`; devuelve además la primera
 /// línea visible, desde 0.
 pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize) {
+    let dump = dump(before, keys, screen);
+    (dump.state, dump.top)
+}
+
+/// El último mensaje que dejan las teclas en nvim: un error (`E16: Invalid
+/// range`) o un aviso (`Pattern not found: x`); vacío si no hubo.
+pub fn message(before: &str, keys: &str) -> String {
+    dump(before, keys, None).message
+}
+
+struct Dump {
+    state: State,
+    top: usize,
+    message: String,
+}
+
+fn dump(before: &str, keys: &str, screen: Option<Screen>) -> Dump {
     assert_eq!(
         installed_version(),
         VERSION,
@@ -51,7 +68,8 @@ pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize
         .unwrap();
     assert!(status.success(), "nvim terminó con {status}");
     let dump = std::fs::read_to_string(output.path()).unwrap();
-    let (header, text) = dump.split_once('\n').unwrap_or((&dump, ""));
+    let (header, rest) = dump.split_once('\n').unwrap();
+    let (message, text) = rest.split_once('\n').unwrap_or((rest, ""));
     let fields: Vec<&str> = header.split(' ').collect();
     let number = |index: usize| fields[index].parse::<usize>().unwrap();
     let (row, col) = (number(0), number(1));
@@ -68,7 +86,11 @@ pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize
         selection: render_visual(&result, visual.then_some(anchor), head),
         mode,
     };
-    (state, top)
+    Dump {
+        state,
+        top,
+        message: message.to_owned(),
+    }
 }
 
 fn installed_version() -> &'static str {

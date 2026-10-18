@@ -62,7 +62,8 @@ Los cambios que importan a quien usa nota. El formato sigue
   por `,` o `;`. Un rango solo (`:12`) va a esa línea.
 - `:d` y `:y` con registro y count, `:m` y `:t`/`:co` para mover y copiar
   líneas, `:j` y `:j!`, `:>` y `:<`.
-- `:sort` con `!`, `i`, `n`, `u` y `/patrón/` (con `r`).
+- `:sort` con `!`, `i`, `u`, `/patrón/` (con `r`) y por números: `n`
+  (decimal), `x` (hexadecimal), `o` (octal), `b` (binario) y `f` (flotante).
 - `:normal` (`:norm`) teclea lo que sigue en la línea del cursor o en cada
   línea del rango.
 - `:g/patrón/comando`, `:g!` y `:v` corren `d`, `s`, `m0`, `t.`, `normal` o
@@ -70,7 +71,8 @@ Los cambios que importan a quien usa nota. El formato sigue
 - `@:` repite la última línea de `:`, con count.
 - Cada comando es un solo paso de `u`, también dentro de una macro.
 - Los errores de vim se muestran con su número y su texto original
-  (`E492: Not an editor command`), para buscarlos en `:help`.
+  (`E492: Not an editor command`), para buscarlos en `:help`, y el aviso de
+  `:s` y `:g` también es el de vim (`3 substitutions on 2 lines`).
 
 #### Visual
 

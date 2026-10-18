@@ -1,4 +1,5 @@
--- Oráculo: aplica teclas en nvim y escribe cursor, modo y texto en un archivo.
+-- Oráculo: aplica teclas en nvim y escribe cursor, modo, el último mensaje y
+-- el texto en un archivo.
 -- Uso: nvim --clean --headless -n -l oracle.lua <texto> <fila> <columna> <teclas> <salida> [<filas> <scrolloff> <primera línea>]
 local text, row, col, keys, out = arg[1], tonumber(arg[2]), tonumber(arg[3]), arg[4], arg[5]
 local rows, scrolloff, top = tonumber(arg[6]), tonumber(arg[7]), tonumber(arg[8])
@@ -71,16 +72,22 @@ while rest ~= "" do
   rest = rest:sub(stop + 1)
 end
 
--- En Visual, getpos("v") es el otro extremo de la selección.
+-- En Visual, getpos("v") es el otro extremo de la selección. El último
+-- mensaje es el de la línea de comandos: un error o un aviso como el de `:g`.
 local state = exec([[
   local pos = vim.api.nvim_win_get_cursor(0)
   local anchor = vim.fn.getpos("v")
   local mode = vim.api.nvim_get_mode().mode
-  return { pos[1], pos[2], mode, anchor[2], anchor[3] - 1, vim.fn.line("w0"), vim.api.nvim_buf_get_lines(0, 0, -1, true) }
+  local messages = vim.split(vim.fn.execute("messages"), "\n", { trimempty = true })
+  return {
+    pos[1], pos[2], mode, anchor[2], anchor[3] - 1, vim.fn.line("w0"),
+    messages[#messages] or "", vim.api.nvim_buf_get_lines(0, 0, -1, true),
+  }
 ]])
 local file = assert(io.open(out, "w"))
 file:write(string.format("%d %d %s %d %d %d\n", state[1], state[2], state[3], state[4], state[5], state[6]))
-file:write(table.concat(state[7], "\n"))
+file:write(state[7] .. "\n")
+file:write(table.concat(state[8], "\n"))
 file:close()
 
 vim.rpcnotify(child, "nvim_command", "qa!")

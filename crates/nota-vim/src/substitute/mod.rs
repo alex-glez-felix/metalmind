@@ -12,12 +12,32 @@ use crate::lines::{first_non_blank, last_char};
 use crate::search::{Case, Pattern, split_at_delimiter};
 use crate::{CommandError, VimError};
 
-/// Cuántos reemplazos hizo un `:s` y en cuántas líneas, para el mensaje de
-/// la UI ("3 substitutions on 2 lines").
+/// Cuántos reemplazos hizo un `:s` y en cuántas líneas.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Substitution {
     pub replacements: usize,
     pub lines: usize,
+}
+
+/// Desde cuántos reemplazos se avisa, como `report=2` de vim.
+const REPORT: usize = 2;
+
+impl Substitution {
+    /// El aviso de vim (`3 substitutions on 2 lines`); `None` si fueron
+    /// pocos para avisar.
+    #[must_use]
+    pub fn report(self) -> Option<String> {
+        let plural = |n: usize| if n == 1 { "" } else { "s" };
+        (self.replacements > REPORT).then(|| {
+            format!(
+                "{} substitution{} on {} line{}",
+                self.replacements,
+                plural(self.replacements),
+                self.lines,
+                plural(self.lines),
+            )
+        })
+    }
 }
 
 /// Un `:s` tal como se escribió.

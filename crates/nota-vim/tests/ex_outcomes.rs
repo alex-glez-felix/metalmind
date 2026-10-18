@@ -19,6 +19,7 @@ use nota_vim::{
 };
 use pretty_assertions::assert_eq;
 use rstest::rstest;
+use rstest_reuse::{self, apply, template};
 
 fn run(before: &str, keys: &str) -> (KeyOutcome, Vim, String) {
     let (mut buffer, mut selections) = support::parse(before);
@@ -31,8 +32,8 @@ fn run(before: &str, keys: &str) -> (KeyOutcome, Vim, String) {
 const TEXT: &str = "a|b\ncd\nab";
 
 #[rstest]
-#[case(":m<CR>", CommandError::InvalidAddress)]
-#[case(":m9<CR>", CommandError::InvalidAddress)]
+#[case(":m<CR>", CommandError::InvalidRange)]
+#[case(":m9<CR>", CommandError::InvalidRange)]
 #[case(":1,2m1<CR>", CommandError::MoveIntoItself)]
 #[case(":2,1d<CR>", CommandError::BackwardsRange)]
 #[case(":4d<CR>", CommandError::InvalidRange)]
@@ -46,9 +47,10 @@ const TEXT: &str = "a|b\ncd\nab";
 #[case(":d x y<CR>", CommandError::TrailingCharacters("y".to_owned()))]
 #[case(":1noh<CR>", CommandError::NoRangeAllowed)]
 #[case(":norm<CR>", CommandError::ArgumentRequired)]
-#[case(":sort x<CR>", CommandError::UnsupportedSortFlag('x'))]
-#[case(":sort z<CR>", CommandError::InvalidArgument)]
-#[case(":sort /a<CR>", CommandError::MissingDelimiter("/a".to_owned()))]
+#[case(":sort l<CR>", CommandError::UnsupportedSortFlag('l'))]
+#[case(":sort z<CR>", CommandError::InvalidArgumentAt("z".to_owned()))]
+#[case(":sort nx<CR>", CommandError::InvalidArgument)]
+#[case(":sort /a<CR>", CommandError::MissingDelimiter("a".to_owned()))]
 #[case(":g<CR>", CommandError::GlobalPatternMissing)]
 #[case(":gxaxd<CR>", CommandError::Unknown("gxaxd".to_owned()))]
 #[case(":g xaxd<CR>", CommandError::LetterDelimiter)]
@@ -61,25 +63,72 @@ fn reports_why_a_command_failed(#[case] keys: &str, #[case] error: CommandError)
     assert_eq!(outcome, KeyOutcome::InvalidCommand(error));
 }
 
+/// El texto que la UI muestra en la barra tras un comando.
+fn message(outcome: &KeyOutcome) -> String {
+    match outcome {
+        KeyOutcome::InvalidCommand(error) => error.to_string(),
+        KeyOutcome::SearchFailed(error) => error.to_string(),
+        KeyOutcome::GlobalMissed(miss) => miss.to_string(),
+        KeyOutcome::Substituted(substitution) => substitution.report().unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+/// Los mensajes de vim, con su número y su texto en inglés, tal como los
+/// deja nvim.
+#[template]
 #[rstest]
-#[case(CommandError::Unknown("dd".to_owned()), "E492: Not an editor command: dd")]
-#[case(CommandError::InvalidRange, "E16: Invalid range")]
-#[case(CommandError::BackwardsRange, "E493: Backwards range given")]
-#[case(CommandError::MarkNotSet, "E20: Mark not set")]
+#[case(":dd<CR>", "E492: Not an editor command: dd")]
+#[case(":m<CR>", "E16: Invalid range")]
+#[case(":m9<CR>", "E16: Invalid range")]
+#[case(":m x<CR>", "E16: Invalid range")]
+#[case(":t-5<CR>", "E16: Invalid range")]
+#[case(":4d<CR>", "E16: Invalid range")]
+#[case(":-2d<CR>", "E16: Invalid range")]
+#[case(":1,2m1<CR>", "E134: Cannot move a range of lines into itself")]
+#[case(":'a<CR>", "E20: Mark not set")]
+#[case(":'<lt>d<CR>", "E20: Mark not set")]
+#[case(":/zz/d<CR>", "E486: Pattern not found: zz")]
+#[case("://d<CR>", "E35: No previous regular expression")]
+#[case("/zz<CR>", "E486: Pattern not found: zz")]
+#[case(":d!<CR>", "E477: No ! allowed")]
+#[case(":d 0<CR>", "E939: Positive count required")]
+#[case(":d x y<CR>", "E488: Trailing characters: y")]
+#[case(":1noh<CR>", "E481: No range allowed")]
+#[case(":norm<CR>", "E471: Argument required")]
+#[case(":sort zq<CR>", "E475: Invalid argument: zq")]
+#[case(":sort /a/ /b/<CR>", "E475: Invalid argument: /b/")]
+#[case(":sort nx<CR>", "E474: Invalid argument")]
+#[case(":sort /a<CR>", "E654: Missing delimiter after search pattern: a")]
+#[case(":g<CR>", "E148: Regular expression missing from global")]
+#[case(":gxaxd<CR>", "E492: Not an editor command: gxaxd")]
 #[case(
-    CommandError::MoveIntoItself,
-    "E134: Cannot move a range of lines into itself"
+    ":g xaxd<CR>",
+    "E146: Regular expressions can't be delimited by letters"
 )]
-#[case(
-    CommandError::Search(SearchError::NotFound("x".to_owned())),
-    "E486: Pattern not found: x"
-)]
-#[case(
-    CommandError::Search(SearchError::NoPrevious),
-    "E35: No previous regular expression"
-)]
-fn vim_errors_keep_their_original_text(#[case] error: CommandError, #[case] text: &str) {
-    assert_eq!(error.to_string(), text);
+#[case(":g/a/2,3g/b/d<CR>", "E147: Cannot do :global recursive with a range")]
+#[case(":g/a/.,+1m1<CR>", "E134: Cannot move a range of lines into itself")]
+#[case(":g/a/zz<CR>", "E492: Not an editor command: zz")]
+#[case(":g/zz/d<CR>", "Pattern not found: zz")]
+#[case(":v/./d<CR>", "Pattern found in every line: .")]
+#[case(":2d<CR>", "")]
+#[case(":%s/./x/g<CR>", "6 substitutions on 3 lines")]
+#[case(":g/./s/^/x/<CR>", "3 substitutions on 3 lines")]
+#[case(":%j<CR>:s/[ab]/x/g<CR>", "4 substitutions on 1 line")]
+#[case(":%s/a/x/<CR>", "")]
+fn messages(#[case] keys: &str, #[case] text: &str) {}
+
+#[apply(messages)]
+fn engine_message(#[case] keys: &str, #[case] text: &str) {
+    let (outcome, _, _) = run(TEXT, keys);
+    assert_eq!(message(&outcome), text);
+}
+
+#[apply(messages)]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn nvim_message(#[case] keys: &str, #[case] text: &str) {
+    let nvim = support::nvim::message(TEXT, keys);
+    assert_eq!(nvim, text, "la tabla no coincide con nvim");
 }
 
 #[test]
