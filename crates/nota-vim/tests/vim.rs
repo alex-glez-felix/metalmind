@@ -427,6 +427,166 @@ use rstest_reuse::{self, apply, template};
     "yipP",
     "|alfa beta\ngama\nalfa beta\ngama\n\ndelta"
 )]
+// . y su count: `3.` reemplaza el del cambio y queda para los siguientes
+#[case("|abcdef", ".", "|abcdef")]
+#[case("|abcdef", "3.", "|abcdef")]
+#[case("|abcdef", "x.", "|cdef")]
+#[case("|abcdef", "2x.", "|ef")]
+#[case("|abcdef", "2x3.", "|f")]
+#[case("|abcdef", "x3.", "|ef")]
+#[case("|a b c d e f g h", "dw.", "|c d e f g h")]
+#[case("|a b c d e f g h", "2dw.", "|e f g h")]
+#[case("|a b c d e f g h", "d2w.", "|e f g h")]
+#[case("|a b c d e f g h", "2dw..", "|g h")]
+#[case("|a b c d e f g h", "2dw3.", "|f g h")]
+#[case("|a b c d e f g h", "2dw3..", "|")]
+#[case("|a b c d e f g h", "d3w2.", "|f g h")]
+#[case("|a b c d e f g h i j k l m n", "2d3w.", "|m n")]
+#[case("|a b c d e f g h", "2d3w2.", "|")]
+#[case("|ab\ncd\nef\ngh", "dd.", "|ef\ngh")]
+#[case("|ab\ncd\nef\ngh", "2dd.", "|")]
+#[case("|a\n\nb\n\nc\n\nd", "dap.", "|c\n\nd")]
+#[case("|a\n\nb\n\nc\n\nd", "dip.", "|b\n\nc\n\nd")]
+#[case("foo b|ar baz qux", "diw.", "foo|baz qux")]
+#[case("foo b|ar baz qux", "daw.", "foo |qux")]
+#[case("foo b|ar baz qux quux zap", "2daw.", "foo |zap")]
+#[case("f(a|b) g(cd)", "di(fc.", "f() g(|)")]
+// . al final del archivo y con un count mayor que lo que queda
+#[case("ab|c", "x.", "|a")]
+#[case("|abc", "x9.", "|")]
+#[case("|a b", "dw9.", "|")]
+#[case("ab\n|cd", "dd.", "|")]
+#[case("ab\ncd\n|ef", "dd.", "|ab")]
+#[case("|ab\ncd\nef", "dd5.", "|")]
+#[case("|ab\ncd", "dd..", "|")]
+// . repite la pasada por Insert entera, aunque se salga con ctrl-c
+#[case("a|bc", "ihola<Esc>.", "aholhol|aabc")]
+#[case("a|bc", "ihola<Esc>3.", "aholholaholahol|aabc")]
+#[case("a|bc", "3ihola<Esc>.", "aholaholaholholaholahol|aabc")]
+#[case("a|bc", "3ihola<Esc>2.", "aholaholaholholahol|aabc")]
+#[case("a|bc", "ihola<C-c>.", "aholhol|aabc")]
+#[case("a|bc", "3ihola<C-c>.", "aholholaholahol|aabc")]
+#[case("a|bc\ndef", "A;<Esc>j.", "abc;\ndef|;")]
+#[case("a|bc\ndef", "oX<Esc>.", "abc\nX\n|X\ndef")]
+#[case("a|bc\ndef", "2oX<Esc>.", "abc\nX\nX\nX\n|X\ndef")]
+#[case("a|bc\ndef", "OX<Esc>.", "|X\nX\nabc\ndef")]
+#[case("|ab\ncd", "o<Esc>.", "ab\n\n|\ncd")]
+#[case("ab|cd", "xi<Esc>.", "|abd")]
+#[case("|abc", "ix<CR>y<Esc>.", "x\nx\n|yyabc")]
+#[case("foo |bar baz", "ciwX<Esc>w.", "foo X |X")]
+#[case("foo |bar baz", "cwX<Esc>w.", "foo X |X")]
+#[case("|a b c d", "2cwX<Esc>w.", "X |X")]
+#[case("|ab cd", "cwX<C-c>w.", "X |X")]
+#[case("|ab\ncd\nef", "ccX<Esc>j.", "X\n|X\nef")]
+#[case("x \"a|b\" \"cd\"", "ci\"Z<Esc>fc.", "x \"Z\" \"|Z\"")]
+#[case("|abc def", "ia<PasteStart>XY<PasteEnd>z<Esc>0.", "aXY|zaXYzabc def")]
+#[case("|abc", "3ia<PasteStart>XY<PasteEnd><Esc>0.", "aXYaXYaX|YaXYaXYaXYabc")]
+// . tras un <BS>: repite las teclas, no el texto que quedó
+#[case("a|bc", "iab<BS>c<Esc>.", "aaa|ccbc")]
+#[case("a|bc", "i<BS><Esc>.", "|bc")]
+#[case("ab\n|cd", "i<BS><Esc>.", "|bcd")]
+#[case("|abcd", "3iab<BS>c<Esc>.", "acacaacaca|ccabcd")]
+// . con multibyte
+#[case("|añob c", "x.", "|ob c")]
+#[case("|ñandú", "x..", "|dú")]
+#[case("|ñ🦀é x", "dw.", "|é x")]
+#[case("a|bc", "ié<Esc>.", "a|éébc")]
+#[case("a|bc", "ié🦀<BS>ñ<Esc>.", "aéé|ññbc")]
+// . con f t F T: repite la búsqueda tecleada, y tras d; la de ; en ese momento
+#[case("|a,b,c,d", "df,.", "|c,d")]
+#[case("|a,b,c,d", "dt,.", "|,c,d")]
+#[case("a,b,c,|d", "dF,.", "a,b|d")]
+#[case("a,b,c,|d", "dT,.", "a,b,c,|d")]
+#[case("|a,b,c,d", "dt,;.", ",|,c,d")]
+#[case("|a,b,c,d", "df,;.", "b|d")]
+#[case("|a,b;c;d", "df,f;.", "b|;c;d")]
+#[case("|a,b,c,d", "f,d;.", "a|d")]
+#[case("|a,b,c;d;e", "f,d;f;.", "ac|e")]
+#[case("|a,b;c,d;e,f", "dt,f;.;", ",b,d|;e,f")]
+#[case("|a,b;c,d;e,f", "dt,f;.,", ",b|,d;e,f")]
+// un . que falla deja el cambio de antes, con su count, y no ejecuta el resto
+#[case("|a,b,c,d,e", "df,5.", "|b,c,d,e")]
+#[case("|a,b,c,d,e", "df,5..", "|c,d,e")]
+#[case("|a,b c", "ct,Y<Esc>$.", "Y,b |c")]
+#[case("|a,b c", "ct,Y<Esc>$.u", "|a,b c")]
+#[case("|abcabc", "xdfz.", "|cabc")]
+#[case("|abcabc", "xd;.", "|cabc")]
+// . después de p y P: pega lo que haya en el registro al repetir
+#[case("|ab", "ylp.", "aa|ab")]
+#[case("|ab", "yl2p.", "aaaa|ab")]
+#[case("|ab", "yl2p3.", "aaaaa|ab")]
+#[case("|ab\ncd", "yyp.", "ab\nab\n|ab\ncd")]
+#[case("|ab\ncd", "yyP.", "|ab\nab\nab\ncd")]
+#[case("|ab cd", "xp.", "ba|a cd")]
+#[case("|ab cd", "xywp.", "bb b|  cd")]
+#[case("|abc", "ix<Esc>pyl.", "x|xabc")]
+// lo que no se graba: motions, yank, undo, la línea de comandos
+#[case("|abc def", "xw.", "bc |ef")]
+#[case("|abc def", "xwyl.", "bc |ef")]
+#[case("|ab cd", "xyw.", "| cd")]
+#[case("|abc def", "xu.", "|bc def")]
+#[case("|abc", "xu<C-r>.", "|c")]
+#[case("|abc def", "xg-.", "|bc def")]
+#[case("|abc", "ix<Esc>u.", "|xabc")]
+#[case("|abc", "x:<Esc>.", "|c")]
+#[case("|abc", "ix<Esc>:w<Esc>.", "|xxabc")]
+#[case("ab|c", "f<Esc>.", "ab|c")]
+#[case("|abc", "xd..", "|c")]
+#[case("|abcdef", "xd.x", "|cdef")]
+// un cambio que no borra nada también se graba
+#[case("|ab cd ef\n\nxy", "dwjxk.", "|d ef\n\nxy")]
+#[case("|abc\n\nef", "xjdiwk.", "|\n\nef")]
+// . es un solo paso de undo
+#[case("|abcdef", "x3.u", "|bcdef")]
+#[case("|a b c d", "dw.u", "|b c d")]
+#[case("a|bc", "ihola<Esc>3.u", "ahol|abc")]
+#[case("|ab\ncd", "yyp.u", "ab\n|ab\ncd")]
+#[case("|ab\ncd", "yyp.uu", "|ab\ncd")]
+#[case("foo |bar baz", "ciwX<Esc>w.u", "foo X |baz")]
+#[case("a|bc\ndef", "oX<Esc>.u", "abc\n|X\ndef")]
+#[case("|ab cd", "cwX<Esc>u.", "|X cd")]
+// tras un clic en Insert, lo que se teclee es otro cambio para .: un `i` ahí
+#[case(
+    "|abc def",
+    "3ihola<LeftMouse><6,0><LeftRelease><6,0>x<Esc>0.",
+    "|xholaabxc def"
+)]
+#[case(
+    "|abc def",
+    "ihola<LeftMouse><6,0><LeftRelease><6,0><Esc>0.",
+    "hol|aholaabc def"
+)]
+#[case(
+    "|abc def",
+    "3ihola<LeftMouse><6,0><LeftRelease><6,0><Esc>0.",
+    "holaholahol|aholaabc def"
+)]
+#[case(
+    "|abc def",
+    "Ahola<LeftMouse><2,0><LeftRelease><2,0>x<Esc>0.",
+    "|xabxc defhola"
+)]
+#[case(
+    "|abc def",
+    "oX<LeftMouse><0,0><LeftRelease><0,0>y<Esc>j.",
+    "yabc def\n|yX"
+)]
+#[case(
+    "|abc def",
+    "cwX<LeftMouse><4,0><LeftRelease><4,0>y<Esc>0.",
+    "|yX deyf"
+)]
+#[case("|abc def", "cwX<LeftMouse><4,0><LeftRelease><4,0><Esc>w.", "X de|X")]
+#[case(
+    "|abc def",
+    "ix<LeftMouse><4,0><LeftRelease><4,0><BS><Esc>$.",
+    "xab |df"
+)]
+#[case(
+    "|abc def",
+    "ix<LeftMouse><4,0><LeftRelease><4,0><PasteStart>Q<PasteEnd><Esc>0.",
+    "|QxabcQ def"
+)]
 // línea de comandos: entrar, editar y salir sin ejecutar nada
 #[case("ab|c", ":w", "ab|c")]
 #[case("ab|c", ":wq<BS>", "ab|c")]
@@ -462,6 +622,9 @@ fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
 #[case("|ab\n|cd", "yyp", "ab\n|ab\ncd\ncd\n|ab\ncd")]
 #[case("f|oo b|ar", "ciwX<Esc>", "|X |X")]
 #[case("|ab\n|cd", "2ix<Esc>", "x|xab\nx|xcd")]
+#[case("|ab\n|cd", "x.", "|\n|")]
+#[case("|ab\n|cd", "A!<Esc>.", "ab!|!\ncd!|!")]
+#[case("f|oo b|ar", "ciwX<Esc>.", "|X |X")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }
@@ -566,4 +729,33 @@ fn moving_the_cursor_cancels_what_was_pending(#[case] pending: &str) {
     assert_eq!(vim.mode(), Mode::Normal);
     let heads = selections.iter().map(|s| s.head);
     assert_eq!(support::render(&buffer, heads), "abc |ef");
+}
+
+#[test]
+fn repeat_change_runs_by_name() {
+    use nota_vim::{Action, Vim};
+
+    let (mut buffer, mut selections) = support::parse("|abc");
+    let mut vim = Vim::new();
+    support::feed(&mut vim, &mut buffer, &mut selections, "x");
+    let repeat = Action::from_name("vim::repeat_change").unwrap();
+    vim.execute(repeat, &mut buffer, &mut selections).unwrap();
+    assert_eq!(support::render(&buffer, [selections.primary().head]), "|c");
+}
+
+/// Como un clic en Normal en vim: cancela lo pendiente, pero `.` sigue
+/// repitiendo el último cambio.
+#[test]
+fn moving_the_cursor_in_normal_keeps_the_last_change() {
+    use nota_buffer::{ByteOffset, Selection, Selections};
+    use nota_vim::Vim;
+
+    let (mut buffer, mut selections) = support::parse("|abc def");
+    let mut vim = Vim::new();
+    support::feed(&mut vim, &mut buffer, &mut selections, "x");
+    selections = Selections::single(Selection::cursor(ByteOffset::new(3)));
+    vim.cursor_moved();
+    support::feed(&mut vim, &mut buffer, &mut selections, ".");
+    let heads = selections.iter().map(|s| s.head);
+    assert_eq!(support::render(&buffer, heads), "bc |ef");
 }

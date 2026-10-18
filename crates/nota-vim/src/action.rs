@@ -39,6 +39,8 @@ pub enum Action {
     Interrupt,
     DeleteRight,
     Paste(PasteSide),
+    /// `.`: repite el último cambio.
+    RepeatChange,
     Undo,
     Redo,
     /// Estado anterior en orden cronológico, cruzando ramas del historial.
@@ -125,6 +127,7 @@ impl Action {
         Self::DeleteRight,
         Self::Paste(PasteSide::After),
         Self::Paste(PasteSide::Before),
+        Self::RepeatChange,
         Self::Undo,
         Self::Redo,
         Self::Earlier,
@@ -161,6 +164,7 @@ impl Action {
             Self::DeleteRight => "vim::delete_right",
             Self::Paste(PasteSide::After) => "vim::paste_after",
             Self::Paste(PasteSide::Before) => "vim::paste_before",
+            Self::RepeatChange => "vim::repeat_change",
             Self::Undo => "vim::undo",
             Self::Redo => "vim::redo",
             Self::Earlier => "vim::earlier",

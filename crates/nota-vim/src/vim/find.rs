@@ -3,6 +3,7 @@
 use nota_buffer::{Buffer, Selections};
 
 use super::{Vim, move_cursors};
+use crate::dot::Subject;
 use crate::find::Find;
 use crate::object::Object;
 use crate::{Action, CharSearch, Key, KeyOutcome, Mode, VimError};
@@ -23,7 +24,7 @@ impl Vim {
         };
         let find = Find::new(search, target);
         self.last_find = Some(find);
-        self.jump(find, buffer, selections)?;
+        self.jump(find, Object::Find(find).into(), buffer, selections)?;
         Ok(KeyOutcome::Executed(Action::FindChar(search)))
     }
 
@@ -34,21 +35,24 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
-        if let Some(find) = self.last_find {
-            return self.jump(find.repeat(reversed), buffer, selections);
-        }
-        self.reset();
-        Ok(())
+        let Some(find) = self.last_find else {
+            self.reset();
+            return Ok(());
+        };
+        let subject = Subject::RepeatFind { reversed };
+        self.jump(find.repeat(reversed), subject, buffer, selections)
     }
 
+    /// Con un operador pendiente opera sobre `subject`, que `.` repite.
     fn jump(
         &mut self,
         find: Find,
+        subject: Subject,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         if let Mode::OperatorPending(operator) = self.mode {
-            return self.operate(operator, Object::Find(find), buffer, selections);
+            return self.operate(operator, subject, buffer, selections);
         }
         let times = self.count.take().unwrap_or(1);
         *selections = move_cursors(selections, |s| find.resolve(buffer, s.head, times));
