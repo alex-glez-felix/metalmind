@@ -1,5 +1,5 @@
-//! Las páginas de tag: `tags/<nombre>.md` con `color`, `icon`, `aliases` y
-//! `parents` en el frontmatter (05 §7).
+//! Las páginas de tag: `tags/<nombre>.md` con `color`, `icon`, `aliases`,
+//! `parents` y `template` en el frontmatter (05 §7).
 
 use std::ops::Range;
 
@@ -23,6 +23,9 @@ pub struct TagPage {
     /// Tal como los declara la página; el `TagGraph` decide cuáles aplican.
     pub aliases: Vec<TagOccurrence>,
     pub parents: Vec<TagOccurrence>,
+    /// La plantilla de las notas nuevas del tag (06 §11): su ruta dentro de
+    /// la carpeta de plantillas, sin `.md`.
+    pub template: Option<String>,
     /// Valores que no se entienden; el resto de la página vale igual.
     pub invalid: Vec<InvalidValue>,
     /// Dónde escribir un campo sin tocar el resto.
@@ -57,6 +60,7 @@ pub enum PageField {
     Icon,
     Aliases,
     Parents,
+    Template,
 }
 
 impl TagPage {
@@ -75,6 +79,7 @@ impl TagPage {
             icon: None,
             aliases: Vec::new(),
             parents: Vec::new(),
+            template: None,
             invalid: Vec::new(),
             layout: PageLayout::new(text, frontmatter),
         };
@@ -94,6 +99,11 @@ impl TagPage {
         let mut lines = Lines::new(text);
         self.aliases = self.tags(text, &mut lines, PageField::Aliases, &frontmatter.aliases);
         self.parents = self.tags(text, &mut lines, PageField::Parents, &frontmatter.parents);
+        self.template = self.single(
+            PageField::Template,
+            frontmatter.template.as_ref(),
+            parse_template,
+        );
     }
 
     fn single<T>(
@@ -170,6 +180,15 @@ impl TagIcon {
     }
 }
 
+/// El nombre de una plantilla si es una ruta del vault sin `.md`
+/// (`trabajo/semanal`): sin `..`, sin ser absoluta ni oculta.
+#[must_use]
+pub fn parse_template(text: &str) -> Option<String> {
+    VaultPath::new(&format!("{text}.md"))
+        .is_ok()
+        .then(|| text.to_owned())
+}
+
 /// Símbolos con sus modificadores: variaciones, ZWJ, etiquetas de banderas y
 /// los dígitos de un keycap. Alcanza para decir que no es texto cualquiera.
 fn is_emoji(text: &str) -> bool {
@@ -218,9 +237,21 @@ mod tests {
         assert_eq!(TagIcon::parse(text).is_some(), valid, "{text}");
     }
 
+    #[rstest]
+    #[case("reunión", true)]
+    #[case("trabajo/semanal", true)]
+    #[case("Con espacios: y # signos", true)]
+    #[case("../fuera", false)]
+    #[case("/absoluta", false)]
+    #[case(".oculta", false)]
+    #[case("a//b", false)]
+    fn templates(#[case] text: &str, #[case] valid: bool) {
+        assert_eq!(parse_template(text).is_some(), valid, "{text}");
+    }
+
     #[test]
     fn a_page_reads_its_fields() {
-        let text = "---\ncolor: naranja\nicon: tabler:brand-rust\naliases: [rs, \"#Rust-lang\"]\nparents: lenguajes\n---\nCuerpo";
+        let text = "---\ncolor: naranja\nicon: tabler:brand-rust\naliases: [rs, \"#Rust-lang\"]\nparents: lenguajes\ntemplate: trabajo/semanal\n---\nCuerpo";
         let scan = nota_syntax::scan(text);
         let page = TagPage::new(
             VaultPath::new("tags/Rust.md").unwrap(),
@@ -244,13 +275,13 @@ mod tests {
         };
         assert_eq!(names(&page.aliases), ["rs", "Rust-lang"]);
         assert_eq!(names(&page.parents), ["lenguajes"]);
+        assert_eq!(page.template.as_deref(), Some("trabajo/semanal"));
         assert_eq!(page.invalid, []);
     }
 
     #[test]
     fn values_that_are_not_understood_are_reported() {
-        let text =
-            "---\ncolor: rojo oscuro\nicon: libro\naliases: [a/b]\nparents: [\"x y\"]\n---\n";
+        let text = "---\ncolor: rojo oscuro\nicon: libro\naliases: [a/b]\nparents: [\"x y\"]\ntemplate: ../x\n---\n";
         let scan = nota_syntax::scan(text);
         let page = TagPage::new(
             VaultPath::new("tags/a.md").unwrap(),
@@ -265,9 +296,10 @@ mod tests {
                 PageField::Color,
                 PageField::Icon,
                 PageField::Aliases,
-                PageField::Parents
+                PageField::Parents,
+                PageField::Template
             ]
         );
-        assert_eq!((page.color, page.icon), (None, None));
+        assert_eq!((page.color, page.icon, page.template), (None, None, None));
     }
 }

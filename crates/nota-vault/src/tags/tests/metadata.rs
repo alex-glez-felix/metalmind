@@ -117,6 +117,20 @@ fn a_hand_written_page_changes_only_that_field() {
 }
 
 #[test]
+fn a_template_is_set_through_an_alias_and_read_back() {
+    let template = PageChange::Template(Some("trabajo/reunión: semanal".into()));
+    let rust = "---\ntitle: Rust  # a mano\ncolor: rojo\naliases: [rs]\nparents:\n  - lenguajes\n\n# fin\ntemplate: \"trabajo/reunión: semanal\"\n---\nCuerpo.\n";
+    assert_eq!(change("#rs", &template), owned(&[("tags/rust.md", rust)]));
+    let tags = after("rust", &template);
+    let page = tags.graph().page(&key("rust")).unwrap();
+    assert_eq!(page.template.as_deref(), Some("trabajo/reunión: semanal"));
+    assert_eq!(
+        change("gpui", &PageChange::Template(Some("diario".into()))),
+        owned(&[("tags/Gpui.md", "---\ntemplate: diario\n---\n")])
+    );
+}
+
+#[test]
 fn an_alias_changes_the_page_of_its_tag() {
     let rust = "---\ntitle: Rust  # a mano\ncolor: verde\naliases: [rs]\nparents:\n  - lenguajes\n\n# fin\n---\nCuerpo.\n";
     assert_eq!(
@@ -230,6 +244,10 @@ fn invalid_requests() {
             PageChange::Icon(Some(TagIcon::Emoji("libro".into())))
         ),
         PlanError::InvalidValue("libro".into())
+    );
+    assert_eq!(
+        error("rust", PageChange::Template(Some("../fuera".into()))),
+        PlanError::InvalidValue("../fuera".into())
     );
     assert_eq!(
         error("rust", PageChange::Parents(names(&["ui", "rs"]))),
