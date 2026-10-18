@@ -68,6 +68,8 @@ pub(crate) enum Change {
     /// Un cambio en Visual por bloque, sobre un bloque del mismo tamaño
     /// desde el cursor.
     Block(BlockChange, BlockSize),
+    /// `editor::toggle_checkbox`, en tantas líneas como diga el count.
+    ToggleCheckbox,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

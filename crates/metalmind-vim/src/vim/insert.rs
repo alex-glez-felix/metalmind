@@ -4,7 +4,7 @@ use metalmind_buffer::{Buffer, Selections};
 
 use super::Vim;
 use crate::dot::{Change, Dot};
-use crate::insert::{self, Session, Typed};
+use crate::insert::{self, Session, Typed, Typing};
 use crate::{InsertAt, Key, KeyOutcome, Mode, VimError};
 
 impl Vim {
@@ -56,9 +56,17 @@ impl Vim {
     ) -> Result<(), VimError> {
         let count = self.count.take();
         self.reset();
-        *selections = insert::enter(buffer, selections, at)?;
+        let typing = self.typing();
+        *selections = insert::enter(buffer, selections, at, typing, self.layout.as_mut())?;
         self.start_insert(Dot::new(Change::Insert(at), count, None));
         Ok(())
+    }
+
+    pub(super) fn typing(&self) -> Typing {
+        Typing {
+            continue_lists: self.markdown.continue_lists,
+            columns: self.viewport.columns(),
+        }
     }
 
     /// Pasa a Insert con la transacción ya abierta por quien empezó `dot`.
@@ -73,7 +81,8 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
-        *selections = typed.apply(buffer, selections)?;
+        let typing = self.typing();
+        *selections = typed.apply(buffer, selections, typing, self.layout.as_mut())?;
         if let Some(session) = &mut self.insert {
             session.record(typed);
         }
@@ -87,7 +96,7 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         if let Some(session) = &self.insert {
-            *selections = session.replay(buffer, selections)?;
+            *selections = session.replay(buffer, selections, self.typing(), &mut self.layout)?;
         }
         Ok(())
     }

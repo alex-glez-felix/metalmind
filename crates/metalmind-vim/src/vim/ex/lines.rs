@@ -94,12 +94,14 @@ impl Vim {
     ) -> Result<(), VimError> {
         self.jumped(buffer, selections)?;
         let columns = self.viewport.columns();
+        let width = self.indent.levels_width(levels);
         let edits = lines
             .clone()
             .filter_map(|line| {
-                let (len, indent) = indent::shift(&buffer.line_text(line), shift, levels, columns)?;
+                let text = buffer.line_text(line);
+                let (len, new) = indent::shift(&text, shift, width, columns, self.indent)?;
                 let start = buffer.line_start(line);
-                Some(Edit::replace(start..start + len, indent))
+                Some(Edit::replace(start..start + len, new))
             })
             .collect();
         let last = *lines.end();

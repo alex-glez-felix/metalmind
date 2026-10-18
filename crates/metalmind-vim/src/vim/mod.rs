@@ -1,5 +1,6 @@
 mod awaiting;
 mod block;
+mod checkbox;
 mod command_line;
 mod dispatch;
 mod ex;
@@ -37,7 +38,7 @@ use crate::keymap::Lookup;
 use crate::mark::{FileMarks, Marks};
 use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, Reselect};
-use crate::{Action, Key, Keymap, Layout, Mode, Prompt, Viewport, VimError};
+use crate::{Action, Indent, Key, Keymap, Layout, Markdown, Mode, Prompt, Viewport, VimError};
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
 /// buffer y las selecciones que le pasan.
@@ -114,6 +115,8 @@ pub struct Vim {
     /// sin él, todas miden una fila.
     layout: Option<Layout>,
     scrolloff: usize,
+    indent: Indent,
+    markdown: Markdown,
 }
 
 impl Default for Vim {
@@ -171,7 +174,19 @@ impl Vim {
             viewport: Viewport::default(),
             layout: None,
             scrolloff: 0,
+            indent: Indent::default(),
+            markdown: Markdown::default(),
         }
+    }
+
+    /// El ancho y los caracteres con que indentan `>` y `<`.
+    pub fn set_indent(&mut self, indent: Indent) {
+        self.indent = indent;
+    }
+
+    /// Qué partes de la edición de markdown están encendidas.
+    pub fn set_markdown(&mut self, markdown: Markdown) {
+        self.markdown = markdown;
     }
 
     #[must_use]

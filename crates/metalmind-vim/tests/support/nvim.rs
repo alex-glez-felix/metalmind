@@ -15,17 +15,23 @@ pub fn run(before: &str, keys: &str) -> State {
     run_on(before, keys, None).0
 }
 
+/// Como [`run`], tras correr `setup`, un comando de Ex: con `set
+/// filetype=markdown`, su ftplugin pone `sw=4 ts=4 et` y trae `]]` y `[[`.
+pub fn run_after(setup: &str, before: &str, keys: &str) -> State {
+    dump(before, keys, setup, None).state
+}
+
 /// Como [`run`], en una ventana como `screen`; devuelve además la primera
 /// línea visible, desde 0.
 pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize) {
-    let dump = dump(before, keys, screen);
+    let dump = dump(before, keys, "", screen);
     (dump.state, dump.top)
 }
 
 /// El último mensaje que dejan las teclas en nvim: un error (`E16: Invalid
 /// range`) o un aviso (`Pattern not found: x`); vacío si no hubo.
 pub fn message(before: &str, keys: &str) -> String {
-    dump(before, keys, None).message
+    dump(before, keys, "", None).message
 }
 
 struct Dump {
@@ -34,7 +40,7 @@ struct Dump {
     message: String,
 }
 
-fn dump(before: &str, keys: &str, screen: Option<Screen>) -> Dump {
+fn dump(before: &str, keys: &str, setup: &str, screen: Option<Screen>) -> Dump {
     assert_eq!(
         installed_version(),
         VERSION,
@@ -53,7 +59,8 @@ fn dump(before: &str, keys: &str, screen: Option<Screen>) -> Dump {
         .arg((row + 1).to_string())
         .arg(col.to_string())
         .arg(keys)
-        .arg(output.path());
+        .arg(output.path())
+        .arg(setup);
     if let Some(screen) = screen {
         command
             .arg(screen.rows.to_string())

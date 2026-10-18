@@ -6,7 +6,7 @@ use metalmind_buffer::{
 
 use crate::VimError;
 use crate::columns::Columns;
-use crate::indent::Shift;
+use crate::indent::{Indent, Shift};
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
 use crate::shift;
@@ -97,18 +97,19 @@ impl Operator {
 
     /// `Change` deja la transacción abierta para el modo Insert. `levels`
     /// es cuánto corren `>` y `<` la sangría: el count en Visual y 1 fuera
-    /// de él, como en vim.
+    /// de él, como en vim; `indent`, con qué.
     pub(crate) fn apply(
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
         columns: Columns,
         levels: usize,
+        indent: Indent,
     ) -> Result<Outcome, VimError> {
         match self.effect() {
             Effect::Cut(cut) => cut.apply(buffer, operands, columns),
             Effect::Transform(transform) => transform.apply(buffer, operands),
-            Effect::Shift(shift) => shift::apply(shift, levels, buffer, operands, columns),
+            Effect::Shift(shift) => shift::apply(shift, levels, buffer, operands, columns, indent),
         }
     }
 }

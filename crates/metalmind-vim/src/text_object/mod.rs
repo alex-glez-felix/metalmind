@@ -10,14 +10,28 @@ mod word;
 use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection};
 
 use crate::VisualKind;
-use crate::span::{Missed, Span};
+use crate::markdown::{self, LazyOutline};
+use crate::span::{Missed, Span, SpanKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextObject {
-    Word { big: bool, around: bool },
-    Parentheses { around: bool },
-    DoubleQuotes { around: bool },
-    Paragraph { around: bool },
+    Word {
+        big: bool,
+        around: bool,
+    },
+    Parentheses {
+        around: bool,
+    },
+    DoubleQuotes {
+        around: bool,
+    },
+    Paragraph {
+        around: bool,
+    },
+    /// `ih`, `ah`: lo que hay bajo un heading de markdown.
+    Section {
+        around: bool,
+    },
 }
 
 /// Los extremos que mueve un text object, como `VIsual` y el cursor de vim.
@@ -42,6 +56,7 @@ impl TextObject {
         buffer: &Buffer,
         head: ByteOffset,
         count: usize,
+        outline: &LazyOutline,
     ) -> Result<Span, Missed> {
         let missed = || Missed::at(buffer, head);
         match self {
@@ -54,6 +69,21 @@ impl TextObject {
             }
             Self::Paragraph { around } => {
                 paragraph::resolve(buffer, head, count, around).ok_or_else(missed)
+            }
+            Self::Section { around } => {
+                let (first, last) = markdown::section(
+                    outline.get(buffer),
+                    buffer,
+                    buffer.line_of(head),
+                    count,
+                    around,
+                )
+                .ok_or_else(missed)?;
+                Ok(Span {
+                    start: buffer.line_start(first),
+                    end: buffer.line_start(last),
+                    kind: SpanKind::Linewise,
+                })
             }
         }
     }
@@ -68,6 +98,7 @@ impl TextObject {
         selection: &Selection,
         kind: VisualKind,
         count: usize,
+        outline: &LazyOutline,
     ) -> (Selection, VisualKind) {
         let mut ends = Ends {
             anchor: selection.anchor,
@@ -89,6 +120,9 @@ impl TextObject {
                 keeps_block(quote::select(buffer, &mut ends, count, around, '"'))
             }
             Self::Paragraph { around } => paragraph::select(buffer, &mut ends, kind, count, around),
+            Self::Section { around } => {
+                select_section(outline, buffer, &mut ends, kind, count, around)
+            }
         };
         let moved = ends.anchor != selection.anchor || ends.head != selection.head;
         let selection = Selection {
@@ -97,5 +131,27 @@ impl TextObject {
             goal: if moved { Goal::None } else { selection.goal },
         };
         (selection, kind)
+    }
+}
+
+/// Selecciona la sección por líneas; si una selección por líneas ya la
+/// abarca, la que la contiene. Si no hay, nada cambia.
+fn select_section(
+    outline: &LazyOutline,
+    buffer: &Buffer,
+    ends: &mut Ends,
+    kind: VisualKind,
+    count: usize,
+    around: bool,
+) -> VisualKind {
+    let (anchor, head) = (buffer.line_of(ends.anchor), buffer.line_of(ends.head));
+    let selected = (kind == VisualKind::Line).then(|| (anchor.min(head), anchor.max(head)));
+    match markdown::select_section(outline.get(buffer), buffer, selected, head, count, around) {
+        Some((first, last)) => {
+            ends.anchor = buffer.line_start(first);
+            ends.head = buffer.line_start(last);
+            VisualKind::Line
+        }
+        None => kind,
     }
 }

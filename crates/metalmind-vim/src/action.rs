@@ -121,6 +121,9 @@ pub enum Action {
     /// empieza con lo escrito.
     HistoryPrevious,
     HistoryNext,
+    /// Marca o desmarca el checkbox de un ítem de lista (`- [ ]` ↔
+    /// `- [x]`), o le pone uno; con count, en tantas líneas.
+    ToggleCheckbox,
     /// Un comando que ejecuta quien aloja el editor, como los de `ctrl-w`.
     Command(Command),
 }
@@ -146,6 +149,8 @@ impl Action {
         Self::Motion(Motion::Window(Place::Middle)),
         Self::Motion(Motion::Window(Place::Bottom)),
         Self::Motion(Motion::Matching),
+        Self::Motion(Motion::NextHeading),
+        Self::Motion(Motion::PreviousHeading),
         Self::Scroll(Scroll::LineDown),
         Self::Scroll(Scroll::LineUp),
         Self::Scroll(Scroll::HalfPageDown),
@@ -216,6 +221,8 @@ impl Action {
         Self::TextObject(TextObject::DoubleQuotes { around: true }),
         Self::TextObject(TextObject::Paragraph { around: false }),
         Self::TextObject(TextObject::Paragraph { around: true }),
+        Self::TextObject(TextObject::Section { around: false }),
+        Self::TextObject(TextObject::Section { around: true }),
         Self::Search { backward: false },
         Self::Search { backward: true },
         Self::SearchNext { reversed: false },
@@ -285,6 +292,7 @@ impl Action {
         Self::SubmitCommand,
         Self::HistoryPrevious,
         Self::HistoryNext,
+        Self::ToggleCheckbox,
         Self::Command(Command::Save),
         Self::Command(Command::Quit),
         Self::Command(Command::ForceQuit),
@@ -378,6 +386,7 @@ impl Action {
             Self::SubmitCommand => "vim::submit_command",
             Self::HistoryPrevious => "vim::history_previous",
             Self::HistoryNext => "vim::history_next",
+            Self::ToggleCheckbox => "editor::toggle_checkbox",
             Self::Command(command) => command.name(),
         }
     }
@@ -417,6 +426,8 @@ fn motion_name(motion: Motion) -> &'static str {
         Motion::Window(Place::Middle) => "vim::window_middle",
         Motion::Window(Place::Bottom) => "vim::window_bottom",
         Motion::Matching => "vim::matching",
+        Motion::NextHeading => "vim::next_heading",
+        Motion::PreviousHeading => "vim::previous_heading",
     }
 }
 
@@ -496,6 +507,8 @@ fn text_object_name(object: TextObject) -> &'static str {
         TextObject::DoubleQuotes { around: true } => "vim::a_double_quotes",
         TextObject::Paragraph { around: false } => "vim::inner_paragraph",
         TextObject::Paragraph { around: true } => "vim::a_paragraph",
+        TextObject::Section { around: false } => "vim::inner_section",
+        TextObject::Section { around: true } => "vim::a_section",
     }
 }
 

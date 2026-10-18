@@ -1,8 +1,10 @@
 -- Oráculo: aplica teclas en nvim y escribe cursor, modo, el último mensaje y
 -- el texto en un archivo.
--- Uso: nvim --clean --headless -n -l oracle.lua <texto> <fila> <columna> <teclas> <salida> [<filas> <scrolloff> <primera línea>]
-local text, row, col, keys, out = arg[1], tonumber(arg[2]), tonumber(arg[3]), arg[4], arg[5]
-local rows, scrolloff, top = tonumber(arg[6]), tonumber(arg[7]), tonumber(arg[8])
+-- Uso: nvim --clean --headless -n -l oracle.lua <texto> <fila> <columna> <teclas> <salida> <preparación> [<filas> <scrolloff> <primera línea>]
+-- <preparación> es un comando de Ex que se corre antes, como `set filetype=markdown`;
+-- vacío, ninguno.
+local text, row, col, keys, out, setup = arg[1], tonumber(arg[2]), tonumber(arg[3]), arg[4], arg[5], arg[6]
+local rows, scrolloff, top = tonumber(arg[7]), tonumber(arg[8]), tonumber(arg[9])
 
 -- Las teclas van a otro nvim por nvim_input, como las manda la TUI: así
 -- cuentan como tecleadas y un <C-c> interrumpe (no repite `3ihola`).
@@ -15,7 +17,10 @@ end
 
 exec(
   [[
-  local text, row, col = ...
+  local text, row, col, setup = ...
+  if setup ~= "" then
+    vim.cmd(setup)
+  end
   -- Metalmind todavía no implementa autoindent.
   vim.o.autoindent = false
   -- Metalmind implementa el `%` de vim (`findmatchlimit`), no el de matchit,
@@ -34,7 +39,8 @@ exec(
 ]],
   text,
   row,
-  col
+  col,
+  setup
 )
 
 -- Una ventana de `rows` filas: `lines` cuenta también la barra de estado y

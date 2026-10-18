@@ -34,12 +34,14 @@ impl Span {
             start: self.start,
             adjusted: false,
             visual: false,
+            nested: false,
         };
         let chars = |end, adjusted| Target {
             region: Region::Chars(self.start..end),
             start: self.start,
             adjusted,
             visual: false,
+            nested: false,
         };
         let first = buffer.line_of(self.start);
         let last = buffer.line_of(self.end);
@@ -91,6 +93,8 @@ pub(crate) struct Target {
     /// Viene de una selección Visual, que `d` borra tal cual: no pasa a
     /// líneas completas como un `d` multi-línea (`op_delete` de vim).
     pub visual: bool,
+    /// Son ítems de lista con sus hijos: `<` los mueve juntos.
+    pub nested: bool,
 }
 
 /// Un objetivo que falló y qué pasa con el cursor.

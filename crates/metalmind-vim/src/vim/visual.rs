@@ -10,6 +10,7 @@ use super::operate::{Operation, run};
 use crate::columns::Columns;
 use crate::dot::{Change, Dot, Subject};
 use crate::lines::clamp_normal;
+use crate::markdown::LazyOutline;
 use crate::motion::Purpose;
 use crate::object::Object;
 use crate::operator::{Operand, Outcome};
@@ -74,6 +75,7 @@ impl Vim {
                 self.insert_in_block(append, buffer, selections)?;
             }
             Action::Replace => self.awaiting = Some(Awaiting::Replace),
+            Action::ToggleCheckbox => self.toggle_checkbox_visual(kind, buffer, selections)?,
             Action::Visual(new) => self.toggle_visual(new, kind, buffer, selections),
             Action::OtherEnd => self.other_end(kind, selections),
             Action::OtherCorner => self.other_corner(kind, buffer, selections),
@@ -126,8 +128,10 @@ impl Vim {
                     VisualKind::Char | VisualKind::Block => Motion::Right,
                     VisualKind::Line => Motion::Down,
                 };
+                let outline = LazyOutline::new(self.layout.as_mut());
                 move_cursors(&cursors, true, |s| {
-                    motion.resolve(buffer, s, Some(times - 1), Purpose::Select, &self.viewport)
+                    let times = Some(times - 1);
+                    motion.resolve(buffer, s, times, Purpose::Select, &self.viewport, &outline)
                 })
                 .unwrap_or(cursors)
             }
@@ -220,7 +224,8 @@ impl Vim {
     ) {
         let count = self.count.take().unwrap_or(1);
         self.reset();
-        let selected = selections.map_to(|s| object.select(buffer, s, kind, count));
+        let outline = LazyOutline::new(self.layout.as_mut());
+        let selected = selections.map_to(|s| object.select(buffer, s, kind, count, &outline));
         let kind = selected.iter().next().map_or(kind, |&(_, kind)| kind);
         *selections = selected.to_selections(|&(selection, _)| selection);
         self.mode = Mode::Visual(kind);
@@ -289,6 +294,8 @@ impl Vim {
                 buffer,
                 selections,
                 &self.viewport,
+                self.indent,
+                &LazyOutline::new(self.layout.as_mut()),
             )?,
         };
         let repeated_register = match side {
@@ -357,7 +364,7 @@ impl Vim {
 
     /// Antes de operar: sale a Normal, `gv` recuerda la selección, y `.` y
     /// `[count]v` su tamaño.
-    fn finish_visual(
+    pub(super) fn finish_visual(
         &mut self,
         kind: VisualKind,
         buffer: &Buffer,

@@ -6,12 +6,13 @@ use metalmind_buffer::{Buffer, PerSelection, Selections};
 use super::Vim;
 use crate::dot::{Change, Dot, MarkJump, Subject};
 use crate::insert;
+use crate::markdown::LazyOutline;
 use crate::object::Object;
 use crate::operator::{Operand, Outcome};
 use crate::register::{Clipboard, Register, RegisterName, Shape, Write};
 use crate::search::Query;
 use crate::travel::Travel;
-use crate::{InsertAt, Operator, PasteSide, Viewport, VimError, paste};
+use crate::{Indent, InsertAt, Operator, PasteSide, Viewport, VimError, paste};
 
 /// Un operador ya tecleado, con lo que `.` necesita para repetirlo.
 pub(super) struct Operation {
@@ -72,10 +73,13 @@ impl Vim {
             self.fail();
             return Ok(());
         };
-        let operands = selections.map_to(|selection| Operand {
-            selection: *selection,
-            target: object.target(buffer, selection, operator, count, &self.viewport),
-        });
+        let operands = {
+            let outline = LazyOutline::new(self.layout.as_mut());
+            selections.map_to(|selection| Operand {
+                selection: *selection,
+                target: object.target(buffer, selection, operator, count, &self.viewport, &outline),
+            })
+        };
         let operation = Operation {
             operator,
             subject,
@@ -113,7 +117,13 @@ impl Vim {
             Subject::Object(Object::Visual(_)) => count.unwrap_or(1),
             _ => 1,
         };
-        let outcome = operator.apply(buffer, operands, self.viewport.columns(), levels)?;
+        let outcome = operator.apply(
+            buffer,
+            operands,
+            self.viewport.columns(),
+            levels,
+            self.indent,
+        )?;
         let (applied, written, spans_lines) = match outcome {
             Outcome::Missed(moved) => {
                 *selections = moved;
@@ -245,12 +255,14 @@ pub(super) fn run(
     buffer: &mut Buffer,
     selections: &Selections,
     viewport: &Viewport,
+    indent: Indent,
+    outline: &LazyOutline,
 ) -> Result<Selections, VimError> {
     let operands = selections.map_to(|selection| Operand {
         selection: *selection,
-        target: object.target(buffer, selection, operator, None, viewport),
+        target: object.target(buffer, selection, operator, None, viewport, outline),
     });
-    let outcome = operator.apply(buffer, &operands, viewport.columns(), 1)?;
+    let outcome = operator.apply(buffer, &operands, viewport.columns(), 1, indent)?;
     Ok(match outcome {
         Outcome::Missed(selections) | Outcome::Applied { selections, .. } => selections,
     })

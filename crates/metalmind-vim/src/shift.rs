@@ -1,13 +1,14 @@
 //! `>` y `<` sobre las líneas que abarca cada operando, como `op_shift` de
 //! nvim fuera de un bloque.
 
+use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
 use metalmind_buffer::{Buffer, Edit, PerSelection, Selection};
 
 use crate::VimError;
 use crate::columns::Columns;
-use crate::indent::{self, Shift};
+use crate::indent::{self, Indent, Shift, leading_blanks};
 use crate::lines::Want;
 use crate::operator::{Operand, Outcome};
 use crate::span::{Region, Target};
@@ -22,24 +23,30 @@ pub(crate) fn apply(
     buffer: &mut Buffer,
     operands: &PerSelection<Operand>,
     columns: Columns,
+    indent: Indent,
 ) -> Result<Outcome, VimError> {
     let steps = operands.map(|operand| Step::new(buffer, operand, columns));
     if steps.iter().all(|step| step.lines.is_none()) {
         return Ok(Outcome::Missed(steps.to_selections(|step| step.before)));
     }
-    let mut lines: Vec<usize> = steps
-        .iter()
-        .filter_map(|step| step.lines.clone())
-        .flatten()
-        .collect();
-    lines.sort_unstable();
-    lines.dedup();
+    let width = indent.levels_width(levels);
+    let mut lines = BTreeMap::new();
+    for step in steps.iter() {
+        let Some(range) = step.lines.clone() else {
+            continue;
+        };
+        let moved = step.width(buffer, shift, width, columns);
+        for line in range {
+            lines.entry(line).or_insert(moved);
+        }
+    }
     let edits: Vec<Edit> = lines
         .into_iter()
-        .filter_map(|line| {
-            let (len, indent) = indent::shift(&buffer.line_text(line), shift, levels, columns)?;
+        .filter_map(|(line, width)| {
+            let text = buffer.line_text(line);
+            let (len, new) = indent::shift(&text, shift, width, columns, indent)?;
             let start = buffer.line_start(line);
-            Some(Edit::replace(start..start + len, indent))
+            Some(Edit::replace(start..start + len, new))
         })
         .collect();
     buffer.begin_transaction(steps.to_selections(|step| step.before))?;
@@ -57,6 +64,8 @@ pub(crate) fn apply(
 struct Step {
     /// Las líneas que corre; `None` si el objeto falló ahí.
     lines: Option<RangeInclusive<usize>>,
+    /// Un ítem de lista con sus hijos: `<` los corre a todos lo mismo.
+    nested: bool,
     /// Donde vuelve el undo: el inicio de lo abarcado, o adonde lo mandó el
     /// fallo.
     before: Selection,
@@ -69,14 +78,29 @@ impl Step {
         match &operand.target {
             Ok(target) => Self {
                 lines: Some(lines_of(buffer, target)),
+                nested: target.nested,
                 before: Selection::cursor(target.start),
                 want: Want::of(buffer, selection, tab_end(target, selection), columns),
             },
             Err(missed) => Self {
                 lines: None,
+                nested: false,
                 before: missed.selection(selection),
                 want: Want::of(buffer, selection, true, columns),
             },
+        }
+    }
+
+    /// Cuántas columnas corre cada línea. Un ítem con hijos que `<` no
+    /// puede correr entero se corre lo que pueda su primera línea, para que
+    /// los hijos sigan más adentro que él.
+    fn width(&self, buffer: &Buffer, shift: Shift, width: usize, columns: Columns) -> usize {
+        match (&self.lines, shift, self.nested) {
+            (Some(lines), Shift::Left, true) => {
+                let first = buffer.line_text(*lines.start());
+                width.min(columns.line_width(leading_blanks(&first)))
+            }
+            _ => width,
         }
     }
 
