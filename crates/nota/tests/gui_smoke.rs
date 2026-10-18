@@ -252,3 +252,22 @@ fn renombra_desde_el_arbol_y_el_buffer_la_sigue() {
     assert_eq!(smoke.read("c.md"), "xuno\n");
     assert_eq!(smoke.files(), ["c.md"]);
 }
+
+/// `nota <vault>` lanzado desde otra carpeta: `:w idea.md` en el `[No Name]`
+/// escribe en el vault, no en el directorio de trabajo.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn w_con_ruta_relativa_escribe_en_el_vault() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let notes = smoke.notes();
+    let mut nota = smoke.launch_from_home(&[notes.to_str().unwrap()]);
+    let window = nota.window();
+    window.wait_title("sin archivo", |title| title.starts_with("[No Name]"));
+    window.type_keys("<C-w>lihola<Esc>:w idea.md<CR>");
+    smoke.wait_contents("idea.md", "hola\n");
+    window.type_keys(":q<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.files(), ["a.md", "idea.md"]);
+    assert!(!smoke.home().join("idea.md").exists());
+}

@@ -100,7 +100,7 @@ Los cambios que importan a quien usa nota. El formato sigue
 #### Buffers y paneles (M2)
 
 - Varios archivos abiertos a la vez. `:e ruta` abre otro en el panel activo
-  (relativo al directorio de trabajo), `:e` sin ruta relee el archivo y `:e!`
+  (relativo a la raíz del vault), `:e` sin ruta relee el archivo y `:e!`
   descarta los cambios.
 - Splits: `ctrl-w v` y `:vs` a la derecha, `ctrl-w s` y `:sp` abajo,
   `ctrl-w h j k l` y `ctrl-w w` mueven el foco, `ctrl-w q` y `:q` cierran el
@@ -130,7 +130,10 @@ Los cambios que importan a quien usa nota. El formato sigue
   sus cambios sin guardar. Borrar avisa si hay cambios sin guardar, que se
   pierden: los paneles de lo borrado se cierran.
 - `:w ruta` y `:wq ruta` le dan archivo a un buffer sin nombre, como en vim; en
-  uno con archivo, `:w ruta` escribe una copia. Nunca pisan un archivo.
+  uno con archivo, `:w ruta` escribe una copia. Nunca pisan un archivo (`E13`)
+  ni escriben en uno abierto en otro buffer (`E139`).
+- Las rutas relativas de `:e` y `:w` parten de la raíz del vault, no del
+  directorio desde el que se lanzó nota.
 - El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
   con las claves `ui.panel_*` y `ui.menu_*` del tema.
 

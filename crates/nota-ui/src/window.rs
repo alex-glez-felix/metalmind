@@ -89,8 +89,9 @@ pub fn open(
     };
     let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
     let file = document.path().map(ToOwned::to_owned);
+    let root = vault.root().to_owned();
     cx.open_window(options, move |window, cx| {
-        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
+        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff, root));
         let sidebar =
             cx.new(|cx| Sidebar::new(vault, updates, &state.panel, workspace.clone(), cx));
         if let Some(file) = &file {

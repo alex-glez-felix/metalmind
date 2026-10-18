@@ -9,7 +9,7 @@ mod xvfb;
 
 use std::fs::{self, File};
 use std::os::unix::fs::PermissionsExt as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use tempfile::TempDir;
@@ -104,7 +104,17 @@ impl Smoke {
     /// una carpeta vacía, y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET` GPUI usa
     /// X11: nunca abre en el escritorio de quien corre los tests.
     pub fn launch(&self, args: &[&str]) -> Nota<'_> {
-        self.launch_with_env(args, &[])
+        self.launch_with_env(&self.notes(), args, &[])
+    }
+
+    /// Como `launch`, pero desde el `HOME` vacío del test y no desde la
+    /// carpeta de notas: así se ve qué depende del directorio de trabajo.
+    pub fn launch_from_home(&self, args: &[&str]) -> Nota<'_> {
+        self.launch_with_env(&self.home(), args, &[])
+    }
+
+    pub fn home(&self) -> PathBuf {
+        self.dir.path().join("home")
     }
 
     /// Como `launch`, pero los loaders de Vulkan y de EGL no encuentran
@@ -115,16 +125,16 @@ impl Smoke {
             ("VK_DRIVER_FILES", missing),
             ("__EGL_VENDOR_LIBRARY_FILENAMES", missing),
         ];
-        self.launch_with_env(args, &env)
+        self.launch_with_env(&self.notes(), args, &env)
     }
 
-    fn launch_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Nota<'_> {
-        let home = self.dir.path().join("home");
+    fn launch_with_env(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Nota<'_> {
+        let home = self.home();
         let log_path = self.dir.path().join("nota.log");
         let log = File::create(&log_path).expect("crear el log");
         let child = Command::new(env!("CARGO_BIN_EXE_nota"))
             .args(args)
-            .current_dir(self.notes())
+            .current_dir(cwd)
             .env("DISPLAY", self.xvfb.name())
             .env_remove("WAYLAND_DISPLAY")
             .env_remove("WAYLAND_SOCKET")
