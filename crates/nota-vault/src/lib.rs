@@ -21,7 +21,9 @@ mod vault;
 mod watch;
 
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
-pub use attachment::{DEFAULT_ATTACHMENT_FOLDER, FileKind, NewAttachment, SavedAttachment, Source};
+pub use attachment::{
+    AttachmentRefs, DEFAULT_ATTACHMENT_FOLDER, FileKind, NewAttachment, SavedAttachment, Source,
+};
 pub use capture::{CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};

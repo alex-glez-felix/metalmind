@@ -12,8 +12,8 @@ use std::path::Path;
 
 use jiff::civil::{DateTime, date};
 use nota_vault::{
-    DEFAULT_ATTACHMENT_FOLDER, FileOpError, NewAttachment, SavedAttachment, Source, Vault,
-    VaultPath,
+    AttachmentRefs, DEFAULT_ATTACHMENT_FOLDER, FileOpError, NewAttachment, SavedAttachment, Source,
+    Vault, VaultPath,
 };
 use pretty_assertions::assert_eq;
 use support::{make_tree, settle};
@@ -211,4 +211,67 @@ fn la_carpeta_no_puede_ser_un_archivo_ni_un_enlace() {
         Err(FileOpError::Symlink(_))
     ));
     assert_eq!(names(outside.path()), Vec::<String>::new());
+}
+
+#[test]
+fn huerfanos_leyendo_las_notas() {
+    let dir = TempDir::new().unwrap();
+    make_tree(
+        dir.path(),
+        &[
+            "adjuntos/usado.png",
+            "adjuntos/sub/con-ruta.png",
+            "adjuntos/informe.pdf",
+            "adjuntos/en-codigo.png",
+            "adjuntos/ambiguo.png",
+            "otra/ambiguo.png",
+            "tapado.png",
+            "adjuntos/tapado.png",
+            "adjuntos/suelto.png",
+            "fuera/suelto.png",
+        ],
+    );
+    fs::write(
+        dir.path().join("a.md"),
+        "![[usado.png]] ![[sub/con-ruta.png|300]] `![[en-codigo.png]]`\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("otra/b.md"),
+        "[informe](../adjuntos/informe.pdf) ![[ambiguo.png]] ![[tapado.png]]\n",
+    )
+    .unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(
+        vault.orphan_attachments(&folder()).unwrap(),
+        [
+            path("adjuntos/en-codigo.png"),
+            path("adjuntos/suelto.png"),
+            path("adjuntos/tapado.png"),
+        ]
+    );
+}
+
+#[test]
+fn huerfanos_con_destinos_ya_resueltos() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["adjuntos/a.png", "adjuntos/b.png", "c.png"]);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let index = vault.snapshot();
+    let mut refs = AttachmentRefs::new(&index, &folder());
+    refs.mark_used(&path("adjuntos/a.png"));
+    refs.mark_used(&path("c.png"));
+    refs.mark_used(&path("no-existe.png"));
+    assert_eq!(refs.orphans(), [&path("adjuntos/b.png")]);
+}
+
+#[test]
+fn huerfanos_de_una_carpeta_que_no_existe() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "![[x.png]]").unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(
+        vault.orphan_attachments(&folder()).unwrap(),
+        Vec::<VaultPath>::new()
+    );
 }
