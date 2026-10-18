@@ -17,6 +17,7 @@ nota-ui = { path = "crates/nota-ui" }
 nota-vault = { path = "crates/nota-vault" }
 nota-vim = { path = "crates/nota-vim" }
 anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
 dirs = "7.0.0"
 env_logger = "0.11.11"
 # Fijado con `=`: gpui-pre cambia cada semana (04 §riesgo 9). Sin gpui-component
