@@ -33,8 +33,8 @@ impl Smoke {
         for sub in ["home", "notas"] {
             fs::create_dir(dir.path().join(sub)).expect("crear la carpeta");
         }
-        let xvfb = Xvfb::start(&dir.path().join("xvfb.log"));
-        let display = Display::connect(xvfb.name());
+        let (xvfb, connection) = Xvfb::start(&dir.path().join("xvfb.log"));
+        let display = Display::new(connection);
         Self { display, xvfb, dir }
     }
 

@@ -10,6 +10,7 @@ use x11rb::rust_connection::RustConnection;
 use x11rb::wrapper::ConnectionExt as _;
 
 use super::keys::Stroke;
+use super::xvfb::Connection;
 
 x11rb::atom_manager! {
     Atoms: AtomsCookie {
@@ -32,8 +33,7 @@ pub struct Display {
 }
 
 impl Display {
-    pub fn connect(name: &str) -> Self {
-        let (conn, screen) = x11rb::connect(Some(name)).expect("conectar al Xvfb");
+    pub fn new(Connection { conn, screen }: Connection) -> Self {
         let root = conn.setup().roots[screen].root;
         let atoms = Atoms::new(&conn)
             .expect("pedir los átomos")
