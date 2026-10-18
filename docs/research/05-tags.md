@@ -60,7 +60,7 @@ Reglas del frontmatter:
 |---|---|
 | `nota-syntax` | El scanner: de un `&str` saca las ocurrencias de tags (texto y frontmatter) con su rango en bytes, y de una página de tag sus campos (`color`, `icon`, `aliases`, `parents`) con sus rangos. Funciones puras, sin estado. |
 | `nota-vault` | El `TagIndex`, el `TagGraph` de las páginas, la clave normalizada (`TagKey`), las consultas (`TagQuery`), el alcance de focus (`Scope`), la refactorización de renombrar/fusionar y la escritura de metadata desde la UI. Nada de esto toca la GUI. |
-| `nota-search` | Sin cambios: el finder recibe la lista de candidatos ya filtrada por el `Scope`. Sigue sin depender de `nota-vault` (03 §4). |
+| `nota-search` | Sin cambios: el finder recibe la lista de candidatos ya filtrada por el `Scope` y no sabe de `nota-vault`. La búsqueda de texto completo sí depende de `nota-vault` para recorrer el disco con sus reglas, y recibe el alcance como un conjunto de rutas (03 §4). |
 | `nota-ui` | El panel de tags, el menú contextual y los selectores (§3), el indicador de focus y el autocompletado. Solo pinta y llama acciones. |
 
 ### Tipos

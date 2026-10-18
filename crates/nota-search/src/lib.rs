@@ -5,4 +5,6 @@ mod fuzzy;
 mod text;
 
 pub use fuzzy::{PathMatch, PathMatcher};
-pub use text::{Case, LineMatch, NoteMatches, SearchError, Syntax, TextQuery, TextSearcher};
+pub use text::{
+    Case, LineMatch, NoteMatches, SearchError, Syntax, TextMatcher, TextQuery, TextSearcher,
+};

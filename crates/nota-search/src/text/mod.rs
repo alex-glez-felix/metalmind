@@ -6,17 +6,16 @@ mod query;
 
 use std::collections::HashSet;
 use std::io;
-use std::path::PathBuf;
+use std::ops::ControlFlow;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 
-use grep_regex::RegexMatcher;
-use ignore::{DirEntry, WalkState};
-use nota_vault::{EntryKind, VaultPath};
+use nota_vault::VaultPath;
 
-pub use note::LineMatch;
 use note::NoteSearcher;
+pub use note::{LineMatch, TextMatcher};
 pub use query::{Case, Syntax, TextQuery};
 
 /// Las coincidencias de una nota, todas juntas: llegan nota por nota.
@@ -33,6 +32,8 @@ pub enum SearchError {
     InvalidPattern(#[from] grep_regex::Error),
     #[error("no se pudo lanzar el hilo de búsqueda: {0}")]
     Spawn(#[source] io::Error),
+    #[error("falló el motor de búsqueda: {0}")]
+    Engine(#[source] io::Error),
 }
 
 /// Busca texto en las notas de un vault, una búsqueda a la vez: empezar otra
@@ -69,7 +70,7 @@ impl TextSearcher {
         &mut self,
         query: &TextQuery,
     ) -> Result<mpsc::Receiver<NoteMatches>, SearchError> {
-        let matcher = query.matcher()?;
+        let matcher = query.compile()?;
         self.cancel();
         let (sender, receiver) = mpsc::channel();
         if query.pattern.is_empty() {
@@ -110,61 +111,52 @@ impl Drop for TextSearcher {
 
 struct Job {
     root: Arc<PathBuf>,
-    matcher: RegexMatcher,
+    matcher: TextMatcher,
     scope: Option<Arc<HashSet<VaultPath>>>,
     cancel: Arc<AtomicBool>,
 }
 
 impl Job {
     fn run(&self, sender: &mpsc::Sender<NoteMatches>) {
-        nota_vault::walker(&self.root).build_parallel().run(|| {
+        nota_vault::walk_notes(&self.root, || {
             let mut note = NoteSearcher::new(self.matcher.clone());
             let sender = sender.clone();
-            Box::new(move |entry| self.visit(entry, &mut note, &sender))
+            move |path, file: &Path| self.visit(path, file, &mut note, &sender)
         });
     }
 
     fn visit(
         &self,
-        entry: Result<DirEntry, ignore::Error>,
+        path: VaultPath,
+        file: &Path,
         note: &mut NoteSearcher,
         sender: &mpsc::Sender<NoteMatches>,
-    ) -> WalkState {
+    ) -> ControlFlow<()> {
         if self.cancel.load(Ordering::Relaxed) {
-            return WalkState::Quit;
+            return ControlFlow::Break(());
         }
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                log::warn!("al buscar en el vault: {error}");
-                return WalkState::Continue;
-            }
-        };
-        let Some((path, EntryKind::Note)) = nota_vault::classify(&self.root, &entry) else {
-            return WalkState::Continue;
-        };
         if self
             .scope
             .as_ref()
             .is_some_and(|scope| !scope.contains(&path))
         {
-            return WalkState::Continue;
+            return ControlFlow::Continue(());
         }
-        let lines = match note.search(entry.path(), &self.cancel) {
+        let lines = match note.search(file, &self.cancel) {
             Ok(lines) => lines,
             Err(error) => {
                 log::warn!("al buscar en {path}: {error}");
-                return WalkState::Continue;
+                return ControlFlow::Continue(());
             }
         };
         if lines.is_empty() {
-            return WalkState::Continue;
+            return ControlFlow::Continue(());
         }
         if sender.send(NoteMatches { path, lines }).is_err() {
             // Nadie escucha: es lo mismo que cancelar.
             self.cancel.store(true, Ordering::Relaxed);
-            return WalkState::Quit;
+            return ControlFlow::Break(());
         }
-        WalkState::Continue
+        ControlFlow::Continue(())
     }
 }

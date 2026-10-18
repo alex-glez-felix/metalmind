@@ -13,6 +13,7 @@ use std::sync::mpsc::Receiver;
 use nota_search::{Case, NoteMatches, SearchError, Syntax, TextQuery, TextSearcher};
 use nota_vault::VaultPath;
 use pretty_assertions::assert_eq;
+use proptest::prelude::*;
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -296,4 +297,52 @@ fn una_busqueda_completa_trae_todas_las_notas() {
     let all: Vec<_> = found.iter().collect();
     assert_eq!(all.len(), notes);
     assert!(all.iter().all(|note| note.lines.len() == 200));
+}
+
+#[test]
+fn find_busca_en_texto_en_memoria() {
+    let matcher = query("o", Syntax::Literal, Case::Smart).compile().unwrap();
+    let found = matcher.find("uno\r\ndos\nNUL\0o").unwrap();
+    let rendered: Vec<_> = found
+        .iter()
+        .map(|line| {
+            format!(
+                "{}:{}:{}:{:?}",
+                line.line, line.offset, line.text, line.matches
+            )
+        })
+        .collect();
+    assert_eq!(
+        rendered,
+        ["0:0:uno:[2..3]", "1:5:dos:[1..2]", "2:9:NUL\0o:[4..5]"]
+    );
+}
+
+#[test]
+fn compile_rechaza_un_patron_invalido() {
+    assert!(matches!(
+        query("(", Syntax::Regex, Case::Smart).compile(),
+        Err(SearchError::InvalidPattern(_))
+    ));
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Una nota en disco da lo mismo que su texto en memoria.
+    #[test]
+    fn find_da_lo_mismo_que_buscar_en_disco(
+        text in "[aAñ\\- \r\n]{0,60}",
+        pattern in "[aAñ]{1,2}",
+    ) {
+        let dir = vault(&[("n.md", text.as_bytes())]);
+        let query = query(&pattern, Syntax::Literal, Case::Smart);
+        let on_disk: Vec<_> = TextSearcher::new(dir.path())
+            .search(&query)
+            .unwrap()
+            .into_iter()
+            .flat_map(|note| note.lines)
+            .collect();
+        prop_assert_eq!(query.compile().unwrap().find(&text).unwrap(), on_disk);
+    }
 }
