@@ -262,3 +262,29 @@ fn lo_abierto_de_la_sesion_anterior_que_ya_no_existe_se_ignora() {
     );
     assert_eq!(tree.expanded().collect::<Vec<_>>(), [&path("diario")]);
 }
+
+/// Una nota creada con el filtro puesto queda seleccionada si el filtro la
+/// muestra; si no, en cuanto se quita el filtro.
+#[test]
+fn revelar_con_un_filtro_puesto() {
+    let mut with: Vec<&str> = VAULT.to_vec();
+    with.push("proyectos/nueva.md");
+    let created = || VaultChange::Created {
+        path: path("proyectos/nueva.md"),
+        kind: EntryKind::Note,
+    };
+
+    let mut tree = FileTree::new(index(VAULT));
+    tree.set_filter("nueva");
+    tree.reveal(path("proyectos/nueva.md"));
+    tree.apply(&[created()], index(&with));
+    assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
+
+    let mut tree = FileTree::new(index(VAULT));
+    tree.set_filter("enero");
+    tree.reveal(path("proyectos/nueva.md"));
+    tree.apply(&[created()], index(&with));
+    assert_ne!(tree.selected(), Some(&path("proyectos/nueva.md")));
+    tree.set_filter("");
+    assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
+}

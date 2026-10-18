@@ -258,6 +258,7 @@ impl FileTree {
         }
         query.clone_into(&mut self.filter);
         self.refresh_keeping_selection();
+        self.retry_reveal();
     }
 
     /// Aplica lo que publicó el watcher: `index` ya incluye `changes`, que
@@ -274,10 +275,16 @@ impl FileTree {
             }
         }
         self.index = index;
+        self.refresh_keeping_selection();
+        self.retry_reveal();
+    }
+
+    /// Lo que esperaba a que el watcher lo trajera, ahora que las filas son
+    /// las del índice y el filtro de este momento.
+    fn retry_reveal(&mut self) {
         if let Some(path) = self.reveal.take() {
             self.reveal(path);
         }
-        self.refresh_keeping_selection();
     }
 
     fn follow_rename(&mut self, from: &VaultPath, to: &VaultPath) {
