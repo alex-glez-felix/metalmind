@@ -344,3 +344,16 @@ fn escaped_markdown_destinations_resolve(#[case] text: &str, #[case] path: &str)
     let target = scan.links[0].target_text(text);
     assert_eq!(resolve(&target, [path]), Resolution::Resolved(path));
 }
+
+#[test]
+fn link_at_finds_the_link_under_the_cursor() {
+    let text = "ver [[a]] y `[[b]]` y [c](c.md)";
+    let target =
+        |offset| nota_syntax::link_at(text, offset).map(|link| text[link.target].to_owned());
+    assert_eq!(target(3), None);
+    assert_eq!(target(4).as_deref(), Some("a"));
+    assert_eq!(target(8).as_deref(), Some("a"));
+    assert_eq!(target(9), None);
+    assert_eq!(target(14), None);
+    assert_eq!(target(22).as_deref(), Some("c.md"));
+}
