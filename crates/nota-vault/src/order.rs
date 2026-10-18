@@ -2,7 +2,8 @@
 //! sobre un árbol nunca toque una carpeta que no existe ni pise un nombre.
 
 use std::cmp::Reverse;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::ops::Bound;
 
 use crate::index::EntryKind;
 use crate::path::VaultPath;
@@ -61,7 +62,7 @@ fn priority(change: &VaultChange) -> (u8, Reverse<usize>, usize, VaultPath) {
 /// Lo que hay en el árbol mientras se aplican los cambios. Solo sigue las
 /// rutas del lote; lo de fuera no cambia y existe.
 struct Tree {
-    present: HashMap<VaultPath, EntryKind>,
+    present: BTreeMap<VaultPath, EntryKind>,
     tracked: HashSet<VaultPath>,
     children: HashMap<VaultPath, usize>,
 }
@@ -69,7 +70,7 @@ struct Tree {
 impl Tree {
     fn new(before: &HashMap<VaultPath, EntryKind>, after: &HashMap<VaultPath, EntryKind>) -> Self {
         let mut tree = Self {
-            present: HashMap::new(),
+            present: BTreeMap::new(),
             tracked: before.keys().chain(after.keys()).cloned().collect(),
             children: HashMap::new(),
         };
@@ -134,11 +135,16 @@ impl Tree {
             }
             VaultChange::Created { path, kind } => self.insert(path.clone(), *kind),
             VaultChange::Renamed { from, to, .. } => {
-                let moved: Vec<_> = self
-                    .present
-                    .keys()
-                    .filter(|path| path.starts_with(from))
-                    .cloned()
+                // En orden de cadena, el contenido de `a` va seguido desde `a/`.
+                let inside = format!("{from}/");
+                let moved: Vec<_> = std::iter::once(from.clone())
+                    .chain(
+                        self.present
+                            .range::<str, _>((Bound::Included(inside.as_str()), Bound::Unbounded))
+                            .map(|(path, _)| path)
+                            .take_while(|path| path.as_str().starts_with(&inside))
+                            .cloned(),
+                    )
                     .collect();
                 let moved: Vec<_> = moved
                     .into_iter()
@@ -152,14 +158,25 @@ impl Tree {
         }
     }
 
-    /// Cada vez, el primer cambio que ya se puede aplicar. `None` si ninguno.
+    /// En pasadas: cada una aplica, en orden, todo lo que ya se puede y deja
+    /// el resto para la siguiente. `None` si una pasada no avanza.
     fn schedule(&mut self, mut pending: Vec<VaultChange>) -> Option<Vec<VaultChange>> {
         let mut ordered = Vec::with_capacity(pending.len());
         while !pending.is_empty() {
-            let next = pending.iter().position(|change| self.can_apply(change))?;
-            let change = pending.remove(next);
-            self.apply(&change);
-            ordered.push(change);
+            let waiting = pending.len();
+            let mut blocked = Vec::new();
+            for change in pending {
+                if self.can_apply(&change) {
+                    self.apply(&change);
+                    ordered.push(change);
+                } else {
+                    blocked.push(change);
+                }
+            }
+            if blocked.len() == waiting {
+                return None;
+            }
+            pending = blocked;
         }
         Some(ordered)
     }
@@ -202,4 +219,37 @@ fn pair_renames(
         });
     }
     changes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn path(path: &str) -> VaultPath {
+        VaultPath::new(path).unwrap()
+    }
+
+    /// Borrar una carpeta con 5 000 notas desde fuera de la app llega como un
+    /// solo lote: los hijos salen antes que la carpeta.
+    #[test]
+    fn un_lote_grande_borra_los_hijos_antes_que_la_carpeta() {
+        let mut before = HashMap::new();
+        let mut removed = Entries::new();
+        before.insert(path("grande"), EntryKind::Folder);
+        removed.insert((path("grande"), EntryKind::Folder));
+        for note in 0..5_000 {
+            let note = path(&format!("grande/n{note}.md"));
+            before.insert(note.clone(), EntryKind::Note);
+            removed.insert((note, EntryKind::Note));
+        }
+        let changes = arrange(&before, &HashMap::new(), &removed, &Entries::new(), &[]);
+        assert_eq!(changes.len(), 5_001);
+        assert_eq!(
+            changes.last(),
+            Some(&VaultChange::Removed {
+                path: path("grande"),
+                kind: EntryKind::Folder
+            })
+        );
+    }
 }
