@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::diagnostic::{Loaded, Location};
+use crate::history::HistoryRetention;
 use crate::parse::{Spanned, parse};
 use crate::theme::DEFAULT_THEME;
 use serde::Deserialize;
@@ -20,6 +21,7 @@ pub struct Settings {
     pub panes: Panes,
     pub panel: Panel,
     pub search: Search,
+    pub history: HistoryRetention,
     /// Carpeta de las plantillas, relativa al vault.
     pub templates_folder: String,
     pub daily: Daily,
@@ -153,6 +155,7 @@ impl Default for Settings {
             panes: Panes::default(),
             panel: Panel::default(),
             search: Search::default(),
+            history: HistoryRetention::default(),
             templates_folder: "plantillas".to_owned(),
             daily: Daily::default(),
         }

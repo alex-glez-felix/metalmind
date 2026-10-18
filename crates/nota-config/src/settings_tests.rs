@@ -38,6 +38,12 @@ daily:
   folder: \"\"
   format: YYYY/MM/YYYY-MM-DD
   template: diario
+
+history:
+  keep_all_hours: 12
+  hourly_days: 7
+  daily_days: 365
+  deleted_days: 30
 ";
 
 fn every_setting() -> Settings {
@@ -67,6 +73,12 @@ fn every_setting() -> Settings {
             ignorecase: true,
             smartcase: true,
         },
+        history: HistoryRetention {
+            keep_all_hours: 12,
+            hourly_days: 7,
+            daily_days: Some(365),
+            deleted_days: 30,
+        },
         templates_folder: "meta/plantillas".to_owned(),
         daily: Daily {
             enabled: true,
@@ -90,6 +102,20 @@ fn sin_archivo_todo_por_defecto() {
         editor.number && editor.relativenumber,
         "híbrido por defecto"
     );
+}
+
+#[test]
+fn el_historial_diario_sin_limite_se_escribe_con_tilde() {
+    let loaded = Settings::parse("history:\n  daily_days: ~\n  keep_all_hours: 6\n");
+    assert_eq!(loaded.diagnostics, []);
+    assert_eq!(
+        loaded.value.history,
+        HistoryRetention {
+            keep_all_hours: 6,
+            ..HistoryRetention::default()
+        }
+    );
+    assert_eq!(loaded.value.history.daily(), None);
 }
 
 #[test]
@@ -122,7 +148,8 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "folder": "",
     "format": "YYYY/MM/YYYY-MM-DD",
     "template": "diario"
-  }
+  },
+  "history": { "keep_all_hours": 12, "hourly_days": 7, "daily_days": 365, "deleted_days": 30 }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);

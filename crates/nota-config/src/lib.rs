@@ -7,6 +7,7 @@
 mod config;
 mod diagnostic;
 mod file;
+mod history;
 mod parse;
 mod paths;
 mod settings;
@@ -14,7 +15,8 @@ mod theme;
 
 pub use config::Config;
 pub use diagnostic::{Diagnostic, Loaded, Location, Severity};
-pub use paths::{NoHomeDir, Paths};
+pub use history::HistoryRetention;
+pub use paths::{MoveVaultDataError, NoHomeDir, Paths};
 pub use settings::{
     Daily, Editor, Font, FontSize, Padding, Panel, PanelWidth, Panes, Search, Settings, TabStop,
 };
