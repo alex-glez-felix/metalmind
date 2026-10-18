@@ -203,7 +203,19 @@ fn hex_float(text: &str) -> Option<f64> {
             exponent = exponent.saturating_add(sign * power);
         }
     }
-    Some(mantissa * 2.0_f64.powi(exponent))
+    Some(scale(mantissa, exponent))
+}
+
+/// `mantissa × 2^exponent`, como `ldexp`: por tramos que no se desbordan,
+/// para que `0x0p1024` sea 0 y no `0 × ∞`.
+fn scale(mut mantissa: f64, mut exponent: i32) -> f64 {
+    const STEP: i32 = 1000;
+    while exponent != 0 && mantissa != 0.0 && mantissa.is_finite() {
+        let step = exponent.clamp(-STEP, STEP);
+        mantissa *= 2.0_f64.powi(step);
+        exponent -= step;
+    }
+    mantissa
 }
 
 fn count_digits(bytes: &[u8]) -> usize {
@@ -253,6 +265,10 @@ mod tests {
             ("1e+x", 1.0),
             ("0x1.8p1", 3.0),
             ("0x10", 16.0),
+            ("0x0p1024", 0.0),
+            ("0x1p1024", f64::INFINITY),
+            ("0x1p-1074", f64::from_bits(1)),
+            ("0x8p-1077", f64::from_bits(1)),
             ("0xg", 0.0),
             ("abc", 0.0),
             ("-inf", f64::NEG_INFINITY),

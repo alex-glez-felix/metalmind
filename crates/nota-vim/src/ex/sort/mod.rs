@@ -221,5 +221,7 @@ mod tests {
             sorted(&["2.5", "", "-1e1", "x"], "f"),
             ["", "-1e1", "x", "2.5"]
         );
+        let floats = ["inf", "0x0p1024", "1"];
+        assert_eq!(sorted(&floats, "f"), ["0x0p1024", "1", "inf"]);
     }
 }
