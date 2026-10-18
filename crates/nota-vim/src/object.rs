@@ -5,7 +5,7 @@ use crate::span::{Region, Target};
 use crate::{Motion, Operator, TextObject};
 
 /// Sobre qué actúa un operador.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum Object {
     Motion(Motion),
     Find(Find),

@@ -9,6 +9,7 @@
 mod action;
 mod command;
 mod cursor;
+mod dot;
 mod error;
 mod find;
 mod insert;

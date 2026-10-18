@@ -1,9 +1,12 @@
 mod find;
+mod insert;
+mod repeat;
 
 use nota_buffer::{Buffer, Selection, Selections};
 
+use crate::dot::{Change, Dot, Subject};
 use crate::find::Find;
-use crate::insert::{Repeat, Typed};
+use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::motion::Destination;
 use crate::object::Object;
@@ -11,8 +14,8 @@ use crate::operator::Operand;
 use crate::register::Register;
 use crate::travel::Travel;
 use crate::{
-    Action, CharSearch, Command, CommandError, InsertAt, Key, Keymap, Mode, Motion, Operator,
-    PasteSide, VimError, insert, paste,
+    Action, CharSearch, Command, CommandError, Key, Keymap, Mode, Motion, Operator, PasteSide,
+    VimError, paste,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -43,7 +46,10 @@ pub struct Vim {
     operator_count: Option<usize>,
     register: Option<Register>,
     command_line: String,
-    repeat: Repeat,
+    /// La pasada por Insert en curso, si se está en Insert.
+    insert: Option<Session>,
+    /// Lo que repite `.`.
+    last_change: Option<Dot>,
     /// Tras `f`, `F`, `t` o `T`, la tecla siguiente es el carácter a buscar.
     awaiting_char: Option<CharSearch>,
     last_find: Option<Find>,
@@ -71,7 +77,8 @@ impl Vim {
             operator_count: None,
             register: None,
             command_line: String::new(),
-            repeat: Repeat::default(),
+            insert: None,
+            last_change: None,
             awaiting_char: None,
             last_find: None,
         }
@@ -129,7 +136,7 @@ impl Vim {
         self.awaiting_char = None;
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
-                self.operate(operator, Object::Motion(motion), buffer, selections)?;
+                self.operate(operator, Object::Motion(motion).into(), buffer, selections)?;
             }
             (Action::Motion(motion), Mode::Normal) => {
                 let count = self.count.take();
@@ -142,10 +149,15 @@ impl Vim {
                 self.repeat_find(reversed, buffer, selections)?;
             }
             (Action::TextObject(object), Mode::OperatorPending(operator)) => {
-                self.operate(operator, Object::TextObject(object), buffer, selections)?;
+                self.operate(
+                    operator,
+                    Object::TextObject(object).into(),
+                    buffer,
+                    selections,
+                )?;
             }
             (Action::CurrentLine, Mode::OperatorPending(operator)) => {
-                self.operate(operator, Object::CurrentLine, buffer, selections)?;
+                self.operate(operator, Object::CurrentLine.into(), buffer, selections)?;
             }
             (Action::Operator(operator), Mode::Normal) => {
                 self.operator_count = self.count.take();
@@ -154,19 +166,20 @@ impl Vim {
             (Action::DeleteRight, Mode::Normal) => {
                 self.operate(
                     Operator::Delete,
-                    Object::Motion(Motion::Right),
+                    Object::Motion(Motion::Right).into(),
                     buffer,
                     selections,
                 )?;
             }
             (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
             (Action::Paste(side), Mode::Normal) => self.paste(side, buffer, selections)?,
+            (Action::RepeatChange, Mode::Normal) => self.repeat_change(buffer, selections)?,
             (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, buffer, selections)?,
             (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
             (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
             (Action::NormalMode, Mode::Insert) => {
-                *selections = self.repeat.replay(buffer, selections)?;
+                self.repeat_insert(buffer, selections)?;
                 self.leave_insert(buffer, selections)?;
             }
             (Action::Interrupt, Mode::Insert) => self.leave_insert(buffer, selections)?,
@@ -197,32 +210,13 @@ impl Vim {
 
     /// El cursor se movió por fuera del motor, como con un clic o un pegado
     /// en Normal: se cancela lo pendiente (count, operador, `f`) y, como en
-    /// vim, lo tecleado en Insert ya no se repite con el count.
+    /// vim, lo tecleado en Insert ya no se repite con el count y lo que se
+    /// teclee después es otro cambio para `.`.
     pub fn cursor_moved(&mut self) {
         self.reset();
-        self.repeat = Repeat::default();
-    }
-
-    /// Texto que llega entero, como lo pegado: entra por el mismo camino que
-    /// lo tecleado, así que en Insert también se repite con el count. Fuera
-    /// de Insert y de la línea de comandos no hace nada.
-    ///
-    /// # Errors
-    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn insert_text(
-        &mut self,
-        text: &str,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
-        match self.mode {
-            Mode::Insert => {
-                self.type_in_insert(&Typed::Text(text.to_owned()), buffer, selections)?;
-            }
-            Mode::CommandLine => self.command_line.push_str(text),
-            Mode::Normal | Mode::OperatorPending(_) => return Ok(KeyOutcome::Unbound),
+        if let Some(session) = &mut self.insert {
+            session.cursor_moved();
         }
-        Ok(KeyOutcome::Inserted)
     }
 
     /// Un `0` sin count previo es la motion `0`, no un dígito.
@@ -280,12 +274,15 @@ impl Vim {
     fn operate(
         &mut self,
         operator: Operator,
-        object: Object,
+        subject: Subject,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         let count = combined(self.operator_count.take(), self.count.take());
         self.reset();
+        let Some(object) = subject.object(self.last_find) else {
+            return Ok(());
+        };
         let operands = selections.map_to(|selection| Operand {
             selection: *selection,
             target: object.target(buffer, selection, operator, count),
@@ -297,45 +294,12 @@ impl Vim {
         if outcome.register.is_some() {
             self.register = outcome.register;
         }
-        if operator == Operator::Change {
-            self.mode = Mode::Insert;
+        let dot = Dot::new(Change::Operate(operator, subject), count);
+        match operator {
+            Operator::Delete => self.last_change = Some(dot),
+            Operator::Change => self.start_insert(dot),
+            Operator::Yank => {}
         }
-        Ok(())
-    }
-
-    fn enter_insert(
-        &mut self,
-        at: InsertAt,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let count = self.count.take();
-        self.reset();
-        *selections = insert::enter(buffer, selections, at)?;
-        self.repeat = Repeat::new(count, at);
-        self.mode = Mode::Insert;
-        Ok(())
-    }
-
-    fn type_in_insert(
-        &mut self,
-        typed: &Typed,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        *selections = typed.apply(buffer, selections)?;
-        self.repeat.record(typed);
-        Ok(())
-    }
-
-    fn leave_insert(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        *selections = insert::leave(buffer, selections)?;
-        self.repeat = Repeat::default();
-        self.mode = Mode::Normal;
         Ok(())
     }
 
@@ -345,10 +309,13 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
-        let count = self.count.take().unwrap_or(1);
+        let count = self.count.take();
         self.reset();
+        // Como en vim, `.` repite un `p` aunque el registro estuviera vacío.
+        self.last_change = Some(Dot::new(Change::Paste(side), count));
         if let Some(register) = &self.register {
-            *selections = paste::paste(buffer, selections, register, side, count)?;
+            let times = count.unwrap_or(1);
+            *selections = paste::paste(buffer, selections, register, side, times)?;
         }
         Ok(())
     }

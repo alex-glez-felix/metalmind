@@ -175,6 +175,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('x')], Action::DeleteRight),
         (Normal, &[ch('p')], Action::Paste(PasteSide::After)),
         (Normal, &[ch('P')], Action::Paste(PasteSide::Before)),
+        (Normal, &[ch('.')], Action::RepeatChange),
         (Normal, &[ch('u')], Action::Undo),
         (Normal, &[Key::Ctrl('r')], Action::Redo),
         (Normal, &[ch('g'), ch('-')], Action::Earlier),
