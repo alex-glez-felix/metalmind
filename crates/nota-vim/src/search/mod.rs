@@ -8,9 +8,9 @@ mod word;
 
 pub(crate) use pattern::Case;
 pub use pattern::Pattern;
-pub(crate) use scan::Query;
 pub use scan::Wrap;
-pub(crate) use word::Word;
+pub(crate) use scan::{Hit, Query};
+pub(crate) use word::WordSearch;
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SearchError {

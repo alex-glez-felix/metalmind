@@ -22,10 +22,16 @@ impl Vim {
             return Ok(());
         };
         self.count = count.or(dot.count);
-        // Como vim, repetir `d/foo<CR>` vuelve a teclear la búsqueda: `n`
-        // sigue buscando `foo`.
-        if let Change::Operate(_, Subject::Object(Object::Search(query))) = &dot.change {
-            self.search.remember(query);
+        // Como vim, repetir `d/foo<CR>` o `d*` vuelve a teclear la búsqueda:
+        // `n` sigue buscando lo que buscó.
+        match &dot.change {
+            Change::Operate(_, Subject::Object(Object::Search(query))) => {
+                self.search.remember(query);
+            }
+            Change::Operate(_, Subject::Object(Object::SearchWord(search))) => {
+                self.remember_word(*search, buffer, selections);
+            }
+            _ => {}
         }
         match dot.change {
             Change::Operate(operator, subject) => {

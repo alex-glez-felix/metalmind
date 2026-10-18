@@ -1,7 +1,7 @@
 use nota_buffer::{Buffer, Selection};
 
 use crate::find::Find;
-use crate::search::Query;
+use crate::search::{Query, WordSearch};
 use crate::span::{Missed, Region, Target};
 use crate::{Motion, Operator, TextObject};
 
@@ -10,8 +10,10 @@ use crate::{Motion, Operator, TextObject};
 pub(crate) enum Object {
     Motion(Motion),
     Find(Find),
-    /// `d/foo<CR>`, `dn`, `d*`: hasta donde empieza la coincidencia.
+    /// `d/foo<CR>`, `dn`: hasta donde empieza la coincidencia.
     Search(Query),
+    /// `d*`, `d#`: como `Search`, con la palabra bajo el cursor.
+    SearchWord(WordSearch),
     TextObject(TextObject),
     CurrentLine,
 }
@@ -36,6 +38,11 @@ impl Object {
                 .ok_or(Missed::Stay)?
                 .span_from(selection.head),
             Self::Search(ref query) => query
+                .find(buffer, selection.head, count.unwrap_or(1))
+                .ok_or(Missed::Stay)?
+                .destination()
+                .span_from(selection.head),
+            Self::SearchWord(search) => search
                 .find(buffer, selection.head, count.unwrap_or(1))
                 .ok_or(Missed::Stay)?
                 .destination()
