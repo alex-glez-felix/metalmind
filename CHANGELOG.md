@@ -60,6 +60,19 @@ Los cambios que importan a quien usa nota. El formato sigue
 - La ventana todavía no pinta bien la selección: le falta el último carácter
   y, con `V`, las líneas completas.
 
+#### Buffers y paneles (M2)
+
+- Varios archivos abiertos a la vez. `:e ruta` abre otro en el panel activo
+  (relativo al directorio de trabajo), `:e` sin ruta relee el archivo y `:e!`
+  descarta los cambios.
+- Splits: `ctrl-w v` y `:vs` a la derecha, `ctrl-w s` y `:sp` abajo,
+  `ctrl-w h j k l` y `ctrl-w w` mueven el foco, `ctrl-w q` y `:q` cierran el
+  panel y `ctrl-w o` y `:on` dejan solo el actual. Dos paneles pueden mostrar
+  el mismo archivo con cursores independientes.
+- Como vim sin `hidden`, `:e` y `:q` se niegan si se perderían cambios, salvo
+  que otro panel siga mostrando ese archivo; cerrar la ventana revisa todos
+  los archivos abiertos.
+
 #### Configuración
 
 - `config.yaml` en el directorio de configuración del usuario
@@ -69,7 +82,8 @@ Los cambios que importan a quien usa nota. El formato sigue
   y la columna; una clave desconocida es solo un aviso. Detalle en
   [docs/config.md](docs/config.md).
 - Temas `nota-oscuro` y `nota-claro`, y temas propios en `themes/*.yaml` que
-  pueden extender a otro.
+  pueden extender a otro. `ui.pane_border`, `ui.status_unfocused_foreground`
+  y `cursor.unfocused` pintan los paneles sin foco.
 
 #### Release
 
