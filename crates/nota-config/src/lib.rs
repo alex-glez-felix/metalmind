@@ -16,5 +16,6 @@ pub use diagnostic::{Diagnostic, Loaded, Location, Severity};
 pub use paths::{NoHomeDir, Paths};
 pub use settings::{Editor, Font, FontSize, Search, Settings, TabStop};
 pub use theme::{
-    BUILTIN_THEMES, Color, CursorColors, DEFAULT_THEME, SyntaxColors, Theme, Themes, UiColors,
+    BUILTIN_THEMES, Color, CursorColors, DEFAULT_THEME, LoadError, SyntaxColors, Theme, Themes,
+    UiColors,
 };

@@ -13,7 +13,7 @@ use toml::Spanned;
 
 pub use color::Color;
 pub use groups::{CursorColors, SyntaxColors, UiColors};
-pub use loader::Themes;
+pub use loader::{LoadError, Themes};
 
 use color::Hex;
 use groups::{RawCursor, RawSyntax, RawUi};

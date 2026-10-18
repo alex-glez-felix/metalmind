@@ -5,7 +5,7 @@ use std::io;
 use crate::diagnostic::{Diagnostic, Loaded};
 use crate::paths::Paths;
 use crate::settings::Settings;
-use crate::theme::{DEFAULT_THEME, Theme, Themes};
+use crate::theme::{DEFAULT_THEME, LoadError, Theme, Themes};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
@@ -52,7 +52,8 @@ impl Config {
         }
         let theme = match Themes::new(paths.themes_dir()).load(&settings.theme) {
             Ok(loaded) => loaded,
-            Err(error) => {
+            Err(LoadError { error, warnings }) => {
+                diagnostics.extend(warnings);
                 diagnostics.push(error);
                 builtin_theme()?
             }
@@ -69,5 +70,7 @@ impl Config {
 }
 
 fn builtin_theme() -> Result<Loaded<Theme>, Diagnostic> {
-    Themes::builtin().load(DEFAULT_THEME)
+    Themes::builtin()
+        .load(DEFAULT_THEME)
+        .map_err(|failed| failed.error)
 }

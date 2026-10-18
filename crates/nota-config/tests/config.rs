@@ -77,6 +77,22 @@ fn un_tema_que_no_carga_cae_al_de_por_defecto() {
 }
 
 #[test]
+fn si_el_tema_falla_tambien_se_reportan_sus_avisos() {
+    let (_root, paths) = paths();
+    fs::write(paths.config_file(), "theme = \"mio\"\n").unwrap();
+    fs::write(
+        paths.themes_dir().join("mio.toml"),
+        "[ui]\nselction = \"#000000\"\n",
+    )
+    .unwrap();
+    let loaded = Config::load(&paths).unwrap();
+    assert_eq!(loaded.value.theme.name, DEFAULT_THEME);
+    let severities: Vec<_> = loaded.diagnostics.iter().map(|d| d.severity).collect();
+    assert_eq!(severities, [Severity::Warning, Severity::Error]);
+    assert!(loaded.diagnostics[0].message.contains("ui.selction"));
+}
+
+#[test]
 fn un_config_ilegible_se_reporta() {
     let (_root, paths) = paths();
     fs::create_dir(paths.config_file()).unwrap();
