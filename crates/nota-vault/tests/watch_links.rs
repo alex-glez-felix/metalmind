@@ -10,7 +10,10 @@ use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
-use nota_vault::{LinkIndex, LinkTarget, Vault, VaultPath, VaultUpdate, read, write_atomic};
+use nota_vault::{
+    AccessError, ApplyRenameError, FileOpError, LinkIndex, LinkTarget, Vault, VaultPath,
+    VaultUpdate, write_atomic,
+};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
@@ -88,23 +91,20 @@ fn el_watcher_mantiene_los_links_al_dia() {
 }
 
 #[test]
-fn renombrar_con_el_plan_no_rompe_ningun_link() {
+fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
-    write(&root, "inicio.md", "[[plan]] [x](viejo/plan.md) `[[plan]]`");
+    let inicio = "[[plan]] [x](viejo/plan.md) `[[plan]]`";
+    write(&root, "inicio.md", inicio);
     write(&root, "viejo/plan.md", "[[./hermana]]");
     write(&root, "viejo/hermana.md", "");
     let (vault, updates) = Vault::open(&root).unwrap();
+    let before = LinkIndex::clone(&vault.links());
     let plan = vault
         .links()
         .rename_plan(&path("viejo/plan.md"), &path("nuevo/Plan del año.md"))
         .unwrap();
-    for file in &plan.files {
-        let full = root.join(file.path.as_str());
-        let (text, _) = file.apply(&read(&full).unwrap().unwrap()).unwrap();
-        write_atomic(&full, |out| out.write_all(text.as_bytes())).unwrap();
-    }
-    vault.rename(&plan.from, &plan.to).unwrap();
+    let applied = vault.apply_rename(&plan).unwrap();
     settle(&vault, &updates);
     assert_eq!(
         fs::read_to_string(root.join("inicio.md")).unwrap(),
@@ -119,4 +119,72 @@ fn renombrar_con_el_plan_no_rompe_ningun_link() {
         ["inicio.md:0", "inicio.md:0"]
     );
     assert_eq!(vault.links().unresolved(), []);
+
+    let report = vault.undo_rename(&applied).unwrap();
+    assert_eq!(report.restored, [path("inicio.md"), path("viejo/plan.md")]);
+    assert_eq!(report.changed, []);
+    settle(&vault, &updates);
+    assert_eq!(fs::read_to_string(root.join("inicio.md")).unwrap(), inicio);
+    assert_eq!(
+        fs::read_to_string(root.join("viejo/plan.md")).unwrap(),
+        "[[./hermana]]"
+    );
+    assert_eq!(*vault.links(), before);
+}
+
+#[test]
+fn deshacer_no_pisa_lo_que_cambio_despues() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(&root, "a.md", "[[plan]]");
+    write(&root, "b.md", "[[plan]]");
+    write(&root, "plan.md", "");
+    let (vault, _updates) = Vault::open(&root).unwrap();
+    let plan = vault
+        .links()
+        .rename_plan(&path("plan.md"), &path("meta.md"))
+        .unwrap();
+    let applied = vault.apply_rename(&plan).unwrap();
+    write(&root, "b.md", "[[meta]] y algo más");
+    let report = vault.undo_rename(&applied).unwrap();
+    assert_eq!(report.restored, [path("a.md")]);
+    assert_eq!(report.changed, [path("b.md")]);
+    assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
+    assert_eq!(
+        fs::read_to_string(root.join("b.md")).unwrap(),
+        "[[meta]] y algo más"
+    );
+    assert!(root.join("plan.md").is_file());
+}
+
+#[test]
+fn un_archivo_que_cambio_no_deja_escribir_nada() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(&root, "a.md", "[[plan]]");
+    write(&root, "b.md", "[[plan]]");
+    write(&root, "plan.md", "");
+    let (vault, _updates) = Vault::open(&root).unwrap();
+    let plan = vault
+        .links()
+        .rename_plan(&path("plan.md"), &path("meta.md"))
+        .unwrap();
+    write(&root, "b.md", "otro texto");
+    let error = vault.apply_rename(&plan).unwrap_err();
+    assert!(matches!(error, ApplyRenameError::Stale(_)), "{error}");
+    assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
+    assert!(root.join("plan.md").is_file());
+    assert!(!root.join("meta.md").exists());
+
+    write(&root, "b.md", "[[plan]]");
+    write(&root, "meta.md", "");
+    let error = vault.apply_rename(&plan).unwrap_err();
+    assert!(
+        matches!(
+            error,
+            ApplyRenameError::Access(AccessError::Path(FileOpError::AlreadyExists(_)))
+        ),
+        "{error}"
+    );
+    assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
 }

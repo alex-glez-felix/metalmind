@@ -8,6 +8,7 @@ mod links;
 mod ops;
 mod order;
 mod path;
+mod refactor;
 mod refresh;
 mod scan;
 mod vault;
@@ -21,6 +22,7 @@ pub use links::{
 };
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
+pub use refactor::{AccessError, AppliedRename, ApplyRenameError, Interruption, UndoReport};
 pub use refresh::VaultChange;
 pub use scan::walk_notes;
 pub use vault::{Vault, VaultError, VaultUpdate};
