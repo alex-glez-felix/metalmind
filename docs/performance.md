@@ -52,6 +52,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.35 / 30 ms | ✅ | `nota-vault` `panel_en_focus` |
 | Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.90 / 25 ms | ✅ | `nota-vault` `candidatos_de_autocompletado` |
 | Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.0 ms | ✅ | `nota-vault` `plan_de_renombrar_un_tag_con_pagina` |
+| Publicar los tags en cada lote (clonarlos), 5 k / 50 k | ≤ 16 / 160 ms | 1.7 / 33 ms | ✅ | `nota-vault` `clonar_los_tags` ([#60](https://github.com/alex-glez-felix/nota/issues/60)) |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |

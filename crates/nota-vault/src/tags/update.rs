@@ -31,7 +31,7 @@ impl Tags {
         vault: &VaultIndex,
         read: &impl ReadNote,
     ) -> Vec<TagKey> {
-        let pages_before = self.pages.clone();
+        let mut pages_changed = false;
         let mut touched = BTreeSet::new();
         let mut settle: BTreeMap<VaultPath, Settle> = BTreeMap::new();
         let mark = |settle: &mut BTreeMap<VaultPath, Settle>, path: VaultPath, how: Settle| {
@@ -45,7 +45,7 @@ impl Tags {
                 }
                 VaultChange::Removed { path, kind } => {
                     for note in self.indexed_under(path, *kind) {
-                        touched.extend(self.forget(&note));
+                        touched.extend(self.forget(&note, &mut pages_changed));
                     }
                 }
                 VaultChange::Renamed { from, to, kind } => {
@@ -53,7 +53,7 @@ impl Tags {
                         let Some(new) = old.rebase(from, to) else {
                             continue;
                         };
-                        let how = self.moved(&old, &new, &mut touched);
+                        let how = self.moved(&old, &new, &mut touched, &mut pages_changed);
                         mark(&mut settle, new, how);
                     }
                     for note in notes_under(vault, to) {
@@ -63,9 +63,9 @@ impl Tags {
             }
         }
         for (path, how) in settle {
-            touched.extend(self.settle(&path, how, vault, read));
+            touched.extend(self.settle(&path, how, vault, read, &mut pages_changed));
         }
-        if self.pages != pages_before {
+        if pages_changed {
             let graph = self.rebuild_graph();
             touched.extend(graph_keys(&self.graph));
             touched.extend(graph_keys(&graph));
@@ -89,8 +89,8 @@ impl Tags {
             .collect()
     }
 
-    fn forget(&mut self, path: &VaultPath) -> BTreeSet<TagKey> {
-        self.pages.remove(path);
+    fn forget(&mut self, path: &VaultPath, pages_changed: &mut bool) -> BTreeSet<TagKey> {
+        *pages_changed |= self.pages.remove(path).is_some();
         self.index.remove(path)
     }
 
@@ -101,8 +101,10 @@ impl Tags {
         old: &VaultPath,
         new: &VaultPath,
         touched: &mut BTreeSet<TagKey>,
+        pages_changed: &mut bool,
     ) -> Settle {
         let was_page = self.pages.remove(old).is_some();
+        *pages_changed |= was_page;
         let Some((note, keys)) = self.index.take(old) else {
             return Settle::IfMissing;
         };
@@ -120,15 +122,18 @@ impl Tags {
         how: Settle,
         vault: &VaultIndex,
         read: &impl ReadNote,
+        pages_changed: &mut bool,
     ) -> BTreeSet<TagKey> {
         if vault.kind(path) != Some(EntryKind::Note) {
-            return self.forget(path);
+            return self.forget(path, pages_changed);
         }
         if how == Settle::IfMissing && self.index.note(path).is_some() {
             return BTreeSet::new();
         }
         let (note, page) = scan_one(&self.folder, path, read);
-        self.store(path.clone(), note, page)
+        let (touched, graph_stale) = self.store(path.clone(), note, page);
+        *pages_changed |= graph_stale;
+        touched
     }
 }
 

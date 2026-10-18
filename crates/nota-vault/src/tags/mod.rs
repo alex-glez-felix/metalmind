@@ -211,8 +211,7 @@ impl Tags {
         let mut pages_changed = false;
         for (path, text) in buffers {
             let (note, page) = scan_text(&tags.folder, path, text);
-            pages_changed |= page.is_some() || tags.pages.contains_key(path);
-            tags.store(path.clone(), note, page);
+            pages_changed |= tags.store(path.clone(), note, page).1;
         }
         if pages_changed {
             tags.graph = tags.rebuild_graph();
@@ -226,22 +225,25 @@ impl Tags {
         matches!(self.pages.get(path), Some(PageFile::Page(_)))
     }
 
-    /// Guarda lo escaneado de una nota y si es página de tag.
+    /// Guarda lo escaneado de una nota y si es página de tag. Devuelve las
+    /// claves que tocó y si cambió alguna página, que obliga a rehacer el grafo.
     fn store(
         &mut self,
         path: VaultPath,
         note: IndexedNote,
         page: Option<PageFile>,
-    ) -> BTreeSet<TagKey> {
+    ) -> (BTreeSet<TagKey>, bool) {
+        let page_changed = self.pages.get(&path) != page.as_ref();
         match page {
-            Some(page) => {
+            Some(page) if page_changed => {
                 self.pages.insert(path.clone(), page);
             }
+            Some(_) => {}
             None => {
                 self.pages.remove(&path);
             }
         }
-        self.index.insert(path, note)
+        (self.index.insert(path, note), page_changed)
     }
 
     fn rebuild_graph(&self) -> TagGraph {

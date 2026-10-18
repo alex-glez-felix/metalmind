@@ -167,7 +167,9 @@ impl Vault {
         self.links.load_full()
     }
 
-    /// Los tags de este momento, al día con [`Vault::snapshot`]. No bloquea.
+    /// Los tags de este momento, sin bloquear. Como [`Vault::links`], van al
+    /// día con [`Vault::snapshot`] salvo entre la publicación de uno y otro;
+    /// cada [`VaultUpdate`] trae los tres del mismo lote.
     #[must_use]
     pub fn tags(&self) -> Arc<Tags> {
         self.tags.load_full()
