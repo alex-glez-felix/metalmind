@@ -316,7 +316,7 @@ fn al_abrir_un_contenido_vacio_o_repetido_no_se_toma_por_renombre() {
 }
 
 #[test]
-fn al_abrir_una_nota_movida_encima_de_una_borrada_junta_las_historias() {
+fn al_abrir_una_nota_movida_encima_de_una_borrada_la_deja_aparte() {
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     {
         let (vault, _updates) = open_vault(dir.path(), data.path());
@@ -333,12 +333,22 @@ fn al_abrir_una_nota_movida_encima_de_una_borrada_junta_las_historias() {
 
     let (vault, _updates) = open_vault(dir.path(), data.path());
     let history = vault.history().unwrap();
-    assert_eq!(contents(history, &path("b.md")), ["b vieja", "a"]);
+    assert_eq!(contents(history, &path("b.md")), ["a"]);
     assert_eq!(
         history.versions(&path("a.md")).unwrap(),
         Vec::<Version>::new()
     );
-    assert_eq!(deleted(history), Vec::<VaultPath>::new());
+    let [old] = history.deleted_notes().unwrap().try_into().unwrap();
+    assert_eq!(old.path, path("b.md"));
+    let [version] = history
+        .deleted_versions(old.id)
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert_eq!(
+        history.deleted_content(old.id, version.id).unwrap(),
+        "b vieja"
+    );
 }
 
 #[test]

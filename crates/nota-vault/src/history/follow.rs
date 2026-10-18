@@ -6,8 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
-use super::log::{DAMAGED, NoteLog};
-use super::store::{Index, IndexEntry, Lock};
+use super::store::{Index, IndexEntry};
 use super::{ContentHash, History, HistoryError, to_millis};
 use crate::file;
 use crate::index::EntryKind;
@@ -15,15 +14,20 @@ use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
 impl History {
-    /// `from` pasó a llamarse `to`. Si `from` es una carpeta, se mueve la
-    /// historia de cada nota que tenía dentro. Si `to` ya tenía historia (una
-    /// nota borrada ahí, o pisada desde fuera), las dos se juntan por fecha y
-    /// se renumeran.
+    /// `from` pasó a llamarse `to` en `at`. Si `from` es una carpeta, se
+    /// mueve la historia de cada nota que tenía dentro. Si `to` ya tenía
+    /// historia (una nota borrada ahí, o pisada desde fuera), esa queda
+    /// aparte como nota borrada: no se mezclan dos notas.
     ///
     /// # Errors
     /// Si no se puede leer o escribir el historial.
-    pub fn rename(&self, from: &VaultPath, to: &VaultPath) -> Result<(), HistoryError> {
-        self.edit_index(|lock, index, orphans| self.rename_in(lock, index, from, to, orphans))
+    pub fn rename(
+        &self,
+        from: &VaultPath,
+        to: &VaultPath,
+        at: SystemTime,
+    ) -> Result<(), HistoryError> {
+        self.edit_index(|index| Ok(rename_in(index, from, to, at)))
     }
 
     /// `path` se borró en `at`. Su historia se guarda lo que diga la
@@ -32,7 +36,7 @@ impl History {
     /// # Errors
     /// Si no se puede leer o escribir el historial.
     pub fn mark_deleted(&self, path: &VaultPath, at: SystemTime) -> Result<(), HistoryError> {
-        self.edit_index(|_, index, _| Ok(mark_deleted_in(index, path, at)))
+        self.edit_index(|index| Ok(mark_deleted_in(index, path, at)))
     }
 
     /// Los renombres y borrados de un lote del watcher, en orden, con una
@@ -70,7 +74,7 @@ impl History {
                 _ => None,
             })
             .collect();
-        self.edit_index(|lock, index, orphans| {
+        self.edit_index(|index| {
             let removed: Vec<VaultPath> = changes
                 .iter()
                 .filter_map(|change| match change {
@@ -87,14 +91,12 @@ impl History {
             let mut edited = false;
             for change in changes {
                 edited |= match change {
-                    VaultChange::Renamed { from, to, .. } => {
-                        self.rename_in(lock, index, from, to, orphans)?
-                    }
+                    VaultChange::Renamed { from, to, .. } => rename_in(index, from, to, now),
                     VaultChange::Removed {
                         path,
                         kind: EntryKind::Note,
                     } => match moved.remove(path) {
-                        Some(to) => self.rename_in(lock, index, path, to, orphans)?,
+                        Some(to) => rename_in(index, path, to, now),
                         None => mark_deleted_in(index, path, now),
                     },
                     _ => false,
@@ -106,8 +108,8 @@ impl History {
 
     /// Alinea el historial con el vault recién abierto. Una historia viva
     /// cuya nota ya no está pasa a la nota con el mismo contenido que su
-    /// última versión (se renombró con nota cerrada), y se junta con la que
-    /// hubiera ahí de una nota borrada; si no hay ninguna, la nota se borró.
+    /// última versión (se renombró con nota cerrada), y la que hubiera ahí de
+    /// una nota borrada queda aparte; si no hay ninguna, la nota se borró.
     /// Una borrada cuya ruta volvió, revive.
     pub(crate) fn reconcile(
         &self,
@@ -120,7 +122,7 @@ impl History {
         if self.store.read_index()?.notes.is_empty() {
             return Ok(());
         }
-        self.edit_index(|lock, index, orphans| {
+        self.edit_index(|index| {
             let before = index.clone();
             let lost: Vec<VaultPath> = index
                 .notes
@@ -132,7 +134,7 @@ impl History {
             for path in lost {
                 match adopted.remove(&path) {
                     Some(new) => {
-                        self.rename_in(lock, index, &path, new, orphans)?;
+                        rename_in(index, &path, new, now);
                     }
                     None => {
                         mark_deleted_in(index, &path, now);
@@ -151,64 +153,16 @@ impl History {
     }
 
     /// Toma el lock, lee el índice, le aplica `edit` y lo escribe si cambió.
-    /// Los logs que `edit` deja sin usar se borran solo después de escribir
-    /// el índice, para que el de disco nunca nombre un log que ya no está; si
-    /// algo falla antes, quedan para la poda.
     fn edit_index(
         &self,
-        edit: impl FnOnce(&Lock, &mut Index, &mut Vec<u64>) -> Result<bool, HistoryError>,
+        edit: impl FnOnce(&mut Index) -> Result<bool, HistoryError>,
     ) -> Result<(), HistoryError> {
         let lock = self.store.lock()?;
         let mut index = self.store.read_index()?;
-        let mut orphans = Vec::new();
-        if edit(&lock, &mut index, &mut orphans)? {
+        if edit(&mut index)? {
             self.store.write_index(&lock, &index)?;
-            for id in orphans {
-                self.store.remove_log(&lock, id)?;
-            }
         }
         Ok(())
-    }
-
-    fn rename_in(
-        &self,
-        lock: &Lock,
-        index: &mut Index,
-        from: &VaultPath,
-        to: &VaultPath,
-        orphans: &mut Vec<u64>,
-    ) -> Result<bool, HistoryError> {
-        let moved: Vec<(VaultPath, VaultPath)> = index_under(index, from)
-            .filter_map(|path| Some((path.clone(), path.rebase(from, to)?)))
-            .collect();
-        for (old, new) in &moved {
-            let Some(mut entry) = index.notes.remove(old) else {
-                continue;
-            };
-            if let Some(&existing) = index.notes.get(new) {
-                match self.merge(lock, entry, existing) {
-                    Ok(()) => orphans.push(existing.id),
-                    // Sin juntar: queda la historia sana y la dañada se aparta.
-                    Err(HistoryError::Corrupt { path, reason }) => {
-                        log::warn!("historial dañado en {}: {reason}", path.display());
-                        let damaged = if self.store.is_log(&path, entry.id) {
-                            std::mem::replace(&mut entry, existing)
-                        } else {
-                            existing
-                        };
-                        self.store.set_aside(lock, damaged.id)?;
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
-            // La nota misma se movió, así que está viva en `to`. Las borradas
-            // dentro de una carpeta movida siguen borradas.
-            if old == from {
-                entry.deleted = None;
-            }
-            index.notes.insert(new.clone(), entry);
-        }
-        Ok(!moved.is_empty())
     }
 
     /// Para cada historia de `lost`, la nota cuyo contenido es igual a su
@@ -282,58 +236,6 @@ impl History {
             })
             .collect())
     }
-
-    /// Junta la historia de `source` con la de `target`, por fecha, en el
-    /// log de `source`. Las versiones se renumeran; el log de `target` queda
-    /// sin usar y lo borra quien escriba el índice.
-    fn merge(
-        &self,
-        lock: &Lock,
-        source: IndexEntry,
-        target: IndexEntry,
-    ) -> Result<(), HistoryError> {
-        let logs = [
-            self.store.read_log(target.id)?,
-            self.store.read_log(source.id)?,
-        ];
-        let ids = [target.id, source.id];
-        let records = logs
-            .each_ref()
-            .map(|log| log.entries().iter().map(|e| e.record).collect::<Vec<_>>());
-        let mut contents = Vec::with_capacity(2);
-        for (log, (records, id)) in logs.iter().zip(records.iter().zip(ids)) {
-            contents.push(
-                log.contents(records)
-                    .map_err(|corrupt| self.store.corrupt_log(id, corrupt))?,
-            );
-        }
-        let mut saved = logs
-            .each_ref()
-            .map(|log| log.entries().iter().map(|e| e.at).peekable());
-        let mut fresh = NoteLog::default();
-        let mut bytes = Vec::new();
-        let mut previous: Option<String> = None;
-        for seq in 0.. {
-            // Por fecha; en un empate, primero la de `target`, que estaba antes.
-            let older = saved[0].peek().copied();
-            let newer = saved[1].peek().copied();
-            let side = match (older, newer) {
-                (None, None) => break,
-                (Some(older), Some(newer)) if older > newer => 1,
-                (Some(_), _) => 0,
-                (None, Some(_)) => 1,
-            };
-            let at = saved[side].next().ok_or(DAMAGED);
-            let text = at.and_then(|at| Ok((at, contents[side].next_text()?.ok_or(DAMAGED)?)));
-            let (at, text) = text.map_err(|corrupt| self.store.corrupt_log(ids[side], corrupt))?;
-            let frames = fresh
-                .push_version(seq, at, &text, previous.as_deref())
-                .map_err(|corrupt| self.store.corrupt_log(source.id, corrupt))?;
-            bytes.extend(frames);
-            previous = Some(text);
-        }
-        self.store.replace_log(lock, source.id, &bytes)
-    }
 }
 
 /// Lo que el índice tiene en `path` o dentro de ella.
@@ -345,6 +247,36 @@ fn index_under<'a>(index: &'a Index, path: &'a VaultPath) -> impl Iterator<Item 
         .map(|(candidate, _)| candidate)
         .take_while(move |candidate| candidate.as_str().starts_with(path.as_str()))
         .filter(move |candidate| candidate.starts_with(path))
+}
+
+/// Mueve a `to` la historia de `from` y de lo que tenga dentro. La que ya
+/// hubiera en el destino queda aparte, borrada cuando se borró o en `at`.
+fn rename_in(index: &mut Index, from: &VaultPath, to: &VaultPath, at: SystemTime) -> bool {
+    let moved: Vec<(VaultPath, VaultPath)> = index_under(index, from)
+        .filter_map(|path| Some((path.clone(), path.rebase(from, to)?)))
+        .collect();
+    for (old, new) in &moved {
+        let Some(mut entry) = index.notes.remove(old) else {
+            continue;
+        };
+        if let Some(existing) = index.notes.remove(new) {
+            let deleted = existing.deleted.unwrap_or_else(|| to_millis(at));
+            index.set_aside.push((
+                new.clone(),
+                IndexEntry {
+                    deleted: Some(deleted),
+                    ..existing
+                },
+            ));
+        }
+        // La nota misma se movió, así que está viva en `to`. Las borradas
+        // dentro de una carpeta movida siguen borradas.
+        if old == from {
+            entry.deleted = None;
+        }
+        index.notes.insert(new.clone(), entry);
+    }
+    !moved.is_empty()
 }
 
 fn mark_deleted_in(index: &mut Index, path: &VaultPath, at: SystemTime) -> bool {

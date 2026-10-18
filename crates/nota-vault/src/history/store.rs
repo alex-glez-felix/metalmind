@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use rustix::fs::{FlockOperation, flock};
 
@@ -19,6 +19,8 @@ use crate::path::VaultPath;
 
 const INDEX_MAGIC: &[u8; 8] = b"notaidx1";
 const NO_DELETION: i64 = i64::MIN;
+const NOTE: u8 = 0;
+const SET_ASIDE: u8 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct IndexEntry {
@@ -30,6 +32,9 @@ pub(super) struct IndexEntry {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Index {
     pub notes: BTreeMap<VaultPath, IndexEntry>,
+    /// Historias de notas borradas cuya ruta ya tiene otra historia: un
+    /// renombre llegó encima. Siempre con fecha de borrado.
+    pub set_aside: Vec<(VaultPath, IndexEntry)>,
     pub next_id: u64,
 }
 
@@ -180,11 +185,6 @@ impl Store {
         }
     }
 
-    /// Si `path` es el log `id`, como el de un [`HistoryError::Corrupt`].
-    pub(super) fn is_log(&self, path: &Path, id: u64) -> bool {
-        path == self.log_path(id)
-    }
-
     pub(super) fn remove_log(&self, _lock: &Lock, id: u64) -> Result<(), HistoryError> {
         let path = self.log_path(id);
         match fs::remove_file(&path) {
@@ -228,12 +228,19 @@ impl Store {
     }
 }
 
-/// `[magic][próximo id]` y por nota `[id][borrada][ruta]`, con un checksum
-/// al final: el índice se reemplaza entero, así que no hay colas cortadas.
+/// `[magic][próximo id]` y por historia `[tipo][id][borrada][ruta]`, con un
+/// checksum al final: el índice se reemplaza entero, así que no hay colas
+/// cortadas.
 fn encode_index(index: &Index) -> Vec<u8> {
     let mut out = INDEX_MAGIC.to_vec();
     put_var(&mut out, index.next_id);
-    for (path, entry) in &index.notes {
+    let notes = index.notes.iter().map(|(path, entry)| (NOTE, path, entry));
+    let set_aside = index
+        .set_aside
+        .iter()
+        .map(|(path, entry)| (SET_ASIDE, path, entry));
+    for (kind, path, entry) in notes.chain(set_aside) {
+        out.push(kind);
         put_var(&mut out, entry.id);
         out.extend_from_slice(&entry.deleted.unwrap_or(NO_DELETION).to_le_bytes());
         put_bytes(&mut out, path.as_str().as_bytes());
@@ -250,15 +257,23 @@ fn decode_index(bytes: &[u8]) -> Option<Index> {
     }
     let mut reader = Reader::new(body.strip_prefix(INDEX_MAGIC)?);
     let mut index = Index {
-        notes: BTreeMap::new(),
         next_id: reader.var()?,
+        ..Index::default()
     };
     while !reader.is_empty() {
+        let kind = reader.u8()?;
         let id = reader.var()?;
         let deleted = i64::from_le_bytes(reader.array()?);
         let path = VaultPath::new(std::str::from_utf8(reader.bytes()?).ok()?).ok()?;
         let deleted = (deleted != NO_DELETION).then_some(deleted);
-        index.notes.insert(path, IndexEntry { id, deleted });
+        let entry = IndexEntry { id, deleted };
+        match kind {
+            NOTE => {
+                index.notes.insert(path, entry);
+            }
+            SET_ASIDE if deleted.is_some() => index.set_aside.push((path, entry)),
+            _ => return None,
+        }
     }
     Some(index)
 }
@@ -281,6 +296,15 @@ mod tests {
                 ..borrada
             },
         );
+        let vieja = index.allocate(VaultPath::new("c.md").unwrap());
+        index.notes.remove(&VaultPath::new("c.md").unwrap());
+        index.set_aside.push((
+            VaultPath::new("c.md").unwrap(),
+            IndexEntry {
+                deleted: Some(7),
+                ..vieja
+            },
+        ));
         let bytes = encode_index(&index);
         assert_eq!(decode_index(&bytes), Some(index));
     }

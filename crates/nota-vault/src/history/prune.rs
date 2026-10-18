@@ -4,8 +4,10 @@
 use std::collections::HashSet;
 use std::time::SystemTime;
 
+use jiff::tz::TimeZone;
+
 use super::log::{DAMAGED, NoteLog};
-use super::store::Lock;
+use super::store::{IndexEntry, Lock};
 use super::{History, HistoryError, millis, retention, to_millis};
 
 /// Lo que se llevó una poda.
@@ -33,7 +35,11 @@ impl History {
             return Ok(pruned);
         }
         let index = self.store.read_index()?;
-        for entry in index.notes.values().filter(|entry| !expired(entry.deleted)) {
+        let entries = index
+            .notes
+            .values()
+            .chain(index.set_aside.iter().map(|(_, entry)| entry));
+        for entry in entries.filter(|entry| !expired(entry.deleted)) {
             let lock = self.store.lock()?;
             match self.prune_log(&lock, entry.id, now) {
                 Ok(versions) => pruned.versions += versions,
@@ -45,22 +51,29 @@ impl History {
 
         let lock = self.store.lock()?;
         let mut index = self.store.read_index()?;
-        let before = index.notes.len();
+        let before = index.notes.len() + index.set_aside.len();
         let mut forgotten = Vec::new();
-        index.notes.retain(|_, entry| {
+        let mut keep = |entry: &IndexEntry| {
             let keep = !expired(entry.deleted);
             if !keep {
                 forgotten.push(entry.id);
             }
             keep
-        });
-        pruned.notes = before - index.notes.len();
+        };
+        index.notes.retain(|_, entry| keep(entry));
+        index.set_aside.retain(|(_, entry)| keep(entry));
+        pruned.notes = before - index.notes.len() - index.set_aside.len();
         if pruned.notes > 0 {
             self.store.write_index(&lock, &index)?;
         }
         // Los logs que no están en el índice: los de recién olvidadas, y los
         // de un primer guardado que se cortó antes de escribir el índice.
-        let known: HashSet<u64> = index.notes.values().map(|entry| entry.id).collect();
+        let known: HashSet<u64> = index
+            .notes
+            .values()
+            .chain(index.set_aside.iter().map(|(_, entry)| entry))
+            .map(|entry| entry.id)
+            .collect();
         for id in self.store.log_ids()?.into_iter().chain(forgotten) {
             if !known.contains(&id) {
                 self.store.remove_log(&lock, id)?;
@@ -72,7 +85,7 @@ impl History {
     fn prune_log(&self, lock: &Lock, id: u64, now: i64) -> Result<usize, HistoryError> {
         let log = self.store.read_log(id)?;
         let saved_at: Vec<i64> = log.entries().iter().map(|entry| entry.at).collect();
-        let kept = retention::keep(&saved_at, now, &self.retention);
+        let kept = retention::keep(&saved_at, now, &self.retention, &TimeZone::system());
         let survivors: Vec<_> = log
             .entries()
             .iter()

@@ -174,7 +174,7 @@ impl NoteLog {
     }
 
     /// Agrega una versión con número `seq` aunque sea igual a la anterior;
-    /// es lo que se usa para rehacer un historial al podar o juntar dos.
+    /// es lo que se usa para rehacer un historial al podar.
     /// `previous` es el texto de la última versión agregada, para no
     /// reconstruirlo desde su snapshot en cada una.
     pub(super) fn push_version(
