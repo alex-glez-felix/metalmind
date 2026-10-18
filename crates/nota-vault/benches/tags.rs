@@ -81,3 +81,12 @@ fn plan_de_renombrar_un_tag_con_pagina(bencher: Bencher, notes: usize) {
             .edit_count()
     });
 }
+
+/// Lo que paga el watcher por lote para publicar los tags, como el índice de
+/// links (`clonar_el_indice`).
+#[divan::bench(args = SIZES)]
+fn clonar_los_tags(bencher: Bencher, notes: usize) {
+    let (_dir, vault) = vault(notes);
+    let tags = vault.tags();
+    bencher.bench(|| Tags::clone(&tags));
+}

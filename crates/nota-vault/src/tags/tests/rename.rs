@@ -358,3 +358,39 @@ fn an_alias_cannot_join_a_conflict_between_other_pages() {
         by: key("a")
     }));
 }
+
+#[test]
+fn merging_an_alias_merges_its_tag() {
+    let fixture = Fixture::new(&[
+        ("tags/rust.md", "---\naliases: [rs]\n---\n"),
+        ("tags/oxido.md", ""),
+        ("n.md", "#rs y #rust"),
+    ]);
+    let plan = fixture.tags().plan_merge("#rs", "#oxido").unwrap();
+    assert!(plan.notices.contains(&PlanNotice::BothHavePages {
+        from: path("tags/rust.md"),
+        into: path("tags/oxido.md"),
+    }));
+    assert_eq!(changed(&fixture, &plan), owned(&[("n.md", "#rs y #oxido")]));
+}
+
+#[test]
+fn a_renamed_page_gets_an_nfc_name_and_a_portability_notice() {
+    let fixture = Fixture::new(&[("tags/a.md", ""), ("n.md", "#a")]);
+    let tags = fixture.tags();
+    let plan = tags.plan_rename("#a", "#cancio\u{301}n").unwrap();
+    assert_eq!(
+        plan.changes.renames,
+        [Rename {
+            from: path("tags/a.md"),
+            to: path("tags/canci\u{F3}n.md"),
+        }]
+    );
+    let plan = tags.plan_rename("#a", "#CON").unwrap();
+    assert_eq!(
+        plan.notices,
+        [PlanNotice::NotPortable {
+            path: path("tags/CON.md")
+        }]
+    );
+}

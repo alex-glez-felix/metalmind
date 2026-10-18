@@ -97,18 +97,19 @@ impl Tags {
             .display_name(key)
             .or_else(|| tag_name(tag))
             .unwrap_or(key.as_str());
+        self.page_file(name)
+            .ok_or_else(|| PlanError::InvalidName(name.to_owned()))
+    }
+
+    /// `tags/<name>.md`, con el nombre en NFC (05 §1).
+    pub(crate) fn page_file(&self, name: &str) -> Option<VaultPath> {
         let name: String = name.nfc().collect();
-        self.folder
-            .join(&format!("{name}.md"))
-            .map_err(|_| PlanError::InvalidName(name))
+        self.folder.join(&format!("{name}.md")).ok()
     }
 
     fn create_page(&self, key: &TagKey, tag: &str, text: String) -> Result<TagPlan, PlanError> {
         let path = self.new_page_path(key, tag)?;
-        let mut notices = Vec::new();
-        if RESERVED_ON_WINDOWS.contains(&key.as_str()) {
-            notices.push(PlanNotice::NotPortable { path: path.clone() });
-        }
+        let notices = not_portable(key, &path).into_iter().collect();
         Ok(TagPlan {
             changes: Changes {
                 creates: vec![NewFile { path, text }],
@@ -152,6 +153,13 @@ impl Tags {
             .filter_map(|alias| self.alias_notice(&alias, key))
             .collect()
     }
+}
+
+/// El aviso para una página cuyo nombre Windows reserva (`con`, `nul`…).
+pub(crate) fn not_portable(key: &TagKey, path: &VaultPath) -> Option<PlanNotice> {
+    RESERVED_ON_WINDOWS
+        .contains(&key.as_str())
+        .then(|| PlanNotice::NotPortable { path: path.clone() })
 }
 
 impl PageField {

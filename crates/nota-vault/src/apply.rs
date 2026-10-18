@@ -17,7 +17,15 @@ use crate::path::VaultPath;
 pub struct Applied {
     files: Vec<Rewritten>,
     created: Vec<Created>,
-    renamed: Vec<Rename>,
+    renamed: Vec<Renamed>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Renamed {
+    rename: Rename,
+    /// El texto con que se movió, si es un archivo: deshacer no lo devuelve
+    /// a su lugar si cambió después. Una carpeta se mueve de vuelta entera.
+    text: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,14 +53,13 @@ impl Applied {
         self.created.iter().map(|created| &created.file.path)
     }
 
-    #[must_use]
-    pub fn renamed(&self) -> &[Rename] {
-        &self.renamed
+    pub fn renamed(&self) -> impl Iterator<Item = &Rename> {
+        self.renamed.iter().map(|renamed| &renamed.rename)
     }
 
     /// Dónde está ahora lo que estaba en `path` antes de aplicar.
     fn now(&self, path: &VaultPath) -> VaultPath {
-        self.renamed.iter().fold(path.clone(), |path, rename| {
+        self.renamed().fold(path.clone(), |path, rename| {
             path.rebase(&rename.from, &rename.to).unwrap_or(path)
         })
     }
@@ -160,12 +167,29 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
         }
     }
     for rename in &changes.renames {
+        let text = moved_text(root, &applied, &rename.from);
         if let Err(error) = ops::rename(root, &rename.from, &rename.to) {
             return interrupted(applied, Interruption::Rename(error));
         }
-        applied.renamed.push(rename.clone());
+        applied.renamed.push(Renamed {
+            rename: rename.clone(),
+            text,
+        });
     }
     Ok(applied)
+}
+
+/// El texto de `path` si es un archivo, tal como lo deja lo ya aplicado.
+fn moved_text(root: &Path, applied: &Applied, path: &VaultPath) -> Option<String> {
+    let current = applied.now(path);
+    let rewritten = applied
+        .files
+        .iter()
+        .find(|file| applied.now(&file.path) == current);
+    match rewritten {
+        Some(file) => Some(file.after.clone()),
+        None => read(root, &current).ok(),
+    }
 }
 
 /// Sin locks de archivo (06 §2), comprobar justo antes de escribir es lo que
@@ -229,10 +253,26 @@ fn interrupted(applied: Applied, cause: Interruption) -> Result<Applied, ApplyEr
 /// rename en el mismo lote del watcher le hace perder el origen a
 /// `notify-debouncer-full` 0.7 (#54).
 pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpError> {
-    for rename in &applied.renamed {
+    for rename in applied.renamed() {
         ops::check_free(root, &rename.from)?;
     }
     let mut report = UndoReport::default();
+    // Antes de devolver los textos: un archivo movido que cambió se queda donde está.
+    let moved_back: Vec<&Rename> = applied
+        .renamed
+        .iter()
+        .filter(|renamed| {
+            let unchanged = renamed
+                .text
+                .as_ref()
+                .is_none_or(|text| read(root, &renamed.rename.to).is_ok_and(|now| &now == text));
+            if !unchanged {
+                report.changed.push(renamed.rename.from.clone());
+            }
+            unchanged
+        })
+        .map(|renamed| &renamed.rename)
+        .collect();
     for file in &applied.files {
         let path = file.path.clone();
         match read(root, &applied.now(&file.path)) {
@@ -242,7 +282,11 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
                     Err(error) => report.failed.push((path, error.into())),
                 }
             }
-            Ok(_) | Err(AccessError::Path(FileOpError::NotFound(_))) => report.changed.push(path),
+            Ok(_) | Err(AccessError::Path(FileOpError::NotFound(_))) => {
+                if !report.changed.contains(&path) {
+                    report.changed.push(path);
+                }
+            }
             Err(error) => report.failed.push((path, error)),
         }
     }
@@ -261,7 +305,7 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
             Err(error) => report.failed.push((path, error)),
         }
     }
-    for rename in applied.renamed.iter().rev() {
+    for rename in moved_back.into_iter().rev() {
         if let Err(error) = ops::rename(root, &rename.to, &rename.from) {
             report.renames.push(error);
         }

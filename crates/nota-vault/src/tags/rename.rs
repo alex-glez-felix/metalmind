@@ -6,6 +6,7 @@ use crate::edit::TextEdit;
 use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
+use crate::tags::metadata::not_portable;
 use crate::tags::note::{TagOccurrence, TagSource};
 use crate::tags::refactor::{Edits, PlanError, PlanNotice, TagPlan};
 
@@ -34,12 +35,14 @@ impl Tags {
     }
 
     /// Fusionar `from` en `into` (`:tagmerge`): las ocurrencias de `from`
-    /// pasan a la forma establecida de `into`.
+    /// pasan a la forma establecida de `into`. Un alias vale por su tag, como
+    /// en una consulta: fusionar `#rs` fusiona `#rust`.
     ///
     /// # Errors
     /// Si algún nombre no es válido o alguno de los dos no existe.
     pub fn plan_merge(&self, from: &str, into: &str) -> Result<TagPlan, PlanError> {
         let from = self.known(from)?;
+        let from = self.graph.resolve(&from).clone();
         let into = self.known(into)?;
         let into = self.graph.resolve(&into);
         let name = self.display_name(into).unwrap_or(into.as_str());
@@ -91,10 +94,12 @@ impl Tags {
                     into: other.path.clone(),
                 });
             }
-            (Some(page), _) => plan
-                .changes
-                .renames
-                .extend(self.page_rename(&page.path, to)),
+            (Some(page), _) => {
+                if let Some(rename) = self.page_rename(&page.path, to) {
+                    plan.notices.extend(not_portable(&rewrite.key, &rename.to));
+                    plan.changes.renames.push(rename);
+                }
+            }
             (None, _) => {}
         }
         let mut edits = Edits::default();
@@ -147,7 +152,7 @@ impl Tags {
     }
 
     fn page_rename(&self, from: &VaultPath, name: &str) -> Option<Rename> {
-        let to = self.folder.join(&format!("{name}.md")).ok()?;
+        let to = self.page_file(name)?;
         (&to != from).then(|| Rename {
             from: from.clone(),
             to,

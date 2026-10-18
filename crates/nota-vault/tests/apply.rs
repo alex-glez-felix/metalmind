@@ -186,3 +186,26 @@ fn undo_leaves_what_changed_after_applying() {
         RENAME[0].1
     );
 }
+
+#[test]
+fn undo_leaves_a_moved_page_that_changed_where_it_is() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), RENAME);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let applied = vault.apply(&plan.changes).unwrap();
+    let edited = "---\ncolor: verde\n---\nOtra descripción.\n";
+    fs::write(dir.path().join("tags/b.md"), edited).unwrap();
+
+    let report = vault.undo(&applied).unwrap();
+    assert_eq!(report.changed, [path("tags/a.md")]);
+    assert_eq!(
+        fs::read_to_string(dir.path().join("tags/b.md")).unwrap(),
+        edited
+    );
+    assert!(!dir.path().join("tags/a.md").exists());
+    assert_eq!(
+        fs::read_to_string(dir.path().join("nota.md")).unwrap(),
+        RENAME[3].1
+    );
+}
