@@ -138,6 +138,7 @@ impl Smoke {
             .env("DISPLAY", self.xvfb.name())
             .env_remove("WAYLAND_DISPLAY")
             .env_remove("WAYLAND_SOCKET")
+            .env_remove("NOTA_VAULT")
             .env("HOME", &home)
             .env("XDG_CONFIG_HOME", home.join(".config"))
             .env("XDG_DATA_HOME", home.join(".local/share"))

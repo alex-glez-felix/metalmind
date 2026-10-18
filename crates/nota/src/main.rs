@@ -52,7 +52,8 @@ fn prepare(cli: &cli::Cli) -> Result<(Startup, Config), StartError> {
     let config = load_config(paths.as_ref()).map_err(StartError::Config)?;
     let remembered = paths.as_ref().and_then(nota_ui::last_vault);
     let configured = dirs::home_dir().and_then(|home| config.settings.vault(&home));
-    let target = target::resolve(cli.path.as_deref(), remembered, configured)?;
+    let variable = target::from_variable(std::env::var_os(target::VAULT_VARIABLE));
+    let target = target::resolve(cli.path.as_deref(), variable, remembered, configured)?;
     let (vault, updates) = Vault::open(&target.vault)?;
     let file = target
         .file
