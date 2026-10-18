@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 /// Cuánto más grande es la entrada grande.
 pub const FACTOR: usize = 16;
 
-/// Lineal da ×16 y un `N log N`, con la caché en contra, hasta ×25; `N^1.5`
-/// da ×64 y cuadrático ×256. El umbral queda a la misma distancia de ×25 y de ×64.
+/// Lineal da ×16 y un `N log N`, con la caché en contra, hasta ×22; `N^1.5`
+/// da ×64 y cuadrático ×256. El umbral deja casi el doble de margen a cada lado.
 pub const MAX_LINEAR_GROWTH: f64 = 40.0;
 
 /// `16^0.5`, para lo que no debería depender del tamaño del texto, como una

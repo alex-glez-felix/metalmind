@@ -11,7 +11,7 @@
 use std::hint::black_box;
 
 use gungraun::prelude::*;
-use nota_buffer::{Buffer, ByteOffset, Edit, Selection, Selections};
+use nota_buffer::{Buffer, Edit, Selection, Selections};
 use nota_perf::{MISSING_WORD, Session, WORD};
 use nota_search::PathMatcher;
 use nota_syntax::Scan;
@@ -51,7 +51,7 @@ fn edited_buffer(lines: usize) -> Buffer {
     let at = buffer.line_start(lines / 2);
     buffer.begin_transaction(cursor(&buffer, 0)).unwrap();
     buffer
-        .apply(vec![Edit::delete(at..ByteOffset::new(at.get() + 1))])
+        .apply(vec![Edit::delete(at..buffer.next_boundary(at))])
         .unwrap();
     buffer.commit_transaction(cursor(&buffer, 0)).unwrap();
     buffer
