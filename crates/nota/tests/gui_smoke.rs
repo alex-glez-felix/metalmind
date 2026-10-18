@@ -23,7 +23,7 @@ use support::Smoke;
     "uno\ndos PALABRA tres\n"
 )]
 #[case::sustitucion("casa\nmala\n", ":%s/a/b/g<CR>:wq<CR>", "cbsb\nmblb\n")]
-#[case::registro_con_nombre("uno\ndos\ntres\n", "\"ayyjdd\"ap:wq<CR>", "uno\ntres\nuno\n")]
+#[case::registro_con_nombre("uno\ndos\n", "\"ayyjdd\"ap:wq<CR>", "uno\nuno\n")]
 #[case::macro_("a\nb\nc\n", "qaA!<Esc>jq@a:wq<CR>", "a!\nb!\nc\n")]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn edita_y_guarda(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
@@ -43,8 +43,7 @@ fn wq_crea_un_archivo_nuevo() {
     let mut nota = smoke.launch(&["nueva.md"]);
     nota.window().type_keys("ihola<Esc>:wq<CR>");
     assert!(nota.wait_exit().success());
-    // Sin `fixeol`: vim escribiría "hola\n" (docs/testing.md).
-    assert_eq!(smoke.read("nueva.md"), "hola");
+    assert_eq!(smoke.read("nueva.md"), "hola\n");
     assert_eq!(smoke.files(), ["nueva.md"]);
 }
 

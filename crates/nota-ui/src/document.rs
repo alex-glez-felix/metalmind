@@ -9,7 +9,11 @@ use nota_buffer::{Buffer, BufferError, HistorySeq};
 use nota_vault::FileError;
 use nota_vim::Marks;
 
-/// Tamaño de lo leído o escrito, para avisarlo como vim (`"a.md" 3L, 20B`).
+/// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
+/// la última no lo lleva. Un buffer vacío se guarda como un archivo vacío.
+const EOL: &str = "\n";
+
+/// Tamaño del archivo tal como se guarda, para avisarlo como vim (`"a.md" 3L, 20B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileStats {
     pub lines: usize,
@@ -18,9 +22,12 @@ pub struct FileStats {
 
 impl FileStats {
     fn of(buffer: &Buffer) -> Self {
+        if buffer.is_empty() {
+            return Self { lines: 0, bytes: 0 };
+        }
         Self {
             lines: buffer.line_count(),
-            bytes: buffer.len().get(),
+            bytes: buffer.len().get() + EOL.len(),
         }
     }
 }
@@ -45,14 +52,16 @@ pub struct Document {
 }
 
 impl Document {
-    /// Abre `path`; si no existe, empieza vacío y se crea al guardar.
+    /// Abre `path`; si no existe, empieza vacío y se crea al guardar. El `\n`
+    /// final del archivo no entra al buffer: lo vuelve a poner `save`.
     ///
     /// # Errors
     /// Si existe pero no se puede leer como texto.
     pub fn open(path: &Path) -> Result<Self, FileError> {
         let text = nota_vault::read(path)?;
         let exists_on_disk = text.is_some();
-        let mut document = Self::new(path, &text.unwrap_or_default());
+        let text = text.unwrap_or_default();
+        let mut document = Self::new(path, text.strip_suffix(EOL).unwrap_or(&text));
         document.exists_on_disk = exists_on_disk;
         Ok(document)
     }
@@ -100,10 +109,13 @@ impl Document {
         self.buffer.has_uncommitted_edits() || self.saved != Some(self.buffer.history_seq())
     }
 
+    /// Escribe el buffer con un `\n` al final, aunque el archivo no lo tuviera.
+    ///
     /// # Errors
     /// Si no se pudo escribir; el archivo en disco queda como estaba.
     pub fn save(&mut self) -> Result<FileStats, FileError> {
-        nota_vault::write_atomic(&self.path, |out| write!(out, "{}", self.buffer))?;
+        let eol = if self.buffer.is_empty() { "" } else { EOL };
+        nota_vault::write_atomic(&self.path, |out| write!(out, "{}{eol}", self.buffer))?;
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
         Ok(self.stats())

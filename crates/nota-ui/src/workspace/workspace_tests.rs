@@ -129,7 +129,7 @@ fn dos_puntos_w_pide_guardar() {
         Some(KeyOutcome::Command(Command::Save.into()))
     );
     assert_eq!(session.mode(), Mode::Normal);
-    assert_eq!(fs::read_to_string(&path).unwrap(), "ab");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "ab\n");
     assert_eq!(
         session.keys(":wq⏎"),
         Some(KeyOutcome::Command(Command::SaveAndQuit.into()))
@@ -152,7 +152,7 @@ fn editar_marca_modificado_y_guardar_lo_limpia() {
     assert_eq!(fs::read_to_string(&path).unwrap(), "uno\n");
     let stats = session.save().unwrap();
     assert!(!session.is_modified());
-    assert_eq!(stats, FileStats { lines: 2, bytes: 8 });
+    assert_eq!(stats, FileStats { lines: 1, bytes: 8 });
     assert_eq!(fs::read_to_string(&path).unwrap(), "unodós\n");
 }
 
@@ -164,7 +164,18 @@ fn guardar_crea_el_archivo_nuevo() {
     session.keys("ihola⎋");
     session.save().unwrap();
     assert!(session.exists_on_disk());
-    assert_eq!(fs::read_to_string(&path).unwrap(), "hola");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "hola\n");
+}
+
+#[test]
+fn pegar_al_final_no_deja_una_linea_vacia() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nota.md");
+    fs::write(&path, "uno\ndos\n").unwrap();
+    let mut session = Session::open(&path);
+    session.keys("\"ayyjdd\"ap");
+    session.save().unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "uno\nuno\n");
 }
 
 #[test]
@@ -323,7 +334,7 @@ fn lo_copiado_en_un_documento_se_pega_en_otro() {
     session.keys("yiw");
     session.keys(&format!(":e! {}⏎", dir.path().join("b.md").display()));
     session.keys("P");
-    assert_eq!(session.text(), "holab\n");
+    assert_eq!(session.text(), "holab");
 }
 
 #[test]

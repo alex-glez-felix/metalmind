@@ -16,6 +16,8 @@ Los cambios que importan a quien usa nota. El formato sigue
 - Guardado atómico: temporal en el mismo directorio, fsync y rename. Conserva
   los permisos, sigue enlaces simbólicos y, si algo falla, el original queda
   intacto.
+- Como el `fixeol` de vim, el `\n` final del archivo no se ve como una línea
+  vacía de más y al guardar se agrega si faltaba.
 - Línea de comandos con `:w`, `:q`, `:q!` y `:wq`, con sus abreviaturas. `:q`
   y el cierre desde el gestor de ventanas se niegan si hay cambios sin
   guardar.
