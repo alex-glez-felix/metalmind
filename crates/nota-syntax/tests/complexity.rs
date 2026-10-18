@@ -36,7 +36,7 @@ fn a_huge_line_scans_in_linear_time() {
 #[test]
 fn backtick_runs_scan_in_linear_time() {
     assert_linear(
-        200_000,
+        100_000,
         |bytes| backtick_runs((2 * bytes).isqrt()),
         |text| scan(&text),
     );

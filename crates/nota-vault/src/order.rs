@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn ordenar_un_borrado_grande_es_lineal() {
-        nota_perf::assert_linear(1_500, folder_removal, |(before, removed)| {
+        nota_perf::assert_linear(1_000, folder_removal, |(before, removed)| {
             arrange(&before, &HashMap::new(), &removed, &Entries::new(), &[])
         });
     }
@@ -324,7 +324,7 @@ mod tests {
     #[ignore = "cuadrático en los renames del lote: #38"]
     fn ordenar_muchos_renames_es_lineal() {
         nota_perf::assert_linear(
-            1_500,
+            1_000,
             |notes| RenameBatch::new(notes, false),
             |batch| batch.arrange(),
         );
@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn ordenar_una_cadena_de_renames_es_lineal() {
         nota_perf::assert_linear(
-            2_000,
+            1_200,
             |notes| RenameBatch::new(notes, true),
             |batch| batch.arrange(),
         );

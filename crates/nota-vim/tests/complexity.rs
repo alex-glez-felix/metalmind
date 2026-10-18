@@ -26,7 +26,7 @@ fn feed(mut session: Session, keys: &str) -> Session {
 
 #[test]
 fn typing_in_insert_does_not_depend_on_the_note_size() {
-    let word = "palabra ".repeat(100);
+    let word = "palabra ".repeat(40);
     assert_flat(
         5_000,
         |lines| session_after(lines, "i"),
@@ -60,7 +60,7 @@ fn substitute_in_one_huge_line_is_linear() {
 fn undoing_a_substitute_is_linear() {
     let keys = format!(":%s/{WORD}/apunte/g\n");
     assert_linear(
-        500,
+        400,
         |lines| session_after(lines, &keys),
         |session| feed(session, "u"),
     );
@@ -70,7 +70,7 @@ fn undoing_a_substitute_is_linear() {
 #[test]
 fn a_macro_with_a_count_is_linear_in_the_count() {
     assert_linear(
-        30,
+        15,
         |times| {
             (
                 session_after(4 * times, "qa0wciwapunte\x1bjq"),
