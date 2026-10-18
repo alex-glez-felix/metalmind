@@ -44,12 +44,16 @@ pub(crate) struct Touched {
     pub paths: BTreeSet<VaultPath>,
     /// Pares `(de, a)` que el debouncer pudo emparejar.
     pub renames: Vec<(VaultPath, VaultPath)>,
+    /// Las rutas donde se escribió contenido: un archivo movido en el mismo
+    /// lote también cuenta como modificado.
+    pub written: BTreeSet<VaultPath>,
 }
 
 impl Touched {
     pub fn merge(&mut self, other: Self) {
         self.paths.extend(other.paths);
         self.renames.extend(other.renames);
+        self.written.extend(other.written);
     }
 }
 
@@ -60,9 +64,23 @@ pub(crate) fn refresh(index: &mut VaultIndex, root: &Path, touched: &Touched) ->
     for path in &dirty {
         index.remove_subtree(path);
     }
-    index.insert_all(scan_partial(root, &dirty));
+    let found = scan_partial(root, &dirty);
+    index.insert_all(found.entries);
+    // Lo que no se pudo leer se queda como estaba hasta el próximo evento.
+    let kept: HashMap<VaultPath, EntryKind> = before
+        .iter()
+        .filter(|(path, _)| {
+            !index.contains(path) && found.unreadable.iter().any(|dir| path.starts_with(dir))
+        })
+        .map(|(path, kind)| (path.clone(), *kind))
+        .collect();
+    index.insert_all(
+        kept.iter()
+            .map(|(path, kind)| (path.clone(), *kind))
+            .collect(),
+    );
     let after = subtrees(index, &dirty);
-    diff(&before, &after, touched)
+    diff(&before, &after, touched, &kept)
 }
 
 /// Las rutas a releer, sin las que ya cubre otra. Si la carpeta de una ruta
@@ -101,15 +119,19 @@ fn diff(
     before: &HashMap<VaultPath, EntryKind>,
     after: &HashMap<VaultPath, EntryKind>,
     touched: &Touched,
+    unread: &HashMap<VaultPath, EntryKind>,
 ) -> Vec<VaultChange> {
     let mut removed = Entries::new();
     let mut created = Entries::new();
-    let mut modified = Vec::new();
+    let mut modified = BTreeSet::new();
     for (path, kind) in before {
         match after.get(path) {
             Some(new) if new == kind => {
-                if *kind != EntryKind::Folder && touched.paths.contains(path) {
-                    modified.push(path.clone());
+                if *kind != EntryKind::Folder
+                    && touched.paths.contains(path)
+                    && !unread.contains_key(path)
+                {
+                    modified.insert(path.clone());
                 }
             }
             _ => {
@@ -123,13 +145,41 @@ fn diff(
         }
     }
     let mut changes = arrange(before, after, &removed, &created, &touched.renames);
-    modified.sort();
+    modified.extend(edited_while_moving(&changes, after, &touched.written));
     changes.extend(
         modified
             .into_iter()
             .map(|path| VaultChange::Modified { path }),
     );
     changes
+}
+
+/// Los archivos que un `Renamed` lleva a su destino y que además se
+/// escribieron en el lote, antes o después de moverse.
+fn edited_while_moving(
+    changes: &[VaultChange],
+    after: &HashMap<VaultPath, EntryKind>,
+    written: &BTreeSet<VaultPath>,
+) -> Vec<VaultPath> {
+    let mut edited = Vec::new();
+    for change in changes {
+        let VaultChange::Renamed { from, to, .. } = change else {
+            continue;
+        };
+        edited.extend(
+            after
+                .iter()
+                .filter(|(path, kind)| **kind != EntryKind::Folder && path.starts_with(to))
+                .filter(|(path, _)| {
+                    written.contains(*path)
+                        || path
+                            .rebase(to, from)
+                            .is_some_and(|old| written.contains(&old))
+                })
+                .map(|(path, _)| path.clone()),
+        );
+    }
+    edited
 }
 
 #[cfg(test)]
@@ -172,6 +222,7 @@ mod tests {
             Op::WriteFile(path) => {
                 let _ = fs::create_dir_all(at(path).parent().unwrap());
                 touched.paths.insert(vault(path));
+                touched.written.insert(vault(path));
                 fs::write(at(path), "")
             }
             Op::CreateDir(path) => {
@@ -291,6 +342,59 @@ mod tests {
     }
 
     #[test]
+    fn una_carpeta_que_no_se_puede_leer_conserva_lo_que_tenia() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("cerrada/hondo")).unwrap();
+        fs::write(root.join("cerrada/hondo/a.md"), "").unwrap();
+        fs::write(root.join("cerrada/b.md"), "").unwrap();
+        let mut index = scan(&root);
+        let snapshot = index.clone();
+        fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o000)).unwrap();
+        let touched = Touched {
+            paths: [VaultPath::new("cerrada/b.md").unwrap()].into(),
+            renames: Vec::new(),
+            ..Touched::default()
+        };
+        let changes = refresh(&mut index, &root, &touched);
+        fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(changes, []);
+        assert_eq!(index, snapshot);
+    }
+
+    #[test]
+    fn editar_y_mover_en_un_lote_avisa_las_dos_cosas() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::write(root.join("a/x.md"), "").unwrap();
+        fs::write(root.join("a/y.md"), "").unwrap();
+        let mut index = scan(&root);
+        fs::write(root.join("a/x.md"), "editada").unwrap();
+        fs::rename(root.join("a"), root.join("b")).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            paths: [path("a/x.md"), path("a"), path("b")].into(),
+            renames: vec![(path("a"), path("b"))],
+            written: [path("a/x.md")].into(),
+        };
+        assert_eq!(
+            refresh(&mut index, &root, &touched),
+            [
+                VaultChange::Renamed {
+                    from: path("a"),
+                    to: path("b"),
+                    kind: EntryKind::Folder
+                },
+                VaultChange::Modified {
+                    path: path("b/x.md")
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn mover_a_una_carpeta_nueva_crea_la_carpeta_antes() {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -303,6 +407,7 @@ mod tests {
         let touched = Touched {
             paths: [path("nueva"), path("x.md"), path("nueva/x.md")].into(),
             renames: vec![(path("x.md"), path("nueva/x.md"))],
+            ..Touched::default()
         };
         let changes = refresh(&mut index, &root, &touched);
         assert_eq!(
@@ -338,6 +443,7 @@ mod tests {
         let touched = Touched {
             paths: [path("a/x.md"), path("a"), path("b")].into(),
             renames: vec![(path("a"), path("b"))],
+            ..Touched::default()
         };
         let changes = refresh(&mut index, &root, &touched);
         assert_eq!(
@@ -371,6 +477,7 @@ mod tests {
         let touched = Touched {
             paths: [path("a"), path("b"), path("b/nuevo.md")].into(),
             renames: vec![(path("a"), path("b"))],
+            ..Touched::default()
         };
         assert_eq!(
             refresh(&mut index, &root, &touched),
