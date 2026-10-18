@@ -44,9 +44,10 @@ pub struct Editor {
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
     drag_anchor: Option<ByteOffset>,
-    /// El cursor la última vez que se hizo visible, para mostrarlo de nuevo
-    /// si lo mueve una edición desde otro panel o si el panel es nuevo.
-    revealed: Option<ByteOffset>,
+    /// La primera línea del panel en el workspace la última vez que se
+    /// leyó o se escribió: si el motor la cambia, el scroll salta ahí; si
+    /// no, conserva la fracción que dejó la rueda.
+    synced_top: usize,
     /// Arranque del proceso, hasta que se pinta el primer frame.
     launched: Option<Instant>,
     _repaint: Subscription,
@@ -68,7 +69,7 @@ impl Editor {
             layout: None,
             marked: None,
             drag_anchor: None,
-            revealed: None,
+            synced_top: 0,
             launched,
             _repaint: repaint,
         }
@@ -174,7 +175,7 @@ impl Editor {
             Ok(_) => {}
             Err(error) => self.report(&error, cx),
         }
-        self.reveal_cursor(cx);
+        cx.notify();
     }
 
     /// La línea donde se escribe, tal como la ve el IME.
@@ -189,17 +190,6 @@ impl Editor {
         let text = view.document.line_text(line).ok()?;
         let column = view.cursor().get() - buffer.line_start(line).get();
         Some(ImeLine::new(text, column, marked))
-    }
-
-    pub(crate) fn reveal_cursor(&mut self, cx: &mut Context<Self>) {
-        let cursor = self
-            .view(cx)
-            .map(|view| (view.cursor(), view.buffer().line_of(view.cursor())));
-        if let (Some(layout), Some((cursor, line))) = (&self.layout, cursor) {
-            self.scroll.reveal(line, layout.viewport.full_rows());
-            self.revealed = Some(cursor);
-        }
-        cx.notify();
     }
 
     fn report_first_paint(&mut self) {

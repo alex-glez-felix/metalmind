@@ -45,8 +45,9 @@ pub fn open(
         absolute: editor.number,
         relative: editor.relativenumber,
     };
+    let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
     cx.open_window(options, move |window, cx| {
-        let view = cx.new(|cx| WorkspaceView::new(document, numbers, launched, cx));
+        let view = cx.new(|cx| WorkspaceView::new(document, numbers, scrolloff, launched, cx));
         view.update(cx, |view, cx| view.focus(window, cx));
         let closing = view.downgrade();
         window.on_window_should_close(cx, move |_window, cx| {

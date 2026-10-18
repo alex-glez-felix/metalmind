@@ -12,6 +12,7 @@ use super::Editor;
 use super::gutter::{Gutter, PaintedGutter};
 use super::highlight::{Cells, search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
+use super::scroll::Scroll;
 use crate::theme::Theme;
 use crate::workspace::PaneView;
 
@@ -102,8 +103,16 @@ impl gpui_kit::Element for EditorElement {
             point(bounds.left(), content.top()),
             size(bounds.size.width, content.size.height),
         );
-        let editor = self.editor.read(cx);
         let line_height = window.line_height();
+        let rows = Viewport::new(content, line_height, Scroll::default()).full_rows();
+        let (workspace, pane) = {
+            let editor = self.editor.read(cx);
+            (editor.workspace.clone(), editor.pane)
+        };
+        if let Err(error) = workspace.update(cx, |workspace, _| workspace.resize(pane, rows)) {
+            log::error!("{error}");
+        }
+        let editor = self.editor.read(cx);
         let Some(view) = editor.view(cx) else {
             let viewport = Viewport::new(content, line_height, editor.scroll);
             return Prepainted {
@@ -119,11 +128,12 @@ impl gpui_kit::Element for EditorElement {
                 preedit: None,
             };
         };
-        let head = view.cursor();
-        let moved = (editor.revealed != Some(head)).then(|| view.buffer().line_of(head));
-        let mut scroll = editor.scroll;
-        let rows = Viewport::new(content, line_height, scroll).full_rows();
-        scroll.settle(view.buffer().last_line(), moved, rows);
+        let top = view.viewport.top();
+        let scroll = if top == editor.synced_top {
+            editor.scroll
+        } else {
+            Scroll::at_line(top)
+        };
         let cell = em_width(&typeface, window);
         let gutter = Gutter::new(&view, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
@@ -146,7 +156,7 @@ impl gpui_kit::Element for EditorElement {
         self.editor.update(cx, |editor, _| {
             editor.layout = Some(layout.clone());
             editor.scroll = scroll;
-            editor.revealed = Some(head);
+            editor.synced_top = top;
         });
         Prepainted {
             layout,

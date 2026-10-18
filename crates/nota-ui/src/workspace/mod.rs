@@ -3,8 +3,8 @@
 //!
 //! Hay un solo [`Vim`] para todos los paneles, como en vim, donde el modo,
 //! los registros, `.` y `;` son globales: lo copiado en un buffer se pega en
-//! otro. Las marks, en cambio, son de cada documento y el motor las toma
-//! prestadas mientras lo edita. Cambiar de panel lo deja en Normal antes,
+//! otro. Las marks, en cambio, son de cada documento, y la ventana
+//! ([`Viewport`]) de cada panel: el motor las toma prestadas mientras edita. Cambiar de panel lo deja en Normal antes,
 //! como un `ctrl-c`.
 
 mod commands;
@@ -14,11 +14,12 @@ mod line_numbers;
 mod message;
 mod options;
 mod pane_tree;
+mod scrolling;
 
 use std::collections::BTreeMap;
 
 use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
-use nota_vim::{Action, Mode, Pattern, Prompt, Vim, VimError};
+use nota_vim::{Action, Mode, Pattern, Prompt, Viewport, Vim, VimError};
 
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
@@ -46,6 +47,7 @@ struct Pane {
     document: DocumentId,
     selections: Selections,
     numbers: LineNumbers,
+    viewport: Viewport,
 }
 
 impl Pane {
@@ -54,6 +56,7 @@ impl Pane {
             document,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
             numbers,
+            viewport: Viewport::default(),
         }
     }
 }
@@ -64,6 +67,8 @@ pub struct Workspace {
     panes: BTreeMap<PaneId, Pane>,
     tree: PaneTree,
     vim: Vim,
+    /// Las líneas que se dejan visibles alrededor del cursor en cada panel.
+    scrolloff: usize,
     message: Option<Message>,
 }
 
@@ -72,6 +77,8 @@ pub struct Workspace {
 pub struct PaneView<'a> {
     pub document: &'a Document,
     pub selection: Selection,
+    /// Qué líneas se ven; la vista pinta desde [`Viewport::top`].
+    pub viewport: Viewport,
     pub focused: bool,
     /// El modo de vim si tiene el foco; los demás se ven en Normal.
     pub mode: Mode,
@@ -107,16 +114,19 @@ impl Workspace {
     /// Un panel con `document` y los números `numbers`, avisando como vim
     /// al abrirlo.
     #[must_use]
-    pub fn new(document: Document, numbers: LineNumbers) -> Self {
+    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize) -> Self {
         let message = Message::opened(&document);
         let mut documents = Documents::default();
         let id = documents.insert(document);
         let tree = PaneTree::new();
+        let mut vim = Vim::new();
+        vim.set_scrolloff(scrolloff);
         Self {
             documents,
             panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers))]),
             tree,
-            vim: Vim::new(),
+            vim,
+            scrolloff,
             message: Some(message),
         }
     }
@@ -149,6 +159,7 @@ impl Workspace {
         Ok(PaneView {
             document: self.document(state.document)?,
             selection: *state.selections.primary(),
+            viewport: state.viewport,
             focused,
             mode: if focused {
                 self.vim.mode()
@@ -212,9 +223,9 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))
     }
 
-    /// Corre `edit` sobre el buffer, las marks y los cursores de `pane`;
-    /// después, los cursores de los otros paneles del mismo documento siguen
-    /// al texto.
+    /// Corre `edit` sobre el buffer, las marks, la ventana y los cursores de
+    /// `pane`, que queda mostrando su cursor; después, los cursores de los
+    /// otros paneles del mismo documento siguen al texto.
     fn edit_pane<T>(
         &mut self,
         pane: PaneId,
@@ -231,8 +242,12 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))?;
         let (buffer, marks) = document.editable();
         self.vim.swap_marks(marks);
+        self.vim.swap_viewport(&mut state.viewport);
         let result = edit(&mut self.vim, buffer, &mut state.selections);
+        self.vim.swap_viewport(&mut state.viewport);
         self.vim.swap_marks(marks);
+        let head = state.selections.primary().head;
+        state.viewport.reveal(buffer, head, self.scrolloff);
         let splices = buffer.take_splices();
         self.follow(pane, id, &splices)?;
         result
@@ -252,6 +267,7 @@ impl Workspace {
             .get(id)
             .ok_or(WorkspaceError::NoDocument(id))?
             .buffer();
+        let scrolloff = self.scrolloff;
         for (_, other) in self
             .panes
             .iter_mut()
@@ -262,6 +278,8 @@ impl Workspace {
                 let head = Splice::map_all(splices, selection.head);
                 normal_selection(buffer, anchor, head)
             });
+            let head = other.selections.primary().head;
+            other.viewport.reveal(buffer, head, scrolloff);
         }
         Ok(())
     }

@@ -38,16 +38,20 @@ pub(crate) struct Session {
 
 impl Session {
     pub fn new(text: &str) -> Self {
-        Self::with(Document::new(Path::new("prueba.md"), text))
+        Self::with_scrolloff(text, 0)
+    }
+
+    pub fn with_scrolloff(text: &str, scrolloff: usize) -> Self {
+        Self::with(Document::new(Path::new("prueba.md"), text), scrolloff)
     }
 
     pub fn open(path: &Path) -> Self {
-        Self::with(Document::open(path).unwrap())
+        Self::with(Document::open(path).unwrap(), 0)
     }
 
-    fn with(document: Document) -> Self {
+    fn with(document: Document, scrolloff: usize) -> Self {
         Self {
-            workspace: Workspace::new(document, LineNumbers::HYBRID),
+            workspace: Workspace::new(document, LineNumbers::HYBRID, scrolloff),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }
@@ -121,6 +125,17 @@ impl Session {
 
     pub fn view(&self, pane: PaneId) -> PaneView<'_> {
         self.workspace.view(pane).unwrap()
+    }
+
+    /// Primera línea visible de `pane`, desde 1 como en vim.
+    pub fn top(&self, pane: PaneId) -> usize {
+        self.view(pane).viewport.top() + 1
+    }
+
+    /// Línea del cursor de `pane`, desde 1.
+    pub fn line(&self, pane: PaneId) -> usize {
+        let view = self.view(pane);
+        view.buffer().line_of(view.cursor()) + 1
     }
 
     pub fn text(&self) -> String {
