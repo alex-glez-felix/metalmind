@@ -44,10 +44,9 @@ Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **u
 Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo que quedó fuera de M2.5:
 
 - **Vistas guardadas**: decididas en [06](research/06-decisiones-de-fondo.md#10-vistas-guardadas): una consulta de tags con nombre (`gs` = `#gs -#archivado`) que aparece en el panel junto a los tags. Falta decidir el archivo exacto donde se guardan.
-- Consultas más ricas: "o", paréntesis, comodines (`#2024/*`) y "solo este tag, sin descendientes". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
+- Consultas más ricas: "o", paréntesis, comodines (`#2024-*`) y "solo este tag, sin descendientes". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
 - Recordar el focus al reabrir el vault.
-- Descargar sets de íconos desde la UI; hoy la propuesta es dejar los SVG en `<config>/icons/<set>/` (05 §7). Color, ícono (emoji y, si se confirma, Tabler y sets del usuario), alias, padres y la página que describe un tag ya entran en M2.5 ([05 §7](research/05-tags.md#7-páginas-de-tag)).
-- Páginas para tags con `/` (`#2024/10`), que hoy no caben en un nombre de archivo.
+- Descargar sets de íconos desde la UI; en M2.5 se agregan dejando los SVG en `<config>/icons/<set>/` (05 §7). Color, ícono (emoji, Tabler y sets propios), alias, padres y la página que describe un tag ya entran en M2.5 ([05 §7](research/05-tags.md#7-páginas-de-tag)).
 - Sugerir tags a partir del contenido de la nota.
 - Que el panel de tags siga al buffer sin guardar, no solo al disco.
 

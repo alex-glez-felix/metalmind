@@ -201,7 +201,7 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 - Cada acción con nombre (`CLAUDE.md`) es alcanzable por teclado (atajo, paleta o `:`) **y** por la UI (menú contextual, botón o selector). Una función que solo existe como comando, o solo como clic, está a medias.
 - Los archivos son el **almacenamiento**, no la interfaz. Lo que se cambia desde la UI se escribe en el archivo de siempre (frontmatter de una página de tag, `config.yaml`), tocando solo el campo editado, y editarlo a mano da el mismo resultado. Ejemplo: las páginas de tag, que nota crea sola en cuanto les pones metadata desde la UI (05 §3, §7).
 - La UI no crea archivos que nadie pidió: escribir un `#tag-nuevo` no crea su página.
-- La config (03 §5) también se edita desde una pantalla de ajustes que escribe el YAML **(propuesta)**; cuándo llega esa pantalla se decide con el roadmap.
+- La config (03 §5) también se edita desde una pantalla de ajustes que escribe el YAML; cuándo llega esa pantalla se decide con el roadmap.
 
 ## Dónde entra en el roadmap
 
