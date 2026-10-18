@@ -22,8 +22,8 @@ use nota_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
-    ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, Set, SplitDown,
-    SplitRight, ToggleFolders, ToggleTags,
+    ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, SaveAs,
+    SaveAsAndQuit, Set, SplitDown, SplitRight, ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
@@ -276,6 +276,8 @@ impl Render for WorkspaceView {
         element = on_command::<Quit>(element, cx);
         element = on_command::<ForceQuit>(element, cx);
         element = on_command::<SaveAndQuit>(element, cx);
+        element = on_command::<SaveAs>(element, cx);
+        element = on_command::<SaveAsAndQuit>(element, cx);
         element = on_command::<Edit>(element, cx);
         element = on_command::<ForceEdit>(element, cx);
         element = on_command::<SplitRight>(element, cx);
