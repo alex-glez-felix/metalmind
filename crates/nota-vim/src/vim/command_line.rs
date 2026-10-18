@@ -4,8 +4,9 @@
 use nota_buffer::{Buffer, Selections};
 
 use super::Vim;
+use crate::ex::ExCommand;
 use crate::history::History;
-use crate::{Action, Command, KeyOutcome, Mode, Prompt, VimError};
+use crate::{Action, KeyOutcome, Mode, Prompt, VimError};
 
 impl Vim {
     /// Lo escrito tras `:`, `/` o `?`, mientras se está en la línea de comandos.
@@ -69,9 +70,29 @@ impl Vim {
             Prompt::Search { backward } => self.submit_search(backward, &line, buffer, selections),
             Prompt::Command => {
                 self.command_history.push(&line);
-                Ok(run_command(&line))
+                self.run_ex(&line, buffer, selections)
             }
         }
+    }
+
+    fn run_ex(
+        &mut self,
+        line: &str,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<KeyOutcome, VimError> {
+        Ok(match ExCommand::parse(line) {
+            Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
+            Ok(Some(ExCommand::Host(command))) => KeyOutcome::Command(command),
+            Ok(Some(ExCommand::Substitute(command))) => {
+                return self.substitute(&command, buffer, selections);
+            }
+            Ok(Some(ExCommand::ClearSearchHighlight)) => {
+                self.search.highlight = false;
+                KeyOutcome::Executed(Action::ClearSearchHighlight)
+            }
+            Err(error) => KeyOutcome::InvalidCommand(error),
+        })
     }
 
     fn history_mut(&mut self) -> &mut History {
@@ -79,13 +100,5 @@ impl Vim {
             Prompt::Command => &mut self.command_history,
             Prompt::Search { .. } => &mut self.search.history,
         }
-    }
-}
-
-fn run_command(line: &str) -> KeyOutcome {
-    match Command::parse(line) {
-        Ok(Some(command)) => KeyOutcome::Command(command),
-        Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
-        Err(error) => KeyOutcome::InvalidCommand(error),
     }
 }

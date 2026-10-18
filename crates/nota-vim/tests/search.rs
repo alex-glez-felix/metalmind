@@ -4,7 +4,7 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
-//! Búsqueda (`/`, `?`, `n`, `N`, `*`, `#`). Cada caso de la tabla
+//! Búsqueda (`/`, `?`, `n`, `N`, `*`, `#`) y `:s`. Cada caso de la tabla
 //! corre en el motor y en nvim, con `ignorecase` y `smartcase` como el motor.
 
 #[allow(
@@ -148,6 +148,59 @@ use rstest_reuse::{self, apply, template};
 #[case("|a b c b c bx", "/bx<CR>/c<CR>0/z<Up><Down><CR>", "|a b c b c bx")]
 #[case("|a b c b c bx", "/b<CR>/c<CR>/b<CR>0/<Up><Up><CR>", "a b |c b c bx")]
 #[case("|a b c b c", "/b<CR>/c<CR>0/<Up>x<BS><Up><CR>", "a b |c b c")]
+#[case("|a b c", "/c<CR>:s/a/X/<CR>0/<Up><CR>", "|X b c")]
+#[case("|ab\nab", ":s/a/X/<CR>j:<Up><CR>", "Xb\n|Xb")]
+// :s, :%s, rangos y flags
+#[case("|a,a,a\na,a", ":s/a/b/<CR>", "|b,a,a\na,a")]
+#[case("|a,a,a\na,a", ":s/a/b/g<CR>", "|b,b,b\na,a")]
+#[case("|a,a,a\na,a", ":%s/a/b/g<CR>", "b,b,b\n|b,b")]
+#[case("  a,a,a\n  a,|a\nx", ":%s/a/b/g<CR>", "  b,b,b\n  |b,b\nx")]
+#[case("a\nb\n|c\nd\ne", ":2,4s/$/!/<CR>", "a\nb!\nc!\n|d!\ne")]
+#[case("a\nb\n|c\nd\ne", ":.,$s/^/-/<CR>", "a\nb\n-c\n-d\n|-e")]
+#[case("a\nb\n|c\nd\ne", ":.-1,.+1s/^/-/<CR>", "a\n-b\n-c\n|-d\ne")]
+#[case("|ab\nab", ":%s/ab/x<CR>", "x\n|x")]
+#[case("|ab", ":s/b<CR>", "|a")]
+#[case("|ab", ":5s/a/x/<CR>", "|ab")]
+#[case("|Abc abc", ":s/a/X/g<CR>", "|Xbc Xbc")]
+#[case("|Abc abc", ":s/A/X/g<CR>", "|Xbc abc")]
+#[case("|Abc abc", ":s/a/X/gI<CR>", "|Abc Xbc")]
+#[case("|Abc abc", ":s/A/X/gi<CR>", "|Xbc Xbc")]
+#[case("|abc\nabc", ":s/z/X/<CR>", "|abc\nabc")]
+#[case("|abc\nabc", ":s/z/X/e<CR>", "|abc\nabc")]
+#[case("|a/b", ":s#/#-#<CR>", "|a-b")]
+#[case(r"|a/b", r":s/\//-/<CR>", "|a-b")]
+#[case("|añb", ":s/ñ/n/<CR>", "|anb")]
+#[case("|a.b", ":s/./x/g<CR>", "|xxx")]
+#[case("|a b", r":s/\s/_/<CR>", "|a_b")]
+// el reemplazo: grupos, &, coincidencias vacías
+#[case(
+    "|foo bar",
+    r":s/\(foo\) \(bar\)/\2 \1 & \&/<CR>",
+    "|bar foo foo bar &"
+)]
+#[case("|abc", ":s/b/[&]/<CR>", "|a[b]c")]
+#[case("|abc", ":s/x*/-/g<CR>", "|-a-b-c")]
+#[case("|baab", ":s/a*/-/g<CR>", "|-b-b")]
+#[case("|baab", r":s/a\=/-/g<CR>", "|-b--b")]
+// :%s que cambia el número de líneas, con \r
+#[case("|a,b,c\nd,e", r":%s/,/\r/g<CR>", "a\nb\nc\nd\n|e")]
+#[case("|a,b\nc,d\ne", r":1s/,/\r/<CR>", "a\n|b\nc,d\ne")]
+#[case("|abc", r":s/c/1\r2\r3/<CR>", "ab1\n2\n|3")]
+// :s sin patrón: el último usado, de búsqueda o de :s
+#[case("|abc\nabc", "/b<CR>:s//X/<CR>", "|aXc\nabc")]
+#[case("|abc\nabc", ":s/b/X/<CR>jn", "aXc\na|bc")]
+#[case("|abc\nabc", ":s/b/X/<CR>j:s<CR>", "aXc\n|aXc")]
+#[case("|abc\nabc", ":s/b/X/<CR>/c<CR>j:s<CR>", "aXc\n|aXc")]
+#[case("|abc", ":s//X/<CR>", "|abc")]
+#[case("|abc", ":s<CR>", "|abc")]
+// todo :s es un solo paso de undo, y el undo vuelve al inicio de la primera línea cambiada
+#[case("|ab ab", ":s/ab/x/g<CR>u", "|ab ab")]
+#[case("  a,a,a\n  a,|a\nx", ":%s/a/b/g<CR>u", "|  a,a,a\n  a,a\nx")]
+#[case("  x\n  a,|a\nx\n  a", ":%s/a/b/g<CR>u", "  x\n|  a,a\nx\n  a")]
+#[case("  x\n  a,|a\nx\n  a", ":%s/a/b/g<CR>u<C-r>", "  x\n|  b,b\nx\n  b")]
+#[case("|a,b,c\nd,e", r":%s/,/\r/g<CR>u", "|a,b,c\nd,e")]
+#[case("|ab", ":s/a/x/<CR>:s/b/y/<CR>u", "|xb")]
+#[case("|a\na", ":s/a/b/<CR>j.", "b\n|a")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]

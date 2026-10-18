@@ -4,7 +4,7 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
-//! Lo que la búsqueda le cuenta a la UI, y lo que nvim no puede
+//! Lo que la búsqueda y `:s` le cuentan a la UI, y lo que nvim no puede
 //! comparar: multi-cursor y donde nota se aparta de vim a propósito. El
 //! movimiento y la edición están en la tabla de `search.rs`.
 
@@ -15,7 +15,7 @@
 mod support;
 
 use nota_buffer::ByteOffset;
-use nota_vim::{Action, KeyOutcome, Prompt, SearchError, Vim, Wrap};
+use nota_vim::{Action, CommandError, KeyOutcome, Prompt, SearchError, Substitution, Vim, Wrap};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -58,6 +58,7 @@ fn reports_when_a_search_wraps(
 #[rstest]
 #[case("|abc", "/zz<CR>", not_found("zz"))]
 #[case("|abc", "d/zz<CR>", not_found("zz"))]
+#[case("|abc", "/b<CR>:s/b/x/<CR>n", not_found("b"))]
 #[case("|abc", "/<CR>", SearchError::NoPrevious)]
 #[case("|abc", "n", SearchError::NoPrevious)]
 #[case("|abc", "dN", SearchError::NoPrevious)]
@@ -77,6 +78,41 @@ fn reports_why_a_search_failed(
     assert_eq!(outcome(before, keys), KeyOutcome::SearchFailed(error));
 }
 
+#[rstest]
+#[case("|a,a\na", ":%s/a/b/g<CR>", 3, 2)]
+#[case("|a,a\na", ":s/a/b/<CR>", 1, 1)]
+#[case("|a,b,c", r":s/,/\r/g<CR>", 2, 1)]
+fn reports_what_a_substitution_did(
+    #[case] before: &str,
+    #[case] keys: &str,
+    #[case] replacements: usize,
+    #[case] lines: usize,
+) {
+    assert_eq!(
+        outcome(before, keys),
+        KeyOutcome::Substituted(Substitution {
+            replacements,
+            lines
+        })
+    );
+}
+
+#[rstest]
+#[case(":s/z/x/<CR>", CommandError::Search(not_found("z")))]
+#[case(":s//x/<CR>", CommandError::Search(SearchError::NoPrevious))]
+#[case(":s<CR>", CommandError::Search(SearchError::NoPrevious))]
+#[case(":5s/a/x/<CR>", CommandError::InvalidRange)]
+#[case(":2,1s/a/x/<CR>", CommandError::BackwardsRange)]
+#[case(":s/a/x/c<CR>", CommandError::UnsupportedFlag('c'))]
+#[case(":s/a/x/g 2<CR>", CommandError::TrailingCharacters("2".to_owned()))]
+#[case(r":s/a/\u&/<CR>", CommandError::UnsupportedReplacement(r"\u".to_owned()))]
+#[case(r":s/\v(a)/x/<CR>", CommandError::Search(SearchError::Unsupported(r"\v".to_owned())))]
+fn reports_why_a_substitution_failed(#[case] keys: &str, #[case] error: CommandError) {
+    let (outcome, _, text) = run("|ab\nab", keys);
+    assert_eq!(outcome, KeyOutcome::InvalidCommand(error));
+    assert_eq!(text, "|ab\nab");
+}
+
 #[test]
 fn the_ui_can_read_the_prompt_and_what_was_typed() {
     let (_, vim, _) = run("|abc", "?ab");
@@ -88,14 +124,14 @@ fn the_ui_can_read_the_prompt_and_what_was_typed() {
     assert_eq!(Prompt::Search { backward: true }.symbol(), '?');
     assert_eq!(Prompt::Search { backward: false }.symbol(), '/');
     assert_eq!(Prompt::Command.symbol(), ':');
-    let (_, vim, _) = run("|abc", ":w");
+    let (_, vim, _) = run("|abc", ":s");
     assert_eq!(vim.command_line_prompt(), Some(Prompt::Command));
     let (_, vim, _) = run("|abc", "/ab<Esc>");
     assert_eq!(vim.command_line_prompt(), None);
 }
 
 #[test]
-fn the_active_search_is_readable() {
+fn the_active_search_stays_until_noh() {
     let (mut buffer, mut selections) = support::parse("|ab xab\nab");
     let mut vim = Vim::new();
     assert!(vim.search_highlight().is_none());
@@ -108,6 +144,23 @@ fn the_active_search_is_readable() {
         .map(|range| (range.start.get(), range.end.get()))
         .collect();
     assert_eq!(found, [(0, 2), (4, 6), (7, 9)]);
+    support::feed(&mut vim, &mut buffer, &mut selections, ":noh<CR>");
+    assert!(vim.search_highlight().is_none());
+    support::feed(&mut vim, &mut buffer, &mut selections, "n");
+    assert_eq!(
+        vim.search_highlight().map(nota_vim::Pattern::source),
+        Some("ab")
+    );
+    support::feed(
+        &mut vim,
+        &mut buffer,
+        &mut selections,
+        ":nohlsearch<CR>:s/b/c/<CR>",
+    );
+    assert_eq!(
+        vim.search_highlight().map(nota_vim::Pattern::source),
+        Some("b")
+    );
 }
 
 #[test]
@@ -129,13 +182,16 @@ fn search_actions_run_by_name() {
 #[case("a |x\nb |x", "?x<CR>", "a |x\nb |x")]
 #[case("|a x y\n|b x y", "d/y<CR>", "|y\n|y")]
 #[case("fo|o x\nfoo |bar foo", "*", "foo x\n|foo bar |foo")]
+#[case("|a\n|a\na", ":%s/a/b/<CR>", "b\nb\n|b")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }
 
 /// Donde nota se aparta de vim a propósito (ver el README del crate).
 #[rstest]
+#[case("|a,b", r":s/,/\n/<CR>", "a\n|b")]
 #[case("|x ~a", "/~a<CR>", "x |~a")]
+#[case("|ab", ":s/a/x/<CR>:s/b/~/<CR>", "|x~")]
 fn departs_from_vim_on_purpose(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }

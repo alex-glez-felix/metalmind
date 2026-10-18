@@ -157,7 +157,7 @@ struct Register(char);
 ### Estado (M0a, 2026-10-15)
 
 - `nota-vim` existe como máquina de estados pura: Normal, Insert y operador pendiente; motions `h j k l w W b B e E 0 ^ $ gg G` y `f F t T ; ,` con counts; `d c y`, `dd cc yy`, `x`, `p P`, `u`, `ctrl-r`, `g- g+` (historial en árbol), `.`; text objects `iw aw iW aW i( a( i" a" ip ap`; registro sin nombre; multi-cursor en todas las operaciones.
-- Búsqueda (2026-10-18): `/ ? n N * # g* g#`, también como motion de operador (`d/foo<CR>`, `dn`, que `.` repite), con historial por flechas. El dialecto de vim se traduce a `regex` línea por línea (`ignorecase` + `smartcase` por default); lo que no tiene equivalente se rechaza con un error en vez de buscar otra cosa (lista en el README del crate). El patrón activo queda en `Vim::search_highlight` para que la UI lo resalte.
+- Búsqueda (2026-10-18): `/ ? n N * # g* g#`, también como motion de operador (`d/foo<CR>`, `dn`, que `.` repite), con historial por flechas, y `:s`/`:%s` con rangos, flags `g i I e`, `&` y `\1` en el reemplazo, en un solo paso de undo. El dialecto de vim se traduce a `regex` línea por línea (`ignorecase` + `smartcase` por default); lo que no tiene equivalente se rechaza con un error en vez de buscar otra cosa (lista en el README del crate). El patrón activo queda en `Vim::search_highlight` para que la UI lo resalte.
 - El keymap vive por ahora dentro de `nota-vim`. El default es una tabla tipada `(contexto, teclas, acción)`, infalible y validada por un test (sin secuencias ambiguas ni duplicadas); el parseo de strings, que sí puede fallar, llegará con la config del usuario. Se moverá a `nota-keymap` cuando haya más de un consumidor.
 - **Referencia de comportamiento = `nvim --clean` 0.12.6 (última estable, 2026-10-09) con `noautoindent`.** Importa porque los defaults de nvim difieren de vim: `nostartofline` (`dd`, `G`, `gg` conservan la columna), `backspace=indent,eol,start`, `cpoptions=aABceFs_`. Las motions de palabra y los text objects portan la lógica de `textobject.c` (`fwd_word`, `current_word`, `current_block`, `current_quote`) para que los bordes coincidan.
 - Cada caso de la tabla (`crates/nota-vim/tests/vim.rs`) corre en el motor y en nvim (`tests/support/oracle.lua`). El oráculo exige esa versión exacta y el CI la instala con checksum. Al pasar de 0.10.4 a 0.12.6 los 207 casos dieron lo mismo.
@@ -258,7 +258,7 @@ nota/
 ├── crates/
 │   ├── nota-buffer/        # Buffer (ropey), Edit, Transaction, History, Selections, newtypes de offset
 │   ├── nota-syntax/        # tree-sitter-md + scanner Obsidian (wikilinks, tags, embeds, frontmatter)
-│   ├── nota-vim/           # Mode, Motion, Operator, TextObject, VimState → Transaction; búsqueda `/ ? n N * #` sobre `regex`. Depende de nota-buffer y regex (+ nota-syntax para text objects md)
+│   ├── nota-vim/           # Mode, Motion, Operator, TextObject, VimState → Transaction; búsqueda `/ ? n N * #` y `:s` sobre `regex`. Depende de nota-buffer y regex (+ nota-syntax para text objects md)
 │   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo TOML, registro de Actions
 │   ├── nota-vault/         # leer y guardar notas (atómico); luego walk, watch, índice, links, backlinks, caché redb
 │   ├── nota-search/        # nucleo (fuzzy) y luego tantivy

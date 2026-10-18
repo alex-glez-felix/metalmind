@@ -1,6 +1,8 @@
 //! Comandos de `:` que el motor reconoce pero no ejecuta: guardar y cerrar
 //! hacen I/O, así que los corre quien aloja el editor.
 
+use crate::SearchError;
+
 /// Un comando de la línea de comandos, invocable también por su nombre.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
@@ -18,6 +20,18 @@ pub enum Command {
 pub enum CommandError {
     #[error("E492: no es un comando del editor: {0}")]
     Unknown(String),
+    #[error("E16: rango inválido")]
+    InvalidRange,
+    #[error("E493: el rango va hacia atrás")]
+    BackwardsRange,
+    #[error("E488: sobra texto: {0}")]
+    TrailingCharacters(String),
+    #[error("nota no soporta el flag {0} de :s")]
+    UnsupportedFlag(char),
+    #[error("nota no soporta {0} en el reemplazo de :s")]
+    UnsupportedReplacement(String),
+    #[error(transparent)]
+    Search(#[from] SearchError),
 }
 
 /// Nombre completo, cuántas letras bastan para abreviarlo y el comando.
