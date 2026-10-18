@@ -58,6 +58,8 @@ fn code_and_comments_hide_syntax(#[case] text: &str, #[case] expected: &[&str]) 
 #[case::ends_at_punctuation("#a. #b, #c! #d? #e:", &["#a", "#b", "#c", "#d", "#e"])]
 #[case::ends_at_hash("#a#b", &["#a"])]
 #[case::nested("#a/b/c", &["#a/b/c"])]
+#[case::trailing_slash("#proyecto/ fin", &["#proyecto"])]
+#[case::only_separators("#- #/ #_ #a//b", &[])]
 #[case::escaped("\\#a", &[])]
 #[case::inside_wikilink("[[nota#a]]", &["[[nota#a]]"])]
 fn tags(#[case] text: &str, #[case] expected: &[&str]) {

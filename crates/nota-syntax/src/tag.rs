@@ -36,22 +36,27 @@ fn is_tag_char(c: char) -> bool {
     }
 }
 
-/// Un nombre de tag válido: solo caracteres de tag y no solo números.
+/// Un nombre de tag válido: solo caracteres de tag, no solo números ni solo
+/// separadores (`-`, `_`, `/`) y sin niveles vacíos (`a//b`, `/a`).
 #[must_use]
 pub fn is_valid_tag_name(name: &str) -> bool {
-    !name.is_empty() && name.chars().all(is_tag_char) && !name.chars().all(char::is_numeric)
+    name.chars().all(is_tag_char)
+        && name.chars().any(|c| !matches!(c, '-' | '_' | '/'))
+        && !name.chars().all(char::is_numeric)
+        && name.split('/').all(|level| !level.is_empty())
 }
 
 /// El tag cuyo `#` está en `at`, si lo hay. Quien llama ya comprobó que el
-/// `#` va al inicio de línea o tras un espacio.
+/// `#` va al inicio de línea o tras un espacio. Un `/` final no es parte del
+/// tag: `#proyecto/` es `#proyecto`.
 pub(crate) fn tag_at(text: &str, at: usize) -> Option<Tag> {
     let start = at + 1;
-    let len: usize = text[start..]
+    let run: usize = text[start..]
         .chars()
         .take_while(|&c| is_tag_char(c))
         .map(char::len_utf8)
         .sum();
-    let name = start..start + len;
+    let name = start..start + text[start..start + run].trim_end_matches('/').len();
     is_valid_tag_name(&text[name.clone()]).then_some(Tag {
         span: at..name.end,
         name,
@@ -75,6 +80,15 @@ mod tests {
     #[case("canción", true)]
     #[case("🔥", true)]
     #[case("a.b", false)]
+    #[case("-", false)]
+    #[case("_", false)]
+    #[case("--", false)]
+    #[case("/", false)]
+    #[case("a//b", false)]
+    #[case("/a", false)]
+    #[case("a/", false)]
+    #[case("a-", true)]
+    #[case("2024-10", true)]
     #[case("xª", true)]
     #[case("x々", true)]
     #[case("x،", false)]
