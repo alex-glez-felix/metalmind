@@ -37,15 +37,33 @@ pub struct Link {
 
 impl Link {
     /// El texto de una de las partes del link. En un link markdown se
-    /// decodifican los `%20`: un destino markdown no puede llevar espacios.
+    /// quitan los escapes con `\\` y se decodifican los `%20`: un destino
+    /// markdown no puede llevar espacios.
     #[must_use]
     pub fn text<'t>(&self, text: &'t str, part: Range<usize>) -> Cow<'t, str> {
         let raw = &text[part];
         match self.syntax {
             LinkSyntax::Wiki => Cow::Borrowed(raw),
-            LinkSyntax::Markdown => percent_decode(raw),
+            LinkSyntax::Markdown => match unescape(raw) {
+                Cow::Borrowed(unescaped) => percent_decode(unescaped),
+                Cow::Owned(unescaped) => Cow::Owned(percent_decode(&unescaped).into_owned()),
+            },
         }
     }
+}
+
+/// Quita la `\` de cada puntuación ASCII escapada, como en markdown.
+fn unescape(raw: &str) -> Cow<'_, str> {
+    if !raw.contains('\\') {
+        return Cow::Borrowed(raw);
+    }
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars().peekable();
+    while let Some(c) = chars.next() {
+        let escaped = c == '\\' && chars.peek().is_some_and(char::is_ascii_punctuation);
+        out.extend(if escaped { chars.next() } else { Some(c) });
+    }
+    Cow::Owned(out)
 }
 
 fn percent_decode(raw: &str) -> Cow<'_, str> {
@@ -79,9 +97,14 @@ pub(crate) fn trim(text: &str, range: Range<usize>) -> Range<usize> {
     start..end.max(start)
 }
 
-/// Separa `nota#Heading` o `nota#^bloque` en destino y subruta.
-pub(crate) fn split_subpath(text: &str, range: Range<usize>) -> (Range<usize>, Option<Subpath>) {
-    let Some(hash) = text[range.clone()].find('#').map(|i| range.start + i) else {
+/// Separa `nota#Heading` o `nota#^bloque` en destino y subruta por el `#`
+/// en `hash`, si lo hay.
+pub(crate) fn split_subpath(
+    text: &str,
+    range: Range<usize>,
+    hash: Option<usize>,
+) -> (Range<usize>, Option<Subpath>) {
+    let Some(hash) = hash else {
         return (trim(text, range), None);
     };
     let target = trim(text, range.start..hash);
@@ -129,7 +152,10 @@ pub(crate) fn wikilink_at(text: &str, start: usize, open: usize) -> Option<Link>
         }
         None => (body..close, None),
     };
-    let (target, subpath) = split_subpath(text, destination);
+    let hash = text[destination.clone()]
+        .find('#')
+        .map(|i| destination.start + i);
+    let (target, subpath) = split_subpath(text, destination, hash);
     if target.is_empty() && subpath.is_none() {
         return None;
     }
@@ -158,5 +184,15 @@ mod tests {
     #[case("50%+5.md", "50%+5.md")]
     fn percent_decoding(#[case] raw: &str, #[case] decoded: &str) {
         assert_eq!(percent_decode(raw), decoded);
+    }
+
+    #[rstest]
+    #[case("a\\).md", "a).md")]
+    #[case("a\\\\b", "a\\b")]
+    #[case("a\\b", "a\\b")]
+    #[case("fin\\", "fin\\")]
+    #[case("sin-escapes", "sin-escapes")]
+    fn unescaping(#[case] raw: &str, #[case] unescaped: &str) {
+        assert_eq!(unescape(raw), unescaped);
     }
 }

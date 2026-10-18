@@ -135,6 +135,19 @@ fn skip_spaces(bytes: &[u8], from: usize) -> usize {
         .count()
 }
 
+/// El primer `#` sin escapar: `nota\\#1.md` es un nombre de archivo.
+fn unescaped_hash(bytes: &[u8], range: Range<usize>) -> Option<usize> {
+    let mut i = range.start;
+    while i < range.end {
+        match bytes[i] {
+            _ if is_escape(bytes, i) => i += 2,
+            b'#' => return Some(i),
+            _ => i += 1,
+        }
+    }
+    None
+}
+
 /// `scheme:` o `//host`: apunta fuera del vault.
 fn is_external(destination: &str) -> bool {
     if destination.starts_with("//") {
@@ -165,7 +178,8 @@ pub(crate) fn markdown_link_at(
     if is_external(&text[dest.clone()]) {
         return Some(MarkdownLink { end, link: None });
     }
-    let (target, subpath) = split_subpath(text, dest);
+    let hash = unescaped_hash(text.as_bytes(), dest.clone());
+    let (target, subpath) = split_subpath(text, dest, hash);
     if target.is_empty() && subpath.is_none() {
         return Some(MarkdownLink { end, link: None });
     }
