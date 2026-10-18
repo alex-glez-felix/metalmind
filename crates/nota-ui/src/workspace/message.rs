@@ -59,6 +59,12 @@ impl Message {
         Self::Error("E37: No write since last change".to_owned())
     }
 
+    /// `:w ruta` con `ruta` abierta, sin guardar todavía, en otro buffer.
+    #[must_use]
+    pub fn loaded_elsewhere() -> Self {
+        Self::Error("E139: File is loaded in another buffer".to_owned())
+    }
+
     #[must_use]
     pub fn unsaved_in(document: &Document) -> Self {
         let path = document.display_name();

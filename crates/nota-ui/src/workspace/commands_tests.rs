@@ -600,3 +600,46 @@ fn wq_con_otra_ruta_en_un_split_no_pierde_los_cambios() {
     assert_eq!(session.workspace.tree().len(), 2);
     assert!(session.is_modified());
 }
+
+/// nvim 0.12.6: `:e nueva.md`, `:enew` y `:w nueva.md` dan E139 si
+/// `nueva.md` no existe; si existe, E13.
+#[test]
+fn w_a_la_ruta_de_otro_buffer_abierto_da_e139() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "e", &path(&dir, "nueva.md"));
+    session.keys("⌃wv");
+    edit(&mut session, "e!", &path(&dir, "a.md"));
+    session.keys("ix⎋");
+    edit(&mut session, "w", &path(&dir, "nueva.md"));
+    assert_eq!(
+        error(&session),
+        Some("E139: File is loaded in another buffer")
+    );
+    assert!(!path(&dir, "nueva.md").exists());
+    edit(&mut session, "wq", &path(&dir, "nueva.md"));
+    assert_eq!(
+        error(&session),
+        Some("E139: File is loaded in another buffer")
+    );
+    assert_eq!(session.effect, Effect::Stay);
+    edit(&mut session, "w", &path(&dir, "b.md"));
+    assert_eq!(
+        error(&session),
+        Some("E13: File exists (add ! to override)")
+    );
+}
+
+#[test]
+fn w_desde_un_buffer_sin_nombre_a_una_nota_abierta_da_e139() {
+    let dir = TempDir::new().unwrap();
+    let mut session = Session::unnamed();
+    session.keys("ihola⎋⌃wv");
+    edit(&mut session, "e!", &path(&dir, "nueva.md"));
+    session.keys("⌃wh");
+    edit(&mut session, "w", &path(&dir, "nueva.md"));
+    assert_eq!(
+        error(&session),
+        Some("E139: File is loaded in another buffer")
+    );
+    assert_eq!(session.view(session.pane()).document.path(), None);
+}

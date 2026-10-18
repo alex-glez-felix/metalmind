@@ -114,6 +114,12 @@ impl Workspace {
     /// devuelve si se pudo.
     fn save(&mut self, path: Option<&Path>) -> Result<bool, WorkspaceError> {
         let id = self.pane(self.focused())?.document;
+        if let Some(path) = path
+            && self.loaded_elsewhere(id, path)
+        {
+            self.message = Some(Message::loaded_elsewhere());
+            return Ok(false);
+        }
         let document = self.document_mut(id)?;
         let saved = match path {
             Some(path) => document.save_to(path),
@@ -147,6 +153,15 @@ impl Workspace {
             return Ok(Effect::Stay);
         }
         self.quit(false)
+    }
+
+    /// Otro documento abierto es de `path`, que todavía no existe en
+    /// disco: escribirlo dejaría dos buffers sobre el mismo archivo. Si ya
+    /// existe, gana el E13 de `save_to`, como en vim.
+    fn loaded_elsewhere(&self, id: DocumentId, path: &Path) -> bool {
+        self.documents
+            .find(path)
+            .is_some_and(|other| other != id && path.symlink_metadata().is_err())
     }
 
     /// `:q` cierra el panel; el último cierra la ventana.
