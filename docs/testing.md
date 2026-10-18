@@ -60,6 +60,6 @@ Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s 
 
 ### Lo que encontró
 
-- nota no tiene el `fixeol` de vim. Un archivo nuevo se guarda sin el `\n` final (`ihola<Esc>:wq` escribe `hola`; vim escribe `hola\n`), y un archivo que termina en `\n` tiene una línea vacía de más al final: en `uno\ndos\n`, `"ayyjdd"ap` deja `uno\n\nuno` y vim, `uno\nuno\n`. Arreglarlo es de `nota-ui`/`nota-vault` (quitar el `\n` final al abrir y ponerlo al guardar); el caso de archivo nuevo fija el comportamiento de hoy.
+- nota no tenía el `fixeol` de vim: `ihola<Esc>:wq` escribía `hola` sin `\n`, y en `uno\ndos\n`, `"ayyjdd"ap` dejaba `uno\n\nuno` por la línea vacía de más al final. Arreglado; los dos casos quedan en el smoke.
 - Si GPUI no puede crear la superficie, `nota` imprime el error pero el proceso no termina: el `cx.quit()` de `main.rs` se pide antes de que arranque el bucle de eventos y se pierde ([#31](https://github.com/alex-glez-felix/nota/issues/31)).
 - `Xvfb -displayfd` elige el primer display donde puede abrir el socket sin mirar el lock, y en un escritorio con XWayland eso puede ser el `:0` de la sesión. Por eso el harness pide un display explícito desde `:100`.

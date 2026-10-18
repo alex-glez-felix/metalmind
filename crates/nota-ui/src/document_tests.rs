@@ -1,6 +1,7 @@
 use std::fs;
 
 use pretty_assertions::assert_eq;
+use rstest::rstest;
 use tempfile::TempDir;
 
 use super::*;
@@ -23,16 +24,39 @@ fn abrir_lee_el_archivo() {
     let path = dir.path().join("nota.md");
     fs::write(&path, "# Título\n\ntexto\n").unwrap();
     let document = Document::open(&path).unwrap();
-    assert_eq!(document.buffer().to_string(), "# Título\n\ntexto\n");
+    assert_eq!(document.buffer().to_string(), "# Título\n\ntexto");
     assert!(document.exists_on_disk());
     assert_eq!(
         document.stats(),
         FileStats {
-            lines: 4,
+            lines: 3,
             bytes: 17
         }
     );
-    assert_eq!(document.stats().to_string(), "4L, 17B");
+    assert_eq!(document.stats().to_string(), "3L, 17B");
+}
+
+/// Como el `fixeol` de vim: el `\n` final no es una línea más y guardar lo
+/// pone si falta.
+#[rstest]
+#[case::con_salto("uno\ndos\n", "uno\ndos", "uno\ndos\n")]
+#[case::sin_salto("uno\ndos", "uno\ndos", "uno\ndos\n")]
+#[case::linea_vacia_al_final("uno\n\n", "uno\n", "uno\n\n")]
+#[case::vacio("", "", "")]
+fn el_salto_final_no_entra_al_buffer(
+    #[case] on_disk: &str,
+    #[case] buffer: &str,
+    #[case] saved: &str,
+) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nota.md");
+    fs::write(&path, on_disk).unwrap();
+    let mut document = Document::open(&path).unwrap();
+    assert_eq!(document.buffer().to_string(), buffer);
+    let stats = document.save().unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), saved);
+    assert_eq!(stats.bytes, saved.len());
+    assert_eq!(stats.lines, saved.lines().count());
 }
 
 #[cfg(unix)]

@@ -41,10 +41,10 @@ fn e_abre_otro_archivo_en_el_panel() {
     let (dir, mut session) = two_files();
     edit(&mut session, "e", &path(&dir, "b.md"));
     assert_eq!(shown(&session), path(&dir, "b.md"));
-    assert_eq!(session.text(), "b1\nb2\n");
+    assert_eq!(session.text(), "b1\nb2");
     assert_eq!(session.cursor(), ByteOffset::ZERO);
     assert_eq!(session.workspace.documents.iter().count(), 1);
-    let opened = format!("\"{}\" 3L, 6B", path(&dir, "b.md").display());
+    let opened = format!("\"{}\" 2L, 6B", path(&dir, "b.md").display());
     assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
 }
 
@@ -55,7 +55,10 @@ fn e_de_un_archivo_que_no_existe_lo_empieza_vacio() {
     assert_eq!(session.text(), "");
     assert!(!session.exists_on_disk());
     session.keys("ihola⎋:w⏎");
-    assert_eq!(fs::read_to_string(path(&dir, "nueva.md")).unwrap(), "hola");
+    assert_eq!(
+        fs::read_to_string(path(&dir, "nueva.md")).unwrap(),
+        "hola\n"
+    );
 }
 
 #[test]
@@ -64,7 +67,7 @@ fn e_se_niega_si_se_perderian_cambios() {
     session.keys("x");
     edit(&mut session, "e", &path(&dir, "b.md"));
     assert_eq!(shown(&session), path(&dir, "a.md"));
-    assert_eq!(session.text(), "\n");
+    assert_eq!(session.text(), "");
     assert_eq!(
         error(&session),
         Some("E37: hay cambios sin guardar (usa :e! para descartarlos)")
@@ -79,7 +82,7 @@ fn e_con_bang_descarta_los_cambios() {
     assert_eq!(shown(&session), path(&dir, "b.md"));
     assert_eq!(session.workspace.documents.iter().count(), 1);
     edit(&mut session, "e", &path(&dir, "a.md"));
-    assert_eq!(session.text(), "a\n");
+    assert_eq!(session.text(), "a");
 }
 
 #[test]
@@ -90,7 +93,7 @@ fn e_cambia_si_el_buffer_sigue_en_otro_panel() {
     assert_eq!(shown(&session), path(&dir, "b.md"));
     assert_eq!(session.workspace.documents.iter().count(), 2);
     session.keys("⌃wh");
-    assert_eq!(session.text(), "\n");
+    assert_eq!(session.text(), "");
     assert!(session.is_modified());
 }
 
@@ -106,23 +109,25 @@ fn e_de_un_archivo_abierto_comparte_el_documento() {
     assert_eq!(session.workspace.documents.iter().count(), 1);
     assert_eq!(session.cursor(), ByteOffset::new(3));
     session.keys("x");
-    assert_eq!(session.view(right).buffer().to_string(), "b1\n2\n");
+    assert_eq!(session.view(right).buffer().to_string(), "b1\n2");
 }
 
 #[test]
 fn e_sin_ruta_relee_el_archivo() {
-    let (dir, mut session) = two_files();
-    fs::write(path(&dir, "a.md"), "a\nfuera\n").unwrap();
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "a\nz\n").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
     session.keys("j");
+    fs::write(path(&dir, "a.md"), "a\nfuera\n").unwrap();
     session.keys(":e⏎");
-    assert_eq!(session.text(), "a\nfuera\n");
+    assert_eq!(session.text(), "a\nfuera");
     assert_eq!(session.cursor(), ByteOffset::new(2));
     session.keys("x");
     session.keys(":e⏎");
-    assert_eq!(session.text(), "a\nuera\n");
+    assert_eq!(session.text(), "a\nuera");
     assert!(error(&session).is_some());
     session.keys(":e!⏎");
-    assert_eq!(session.text(), "a\nfuera\n");
+    assert_eq!(session.text(), "a\nfuera");
     assert!(!session.is_modified());
 }
 
@@ -131,7 +136,7 @@ fn e_con_la_ruta_del_mismo_archivo_relee() {
     let (dir, mut session) = two_files();
     session.keys("x");
     edit(&mut session, "e!", &path(&dir, "a.md"));
-    assert_eq!(session.text(), "a\n");
+    assert_eq!(session.text(), "a");
     assert!(!session.is_modified());
 }
 
@@ -287,7 +292,7 @@ fn saltar_tras_e_no_usa_las_marks_del_otro_buffer() {
     edit(&mut session, "e", &path(&dir, "b.md"));
     session.keys("G");
     assert_eq!(error(&session), None);
-    assert_eq!(session.cursor(), ByteOffset::new(6));
+    assert_eq!(session.cursor(), ByteOffset::new(3));
     session.keys("x:e!⏎gg");
     assert_eq!(error(&session), None);
     assert_eq!(session.cursor(), ByteOffset::ZERO);
@@ -295,7 +300,9 @@ fn saltar_tras_e_no_usa_las_marks_del_otro_buffer() {
 
 #[test]
 fn cada_buffer_tiene_sus_marks() {
-    let (dir, mut session) = two_files();
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "a\nz\n").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
     session.keys("jma⌃wv");
     edit(&mut session, "e", &path(&dir, "b.md"));
     session.keys("jmbgg'a");
