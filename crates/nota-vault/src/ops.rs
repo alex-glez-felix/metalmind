@@ -148,6 +148,26 @@ pub(crate) fn check_free(root: &Path, path: &VaultPath) -> Result<(), FileOpErro
     }
 }
 
+/// Crea las carpetas que le falten a `path` y dice cuáles creó, de la más
+/// cercana a la raíz a la más profunda.
+pub(crate) fn create_parents(root: &Path, path: &VaultPath) -> Result<Vec<VaultPath>, FileOpError> {
+    check_ancestors(root, path)?;
+    let mut missing: Vec<VaultPath> = path
+        .ancestors()
+        .filter(|dir| !dir.is_root() && !dir.to_fs(root).exists())
+        .collect();
+    missing.reverse();
+    let mut created = Vec::with_capacity(missing.len());
+    for dir in missing {
+        match fs::create_dir(dir.to_fs(root)) {
+            Ok(()) => created.push(dir),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(io_error("crear", &dir, error)),
+        }
+    }
+    Ok(created)
+}
+
 /// La ruta en disco donde crear `path`, con sus carpetas ya creadas.
 fn prepare_target(
     root: &Path,

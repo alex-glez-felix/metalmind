@@ -5,6 +5,7 @@ mod cycles;
 mod graph;
 mod index;
 mod key;
+mod metadata;
 mod note;
 mod page;
 mod query;
@@ -21,10 +22,11 @@ use std::thread;
 pub use graph::{TagGraph, TagProblem};
 pub use index::{TagEntry, TagIndex};
 pub use key::{TagKey, tag_name};
-pub use note::{FrontmatterSpot, NoteTags, TagOccurrence, TagSource, content_hash};
-pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage};
+pub use metadata::PageChange;
+pub use note::{FrontmatterSpot, NoteTags, TagOccurrence, TagSource};
+pub use page::{InvalidValue, PageField, PageLayout, TagColor, TagIcon, TagPage};
 pub use query::{ParsedQuery, TagQuery};
-pub use refactor::{FileEdit, PageRename, PlanError, PlanNotice, StaleFile, TagPlan, TextEdit};
+pub use refactor::{PlanError, PlanNotice, TagPlan};
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
@@ -240,6 +242,7 @@ fn scan_one(
         Ok(name) => PageFile::Page(Box::new(TagPage::new(
             path.clone(),
             name,
+            &text,
             frontmatter.as_ref(),
         ))),
         Err(()) => PageFile::InvalidName,

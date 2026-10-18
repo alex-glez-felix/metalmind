@@ -1,11 +1,12 @@
 //! Armar los planes de 05 §5: renombrar un tag o un alias, fusionar y pasar
 //! un alias al nombre principal.
 
+use crate::changes::{Rename, TextEdit};
 use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::note::{FrontmatterSpot, TagOccurrence, TagSource};
-use crate::tags::refactor::{Edits, PageRename, PlanError, PlanNotice, TagPlan, TextEdit};
+use crate::tags::refactor::{Edits, PlanError, PlanNotice, TagPlan};
 
 /// Qué ocurrencias reescribe un plan y cómo se escriben después.
 struct Rewrite<'n> {
@@ -58,10 +59,9 @@ impl Tags {
         let name = self.display_name(owner).unwrap_or(owner.as_str());
         let mut edits = Edits::default();
         self.rewrite_notes(&Rewrite::new(&key, name), &mut edits);
-        Ok(TagPlan {
-            files: edits.into_files(),
-            ..TagPlan::default()
-        })
+        let mut plan = TagPlan::default();
+        plan.changes.edits = edits.into_files();
+        Ok(plan)
     }
 
     fn known(&self, text: &str) -> Result<TagKey, PlanError> {
@@ -90,13 +90,16 @@ impl Tags {
                     into: other.path.clone(),
                 });
             }
-            (Some(page), _) => plan.page_rename = self.page_rename(&page.path, to),
+            (Some(page), _) => plan
+                .changes
+                .renames
+                .extend(self.page_rename(&page.path, to)),
             (None, _) => {}
         }
         let mut edits = Edits::default();
         self.rewrite_notes(&rewrite, &mut edits);
         self.rewrite_pages(&rewrite, &mut edits);
-        plan.files = edits.into_files();
+        plan.changes.edits = edits.into_files();
         plan
     }
 
@@ -130,13 +133,13 @@ impl Tags {
         let mut edits = Edits::default();
         self.rewrite_notes(&rewrite, &mut edits);
         self.rewrite_pages(&rewrite, &mut edits);
-        plan.files = edits.into_files();
+        plan.changes.edits = edits.into_files();
         plan
     }
 
-    fn page_rename(&self, from: &VaultPath, name: &str) -> Option<PageRename> {
+    fn page_rename(&self, from: &VaultPath, name: &str) -> Option<Rename> {
         let to = self.folder.join(&format!("{name}.md")).ok()?;
-        (&to != from).then(|| PageRename {
+        (&to != from).then(|| Rename {
             from: from.clone(),
             to,
         })

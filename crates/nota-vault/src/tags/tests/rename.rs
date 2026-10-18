@@ -1,13 +1,11 @@
 //! Renombrar y fusionar como planes (05 §5): cada archivo cambia solo en los
 //! rangos esperados, y aplicar el plan da un vault coherente.
 
-use std::collections::BTreeMap;
-
 use pretty_assertions::assert_eq;
 
-use super::{Fixture, key, path};
-use crate::path::VaultPath;
-use crate::tags::{PageRename, PlanError, PlanNotice, TagPlan};
+use super::{Fixture, applied, changed, key, owned, path};
+use crate::changes::Rename;
+use crate::tags::{PlanError, PlanNotice};
 
 fn fixture() -> Fixture {
     Fixture::new(&[
@@ -28,47 +26,17 @@ fn fixture() -> Fixture {
     ])
 }
 
-/// Los archivos tras aplicar el plan, con la página ya renombrada.
-fn applied(fixture: &Fixture, plan: &TagPlan) -> BTreeMap<VaultPath, String> {
-    let mut files = fixture.files.clone();
-    for edit in &plan.files {
-        let text = edit.apply(&fixture.files[&edit.path]).unwrap();
-        files.insert(edit.path.clone(), text);
-    }
-    if let Some(PageRename { from, to }) = &plan.page_rename {
-        let text = files.remove(from).unwrap();
-        files.insert(to.clone(), text);
-    }
-    files
-}
-
-/// Solo lo que cambió, como `ruta: contenido`.
-fn changed(fixture: &Fixture, plan: &TagPlan) -> Vec<(String, String)> {
-    applied(fixture, plan)
-        .into_iter()
-        .filter(|(file, text)| fixture.files.get(file) != Some(text))
-        .map(|(file, text)| (file.to_string(), text))
-        .collect()
-}
-
-fn owned(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-    pairs
-        .iter()
-        .map(|(file, text)| ((*file).to_owned(), (*text).to_owned()))
-        .collect()
-}
-
 #[test]
 fn rename_a_tag_with_page_parents_and_aliases() {
     let fixture = fixture();
     let plan = fixture.tags().plan_rename("#rust", "#Oxido").unwrap();
     assert_eq!(plan.notices, []);
     assert_eq!(
-        plan.page_rename,
-        Some(PageRename {
+        plan.changes.renames,
+        [Rename {
             from: path("tags/rust.md"),
             to: path("tags/Oxido.md"),
-        })
+        }]
     );
     assert_eq!(
         changed(&fixture, &plan),
@@ -108,7 +76,7 @@ fn rename_a_tag_with_page_parents_and_aliases() {
 fn the_original_files_are_kept_for_undo() {
     let fixture = fixture();
     let plan = fixture.tags().plan_rename("#rust", "#Oxido").unwrap();
-    for edit in &plan.files {
+    for edit in &plan.changes.edits {
         let original = &fixture.files[&edit.path];
         let new = edit.apply(original).unwrap();
         assert_ne!(&new, original);
@@ -125,11 +93,11 @@ fn renaming_only_the_case_unifies_spellings() {
     let fixture = fixture();
     let plan = fixture.tags().plan_rename("#rust", "#Rust").unwrap();
     assert_eq!(
-        plan.page_rename,
-        Some(PageRename {
+        plan.changes.renames,
+        [Rename {
             from: path("tags/rust.md"),
             to: path("tags/Rust.md"),
-        })
+        }]
     );
     let files = applied(&fixture, &plan);
     assert_eq!(
@@ -213,11 +181,11 @@ fn a_page_moves_to_the_merged_tag_when_only_it_has_one() {
     let fixture = Fixture::new(&[("tags/viejo.md", "Descripción"), ("a.md", "#nuevo #viejo")]);
     let plan = fixture.tags().plan_merge("#viejo", "#nuevo").unwrap();
     assert_eq!(
-        plan.page_rename,
-        Some(PageRename {
+        plan.changes.renames,
+        [Rename {
             from: path("tags/viejo.md"),
             to: path("tags/nuevo.md"),
-        })
+        }]
     );
 }
 
@@ -226,7 +194,7 @@ fn rename_an_alias() {
     let fixture = fixture();
     let plan = fixture.tags().plan_rename("#rs", "#rst").unwrap();
     assert_eq!(plan.notices, [PlanNotice::RenamesAlias { of: key("rust") }]);
-    assert_eq!(plan.page_rename, None);
+    assert_eq!(plan.changes.renames, []);
     assert_eq!(
         changed(&fixture, &plan),
         owned(&[

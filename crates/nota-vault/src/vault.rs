@@ -9,6 +9,8 @@ use arc_swap::ArcSwap;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
+use crate::apply::{self, Applied, ApplyError, ChangesUndoReport};
+use crate::changes::Changes;
 use crate::file;
 use crate::index::VaultIndex;
 use crate::links::LinkIndex;
@@ -229,6 +231,29 @@ impl Vault {
     /// Si no existe, es la raíz o pasa por un enlace simbólico.
     pub fn move_to_trash(&self, path: &VaultPath) -> Result<PathBuf, FileOpError> {
         ops::trash(&self.root, path)
+    }
+
+    /// Aplica unos cambios armados sin tocar el disco (un [`crate::tags::TagPlan`]):
+    /// comprueba antes que cada archivo siga como se escaneó y que los
+    /// destinos estén libres, y luego edita, crea y renombra. Lo devuelto
+    /// sirve para [`Vault::undo`]. El índice se entera por el watcher.
+    ///
+    /// # Errors
+    /// Si un archivo cambió o no se puede leer, o un destino está ocupado (no
+    /// se escribió nada), o si algo falló a medias ([`ApplyError::Interrupted`]
+    /// trae lo hecho, para deshacerlo).
+    pub fn apply(&self, changes: &Changes) -> Result<Applied, ApplyError> {
+        apply::apply(&self.root, changes)
+    }
+
+    /// Deshace unos cambios aplicados: cada archivo vuelve a su texto de
+    /// antes, los creados se borran y los renombres se revierten. Lo que
+    /// cambió después de aplicar no se toca y queda en el reporte.
+    ///
+    /// # Errors
+    /// Si el origen de un renombre ya está ocupado: no se toca nada.
+    pub fn undo(&self, applied: &Applied) -> Result<ChangesUndoReport, FileOpError> {
+        apply::undo(&self.root, applied)
     }
 }
 
