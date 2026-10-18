@@ -45,6 +45,17 @@ pub struct Editor {
     pub tabstop: TabStop,
     /// `Tab` inserta espacios.
     pub expandtab: bool,
+    pub padding: Padding,
+}
+
+/// Espacio entre el borde del panel y el texto, en píxeles lógicos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Padding {
+    /// A la izquierda, antes de los números de línea, y a la derecha.
+    pub horizontal: u8,
+    /// Arriba y abajo.
+    pub vertical: u8,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -123,6 +134,16 @@ impl Default for Editor {
             scrolloff: 0,
             tabstop: TabStop(4),
             expandtab: true,
+            padding: Padding::default(),
+        }
+    }
+}
+
+impl Default for Padding {
+    fn default() -> Self {
+        Self {
+            horizontal: 12,
+            vertical: 8,
         }
     }
 }
@@ -193,6 +214,9 @@ editor:
   scrolloff: 5
   tabstop: 2
   expandtab: false
+  padding:
+    horizontal: 20
+    vertical: 0
 
 search:
   ignorecase: true
@@ -213,6 +237,10 @@ search:
                 scrolloff: 5,
                 tabstop: TabStop(2),
                 expandtab: false,
+                padding: Padding {
+                    horizontal: 20,
+                    vertical: 0,
+                },
             },
             search: Search {
                 ignorecase: true,
@@ -254,7 +282,8 @@ search:
     "relativenumber": false,
     "scrolloff": 5,
     "tabstop": 2,
-    "expandtab": false
+    "expandtab": false,
+    "padding": { "horizontal": 20, "vertical": 0 }
   },
   "search": { "ignorecase": true, "smartcase": true }
 }"#;
@@ -339,14 +368,20 @@ search:
 
     #[test]
     fn valor_fuera_de_rango_es_error() {
-        for text in [
-            "font:\n  size: 0",
-            "font:\n  size: 900",
-            "editor:\n  tabstop: 0",
+        for (text, line) in [
+            ("font:\n  size: 0", 2),
+            ("font:\n  size: 900", 2),
+            ("editor:\n  tabstop: 0", 2),
+            ("editor:\n  padding:\n    vertical: 300", 3),
+            ("editor:\n  padding:\n    horizontal: -1", 3),
         ] {
             let loaded = Settings::parse(text);
             assert_eq!(loaded.value, Settings::default(), "{text}");
-            assert_eq!(loaded.diagnostics[0].location.map(|at| at.line), Some(2));
+            assert_eq!(
+                loaded.diagnostics[0].location.map(|at| at.line),
+                Some(line),
+                "{text}"
+            );
         }
     }
 

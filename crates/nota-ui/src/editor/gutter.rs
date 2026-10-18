@@ -37,8 +37,8 @@ impl Gutter {
         )
     }
 
-    /// El fondo del margen en toda la altura de `bounds` y un número por
-    /// línea pintada, a la altura de su línea.
+    /// El fondo del margen en toda la altura de `bounds`, desde su borde
+    /// izquierdo, y un número por línea pintada, a la altura de su línea.
     pub fn paint(
         &self,
         view: &PaneView<'_>,
@@ -48,8 +48,13 @@ impl Gutter {
         theme: &Theme,
         window: &gpui_kit::Window,
     ) -> PaintedGutter {
+        let text_left = layout.viewport.bounds.left();
+        let left = text_left - self.width;
         let background = fill(
-            Bounds::new(bounds.origin, size(self.width, bounds.size.height)),
+            Bounds::new(
+                bounds.origin,
+                size(text_left - bounds.left(), bounds.size.height),
+            ),
             theme.gutter,
         );
         let cursor_line = view.buffer().line_of(view.cursor());
@@ -64,7 +69,7 @@ impl Gutter {
                     theme.gutter_foreground
                 };
                 let shaped = shape(label.text.into(), typeface, color, None, window);
-                Some((point(bounds.left(), laid.origin.y), shaped))
+                Some((point(left, laid.origin.y), shaped))
             })
             .collect();
         PaintedGutter { background, labels }

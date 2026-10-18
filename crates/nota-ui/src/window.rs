@@ -31,7 +31,7 @@ pub fn open(
     launched: Instant,
     cx: &mut App,
 ) -> Result<(), OpenError> {
-    cx.set_global(Theme::new(&config.theme, &config.settings.font, cx)?);
+    cx.set_global(Theme::new(config, cx)?);
     actions::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
