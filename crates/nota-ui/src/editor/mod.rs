@@ -1,5 +1,6 @@
 //! Vista de editor: `nota-buffer` + `nota-vim` pintando solo lo visible.
 
+mod clipboard;
 mod commands;
 mod element;
 mod input;
@@ -20,6 +21,7 @@ use gpui_kit::{
 use nota_buffer::ByteOffset;
 use nota_vim::{Action, KeyOutcome};
 
+use self::clipboard::SystemClipboard;
 use self::element::EditorElement;
 use self::input::ImeLine;
 use self::keys::Route;
@@ -72,7 +74,7 @@ impl Editor {
             Route::Engine(key) => {
                 cx.stop_propagation();
                 self.marked = None;
-                let outcome = self.document.feed(key);
+                let outcome = self.document.feed(key, &mut SystemClipboard(cx));
                 self.handle_outcome(outcome, window, cx);
             }
             Route::TextInput => {}
@@ -96,7 +98,10 @@ impl Editor {
         if let Some(range) = range.filter(|range| Some(range) != marked_range.as_ref()) {
             log::warn!("el IME pidió reemplazar {range:?}; solo se escribe en el cursor");
         }
-        let outcome = self.document.type_text(text).transpose();
+        let outcome = self
+            .document
+            .type_text(text, &mut SystemClipboard(cx))
+            .transpose();
         match outcome {
             Some(outcome) => self.handle_outcome(outcome, window, cx),
             None => cx.notify(),

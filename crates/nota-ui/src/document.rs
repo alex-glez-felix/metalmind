@@ -8,7 +8,7 @@ use nota_buffer::{
     Bias, Buffer, BufferError, ByteOffset, Edit, Goal, HistorySeq, Selection, Selections,
 };
 use nota_vault::FileError;
-use nota_vim::{Key, KeyOutcome, Mode, Vim, VimError};
+use nota_vim::{Clipboard, Key, KeyOutcome, Mode, Vim, VimError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -142,10 +142,19 @@ impl Document {
         Ok(self.buffer.text_in(range)?)
     }
 
+    /// `clipboard` es lo que leen y escriben los registros `"+` y `"*`.
+    ///
     /// # Errors
     /// Solo si una edición resulta inválida, lo que sería un bug.
-    pub fn feed(&mut self, key: Key) -> Result<KeyOutcome, DocumentError> {
-        Ok(self.vim.feed(key, &mut self.buffer, &mut self.selections)?)
+    pub fn feed(
+        &mut self,
+        key: Key,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, DocumentError> {
+        let outcome =
+            self.vim
+                .feed_with_clipboard(key, &mut self.buffer, &mut self.selections, clipboard)?;
+        Ok(outcome)
     }
 
     /// Texto ya compuesto por el teclado o el IME: cada carácter entra al
@@ -153,10 +162,14 @@ impl Document {
     ///
     /// # Errors
     /// Solo si una edición resulta inválida, lo que sería un bug.
-    pub fn type_text(&mut self, text: &str) -> Result<Option<KeyOutcome>, DocumentError> {
+    pub fn type_text(
+        &mut self,
+        text: &str,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<Option<KeyOutcome>, DocumentError> {
         let mut last = None;
         for c in text.chars() {
-            last = Some(self.feed(Key::Char(c))?);
+            last = Some(self.feed(Key::Char(c), clipboard)?);
         }
         Ok(last)
     }

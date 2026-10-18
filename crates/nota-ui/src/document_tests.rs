@@ -1,16 +1,42 @@
 use std::fs;
 
-use nota_vim::Command;
+use nota_vim::{Clipboard, Command, SystemRegister};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 use super::*;
+
+/// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
+#[derive(Default)]
+struct TestClipboard(Option<String>);
+
+impl Clipboard for TestClipboard {
+    fn read(&mut self, register: SystemRegister) -> Option<String> {
+        (register == SystemRegister::Clipboard)
+            .then(|| self.0.clone())
+            .flatten()
+    }
+
+    fn write(&mut self, register: SystemRegister, text: String) {
+        if register == SystemRegister::Clipboard {
+            self.0 = Some(text);
+        }
+    }
+}
 
 fn document(text: &str) -> Document {
     Document::new(Path::new("prueba.md"), text)
 }
 
 fn keys(document: &mut Document, text: &str) -> Option<KeyOutcome> {
+    keys_with(document, text, &mut TestClipboard::default())
+}
+
+fn keys_with(
+    document: &mut Document,
+    text: &str,
+    clipboard: &mut TestClipboard,
+) -> Option<KeyOutcome> {
     let mut last = None;
     for c in text.chars() {
         let key = match c {
@@ -19,7 +45,7 @@ fn keys(document: &mut Document, text: &str) -> Option<KeyOutcome> {
             '⌫' => Key::Backspace,
             _ => Key::Char(c),
         };
-        last = Some(document.feed(key).unwrap());
+        last = Some(document.feed(key, clipboard).unwrap());
     }
     last
 }
@@ -29,7 +55,9 @@ fn el_texto_compuesto_entra_por_el_motor() {
     let mut document = document("hola\n");
     keys(&mut document, "A");
     assert_eq!(
-        document.type_text("ñá").unwrap(),
+        document
+            .type_text("ñá", &mut TestClipboard::default())
+            .unwrap(),
         Some(KeyOutcome::Inserted)
     );
     keys(&mut document, "⎋");
@@ -41,7 +69,9 @@ fn el_texto_compuesto_entra_por_el_motor() {
 fn en_normal_el_texto_son_comandos() {
     let mut document = document("uno dos\n");
     assert!(matches!(
-        document.type_text("w").unwrap(),
+        document
+            .type_text("w", &mut TestClipboard::default())
+            .unwrap(),
         Some(KeyOutcome::Executed(_))
     ));
     assert_eq!(document.cursor(), ByteOffset::new(4));
@@ -290,4 +320,15 @@ fn guardar_a_mitad_del_insert_no_coincide_con_ningun_estado() {
     keys(&mut document, "⎋u");
     assert_eq!(document.buffer().to_string(), "");
     assert!(document.is_modified());
+}
+
+#[test]
+fn los_registros_del_portapapeles_usan_el_que_le_pasan() {
+    let mut document = document("uno\ndos");
+    let mut clipboard = TestClipboard::default();
+    keys_with(&mut document, "\"+yyj", &mut clipboard);
+    assert_eq!(clipboard.0.as_deref(), Some("uno\n"));
+    clipboard.0 = Some("tres".to_owned());
+    keys_with(&mut document, "\"+P", &mut clipboard);
+    assert_eq!(document.buffer().to_string(), "uno\ntresdos");
 }
