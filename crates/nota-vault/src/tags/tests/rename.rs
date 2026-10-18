@@ -299,3 +299,57 @@ fn an_unsaved_page_changes_the_graph() {
     assert_eq!(tags.graph().alias_of(&key("oxido")), Some(&key("rust")));
     assert_eq!(fixture.tags().graph().alias_of(&key("oxido")), None);
 }
+
+#[test]
+fn removing_values_across_lines_and_at_the_start_of_a_list() {
+    let fixture = Fixture::new(&[
+        ("tags/b.md", "---\nparents: [a, a, otro]\n---\n"),
+        ("n.md", "---\ntags: [b,\n  a,\n  c]\n---\n"),
+        ("m.md", "---\ntags: [a, b, b, c]\n---\n"),
+    ]);
+    let plan = fixture.tags().plan_merge("#a", "#b").unwrap();
+    assert_eq!(
+        changed(&fixture, &plan),
+        owned(&[
+            ("m.md", "---\ntags: [b, c]\n---\n"),
+            ("n.md", "---\ntags: [b,\n  c]\n---\n"),
+            ("tags/b.md", "---\nparents: [otro]\n---\n"),
+        ])
+    );
+}
+
+#[test]
+fn a_renamed_page_drops_the_parent_with_its_new_name() {
+    let fixture = Fixture::new(&[
+        ("tags/a.md", "---\nparents: [b, c]\n---\n"),
+        ("n.md", "#a #b"),
+    ]);
+    let plan = fixture.tags().plan_rename("#a", "#b").unwrap();
+    assert_eq!(
+        changed(&fixture, &plan),
+        owned(&[("n.md", "#b #b"), ("tags/b.md", "---\nparents: [c]\n---\n"),])
+    );
+    let after = Fixture {
+        files: applied(&fixture, &plan),
+    }
+    .tags();
+    assert_eq!(after.graph().problems(), []);
+}
+
+#[test]
+fn an_alias_cannot_join_a_conflict_between_other_pages() {
+    let fixture = Fixture::new(&[
+        ("tags/rust.md", "---\naliases: [rs]\n---\n"),
+        ("tags/a.md", "---\naliases: [x]\n---\n"),
+        ("tags/b.md", "---\naliases: [x]\n---\n"),
+        ("n.md", "#rs"),
+    ]);
+    let tags = fixture.tags();
+    assert_eq!(tags.graph().alias_of(&key("x")), None);
+    let plan = tags.plan_rename("#rs", "#x").unwrap();
+    assert!(plan.is_blocked());
+    assert!(plan.notices.contains(&PlanNotice::AliasTaken {
+        alias: key("x"),
+        by: key("a")
+    }));
+}

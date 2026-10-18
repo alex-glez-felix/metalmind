@@ -5,7 +5,7 @@ use crate::changes::{Rename, TextEdit};
 use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
-use crate::tags::note::{FrontmatterSpot, TagOccurrence, TagSource};
+use crate::tags::note::{TagOccurrence, TagSource};
 use crate::tags::refactor::{Edits, PlanError, PlanNotice, TagPlan};
 
 /// Qué ocurrencias reescribe un plan y cómo se escriben después.
@@ -109,32 +109,40 @@ impl Tags {
             notices: vec![PlanNotice::RenamesAlias { of: owner.clone() }],
             ..TagPlan::default()
         };
-        if &rewrite.key != alias && &rewrite.key != owner {
-            let taken = match self.graph.alias_of(&rewrite.key) {
-                Some(other) if other != owner => Some(other.clone()),
-                _ => self.graph.page(&rewrite.key).map(|page| page.key.clone()),
-            };
-            match taken {
-                Some(by) => plan.notices.push(PlanNotice::AliasTaken {
-                    alias: rewrite.key.clone(),
-                    by,
-                }),
-                None if self.index.tag(&rewrite.key).is_some()
-                    && self.graph.alias_of(&rewrite.key).is_none() =>
-                {
-                    plan.notices.push(PlanNotice::AliasAbsorbs {
-                        tag: rewrite.key.clone(),
-                        of: owner.clone(),
-                    });
-                }
-                None => {}
-            }
+        if &rewrite.key != alias {
+            plan.notices.extend(self.alias_notice(&rewrite.key, owner));
         }
         let mut edits = Edits::default();
         self.rewrite_notes(&rewrite, &mut edits);
         self.rewrite_pages(&rewrite, &mut edits);
         plan.changes.edits = edits.into_files();
         plan
+    }
+
+    /// Lo que la vista previa avisa si `alias` pasa a ser alias de `owner`:
+    /// bloquea si es una página u otra página ya lo declara (aunque ahí no
+    /// aplique por un choque), y avisa si las notas ya lo escriben como tag.
+    pub(crate) fn alias_notice(&self, alias: &TagKey, owner: &TagKey) -> Option<PlanNotice> {
+        if alias == owner {
+            return None;
+        }
+        let taken = self.graph.page(alias).or_else(|| {
+            self.graph.pages().find(|page| {
+                &page.key != owner && page.aliases.iter().any(|declared| &declared.key == alias)
+            })
+        });
+        if let Some(page) = taken.filter(|page| &page.key != owner) {
+            return Some(PlanNotice::AliasTaken {
+                alias: alias.clone(),
+                by: page.key.clone(),
+            });
+        }
+        (self.index.tag(alias).is_some() && self.graph.alias_of(alias).is_none()).then(|| {
+            PlanNotice::AliasAbsorbs {
+                tag: alias.clone(),
+                of: owner.clone(),
+            }
+        })
     }
 
     fn page_rename(&self, from: &VaultPath, name: &str) -> Option<Rename> {
@@ -153,9 +161,9 @@ impl Tags {
             if !tags.occurrences.iter().any(|tag| &tag.key == rewrite.from) {
                 continue;
             }
-            let mut seen = false;
+            let mut list = List::new(false);
             for occurrence in &tags.occurrences {
-                if let Some(edit) = rewrite.edit(occurrence, &mut seen) {
+                if let Some(edit) = rewrite.edit(occurrence, &mut list) {
                     edits.push(path, tags.hash, edit);
                 }
             }
@@ -163,7 +171,8 @@ impl Tags {
     }
 
     /// Los `aliases` y `parents` de las páginas que nombran la clave. Un
-    /// padre que queda repetido o que sería la página misma se quita.
+    /// padre que queda repetido o que sería la página misma (con su nombre
+    /// nuevo, si es la que se renombra) se quita.
     fn rewrite_pages(&self, rewrite: &Rewrite<'_>, edits: &mut Edits) {
         for page in self.graph.pages() {
             let Some(hash) = self.index.note(&page.path).map(|note| note.hash) else {
@@ -176,13 +185,32 @@ impl Tags {
             {
                 edits.push(&page.path, hash, rewrite.replace(alias));
             }
-            let mut seen = page.key == rewrite.key;
+            let renamed = if &page.key == rewrite.from {
+                &rewrite.key
+            } else {
+                &page.key
+            };
+            let mut list = List::new(renamed == &rewrite.key);
             for parent in &page.parents {
-                if let Some(edit) = rewrite.edit(parent, &mut seen) {
+                if let Some(edit) = rewrite.edit(parent, &mut list) {
                     edits.push(&page.path, hash, edit);
                 }
             }
         }
+    }
+}
+
+/// Lo recorrido de una lista del frontmatter.
+struct List {
+    /// Ya tiene la clave nueva: otra igual sobra.
+    seen: bool,
+    /// Todos los valores de antes se quitan.
+    prefix: bool,
+}
+
+impl List {
+    fn new(seen: bool) -> Self {
+        Self { seen, prefix: true }
     }
 }
 
@@ -196,20 +224,22 @@ impl<'n> Rewrite<'n> {
     }
 
     /// Qué hacer con una ocurrencia de una lista (o del texto): reescribirla,
-    /// quitarla si repite la clave nueva en su lista, o nada. `seen` dice si
-    /// la lista ya tiene la clave nueva.
-    fn edit(&self, occurrence: &TagOccurrence, seen: &mut bool) -> Option<TextEdit> {
+    /// quitarla si repite la clave nueva en su lista, o nada.
+    fn edit(&self, occurrence: &TagOccurrence, list: &mut List) -> Option<TextEdit> {
         let renamed = &occurrence.key == self.from;
         let lands = renamed || occurrence.key == self.key;
         match &occurrence.source {
-            TagSource::Frontmatter(FrontmatterSpot { removal, .. }) if lands && *seen => {
-                Some(TextEdit {
-                    range: removal.clone(),
-                    text: String::new(),
-                })
-            }
+            TagSource::Frontmatter(spot) if lands && list.seen => Some(TextEdit {
+                range: if list.prefix {
+                    spot.removal_first.clone()
+                } else {
+                    spot.removal.clone()
+                },
+                text: String::new(),
+            }),
             TagSource::Frontmatter(_) => {
-                *seen |= lands;
+                list.seen |= lands;
+                list.prefix = false;
                 renamed.then(|| self.replace(occurrence))
             }
             TagSource::Inline => renamed.then(|| self.replace(occurrence)),

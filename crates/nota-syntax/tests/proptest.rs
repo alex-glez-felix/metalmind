@@ -88,14 +88,16 @@ fn written_tag() -> impl Strategy<Value = (String, String)> {
     })
 }
 
-/// Un frontmatter con `tags:` en una lista entre corchetes o en bloque.
+/// Un frontmatter con `tags:` en una lista entre corchetes (en una línea o
+/// en varias) o en bloque.
 fn tags_frontmatter() -> impl Strategy<Value = (Vec<String>, String)> {
     (
         prop::collection::vec(written_tag(), 1..6),
         any::<bool>(),
         any::<bool>(),
+        any::<bool>(),
     )
-        .prop_map(|(tags, block, crlf)| {
+        .prop_map(|(tags, block, crlf, multiline)| {
             let eol = if crlf { "\r\n" } else { "\n" };
             let written: Vec<&str> = tags.iter().map(|(_, written)| written.as_str()).collect();
             let list = if block {
@@ -105,6 +107,8 @@ fn tags_frontmatter() -> impl Strategy<Value = (Vec<String>, String)> {
                     list.push_str(tag);
                     list
                 })
+            } else if multiline {
+                format!(" [{}]", written.join(&format!(",{eol}  ")))
             } else {
                 format!(" [{}]", written.join(", "))
             };
@@ -138,6 +142,38 @@ proptest! {
             expected.remove(which);
             prop_assert_eq!(tag_names(&rest), expected, "{:?}", rest);
         }
+    }
+
+    /// Quitar varios valores a la vez: los que tienen borrados todos los de
+    /// antes van por `removal_first` y los demás por `removal`. Los rangos
+    /// nunca se pisan y quedan los demás, en orden.
+    #[test]
+    fn several_values_can_be_removed_at_once(
+        (names, text) in tags_frontmatter(),
+        removed in prop::collection::vec(any::<bool>(), 6),
+    ) {
+        let tags = scan(&text).frontmatter.map(|frontmatter| frontmatter.tags).unwrap_or_default();
+        let mut prefix = true;
+        let mut ranges = Vec::new();
+        let mut expected = Vec::new();
+        for ((tag, name), &remove) in tags.iter().zip(&names).zip(&removed) {
+            if remove {
+                ranges.push(if prefix { tag.removal_first.clone() } else { tag.removal.clone() });
+            } else {
+                prefix = false;
+                expected.push(name.clone());
+            }
+        }
+        let mut rest = String::new();
+        let mut at = 0;
+        for range in &ranges {
+            prop_assert!(range.start >= at, "{:?} se pisa en {:?}", ranges, text);
+            rest.push_str(&text[at..range.start]);
+            at = range.end;
+        }
+        rest.push_str(&text[at..]);
+        prop_assert_eq!(scan(&rest).problems, vec![], "{:?}", rest);
+        prop_assert_eq!(tag_names(&rest), expected, "{:?}", rest);
     }
 
     /// Quitar el campo `tags` entero por su `Entry` deja los demás campos

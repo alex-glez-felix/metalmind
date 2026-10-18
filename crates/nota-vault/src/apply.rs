@@ -3,10 +3,11 @@
 //! un fallo a medias dice qué quedó hecho para poder deshacerlo.
 
 use std::fs;
+use std::io;
 use std::path::Path;
 
 use crate::changes::{Changes, NewFile, Rename, StaleFile};
-use crate::file::{self, FileError, create_atomic, write_atomic};
+use crate::file::{self, FileError, create_atomic, replace_file};
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refactor::AccessError;
@@ -143,7 +144,10 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
     for file in &changes.creates {
         match create(root, file) {
             Ok(created) => applied.created.push(created),
-            Err(error) => return interrupted(applied, ChangesInterruption::Create(error)),
+            Err(failed) => {
+                applied.created.extend(failed.created);
+                return interrupted(applied, ChangesInterruption::Create(failed.cause));
+            }
         }
     }
     for rename in &changes.renames {
@@ -166,24 +170,39 @@ fn rewrite(root: &Path, file: &Rewritten) -> Result<(), ChangesInterruption> {
     write(root, &file.path, &file.after).map_err(ChangesInterruption::Write)
 }
 
-fn create(root: &Path, file: &NewFile) -> Result<Created, AccessError> {
-    ops::check_free(root, &file.path)?;
-    let folders = ops::create_parents(root, &file.path)?;
+/// Crear falló; `created` está si el archivo igual quedó en disco (falló al
+/// bajar la carpeta a disco), para poder deshacerlo.
+struct CreateFailed {
+    created: Option<Created>,
+    cause: AccessError,
+}
+
+fn create(root: &Path, file: &NewFile) -> Result<Created, CreateFailed> {
+    let failed = |cause: AccessError| CreateFailed {
+        created: None,
+        cause,
+    };
+    ops::check_free(root, &file.path).map_err(|error| failed(error.into()))?;
+    let folders = ops::create_parents(root, &file.path).map_err(|error| failed(error.into()))?;
+    let created = Created {
+        file: file.clone(),
+        folders,
+    };
     match create_atomic(&file.path.to_fs(root), &file.text) {
-        Ok(()) => Ok(Created {
-            file: file.clone(),
-            folders,
-        }),
-        Err(error) => {
-            remove_folders(root, &folders);
-            Err(match error {
-                FileError::Write { source, .. }
-                    if source.kind() == std::io::ErrorKind::AlreadyExists =>
-                {
-                    FileOpError::AlreadyExists(file.path.clone()).into()
-                }
-                error => error.into(),
+        Ok(()) => Ok(created),
+        Err(FileError::Write { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists => {
+            remove_folders(root, &created.folders);
+            Err(failed(FileOpError::AlreadyExists(file.path.clone()).into()))
+        }
+        Err(error) if read(root, &file.path).is_ok_and(|text| text == file.text) => {
+            Err(CreateFailed {
+                created: Some(created),
+                cause: error.into(),
             })
+        }
+        Err(error) => {
+            remove_folders(root, &created.folders);
+            Err(failed(error.into()))
         }
     }
 }
@@ -250,8 +269,9 @@ fn read(root: &Path, path: &VaultPath) -> Result<String, AccessError> {
     file::read(&full)?.ok_or_else(|| FileOpError::NotFound(path.clone()).into())
 }
 
+/// Sin seguir un enlace que haya aparecido después de leer el archivo.
 fn write(root: &Path, path: &VaultPath, text: &str) -> Result<(), FileError> {
-    write_atomic(&path.to_fs(root), |out| out.write_all(text.as_bytes()))
+    replace_file(&path.to_fs(root), text)
 }
 
 fn remove(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
