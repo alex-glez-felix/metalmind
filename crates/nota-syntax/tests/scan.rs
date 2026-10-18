@@ -166,6 +166,8 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
 #[case("[a](nota.md \"título\")", "nota.md", None, Some("a"), false)]
 #[case("![](img.png)", "img.png", None, None, true)]
 #[case("[x](a\\).md)", "a).md", None, Some("x"), false)]
+#[case("[x](<a\\>b.md>)", "a>b.md", None, Some("x"), false)]
+#[case("[x](<a \\<b.md>)", "a <b.md", None, Some("x"), false)]
 #[case(
     "[50%25 \\*off\\*](nota.md)",
     "nota.md",
