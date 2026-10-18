@@ -58,6 +58,11 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.90 / 25 ms | ✅ | `nota-vault` `candidatos_de_autocompletado` |
 | Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.0 ms | ✅ | `nota-vault` `plan_de_renombrar_un_tag_con_pagina` |
 | Publicar los tags en cada lote (clonarlos), 5 k / 50 k | ≤ 16 / 160 ms | 1.7 / 33 ms | ✅ | `nota-vault` `clonar_los_tags` ([#60](https://github.com/alex-glez-felix/nota/issues/60)) |
+| Árbol del panel, todo abierto: armarlo, 5 k / 50 k notas | ≤ 16 ms | 0.11 / 0.96 ms | ✅ | `nota-ui` `construir_todo_abierto` |
+| Árbol: abrir o cerrar una carpeta, 5 k / 50 k | ≤ 1 ms | 0.13 / 1.5 ms | ❌ | `nota-ui` `expandir_y_colapsar` ([#59](https://github.com/alex-glez-felix/nota/issues/59)) |
+| Árbol: bajar una fila | ≤ 1 ms | 20 ns | ✅ | `nota-ui` `bajar_una_fila` |
+| Árbol: filtrar con `/`, peor consulta (`tema nota`), 5 k / 50 k | ≤ 8 ms | 2.6 / 35 ms | ❌ | `nota-ui` `filtrar` ([#59](https://github.com/alex-glez-felix/nota/issues/59)) |
+| Árbol: aplicar el rename de las 10 carpetas de arriba que manda el watcher, 5 k / 50 k | ≤ 16 ms | 0.19 / 1.7 ms | ✅ | `nota-ui` `aplicar_un_rename` |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
@@ -74,7 +79,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 
 Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault también escanea los tags de cada nota: en la misma máquina, `main` con solo el índice de links abría 5 k y 50 k notas en 33.9 y 434 ms, y los tags suman 4.8 y 45 ms (un 14 % y un 10 %). El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 13 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
 
-⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
+⏳ es pendiente: todavía no se puede medir sin abrir una ventana. ❌ no cumple hoy y tiene su issue. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
 
 ❌ no cumple y tiene su issue. `:g` y `:normal` corren su comando en cada línea como una edición aparte, igual que vim, y lo que cuesta es la transacción del buffer: unos 3 µs por línea.
 
@@ -86,7 +91,7 @@ El picker (`nota-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla mand
 
 ### 1. Benchmarks de tiempo (`divan`, local)
 
-`cargo bench -p <crate>` en `nota-buffer`, `nota-vim`, `nota-syntax`, `nota-search` y `nota-vault`. Son los números de la tabla. Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
+`cargo bench -p <crate>` en `nota-buffer`, `nota-vim`, `nota-syntax`, `nota-search`, `nota-vault` y `nota-ui` (solo el modelo del árbol, sin ventana: `--bench file_tree`). Son los números de la tabla. Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
 
 No sirven para CI: en los runners de GitHub el tiempo de pared varía más que las regresiones que se quieren atrapar.
 

@@ -3966,6 +3966,7 @@ dependencies = [
  "log",
  "nota-buffer",
  "nota-config",
+ "nota-perf",
  "nota-search",
  "nota-vault",
  "nota-vim",
