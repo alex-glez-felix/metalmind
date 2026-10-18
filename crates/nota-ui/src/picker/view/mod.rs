@@ -70,8 +70,9 @@ pub struct PickerView<T> {
     scroll: UniformListScrollHandle,
     /// Se presta a la búsqueda en curso y vuelve con sus resultados.
     search_matcher: Option<FuzzyMatcher>,
-    /// Para las posiciones de las filas que se pintan.
-    paint_matcher: FuzzyMatcher,
+    /// Para lo que corre en el hilo de la UI: las posiciones de las filas
+    /// que se pintan y la búsqueda de un `enter` que no espera.
+    ui_matcher: FuzzyMatcher,
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
     search: Option<Task<()>>,
@@ -92,7 +93,7 @@ impl<T: PickerItem> PickerView<T> {
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             search_matcher: Some(options.haystack.matcher()),
-            paint_matcher: options.haystack.matcher(),
+            ui_matcher: options.haystack.matcher(),
             options,
             marked: None,
             search: None,
@@ -164,7 +165,7 @@ impl<T: PickerItem> PickerView<T> {
     }
 
     fn choose(&mut self, open: Open, cx: &mut Context<Self>) {
-        if let Some(chosen) = self.state.choose(open) {
+        if let Some(chosen) = self.state.choose(open, &mut self.ui_matcher) {
             cx.emit(PickerEvent::Chosen(chosen));
         }
     }

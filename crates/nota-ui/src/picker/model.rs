@@ -63,8 +63,7 @@ pub struct Chosen {
 pub struct Step<T> {
     /// La búsqueda que falta correr.
     pub job: Option<Job<T>>,
-    /// Se pidió elegir antes de que llegaran los resultados de lo escrito,
-    /// y ya llegaron.
+    /// Se pidió elegir antes de que llegaran los ítems, y ya llegaron.
     pub chosen: Option<Chosen>,
 }
 
@@ -78,7 +77,7 @@ pub struct PickerState<T> {
     selected: usize,
     /// Hay una búsqueda corriendo.
     running: bool,
-    /// Se pidió elegir con resultados viejos: se elige cuando lleguen.
+    /// Se pidió elegir antes de que llegaran los ítems.
     pending_choice: Option<Open>,
     /// Los próximos resultados vuelven a la primera fila.
     reset_selection: bool,
@@ -228,8 +227,8 @@ impl<T: AsRef<str>> PickerState<T> {
         self.settle(job)
     }
 
-    /// Si había una elección esperando y lo mostrado ya es de lo escrito,
-    /// se elige.
+    /// Si había una elección esperando a los ítems y lo mostrado ya es de
+    /// lo escrito, se elige.
     fn settle(&mut self, job: Option<Job<T>>) -> Step<T> {
         let chosen = if self.is_current() {
             self.pending_choice
@@ -268,17 +267,27 @@ impl<T: AsRef<str>> PickerState<T> {
         }
     }
 
-    /// Elige la fila marcada. Si los resultados todavía no son de lo
-    /// escrito (se tecleó y se dio `enter` antes de que volviera la
-    /// búsqueda, o antes de que llegaran los ítems), la elección espera:
-    /// así se abre lo que se ve después de escribir, no lo de antes.
-    pub fn choose(&mut self, open: Open) -> Option<Chosen> {
-        if self.is_current() {
-            self.chosen(open)
-        } else {
+    /// Elige la fila marcada de lo escrito ahora. Si la búsqueda de lo
+    /// escrito no volvió todavía (se tecleó y se dio `enter` enseguida), se
+    /// busca en el momento con `matcher`: es una sola búsqueda, la que se
+    /// está esperando, y así las teclas que lleguen después del `enter` no
+    /// cambian lo elegido. Sin ítems todavía, la elección espera a
+    /// [`PickerState::set_items`].
+    pub fn choose(&mut self, open: Open, matcher: &mut FuzzyMatcher) -> Option<Chosen> {
+        if !self.loaded {
             self.pending_choice = Some(open);
-            None
+            return None;
         }
+        if !self.is_current() {
+            let job = Job {
+                version: self.version,
+                query: Query::new(self.line.text()),
+                items: Arc::clone(&self.items),
+            };
+            let found = job.run(matcher);
+            self.show(found);
+        }
+        self.chosen(open)
     }
 
     fn chosen(&self, open: Open) -> Option<Chosen> {

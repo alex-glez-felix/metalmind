@@ -138,7 +138,7 @@ impl<T: PickerItem> PickerView<T> {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let positions = self.state.positions(row, &mut self.paint_matcher);
+        let positions = self.state.positions(row, &mut self.ui_matcher);
         let item = self.state.item(row);
         let text = item
             .map(|item| item.as_ref().to_owned())
