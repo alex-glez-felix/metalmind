@@ -1,4 +1,13 @@
 [profile.default]
 # Una prueba de complejidad que se volvió cuadrática puede tardar minutos en
-# fallar por tiempo; aquí falla al minuto. La más lenta hoy tarda ~7 s.
+# fallar por tiempo; aquí falla al minuto. La más lenta hoy tarda ~20 s.
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+# Miden tiempo: si corren varias a la vez y son más que los núcleos, se
+# reparten la CPU y la proporción N contra 16N sale inflada (docs/performance.md).
+[test-groups]
+complexity = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary(complexity) | test(/::complexity::|_es_lineal$|^growth::tests::/)'
+test-group = 'complexity'
