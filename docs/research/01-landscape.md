@@ -1,6 +1,6 @@
 # 01 — Panorama: apps de notas markdown que se solapan con "nota"
 
-Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (Linux primero), en Rust, centrada en (1) rendimiento, (2) UX y (3) edición modal vim y atajos de teclado en toda la app. Debe ser compatible con vaults de Obsidian.
+Fecha: 2026-10-15. Objetivo de nota: app de notas markdown open-source, nativa (Linux primero), en Rust, centrada en (1) rendimiento, (2) UX y (3) edición modal vim y atajos de teclado en toda la app. La compatibilidad con vaults de Obsidian no es requisito: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
 
 ## Cómo se verificó
 
