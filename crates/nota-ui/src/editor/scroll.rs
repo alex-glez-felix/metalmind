@@ -21,6 +21,11 @@ impl Scroll {
         self.top = (self.top + lines).clamp(0.0, to_f64(last_line));
     }
 
+    /// Que no quede pasado el final si el texto se acortó.
+    pub fn clamp(&mut self, last_line: usize) {
+        self.top = self.top.min(to_f64(last_line));
+    }
+
     /// Lo mínimo para que `line` entre en las `rows` filas completas visibles.
     pub fn reveal(&mut self, line: usize, rows: usize) {
         let rows = rows.max(1);
@@ -63,6 +68,15 @@ mod tests {
         assert_eq!((scroll.first_line(), scroll.fraction()), (2, 0.5));
         scroll.scroll_by(1_000.0, 100);
         assert_eq!(scroll, at(100.0));
+    }
+
+    #[test]
+    fn clamp_no_deja_el_scroll_pasado_el_final() {
+        let mut scroll = at(80.5);
+        scroll.clamp(100);
+        assert_eq!(scroll, at(80.5));
+        scroll.clamp(10);
+        assert_eq!(scroll, at(10.0));
     }
 
     #[test]
