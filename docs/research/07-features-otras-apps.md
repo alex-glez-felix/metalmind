@@ -1,5 +1,8 @@
 # 07 — Features de otras apps: qué falta decidir
 
+> [!WARNING]
+> **Estado: pendiente de revisión de Alex.** Nada de este documento está decidido ni entra al roadmap. Las recomendaciones son solo eso: no implementes nada de aquí hasta que este aviso se quite.
+
 > Investigación del 2026-10-18. Objetivo: decidir el alcance **ahora** y no descubrir a medio camino algo que cambie los cimientos. No repite el panorama de [01](01-landscape.md) (qué apps existen y en qué stack): aquí importan sus **features** y si nota las quiere.
 > Parte de lo ya decidido en [05](05-tags.md) (tags) y [06](06-decisiones-de-fondo.md) (decisiones de fondo), y del roadmap de [03 §8](03-core-architecture.md#8-hitos-del-mvp). Este documento **no cambia** ninguno de los tres: todo lo de aquí es recomendación hasta que el autor decida (§5).
 
@@ -8,7 +11,7 @@
 - Se revisó documentación oficial, changelogs y foros de las apps pedidas: Obsidian, Notion, Inkdrop, Evernote, Logseq, Bear, Apple Notes, Joplin, Standard Notes, Notesnook, Anytype, Capacities, Tana, Reflect, Craft, SiYuan y Zettlr. Del lado terminal y Emacs: zk, nb, Neorg, org-mode/org-roam, Denote y SilverBullet. Además Dendron y Foam por las jerarquías, y Trilium, Memos, UpNote y Heptabase, que aparecieron al buscar.
 - Cada feature cita su fuente. Un link sin marca es una página que se abrió y se leyó. **(b)** quiere decir que la página salió en los resultados del buscador con ese contenido, pero no se abrió; el Help Center de Evernote, por ejemplo, devolvió 403. **(sin verificar)** quiere decir que no se encontró fuente.
 - Clasificación:
-  - **MVP**: entra antes del primer release (M0–M6).
+  - **MVP**: recomendado para antes del primer release (M0–M6).
   - **Después**: post-MVP. Hoy no cuesta nada salvo la restricción que se indica.
   - **Baja**: deseable, sin fecha.
   - **No encaja**: no va, con la razón.
@@ -22,7 +25,7 @@ Las primeras once tocan cimientos y van primero. Las demás se pueden agregar de
 
 | # | Feature | Recomendación | Por qué, en una línea |
 |---|---|---|---|
-| 1 | **Frontmatter completo en el índice**, como clave/valor genérico | **MVP (restricción)** | Hoy `Frontmatter` solo guarda `tags`, `aliases` y `cssclasses`. Guardarlo entero permite filtrar por cualquier campo y deja abierta una vista de tabla sin tocar los cimientos. Las bases de datos siguen sin entrar (§2.2). |
+| 1 | **Frontmatter completo en el índice**, como clave/valor genérico | **MVP (restricción)** | Hoy `Frontmatter` solo guarda `tags`, `aliases` y `cssclasses`. Guardarlo entero permite filtrar por cualquier campo y deja abierta una vista de tabla sin tocar los cimientos. Lo recomendado es que las bases de datos no entren (§2.2). |
 | 2 | **Gramática de tags cerrada desde M2.5 y sin espacios** | **MVP** | Bear 2 cambió la suya y rompió los tags de sus usuarios. La sintaxis `#tag con espacios#` de Bear no la entiende ninguna otra herramienta. |
 | 3 | **Consultas extensibles**: reservar `clave:valor` y agregar "sin tags", fechas, "solo este tag" y "tiene adjuntos" | **MVP** para la reserva y "sin tags"; **Después** para el resto | Bear, Evernote, Inkdrop y zk filtran por fecha, adjunto y título. Si la gramática no reserva sitio, cada filtro nuevo rompe consultas guardadas y el `--json` de la CLI. |
 | 4 | **Fechas en consultas** a partir del `mtime`; "creada" solo si la nota la trae en el frontmatter | **MVP** | Sincronizar con Syncthing o git cambia el `mtime` y la fecha de creación del sistema de archivos no es fiable. Escribir `created:` en cada nota sería ensuciarla, como el ID que 06 §1 ya descartó. |
@@ -63,7 +66,7 @@ Lo que hacen bien las apps de tags primero y qué aprovecha nota está en el §3
 
 | Feature | Qué es | Apps y fuente | Encaje con nota | Cimientos | Clasificación |
 |---|---|---|---|---|---|
-| **Bases de datos / vistas de tabla sobre propiedades** | Tablas, tableros y filtros sobre campos tipados | Notion; Obsidian Bases; Tana (supertags con campos); Anytype y SiYuan (tipos de objeto) | **No encaja, por decisión del autor.** Hay demanda, pero los tags y las vistas guardadas (06 §10) ya cubren el caso real: listas filtradas. Una tabla de propiedades empuja a usar las notas como base de datos o como lista de tareas, y las tareas ya se descartaron (06 §5). | **Restricción barata**: el índice guarda el frontmatter **completo** como clave/valor genérico, no solo `tags`. Así, si algún día se quisiera, una vista así se agrega sin tocar los cimientos. | **No encaja** |
+| **Bases de datos / vistas de tabla sobre propiedades** | Tablas, tableros y filtros sobre campos tipados | Notion; Obsidian Bases; Tana (supertags con campos); Anytype y SiYuan (tipos de objeto) | **No encaja (recomendado).** Hay demanda, pero los tags y las vistas guardadas (06 §10) ya cubren el caso real: listas filtradas. Una tabla de propiedades empuja a usar las notas como base de datos o como lista de tareas, y las tareas ya se descartaron (06 §5). | **Restricción barata**: el índice guarda el frontmatter **completo** como clave/valor genérico, no solo `tags`. Así, si algún día se quisiera, una vista así se agrega sin tocar los cimientos. | **No encaja** |
 | Tags con espacios | `#vacation plans#` | [Bear](https://bear.app/faq/how-to-use-tags-in-bear/) | Bajo: es ambiguo en markdown y ninguna otra herramienta lo lee. El tag de nota (05 §1) ya admite `-` y `_`. | **Sí** (gramática) | **No encaja** |
 | Renombrar = reestructurar | Renombrar `b` a `a/b` lo anida | [Bear](https://bear.app/faq/how-to-use-tags-in-bear/) | Alto: ya sale de 05 §5 (renombrar con descendientes). | Ya contemplado | — |
 | Quitar un tag de todo el vault | Borra el tag sin borrar las notas | [Bear](https://bear.app/faq/how-to-use-tags-in-bear/) | Alto: es renombrar hacia "nada" con el mismo flujo (vista previa y deshacer). | Sí (motor de refactor) | **MVP** (M2.5) |
@@ -123,7 +126,7 @@ Lo que hacen bien las apps de tags primero y qué aprovecha nota está en el §3
 | Reparar links tras un renombre hecho fuera | Detectar el renombre por hash y ofrecer arreglar los links | zk no tiene renombrar y el issue se cerró ([#200](https://github.com/zk-org/zk/issues/200)) | Alto: 06 §1 ya detecta el renombre; falta *ofrecer* reescribir los links. | Sí (motor) | **Después** |
 | Aliases de nota | `aliases:` en el frontmatter, en el completado y en la resolución | [Obsidian](https://obsidian.md/help/aliases), org-roam `ROAM_ALIASES` ([manual](https://www.orgroam.com/manual.html)) | Ya previsto en 03 §2 (M3). | — | Ya contemplado |
 | Menciones sin link | Texto que coincide con el título o un alias de la nota, con opción de convertirlo en link | [Obsidian](https://obsidian.md/help/plugins/backlinks), Bear (b), org-roam (lento, apagado por defecto) | Medio: depende de la búsqueda full-text (M6); org-roam muestra lo que cuesta. | No | **Después** |
-| Block refs `^id` | `[[nota#^id]]` | [Obsidian](https://obsidian.md/help/links), Foam; Logseq usa `((uuid))` (sin verificar) | Ya previsto en 03 §2. La decisión nueva es que nota **no inserte IDs sola**: solo cuando el usuario pide "link a este bloque". | **Sí** (formato) | **MVP** con esa regla (pregunta 5) |
+| Block refs `^id` | `[[nota#^id]]` | [Obsidian](https://obsidian.md/help/links), Foam; Logseq usa `((uuid))` (sin verificar) | Ya previsto en 03 §2. La recomendación nueva es que nota **no inserte IDs sola**: solo cuando el usuario pide "link a este bloque". | **Sí** (formato) | **MVP** con esa regla (pregunta 5) |
 | Transclusión editable | Editar el bloque incrustado cambia el original | Notion [synced blocks](https://www.notion.com/help/synced-blocks); [org-transclusion](https://github.com/nobiot/org-transclusion) | Bajo: M5 ya tiene transclusión de solo lectura. Editar a través de otro archivo complica el undo, el historial y los conflictos. | — | **No encaja** (solo lectura basta) |
 | Filtros por grafo | Huérfanas, links rotos, backlinks que faltan, relacionadas por vecinos | [zk](https://zk-org.github.io/zk/notes/note-filtering.html) | Alto: salen del índice de links. | No | **Después** (M3, pregunta 11) |
 | Grafo 2D/3D | — | [org-roam-ui](https://github.com/org-roam/org-roam-ui), Obsidian | Ya decidido: baja (06 §11). | — | Ya contemplado |
@@ -226,7 +229,7 @@ Todo eso cabe en markdown plano con la ruta como identidad. Ninguna de las cuatr
 |---|---|---|
 | **Lentitud con vaults grandes** | Obsidian: unos 4 s por tecla en el picker `[[` con 40 k archivos ([foro](https://forum.obsidian.md/t/slow-performance-with-large-vaults/16633)) y búsqueda lenta en 30 k notas ([foro, b](https://forum.obsidian.md/t/slow-search-yet-fast-quick-switcher-for-large-vault-why/62969)). Notion: la lentitud domina las reseñas negativas (sin verificar, fuente secundaria). | El rendimiento es la prioridad 1. Los objetivos de 03 §8 se miden con el vault sintético de 5 k notas; conviene agregar uno de 40 k. |
 | **Formato opaco y lock-in** | SiYuan: `.sy` en JSON, y su README avisa que sincronizar con Dropbox o Drive puede corromper datos ([repo](https://github.com/siyuan-note/siyuan)). Notion: el export rompe callouts e imágenes y llena los nombres de UUIDs (sin verificar). Anytype: el export perdía las relaciones (b). Inkdrop: no son archivos, por diseño ([foro](https://forum.inkdrop.app/t/folder-with-markdown-files/1313)). | Markdown plano; el índice es caché; nada que dé sentido al vault vive fuera de él (06 §2). |
-| **Abandonar el markdown a medio camino** | Logseq con la versión DB: los usuarios temen perder grep, regex y git ([foro](https://discuss.logseq.com/t/database-version-too-drastic-choice/20346)). | El archivo es la verdad, también en el futuro. Las bases de datos no entran (§2.2). |
+| **Abandonar el markdown a medio camino** | Logseq con la versión DB: los usuarios temen perder grep, regex y git ([foro](https://discuss.logseq.com/t/database-version-too-drastic-choice/20346)). | El archivo es la verdad, también en el futuro. Lo recomendado es que las bases de datos no entren (§2.2). |
 | **Sync propietario y conflictos duplicados** | Inkdrop duplica notas con "[conflicted]" ([foro, b](https://forum.inkdrop.app/t/conflicted-all-the-time/1073)). Standard Notes perdía notas por una carrera en el sync ([post](https://o.ctrl.blog/entry/standard-notes-dataloss.html)). Evernote limitó los dispositivos del plan gratis (b). | Sin sync propio. Tolera cambios externos y nunca sobrescribe un buffer sin guardar (06 §2). |
 | **Plugins que rompen la app** | Obsidian tuvo que desactivar plugins de la comunidad que rompían el core (b). El plugin de mappings de vim busca mantenedor (01 §5). | Plugins WASM en sandbox y API versionada (IDEAS). Vim y lo esencial van en el núcleo, nunca en un plugin. |
 | **Metadatos de plugins en el frontmatter** | Obsidian Spaced Repetition ([issues](https://github.com/st3v3nmw/obsidian-spaced-repetition/issues?q=frontmatter)) | El estado de nota vive en `data` o `state`; nunca reescribe el YAML del usuario salvo el campo editado (CLAUDE.md). |
@@ -245,7 +248,7 @@ Todo eso cabe en markdown plano con la ruta como identidad. Ninguna de las cuatr
 
 ## 5. Preguntas para el autor
 
-Cada una se contesta con sí/no o con una opción. La recomendación va primero. Las bases de datos no están aquí porque ya se decidieron (§2.2).
+Cada una se contesta con sí/no o con una opción. La recomendación va primero. Las bases de datos no están aquí porque lo recomendado es que no encajen (§2.2).
 
 1. **Frontmatter completo en el índice** (clave/valor genérico, solo lectura): ¿se agrega la restricción a 03 §4 ya? **Sí (recomendado)** / No.
 2. **Tags con espacios**: **A) No, en ningún lado (recomendado)** / B) Solo en `tags:` del frontmatter / C) Sintaxis de Bear `#a b#`.
