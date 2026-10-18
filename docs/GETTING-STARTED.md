@@ -9,7 +9,7 @@ Resumen accionable de `docs/research/`. Si algo aquí contradice a un documento 
 | GUI | **GPUI** vía `gpui-kit =0.7.3` sin features por defecto (solo `gpui-pre`, sin gpui-component), con **editor propio** | Único stack probado en un editor de alto rendimiento en Linux (Zed). El spike confirmó 240 fps, teclas muertas, IME y portapapeles en la máquina de pruebas; el editor de gpui-component no escala (108 s para abrir 50 MB) | 02, 04 |
 | Plan B | **iced 0.14 + cosmic-text** | La IA lo conoce mejor y crates.io no está desfasado; el editor habría que hacerlo a mano | 02 |
 | Buffer | `ropey` + undo/multi-cursor propios | Estándar, estable | 03 §1 |
-| Markdown | `tree-sitter-md` (editor, incremental) + `pulldown-cmark` (índice/export) | Cada uno para lo que sirve | 03 §2 |
+| Markdown | El scanner de `metalmind-syntax` (índice y estilo del editor, por tramos e incremental) + `pulldown-cmark` (export) | El editor y el índice nunca discrepan sobre qué es un link; sin tree-sitter, medido | 03 §2 |
 | Vim | Motor **propio**, puro, sin GUI, con el modelo de keymap+contextos+acciones de Zed | Así vim aplica igual al árbol, la paleta y `:` | 03 §3 |
 | Vault | `ignore` + `notify` + índice en memoria; `nucleo` para fuzzy | Los `.md` son la verdad; caché solo para arranque | 03 §4 |
 

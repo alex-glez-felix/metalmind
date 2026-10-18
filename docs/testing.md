@@ -74,6 +74,10 @@ Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/t
 
 Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s para lo demás. Si se acaba, el test falla con lo último que vio.
 
+### Capturas del markdown con estilo
+
+Lo que se ve no lo comprueba ningún test: se mira. `scripts/capturas-markdown.sh [binario]` abre la nota de prueba (`crates/metalmind-syntax/tests/fixtures/estilos.md`, con headings, negrita, links resueltos y no, tags, embeds, código, listas, tareas, citas y una regla) en los dos temas de fábrica y deja `docs/capturas/markdown-oscuro.png` y `markdown-claro.png`. Arranca su propio Xvfb en un display libre del `:90` al `:99` y usa una carpeta temporal como configuración, estado y datos, así no toca nada de quien lo corre. Necesita Xvfb, xdotool, ImageMagick (`import`) y lavapipe. Si cambia cómo se ve el markdown, se rehacen en la misma PR.
+
 ### Lo que encontró
 
 - Metalmind no tenía el `fixeol` de vim: `ihola<Esc>:wq` escribía `hola` sin `\n`, y en `uno\ndos\n`, `"ayyjdd"ap` dejaba `uno\n\nuno` por la línea vacía de más al final. Arreglado; los dos casos quedan en el smoke.
