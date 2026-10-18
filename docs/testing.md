@@ -8,7 +8,7 @@ Los casos de `nota-vim` también corren en `nvim --headless` 0.12.6; sin ese `nv
 
 ## Smoke de la app real
 
-`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100` según el lock de X, así que corren en paralelo sin pisarse el foco y nunca tocan el display de un escritorio. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local.
+`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100`, así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local.
 
 ### Correrlo en local
 
@@ -19,9 +19,24 @@ sudo pacman -S --needed xorg-server-xvfb vulkan-swrast ttf-dejavu               
 sudo apt-get install -y xvfb mesa-vulkan-drivers fonts-dejavu-core                      # Debian/Ubuntu
 
 cargo nextest run -p nota --test gui_smoke --run-ignored only
+
+# En un display fijo, de uno en uno:
+NOTA_SMOKE_DISPLAY=97 cargo nextest run -p nota --test gui_smoke --run-ignored only --test-threads 1
 ```
 
 No hace falta `xvfb-run` ni un `DISPLAY`: el harness abre su servidor. `nota` corre con `HOME` y `XDG_*` apuntando a una carpeta vacía (config por defecto) y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET`, para que GPUI use X11 y no abra nada en tu escritorio. Si un test falla, la salida trae el log de `nota` con `RUST_LOG=info`, que dice qué adaptador eligió GPUI. Los logs de `nota` y de Xvfb quedan en la carpeta temporal del test mientras corre.
+
+### Nunca sobre tu pantalla
+
+El smoke teclea con XTest, que manda teclas al servidor X entero: corrido sobre tu escritorio, escribiría en lo que tengas enfocado. El harness (`support/xvfb.rs`) lo hace imposible:
+
+- El display solo sale de un Xvfb que lanzó el propio test, sin `-displayfd`, para que Xvfb cree y respete el lock de X. Si el display está ocupado, Xvfb sale y se prueba el siguiente.
+- Antes de conectarse, el test espera a que `/tmp/.XN-lock` tenga el pid de **su** Xvfb, y se niega si el número es el del `DISPLAY` del entorno.
+- Si Xvfb no está o no arranca, el test **aborta**; nunca cae al `DISPLAY` del entorno, que no se lee más que para esa comprobación.
+- `DISPLAY` solo se le pasa a `nota` (`Command::env`), nunca al proceso de los tests, y `nota` corre sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET`.
+- Al terminar, el Xvfb recibe SIGTERM, que borra su socket y su lock.
+
+`sin_xvfb_aborta_en_vez_de_usar_el_display_del_entorno` y `un_display_ocupado_no_se_comparte` lo prueban.
 
 ### Dibujar sin GPU
 
@@ -62,4 +77,4 @@ Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s 
 
 - nota no tenía el `fixeol` de vim: `ihola<Esc>:wq` escribía `hola` sin `\n`, y en `uno\ndos\n`, `"ayyjdd"ap` dejaba `uno\n\nuno` por la línea vacía de más al final. Arreglado; los dos casos quedan en el smoke.
 - Si GPUI no puede crear la superficie, `nota` imprime el error pero el proceso no termina: el `cx.quit()` de `main.rs` se pide antes de que arranque el bucle de eventos y se pierde ([#31](https://github.com/alex-glez-felix/nota/issues/31)).
-- `Xvfb -displayfd` elige el primer display donde puede abrir el socket sin mirar el lock, y en un escritorio con XWayland eso puede ser el `:0` de la sesión. Por eso el harness pide un display explícito desde `:100`.
+- Con `-displayfd`, Xvfb ni mira ni escribe el lock de X (`/tmp/.XN-lock`), aunque se le dé el display: en un escritorio con XWayland, cuyo socket de `:0` no siempre está en `/tmp/.X11-unix`, se quedó con el `:0` de la sesión. Por eso el harness no lo usa (ver "Nunca sobre tu pantalla").
