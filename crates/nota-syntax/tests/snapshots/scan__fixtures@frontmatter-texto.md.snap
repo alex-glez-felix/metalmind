@@ -3,9 +3,9 @@ source: crates/nota-syntax/tests/scan.rs
 expression: "support::render(&text, &scan(&text))"
 input_file: crates/nota-syntax/tests/fixtures/frontmatter-texto.md
 ---
-frontmatter 0..70 yaml 4..67
+frontmatter 0..74 yaml 4..71
     tags ["uno", "dos", "tres"]
     aliases ["Viejo", "Otro alias"]
     cssclasses ["ancho"]
-wikilink 78..86 "[[link]]"
-    target 80..84 "link"
+wikilink 82..90 "[[link]]"
+    target 84..88 "link"
