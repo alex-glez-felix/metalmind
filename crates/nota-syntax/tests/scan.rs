@@ -8,7 +8,7 @@ mod support;
 
 use std::fs;
 
-use nota_syntax::{LinkSyntax, Problem, Subpath, scan};
+use nota_syntax::{LinkSyntax, Problem, Resolution, Subpath, resolve, scan};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -161,6 +161,8 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
 #[case("[a](<con espacios.md>)", "con espacios.md", None, Some("a"), false)]
 #[case("[a](nota.md \"título\")", "nota.md", None, Some("a"), false)]
 #[case("![](img.png)", "img.png", None, None, true)]
+#[case("[x](a\\).md)", "a).md", None, Some("x"), false)]
+#[case("[x](nota\\#1.md#H)", "nota#1.md", Some("#H"), Some("x"), false)]
 fn link_parts(
     #[case] text: &str,
     #[case] target: &str,
@@ -287,4 +289,14 @@ fn unclosed_backtick_runs_of_many_lengths_stay_linear() {
         "{:?}",
         start.elapsed()
     );
+}
+
+#[rstest]
+#[case("[x](a\\).md)", "a).md")]
+#[case("[x](nota\\#1.md#H)", "carpeta/nota#1.md")]
+#[case("[x](Mi%20Nota.md)", "Mi Nota.md")]
+fn escaped_markdown_destinations_resolve(#[case] text: &str, #[case] path: &str) {
+    let scan = scan(text);
+    let target = scan.links[0].text(text, scan.links[0].target.clone());
+    assert_eq!(resolve(&target, [path]), Resolution::Resolved(path));
 }
