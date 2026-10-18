@@ -127,6 +127,14 @@ impl Document {
         self.path.as_deref().map(resolve)
     }
 
+    /// La ruta absoluta de la entrada en su carpeta, con las carpetas sin
+    /// enlaces pero sin seguir el último: si el archivo es un enlace, la del
+    /// enlace. Es lo que se mueve al renombrar o mover una carpeta.
+    #[must_use]
+    pub fn entry_path(&self) -> Option<PathBuf> {
+        self.path.as_deref().map(entry_path)
+    }
+
     /// Su archivo pasó a llamarse `path`: se renombró desde nota.
     pub(crate) fn set_path(&mut self, path: PathBuf) {
         self.path = Some(path);
@@ -257,6 +265,13 @@ fn resolve(path: &Path) -> PathBuf {
     if let Ok(file) = path.canonicalize() {
         return file;
     }
+    entry_path(path)
+}
+
+/// Absoluta, con su carpeta sin enlaces y el nombre tal cual: la de la
+/// entrada, aunque sea un enlace. Si la carpeta no existe, la ruta
+/// absoluta tal cual.
+pub(crate) fn entry_path(path: &Path) -> PathBuf {
     let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_owned());
     match (absolute.parent(), absolute.file_name()) {
         (Some(parent), Some(name)) => parent

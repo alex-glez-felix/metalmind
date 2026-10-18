@@ -239,3 +239,49 @@ fn la_ruta_se_muestra_desde_el_directorio_de_trabajo() {
     );
     assert_eq!(shown_path(&cwd), cwd, "el directorio mismo no queda vacío");
 }
+
+/// Un documento abierto por un enlace dentro de la carpeta movida sigue a
+/// la carpeta aunque el enlace apunte fuera de ella: lo que se mueve es la
+/// entrada, no su destino.
+#[test]
+fn mover_una_carpeta_lleva_los_buffers_abiertos_por_un_enlace() {
+    let (dir, vault, mut session) = vault();
+    let outside = TempDir::new().unwrap();
+    let target = outside.path().join("real.md");
+    fs::write(&target, "real\n").unwrap();
+    std::os::unix::fs::symlink(&target, file(&vault, "notas/enlace.md")).unwrap();
+    session
+        .workspace
+        .open_file(
+            &file(&vault, "notas/enlace.md"),
+            Placement::Split(Axis::Row),
+        )
+        .unwrap();
+    session.keys("x");
+    assert!(session.workspace.has_unsaved_within(&file(&vault, "notas")));
+    session
+        .workspace
+        .rename_file(&vault, &vault_path("notas"), &vault_path("movidas"))
+        .unwrap();
+    assert_eq!(shown(&session), file(&vault, "movidas/enlace.md"));
+    assert!(session.view(session.pane()).document.is_modified());
+    session.keys(":w⏎");
+    assert_eq!(fs::read_to_string(&target).unwrap(), "eal\n");
+    drop(dir);
+}
+
+/// Renombrar el enlace mismo lleva al buffer abierto por él.
+#[test]
+fn renombrar_un_enlace_lleva_su_buffer() {
+    let (_dir, vault, mut session) = vault();
+    std::os::unix::fs::symlink(file(&vault, "b.md"), file(&vault, "enlace.md")).unwrap();
+    session
+        .workspace
+        .open_file(&file(&vault, "enlace.md"), Placement::Current)
+        .unwrap();
+    session
+        .workspace
+        .rename_file(&vault, &vault_path("enlace.md"), &vault_path("otro.md"))
+        .unwrap();
+    assert_eq!(shown(&session), file(&vault, "otro.md"));
+}
