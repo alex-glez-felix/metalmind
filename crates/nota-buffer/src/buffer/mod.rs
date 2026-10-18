@@ -5,9 +5,11 @@ use std::ops::Range;
 use ropey::Rope;
 
 mod anchored;
+mod marked;
 
 use crate::anchor::{Anchors, LineChange};
 use crate::history::{AppliedEdit, Direction, History, Step};
+use crate::marked::MarkedLines;
 use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Splice, Transaction};
 
 /// Texto editable. Las líneas se separan solo por `\n`.
@@ -16,6 +18,7 @@ pub struct Buffer {
     rope: Rope,
     history: History,
     anchors: Anchors,
+    marked: MarkedLines,
     version: u64,
     /// Lo reemplazado desde el último [`Buffer::take_splices`].
     splices: Vec<Splice>,
@@ -192,7 +195,8 @@ impl Buffer {
 
     /// Las transacciones que se guarden hasta [`Buffer::end_undo_group`]
     /// forman un solo paso de undo, como los cambios de una macro de vim.
-    /// Moverse por el historial corta el grupo.
+    /// Moverse por el historial corta el grupo. Un grupo abierto dentro de
+    /// otro es parte del de afuera.
     pub fn begin_undo_group(&mut self) {
         self.history.begin_group();
     }
@@ -240,6 +244,7 @@ impl Buffer {
             splice(
                 &mut self.rope,
                 &mut self.anchors,
+                &mut self.marked,
                 &mut self.splices,
                 edit.range.start,
                 removed,
@@ -307,6 +312,7 @@ impl Buffer {
                         splice(
                             &mut self.rope,
                             &mut self.anchors,
+                            &mut self.marked,
                             &mut self.splices,
                             edit.start,
                             removed,
@@ -320,6 +326,7 @@ impl Buffer {
                         splice(
                             &mut self.rope,
                             &mut self.anchors,
+                            &mut self.marked,
                             &mut self.splices,
                             edit.start,
                             removed,
@@ -375,6 +382,7 @@ fn check_overlaps(sorted: &[Edit]) -> Result<(), BufferError> {
 fn splice(
     rope: &mut Rope,
     anchors: &mut Anchors,
+    marked: &mut MarkedLines,
     log: &mut Vec<Splice>,
     start: ByteOffset,
     removed: usize,
@@ -390,7 +398,9 @@ fn splice(
     let last = rope
         .try_byte_to_char(start.get() + removed)
         .map_err(out_of_bounds)?;
-    anchors.adjust(&LineChange::new(rope, start.get(), removed, text));
+    let change = LineChange::new(rope, start.get(), removed, text);
+    anchors.adjust(&change);
+    marked.adjust(&change);
     rope.try_remove(first..last).map_err(out_of_bounds)?;
     rope.try_insert(first, text).map_err(out_of_bounds)?;
     log.push(Splice {

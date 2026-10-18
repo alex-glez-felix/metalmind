@@ -1,6 +1,8 @@
 //! Anclas de línea: posiciones que siguen a su línea cuando se insertan o
 //! borran líneas antes, como las marks de vim (`mark_adjust`).
 
+use std::ops::RangeInclusive;
+
 use ropey::Rope;
 
 /// Una posición que sigue a su línea. La crea [`crate::Buffer::create_anchor`]
@@ -101,6 +103,24 @@ impl LineChange {
             tail,
             inserts_lines_before: removed == 0 && start.column == 0 && text.ends_with('\n'),
         }
+    }
+
+    /// Las líneas de antes que toca la edición; las de después se corren
+    /// [`Self::line_shift`].
+    pub fn lines(&self) -> RangeInclusive<usize> {
+        self.start.line..=self.end.line
+    }
+
+    pub fn line_shift(&self) -> isize {
+        let removed = self.end.line - self.start.line;
+        // Un texto que cabe en memoria no tiene más de `isize::MAX` líneas.
+        self.inserted_lines.cast_signed() - removed.cast_signed()
+    }
+
+    /// Dónde queda `line` tras la edición; `None` si se borró.
+    pub fn adjust_line(&self, line: usize) -> Option<usize> {
+        self.adjust(Point { line, column: 0 })
+            .map(|point| point.line)
     }
 
     /// Dónde queda `point` tras la edición; `None` si su línea se borró.

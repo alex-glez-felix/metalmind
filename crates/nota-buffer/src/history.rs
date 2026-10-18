@@ -97,6 +97,9 @@ struct OpenTransaction {
 /// Transacciones que se guardan como un solo paso de undo.
 #[derive(Debug, Default)]
 struct Group {
+    /// Los grupos abiertos dentro de este, como un `:g` dentro de una macro:
+    /// solo cierra el de afuera.
+    nested: usize,
     /// El estado que creó el grupo, al que se suman las siguientes.
     joined: Option<HistorySeq>,
     /// Se pidió cerrar con una transacción abierta: termina al guardarla.
@@ -156,11 +159,15 @@ impl History {
     }
 
     pub fn begin_group(&mut self) {
-        self.group = Some(Group::default());
+        match &mut self.group {
+            Some(group) => group.nested += 1,
+            None => self.group = Some(Group::default()),
+        }
     }
 
     pub fn end_group(&mut self) {
         match &mut self.group {
+            Some(group) if group.nested > 0 => group.nested -= 1,
             Some(group) if self.open.is_some() => group.ends_at_commit = true,
             _ => self.group = None,
         }
