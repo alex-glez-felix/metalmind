@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use gpui_kit::{AppContext as _, Context, Entity, Subscription, Task, Window};
 use nota_vim::{Command, Invocation};
 
-use crate::workspace::Axis;
+use crate::workspace::{Axis, shown_path};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
@@ -234,13 +234,4 @@ impl WorkspaceView {
             .filter(|parent| !parent.as_os_str().is_empty());
         std::fs::canonicalize(parent.unwrap_or(Path::new("."))).ok()
     }
-}
-
-/// La ruta como la escribiría quien usa vim, y como la muestran el título
-/// y la barra: relativa al directorio de trabajo si está dentro.
-fn shown_path(path: &Path) -> PathBuf {
-    std::env::current_dir()
-        .ok()
-        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_owned))
-        .unwrap_or_else(|| path.to_owned())
 }

@@ -28,7 +28,7 @@ pub use self::rail::rail;
 use crate::file_tree::FileTree;
 use crate::panel::{Panel, PanelView};
 use crate::session::PanelState;
-use crate::workspace::{Placement, Workspace};
+use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,7 +151,7 @@ impl Sidebar {
     /// Abre `path` donde dice `placement`; si el panel de edición enfocado
     /// lo muestra, la ventana le pasa el foco.
     fn open(&mut self, path: &VaultPath, placement: Placement, cx: &mut Context<Self>) {
-        let file = self.vault.root().join(path.as_str());
+        let file = shown_path(&self.vault.root().join(path.as_str()));
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             workspace
