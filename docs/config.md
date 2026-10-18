@@ -88,7 +88,7 @@ ui:
   selection: { color: blue, alpha: 0.25 }
 ```
 
-Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `nota-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/nota-oscuro.yaml` con `extends: nota-oscuro` parte del embebido.
+Para heredar un color, no pongas la clave: una clave vacía o `null` es un error, no una herencia. Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `nota-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/nota-oscuro.yaml` con `extends: nota-oscuro` parte del embebido.
 
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.yaml`](../crates/nota-config/themes/nota-oscuro.yaml) y [`nota-claro.yaml`](../crates/nota-config/themes/nota-claro.yaml).
 

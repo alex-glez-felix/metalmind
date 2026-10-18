@@ -22,35 +22,41 @@ pub(crate) fn read_yaml(
     warnings: &mut Vec<Diagnostic>,
 ) -> Result<Option<YamlFile>, Diagnostic> {
     let alternative = preferred.with_extension("yml");
+    let found = match read(preferred)? {
+        Some(text) => {
+            if alternative.exists() {
+                warnings.push(ignored(&alternative, preferred));
+            }
+            Some(YamlFile {
+                path: preferred.to_owned(),
+                text,
+            })
+        }
+        None => read(&alternative)?.map(|text| YamlFile {
+            path: alternative,
+            text,
+        }),
+    };
     let old = preferred.with_extension("toml");
     if old.exists() {
-        warnings.push(
-            Diagnostic::warning(format!(
+        warnings.push(match &found {
+            Some(found) => ignored(&old, &found.path),
+            None => Diagnostic::warning(format!(
                 "el formato cambió a YAML y este archivo ya no se lee; pásalo a `{}`",
                 file_name(preferred)
             ))
             .in_file(&old),
-        );
+        });
     }
-    let Some(text) = read(preferred)? else {
-        return Ok(read(&alternative)?.map(|text| YamlFile {
-            path: alternative,
-            text,
-        }));
-    };
-    if alternative.exists() {
-        warnings.push(
-            Diagnostic::warning(format!(
-                "se ignora porque también existe `{}`",
-                file_name(preferred)
-            ))
-            .in_file(&alternative),
-        );
-    }
-    Ok(Some(YamlFile {
-        path: preferred.to_owned(),
-        text,
-    }))
+    Ok(found)
+}
+
+fn ignored(file: &Path, used: &Path) -> Diagnostic {
+    Diagnostic::warning(format!(
+        "se ignora porque también existe `{}`",
+        file_name(used)
+    ))
+    .in_file(file)
 }
 
 /// El texto de `file`, `None` si no existe.
@@ -132,6 +138,23 @@ mod tests {
         assert_eq!(warning.file, Some(dir.path().join("config.toml")));
         assert!(warning.message.contains("YAML"), "{}", warning.message);
         assert!(warning.message.contains("`config.yaml`"));
+    }
+
+    #[test]
+    fn un_toml_junto_al_yaml_solo_dice_que_se_ignora() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("config.toml"), "theme = \"x\"\n").unwrap();
+        fs::write(dir.path().join("config.yml"), "a: 1\n").unwrap();
+        let (found, warnings) = read_in(dir.path());
+        assert_eq!(found.unwrap().unwrap().text, "a: 1\n");
+        let [warning] = warnings.as_slice() else {
+            panic!("{warnings:?}")
+        };
+        assert_eq!(warning.file, Some(dir.path().join("config.toml")));
+        assert_eq!(
+            warning.message,
+            "se ignora porque también existe `config.yml`"
+        );
     }
 
     #[test]

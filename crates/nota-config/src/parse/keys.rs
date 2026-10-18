@@ -3,7 +3,7 @@
 use std::fmt;
 
 use serde::Deserialize;
-use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 
 use super::Spanned;
 use crate::diagnostic::Location;
@@ -34,7 +34,7 @@ pub(super) fn segments(path: &serde_ignored::Path<'_>) -> Option<Vec<String>> {
 
 /// El documento reducido a sus claves y dónde se escribió cada una.
 pub(super) enum Node {
-    Map(Vec<(Spanned<String>, Node)>),
+    Map(Vec<(Spanned<Key>, Node)>),
     Seq(Vec<Node>),
     Scalar,
 }
@@ -46,7 +46,7 @@ impl Node {
         let (key, child) = match self {
             Self::Map(entries) => entries
                 .iter()
-                .find(|(key, _)| key.get_ref() == first)
+                .find(|(key, _)| matches!(key.get_ref(), Key::Text(text) if text == first))
                 .map(|(key, child)| (key.location(), child))?,
             Self::Seq(items) => (None, items.get(first.parse::<usize>().ok()?)?),
             Self::Scalar => return None,
@@ -62,6 +62,63 @@ impl Node {
 impl<'de> Deserialize<'de> for Node {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_any(NodeVisitor)
+    }
+}
+
+/// Una clave como la nombra `serde_ignored`. Una que no es texto (`? [a, b]`)
+/// no está en ninguna ruta, pero no debe impedir ubicar las demás.
+pub(super) enum Key {
+    Text(String),
+    Other,
+}
+
+impl<'de> Deserialize<'de> for Key {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(KeyVisitor)
+    }
+}
+
+struct KeyVisitor;
+
+impl<'de> Visitor<'de> for KeyVisitor {
+    type Value = Key;
+
+    fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("una clave")
+    }
+
+    fn visit_str<E: de::Error>(self, text: &str) -> Result<Key, E> {
+        Ok(Key::Text(text.to_owned()))
+    }
+
+    fn visit_bool<E: de::Error>(self, value: bool) -> Result<Key, E> {
+        Ok(Key::Text(value.to_string()))
+    }
+
+    fn visit_i64<E: de::Error>(self, value: i64) -> Result<Key, E> {
+        Ok(Key::Text(value.to_string()))
+    }
+
+    fn visit_u64<E: de::Error>(self, value: u64) -> Result<Key, E> {
+        Ok(Key::Text(value.to_string()))
+    }
+
+    fn visit_f64<E: de::Error>(self, value: f64) -> Result<Key, E> {
+        Ok(Key::Text(value.to_string()))
+    }
+
+    fn visit_unit<E: de::Error>(self) -> Result<Key, E> {
+        Ok(Key::Other)
+    }
+
+    fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Key, M::Error> {
+        while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+        Ok(Key::Other)
+    }
+
+    fn visit_seq<S: SeqAccess<'de>>(self, mut seq: S) -> Result<Key, S::Error> {
+        while seq.next_element::<IgnoredAny>()?.is_some() {}
+        Ok(Key::Other)
     }
 }
 
@@ -163,5 +220,15 @@ mod tests {
         );
         assert_eq!(locate(text, &["b", "z"]), None);
         assert_eq!(locate(text, &["a", "z"]), None);
+    }
+
+    #[test]
+    fn una_clave_que_no_es_texto_no_impide_ubicar_las_demas() {
+        let text = "x:\n  ? [a, b]\n  : 1\n  1: y\nz: 2\n";
+        assert_eq!(locate(text, &["z"]), Some(Location { line: 5, column: 1 }));
+        assert_eq!(
+            locate(text, &["x", "1"]),
+            Some(Location { line: 4, column: 3 })
+        );
     }
 }

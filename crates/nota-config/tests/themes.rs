@@ -385,3 +385,20 @@ fn un_tema_en_toml_ya_no_se_lee_y_se_avisa() {
     assert_eq!(warning.file, Some(dir.path().join("nota-oscuro.toml")));
     assert!(warning.message.contains("`nota-oscuro.yaml`"));
 }
+
+#[test]
+fn un_color_nulo_es_error_y_no_hereda() {
+    let dir = tempfile::tempdir().unwrap();
+    for (name, text) in [
+        ("nulo", "extends: nota-oscuro\nui:\n  background: null\n"),
+        ("vacio", "extends: nota-oscuro\nui:\n  background:\n"),
+    ] {
+        write(dir.path(), name, text);
+        let error = Themes::new(dir.path().to_owned())
+            .load(name)
+            .unwrap_err()
+            .error;
+        assert_eq!(error.severity, Severity::Error, "{name}");
+        assert_eq!(error.location.map(|at| at.line), Some(3), "{name}: {error}");
+    }
+}
