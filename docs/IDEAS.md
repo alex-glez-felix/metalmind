@@ -39,6 +39,23 @@ Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **u
 - Idea: vista del árbol en un panel, navegable con `j`/`k`, con vista previa del diff de cada estado.
 - Idea: historial persistente entre sesiones (como `undofile`).
 
+## Tags
+
+Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo que quedó fuera de M2.5:
+
+- **Vistas guardadas**: una consulta de tags con nombre (`#rust -#archivado` → "Rust activo"), como las carpetas inteligentes. Aparecerían en el panel y en `:focus` por su nombre. Dónde se guardan (config del vault o un archivo dentro del vault, para que viaje con él) está por decidir.
+- Consultas más ricas: "o", paréntesis, comodines (`#proyecto/*`) y "solo este tag, sin hijos". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
+- Recordar el focus al reabrir el vault.
+- Color o ícono por tag, en el panel y en el texto.
+- Una nota que describe un tag: abrir `#rust` en el panel muestra esa nota arriba de la lista.
+- Alias de tags (`#rs` → `#rust`).
+- Sugerir tags a partir del contenido de la nota.
+- Que el árbol de tags siga al buffer sin guardar, no solo al disco.
+
+**Impacto en el diseño temprano:**
+- La consulta es un tipo (`TagQuery`) con parseo puro y tabla de casos: agregar "o" o darle nombre a una consulta no toca a quien la usa.
+- Renombrar tags y renombrar notas (M3) comparten el motor de refactorización del vault con vista previa y deshacer.
+
 ## Importador de Obsidian (y quizá de otros)
 
 nota no busca ser compatible con Obsidian: tiene su propio formato y puede diferir donde haya algo más eficiente o mejor. Si algún día hace falta, un importador convierte el vault (links, frontmatter, adjuntos) al formato de nota.
