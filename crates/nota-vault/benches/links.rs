@@ -1,5 +1,6 @@
-//! El índice de links de un vault sintético de 5 000 notas: armarlo de cero
-//! y actualizar una nota. Correr con `cargo bench -p nota-vault --bench links`.
+//! El índice de links de un vault sintético de 5 000 notas con 30 000 links:
+//! armarlo de cero, actualizarlo, publicarlo y planear un rename. Objetivos
+//! en `docs/performance.md`. Correr con `cargo bench -p nota-vault --bench links`.
 
 #![allow(
     clippy::unwrap_used,
@@ -9,77 +10,54 @@
 use std::collections::HashMap;
 
 use divan::Bencher;
+use nota_perf::{NoteNames, linked_vault};
 use nota_vault::{EntryKind, LinkIndex, VaultChange, VaultPath};
-
-const NOTES: usize = 5_000;
 
 fn main() {
     divan::main();
 }
 
-/// Las mismas 10 × 10 carpetas de 50 notas que `open`, cada nota con seis
-/// links: por nombre, por ruta, a un heading, markdown, un embed y uno sin
-/// resolver. Cada nombre se repite en las 100 carpetas, así que cada link por
-/// nombre empata y lo desempata la carpeta propia: el peor caso.
-fn synthetic_vault() -> HashMap<VaultPath, (EntryKind, String)> {
-    vault_with_names(|_, _, note| format!("nota-{note}"))
+type Files = HashMap<VaultPath, (EntryKind, String)>;
+
+fn vault(notes: usize, names: NoteNames) -> Files {
+    linked_vault(notes, names)
+        .into_iter()
+        .map(|(path, text)| {
+            let kind = if std::path::Path::new(&path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+            {
+                EntryKind::Note
+            } else {
+                EntryKind::Attachment
+            };
+            (VaultPath::new(&path).unwrap(), (kind, text))
+        })
+        .collect()
 }
 
-/// El mismo vault, pero cada nota con un nombre distinto: lo común en un
-/// vault real, donde un nombre casi nunca se repite.
-fn unique_names_vault() -> HashMap<VaultPath, (EntryKind, String)> {
-    vault_with_names(|top, sub, note| format!("nota-{top}-{sub}-{note}"))
-}
-
-fn vault_with_names(
-    name: impl Fn(usize, usize, usize) -> String,
-) -> HashMap<VaultPath, (EntryKind, String)> {
-    let mut files = HashMap::new();
-    for top in 0..10 {
-        for sub in 0..10 {
-            let dir = format!("area-{top}/tema-{sub}");
-            for note in 0..NOTES / 100 {
-                let next = name(top, sub, (note + 1) % (NOTES / 100));
-                let elsewhere = name((top + 1) % 10, sub, note);
-                let body = format!(
-                    "# Nota {note}\n\nVer [[{next}]] y [[area-{}/tema-{sub}/{elsewhere}]].\n\
-                     Más en [[{next}#Nota]] o [aquí]({next}.md).\n\
-                     ![[imagen.png]] y [[pendiente-{note}]]\n",
-                    (top + 1) % 10
-                );
-                let path = VaultPath::new(&format!("{dir}/{}.md", name(top, sub, note))).unwrap();
-                files.insert(path, (EntryKind::Note, body));
-            }
-            let image = VaultPath::new(&format!("{dir}/imagen.png")).unwrap();
-            files.insert(image, (EntryKind::Attachment, String::new()));
-        }
-    }
-    files
-}
-
-fn build(files: &HashMap<VaultPath, (EntryKind, String)>) -> LinkIndex {
+fn build(files: &Files) -> LinkIndex {
     LinkIndex::build(
         files.iter().map(|(path, (kind, _))| (path.clone(), *kind)),
         |path| files.get(path).map(|(_, text)| text.clone()),
     )
 }
 
-#[divan::bench(sample_count = 20)]
-fn indexar_links_5k_notas(bencher: Bencher) {
-    let files = synthetic_vault();
+#[divan::bench(args = [5_000, 50_000], sample_count = 10)]
+fn indexar_links(bencher: Bencher, notes: usize) {
+    let files = vault(notes, NoteNames::Repeated);
     bencher.bench(|| build(&files));
 }
 
-#[divan::bench(sample_count = 20)]
-fn indexar_links_5k_notas_nombres_unicos(bencher: Bencher) {
-    let files = unique_names_vault();
+#[divan::bench(args = [5_000, 50_000], sample_count = 10)]
+fn indexar_links_nombres_unicos(bencher: Bencher, notes: usize) {
+    let files = vault(notes, NoteNames::Unique);
     bencher.bench(|| build(&files));
 }
 
 #[divan::bench(sample_count = 100)]
 fn modificar_una_nota(bencher: Bencher) {
-    let files = synthetic_vault();
-    let index = build(&files);
+    let index = build(&vault(5_000, NoteNames::Repeated));
     let path = VaultPath::new("area-3/tema-4/nota-7.md").unwrap();
     let text = "[[nota-8]] [[nota-9]] [[area-0/tema-0/nota-0]]".to_owned();
     let change = VaultChange::Modified { path };
@@ -88,10 +66,10 @@ fn modificar_una_nota(bencher: Bencher) {
         .bench_local_refs(|index| index.apply(&change, |_| Some(text.clone())));
 }
 
+/// `nota-8` está en las 100 carpetas: 300 links de 100 notas vuelven a resolver.
 #[divan::bench(sample_count = 100)]
 fn crear_una_nota_que_empata(bencher: Bencher) {
-    let files = synthetic_vault();
-    let index = build(&files);
+    let index = build(&vault(5_000, NoteNames::Repeated));
     let change = VaultChange::Created {
         path: VaultPath::new("nota-8.md").unwrap(),
         kind: EntryKind::Note,
@@ -102,8 +80,56 @@ fn crear_una_nota_que_empata(bencher: Bencher) {
 }
 
 /// Lo que paga el watcher por lote para publicar el índice.
-#[divan::bench(sample_count = 100)]
-fn clonar_el_indice(bencher: Bencher) {
-    let index = build(&synthetic_vault());
+#[divan::bench(args = [5_000, 50_000], sample_count = 20)]
+fn clonar_el_indice(bencher: Bencher, notes: usize) {
+    let index = build(&vault(notes, NoteNames::Repeated));
     bencher.bench(|| index.clone());
+}
+
+/// Renombrar una nota con 6 links que llegan a ella.
+#[divan::bench(sample_count = 100)]
+fn plan_de_renombrar_una_nota(bencher: Bencher) {
+    let index = build(&vault(5_000, NoteNames::Unique));
+    let from = VaultPath::new("area-3/tema-4/nota-3-4-7.md").unwrap();
+    let to = VaultPath::new("area-3/tema-4/otra.md").unwrap();
+    bencher.bench(|| index.rename_plan(&from, &to).unwrap());
+}
+
+/// Mover una carpeta de 500 notas: sus links relativos y los que llegan.
+/// Con nombres repetidos, cada nombre movido vuelve a mirar los links que lo
+/// usan en todo el vault.
+#[divan::bench(args = [NoteNames::Unique, NoteNames::Repeated], sample_count = 20)]
+fn plan_de_mover_una_carpeta(bencher: Bencher, names: NoteNames) {
+    let index = build(&vault(5_000, names));
+    let from = VaultPath::new("area-3").unwrap();
+    let to = VaultPath::new("archivo/area-3").unwrap();
+    bencher.bench(|| index.rename_plan(&from, &to).unwrap());
+}
+
+/// `gd` sobre el último link de una nota de 5 000 líneas: escanea la nota
+/// entera, con los cambios sin guardar del buffer.
+#[divan::bench(sample_count = 50)]
+fn seguir_un_link_en_5k_lineas(bencher: Bencher) {
+    let index = build(&vault(5_000, NoteNames::Repeated));
+    let source = VaultPath::new("area-0/tema-0/nota-0.md").unwrap();
+    let text = nota_perf::note(5_000);
+    let offset = text.rfind("[[").unwrap() + 2;
+    bencher.bench(|| index.follow(&source, &text, offset).unwrap());
+}
+
+/// Lo que insertaría el autocompletado de `[[` para una página de 50
+/// resultados, mientras se escribe.
+#[divan::bench(sample_count = 100)]
+fn nombrar_50_notas_para_completar(bencher: Bencher) {
+    let files = vault(5_000, NoteNames::Repeated);
+    let index = build(&files);
+    let source = VaultPath::new("area-0/tema-0/nota-0.md").unwrap();
+    let mut targets: Vec<&VaultPath> = files.keys().collect();
+    targets.sort();
+    let page: Vec<&VaultPath> = targets.into_iter().step_by(100).take(50).collect();
+    bencher.bench(|| {
+        page.iter()
+            .filter_map(|target| index.wikilink_target(&source, target))
+            .count()
+    });
 }

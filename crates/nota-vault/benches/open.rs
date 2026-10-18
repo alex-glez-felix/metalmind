@@ -1,5 +1,6 @@
-//! Abrir un vault sintético de 5 000 y 50 000 notas en carpetas anidadas.
-//! Objetivos en `docs/performance.md`. Correr con `cargo bench -p nota-vault`.
+//! Abrir un vault sintético de 5 000 y 50 000 notas con links, en carpetas
+//! anidadas: walk, watcher e índice de links. Objetivos en
+//! `docs/performance.md`. Correr con `cargo bench -p nota-vault --bench open`.
 
 #![allow(
     clippy::unwrap_used,
@@ -10,6 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use divan::Bencher;
+use nota_perf::{NoteNames, linked_vault};
 use nota_vault::Vault;
 use tempfile::TempDir;
 
@@ -17,19 +19,12 @@ fn main() {
     divan::main();
 }
 
-/// 10 carpetas × 10 subcarpetas × `notes / 100` notas, más un adjunto por
-/// subcarpeta: las rutas de `nota_perf::vault_paths`.
+/// `nota_perf::linked_vault`, con seis links por nota, en disco.
 fn synthetic_vault(root: &Path, notes: usize) {
-    for top in 0..10 {
-        for sub in 0..10 {
-            let dir = root.join(format!("area-{top}/tema-{sub}"));
-            fs::create_dir_all(&dir).unwrap();
-            for note in 0..notes / 100 {
-                let body = format!("# Nota {note}\n\nVer [[nota-{}]].\n", note + 1);
-                fs::write(dir.join(format!("nota-{note}.md")), body).unwrap();
-            }
-            fs::write(dir.join("imagen.png"), [0_u8; 64]).unwrap();
-        }
+    for (path, text) in linked_vault(notes, NoteNames::Repeated) {
+        let full = root.join(path);
+        fs::create_dir_all(full.parent().unwrap()).unwrap();
+        fs::write(full, text).unwrap();
     }
 }
 

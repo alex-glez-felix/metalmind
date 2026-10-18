@@ -34,10 +34,18 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | `?`, `/\<…\>` y `:%s` sin coincidencias en 50 k | ≤ 8 ms | 0.35 / 0.37 / 0.35 ms | ✅ | `nota-vim` `…_sin_resultado` |
 | `/` hasta la siguiente coincidencia en 50 k; `n` | ≤ 1 ms | 36 µs; 2 µs | ✅ | `nota-vim` |
 | Scan de `nota-syntax`, nota de 5 k | ≤ 8 ms | 1.3 ms | ✅ | `nota-syntax` `nota` |
-| Scan, nota de 50 k | ≤ 50 ms | 14 ms | ✅ | `nota-syntax` `nota` |
-| Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 4.4 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `nota-syntax` |
-| Abrir el vault, 5 k notas | ≤ 200 ms | 12.8 ms | ✅ | `nota-vault` `abrir_5k_notas` |
-| Abrir el vault, 50 k notas | ≤ 2 s | 95 ms | ✅ | `nota-vault` `abrir_50k_notas` |
+| Scan, nota de 50 k | ≤ 50 ms | 11.7 ms | ✅ | `nota-syntax` `nota` |
+| Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 3.2 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `nota-syntax` |
+| Abrir el vault, 5 k notas (walk, watcher e índice de links) | ≤ 200 ms | 36 ms | ✅ | `nota-vault` `abrir_5k_notas` |
+| Abrir el vault, 50 k notas | ≤ 2 s | 446 ms | ✅ | `nota-vault` `abrir_50k_notas` |
+| Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `nota-vault` `indexar_links`, `indexar_links_nombres_unicos` |
+| Índice de links, un cambio del watcher: modificar una nota / crear una cuyo nombre usan 300 links | ≤ 16 ms | 23 µs / 0.35 ms | ✅ | `nota-vault` `modificar_una_nota`, `crear_una_nota_que_empata` |
+| Publicar el índice de links en cada lote (clonarlo), 5 k / 50 k | ≤ 16 / 160 ms | 5.7 / 88 ms | ⚠️ | `nota-vault` `clonar_el_indice` |
+| Un nombre en cada carpeta (`index.md` en 8 000 carpetas): armar el índice / crear otra | lineal | 60 / 6.8 ms | ✅ | test `un_nombre_en_cada_carpeta_es_lineal` |
+| `gd` en una nota de 5 k líneas (escanea el buffer) | ≤ 16 ms | 0.93 ms | ✅ | `nota-vault` `seguir_un_link_en_5k_lineas` |
+| Autocompletado de `[[`: el destino de una página de 50 notas | ≤ 8 ms | 0.10 ms | ✅ | `nota-vault` `nombrar_50_notas_para_completar` |
+| Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 7.6 µs / 13.4 ms | ⚠️ | `nota-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
+| Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 37 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
@@ -91,8 +99,8 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | `100@a` en 5 k | 32.9 M |
 | `:%s` en 5 k | 107.9 M |
 | `/` sin resultado en 50 k | 6.0 M |
-| Scan 5 k / 50 k | 18.0 M / 179.6 M |
-| Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 9.1 M / 4.4 M / 5.8 M / 29.1 M / 57.3 M |
+| Scan 5 k / 50 k | 16.5 M / 165.0 M |
+| Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 8.8 M / 4.2 M / 5.7 M / 29.1 M / 52.7 M |
 | Finder 5 k / 50 k (ordenar todas las coincidencias, para la lista virtual) | 18.9 M / 187.8 M |
 | Texto completo en una nota de 5 k: palabra frecuente / sin resultado | 12.4 M / 459 k |
 
@@ -108,7 +116,7 @@ cargo bench -p nota-perf --bench instrucciones -- --baseline=antes
 
 ### 3. Pruebas de complejidad (`cargo nextest`, en cada PR)
 
-Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner, la búsqueda, `:s`, el índice del vault, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `nota-vault`) que corre la operación con tamaño N y **16N**:
+Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner, la búsqueda, `:s`, el índice del vault, el índice de links, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `nota-vault`) que corre la operación con tamaño N y **16N**:
 
 - El paso es ×16 y no ×4 porque con ×4 un `N^1.5` da ×8, justo entre lineal (×4) y cuadrático (×16), y ningún umbral lo separa de lo lineal con margen. No es teórico: las rachas de backticks sin pareja de largos 1…k miden k² bytes y el código anterior al arreglo costaba k³, o sea `N^1.5` en bytes, y con ×4 pasaba.
 - `nota_perf::assert_linear` falla si 16N tarda más de **×40** lo que N. Lineal da ×16; lo peor que se vio en verde, con la suite completa en paralelo, fue ×22 (ordenar el borrado de una carpeta grande del vault, un `N log N` con la caché en contra). `N^1.5` da ×64 y cuadrático ×256: ×40 deja casi el doble de margen hacia los dos lados.
