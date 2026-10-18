@@ -43,14 +43,13 @@ Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **u
 
 Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo que quedó fuera de M2.5:
 
-- **Vistas guardadas**: decididas en [06](research/06-decisiones-de-fondo.md#10-vistas-guardadas): una consulta de tags con nombre (`gs` = `#gs -#archivado`) que aparece en el panel junto al árbol de tags. Falta decidir el archivo exacto donde se guardan.
-- Consultas más ricas: "o", paréntesis, comodines (`#proyecto/*`) y "solo este tag, sin hijos". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
+- **Vistas guardadas**: decididas en [06](research/06-decisiones-de-fondo.md#10-vistas-guardadas): una consulta de tags con nombre (`gs` = `#gs -#archivado`) que aparece en el panel junto a los tags. Falta decidir el archivo exacto donde se guardan.
+- Consultas más ricas: "o", paréntesis, comodines (`#2024/*`) y "solo este tag, sin descendientes". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
 - Recordar el focus al reabrir el vault.
-- Color o ícono por tag, en el panel y en el texto.
-- Una nota que describe un tag: abrir `#rust` en el panel muestra esa nota arriba de la lista.
-- Alias de tags (`#rs` → `#rust`).
+- Íconos por nombre (`icon: lucide:cpu`), además de emoji. Color, ícono emoji, alias, padres y la página que describe un tag ya entran en M2.5 ([05 §7](research/05-tags.md#7-páginas-de-tag)).
+- Páginas para tags con `/` (`#2024/10`), que hoy no caben en un nombre de archivo.
 - Sugerir tags a partir del contenido de la nota.
-- Que el árbol de tags siga al buffer sin guardar, no solo al disco.
+- Que el panel de tags siga al buffer sin guardar, no solo al disco.
 
 **Impacto en el diseño temprano:**
 - La consulta es un tipo (`TagQuery`) con parseo puro y tabla de casos: agregar "o" o darle nombre a una consulta no toca a quien la usa.

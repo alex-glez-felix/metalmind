@@ -19,6 +19,7 @@
 | 10 | Vistas guardadas: consultas de tags con nombre, en el panel | Se guardan con el vault, no en la config global |
 | 11 | Daily notes, plantillas, grafo, temas | Ninguna |
 | 12 | Publicar a la web: fuera de alcance | — |
+| 13 | nota es una GUI con navegación estilo vim, no una TUI | Toda función se usa desde la UI además del teclado; nadie edita config ni metadata a mano por necesidad |
 
 ---
 
@@ -120,7 +121,7 @@ Comandos tentativos **(propuesta)**:
 |---|---|
 | `nota add "texto" -t tag` | Crea una nota. Sin `-t`, cae en el buzón (§9). Sin texto, lee de stdin (`wl-paste \| nota add`). |
 | `nota search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. |
-| `nota tags` | El árbol de tags con conteo. |
+| `nota tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). |
 | `nota open <ruta>` | Abre la app en esa nota. |
 | `--json` en todos | Salida estable para que la consuman agentes y scripts. |
 
@@ -158,13 +159,14 @@ Comandos tentativos **(propuesta)**:
 - `TagQuery` (05 §4) tiene que poder expresar "sin tags". Hoy no puede: `-#a` excluye un tag concreto, no "cualquiera".
 - El nodo **Sin tags** que 05 §3 proponía al final del panel es el buzón, y se llama así en la UI.
 - La captura nunca pone tags por su cuenta (ni `#inbox` ni similares): eso rompería la definición.
+- Las páginas de tag (`tags/<nombre>.md`, 05 §7) no son notas del buzón aunque no tengan tags, y "sin tags" en `TagQuery` no las devuelve.
 - En focus del buzón, una nota nueva nace sin tags, que es justo lo que ya dice 05 §3 para el focus de tags.
 
 ## 10. Vistas guardadas
 
-**Decisión.** Una vista guardada es una consulta de tags (05 §4) con nombre. Aparecen en el panel junto al árbol de tags y se puede enfocar en ellas (05 §3). Ejemplos: `buzón` = sin tags (§9); `gs` = `#gs -#archivado`.
+**Decisión.** Una vista guardada es una consulta de tags (05 §4) con nombre. Aparecen en el panel junto a los tags y se puede enfocar en ellas (05 §3). Ejemplos: `buzón` = sin tags (§9); `gs` = `#gs -#archivado`.
 
-**Por qué.** Las consultas que se repiten a diario no deberían escribirse cada vez; es lo que 05 §7 y [`IDEAS.md`](../IDEAS.md#tags) ya anotaban como idea.
+**Por qué.** Las consultas que se repiten a diario no deberían escribirse cada vez; es lo que 05 §8 y [`IDEAS.md`](../IDEAS.md#tags) ya anotaban como idea.
 
 **Restricciones desde ya:**
 
@@ -185,6 +187,19 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 ## 12. Fuera de alcance
 
 - **Publicar a la web.** Son archivos markdown en git; para publicarlos ya hay muchas herramientas. Exportar una nota a HTML o PDF (post-MVP, 03 §8) es otra cosa y sigue ahí.
+
+## 13. Una GUI, no una TUI
+
+**Decisión.** nota es una GUI con navegación estilo vim, no una TUI. El vim es para moverse y editar rápido con el teclado, pero no todo tiene que hacerse editando archivos a mano: toda función se puede usar desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
+
+**Por qué.** Una ventana puede mostrar y ofrecer cosas que una terminal no; si la única forma de darle color a un tag es escribir YAML, nota desperdicia lo que la hace distinta de un editor en la terminal.
+
+**Restricciones desde ya:**
+
+- Cada acción con nombre (`CLAUDE.md`) es alcanzable por teclado (atajo, paleta o `:`) **y** por la UI (menú contextual, botón o selector). Una función que solo existe como comando, o solo como clic, está a medias.
+- Los archivos son el **almacenamiento**, no la interfaz. Lo que se cambia desde la UI se escribe en el archivo de siempre (frontmatter de una página de tag, `config.yaml`), tocando solo el campo editado, y editarlo a mano da el mismo resultado. Ejemplo: las páginas de tag, que nota crea sola en cuanto les pones metadata desde la UI (05 §3, §7).
+- La UI no crea archivos que nadie pidió: escribir un `#tag-nuevo` no crea su página.
+- La config (03 §5) también se edita desde una pantalla de ajustes que escribe el YAML **(propuesta)**; cuándo llega esa pantalla se decide con el roadmap.
 
 ## Dónde entra en el roadmap
 
