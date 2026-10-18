@@ -3625,6 +3625,9 @@ dependencies = [
  "log",
  "nota-config",
  "nota-ui",
+ "rstest",
+ "tempfile",
+ "x11rb",
 ]
 
 [[package]]
