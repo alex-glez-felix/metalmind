@@ -20,6 +20,11 @@ pub const MAX_FLAT_GROWTH: f64 = 4.0;
 /// otros tests en paralelo solo suma tiempo, nunca lo resta.
 const ROUNDS: usize = 11;
 
+/// Pasadas estas rondas, se deja de medir si lo grande ya gastó [`BUDGET`]:
+/// así un caso que crece mal falla en segundos y no en minutos.
+const MIN_ROUNDS: usize = 3;
+const BUDGET: Duration = Duration::from_secs(2);
+
 /// Por debajo de esto el reloj y el ruido pesan más que el trabajo medido.
 const MIN_SMALL: Duration = Duration::from_millis(1);
 
@@ -31,10 +36,16 @@ const MIN_SMALL: Duration = Duration::from_millis(1);
 pub fn growth<T, R>(n: usize, setup: impl Fn(usize) -> T, mut run: impl FnMut(T) -> R) -> f64 {
     let mut small = Duration::MAX;
     let mut large = Duration::MAX;
+    let mut spent = Duration::ZERO;
     // La primera vuelta calienta cachés y asignador; también cuenta, es un mínimo.
-    for _ in 0..ROUNDS {
+    for round in 1..=ROUNDS {
         small = small.min(time(&mut run, setup(n)));
-        large = large.min(time(&mut run, setup(FACTOR * n)));
+        let elapsed = time(&mut run, setup(FACTOR * n));
+        large = large.min(elapsed);
+        spent += elapsed;
+        if round >= MIN_ROUNDS && spent >= BUDGET {
+            break;
+        }
     }
     assert!(
         small >= MIN_SMALL,
