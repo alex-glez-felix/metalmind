@@ -9,15 +9,15 @@ use arc_swap::ArcSwap;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
-use crate::apply::{self, Applied, ApplyError, ChangesUndoReport};
+use crate::apply::{self, Applied, ApplyError, UndoReport};
 use crate::changes::Changes;
 use crate::file;
 use crate::index::VaultIndex;
 use crate::links::LinkIndex;
+#[cfg(doc)]
 use crate::links::RenamePlan;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
-use crate::refactor::{self, AppliedRename, ApplyRenameError, UndoReport};
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::scan::scan;
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
@@ -200,30 +200,6 @@ impl Vault {
         ops::rename(&self.root, from, to)
     }
 
-    /// Aplica un plan de [`LinkIndex::rename_plan`]: comprueba que cada
-    /// archivo dice lo que el plan espera, reescribe sus links y renombra. Lo
-    /// que quien llama aplique por su cuenta, como los buffers abiertos con
-    /// cambios sin guardar, se quita de `plan.files` antes. El índice se
-    /// entera por el watcher.
-    ///
-    /// # Errors
-    /// Si algún archivo cambió, no se puede leer o el destino existe, sin
-    /// escribir nada; si falla a medias, [`ApplyRenameError::Interrupted`]
-    /// con lo que quedó hecho, para deshacerlo.
-    pub fn apply_rename(&self, plan: &RenamePlan) -> Result<AppliedRename, ApplyRenameError> {
-        refactor::apply(&self.root, plan)
-    }
-
-    /// Deshace un plan aplicado: devuelve cada archivo a su texto de antes,
-    /// salvo los que cambiaron desde entonces, y renombra de vuelta.
-    ///
-    /// # Errors
-    /// Si la ruta de antes del rename ya está ocupada o pasa por un archivo;
-    /// entonces no toca nada.
-    pub fn undo_rename(&self, applied: &AppliedRename) -> Result<UndoReport, FileOpError> {
-        refactor::undo(&self.root, applied)
-    }
-
     /// Manda un archivo o carpeta a la papelera del vault (`.trash/`, como
     /// Obsidian) y devuelve dónde quedó.
     ///
@@ -233,10 +209,13 @@ impl Vault {
         ops::trash(&self.root, path)
     }
 
-    /// Aplica unos cambios armados sin tocar el disco (un [`crate::tags::TagPlan`]):
-    /// comprueba antes que cada archivo siga como se escaneó y que los
-    /// destinos estén libres, y luego edita, crea y renombra. Lo devuelto
-    /// sirve para [`Vault::undo`]. El índice se entera por el watcher.
+    /// Aplica unos cambios armados sin tocar el disco: un renombre de nota
+    /// ([`RenamePlan::changes`]) o un [`crate::tags::TagPlan`]. Comprueba
+    /// antes que cada archivo diga lo que sus ediciones esperan y que los
+    /// destinos estén libres, y luego edita, crea y renombra. Lo que quien
+    /// llama aplique por su cuenta, como los buffers abiertos con cambios sin
+    /// guardar, se quita de `changes.edits` antes. Lo devuelto sirve para
+    /// [`Vault::undo`]. El índice se entera por el watcher.
     ///
     /// # Errors
     /// Si un archivo cambió o no se puede leer, o un destino está ocupado (no
@@ -252,7 +231,7 @@ impl Vault {
     ///
     /// # Errors
     /// Si el origen de un renombre ya está ocupado: no se toca nada.
-    pub fn undo(&self, applied: &Applied) -> Result<ChangesUndoReport, FileOpError> {
+    pub fn undo(&self, applied: &Applied) -> Result<UndoReport, FileOpError> {
         apply::undo(&self.root, applied)
     }
 }

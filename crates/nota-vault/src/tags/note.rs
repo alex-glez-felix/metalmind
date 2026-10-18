@@ -5,7 +5,6 @@ use std::ops::Range;
 
 use nota_syntax::{Frontmatter, Value};
 
-use crate::changes::content_hash;
 use crate::path::VaultPath;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::page::TagPage;
@@ -22,13 +21,31 @@ pub enum TagSource {
 /// Cómo reescribir o quitar un valor del frontmatter sin tocar el resto.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontmatterSpot {
-    /// Si es `false`, el YAML escribe el valor con escapes o en varias
-    /// líneas: el rango cubre el escalar entero y se reescribe entre comillas.
-    pub literal: bool,
+    /// El escalar como está escrito, si el YAML no escribe el nombre tal
+    /// cual (escapes, varias líneas): el rango lo cubre entero y se
+    /// reescribe entre comillas.
+    pub escaped: Option<String>,
     /// Lo que se borra para sacar el valor de su lista.
-    pub removal: Range<usize>,
+    pub removal: Snippet,
     /// Lo que se borra si también se quitan todos los de antes en su lista.
-    pub removal_first: Range<usize>,
+    pub removal_first: Snippet,
+}
+
+/// Un tramo de la nota y lo que dice, para que una edición compruebe que
+/// sigue ahí.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Snippet {
+    pub range: Range<usize>,
+    pub text: String,
+}
+
+impl Snippet {
+    fn new(text: &str, range: &Range<usize>) -> Self {
+        Self {
+            range: range.clone(),
+            text: text[range.clone()].to_owned(),
+        }
+    }
 }
 
 /// Un tag escrito en una nota.
@@ -39,42 +56,87 @@ pub struct TagOccurrence {
     pub spelling: String,
     /// El nombre en la nota, sin `#` ni comillas: lo que reescribe renombrar.
     pub range: Range<usize>,
+    /// La línea, desde cero, para la vista previa.
+    pub line: usize,
     pub source: TagSource,
 }
 
 impl TagOccurrence {
-    /// Un valor del frontmatter ya validado como tag.
-    pub(crate) fn from_value(value: &Value) -> Self {
+    /// Un valor del frontmatter de `text` ya validado como tag.
+    pub(crate) fn from_value(text: &str, value: &Value, lines: &mut Lines<'_>) -> Self {
+        let range = value.literal.clone().unwrap_or_else(|| value.span.clone());
         Self {
             key: TagKey::new(&value.text),
             spelling: value.text.clone(),
-            range: value.literal.clone().unwrap_or_else(|| value.span.clone()),
+            line: lines.line_of(range.start),
             source: TagSource::Frontmatter(FrontmatterSpot {
-                literal: value.literal.is_some(),
-                removal: value.removal.clone(),
-                removal_first: value.removal_first.clone(),
+                escaped: value
+                    .literal
+                    .is_none()
+                    .then(|| text[range.clone()].to_owned()),
+                removal: Snippet::new(text, &value.removal),
+                removal_first: Snippet::new(text, &value.removal_first),
             }),
+            range,
+        }
+    }
+
+    /// Lo que dice la nota en [`TagOccurrence::range`].
+    #[must_use]
+    pub fn written(&self) -> &str {
+        match &self.source {
+            TagSource::Frontmatter(FrontmatterSpot {
+                escaped: Some(escaped),
+                ..
+            }) => escaped,
+            _ => &self.spelling,
         }
     }
 }
 
-/// Las ocurrencias de una nota, en orden de aparición, y la huella de su
-/// contenido para saber si cambió desde que se escaneó.
+/// Cuenta líneas hacia adelante: preguntar en orden recorre el texto una vez.
+pub(crate) struct Lines<'t> {
+    text: &'t str,
+    at: usize,
+    line: usize,
+}
+
+impl<'t> Lines<'t> {
+    pub(crate) fn new(text: &'t str) -> Self {
+        Self {
+            text,
+            at: 0,
+            line: 0,
+        }
+    }
+
+    /// La línea de `offset`, desde cero.
+    pub(crate) fn line_of(&mut self, offset: usize) -> usize {
+        if offset < self.at {
+            *self = Self::new(self.text);
+        }
+        self.line += self.text[self.at..offset].matches('\n').count();
+        self.at = offset;
+        self.line
+    }
+}
+
+/// Las ocurrencias de una nota, en orden de aparición.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NoteTags {
     pub occurrences: Vec<TagOccurrence>,
-    pub hash: u64,
 }
 
 /// Las ocurrencias de una nota y su frontmatter, del que una página de tag
 /// saca su metadata.
 pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {
     let scan = nota_syntax::scan(text);
+    let mut lines = Lines::new(text);
     let mut occurrences: Vec<TagOccurrence> = scan
         .frontmatter
         .iter()
         .flat_map(|frontmatter| &frontmatter.tags)
-        .map(TagOccurrence::from_value)
+        .map(|value| TagOccurrence::from_value(text, value, &mut lines))
         .collect();
     occurrences.extend(scan.tags.iter().map(|tag| {
         let spelling = tag.name(text).to_owned();
@@ -82,14 +144,11 @@ pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {
             key: TagKey::new(&spelling),
             spelling,
             range: tag.name.clone(),
+            line: lines.line_of(tag.name.start),
             source: TagSource::Inline,
         }
     }));
-    let tags = NoteTags {
-        occurrences,
-        hash: content_hash(text),
-    };
-    (tags, scan.frontmatter)
+    (NoteTags { occurrences }, scan.frontmatter)
 }
 
 /// Qué es un archivo de la carpeta de tags.
@@ -178,7 +237,10 @@ mod tests {
         assert_eq!(&text[occurrence.range.clone()], "\"r\\u0075st\"");
         assert!(matches!(
             &occurrence.source,
-            TagSource::Frontmatter(FrontmatterSpot { literal: false, .. })
+            TagSource::Frontmatter(FrontmatterSpot {
+                escaped: Some(_),
+                ..
+            })
         ));
     }
 }

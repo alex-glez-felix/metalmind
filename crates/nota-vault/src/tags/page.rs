@@ -3,12 +3,13 @@
 
 use std::ops::Range;
 
-use nota_syntax::{Entry, Frontmatter, Value};
+use nota_syntax::{Frontmatter, Value};
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
 use crate::path::VaultPath;
 use crate::tags::key::TagKey;
-use crate::tags::note::TagOccurrence;
+use crate::tags::layout::PageLayout;
+use crate::tags::note::{Lines, TagOccurrence};
 
 /// Un tag con página.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,51 +27,6 @@ pub struct TagPage {
     pub invalid: Vec<InvalidValue>,
     /// Dónde escribir un campo sin tocar el resto.
     pub layout: PageLayout,
-}
-
-/// Cómo está escrito el frontmatter de una página, para cambiar un campo.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PageLayout {
-    /// Sin frontmatter: se agrega uno en `at`, tras el BOM si lo hay.
-    Bare { at: usize, crlf: bool },
-    /// Un mapa en bloque: un campo nuevo va en `end`, antes del `---` de cierre.
-    Block {
-        entries: Vec<Entry>,
-        end: usize,
-        crlf: bool,
-    },
-    /// YAML roto o con una forma que nota no edita (`{a: 1}`): hay que
-    /// arreglarlo a mano antes de cambiar un campo.
-    Unreadable,
-}
-
-impl PageLayout {
-    fn new(text: &str, frontmatter: Option<&Frontmatter>) -> Self {
-        let crlf = text
-            .split('\n')
-            .next()
-            .is_some_and(|line| line.ends_with('\r'));
-        match frontmatter {
-            None => Self::Bare {
-                at: if text.starts_with('\u{FEFF}') {
-                    '\u{FEFF}'.len_utf8()
-                } else {
-                    0
-                },
-                crlf,
-            },
-            Some(Frontmatter {
-                entries: Some(entries),
-                yaml,
-                ..
-            }) => Self::Block {
-                entries: entries.clone(),
-                end: yaml.end,
-                crlf,
-            },
-            Some(_) => Self::Unreadable,
-        }
-    }
 }
 
 /// Un nombre de la paleta del tema (`naranja`) o un hex (`#d97706`).
@@ -123,20 +79,21 @@ impl TagPage {
             layout: PageLayout::new(text, frontmatter),
         };
         if let Some(frontmatter) = frontmatter {
-            page.read(frontmatter);
+            page.read(text, frontmatter);
         }
         page
     }
 
-    fn read(&mut self, frontmatter: &Frontmatter) {
+    fn read(&mut self, text: &str, frontmatter: &Frontmatter) {
         self.color = self.single(
             PageField::Color,
             frontmatter.color.as_ref(),
             TagColor::parse,
         );
         self.icon = self.single(PageField::Icon, frontmatter.icon.as_ref(), TagIcon::parse);
-        self.aliases = self.tags(PageField::Aliases, &frontmatter.aliases);
-        self.parents = self.tags(PageField::Parents, &frontmatter.parents);
+        let mut lines = Lines::new(text);
+        self.aliases = self.tags(text, &mut lines, PageField::Aliases, &frontmatter.aliases);
+        self.parents = self.tags(text, &mut lines, PageField::Parents, &frontmatter.parents);
     }
 
     fn single<T>(
@@ -153,11 +110,17 @@ impl TagPage {
         parsed
     }
 
-    fn tags(&mut self, field: PageField, values: &[Value]) -> Vec<TagOccurrence> {
+    fn tags(
+        &mut self,
+        text: &str,
+        lines: &mut Lines<'_>,
+        field: PageField,
+        values: &[Value],
+    ) -> Vec<TagOccurrence> {
         let mut tags = Vec::new();
         for value in values {
             match value.as_tag() {
-                Some(tag) => tags.push(TagOccurrence::from_value(&tag)),
+                Some(tag) => tags.push(TagOccurrence::from_value(text, &tag, lines)),
                 None => self.reject(field, value),
             }
         }

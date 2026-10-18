@@ -135,7 +135,8 @@ fn a_file_that_changed_after_planning_stops_everything() {
     write(dir.path(), RENAME);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let plan = vault.tags().plan_rename("#a", "#b").unwrap();
-    fs::write(dir.path().join("tags/hijo.md"), "---\nparents: [a]\n---\n").unwrap();
+    let moved = "---\ntitle: nuevo\nparents: [a, otro]\n---\n";
+    fs::write(dir.path().join("tags/hijo.md"), moved).unwrap();
     let before = contents(dir.path());
     let Err(ApplyError::Stale(stale)) = vault.apply(&plan.changes) else {
         panic!("se esperaba un archivo cambiado");

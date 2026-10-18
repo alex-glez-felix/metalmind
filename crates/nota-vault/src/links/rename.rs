@@ -8,7 +8,8 @@ use std::ops::Range;
 
 use super::names::{Names, Renamed, key_of};
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
-use crate::links::edit::{FileEdits, TextEdit};
+use crate::changes::{Changes, Rename};
+use crate::edit::{FileEdits, TextEdit};
 use crate::path::VaultPath;
 
 /// Las ediciones que mantienen los links al renombrar `from` a `to`. Se
@@ -22,6 +23,21 @@ pub struct RenamePlan {
     /// Links que dejarían de apuntar a su destino y no se pueden reescribir
     /// con su forma (un `#` o `|` en el nombre nuevo de un wikilink).
     pub conflicts: Vec<RenameConflict>,
+}
+
+impl RenamePlan {
+    /// Lo que aplica [`crate::Vault::apply`]: las ediciones y el renombre.
+    #[must_use]
+    pub fn changes(&self) -> Changes {
+        Changes {
+            edits: self.files.clone(),
+            creates: Vec::new(),
+            renames: vec![Rename {
+                from: self.from.clone(),
+                to: self.to.clone(),
+            }],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,7 +67,7 @@ impl LinkIndex {
     /// # Errors
     /// Si `to` ya existe, está dentro de `from` o debajo de un archivo. Una
     /// carpeta vacía en `to` no la ve el índice: la frena
-    /// [`crate::Vault::apply_rename`] antes de escribir.
+    /// [`crate::Vault::apply`] antes de escribir.
     pub fn rename_plan(
         &self,
         from: &VaultPath,

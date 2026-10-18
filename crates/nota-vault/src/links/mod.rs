@@ -4,7 +4,6 @@
 //! [`crate::VaultChange`].
 
 mod complete;
-mod edit;
 mod follow;
 mod names;
 mod note;
@@ -17,7 +16,6 @@ use std::sync::Arc;
 
 use nota_syntax::LinkSyntax;
 
-pub use edit::{FileEdits, StaleEdit, TextEdit};
 pub use follow::Destination;
 pub use rename::{RenameConflict, RenamePlan, RenamePlanError};
 

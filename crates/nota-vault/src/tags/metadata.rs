@@ -2,14 +2,15 @@
 //! alias y padres. Se escribe en el frontmatter de su página tocando solo
 //! ese campo, y si el tag no tiene página, nota la crea.
 
-use nota_syntax::Entry;
 use unicode_normalization::UnicodeNormalization as _;
 
-use crate::changes::{Changes, FileEdit, NewFile, TextEdit};
+use crate::changes::{Changes, NewFile};
+use crate::edit::{FileEdits, TextEdit};
 use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
-use crate::tags::page::{PageField, PageLayout, TagColor, TagIcon, TagPage};
+use crate::tags::layout::{PageEntry, PageLayout};
+use crate::tags::page::{PageField, TagColor, TagIcon, TagPage};
 use crate::tags::refactor::{PlanError, PlanNotice, TagPlan};
 
 /// El valor nuevo de un campo de la página. `None` o una lista vacía quitan
@@ -71,7 +72,7 @@ impl Tags {
             _ => Vec::new(),
         };
         let mut plan = match self.graph.page(&key) {
-            Some(page) => edit_page(self, page, field, value.as_deref())?,
+            Some(page) => edit_page(page, field, value.as_deref())?,
             None => match value {
                 Some(value) => {
                     let text = format!("---\n{}: {value}\n---\n", field.key());
@@ -167,15 +168,7 @@ impl PageField {
 }
 
 /// La edición de un campo en una página que ya existe.
-fn edit_page(
-    tags: &Tags,
-    page: &TagPage,
-    field: PageField,
-    value: Option<&str>,
-) -> Result<TagPlan, PlanError> {
-    let Some(hash) = tags.index.note(&page.path).map(|note| note.hash) else {
-        return Ok(TagPlan::default());
-    };
+fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<TagPlan, PlanError> {
     let key = field.key();
     let edits = match (&page.layout, value) {
         (PageLayout::Unreadable, _) => return Err(PlanError::UneditablePage(page.path.clone())),
@@ -184,19 +177,30 @@ fn edit_page(
             let eol = eol(crlf);
             vec![TextEdit {
                 range: at..at,
-                text: format!("---{eol}{key}: {value}{eol}---{eol}"),
+                old: String::new(),
+                new: format!("---{eol}{key}: {value}{eol}---{eol}"),
+                line: 0,
             }]
         }
-        (PageLayout::Block { entries, end, crlf }, value) => {
+        (
+            PageLayout::Block {
+                entries,
+                end,
+                end_line,
+                crlf,
+            },
+            value,
+        ) => {
             let line = value.map(|value| format!("{key}: {value}{}", eol(*crlf)));
-            block_edits(entries, key, *end, line)
+            block_edit(entries, key, (*end, *end_line), line)
+                .into_iter()
+                .collect()
         }
     };
     let mut plan = TagPlan::default();
     if !edits.is_empty() {
-        plan.changes.edits.push(FileEdit {
+        plan.changes.edits.push(FileEdits {
             path: page.path.clone(),
-            hash,
             edits,
         });
     }
@@ -204,19 +208,28 @@ fn edit_page(
 }
 
 /// En un mapa en bloque, `line` reemplaza el campo o va antes del `---` de
-/// cierre; `None` lo quita. Una clave repetida es YAML inválido, así que hay
-/// a lo sumo una.
-fn block_edits(entries: &[Entry], key: &str, end: usize, line: Option<String>) -> Vec<TextEdit> {
+/// cierre (`end`, con su línea); `None` lo quita. Una clave repetida es YAML
+/// inválido, así que hay a lo sumo una.
+fn block_edit(
+    entries: &[PageEntry],
+    key: &str,
+    (end, end_line): (usize, usize),
+    line: Option<String>,
+) -> Option<TextEdit> {
     match (entries.iter().find(|entry| entry.key == key), line) {
-        (Some(entry), line) => vec![TextEdit {
+        (Some(entry), line) => Some(TextEdit {
             range: entry.span.clone(),
-            text: line.unwrap_or_default(),
-        }],
-        (None, Some(text)) => vec![TextEdit {
+            old: entry.text.clone(),
+            new: line.unwrap_or_default(),
+            line: entry.line,
+        }),
+        (None, Some(new)) => Some(TextEdit {
             range: end..end,
-            text,
-        }],
-        (None, None) => Vec::new(),
+            old: String::new(),
+            new,
+            line: end_line,
+        }),
+        (None, None) => None,
     }
 }
 

@@ -4,30 +4,30 @@
 
 mod apply;
 mod changes;
+mod edit;
 mod file;
 mod index;
 mod links;
 mod ops;
 mod order;
 mod path;
-mod refactor;
 mod refresh;
 mod scan;
 pub mod tags;
 mod vault;
 mod watch;
 
-pub use apply::{Applied, ApplyError, ChangesInterruption, ChangesUndoReport};
-pub use changes::{Changes, FileEdit, NewFile, Rename, StaleFile, content_hash};
+pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
+pub use changes::{Changes, NewFile, Rename};
+pub use edit::{FileEdits, StaleEdit, TextEdit};
 pub use file::{FileError, read, write_atomic};
 pub use index::{Entry, EntryKind, VaultIndex};
 pub use links::{
-    Destination, FileEdits, IndexedLink, LinkContext, LinkIndex, LinkSubpath, LinkTarget, NoteLink,
-    RenameConflict, RenamePlan, RenamePlanError, StaleEdit, TextEdit,
+    Destination, IndexedLink, LinkContext, LinkIndex, LinkSubpath, LinkTarget, NoteLink,
+    RenameConflict, RenamePlan, RenamePlanError,
 };
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
-pub use refactor::{AccessError, AppliedRename, ApplyRenameError, Interruption, UndoReport};
 pub use refresh::VaultChange;
 pub use scan::walk_notes;
 pub use vault::{Vault, VaultError, VaultOptions, VaultUpdate};

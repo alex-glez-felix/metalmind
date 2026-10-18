@@ -73,18 +73,23 @@ fn rename_a_tag_with_page_parents_and_aliases() {
 }
 
 #[test]
-fn the_original_files_are_kept_for_undo() {
+fn each_edit_says_what_it_replaces_and_can_be_undone() {
     let fixture = fixture();
     let plan = fixture.tags().plan_rename("#rust", "#Oxido").unwrap();
     for edit in &plan.changes.edits {
         let original = &fixture.files[&edit.path];
-        let new = edit.apply(original).unwrap();
+        let (new, undo) = edit.apply(original).unwrap();
         assert_ne!(&new, original);
+        assert_eq!(&undo.apply(&new).unwrap().0, original);
         assert!(
             edit.apply(&new).is_err(),
             "{}: un plan no se aplica dos veces",
             edit.path
         );
+        for change in &edit.edits {
+            let line = original[..change.range.start].matches('\n').count();
+            assert_eq!(change.line, line, "{}: {change:?}", edit.path);
+        }
     }
 }
 
@@ -285,7 +290,7 @@ fn an_unsaved_buffer_is_planned_on_its_text() {
         .find(|edit| edit.path == path("d.md"))
         .unwrap();
     assert_eq!(
-        edit.apply(buffer).unwrap(),
+        edit.apply(buffer).unwrap().0,
         "Sin guardar: #oxido y #oxido.\n"
     );
     assert!(edit.apply(&fixture.files[&path("d.md")]).is_err());

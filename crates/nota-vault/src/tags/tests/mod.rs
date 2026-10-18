@@ -66,7 +66,7 @@ pub(super) fn tags(files: &[(&str, &str)]) -> Tags {
 pub(super) fn applied(fixture: &Fixture, plan: &TagPlan) -> BTreeMap<VaultPath, String> {
     let mut files = fixture.files.clone();
     for edit in &plan.changes.edits {
-        let text = edit.apply(&fixture.files[&edit.path]).unwrap();
+        let (text, _) = edit.apply(&fixture.files[&edit.path]).unwrap();
         files.insert(edit.path.clone(), text);
     }
     for file in &plan.changes.creates {
