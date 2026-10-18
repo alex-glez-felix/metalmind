@@ -11,14 +11,19 @@ use ropey::Rope;
 pub struct LineAnchor(usize);
 
 /// Línea y bytes desde su inicio.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Point {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Point {
     pub line: usize,
     pub column: usize,
 }
 
 impl Point {
-    pub fn of(rope: &Rope, byte: usize) -> Self {
+    #[must_use]
+    pub fn new(line: usize, column: usize) -> Self {
+        Self { line, column }
+    }
+
+    pub(crate) fn of(rope: &Rope, byte: usize) -> Self {
         let line = rope.byte_to_line(byte);
         Self {
             line,
@@ -67,7 +72,10 @@ impl Anchors {
 }
 
 /// Lo que una edición le hace a las líneas, medido sobre el texto de antes.
-pub(crate) struct LineChange {
+/// Viene en cada [`Splice`](crate::Splice) para mover posiciones guardadas
+/// por línea fuera del buffer, como la jumplist de vim.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LineChange {
     start: Point,
     end: Point,
     end_line_len: usize,
@@ -81,7 +89,7 @@ pub(crate) struct LineChange {
 }
 
 impl LineChange {
-    pub fn new(rope: &Rope, start: usize, removed: usize, text: &str) -> Self {
+    pub(crate) fn new(rope: &Rope, start: usize, removed: usize, text: &str) -> Self {
         let end = start + removed;
         let line_len = |line| {
             let next = rope.line_to_byte(line + 1);
@@ -107,26 +115,27 @@ impl LineChange {
 
     /// Las líneas de antes que toca la edición; las de después se corren
     /// [`Self::line_shift`].
-    pub fn lines(&self) -> RangeInclusive<usize> {
+    pub(crate) fn lines(&self) -> RangeInclusive<usize> {
         self.start.line..=self.end.line
     }
 
-    pub fn line_shift(&self) -> isize {
+    pub(crate) fn line_shift(&self) -> isize {
         let removed = self.end.line - self.start.line;
         // Un texto que cabe en memoria no tiene más de `isize::MAX` líneas.
         self.inserted_lines.cast_signed() - removed.cast_signed()
     }
 
     /// Dónde queda `line` tras la edición; `None` si se borró.
-    pub fn adjust_line(&self, line: usize) -> Option<usize> {
+    pub(crate) fn adjust_line(&self, line: usize) -> Option<usize> {
         self.adjust(Point { line, column: 0 })
             .map(|point| point.line)
     }
 
-    /// Dónde queda `point` tras la edición; `None` si su línea se borró.
-    /// En la línea editada la columna no cambia, como en vim; lo que queda
-    /// de una línea que se une a otra sí se corre con su texto.
-    fn adjust(&self, point: Point) -> Option<Point> {
+    /// Dónde queda `point` tras la edición, como una mark de vim; `None` si
+    /// su línea se borró. En la línea editada la columna no cambia; lo que
+    /// queda de una línea que se une a otra sí se corre con su texto.
+    #[must_use]
+    pub fn adjust(&self, point: Point) -> Option<Point> {
         let (first, last) = (self.start.line, self.end.line);
         if point.line < first {
             return Some(point);
@@ -159,6 +168,17 @@ impl LineChange {
         Some(Point {
             line: first + self.inserted_lines,
             column,
+        })
+    }
+
+    /// Como [`Self::adjust`], pero si su línea se borra queda en la primera
+    /// línea de lo borrado, como las entradas de la jumplist de vim
+    /// (`one_adjust_nodel`).
+    #[must_use]
+    pub fn keep(&self, point: Point) -> Point {
+        self.adjust(point).unwrap_or(Point {
+            line: self.start.line,
+            ..point
         })
     }
 
@@ -238,6 +258,17 @@ mod tests {
         assert_eq!(moved(TEXT, 2, 1, "", point(1, 1)), Some(point(0, 3)));
         assert_eq!(moved(TEXT, 2, 1, " ", point(1, 1)), Some(point(0, 4)));
         assert_eq!(moved(TEXT, 1, 3, "", point(1, 0)), Some(point(0, 1)));
+    }
+
+    #[test]
+    fn keep_leaves_a_deleted_line_at_the_start_of_the_deletion() {
+        let keep = |start, removed, at| {
+            LineChange::new(&Rope::from_str(TEXT), start, removed, "").keep(at)
+        };
+        assert_eq!(keep(3, 3, point(1, 1)), point(1, 1));
+        assert_eq!(keep(0, 6, point(1, 1)), point(0, 1));
+        assert_eq!(keep(0, 6, point(2, 1)), point(0, 1));
+        assert_eq!(keep(0, 8, point(2, 1)), point(0, 1));
     }
 
     #[test]

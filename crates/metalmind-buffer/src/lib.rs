@@ -15,7 +15,7 @@ mod offset;
 mod selection;
 mod splice;
 
-pub use anchor::LineAnchor;
+pub use anchor::{LineAnchor, LineChange, Point};
 pub use buffer::Buffer;
 pub use edit::{Bias, Edit, EditMap};
 pub use error::BufferError;

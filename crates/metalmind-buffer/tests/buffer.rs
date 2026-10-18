@@ -427,21 +427,11 @@ fn splices_follow_edits_and_history() {
     edit(&mut buffer, vec![Edit::replace(at(4)..at(7), "cuatro")]);
     buffer.undo().unwrap();
     let splices = buffer.take_splices();
-    assert_eq!(
-        splices,
-        [
-            Splice {
-                start: at(4),
-                removed: 3,
-                inserted: 6
-            },
-            Splice {
-                start: at(4),
-                removed: 6,
-                inserted: 3
-            },
-        ]
-    );
+    let bytes: Vec<_> = splices
+        .iter()
+        .map(|s| (s.start, s.removed, s.inserted))
+        .collect();
+    assert_eq!(bytes, [(at(4), 3, 6), (at(4), 6, 3)]);
     assert_eq!(Splice::map_all(&splices, at(9)), at(9));
     assert_eq!(buffer.take_splices(), []);
 }
