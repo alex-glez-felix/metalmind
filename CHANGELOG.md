@@ -38,7 +38,16 @@ Los cambios que importan a quien usa nota. El formato sigue
 - `.` repite el último cambio, con count.
 - Un count en Insert repite lo tecleado o pegado al salir con `Esc`;
   `ctrl-c` sale sin repetir.
-- Cada caso de la tabla de vim (488) se verifica contra Neovim 0.12.6.
+- Cada caso de la tabla de vim se verifica contra Neovim 0.12.6.
+
+#### Configuración
+
+- `config.toml` en el directorio de configuración del usuario (XDG), con tema y
+  fuente. Un archivo roto o con tipos equivocados se reemplaza por los
+  defaults y el error dice la línea y la columna; una clave desconocida es
+  solo un aviso. Detalle en [docs/config.md](docs/config.md).
+- Temas `nota-oscuro` y `nota-claro`, y temas propios en `themes/*.toml` que
+  pueden extender a otro.
 
 #### Release
 
