@@ -16,6 +16,7 @@ nota-config = { path = "crates/nota-config" }
 nota-perf = { path = "crates/nota-perf" }
 nota-search = { path = "crates/nota-search" }
 nota-syntax = { path = "crates/nota-syntax" }
+nota-template = { path = "crates/nota-template" }
 nota-ui = { path = "crates/nota-ui" }
 nota-vault = { path = "crates/nota-vault" }
 nota-vim = { path = "crates/nota-vim" }
@@ -33,6 +34,7 @@ grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
 grep-searcher = "0.1.17"
 ignore = "0.4.33"
+jiff = "0.2.38"
 log = "0.4.34"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
