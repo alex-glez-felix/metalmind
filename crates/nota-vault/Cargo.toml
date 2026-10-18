@@ -1,6 +1,6 @@
 [package]
 name = "nota-vault"
-description = "El vault en disco: índices de archivos, links y tags, watcher, operaciones de archivo y guardado atómico."
+description = "El vault en disco: índices de archivos, links y tags, watcher, operaciones de archivo, guardado atómico y adjuntos."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

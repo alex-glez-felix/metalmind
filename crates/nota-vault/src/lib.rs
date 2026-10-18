@@ -1,9 +1,10 @@
 //! El vault en disco: abrir una carpeta, sus índices de archivos, links y
 //! tags al día con lo que pasa en disco, crear, capturar, mover y borrar, el
-//! guardado atómico de cada nota y aplicar y deshacer cambios en varios
-//! archivos.
+//! guardado atómico de cada nota, aplicar y deshacer cambios en varios
+//! archivos y los adjuntos.
 
 mod apply;
+mod attachment;
 mod capture;
 mod changes;
 mod edit;
@@ -20,6 +21,7 @@ mod vault;
 mod watch;
 
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
+pub use attachment::{DEFAULT_ATTACHMENT_FOLDER, FileKind, NewAttachment, SavedAttachment, Source};
 pub use capture::{CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};

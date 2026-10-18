@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use rustix::fs::{CWD, RenameFlags, renameat_with};
 
 use crate::index::EntryKind;
-use crate::path::VaultPath;
+use crate::path::{InvalidPath, VaultPath};
 
 /// La papelera del vault, la misma de Obsidian.
 const TRASH: &str = ".trash";
@@ -31,6 +31,8 @@ pub enum FileOpError {
     AlreadyExists(VaultPath),
     #[error("{0} no existe")]
     NotFound(VaultPath),
+    #[error(transparent)]
+    InvalidPath(#[from] InvalidPath),
     #[error("no se pudo {action} {path}: {source}")]
     Io {
         action: &'static str,
@@ -196,6 +198,25 @@ fn prepare_target(
         fs::create_dir_all(parent).map_err(|source| io_error(action, path, source))?;
     }
     Ok(full)
+}
+
+/// La ruta en disco de la carpeta `folder`, creándola con las que le falten
+/// si no existe. Ni ella ni sus padres pueden ser enlaces simbólicos.
+pub(crate) fn ensure_folder(root: &Path, folder: &VaultPath) -> Result<PathBuf, FileOpError> {
+    check_ancestors(root, folder)?;
+    let full = folder.to_fs(root);
+    match fs::symlink_metadata(&full) {
+        Ok(metadata) if folder.is_root() || metadata.is_dir() => Ok(full),
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err(FileOpError::Symlink(folder.clone()))
+        }
+        Ok(_) => Err(FileOpError::NotAFolder(folder.clone())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            fs::create_dir_all(&full).map_err(|source| io_error("crear", folder, source))?;
+            Ok(full)
+        }
+        Err(error) => Err(io_error("leer", folder, error)),
+    }
 }
 
 /// Ninguna carpeta entre la raíz y `path` puede ser un enlace simbólico (por
