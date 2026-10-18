@@ -68,7 +68,6 @@ impl Anchors {
 pub(crate) struct LineChange {
     start: Point,
     end: Point,
-    start_line_len: usize,
     end_line_len: usize,
     /// Borra todo el texto: todas las líneas desaparecen.
     clears_text: bool,
@@ -96,7 +95,6 @@ impl LineChange {
         Self {
             start,
             end,
-            start_line_len: line_len(start.line),
             end_line_len: line_len(end.line),
             clears_text: removed > 0 && removed == rope.len_bytes(),
             inserted_lines,
@@ -146,8 +144,8 @@ impl LineChange {
 
     /// Una línea desaparece si se borra con su salto de línea: las de en
     /// medio, la primera si se borra desde su inicio hasta el inicio de otra
-    /// (`dd`) y la última si se borra desde el final de otra hasta su final
-    /// (`dd` en la última línea).
+    /// (`dd`) y la última si se borra hasta su final (`dd` en la última
+    /// línea, o un borrado que sigue desde una línea anterior).
     fn vanishes(&self, line: usize) -> bool {
         let (first, last) = (self.start.line, self.end.line);
         if self.clears_text {
@@ -159,7 +157,7 @@ impl LineChange {
         if line == first {
             self.start.column == 0 && self.end.column == 0
         } else if line == last {
-            self.start.column == self.start_line_len && self.end.column == self.end_line_len
+            self.end.column == self.end_line_len
         } else {
             true
         }
@@ -198,6 +196,8 @@ mod tests {
     #[test]
     fn deleting_its_line_drops_it() {
         assert_eq!(moved(TEXT, 3, 3, "", point(1, 1)), None);
+        assert_eq!(moved(TEXT, 3, 5, "", point(2, 1)), None);
+        assert_eq!(moved(TEXT, 3, 5, "", point(1, 1)), Some(point(1, 1)));
         assert_eq!(moved(TEXT, 5, 3, "", point(2, 0)), None);
         assert_eq!(moved(TEXT, 0, 8, "", point(0, 1)), None);
         assert_eq!(moved(TEXT, 1, 6, "", point(1, 0)), None);
