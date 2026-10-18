@@ -7,11 +7,13 @@ pub enum Resolution<'p> {
     Unresolved,
 }
 
-/// Resuelve `target` como Obsidian contra las rutas del vault (relativas a
-/// su raíz, separadas por `/`). Coincide el nombre o el final de la ruta
+/// Resuelve `target` contra las rutas del vault (relativas a su raíz,
+/// separadas por `/`). Coincide el nombre o el final de la ruta
 /// (`carpeta/nota`), sin distinguir mayúsculas y con o sin `.md`; gana la de
-/// menos carpetas. Un `/` al principio exige la ruta completa. El destino
-/// vacío de `[[#Heading]]` es la nota misma y aquí no resuelve.
+/// menos carpetas. Si empatan, desempata la única escrita con las mismas
+/// mayúsculas; si no, es `Ambiguous` en vez de elegir una al azar. Un `/` al
+/// principio exige la ruta completa. El destino vacío de `[[#Heading]]` es la
+/// nota misma y aquí no resuelve.
 pub fn resolve<'p, I>(target: &str, paths: I) -> Resolution<'p>
 where
     I: IntoIterator<Item = &'p str>,
@@ -24,6 +26,7 @@ where
     if target.is_empty() {
         return Resolution::Unresolved;
     }
+    let exact = target;
     let target = target.to_lowercase();
     let mut best: Vec<&'p str> = Vec::new();
     let mut best_depth = usize::MAX;
@@ -43,11 +46,25 @@ where
     match best.as_slice() {
         [] => Resolution::Unresolved,
         [path] => Resolution::Resolved(path),
-        _ => Resolution::Ambiguous(best),
+        _ => match same_case(&best, exact, from_root).as_slice() {
+            [path] => Resolution::Resolved(path),
+            _ => Resolution::Ambiguous(best),
+        },
     }
 }
 
-/// `path` y `target` ya en minúsculas.
+/// En un sistema de archivos que distingue mayúsculas, `Casa.md` y `casa.md`
+/// conviven; `[[Casa]]` apunta a la primera.
+fn same_case<'p>(paths: &[&'p str], target: &str, from_root: bool) -> Vec<&'p str> {
+    paths
+        .iter()
+        .copied()
+        .filter(|path| matches(path, target, from_root))
+        .collect()
+}
+
+/// Con mayúsculas exactas; quien llama pasa los dos en minúsculas para
+/// ignorarlas.
 fn matches(path: &str, target: &str, from_root: bool) -> bool {
     let ends_with = |name: &str| {
         if from_root {
