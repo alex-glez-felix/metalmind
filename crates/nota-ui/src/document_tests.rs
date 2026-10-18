@@ -43,6 +43,7 @@ fn abrir_lee_el_archivo() {
 #[case::sin_salto("uno\ndos", "uno\ndos", "uno\ndos\n")]
 #[case::linea_vacia_al_final("uno\n\n", "uno\n", "uno\n\n")]
 #[case::vacio("", "", "")]
+#[case::solo_una_linea_vacia("\n", "", "\n")]
 fn el_salto_final_no_entra_al_buffer(
     #[case] on_disk: &str,
     #[case] buffer: &str,
@@ -77,4 +78,32 @@ fn un_enlace_es_el_archivo_al_que_apunta_ahora() {
     std::os::unix::fs::symlink(&b, &link).unwrap();
     assert!(document.is_file(&b), "guardar ya escribiría en b.md");
     assert!(!document.is_file(&a));
+}
+
+#[test]
+fn una_linea_vacia_cuenta_como_una_linea() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nota.md");
+    fs::write(&path, "\n").unwrap();
+    let document = Document::open(&path).unwrap();
+    assert_eq!(document.stats(), FileStats { lines: 1, bytes: 1 });
+}
+
+#[rstest]
+#[case::con_salto("uno\n", false, FileStats { lines: 1, bytes: 4 })]
+#[case::sin_salto("uno", true, FileStats { lines: 1, bytes: 3 })]
+#[case::vacio("", false, FileStats { lines: 0, bytes: 0 })]
+fn al_abrir_avisa_lo_que_hay_en_disco(
+    #[case] on_disk: &str,
+    #[case] noeol: bool,
+    #[case] stats: FileStats,
+) {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nota.md");
+    fs::write(&path, on_disk).unwrap();
+    let mut document = Document::open(&path).unwrap();
+    assert_eq!(document.noeol(), noeol);
+    assert_eq!(document.opened_stats(), stats);
+    document.save().unwrap();
+    assert!(!document.noeol(), "guardar pone el \\n que faltaba");
 }

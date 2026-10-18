@@ -10,26 +10,14 @@ use nota_vault::FileError;
 use nota_vim::Marks;
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
-/// la última no lo lleva. Un buffer vacío se guarda como un archivo vacío.
+/// la última no lo lleva.
 const EOL: &str = "\n";
 
-/// Tamaño del archivo tal como se guarda, para avisarlo como vim (`"a.md" 3L, 20B`).
+/// Tamaño del archivo, para avisarlo como vim (`"a.md" 3L, 20B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileStats {
     pub lines: usize,
     pub bytes: usize,
-}
-
-impl FileStats {
-    fn of(buffer: &Buffer) -> Self {
-        if buffer.is_empty() {
-            return Self { lines: 0, bytes: 0 };
-        }
-        Self {
-            lines: buffer.line_count(),
-            bytes: buffer.len().get() + EOL.len(),
-        }
-    }
 }
 
 impl fmt::Display for FileStats {
@@ -49,6 +37,11 @@ pub struct Document {
     /// a mitad de una transacción y ningún estado coincide.
     saved: Option<HistorySeq>,
     exists_on_disk: bool,
+    /// El archivo era una sola línea vacía. Vim distingue "sin líneas" de
+    /// "una línea vacía", y el buffer vacío no: sin esto, `:w` lo vaciaría.
+    blank_line: bool,
+    /// Al archivo le faltaba el `\n` final y todavía no se guardó.
+    noeol: bool,
 }
 
 impl Document {
@@ -61,8 +54,11 @@ impl Document {
         let text = nota_vault::read(path)?;
         let exists_on_disk = text.is_some();
         let text = text.unwrap_or_default();
-        let mut document = Self::new(path, text.strip_suffix(EOL).unwrap_or(&text));
+        let lines = text.strip_suffix(EOL);
+        let mut document = Self::new(path, lines.unwrap_or(&text));
         document.exists_on_disk = exists_on_disk;
+        document.blank_line = text == EOL;
+        document.noeol = lines.is_none() && !text.is_empty();
         Ok(document)
     }
 
@@ -75,6 +71,8 @@ impl Document {
             marks: Marks::default(),
             buffer,
             exists_on_disk: false,
+            blank_line: false,
+            noeol: false,
         }
     }
 
@@ -96,9 +94,45 @@ impl Document {
         self.exists_on_disk
     }
 
+    /// Lo que ocuparía en disco al guardarlo ahora.
     #[must_use]
     pub fn stats(&self) -> FileStats {
-        FileStats::of(&self.buffer)
+        if self.final_eol().is_empty() {
+            return FileStats { lines: 0, bytes: 0 };
+        }
+        FileStats {
+            lines: self.buffer.line_count(),
+            bytes: self.buffer.len().get() + EOL.len(),
+        }
+    }
+
+    /// Como lo avisa vim al abrir: sin el `\n` que le falta al archivo, si
+    /// le falta (`noeol`).
+    #[must_use]
+    pub fn opened_stats(&self) -> FileStats {
+        let stats = self.stats();
+        if self.noeol {
+            FileStats {
+                bytes: stats.bytes - EOL.len(),
+                ..stats
+            }
+        } else {
+            stats
+        }
+    }
+
+    #[must_use]
+    pub fn noeol(&self) -> bool {
+        self.noeol
+    }
+
+    /// Un buffer vacío no lleva `\n`, salvo que se abriera de una línea vacía.
+    fn final_eol(&self) -> &'static str {
+        if self.buffer.is_empty() && !self.blank_line {
+            ""
+        } else {
+            EOL
+        }
     }
 
     /// Como vim, depende del estado del historial y no del texto: volver a
@@ -114,10 +148,11 @@ impl Document {
     /// # Errors
     /// Si no se pudo escribir; el archivo en disco queda como estaba.
     pub fn save(&mut self) -> Result<FileStats, FileError> {
-        let eol = if self.buffer.is_empty() { "" } else { EOL };
+        let eol = self.final_eol();
         nota_vault::write_atomic(&self.path, |out| write!(out, "{}{eol}", self.buffer))?;
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
+        self.noeol = false;
         Ok(self.stats())
     }
 
