@@ -24,7 +24,7 @@ impl Config {
         })
     }
 
-    /// Lee `config.yaml` (o `config.yml`) y el tema que elige. Sin archivo
+    /// Lee `config.yaml` y el tema que elige. Sin archivo
     /// valen los defaults; con uno inválido también, y el error vuelve en los
     /// diagnósticos. Un tema que no carga se cambia por [`DEFAULT_THEME`].
     ///
@@ -32,7 +32,7 @@ impl Config {
     /// Solo si el tema embebido por defecto no carga, lo que es un bug.
     pub fn load(paths: &Paths) -> Result<Loaded<Self>, Diagnostic> {
         let mut diagnostics = Vec::new();
-        let (settings, file) = match read_yaml(&paths.config_file(), &mut diagnostics) {
+        let (settings, file) = match read_yaml(&paths.config_file()) {
             Ok(Some(YamlFile { path, text })) => {
                 let loaded = Settings::parse(&text);
                 diagnostics.extend(

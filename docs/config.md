@@ -8,8 +8,6 @@
 | macOS | `~/Library/Application Support/nota/` |
 | Windows | `%APPDATA%\nota\` |
 
-También vale `config.yml`; si están los dos, se usa `config.yaml` y se avisa. Un `config.toml` de versiones anteriores ya no se lee: nota avisa que el formato cambió y hay que pasarlo a mano a `config.yaml`.
-
 Si el archivo tiene un error, `nota` arranca igual con los valores por defecto y reporta el error con archivo, línea y columna. Una clave que no existe (por ejemplo un typo) no tumba el archivo: se avisa y el resto se aplica.
 
 ## `config.yaml`
@@ -66,7 +64,7 @@ Lo que sí sigue siendo YAML:
 
 ## Temas
 
-Un tema es una **paleta** con nombres y los **colores semánticos** que usa la interfaz. Los temas propios van en `themes/<nombre>.yaml` (o `.yml`) dentro de la carpeta de configuración y se eligen con `theme: <nombre>`.
+Un tema es una **paleta** con nombres y los **colores semánticos** que usa la interfaz. Los temas propios van en `themes/<nombre>.yaml` dentro de la carpeta de configuración y se eligen con `theme: <nombre>`.
 
 Cada color semántico puede ser:
 
