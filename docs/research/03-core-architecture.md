@@ -325,6 +325,20 @@ Qué dice del umbral de `tantivy`:
 - En frío sí gana un índice, porque lee menos que el corpus. Pero M3 lee todas las notas al abrir el vault para indexar los links, y eso deja la caché caliente antes de la primera búsqueda.
 - Conclusión: el grep alcanza para vaults de hasta ~50 k notas, cinco veces más que los ~10 k que se suponían. `tantivy` vuelve a evaluarse si aparece un vault real de más de ~75 k notas, o si el primer grep en frío molesta en un vault real con disco lento.
 
+### Medido (M3, 2026-10-18)
+
+Con `divan`, en release, en un contenedor Linux x86_64 de 4 hilos (no la máquina de CI: aquí el bench `open` sin links da 12 ms, contra 57 ms en CI). El vault es el sintético de M2 con seis links por nota (por nombre, por ruta, a un heading, markdown, un embed y uno sin resolver): 30 000 links. En la variante de M2 cada nombre se repite en las 100 carpetas, así que cada link por nombre empata entre 100 rutas y lo desempata la carpeta propia: el peor caso. No hay `docs/performance.md`; el presupuesto que aplica es el de M2 (abrir 5 k notas en < 1 s).
+
+| Qué | Bench | Mediana |
+|---|---|---|
+| Armar el índice de links, nombres repetidos ×100 / nombres únicos | `cargo bench -p nota-vault --bench links` | 58 / 28 ms (en un solo hilo eran 185 / 67 ms) |
+| Modificar una nota (reescanear y resolver sus links) | ídem | 31 µs |
+| Crear una nota cuyo nombre lo usan 300 links de 100 notas | ídem | 5.3 ms |
+| Clonar el índice (lo que paga el watcher por lote para publicarlo) | ídem | 3.9 ms |
+| Abrir 5 000 notas (walk, watcher e índice de links) | `cargo bench -p nota-vault --bench open` | 43 ms (12 ms sin links) |
+
+Casi todo el costo del peor caso es `resolve` comparando contra las 100 candidatas empatadas (`to_lowercase` de cada una); comparar sin copiar, carácter por carácter, resultó el doble de lento por las tablas de Unicode, así que se quedó como está.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins

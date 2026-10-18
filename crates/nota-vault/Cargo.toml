@@ -30,5 +30,9 @@ rstest.workspace = true
 name = "open"
 harness = false
 
+[[bench]]
+name = "links"
+harness = false
+
 [lints]
 workspace = true
