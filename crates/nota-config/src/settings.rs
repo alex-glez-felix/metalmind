@@ -17,7 +17,15 @@ pub struct Settings {
     vault: Option<PathBuf>,
     pub font: Font,
     pub editor: Editor,
+    pub panes: Panes,
     pub search: Search,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Panes {
+    /// Ancho de la línea entre dos paneles, en píxeles lógicos.
+    pub border_width: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -112,6 +120,7 @@ impl Default for Settings {
             vault: None,
             font: Font::default(),
             editor: Editor::default(),
+            panes: Panes::default(),
             search: Search::default(),
         }
     }
@@ -136,6 +145,12 @@ impl Default for Editor {
             expandtab: true,
             padding: Padding::default(),
         }
+    }
+}
+
+impl Default for Panes {
+    fn default() -> Self {
+        Self { border_width: 2 }
     }
 }
 
@@ -218,6 +233,9 @@ editor:
     horizontal: 20
     vertical: 0
 
+panes:
+  border_width: 4
+
 search:
   ignorecase: true
   smartcase: true
@@ -242,6 +260,7 @@ search:
                     vertical: 0,
                 },
             },
+            panes: Panes { border_width: 4 },
             search: Search {
                 ignorecase: true,
                 smartcase: true,
@@ -285,6 +304,7 @@ search:
     "expandtab": false,
     "padding": { "horizontal": 20, "vertical": 0 }
   },
+  "panes": { "border_width": 4 },
   "search": { "ignorecase": true, "smartcase": true }
 }"#;
         let loaded = Settings::parse(json);

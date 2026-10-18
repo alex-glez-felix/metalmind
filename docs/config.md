@@ -32,6 +32,9 @@ editor:
     horizontal: 12        # a la izquierda, antes de los números, y a la derecha
     vertical: 8           # arriba y abajo
 
+panes:
+  border_width: 2         # ancho de la línea entre paneles, en píxeles (0–255); el color es ui.pane_border
+
 search:
   ignorecase: false
   smartcase: false        # con ignorecase, una mayúscula vuelve la búsqueda exacta
