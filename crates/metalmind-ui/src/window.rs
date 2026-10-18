@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
 use metalmind_config::{Config, Paths};
 use metalmind_vault::{Vault, VaultUpdate};
+use metalmind_vim::Markdown;
 
 use crate::actions;
 use crate::document::Document;
@@ -91,7 +92,12 @@ pub fn open(
     let workspace_options = Options {
         scrolloff: usize::try_from(editor.scrolloff).unwrap_or(usize::MAX),
         tabstop: usize::from(editor.tabstop.get()),
+        expandtab: editor.expandtab,
         gutter_marks: editor.gutter_marks,
+        markdown: Markdown {
+            continue_lists: config.settings.markdown.continue_lists,
+            indent_list_children: config.settings.markdown.indent_list_children,
+        },
     };
     let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {

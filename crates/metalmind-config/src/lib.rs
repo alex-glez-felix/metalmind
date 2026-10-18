@@ -18,7 +18,8 @@ pub use diagnostic::{Diagnostic, Loaded, Location, Severity};
 pub use history::HistoryRetention;
 pub use paths::{NoHomeDir, Paths};
 pub use settings::{
-    Daily, Editor, Font, FontSize, Padding, Panel, PanelWidth, Panes, Search, Settings, TabStop,
+    Daily, Editor, Font, FontSize, Markdown, Padding, Panel, PanelWidth, Panes, Search, Settings,
+    TabStop,
 };
 pub use theme::{
     BUILTIN_THEMES, Color, Count, CursorColors, DEFAULT_THEME, Factor, Fraction, Heading, Headings,

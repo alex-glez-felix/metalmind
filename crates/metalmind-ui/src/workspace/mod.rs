@@ -28,11 +28,12 @@ mod show;
 mod source_lines;
 
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_vim::{
-    Action, FileId, JumpList, Keymap, Layout, Mode, Pattern, Prompt, Uniform, Viewport, Vim,
-    VimError,
+    Action, FileId, Indent, JumpList, Keymap, Layout, Markdown, Mode, Pattern, Prompt, Uniform,
+    Viewport, Vim, VimError,
 };
 
 pub use self::commands::Effect;
@@ -139,8 +140,13 @@ pub struct Workspace {
 pub struct Options {
     /// Las líneas que se dejan visibles alrededor del cursor.
     pub scrolloff: usize,
-    /// Las columnas hasta la siguiente parada de un tab.
+    /// Las columnas hasta la siguiente parada de un tab, y las que corren
+    /// `>` y `<`: Metalmind no tiene un `shiftwidth` aparte.
     pub tabstop: usize,
+    /// `>` y `<` escriben solo espacios.
+    pub expandtab: bool,
+    /// Qué partes de la edición de markdown están encendidas.
+    pub markdown: Markdown,
     /// El margen muestra las marks de cada línea.
     pub gutter_marks: bool,
 }
@@ -191,7 +197,9 @@ impl Workspace {
         let Options {
             scrolloff,
             tabstop,
+            expandtab,
             gutter_marks,
+            markdown,
         } = options;
         let message = Message::opened(&document);
         let mut documents = Documents::default();
@@ -201,6 +209,11 @@ impl Workspace {
         let tree = PaneTree::new();
         let mut vim = Vim::new();
         vim.set_scrolloff(scrolloff);
+        vim.set_indent(Indent {
+            shiftwidth: NonZeroUsize::MIN.saturating_add(tabstop.saturating_sub(1)),
+            expandtab,
+        });
+        vim.set_markdown(markdown);
         Self {
             documents,
             files,

@@ -56,6 +56,10 @@ history:                  # cuántas versiones viejas de cada nota se guardan
   hourly_days: 30         # luego, la última de cada hora hasta los 30 días
   daily_days: ~           # luego, la última de cada día; ~ es para siempre
   deleted_days: 90        # la historia de una nota borrada
+
+markdown:                 # la edición de markdown en el editor
+  continue_lists: true        # Enter, o y O en un ítem de lista abren el siguiente (y renumeran)
+  indent_list_children: true  # >> y << en un ítem de lista mueven también sus hijos
 ```
 
 Los números de línea siguen a vim: con solo `number`, el número de cada línea; con solo `relativenumber`, la distancia al cursor; con los dos (el default), el modo híbrido: el número de la línea del cursor y la distancia en las demás. El margen crece con el número de líneas y resalta la del cursor (`ui.gutter_current`). Cada panel tiene los suyos: `:set nu`, `:set rnu`, `:set nonu`, `:set nornu`, `:set nu!` (o `invnu`) cambian solo el panel enfocado, y un split hereda los del panel que se divide. Por ejemplo, solo números absolutos:
@@ -71,7 +75,11 @@ La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nun
 
 El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/metalmind/vaults/` en Linux (por default `~/.local/share/metalmind/vaults/`). De cada hora o día se queda la última versión, con las horas y los días de la zona horaria del sistema; la última versión de una nota se guarda siempre, y la diaria es para siempre salvo que se ponga `daily_days`.
 
-Hoy la app usa el tema, la fuente, los números de línea, `gutter_marks`, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+`tabstop` y `expandtab` son también el ancho y los caracteres con que indentan `>`, `<`, `:>` y `:<`: Metalmind no tiene un `shiftwidth` aparte. Con `expandtab: false`, la sangría se escribe con tabs y luego espacios, como vim.
+
+Con `markdown`, `Enter` en Insert sobre `- algo`, `1. algo` o `- [ ] algo` abre otro ítem igual (el número siguiente, el checkbox sin marcar), renumera los de abajo y en un ítem vacío termina la lista; `o` y `O` hacen lo mismo. `>>` y `<<` sobre un ítem llevan consigo a sus hijos. Cada parte se apaga por separado: con `continue_lists: false`, `Enter` es solo un salto de línea; con `indent_list_children: false`, `>>` mueve solo la línea, como en vim.
+
+Hoy la app usa el tema, la fuente, los números de línea, `gutter_marks`, `editor.padding`, `panes`, `panel`, `scrolloff`, `tabstop`, `expandtab`, `markdown` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
 Dentro de Metalmind, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado Metalmind desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `metalmind` sin argumentos elige el vault en este orden: la carpeta de la variable de entorno `METALMIND_VAULT` (si está puesta tiene que ser una carpeta; si no, Metalmind avisa y no abre), el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Un argumento gana a todo eso: `METALMIND_VAULT=~/Notas metalmind` y `metalmind ~/Notas` abren lo mismo, pero `metalmind ~/otra/` abre `~/otra/` aunque la variable esté puesta. Lo que Metalmind recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/metalmind/`, por defecto `~/.local/state/metalmind/`): no es configuración y se puede borrar sin perder nada.
 

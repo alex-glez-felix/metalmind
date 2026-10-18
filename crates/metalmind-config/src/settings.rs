@@ -25,6 +25,17 @@ pub struct Settings {
     /// Carpeta de las plantillas, relativa al vault.
     pub templates_folder: String,
     pub daily: Daily,
+    pub markdown: Markdown,
+}
+
+/// La edición de markdown del editor; cada parte se puede apagar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Markdown {
+    /// `Enter`, `o` y `O` en un ítem de lista abren el siguiente.
+    pub continue_lists: bool,
+    /// `>>` y `<<` en un ítem de lista mueven también sus hijos.
+    pub indent_list_children: bool,
 }
 
 /// La nota del día. Apagada por defecto: el flujo de captura es el buzón.
@@ -165,6 +176,16 @@ impl Default for Settings {
             history: HistoryRetention::default(),
             templates_folder: "plantillas".to_owned(),
             daily: Daily::default(),
+            markdown: Markdown::default(),
+        }
+    }
+}
+
+impl Default for Markdown {
+    fn default() -> Self {
+        Self {
+            continue_lists: true,
+            indent_list_children: true,
         }
     }
 }
