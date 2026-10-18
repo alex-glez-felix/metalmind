@@ -112,7 +112,7 @@ impl Cut {
             Self::Yank => at_starts(buffer, &steps),
             Self::Delete if !has_text => at_starts(buffer, &steps),
             Self::Delete | Self::Change => {
-                let selections = edit(buffer, &steps)?;
+                let selections = edit(buffer, self, &steps)?;
                 if self == Self::Delete {
                     buffer.commit_transaction(selections.clone())?;
                 }
@@ -198,7 +198,7 @@ fn at_starts(buffer: &Buffer, steps: &PerSelection<Step>) -> Selections {
 }
 
 /// Abre la transacción, borra y devuelve los cursores resultantes.
-fn edit(buffer: &mut Buffer, steps: &PerSelection<Step>) -> Result<Selections, VimError> {
+fn edit(buffer: &mut Buffer, cut: Cut, steps: &PerSelection<Step>) -> Result<Selections, VimError> {
     let before = steps.to_selections(|step| match &step.plan {
         Ok(plan) => Selection::cursor(plan.start),
         Err(_) => step.selection,
@@ -212,9 +212,13 @@ fn edit(buffer: &mut Buffer, steps: &PerSelection<Step>) -> Result<Selections, V
     let buffer = &*buffer;
     Ok(steps.to_selections(|step| match &step.plan {
         Ok(plan) => plan.cursor_after(buffer, &map),
+        // Lo que borró otra selección puede dejarlo sobre un fin de línea.
         Err(missed) => {
-            let head = missed.selection(&step.selection).head;
-            Selection::cursor(map.map(head, Bias::Before))
+            let head = map.map(missed.selection(&step.selection).head, Bias::Before);
+            Selection::cursor(match cut {
+                Cut::Delete => clamp_normal(buffer, head),
+                Cut::Change | Cut::Yank => head,
+            })
         }
     }))
 }

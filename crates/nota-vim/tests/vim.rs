@@ -901,6 +901,7 @@ fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
 #[case("|ab\n|cd", "A!<Esc>.", "ab!|!\ncd!|!")]
 #[case("f|oo b|ar", "ciwX<Esc>.", "|X |X")]
 #[case("foo |qux foo |qux", "d2aw", "foo |qu|x")]
+#[case("x|yzw|a", "dfa", "|x")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }
