@@ -233,6 +233,33 @@ impl Workspace {
         Ok(())
     }
 
+    /// Como `:vsplit ruta` de vim: `path` en un panel nuevo, que se queda
+    /// con el foco. El documento se abre antes de dividir, así que si no se
+    /// puede leer no queda un panel de más; si ya está abierto (también si
+    /// es el del panel enfocado) se comparte, con el cursor de un panel que
+    /// lo muestra.
+    ///
+    /// # Errors
+    /// Solo si el estado está inconsistente, lo que sería un bug.
+    pub fn open_in_split(&mut self, axis: Axis, path: &Path) -> Result<(), WorkspaceError> {
+        let numbers = self.pane(self.focused())?.numbers;
+        let shown = match self.documents.find(path) {
+            Some(id) => self.pane_on(id, numbers),
+            None => match Document::open(path) {
+                Ok(document) => Pane::at_start(self.documents.insert(document), numbers),
+                Err(error) => {
+                    self.message = Some(Message::Error(error.to_string()));
+                    return Ok(());
+                }
+            },
+        };
+        self.message = Some(Message::opened(self.document(shown.document)?));
+        self.vim.cursor_moved();
+        let new = self.tree.split(axis);
+        self.panes.insert(new, shown);
+        Ok(())
+    }
+
     /// El panel nuevo muestra lo mismo, con el mismo cursor, y se queda
     /// con el foco.
     fn split(&mut self, axis: Axis) -> Result<(), WorkspaceError> {

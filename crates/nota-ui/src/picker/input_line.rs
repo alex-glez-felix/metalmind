@@ -7,6 +7,13 @@ use unicode_segmentation::UnicodeSegmentation as _;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LineEdit<'a> {
     Insert(&'a str),
+    /// Cambia los bytes `start..end` por `text`, como pide un IME que
+    /// corrige lo ya escrito; el cursor queda al final de lo nuevo.
+    Replace {
+        start: usize,
+        end: usize,
+        text: &'a str,
+    },
     /// `backspace`: el grafema antes del cursor.
     DeleteBackward,
     /// `delete`: el grafema después del cursor.
@@ -44,10 +51,19 @@ impl InputLine {
         let before = self.text.len();
         match edit {
             LineEdit::Insert(text) => {
-                let text: String = text.chars().filter(|c| !c.is_control()).collect();
+                let text = printable(text);
                 self.text.insert_str(self.cursor, &text);
                 self.cursor += text.len();
                 return !text.is_empty();
+            }
+            LineEdit::Replace { start, end, text } => {
+                let start = self.floor_boundary(start);
+                let end = self.floor_boundary(end).max(start);
+                let text = printable(text);
+                let changed = self.text[start..end] != text;
+                self.text.replace_range(start..end, &text);
+                self.cursor = start + text.len();
+                return changed;
             }
             LineEdit::DeleteBackward => self.delete_to(self.previous_boundary()),
             LineEdit::DeleteForward => {
@@ -62,6 +78,14 @@ impl InputLine {
             LineEdit::End => self.cursor = self.text.len(),
         }
         self.text.len() != before
+    }
+
+    fn floor_boundary(&self, offset: usize) -> usize {
+        let mut offset = offset.min(self.text.len());
+        while !self.text.is_char_boundary(offset) {
+            offset -= 1;
+        }
+        offset
     }
 
     fn delete_to(&mut self, start: usize) {
@@ -95,6 +119,10 @@ impl InputLine {
     }
 }
 
+fn printable(text: &str) -> String {
+    text.chars().filter(|c| !c.is_control()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,6 +147,26 @@ mod tests {
         let cases = [
             ("ab|", LineEdit::Insert("c"), "abc|", true),
             ("a|c", LineEdit::Insert("ñ"), "añ|c", true),
+            (
+                "teh|",
+                LineEdit::Replace {
+                    start: 0,
+                    end: 3,
+                    text: "the",
+                },
+                "the|",
+                true,
+            ),
+            (
+                "|añb",
+                LineEdit::Replace {
+                    start: 2,
+                    end: 9,
+                    text: "x",
+                },
+                "ax|",
+                true,
+            ),
             ("a|", LineEdit::Insert("\n\t"), "a|", false),
             ("añ|", LineEdit::DeleteBackward, "a|", true),
             ("|a", LineEdit::DeleteBackward, "|a", false),

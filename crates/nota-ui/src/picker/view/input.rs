@@ -8,6 +8,7 @@ use gpui_kit::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selectio
 use super::{PickerItem, PickerView};
 use crate::ime::ImeLine;
 use crate::picker::LineEdit;
+use crate::utf16;
 
 impl<T: PickerItem> PickerView<T> {
     /// La línea del input como la ve el IME.
@@ -60,13 +61,14 @@ impl<T: PickerItem> EntityInputHandler for PickerView<T> {
 
     fn replace_text_in_range(
         &mut self,
-        _range: Option<Range<usize>>,
+        range: Option<Range<usize>>,
         text: &str,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.marked = None;
-        self.edit(LineEdit::Insert(text), cx);
+        let had_preedit = self.marked.take().is_some();
+        let edit = commit(self.state.line().text(), had_preedit, range, text);
+        self.edit(edit, cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -98,5 +100,44 @@ impl<T: PickerItem> EntityInputHandler for PickerView<T> {
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
         None
+    }
+}
+
+/// La edición de un commit del IME. Con preedit, el rango es el del preedit,
+/// que no está en la línea: va en el cursor. Sin él, el rango (en UTF-16)
+/// es de lo ya escrito y se reemplaza, como cuando el IME corrige una
+/// palabra.
+fn commit<'a>(
+    line: &str,
+    had_preedit: bool,
+    range: Option<Range<usize>>,
+    text: &'a str,
+) -> LineEdit<'a> {
+    match range {
+        Some(range) if !had_preedit => LineEdit::Replace {
+            start: utf16::to_byte(line, range.start),
+            end: utf16::to_byte(line, range.end),
+            text,
+        },
+        _ => LineEdit::Insert(text),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn un_commit_reemplaza_lo_escrito_salvo_si_venia_de_un_preedit() {
+        assert_eq!(
+            commit("añob", false, Some(2..4), "x"),
+            LineEdit::Replace {
+                start: 3,
+                end: 5,
+                text: "x"
+            }
+        );
+        assert_eq!(commit("añob", true, Some(2..3), "é"), LineEdit::Insert("é"));
+        assert_eq!(commit("añob", false, None, "x"), LineEdit::Insert("x"));
     }
 }
