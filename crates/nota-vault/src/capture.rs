@@ -6,10 +6,9 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use jiff::civil::DateTime;
-use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
 use crate::file::{FileError, create_atomic};
-use crate::path::{InvalidPath, VaultPath};
+use crate::path::{InvalidPath, VaultPath, is_word_char};
 use crate::tags::TagKey;
 
 /// Lo que se le pide a la captura; todo tal como lo escribió el usuario.
@@ -185,12 +184,6 @@ fn slug(line: &str) -> String {
         }
     }
     slug
-}
-
-/// Letras, números y las marcas que se les combinan: sin ellas, una `é`
-/// descompuesta o un virama partirían la palabra.
-fn is_word_char(c: char) -> bool {
-    c.is_alphanumeric() || c.general_category_group() == GeneralCategoryGroup::Mark
 }
 
 fn create_unique(root: &Path, stem: &str, contents: &str) -> Result<VaultPath, CaptureError> {

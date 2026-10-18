@@ -22,7 +22,7 @@ mod watch;
 
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
 pub use attachment::{
-    AttachmentRefs, DEFAULT_ATTACHMENT_FOLDER, FileKind, NewAttachment, SavedAttachment, Source,
+    AttachmentError, DEFAULT_ATTACHMENTS_FOLDER, FileKind, NewAttachment, SavedAttachment,
 };
 pub use capture::{CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};

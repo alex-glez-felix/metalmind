@@ -16,18 +16,28 @@ impl LinkIndex {
         if !self.names.contains(target) {
             return None;
         }
-        let resolved = LinkTarget::Resolved(target.clone());
-        let name = target.name();
-        let shape = match EntryKind::of_file(target) {
-            EntryKind::Note => &name[..name.len() - ".md".len()],
-            _ => name,
-        };
-        form::candidates(shape, source, target)
-            .into_iter()
-            .find(|candidate| {
-                self.names.resolve(source, candidate) == resolved && writable(candidate)
-            })
+        shortest_target(source, target, |candidate| {
+            self.names.resolve(source, candidate)
+        })
     }
+}
+
+/// El primer destino de `source` a `target`, de más corto a más largo, que
+/// `resolve` lleva a `target` y que un wikilink puede escribir.
+pub(super) fn shortest_target(
+    source: &VaultPath,
+    target: &VaultPath,
+    resolve: impl Fn(&str) -> LinkTarget,
+) -> Option<String> {
+    let resolved = LinkTarget::Resolved(target.clone());
+    let name = target.name();
+    let shape = match EntryKind::of_file(target) {
+        EntryKind::Note => &name[..name.len() - ".md".len()],
+        _ => name,
+    };
+    form::candidates(shape, source, target)
+        .into_iter()
+        .find(|candidate| resolve(candidate) == resolved && writable(candidate))
 }
 
 /// `[[candidate]]` es un solo link entero hacia `candidate`, sin subruta.

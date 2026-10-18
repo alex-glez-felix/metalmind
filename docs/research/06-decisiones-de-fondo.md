@@ -105,7 +105,7 @@ Abierto **(propuesta)**:
 - La carpeta de adjuntos es un ajuste del vault (config por vault, 03 §5), no global.
 - El walk del vault (M2) conoce los archivos que no son `.md`: `![[img.png]]` se resuelve contra ellos igual que un wikilink contra las notas.
 - Ninguna operación sobre notas (renombrar, mover, borrar, renombrar tags) borra o mueve adjuntos por su cuenta. Mover un adjunto sí actualiza los `![[...]]` que lo usan (mismo motor que §1).
-- Nombre de un adjunto nuevo: `<nombre-de-la-nota>-<AAAA-MM-DD>-<HHMMSS>.<ext>` al pegar y `<nombre-del-archivo>-<…>.<ext>` al arrastrar, con `-1`, `-2`, … si choca, para que dos pegados no se pisen y se sepa de dónde vino. La extensión sale del contenido, no del portapapeles (03 §4, "Estado: adjuntos").
+- Nombre del archivo pegado **(propuesta)**: `<nombre-de-la-nota>-<fecha y hora>.png`, para que dos pegados no choquen y se sepa de dónde vino. Es lo que hace el núcleo hoy, también al arrastrar (con el nombre del archivo) y con la extensión que dice el contenido (03 §4, "Estado: adjuntos en el núcleo").
 
 ## 7. CLI de primera clase
 

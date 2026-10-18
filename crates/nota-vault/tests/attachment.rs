@@ -9,11 +9,13 @@ mod support;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
+use std::sync::mpsc::Receiver;
+use std::time::{Duration, Instant};
 
 use jiff::civil::{DateTime, date};
 use nota_vault::{
-    AttachmentRefs, DEFAULT_ATTACHMENT_FOLDER, FileOpError, NewAttachment, SavedAttachment, Source,
-    Vault, VaultPath,
+    AttachmentError, FileOpError, NewAttachment, SavedAttachment, Vault, VaultOptions, VaultPath,
+    VaultUpdate,
 };
 use pretty_assertions::assert_eq;
 use support::{make_tree, settle};
@@ -26,10 +28,6 @@ fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
 }
 
-fn folder() -> VaultPath {
-    path(DEFAULT_ATTACHMENT_FOLDER)
-}
-
 fn at() -> DateTime {
     date(2026, 10, 18).at(9, 5, 7, 0)
 }
@@ -37,16 +35,16 @@ fn at() -> DateTime {
 fn pasted<'a>(bytes: &'a [u8], note: &'a VaultPath) -> NewAttachment<'a> {
     NewAttachment {
         bytes,
-        source: Source::Pasted { note },
+        note,
+        file_name: None,
         at: at(),
     }
 }
 
-fn dropped<'a>(bytes: &'a [u8], file_name: &'a str) -> NewAttachment<'a> {
+fn dropped<'a>(bytes: &'a [u8], file_name: &'a str, note: &'a VaultPath) -> NewAttachment<'a> {
     NewAttachment {
-        bytes,
-        source: Source::Dropped { file_name },
-        at: at(),
+        file_name: Some(file_name),
+        ..pasted(bytes, note)
     }
 }
 
@@ -55,6 +53,14 @@ fn saved(at: &str, embed: &str) -> SavedAttachment {
         path: path(at),
         embed: embed.to_owned(),
     }
+}
+
+fn open_with_folder(root: &Path, folder: &str) -> (Vault, Receiver<VaultUpdate>) {
+    let options = VaultOptions {
+        attachments_folder: path(folder),
+        ..VaultOptions::default()
+    };
+    Vault::open_with(root, options).unwrap()
 }
 
 /// Los nombres de `dir`, ocultos incluidos: un temporal olvidado se vería.
@@ -67,14 +73,24 @@ fn names(dir: &Path) -> Vec<String> {
     names
 }
 
+/// Espera a que el watcher deje los huérfanos en `expected`.
+fn orphans_settle(vault: &Vault, updates: &Receiver<VaultUpdate>, expected: &[&str]) {
+    let expected: Vec<VaultPath> = expected.iter().map(|p| path(p)).collect();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while vault.orphan_attachments() != expected {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if updates.recv_timeout(left).is_err() {
+            assert_eq!(vault.orphan_attachments(), expected, "el watcher no llegó");
+        }
+    }
+}
+
 #[test]
 fn pegar_crea_la_carpeta_y_devuelve_el_embed() {
     let dir = TempDir::new().unwrap();
     let (vault, updates) = Vault::open(dir.path()).unwrap();
     let note = path("diario/Mi día.md");
-    let result = vault
-        .save_attachment(&folder(), &pasted(PNG, &note))
-        .unwrap();
+    let result = vault.save_attachment(&pasted(PNG, &note)).unwrap();
     assert_eq!(
         result,
         saved(
@@ -103,9 +119,10 @@ fn pegar_crea_la_carpeta_y_devuelve_el_embed() {
 #[test]
 fn una_carpeta_anidada_que_no_existe() {
     let dir = TempDir::new().unwrap();
-    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let (vault, _updates) = open_with_folder(dir.path(), "media/img");
+    let note = path("nota.md");
     let result = vault
-        .save_attachment(&path("media/img"), &dropped(PNG, "foto.png"))
+        .save_attachment(&dropped(PNG, "foto.png", &note))
         .unwrap();
     assert_eq!(result.path, path("media/img/foto-2026-10-18-090507.png"));
 }
@@ -114,14 +131,15 @@ fn una_carpeta_anidada_que_no_existe() {
 fn nombres_repetidos_no_se_pisan() {
     let dir = TempDir::new().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
     let first = vault
-        .save_attachment(&folder(), &dropped(PNG, "x.png"))
+        .save_attachment(&dropped(PNG, "x.png", &note))
         .unwrap();
     let second = vault
-        .save_attachment(&folder(), &dropped(PDF, "x.pdf"))
+        .save_attachment(&dropped(PDF, "x.pdf", &note))
         .unwrap();
     let third = vault
-        .save_attachment(&folder(), &dropped(PNG, "x.png"))
+        .save_attachment(&dropped(PNG, "x.png", &note))
         .unwrap();
     assert_eq!(
         [first.path, second.path, third.path.clone()],
@@ -143,10 +161,46 @@ fn nombres_repetidos_no_se_pisan() {
 fn la_extension_sale_del_contenido() {
     let dir = TempDir::new().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
     let result = vault
-        .save_attachment(&folder(), &dropped(PNG, "foto.jpg"))
+        .save_attachment(&dropped(PNG, "foto.jpg", &note))
         .unwrap();
     assert_eq!(result.path, path("adjuntos/foto-2026-10-18-090507.png"));
+}
+
+#[test]
+fn una_firma_compartida_deja_la_extension_propia() {
+    let dir = TempDir::new().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
+    let raw = b"II*\0\x10\0\0\0CR\x02\0";
+    let cr2 = vault
+        .save_attachment(&dropped(raw, "IMG_0001.CR2", &note))
+        .unwrap();
+    let tiff = vault.save_attachment(&pasted(raw, &note)).unwrap();
+    let three_gp = vault
+        .save_attachment(&dropped(
+            b"\0\0\0\x18ftyp3gp4\0\0\x02\0isom3gp4",
+            "video.3gp",
+            &note,
+        ))
+        .unwrap();
+    let html = vault
+        .save_attachment(&dropped(
+            b"<!DOCTYPE html><link href=\"data:image/svg+xml,<svg/>\">",
+            "page.html",
+            &note,
+        ))
+        .unwrap();
+    assert_eq!(
+        [cr2.path, tiff.path, three_gp.path, html.path],
+        [
+            path("adjuntos/IMG_0001-2026-10-18-090507.cr2"),
+            path("adjuntos/nota-2026-10-18-090507.tiff"),
+            path("adjuntos/video-2026-10-18-090507.3gp"),
+            path("adjuntos/page-2026-10-18-090507.html"),
+        ]
+    );
 }
 
 #[test]
@@ -155,13 +209,13 @@ fn un_tipo_desconocido() {
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let note = path("nota.md");
     let paste = vault
-        .save_attachment(&folder(), &pasted(b"a,b\n1,2\n", &note))
+        .save_attachment(&pasted(b"a,b\n1,2\n", &note))
         .unwrap();
     let drop = vault
-        .save_attachment(&folder(), &dropped(b"a,b\n1,2\n", "Datos 2026.CSV"))
+        .save_attachment(&dropped(b"a,b\n1,2\n", "Datos 2026.CSV", &note))
         .unwrap();
     let nameless = vault
-        .save_attachment(&folder(), &dropped(b"", "LEEME"))
+        .save_attachment(&dropped(b"", "LEEME", &note))
         .unwrap();
     assert_eq!(
         [paste.path, drop.path, nameless.path],
@@ -174,13 +228,38 @@ fn un_tipo_desconocido() {
 }
 
 #[test]
+fn un_md_arrastrado_no_es_un_adjunto() {
+    let dir = TempDir::new().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
+    let result = vault.save_attachment(&dropped(b"\xff\xfe no es UTF-8", "Otra.MD", &note));
+    assert!(
+        matches!(&result, Err(AttachmentError::Note(name)) if name == "Otra-2026-10-18-090507.md"),
+        "{result:?}"
+    );
+    assert!(!dir.path().join("adjuntos").exists());
+}
+
+#[test]
+fn un_nombre_largo_en_cualquier_alfabeto_cabe() {
+    let dir = TempDir::new().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
+    let long = format!("{}.png", "𝒜".repeat(100));
+    let result = vault.save_attachment(&dropped(PNG, &long, &note)).unwrap();
+    assert_eq!(
+        fs::read(dir.path().join(result.path.as_str())).unwrap(),
+        PNG
+    );
+}
+
+#[test]
 fn el_embed_lleva_la_carpeta_si_el_nombre_no_basta() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["x-2026-10-18-090507.png"]);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let result = vault
-        .save_attachment(&folder(), &dropped(PNG, "x"))
-        .unwrap();
+    let note = path("nota.md");
+    let result = vault.save_attachment(&dropped(PNG, "x", &note)).unwrap();
     assert_eq!(
         result,
         saved(
@@ -191,87 +270,99 @@ fn el_embed_lleva_la_carpeta_si_el_nombre_no_basta() {
 }
 
 #[test]
+fn el_embed_se_resuelve_desde_la_nota() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["otra/x-2026-10-18-090507.png"]);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let inside = path("adjuntos/nota.md");
+    let result = vault.save_attachment(&dropped(PNG, "x", &inside)).unwrap();
+    assert_eq!(result.embed, "![[x-2026-10-18-090507.png]]");
+}
+
+#[test]
 fn la_carpeta_no_puede_ser_un_archivo_ni_un_enlace() {
     let dir = TempDir::new().unwrap();
     let outside = TempDir::new().unwrap();
     make_tree(dir.path(), &["adjuntos"]);
     symlink(outside.path(), dir.path().join("enlace")).unwrap();
+    let note = path("nota.md");
+    let png = dropped(PNG, "x.png", &note);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let png = dropped(PNG, "x.png");
     assert!(matches!(
-        vault.save_attachment(&folder(), &png),
-        Err(FileOpError::NotAFolder(p)) if p == folder()
+        vault.save_attachment(&png),
+        Err(AttachmentError::Folder(FileOpError::NotAFolder(p))) if p == path("adjuntos")
     ));
-    assert!(matches!(
-        vault.save_attachment(&path("enlace"), &png),
-        Err(FileOpError::Symlink(_))
-    ));
-    assert!(matches!(
-        vault.save_attachment(&path("enlace/dentro"), &png),
-        Err(FileOpError::Symlink(_))
-    ));
+    for folder in ["enlace", "enlace/dentro"] {
+        let (vault, _updates) = open_with_folder(dir.path(), folder);
+        assert!(matches!(
+            vault.save_attachment(&png),
+            Err(AttachmentError::Folder(FileOpError::Symlink(_)))
+        ));
+    }
     assert_eq!(names(outside.path()), Vec::<String>::new());
 }
 
 #[test]
-fn huerfanos_leyendo_las_notas() {
+fn lo_que_el_vault_ignora_no_se_guarda() {
     let dir = TempDir::new().unwrap();
-    make_tree(
-        dir.path(),
-        &[
-            "adjuntos/usado.png",
-            "adjuntos/sub/con-ruta.png",
-            "adjuntos/informe.pdf",
-            "adjuntos/en-codigo.png",
-            "adjuntos/ambiguo.png",
-            "otra/ambiguo.png",
-            "tapado.png",
-            "adjuntos/tapado.png",
-            "adjuntos/suelto.png",
-            "fuera/suelto.png",
-        ],
+    fs::write(dir.path().join(".gitignore"), "privado/\n*.pdf\n").unwrap();
+    let note = path("nota.md");
+    let (vault, _updates) = open_with_folder(dir.path(), "privado/img");
+    let result = vault.save_attachment(&dropped(PNG, "x.png", &note));
+    assert!(
+        matches!(&result, Err(AttachmentError::Ignored(p)) if p.as_str() == "privado/img/x-2026-10-18-090507.png"),
+        "{result:?}"
     );
+    assert!(
+        !dir.path().join("privado").exists(),
+        "quita las carpetas que creó"
+    );
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let result = vault.save_attachment(&dropped(PDF, "informe.pdf", &note));
+    assert!(
+        matches!(result, Err(AttachmentError::Ignored(_))),
+        "{result:?}"
+    );
+    assert!(!dir.path().join("adjuntos").exists());
+}
+
+#[test]
+fn una_carpeta_que_un_wikilink_no_nombra() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a#b/", "otra/x-2026-10-18-090507.png"]);
+    let note = path("nota.md");
+    let (vault, _updates) = open_with_folder(dir.path(), "a#b");
+    let result = vault.save_attachment(&dropped(PNG, "x.png", &note));
+    assert!(
+        matches!(result, Err(AttachmentError::Unnameable(_))),
+        "{result:?}"
+    );
+    assert_eq!(names(&dir.path().join("a#b")), Vec::<String>::new());
+}
+
+#[test]
+fn huerfanos_con_el_watcher() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["adjuntos/viejo.png", "fuera.png"]);
+    fs::write(dir.path().join("a.md"), "![[viejo.png]]\n").unwrap();
+    let (vault, updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(vault.orphan_attachments(), Vec::<VaultPath>::new());
+
+    let note = path("a.md");
+    let new = vault.save_attachment(&pasted(PNG, &note)).unwrap();
+    orphans_settle(&vault, &updates, &[new.path.as_str()]);
+
     fs::write(
         dir.path().join("a.md"),
-        "![[usado.png]] ![[sub/con-ruta.png|300]] `![[en-codigo.png]]`\n",
+        format!("![[viejo.png]] {}\n", new.embed),
     )
     .unwrap();
-    fs::write(
-        dir.path().join("otra/b.md"),
-        "[informe](../adjuntos/informe.pdf) ![[ambiguo.png]] ![[tapado.png]]\n",
-    )
-    .unwrap();
-    let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(
-        vault.orphan_attachments(&folder()).unwrap(),
-        [
-            path("adjuntos/en-codigo.png"),
-            path("adjuntos/suelto.png"),
-            path("adjuntos/tapado.png"),
-        ]
-    );
-}
+    orphans_settle(&vault, &updates, &[]);
 
-#[test]
-fn huerfanos_con_destinos_ya_resueltos() {
-    let dir = TempDir::new().unwrap();
-    make_tree(dir.path(), &["adjuntos/a.png", "adjuntos/b.png", "c.png"]);
-    let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let index = vault.snapshot();
-    let mut refs = AttachmentRefs::new(&index, &folder());
-    refs.mark_used(&path("adjuntos/a.png"));
-    refs.mark_used(&path("c.png"));
-    refs.mark_used(&path("no-existe.png"));
-    assert_eq!(refs.orphans(), [&path("adjuntos/b.png")]);
-}
-
-#[test]
-fn huerfanos_de_una_carpeta_que_no_existe() {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("a.md"), "![[x.png]]").unwrap();
-    let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(
-        vault.orphan_attachments(&folder()).unwrap(),
-        Vec::<VaultPath>::new()
+    fs::write(dir.path().join("a.md"), "nada\n").unwrap();
+    orphans_settle(
+        &vault,
+        &updates,
+        &["adjuntos/a-2026-10-18-090507.png", "adjuntos/viejo.png"],
     );
 }

@@ -2,6 +2,8 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
+use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
+
 /// Ruta de un archivo o carpeta visible del vault, relativa a la raíz, con
 /// componentes separados por `/`. La cadena vacía es la raíz.
 ///
@@ -190,6 +192,12 @@ fn check_component(name: &str) -> Result<(), InvalidReason> {
 /// nunca muestra ni toca nombres con punto (`.obsidian/`, `.git/`, `.trash/`, …).
 pub(crate) fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.')
+}
+
+/// Letras, números y las marcas que se les combinan: sin ellas, una `é`
+/// descompuesta o un virama partirían la palabra de un nombre generado.
+pub(crate) fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c.general_category_group() == GeneralCategoryGroup::Mark
 }
 
 /// Para buscar por prefijo en un `BTreeMap<VaultPath, _>`: el orden y el hash
