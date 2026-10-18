@@ -86,3 +86,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y appstream desktop-file-utils libxml2-utils
+      - run: desktop-file-validate packaging/linux/nota.desktop
+      - run: appstreamcli validate --no-net packaging/linux/io.github.alex_glez_felix.nota.metainfo.xml
+      - run: xmllint --noout packaging/linux/nota.svg
