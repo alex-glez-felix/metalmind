@@ -21,7 +21,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Operación | Objetivo | Hoy | | Bench |
 |---|---|---|---|---|
 | Arranque al primer frame, archivo chico | ≤ 300 ms | 244–297 ms (spike, máquina de pruebas) | ⏳ | sin automatizar ([#39](https://github.com/alex-glez-felix/nota/issues/39)) |
-| `nota add` / `nota search` de punta a punta (proceso entero, vault de 500 notas, build de debug) | ≤ 500 ms | 4 / 15 ms | ✅ | test `add_y_search_terminan_rapido` (`crates/nota/tests/commands.rs`) |
+| `nota add` / `nota search` de punta a punta (proceso entero, vault de 500 notas, build de debug) | ≤ 500 ms | 4 / 6 ms | ✅ | test `add_y_search_terminan_rapido` (`crates/nota/tests/commands.rs`) |
 | Tecla en Insert, de la tecla al frame | < 16 ms | — | ⏳ | sin benchmark de la UI ([#39](https://github.com/alex-glez-felix/nota/issues/39)) |
 | Render: CPU por frame | ≤ 4 ms (240 Hz) | p99 1.05 ms (spike) | ⏳ | sin benchmark en la app ([#39](https://github.com/alex-glez-felix/nota/issues/39)) |
 | Tecla en Insert, núcleo, 5 k / 50 k líneas | ≤ 1 ms | 1.7 / 3.8 µs | ✅ | `nota-vim` `tecla_en_insert` |

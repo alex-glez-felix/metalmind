@@ -70,8 +70,8 @@ impl Default for VaultOptions {
     }
 }
 
-/// La raíz de un vault, ya comprobada y sin índice: lo que basta para crear
-/// una nota sin recorrer todo el vault.
+/// La raíz de un vault, ya comprobada y sin índices ni watcher: lo que basta
+/// para crear una nota o buscar rutas sin leer todo el vault.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultRoot(PathBuf);
 
@@ -86,6 +86,13 @@ impl VaultRoot {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.0
+    }
+
+    /// Los archivos y carpetas de hoy, con las reglas de [`Vault::open`],
+    /// sin leer ninguna nota: lo que necesita quien solo busca rutas.
+    #[must_use]
+    pub fn files(&self) -> VaultIndex {
+        scan(&self.0)
     }
 
     /// Crea en la raíz una nota con `note` como `slug.md`, que nunca pisa
@@ -141,7 +148,17 @@ impl Vault {
         let mut debouncer = new_debouncer(DEBOUNCE, None, events)?;
         // Vigilar antes del walk: lo que cambie mientras tanto llega como evento.
         debouncer.watch(&root, RecursiveMode::Recursive)?;
-        let (index, links, tags) = build(&root, options);
+        let files = scan(&root);
+        let links = LinkIndex::build(
+            files.files().map(|entry| (entry.path.clone(), entry.kind)),
+            |path| read_note(&root, path),
+        );
+        let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
+            read_note(&root, path)
+        });
+        let index = Arc::new(ArcSwap::from_pointee(files));
+        let links = Arc::new(ArcSwap::from_pointee(links));
+        let tags = Arc::new(ArcSwap::from_pointee(tags));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let worker = Worker {
@@ -168,24 +185,6 @@ impl Vault {
             }),
         };
         Ok((vault, receiver))
-    }
-
-    /// Abre e indexa `root` como [`Vault::open_with`], pero sin vigilarlo:
-    /// para quien lee el vault una vez y sale, como la CLI. Los índices quedan
-    /// como estaban al abrir.
-    ///
-    /// # Errors
-    /// Si `root` no existe, no es una carpeta o no se puede leer.
-    pub fn load(root: impl AsRef<Path>, options: VaultOptions) -> Result<Self, VaultError> {
-        let root = canonical_dir(root.as_ref())?;
-        let (index, links, tags) = build(&root, options);
-        Ok(Self {
-            root,
-            index,
-            links,
-            tags,
-            watch: None,
-        })
     }
 
     /// La raíz, sin enlaces simbólicos.
@@ -383,29 +382,6 @@ fn read_note(root: &Path, path: &VaultPath) -> Option<String> {
             None
         }
     }
-}
-
-type Indexes = (
-    Arc<ArcSwap<VaultIndex>>,
-    Arc<ArcSwap<LinkIndex>>,
-    Arc<ArcSwap<Tags>>,
-);
-
-/// Los índices de archivos, links y tags de `root`, de cero.
-fn build(root: &Path, options: VaultOptions) -> Indexes {
-    let files = scan(root);
-    let links = LinkIndex::build(
-        files.files().map(|entry| (entry.path.clone(), entry.kind)),
-        |path| read_note(root, path),
-    );
-    let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
-        read_note(root, path)
-    });
-    (
-        Arc::new(ArcSwap::from_pointee(files)),
-        Arc::new(ArcSwap::from_pointee(links)),
-        Arc::new(ArcSwap::from_pointee(tags)),
-    )
 }
 
 fn canonical_dir(root: &Path) -> Result<PathBuf, VaultError> {

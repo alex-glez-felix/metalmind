@@ -7,7 +7,7 @@ use nota_search::{FuzzyMatcher, Query};
 use nota_vault::{EntryKind, VaultPath};
 use serde::Serialize;
 
-use super::{CliError, open_vault, print, root_text};
+use super::{CliError, print, root_text, vault_root};
 use crate::cli::SearchArgs;
 
 #[derive(Serialize)]
@@ -33,8 +33,8 @@ pub fn search(args: &SearchArgs) -> Result<(), CliError> {
             "`{tag}`: la búsqueda por tags todavía no existe; por ahora solo se buscan rutas"
         )));
     }
-    let vault = open_vault(&args.common)?;
-    let index = vault.snapshot();
+    let vault = vault_root(&args.common)?;
+    let index = vault.files();
     let mut files: Vec<_> = index.files().collect();
     // El índice no tiene orden; a igual puntaje gana el orden de entrada.
     files.sort_unstable_by(|a, b| a.path.cmp(b.path));
@@ -49,7 +49,7 @@ pub fn search(args: &SearchArgs) -> Result<(), CliError> {
         })
         .collect();
     let found = Found {
-        vault: root_text(vault.root()),
+        vault: root_text(vault.path()),
         query: &args.query,
         results,
     };

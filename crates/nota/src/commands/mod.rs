@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use nota_config::{Paths, Settings};
-use nota_vault::{Vault, VaultOptions, VaultRoot};
+use nota_vault::VaultRoot;
 use serde::Serialize;
 
 pub use add::add;
@@ -45,12 +45,7 @@ fn choose(common: &Common) -> Result<PathBuf, CliError> {
     })
 }
 
-/// El vault elegido, indexado.
-fn open_vault(common: &Common) -> Result<Vault, CliError> {
-    Ok(Vault::load(choose(common)?, VaultOptions::default())?)
-}
-
-/// Solo la raíz del vault elegido, sin recorrerlo.
+/// La raíz del vault elegido, ya comprobada.
 fn vault_root(common: &Common) -> Result<VaultRoot, CliError> {
     Ok(VaultRoot::new(choose(common)?)?)
 }
