@@ -102,7 +102,7 @@ impl Fenwick {
         let mut at = index + 1;
         while at < self.0.len() {
             self.0[at] += delta;
-            at += at & at.wrapping_neg();
+            at += at.isolate_lowest_one();
         }
     }
 
@@ -112,7 +112,7 @@ impl Fenwick {
         let mut sum = 0;
         while at > 0 {
             sum += self.0[at];
-            at -= at & at.wrapping_neg();
+            at -= at.isolate_lowest_one();
         }
         sum
     }
