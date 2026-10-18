@@ -1,6 +1,6 @@
 use crate::{
-    Action, CharSearch, Command, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject,
-    VisualKind,
+    Action, CharSearch, Command, InsertAt, Key, Mode, Motion, Operator, PasteSide, Place, Scroll,
+    TextObject, VisualKind,
 };
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
@@ -137,6 +137,13 @@ const fn search_word(backward: bool, whole_word: bool) -> Action {
     Action::SearchWord {
         backward,
         whole_word,
+    }
+}
+
+const fn reposition(place: Place, first_non_blank: bool) -> Action {
+    Action::Reposition {
+        place,
+        first_non_blank,
     }
 }
 
@@ -313,6 +320,50 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[ch('#')], search_word(true, true)),
         (Control, &[ch('g'), ch('*')], search_word(false, false)),
         (Control, &[ch('g'), ch('#')], search_word(true, false)),
+        // Scroll: con un operador pendiente lo cancelan, como en vim.
+        (Control, &[ch('H')], motion(Motion::Window(Place::Top))),
+        (Control, &[ch('M')], motion(Motion::Window(Place::Middle))),
+        (Control, &[ch('L')], motion(Motion::Window(Place::Bottom))),
+        (Control, &[Key::Ctrl('e')], Action::Scroll(Scroll::LineDown)),
+        (Control, &[Key::Ctrl('y')], Action::Scroll(Scroll::LineUp)),
+        (
+            Control,
+            &[Key::Ctrl('d')],
+            Action::Scroll(Scroll::HalfPageDown),
+        ),
+        (
+            Control,
+            &[Key::Ctrl('u')],
+            Action::Scroll(Scroll::HalfPageUp),
+        ),
+        (Control, &[Key::Ctrl('f')], Action::Scroll(Scroll::PageDown)),
+        (Control, &[Key::Ctrl('b')], Action::Scroll(Scroll::PageUp)),
+        (Control, &[ch('z'), ch('t')], reposition(Place::Top, false)),
+        (
+            Control,
+            &[ch('z'), ch('z')],
+            reposition(Place::Middle, false),
+        ),
+        (
+            Control,
+            &[ch('z'), ch('b')],
+            reposition(Place::Bottom, false),
+        ),
+        (
+            Control,
+            &[ch('z'), Key::Enter],
+            reposition(Place::Top, true),
+        ),
+        (
+            Control,
+            &[ch('z'), ch('.')],
+            reposition(Place::Middle, true),
+        ),
+        (
+            Control,
+            &[ch('z'), ch('-')],
+            reposition(Place::Bottom, true),
+        ),
     ]
 };
 

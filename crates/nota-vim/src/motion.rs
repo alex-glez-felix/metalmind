@@ -3,6 +3,7 @@ use nota_buffer::{Buffer, ByteOffset, Goal, Selection};
 use crate::Operator;
 use crate::cursor::Cursor;
 use crate::lines::{Want, first_non_blank, is_blank, last_char};
+use crate::scroll::{Place, Viewport};
 use crate::span::{Span, SpanKind};
 use crate::word;
 
@@ -12,14 +13,22 @@ pub enum Motion {
     Right,
     Up,
     Down,
-    NextWordStart { big: bool },
-    NextWordEnd { big: bool },
-    PreviousWordStart { big: bool },
+    NextWordStart {
+        big: bool,
+    },
+    NextWordEnd {
+        big: bool,
+    },
+    PreviousWordStart {
+        big: bool,
+    },
     LineStart,
     FirstNonBlank,
     LineEnd,
     DocumentStart,
     DocumentEnd,
+    /// `H`, `M` y `L`: una línea de la ventana.
+    Window(Place),
 }
 
 /// Para qué se resuelve una motion; cambia hasta dónde puede llegar.
@@ -68,9 +77,13 @@ impl Motion {
         matches!(self, Self::Left | Self::Right)
     }
 
-    /// Como en vim, `gg` y `G` dejan el cursor de antes como la mark de `''`.
+    /// Como en vim, `gg`, `G`, `H`, `M` y `L` dejan el cursor de antes como
+    /// la mark de `''`.
     pub(crate) fn is_jump(self) -> bool {
-        matches!(self, Self::DocumentStart | Self::DocumentEnd)
+        matches!(
+            self,
+            Self::DocumentStart | Self::DocumentEnd | Self::Window(_)
+        )
     }
 
     /// `count` es el que escribió el usuario: `gg` y `G` distinguen su ausencia.
@@ -81,6 +94,7 @@ impl Motion {
         selection: &Selection,
         count: Option<usize>,
         purpose: Purpose,
+        viewport: &Viewport,
     ) -> Option<Destination> {
         let head = selection.head;
         let times = count.unwrap_or(1);
@@ -123,6 +137,12 @@ impl Motion {
                 line_number(buffer, count, buffer.last_line()),
                 purpose,
             ),
+            Self::Window(place) => vertical(
+                buffer,
+                selection,
+                viewport.line_at(place, times, buffer),
+                purpose,
+            ),
         };
         Some(destination)
     }
@@ -163,7 +183,12 @@ fn line_below(buffer: &Buffer, line: usize, times: usize) -> Option<usize> {
     (line < last).then(|| line.saturating_add(times).min(last))
 }
 
-fn vertical(buffer: &Buffer, selection: &Selection, line: usize, purpose: Purpose) -> Destination {
+pub(crate) fn vertical(
+    buffer: &Buffer,
+    selection: &Selection,
+    line: usize,
+    purpose: Purpose,
+) -> Destination {
     let want = Want::of(buffer, selection);
     let offset = if purpose == Purpose::Select {
         want.visual_offset_on(buffer, line)

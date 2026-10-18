@@ -23,7 +23,10 @@ impl Vim {
         if self.mode.takes_text() {
             self.record(text.chars().map(Key::Char));
         }
-        self.write_text(text, buffer, selections)
+        let version = buffer.version();
+        let outcome = self.write_text(text, buffer, selections)?;
+        self.follow_cursor(buffer, selections, version);
+        Ok(outcome)
     }
 
     /// Escribe en Insert o en la línea de comandos, sin grabarlo en la macro.

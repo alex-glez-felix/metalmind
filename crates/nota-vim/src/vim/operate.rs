@@ -11,7 +11,7 @@ use crate::operator::{Operand, Outcome};
 use crate::register::{Clipboard, Register, RegisterName, Write};
 use crate::search::Query;
 use crate::travel::Travel;
-use crate::{InsertAt, Operator, PasteSide, VimError, paste};
+use crate::{InsertAt, Operator, PasteSide, Viewport, VimError, paste};
 
 /// Un operador ya tecleado, con lo que `.` necesita para repetirlo.
 pub(super) struct Operation {
@@ -74,7 +74,7 @@ impl Vim {
         };
         let operands = selections.map_to(|selection| Operand {
             selection: *selection,
-            target: object.target(buffer, selection, operator, count),
+            target: object.target(buffer, selection, operator, count, &self.viewport),
         });
         let operation = Operation {
             operator,
@@ -234,10 +234,11 @@ pub(super) fn run(
     object: &Object,
     buffer: &mut Buffer,
     selections: &Selections,
+    viewport: &Viewport,
 ) -> Result<Selections, VimError> {
     let operands = selections.map_to(|selection| Operand {
         selection: *selection,
-        target: object.target(buffer, selection, operator, None),
+        target: object.target(buffer, selection, operator, None, viewport),
     });
     Ok(match operator.apply(buffer, &operands)? {
         Outcome::Missed(selections) | Outcome::Applied { selections, .. } => selections,

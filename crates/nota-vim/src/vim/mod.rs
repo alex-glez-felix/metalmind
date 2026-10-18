@@ -7,6 +7,7 @@ mod macros;
 mod marks;
 mod operate;
 mod repeat;
+mod scroll;
 mod search;
 mod substitute;
 mod visual;
@@ -28,7 +29,7 @@ use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegist
 use crate::visual::{LastVisual, VisualSize};
 use crate::{
     Action, CommandError, Invocation, Key, Keymap, Mode, Prompt, SearchError, Substitution,
-    VimError, Wrap,
+    Viewport, VimError, Wrap,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -99,6 +100,9 @@ pub struct Vim {
     /// El tamaño de la última selección sobre la que se operó, para
     /// `[count]v` y `[count]V`.
     last_visual_size: Option<VisualSize>,
+    /// La ventana del panel que se edita, prestada por quien aloja el motor.
+    viewport: Viewport,
+    scrolloff: usize,
 }
 
 impl Default for Vim {
@@ -142,6 +146,8 @@ impl Vim {
             failed: false,
             last_visual: None,
             last_visual_size: None,
+            viewport: Viewport::default(),
+            scrolloff: 0,
         }
     }
 
@@ -197,7 +203,9 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         self.failed = false;
+        let version = buffer.version();
         let outcome = self.interpret(key, buffer, selections, clipboard)?;
+        self.follow_cursor(buffer, selections, version);
         if matches!(
             outcome,
             KeyOutcome::SearchFailed(_) | KeyOutcome::InvalidCommand(_)
@@ -261,7 +269,10 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
-        self.run(action, buffer, selections, clipboard)
+        let version = buffer.version();
+        let outcome = self.run(action, buffer, selections, clipboard)?;
+        self.follow_cursor(buffer, selections, version);
+        Ok(outcome)
     }
 
     /// `action` con `"+` o `"*`, como si se tecleara el registro y luego la

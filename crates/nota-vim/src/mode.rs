@@ -25,6 +25,11 @@ impl Mode {
     pub fn takes_text(self) -> bool {
         matches!(self, Self::Insert | Self::CommandLine)
     }
+
+    /// El cursor puede quedar sobre el fin de línea.
+    pub(crate) fn reaches_line_end(self) -> bool {
+        matches!(self, Self::Insert | Self::Visual(_))
+    }
 }
 
 /// Qué se escribe en la línea de comandos, para mostrar su símbolo.

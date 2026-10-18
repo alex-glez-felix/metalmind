@@ -7,7 +7,7 @@ use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
 use crate::span::{Missed, Region, Span, SpanKind, Target};
 use crate::visual::Area;
-use crate::{Motion, Operator, TextObject};
+use crate::{Motion, Operator, TextObject, Viewport};
 
 /// Sobre qué actúa un operador.
 #[derive(Clone, Debug)]
@@ -37,10 +37,17 @@ impl Object {
         selection: &Selection,
         operator: Operator,
         count: Option<usize>,
+        viewport: &Viewport,
     ) -> Result<Target, Missed> {
         let span = match *self {
             Self::Motion(motion) => motion
-                .resolve(buffer, selection, count, Purpose::Operate(operator))
+                .resolve(
+                    buffer,
+                    selection,
+                    count,
+                    Purpose::Operate(operator),
+                    viewport,
+                )
                 .ok_or(Missed::Stay)?
                 .span_from(selection.head),
             Self::Find(find) => find

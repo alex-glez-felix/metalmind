@@ -31,6 +31,11 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         match action {
             Action::Motion(motion) => self.move_by(motion, buffer, selections)?,
+            Action::Scroll(scroll) => self.scroll(scroll, buffer, selections),
+            Action::Reposition {
+                place,
+                first_non_blank,
+            } => self.reposition(place, first_non_blank, buffer, selections)?,
             Action::FindChar(search) => self.awaiting = Some(Awaiting::Find(search)),
             Action::RepeatFind { reversed } => {
                 self.repeat_find(reversed, buffer, selections, clipboard)?;
@@ -92,7 +97,7 @@ impl Vim {
                     VisualKind::Line => Motion::Down,
                 };
                 move_cursors(&cursors, true, |s| {
-                    motion.resolve(buffer, s, Some(times - 1), Purpose::Select)
+                    motion.resolve(buffer, s, Some(times - 1), Purpose::Select, &self.viewport)
                 })
                 .unwrap_or(cursors)
             }
@@ -218,6 +223,7 @@ impl Vim {
                 &Object::Visual(Area::Selection(kind)),
                 buffer,
                 selections,
+                &self.viewport,
             )?,
         };
         let repeated_register = match side {

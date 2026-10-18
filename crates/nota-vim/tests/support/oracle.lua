@@ -1,6 +1,7 @@
 -- Oráculo: aplica teclas en nvim y escribe cursor, modo y texto en un archivo.
--- Uso: nvim --clean --headless -n -l oracle.lua <texto> <fila> <columna> <teclas> <salida>
+-- Uso: nvim --clean --headless -n -l oracle.lua <texto> <fila> <columna> <teclas> <salida> [<filas> <scrolloff> <primera línea>]
 local text, row, col, keys, out = arg[1], tonumber(arg[2]), tonumber(arg[3]), arg[4], arg[5]
+local rows, scrolloff, top = tonumber(arg[6]), tonumber(arg[7]), tonumber(arg[8])
 
 -- Las teclas van a otro nvim por nvim_input, como las manda la TUI: así
 -- cuentan como tecleadas y un <C-c> interrumpe (no repite `3ihola`).
@@ -30,6 +31,26 @@ exec(
   col
 )
 
+-- Una ventana de `rows` filas: `lines` cuenta también la barra de estado y
+-- la línea de comandos.
+if rows then
+  local height = exec(
+    [[
+    local rows, scrolloff, top, row, col = ...
+    vim.o.lines = rows + 2
+    vim.o.scrolloff = scrolloff
+    vim.fn.winrestview({ topline = top, lnum = row, col = col })
+    return vim.fn.winheight(0)
+  ]],
+    rows,
+    scrolloff,
+    top,
+    row,
+    col
+  )
+  assert(height == rows, "la ventana tiene " .. height .. " filas, no " .. rows)
+end
+
 local function type_keys(typed)
   vim.rpcrequest(child, "nvim_input", typed)
   exec("return 0")
@@ -54,11 +75,12 @@ end
 local state = exec([[
   local pos = vim.api.nvim_win_get_cursor(0)
   local anchor = vim.fn.getpos("v")
-  return { pos[1], pos[2], vim.api.nvim_get_mode().mode, anchor[2], anchor[3] - 1, vim.api.nvim_buf_get_lines(0, 0, -1, true) }
+  local mode = vim.api.nvim_get_mode().mode
+  return { pos[1], pos[2], mode, anchor[2], anchor[3] - 1, vim.fn.line("w0"), vim.api.nvim_buf_get_lines(0, 0, -1, true) }
 ]])
 local file = assert(io.open(out, "w"))
-file:write(string.format("%d %d %s %d %d\n", state[1], state[2], state[3], state[4], state[5]))
-file:write(table.concat(state[6], "\n"))
+file:write(string.format("%d %d %s %d %d %d\n", state[1], state[2], state[3], state[4], state[5], state[6]))
+file:write(table.concat(state[7], "\n"))
 file:close()
 
 vim.rpcnotify(child, "nvim_command", "qa!")
