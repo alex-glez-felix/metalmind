@@ -23,8 +23,10 @@ impl Vim {
     }
 
     /// La rueda llevó la ventana a `top`: los cursores la siguen, como en
-    /// vim. Si se mueven en Insert, lo que se teclee después es otro cambio.
+    /// vim, y lo pendiente (un count, un operador) se cancela, como con un
+    /// clic. Si se mueven en Insert, lo que se teclee después es otro cambio.
     pub fn scroll_to(&mut self, top: usize, buffer: &Buffer, selections: &mut Selections) {
+        self.reset();
         let moved = self
             .viewport
             .scroll_to(top, buffer, selections, self.scrolloff, self.mode);

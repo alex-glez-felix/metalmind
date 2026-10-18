@@ -231,6 +231,17 @@ impl Workspace {
         pane: PaneId,
         edit: impl FnOnce(&mut Vim, &mut Buffer, &mut Selections) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
+        self.edit_pane_with(pane, self.scrolloff, edit)
+    }
+
+    /// Como [`Workspace::edit_pane`], mostrando el cursor con `scrolloff`
+    /// líneas alrededor.
+    fn edit_pane_with<T>(
+        &mut self,
+        pane: PaneId,
+        scrolloff: usize,
+        edit: impl FnOnce(&mut Vim, &mut Buffer, &mut Selections) -> Result<T, WorkspaceError>,
+    ) -> Result<T, WorkspaceError> {
         let state = self
             .panes
             .get_mut(&pane)
@@ -247,7 +258,7 @@ impl Workspace {
         self.vim.swap_viewport(&mut state.viewport);
         self.vim.swap_marks(marks);
         let head = state.selections.primary().head;
-        state.viewport.reveal(buffer, head, self.scrolloff);
+        state.viewport.reveal(buffer, head, scrolloff);
         let splices = buffer.take_splices();
         self.follow(pane, id, &splices)?;
         result

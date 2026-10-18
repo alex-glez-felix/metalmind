@@ -129,11 +129,7 @@ impl gpui_kit::Element for EditorElement {
             };
         };
         let top = view.viewport.top();
-        let scroll = if top == editor.synced_top {
-            editor.scroll
-        } else {
-            Scroll::at_line(top)
-        };
+        let scroll = editor.scroll.follow(top, editor.synced_top);
         let cell = em_width(&typeface, window);
         let gutter = Gutter::new(&view, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
@@ -156,7 +152,7 @@ impl gpui_kit::Element for EditorElement {
         self.editor.update(cx, |editor, _| {
             editor.layout = Some(layout.clone());
             editor.scroll = scroll;
-            editor.synced_top = top;
+            editor.synced_top = Some(top);
         });
         Prepainted {
             layout,

@@ -26,6 +26,18 @@ impl Scroll {
         Self { top: to_f64(line) }
     }
 
+    /// El scroll para pintar si el motor dejó la ventana en `top`. Solo se
+    /// conserva la fracción de la rueda si es la misma línea que se le dio
+    /// (`synced`); `None` alinea a las filas del motor, que si no contaría
+    /// como visible una fila recortada abajo.
+    pub fn follow(self, top: usize, synced: Option<usize>) -> Self {
+        if synced == Some(top) {
+            self
+        } else {
+            Self::at_line(top)
+        }
+    }
+
     /// La primera línea que se ve entera: la de arriba si no hay fracción.
     pub fn first_full_line(self) -> usize {
         self.first_line() + usize::from(self.fraction() > 0.0)
@@ -69,6 +81,13 @@ mod tests {
         assert_eq!(at(10.0).first_full_line(), 10);
         assert_eq!(at(10.25).first_full_line(), 11);
         assert_eq!(Scroll::at_line(7), at(7.0));
+    }
+
+    #[test]
+    fn la_fraccion_de_la_rueda_dura_mientras_el_motor_no_mueva() {
+        assert_eq!(at(10.25).follow(11, Some(11)), at(10.25));
+        assert_eq!(at(10.25).follow(14, Some(11)), at(14.0));
+        assert_eq!(at(10.25).follow(11, None), at(11.0));
     }
 
     #[test]
