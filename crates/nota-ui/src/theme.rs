@@ -32,6 +32,10 @@ pub struct Theme {
     /// El cursor de un panel sin foco.
     pub unfocused_cursor: Hsla,
     pub selection: Hsla,
+    /// Las coincidencias de la búsqueda activa.
+    pub search: Hsla,
+    /// La coincidencia donde está el cursor.
+    pub search_current: Hsla,
     /// Fondo del margen de los números de línea.
     pub gutter: Hsla,
     pub gutter_foreground: Hsla,
@@ -87,6 +91,8 @@ impl Theme {
             visual_cursor: hsla(cursor.visual),
             unfocused_cursor: hsla(cursor.unfocused),
             selection: hsla(ui.selection),
+            search: hsla(ui.search),
+            search_current: hsla(ui.search_current),
             gutter: hsla(ui.gutter),
             gutter_foreground: hsla(ui.gutter_foreground),
             gutter_current: hsla(ui.gutter_current),
@@ -173,7 +179,7 @@ mod tests {
     fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
         let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
         let blue = Hsla::from(rgb(0x7a_a2_f7));
-        let expected: [(&str, Hsla, Hsla); 14] = [
+        let expected: [(&str, Hsla, Hsla); 16] = [
             ("background", theme.background, rgb(0x1c_1f_24).into()),
             ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
             ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
@@ -189,6 +195,16 @@ mod tests {
                 Hsla::from(rgb(0x9a_a0_a6)).opacity(0.35),
             ),
             ("selection", theme.selection, blue.opacity(0.3)),
+            (
+                "search",
+                theme.search,
+                Hsla::from(rgb(0xe0_af_68)).opacity(0.3),
+            ),
+            (
+                "search_current",
+                theme.search_current,
+                Hsla::from(rgb(0x00ff_9e64)).opacity(0.6),
+            ),
             (
                 "status_background",
                 theme.status_background,

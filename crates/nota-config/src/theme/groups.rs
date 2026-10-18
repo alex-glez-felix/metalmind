@@ -113,6 +113,10 @@ color_group! {
         background,
         foreground,
         selection,
+        /// Las coincidencias de la búsqueda activa.
+        search,
+        /// La coincidencia donde está el cursor.
+        search_current,
         /// Fondo de la línea del cursor.
         current_line,
         gutter,

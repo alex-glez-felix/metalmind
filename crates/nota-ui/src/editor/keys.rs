@@ -61,6 +61,8 @@ fn named_key(name: &str) -> Option<Key> {
         "enter" => Some(Key::Enter),
         "backspace" => Some(Key::Backspace),
         "tab" => Some(Key::Tab),
+        "up" => Some(Key::Up),
+        "down" => Some(Key::Down),
         _ => None,
     }
 }
@@ -128,6 +130,8 @@ mod tests {
             ("c", None, Mods::CtrlShift, None),
             ("x", Some("x"), Mods::Alt, None),
             ("a", Some("a"), Mods::Super, None),
+            ("up", None, Mods::None, Some(Key::Up)),
+            ("down", None, Mods::None, Some(Key::Down)),
             ("left", None, Mods::None, None),
             ("f1", None, Mods::None, None),
         ];

@@ -12,7 +12,7 @@ use super::Editor;
 use super::gutter::{Gutter, PaintedGutter};
 use super::highlight::{self, Cells};
 use super::layout::{FrameLayout, LaidLine, Viewport};
-use super::spans::selection_spans;
+use super::spans::{Match, search_spans, selection_spans};
 use crate::theme::Theme;
 use crate::workspace::PaneView;
 
@@ -33,6 +33,7 @@ pub struct Prepainted {
     /// vertical, para que una fila a medio scroll no lo invada.
     clip: Bounds<Pixels>,
     gutter: Option<PaintedGutter>,
+    search: Vec<PaintQuad>,
     selection: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
     preedit: Option<Preedit>,
@@ -113,6 +114,7 @@ impl gpui_kit::Element for EditorElement {
                     lines: Vec::new(),
                 },
                 gutter: None,
+                search: Vec::new(),
                 selection: Vec::new(),
                 cursor: None,
                 preedit: None,
@@ -134,6 +136,7 @@ impl gpui_kit::Element for EditorElement {
             width: cell,
             edge: bounds.right(),
         };
+        let search = search_quads(&view, &layout, cells, &self.theme);
         let selection = selection_quads(&view, &layout, cells, &self.theme);
         let cursor = cursor_quad(&view, &layout, &typeface, &self.theme, window);
         let preedit = editor
@@ -150,6 +153,7 @@ impl gpui_kit::Element for EditorElement {
             layout,
             clip,
             gutter: painted_gutter,
+            search,
             selection,
             cursor,
             preedit,
@@ -181,7 +185,11 @@ impl gpui_kit::Element for EditorElement {
                     paint_line(shaped, *origin, line_height, window, cx);
                 }
             }
-            for quad in prepainted.selection.drain(..) {
+            for quad in prepainted
+                .search
+                .drain(..)
+                .chain(prepainted.selection.drain(..))
+            {
                 window.paint_quad(quad);
             }
             for laid in &prepainted.layout.lines {
@@ -268,6 +276,33 @@ pub fn shape(
     window
         .text_system()
         .shape_line(text, typeface.size, &[run], None)
+}
+
+fn search_quads(
+    view: &PaneView<'_>,
+    layout: &FrameLayout,
+    cells: Cells,
+    theme: &Theme,
+) -> Vec<PaintQuad> {
+    let Some(pattern) = view.search else {
+        return Vec::new();
+    };
+    let found = search_spans(
+        pattern,
+        view.buffer(),
+        layout.visible_lines(),
+        view.cursor(),
+    );
+    let (current, others): (Vec<_>, Vec<_>) = found.into_iter().partition(|found| found.current);
+    let spans = |matches: Vec<Match>| matches.into_iter().map(|found| found.span);
+    let mut quads = highlight::quads(spans(others), layout, cells, theme.search);
+    quads.extend(highlight::quads(
+        spans(current),
+        layout,
+        cells,
+        theme.search_current,
+    ));
+    quads
 }
 
 fn selection_quads(

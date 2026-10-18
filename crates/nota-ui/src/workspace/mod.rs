@@ -18,7 +18,7 @@ mod pane_tree;
 use std::collections::BTreeMap;
 
 use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
-use nota_vim::{Action, Mode, Prompt, Vim, VimError};
+use nota_vim::{Action, Mode, Pattern, Prompt, Vim, VimError};
 
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
@@ -79,6 +79,9 @@ pub struct PaneView<'a> {
     pub recording: Option<char>,
     pub command_line: Option<CommandLine<'a>>,
     pub numbers: LineNumbers,
+    /// El patrón a resaltar, en todos los paneles como `hlsearch`, hasta
+    /// un `:noh`.
+    pub search: Option<&'a Pattern>,
 }
 
 /// Lo que se está escribiendo tras `:`, `/` o `?`.
@@ -155,6 +158,7 @@ impl Workspace {
             recording: self.vim.recording().filter(|_| focused),
             command_line: self.command_line().filter(|_| focused),
             numbers: state.numbers,
+            search: self.vim.search_highlight(),
         })
     }
 

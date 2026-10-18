@@ -474,3 +474,51 @@ fn pegar_fuera_de_visual_pega_en_el_cursor() {
     session.paste_clipboard();
     assert_eq!(session.text(), "Xab\n");
 }
+
+fn highlighted(session: &Session, pane: PaneId) -> Option<String> {
+    session
+        .view(pane)
+        .search
+        .map(|pattern| pattern.source().to_owned())
+}
+
+#[test]
+fn noh_apaga_el_resaltado_y_una_busqueda_lo_enciende() {
+    let mut session = Session::new("uno\ndos\nuno\n");
+    let left = session.pane();
+    assert_eq!(highlighted(&session, left), None);
+    session.keys("/uno⏎⌃wv");
+    let right = session.pane();
+    assert_eq!(highlighted(&session, right).as_deref(), Some("uno"));
+    assert_eq!(
+        highlighted(&session, left).as_deref(),
+        Some("uno"),
+        "en todos los paneles"
+    );
+    session.keys(":noh⏎");
+    assert_eq!(highlighted(&session, right), None);
+    assert_eq!(highlighted(&session, left), None);
+    session.keys("n");
+    assert_eq!(highlighted(&session, right).as_deref(), Some("uno"));
+    session.keys(":nohlsearch⏎?dos⏎");
+    assert_eq!(highlighted(&session, right).as_deref(), Some("dos"));
+}
+
+#[test]
+fn las_flechas_recorren_el_historial_de_la_busqueda() {
+    let mut session = Session::new("uno\ndos\n");
+    session.keys("/uno⏎/dos⏎/");
+    let pane = session.pane();
+    session
+        .workspace
+        .feed(pane, Key::Up, &mut session.clipboard)
+        .unwrap();
+    assert_eq!(session.command_line(), Some("dos"));
+    session
+        .workspace
+        .feed(pane, Key::Up, &mut session.clipboard)
+        .unwrap();
+    assert_eq!(session.command_line(), Some("uno"));
+    let line = session.view(pane).command_line.unwrap();
+    assert_eq!(line.prompt.symbol(), '/');
+}

@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use nota_buffer::{Buffer, ByteOffset, Selection};
-use nota_vim::{Mode, VisualKind};
+use nota_vim::{Mode, Pattern, VisualKind};
 
 /// Un tramo resaltado de una línea, en bytes desde su inicio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,6 +78,42 @@ pub fn selection_spans(
         .collect()
 }
 
+/// Una coincidencia de la búsqueda; `current` si el cursor está en ella,
+/// como `CurSearch` de nvim.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Match {
+    pub span: Span,
+    pub current: bool,
+}
+
+/// Las coincidencias de `pattern` en las líneas `visible`. Las vacías (como
+/// la de `^`) no se pintan.
+#[must_use]
+pub fn search_spans(
+    pattern: &Pattern,
+    buffer: &Buffer,
+    visible: Range<usize>,
+    cursor: ByteOffset,
+) -> Vec<Match> {
+    pattern
+        .matches_in(buffer, visible)
+        .into_iter()
+        .filter(|found| !found.is_empty())
+        .map(|found| {
+            let line = buffer.line_of(found.start);
+            let line_start = buffer.line_start(line).get();
+            Match {
+                span: Span {
+                    line,
+                    start: found.start.get() - line_start,
+                    end: SpanEnd::At(found.end.get() - line_start),
+                },
+                current: found.contains(&cursor),
+            }
+        })
+        .collect()
+}
+
 /// Hasta el carácter en `offset` incluido, o el salto si está al final.
 fn inclusive_end(buffer: &Buffer, offset: ByteOffset) -> SpanEnd {
     let line = buffer.line_of(offset);
@@ -90,7 +126,8 @@ fn inclusive_end(buffer: &Buffer, offset: ByteOffset) -> SpanEnd {
 
 #[cfg(test)]
 mod tests {
-    use nota_buffer::Goal;
+    use nota_buffer::{Goal, Selections};
+    use nota_vim::{Key, Vim};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -156,6 +193,73 @@ mod tests {
             [(0, 1, SpanEnd::PastText)]
         );
         assert_eq!(spans("hola", 2, 2, Mode::Normal), []);
+    }
+
+    /// El patrón que deja `/` en el motor, como lo recibe la UI.
+    fn searched(source: &str) -> Pattern {
+        let mut vim = Vim::new();
+        let mut buffer = Buffer::from("");
+        let mut selections = Selections::single(Selection::cursor(ByteOffset::ZERO));
+        let keys = std::iter::once('/').chain(source.chars()).map(Key::Char);
+        for key in keys.chain([Key::Enter]) {
+            vim.feed(key, &mut buffer, &mut selections).unwrap();
+        }
+        vim.search_highlight().unwrap().clone()
+    }
+
+    fn matches(
+        pattern: &str,
+        text: &str,
+        visible: Range<usize>,
+        cursor: usize,
+    ) -> Vec<(usize, usize, usize, bool)> {
+        let buffer = Buffer::from(text);
+        search_spans(
+            &searched(pattern),
+            &buffer,
+            visible,
+            ByteOffset::new(cursor),
+        )
+        .into_iter()
+        .map(|found| {
+            let SpanEnd::At(end) = found.span.end else {
+                panic!("{found:?}")
+            };
+            (found.span.line, found.span.start, end, found.current)
+        })
+        .collect()
+    }
+
+    #[test]
+    fn solo_las_coincidencias_de_las_lineas_visibles() {
+        let text = "uno\nuno dos uno\ntres\nuno\n";
+        assert_eq!(
+            matches("uno", text, 1..3, 0),
+            [(1, 0, 3, false), (1, 8, 11, false)]
+        );
+        assert_eq!(matches("uno", text, 3..40, 0), [(3, 0, 3, false)]);
+        assert_eq!(matches("nada", text, 0..4, 0), []);
+    }
+
+    #[test]
+    fn la_coincidencia_del_cursor_es_la_actual() {
+        let text = "año uno año\n";
+        let current = |cursor| {
+            matches("año", text, 0..1, cursor)
+                .iter()
+                .map(|found| found.3)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(current(0), [true, false]);
+        assert_eq!(current(2), [true, false]);
+        assert_eq!(current(4), [false, false]);
+        assert_eq!(current(9), [false, true]);
+    }
+
+    #[test]
+    fn las_coincidencias_vacias_no_se_pintan() {
+        assert_eq!(matches("^", "a\nb\n", 0..2, 0), []);
+        assert_eq!(matches("x*", "axxb\n", 0..1, 1), [(0, 1, 3, true)]);
     }
 
     #[test]
