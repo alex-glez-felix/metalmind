@@ -35,6 +35,12 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
         {
             touched.renames.push((from.clone(), to.clone()));
         }
+        if matches!(
+            event.kind,
+            EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any)
+        ) {
+            touched.written.extend(paths.iter().flatten().cloned());
+        }
         touched.paths.extend(paths.into_iter().flatten());
     }
     touched

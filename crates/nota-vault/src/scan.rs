@@ -2,6 +2,7 @@
 //! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
 
 use std::collections::HashSet;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
 
@@ -85,23 +86,78 @@ pub(crate) fn scan(root: &Path) -> VaultIndex {
     VaultIndex::from_entries(receiver.into_iter().collect())
 }
 
+/// Lo que el walk parcial encontró, y las carpetas que no pudo leer: de esas
+/// no se sabe qué hay, así que el índice conserva lo que tenía.
+#[derive(Debug, Default)]
+pub(crate) struct Partial {
+    pub entries: Vec<(VaultPath, EntryKind)>,
+    pub unreadable: Vec<VaultPath>,
+}
+
 /// Lo que hay hoy en disco en `dirty` y en sus carpetas. Recorre desde la raíz
 /// para que apliquen todos los `.gitignore` de por medio, pero solo entra en
 /// los ancestros de `dirty`.
-pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Vec<(VaultPath, EntryKind)> {
+pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Partial {
     let scope = Arc::new(Scope::new(dirty));
     let root_owned: PathBuf = root.to_owned();
     let filter_scope = Arc::clone(&scope);
-    walker(root)
+    let mut found = Partial::default();
+    let walk = walker(root)
         .filter_entry(move |entry| {
             is_visible(entry)
                 && VaultPath::from_fs(&root_owned, entry.path())
                     .is_some_and(|path| filter_scope.allows(&path))
         })
-        .build()
-        .filter_map(|result| accept(root, result))
-        .filter(|(path, _)| scope.contains(path))
-        .collect()
+        .build();
+    for result in walk {
+        match result {
+            Ok(entry) => {
+                if let Some((path, kind)) = classify(root, &entry)
+                    && scope.contains(&path)
+                {
+                    found.entries.push((path, kind));
+                }
+            }
+            Err(error) => {
+                if let Some(path) = unreadable(root, &error) {
+                    log::warn!("al releer el vault: {error}");
+                    found.unreadable.push(path);
+                }
+            }
+        }
+    }
+    found
+}
+
+/// Qué parte del vault quedó sin leer por `error`: nada si lo que faltaba ya
+/// no existe (se borró mientras se recorría), todo si no dice dónde fue.
+fn unreadable(root: &Path, error: &ignore::Error) -> Option<VaultPath> {
+    if error
+        .io_error()
+        .is_some_and(|io| io.kind() == io::ErrorKind::NotFound)
+    {
+        return None;
+    }
+    Some(
+        error_path(error)
+            .and_then(|path| VaultPath::from_fs(root, path))
+            .unwrap_or_else(VaultPath::root),
+    )
+}
+
+fn error_path(error: &ignore::Error) -> Option<&Path> {
+    match error {
+        ignore::Error::WithPath { path, .. } => Some(path),
+        ignore::Error::Loop { child, .. } => Some(child),
+        ignore::Error::WithDepth { err, .. } | ignore::Error::WithLineNumber { err, .. } => {
+            error_path(err)
+        }
+        ignore::Error::Partial(errors) => errors.first().and_then(error_path),
+        ignore::Error::Io(_)
+        | ignore::Error::Glob { .. }
+        | ignore::Error::UnrecognizedFileType(_)
+        | ignore::Error::InvalidDefinition => None,
+    }
 }
 
 /// Las rutas sucias y sus ancestros: lo que el walk parcial tiene que pisar.
