@@ -8,6 +8,8 @@ Theme {
         background: #f5f6f8,
         foreground: #2b2f36,
         selection: #2e5cd6 α0.2,
+        search: #8f6400 α0.3,
+        search_current: #b35a00 α0.5,
         current_line: #eceef2,
         gutter: #f5f6f8,
         gutter_foreground: #a0a6b0,

@@ -106,6 +106,18 @@ mod tests {
     }
 
     #[test]
+    fn la_busqueda_avisa_hacia_donde_dio_la_vuelta() {
+        assert_eq!(
+            Message::wrapped(Wrap::ToTop),
+            Message::Info("la búsqueda llegó al final y siguió desde el principio".to_owned())
+        );
+        assert_eq!(
+            Message::wrapped(Wrap::ToBottom),
+            Message::Info("la búsqueda llegó al principio y siguió desde el final".to_owned())
+        );
+    }
+
+    #[test]
     fn al_abrir_dice_si_es_nuevo() {
         let document = Document::new(Path::new("a.md"), "");
         assert_eq!(

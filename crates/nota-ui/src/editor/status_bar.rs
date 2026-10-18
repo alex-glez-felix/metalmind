@@ -84,17 +84,21 @@ fn mode_label(mode: Mode) -> &'static str {
     }
 }
 
+impl CommandLine {
+    /// Lo escrito tras su símbolo: `:w`, `/patrón` o `?patrón`.
+    fn text(&self) -> String {
+        format!("{}{}", self.symbol, self.typed)
+    }
+}
+
 fn command_line(line: CommandLine, theme: &Theme) -> Div {
-    let CommandLine {
-        symbol,
-        typed,
-        preedit,
-    } = line;
+    let text = line.text();
+    let preedit = line.preedit;
     div()
         .flex()
         .flex_row()
         .text_color(theme.foreground)
-        .child(format!("{symbol}{typed}"))
+        .child(text)
         .when(!preedit.is_empty(), |line| {
             line.child(div().underline().child(preedit))
         })
@@ -105,5 +109,29 @@ fn message_line(message: Message, theme: &Theme) -> Div {
     match message {
         Message::Info(text) => div().child(text),
         Message::Error(text) => div().text_color(theme.error).child(text),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nota_vim::Prompt;
+
+    use super::*;
+
+    #[test]
+    fn la_linea_de_comandos_lleva_el_simbolo_de_su_prompt() {
+        let cases = [
+            (Prompt::Command, "w", ":w"),
+            (Prompt::Search { backward: false }, "uno", "/uno"),
+            (Prompt::Search { backward: true }, "dos", "?dos"),
+        ];
+        for (prompt, typed, expected) in cases {
+            let line = CommandLine {
+                symbol: prompt.symbol(),
+                typed: typed.to_owned(),
+                preedit: String::new(),
+            };
+            assert_eq!(line.text(), expected);
+        }
     }
 }

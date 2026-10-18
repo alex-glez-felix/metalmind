@@ -26,6 +26,8 @@ ui:
   background: bg
   foreground: fg
   selection: { color: blue, alpha: 0.3 }
+  search: { color: yellow, alpha: 0.3 }
+  search_current: { color: orange, alpha: 0.6 }
   current_line: bg_highlight
   gutter: bg
   gutter_foreground: fg_faint
