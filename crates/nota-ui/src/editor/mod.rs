@@ -42,6 +42,9 @@ pub struct Editor {
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
     drag_anchor: Option<ByteOffset>,
+    /// El cursor la última vez que se hizo visible, para mostrarlo de nuevo
+    /// si lo mueve una edición desde otro panel.
+    revealed: Option<ByteOffset>,
     /// Arranque del proceso, hasta que se pinta el primer frame.
     launched: Option<Instant>,
     _repaint: Subscription,
@@ -54,7 +57,7 @@ impl Editor {
         launched: Option<Instant>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
+        let repaint = cx.observe(&workspace, |editor, _, cx| editor.follow_workspace(cx));
         Self {
             workspace,
             pane,
@@ -63,6 +66,7 @@ impl Editor {
             layout: None,
             marked: None,
             drag_anchor: None,
+            revealed: None,
             launched,
             _repaint: repaint,
         }
@@ -186,13 +190,31 @@ impl Editor {
     }
 
     pub(crate) fn reveal_cursor(&mut self, cx: &mut Context<Self>) {
-        let line = self
+        let cursor = self
             .view(cx)
-            .map(|view| view.buffer().line_of(view.cursor()));
-        if let (Some(layout), Some(line)) = (&self.layout, line) {
+            .map(|view| (view.cursor(), view.buffer().line_of(view.cursor())));
+        if let (Some(layout), Some((cursor, line))) = (&self.layout, cursor) {
             self.scroll.reveal(line, layout.viewport.full_rows());
+            self.revealed = Some(cursor);
         }
         cx.notify();
+    }
+
+    /// Otro panel pudo acortar el texto o mover este cursor: el scroll no
+    /// queda pasado el final y el cursor movido se ve, como en vim.
+    fn follow_workspace(&mut self, cx: &mut Context<Self>) {
+        let Some((cursor, last_line)) = self
+            .view(cx)
+            .map(|view| (view.cursor(), view.buffer().last_line()))
+        else {
+            return;
+        };
+        self.scroll.clamp(last_line);
+        if self.revealed == Some(cursor) {
+            cx.notify();
+        } else {
+            self.reveal_cursor(cx);
+        }
     }
 
     fn report_first_paint(&mut self) {
