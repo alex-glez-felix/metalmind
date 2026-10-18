@@ -80,11 +80,17 @@ impl NoteSearcher {
         let mut sink = Collect::new(regex, Some(cancel));
         self.searcher.search_slice(regex, &self.bytes, &mut sink)?;
         let complete = !sink.not_text && !cancel.load(Ordering::Relaxed);
-        if sink.lines.is_empty() || !complete || str::from_utf8(&self.bytes).is_err() {
+        if sink.lines.is_empty() || !complete || !can_open(&self.bytes) {
             return Ok(Vec::new());
         }
         Ok(sink.lines)
     }
+}
+
+/// Lo que nota abre: UTF-8 sin NUL. `search_slice` solo busca el NUL en los
+/// primeros 64 KiB, así que se mira todo, y solo en notas que coinciden.
+fn can_open(bytes: &[u8]) -> bool {
+    !bytes.contains(&0) && str::from_utf8(bytes).is_ok()
 }
 
 fn searcher(binary: BinaryDetection) -> Searcher {
@@ -168,9 +174,12 @@ impl Sink for Collect<'_> {
     }
 }
 
+/// Sin el `\n` o el `\r\n` final; un `\r` suelto es parte del texto.
 fn without_terminator(line: &[u8]) -> &[u8] {
-    let line = line.strip_suffix(b"\n").unwrap_or(line);
-    line.strip_suffix(b"\r").unwrap_or(line)
+    match line.strip_suffix(b"\n") {
+        Some(line) => line.strip_suffix(b"\r").unwrap_or(line),
+        None => line,
+    }
 }
 
 fn to_usize(value: u64) -> io::Result<usize> {

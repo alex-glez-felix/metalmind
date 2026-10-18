@@ -56,7 +56,7 @@ fn text_search_is_linear_in_the_notes() {
 #[test]
 fn find_is_linear_in_the_text() {
     let matcher = query(WORD).compile().unwrap();
-    assert_linear(2_000, nota_perf::note, |text| {
+    assert_linear(4_000, nota_perf::note, |text| {
         matcher.find(&text).unwrap().len()
     });
 }
