@@ -1,0 +1,21 @@
+[package]
+name = "nota-syntax"
+description = "Scanner de la sintaxis de Obsidian: wikilinks, embeds, tags, links markdown y frontmatter."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+yaml-rust2.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+pretty_assertions.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+
+[lints]
+workspace = true

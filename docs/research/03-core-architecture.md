@@ -95,6 +95,8 @@ El **mismo** scanner de sintaxis Obsidian (crate `nota-syntax`) debe usarse en a
 
 Resolución de wikilinks (como Obsidian): por nombre de archivo sin extensión, case-insensitive, desempate por ruta más corta / misma carpeta; también matchea `aliases` del frontmatter. Documentarlo como tabla de casos en un test `insta` — es la spec.
 
+Estado (2026-10-18): `nota-syntax` tiene el scanner a mano, todavía sin tree-sitter (entra en M4): wikilinks, embeds, tags, links markdown a archivos locales y frontmatter, ignorando bloques cercados, código inline y `%% %%`. Un tag empieza al inicio de línea o tras un espacio, así `texto#algo` y el fragmento de una URL no lo son.
+
 ### Frontmatter YAML
 
 El mismo crate lee la config (§5) y el frontmatter. Requisito: **YAML 1.2**, no 1.1. En 1.1, `NO`, `on`, `yes` y `off` son booleanos y `0755` es octal aunque el campo espere texto (el "problema de Noruega"); 1.2 (core schema) solo reconoce `true`/`false` y es superset de JSON, así que una config en JSON puro también vale.
@@ -293,6 +295,8 @@ nota/
 └── tests/fixtures/vaults/  # vaults de ejemplo (incluir uno exportado de Obsidian real)
 ```
 
+Estado (2026-10-18): existen `nota-buffer`, `nota-syntax` (scanner Obsidian, sin tree-sitter todavía), `nota-vim`, `nota-vault`, `nota-ui` y `nota`.
+
 Regla de dependencias (verificable con `cargo tree` en CI): **solo `nota-ui` y `nota` dependen del framework de GUI**. Todo lo demás compila y se testea sin ventana. Eso hace que cambiar GPUI ↔ iced cueste una sola capa.
 
 `Cargo.toml` raíz:
@@ -390,7 +394,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 | **M1 — Vim normal/insert** ✅ (2026-10-17) | `nota-keymap` (trie + contextos), `nota-vim`: normal, insert, motions básicos (`hjkl wbe 0^$ gg G f t`), operadores `d c y` + `p`, `x`, `u`/`ctrl-r`, `.`, counts, text objects `iw aw i" i( ip`. Cursor bloque/línea por modo. | ~150 casos de tabla verificados contra nvim headless. Cerrado con 488 casos, cada uno corrido también en nvim. El keymap (tabla tipada con contextos) sigue dentro de `nota-vim` hasta que haya un segundo consumidor (§3, "Estado"). |
 | **M2 — Vault + finder** | `nota-vault`: abrir carpeta, walk con `ignore`, watcher, árbol de archivos con navegación vim, fuzzy finder (`nucleo`) en `space f`, paleta de comandos, `:e`, `:w`, `:q`, splits `ctrl-w`. | Abre una carpeta real de notas markdown (≥ 5 k notas, por ejemplo un vault de Obsidian) en < 1 s **(objetivo)**; crear/renombrar/borrar desde el árbol. |
 | **M2.5 — Tags** | Los tags son el eje de organización ([05](05-tags.md)). `nota-syntax` saca los tags del texto (`#a/b`) y de `tags:` del frontmatter, sin contar los de código; `TagIndex` en `nota-vault`, incremental sobre el watcher; árbol de tags en el panel (jerárquico por `/`, con conteo) que alterna con el de carpetas; `space f` filtrable por tag (`#rust -#archivado`); modo focus por carpeta o tags (`:focus`, desde el panel, indicador en la barra de estado); autocompletado de `#`; renombrar y fusionar tags en todo el vault con vista previa y deshacer. | Con el vault sintético de 5 k notas de M2: índice de tags en < 200 ms al abrir y `space f` filtrado por tag en < 16 ms **(objetivos)**; reindex incremental == completo (proptest); casos borde del scanner y de las consultas en `insta`; renombrar `#a` → `#b` (con hijos y frontmatter) y deshacer deja cada archivo byte a byte igual. |
-| **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
+| **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter) ✅ (2026-10-18), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
 | **M4 — Live preview** | tree-sitter-md incremental; ocultar marcadores fuera de la línea del cursor, headings con tamaño, negrita/cursiva, links como texto clicable, listas y checkboxes (`ctrl-enter`/`gx` alterna), código con resaltado, `==highlight==`, comentarios `%%`. Toggle source/live/lectura. | Escribir en una nota de 5 k líneas sin latencia perceptible (< 16 ms por tecla **objetivo**). |
 | **M5 — Embeds y callouts** | `![[img]]` imágenes, `![[nota]]` transclusión (solo lectura), callouts, tablas renderizadas. | El vault de prueba se ve "como en Obsidian" en lo común. |
 | **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo (✅ `v` y `V` en el motor, 2026-10-18; falta pintar la selección y `ctrl-v`), registros ✅, macros ✅, `:%s`, marks ✅ (falta `A`–`Z`), keymap y tema del usuario en YAML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. Listo para el tag (2026-10-17): dist, `nota --version`, `.desktop` + metainfo, PKGBUILD de `nota-bin` y `nota-git`, CHANGELOG y `docs/release.md`. Falta publicar. |
