@@ -184,6 +184,20 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 - **Grafo**: deseable, prioridad baja. Sale del índice de links de M3 (03 §4).
 - **Temas**: ya existen (03 §5).
 
+### Plantillas y nota del día, en el núcleo
+
+Hecho en `nota-template`, sin UI todavía. Lo que no venía de la decisión es **(propuesta)**:
+
+- **Plantillas**: notas markdown en `plantillas/` (clave `templates_folder` de `config.yaml`), con subcarpetas. El nombre de una plantilla es su ruta dentro de la carpeta sin `.md`: `trabajo/semanal`, exacto, con mayúsculas.
+- **Variables**: las de Obsidian y nada más, para que sus plantillas sirvan sin tocarlas: `{{title}}`, `{{date}}` (`YYYY-MM-DD`), `{{time}}` (`HH:mm`), `{{date:FORMATO}}` y `{{time:FORMATO}}`. Se aceptan espacios dentro de las llaves. Sin condicionales, bucles ni escapes.
+- **Formato de fecha**: los códigos de moment.js que usa Obsidian, solo los comunes: `YYYY YY MMMM MMM MM M DD D dddd ddd HH H hh h mm m ss s A a Z ZZ` y `[texto]` literal. Otra letra se copia tal cual, como en moment. Los nombres de meses y días van en español y en minúsculas (`domingo 18 de octubre`) **(propuesta)**; cuando la app tenga idioma, salen de él.
+- **Lo mal escrito se deja tal cual y se reporta**, con su rango en bytes de la plantilla: una variable desconocida (`{{autor}}`, `{{Date}}`), un `{{` sin `}}` en su línea y un formato inválido (`{{date:}}`, un `[` sin cerrar). La nota se crea igual.
+- **La fecha es la local**: la API recibe un `jiff::Zoned` y todo sale en su zona horaria. Pasada la medianoche local ya es la nota del día siguiente.
+- **Plantilla por tag**: `template: nombre` en la página del tag (05 §7), que lee el `TagGraph` de `nota-vault` como los demás campos y la UI cambia con `PageChange::Template`. Una nota nueva con ese tag, o con uno de sus alias, o creada en focus de él, la usa. Si sus tags piden plantillas **distintas**, no se usa ninguna y se reporta, como con los alias que chocan (05 §7): elegir una adivinaría. Una plantilla elegida a mano gana sobre la del tag, y se puede pedir "sin plantilla". Un tag no hereda la plantilla de sus `parents`.
+- **Tags de la nota nueva**: van al `tags:` del frontmatter de la plantilla ya llena, después de los suyos y sin repetir. Una lista de flujo de una línea o una lista en bloque se alarga en su estilo, con sus comentarios; otro valor (un texto, una lista de flujo en varias líneas) se reescribe como `tags: [a, b]`. Un tag que YAML leería como otra cosa (`null`, `007`) va entre comillas, con el mismo `yaml_scalar` que la metadata de las páginas. Sin frontmatter se le agrega uno. Si el frontmatter de la plantilla tiene errores o el `tags:` no está escrito en bloque, la nota sale con la plantilla tal cual y se reporta.
+- **Nota del día**: apagada por defecto. Con `daily.enabled: true`, una función pura da su ruta (`daily.folder`, por defecto `diario/`, más el nombre en `daily.format`, por defecto `YYYY-MM-DD`; un `/` en el formato hace subcarpetas) y su texto con `daily.template`, si tiene. Sin plantilla nace vacía. Si ya existe, quien llama la abre en vez de crearla.
+- **Pendiente**: que el finder, el buzón y los conteos no traten las plantillas como notas normales (lo mismo que las páginas de tag, 05 §7), la acción de nota nueva desde plantilla en la UI y `nota add --template`.
+
 ## 12. Fuera de alcance
 
 - **Publicar a la web.** Son archivos markdown en git; para publicarlos ya hay muchas herramientas. Exportar una nota a HTML o PDF (post-MVP, 03 §8) es otra cosa y sigue ahí.
