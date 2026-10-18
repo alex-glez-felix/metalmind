@@ -72,6 +72,6 @@ crashes en `fuzz/artifacts/<target>/`; los dos están en el `.gitignore`.
 
 `.github/workflows/fuzz.yml` corre cada target cinco minutos a diario y con
 `workflow_dispatch` (se puede pedir otra duración). El corpus se guarda en el
-caché de Actions entre corridas y se minimiza con `cmin` cuando no hay
-crashes. Si un target falla, el crash se sube como artifact
+caché de Actions entre corridas, también cuando hay un crash, y se minimiza
+con `cmin` cuando no lo hay. Si un target falla, el crash se sube como artifact
 `crash-<target>`: se descarga y se sigue el paso 1 con ese archivo.
