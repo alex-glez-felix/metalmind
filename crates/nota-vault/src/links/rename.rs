@@ -1,14 +1,12 @@
 //! Renombrar o mover un archivo sin romper los links: el plan de ediciones
 //! que deja cada link resolviendo a lo mismo que antes del rename.
 
-mod form;
+pub(super) mod form;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::ops::Range;
 
-use nota_syntax::path_keys;
-
-use super::names::{Names, resolve_among};
+use super::names::{Names, Renamed, key_of};
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::links::edit::{FileEdits, TextEdit};
 use crate::path::VaultPath;
@@ -103,8 +101,8 @@ impl LinkIndex {
     }
 
     /// Los links que el rename puede cambiar: los que llegan a lo movido,
-    /// los de las notas movidas (sus relativos) y los que podrían resolver
-    /// a un nombre nuevo.
+    /// los de las notas movidas (sus relativos y el desempate por carpeta) y
+    /// los que tienen la clave de un nombre nuevo, que podría capturarlos.
     fn links_to_check(&self, moved: &[VaultPath], after: &After<'_>) -> BTreeSet<LinkId> {
         let mut ids: BTreeSet<LinkId> = moved
             .iter()
@@ -112,13 +110,26 @@ impl LinkIndex {
             .flatten()
             .cloned()
             .collect();
-        let sources = after
-            .added
-            .keys()
-            .filter_map(|key| self.by_key.get(key))
+        let added: HashSet<&String> = after.names.added_keys().collect();
+        let sources: BTreeSet<&VaultPath> = added
+            .iter()
+            .filter_map(|key| self.by_key.get(*key))
             .flatten()
-            .chain(moved);
+            .collect();
         for source in sources {
+            let captured = self
+                .outgoing(source)
+                .iter()
+                .enumerate()
+                .filter(|(_, link)| {
+                    key_of(source, &link.target_text).is_some_and(|key| added.contains(&key))
+                });
+            ids.extend(captured.map(|(ordinal, _)| LinkId {
+                source: source.clone(),
+                ordinal,
+            }));
+        }
+        for source in moved {
             ids.extend((0..self.outgoing(source).len()).map(|ordinal| LinkId {
                 source: source.clone(),
                 ordinal,
@@ -134,28 +145,19 @@ enum Rewrite {
     Impossible,
 }
 
-/// Los archivos del vault como quedan tras el rename, para resolver contra ellos.
+/// El vault como queda tras el rename, para resolver contra él.
 struct After<'a> {
-    names: &'a Names,
+    names: Renamed<'a>,
     from: &'a VaultPath,
     to: &'a VaultPath,
-    /// Las rutas nuevas, por clave.
-    added: HashMap<String, Vec<VaultPath>>,
 }
 
 impl<'a> After<'a> {
     fn new(names: &'a Names, from: &'a VaultPath, to: &'a VaultPath, moved: &[VaultPath]) -> Self {
-        let mut added: HashMap<String, Vec<VaultPath>> = HashMap::new();
-        for new in moved.iter().filter_map(|old| old.rebase(from, to)) {
-            for key in path_keys(new.as_str()) {
-                added.entry(key).or_default().push(new.clone());
-            }
-        }
         Self {
-            names,
+            names: names.renamed(moved, from, to),
             from,
             to,
-            added,
         }
     }
 
@@ -165,16 +167,7 @@ impl<'a> After<'a> {
     }
 
     fn resolve(&self, source: &VaultPath, target: &str) -> LinkTarget {
-        resolve_among(source, target, |key| {
-            let mut paths: Vec<&VaultPath> = self
-                .names
-                .candidates(key)
-                .filter(|path| !path.starts_with(self.from))
-                .chain(self.added.get(key).into_iter().flatten())
-                .collect();
-            paths.sort();
-            paths
-        })
+        self.names.resolve(source, target)
     }
 
     /// Cómo escribir `link`, desde la nota que tras el rename es `source`,
