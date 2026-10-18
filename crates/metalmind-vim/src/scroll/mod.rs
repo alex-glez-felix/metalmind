@@ -1,6 +1,6 @@
 //! Lo visible de un panel y cómo lo mueven el cursor y los comandos de
-//! scroll. El motor no sabe de pantallas: quien lo aloja le dice cuántas
-//! filas caben.
+//! scroll. El motor no sabe de pantallas: quien lo aloja le dice cuánto
+//! alto hay y cuánto mide cada línea ([`LineHeights`]).
 
 mod page;
 mod window;
@@ -12,15 +12,40 @@ use crate::Mode;
 use crate::columns::Columns;
 use crate::lines::{Want, tab_end};
 
-/// La primera línea visible de un panel y cuántas filas caben. Quien aloja
-/// el motor guarda uno por panel, le da su altura en cada layout
+/// Cuánto mide cada línea en pantalla, en las mismas unidades que el alto
+/// del [`Viewport`]. Con todas de una fila, la ventana se mueve igual que en
+/// vim; un heading más grande mide más, como una línea partida por `wrap`.
+pub trait LineHeights {
+    fn height(&self, line: usize) -> usize;
+}
+
+/// Todas las líneas miden lo mismo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Uniform(pub usize);
+
+impl LineHeights for Uniform {
+    fn height(&self, _line: usize) -> usize {
+        self.0
+    }
+}
+
+/// La primera línea visible de un panel y cuánto alto tiene. Quien aloja
+/// el motor guarda uno por panel, le da su alto en cada layout
 /// ([`Viewport::resize`]) y se lo presta al motor mientras edita en ese
 /// panel ([`crate::Vim::swap_viewport`]); el motor lo deja donde quedó tras
 /// cada tecla, y la UI pinta desde [`Viewport::top`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Viewport {
     top: usize,
+    /// En unidades de [`LineHeights`].
     height: usize,
+    /// Cuánto mide una línea de texto: lo que es una fila para vim.
+    row: usize,
+    /// La primera línea que no se ve entera y la de en medio, de la última
+    /// vez que se movió la ventana: `L` y `M` como motions las leen sin
+    /// medir líneas, como `w_botline` en vim.
+    bottom: usize,
+    middle: usize,
     /// Las líneas que fijó un count de `ctrl-d` o `ctrl-u` (la opción
     /// `scroll` de vim, que es de cada ventana).
     half_page: Option<usize>,
@@ -57,11 +82,16 @@ impl Default for Viewport {
 }
 
 impl Viewport {
+    /// `height` filas de una unidad cada una.
     #[must_use]
     pub fn new(height: usize) -> Self {
+        let height = height.max(1);
         Self {
             top: 0,
-            height: height.max(1),
+            height,
+            row: 1,
+            bottom: height,
+            middle: height.div_ceil(2) - 1,
             half_page: None,
             settled: None,
             columns: Columns::default(),
@@ -90,13 +120,21 @@ impl Viewport {
         self.height
     }
 
-    /// Las filas que caben ahora. Si cambian, `ctrl-d` vuelve a media
-    /// pantalla, como en vim, y el siguiente [`Viewport::reveal`] vuelve a
-    /// mostrar el cursor.
-    pub fn resize(&mut self, height: usize) {
-        let height = height.max(1);
-        if height != self.height {
+    /// Lo que mide una línea de texto.
+    #[must_use]
+    pub fn row(&self) -> usize {
+        self.row
+    }
+
+    /// El alto de ahora y lo que mide una línea de texto, en las unidades
+    /// de [`LineHeights`]. Si cambia, `ctrl-d` vuelve a media pantalla,
+    /// como en vim, y el siguiente [`Viewport::reveal`] vuelve a mostrar el
+    /// cursor.
+    pub fn resize(&mut self, height: usize, row: usize) {
+        let (height, row) = (height.max(1), row.max(1));
+        if (height, row) != (self.height, self.row) {
             self.height = height;
+            self.row = row;
             self.half_page = None;
             self.settled = None;
         }
@@ -105,10 +143,22 @@ impl Viewport {
     /// Mueve lo mínimo para que se vea el cursor con `scrolloff` líneas
     /// alrededor, o lo centra si está lejos, como vim antes de pintar. Si
     /// el texto se acortó, no deja la ventana pasada del final.
-    pub fn reveal(&mut self, buffer: &Buffer, cursor: ByteOffset, scrolloff: usize) {
-        let mut window = self.window(buffer, cursor, scrolloff);
+    pub fn reveal(
+        &mut self,
+        buffer: &Buffer,
+        cursor: ByteOffset,
+        scrolloff: usize,
+        heights: &dyn LineHeights,
+    ) {
+        let mut window = self.window(buffer, cursor, scrolloff, heights);
         window.show_cursor();
         self.apply(&window);
+    }
+
+    /// Las alturas cambiaron (se editó un heading): el próximo
+    /// [`Viewport::reveal`] revisa aunque el cursor no se haya movido.
+    pub fn heights_changed(&mut self) {
+        self.settled = None;
     }
 
     /// Lleva la ventana a `top` como la rueda en vim, que es un `ctrl-e` o
@@ -121,9 +171,10 @@ impl Viewport {
         selections: &mut Selections,
         scrolloff: usize,
         mode: Mode,
+        heights: &dyn LineHeights,
     ) -> bool {
         let head = selections.primary().head;
-        let mut window = self.window(buffer, head, scrolloff);
+        let mut window = self.window(buffer, head, scrolloff, heights);
         let top = top.min(window.lines - 1);
         if top == window.top {
             return false;
@@ -145,48 +196,57 @@ impl Viewport {
         moved
     }
 
-    /// `H` y `L`: la línea a `count` filas de arriba o de abajo, aunque
+    /// `H` y `L`: la línea a `count` líneas de arriba o de abajo, aunque
     /// `L` con un count grande suba más allá de la ventana. `M`: la de en
-    /// medio de las que se ven.
+    /// medio de las filas que se ven.
     pub(crate) fn line_at(&self, place: Place, count: usize, buffer: &Buffer) -> usize {
-        let window = self.window(buffer, ByteOffset::ZERO, 0);
         let last_line = buffer.last_line();
+        let top = self.top.min(last_line);
         let from_edge = count.saturating_sub(1);
         match place {
-            Place::Top => window.top.saturating_add(from_edge).min(last_line),
-            Place::Middle => {
-                let shown = window.bottom() - window.top;
-                let half = shown.div_ceil(2);
-                (window.top + half - 1).min(last_line)
+            Place::Top => top.saturating_add(from_edge).min(last_line),
+            Place::Middle => self.middle.clamp(top, last_line),
+            Place::Bottom => {
+                (self.bottom.min(last_line + 1).max(top + 1) - 1).saturating_sub(from_edge)
             }
-            Place::Bottom => (window.bottom() - 1).saturating_sub(from_edge),
         }
     }
 
-    pub(crate) fn window(&self, buffer: &Buffer, cursor: ByteOffset, scrolloff: usize) -> Window {
+    pub(crate) fn window<'h>(
+        &self,
+        buffer: &Buffer,
+        cursor: ByteOffset,
+        scrolloff: usize,
+        heights: &'h dyn LineHeights,
+    ) -> Window<'h> {
         let lines = buffer.line_count();
         Window {
             top: self.top.min(lines - 1),
             height: self.height,
+            row: self.row,
             lines,
             scrolloff,
             cursor: buffer.line_of(cursor),
             settled: self.settled,
+            heights,
         }
     }
 
-    pub(crate) fn apply(&mut self, window: &Window) {
+    pub(crate) fn apply(&mut self, window: &Window<'_>) {
         self.top = window.top;
         self.settled = window.settled;
+        self.bottom = window.bottom();
+        self.middle = window.middle();
     }
 
-    /// Lo que mueven `ctrl-d` y `ctrl-u`: lo que fijó un count o media
-    /// pantalla.
+    /// Lo que mueven `ctrl-d` y `ctrl-u`, en filas de texto: lo que fijó un
+    /// count o media pantalla.
     pub(crate) fn half_page(&mut self, count: Option<usize>) -> usize {
+        let rows = (self.height / self.row).max(1);
         if let Some(count) = count {
-            self.half_page = Some(count.min(self.height));
+            self.half_page = Some(count.min(rows));
         }
-        self.half_page.unwrap_or((self.height / 2).max(1))
+        self.half_page.unwrap_or((rows / 2).max(1))
     }
 
     /// El texto cambió: el próximo [`Viewport::reveal`] revisa aunque el
@@ -253,9 +313,9 @@ mod tests {
         let mut viewport = Viewport::new(10);
         assert_eq!(viewport.half_page(Some(3)), 3);
         assert_eq!(viewport.half_page(None), 3);
-        viewport.resize(10);
+        viewport.resize(10, 1);
         assert_eq!(viewport.half_page(None), 3);
-        viewport.resize(20);
+        viewport.resize(20, 1);
         assert_eq!(viewport.half_page(None), 10);
     }
 
@@ -269,9 +329,16 @@ mod tests {
     fn con_el_texto_acortado_no_queda_pasada_del_final() {
         let mut viewport = Viewport::new(10);
         let mut selections = Selections::single(Selection::cursor(ByteOffset::ZERO));
-        viewport.scroll_to(80, &numbered(100), &mut selections, 0, Mode::Normal);
+        viewport.scroll_to(
+            80,
+            &numbered(100),
+            &mut selections,
+            0,
+            Mode::Normal,
+            &Uniform(1),
+        );
         let short = numbered(5);
-        viewport.reveal(&short, short.line_start(4), 0);
+        viewport.reveal(&short, short.line_start(4), 0, &Uniform(1));
         assert_eq!(viewport.top(), 4);
     }
 }

@@ -59,6 +59,7 @@ const fn screen(rows: usize, scrolloff: usize, top: usize) -> Screen {
         rows,
         scrolloff,
         top: top - 1,
+        tall_headings: false,
     }
 }
 
