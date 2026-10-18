@@ -204,12 +204,19 @@ impl Workspace {
         if !self.tree.contains(pane) {
             return Err(WorkspaceError::NoPane(pane));
         }
-        self.edit_pane(previous, |vim, buffer, selections| {
-            vim.execute(Action::Interrupt, buffer, selections)?;
-            Ok(())
-        })?;
+        self.interrupt(previous)?;
         self.tree.set_focus(pane);
         Ok(())
+    }
+
+    /// Lo que esté a medias en `pane` (un Insert, un operador, la línea de
+    /// comandos) termina como con `ctrl-c`: es lo que pasa antes de que el
+    /// panel deje el foco o cambie de documento.
+    fn interrupt(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
+        self.edit_pane(pane, |vim, buffer, selections| {
+            vim.execute(Action::Interrupt, buffer, selections)?;
+            Ok(())
+        })
     }
 
     fn command_line(&self) -> Option<CommandLine<'_>> {
@@ -362,6 +369,8 @@ fn clamp_cursor(buffer: &Buffer, offset: ByteOffset, mode: Mode) -> ByteOffset {
     }
 }
 
+#[cfg(test)]
+mod panes_oracle;
 #[cfg(test)]
 mod test_session;
 #[cfg(test)]

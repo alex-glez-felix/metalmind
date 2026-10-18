@@ -6,6 +6,7 @@ use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 use super::*;
+use crate::workspace::panes_oracle;
 use crate::workspace::test_session::Session;
 
 /// Una carpeta con `a.md` y `b.md`, y una sesión abierta en `a.md`.
@@ -448,4 +449,54 @@ fn open_in_split_de_algo_ilegible_no_divide() {
         .unwrap();
     assert_eq!(session.workspace.tree().len(), 1);
     assert!(error(&session).is_some());
+}
+
+/// Abrir desde el finder con un modo a medias (Insert, por ejemplo con la
+/// paleta abierta desde Insert): el panel de antes termina lo pendiente
+/// como un `ctrl-c`, igual que al cambiar de panel, y el nuevo empieza en
+/// Normal. En nvim es lo de teclear `<C-c>` y después el comando; con
+/// `<C-o>:vsplit` o `<Cmd>vsplit` nvim seguiría en Insert, pero nota nunca
+/// cambia de panel sin salir de lo pendiente (`Workspace::focus`).
+#[rstest::rstest]
+#[case::split_desde_insert("Aho", Opened::Split)]
+#[case::split_desde_un_operador("d", Opened::Split)]
+#[case::split_desde_la_linea_de_comandos(":ab", Opened::Split)]
+#[case::edit_desde_insert_se_niega_con_cambios("Aho", Opened::Edit)]
+#[case::edit_desde_la_linea_de_comandos(":ab", Opened::Edit)]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn abrir_desde_un_modo_a_medias_es_como_nvim_tras_ctrl_c(
+    #[case] pending: &str,
+    #[case] opened: Opened,
+) {
+    let (dir, mut session) = two_files();
+    session.keys(pending);
+    assert_ne!(session.mode(), nota_vim::Mode::Normal);
+    let target = path(&dir, "b.md");
+    let command = match opened {
+        Opened::Split => {
+            session.workspace.open_in_split(Axis::Row, &target).unwrap();
+            "vsplit"
+        }
+        Opened::Edit => {
+            let edit = nota_vim::Invocation {
+                command: nota_vim::Command::Edit,
+                argument: Some(target.display().to_string()),
+            };
+            session.effect = session.workspace.run(&edit, &mut session.clipboard);
+            "edit"
+        }
+    };
+    let nvim = panes_oracle::run(
+        dir.path(),
+        "a.md",
+        &format!("{pending}<C-c>:{command} b.md<CR>"),
+    );
+    assert_eq!(session.panes(), nvim);
+    assert_eq!(nvim.mode, "n");
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Opened {
+    Split,
+    Edit,
 }

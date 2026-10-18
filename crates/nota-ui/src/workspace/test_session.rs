@@ -6,6 +6,7 @@ use nota_buffer::ByteOffset;
 use nota_vault::FileError;
 use nota_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
 
+use super::panes_oracle::{Panes, Window};
 use super::{Effect, LineNumbers, PaneId, PaneView, Workspace};
 use crate::document::{Document, FileStats};
 
@@ -138,6 +139,38 @@ impl Session {
         view.buffer().line_of(view.cursor()) + 1
     }
 
+    /// Los paneles como los describe el oráculo de nvim, en el mismo orden.
+    pub fn panes(&self) -> Panes {
+        let mut windows: Vec<Window> = self
+            .workspace
+            .tree()
+            .panes()
+            .into_iter()
+            .map(|pane| {
+                let view = self.view(pane);
+                let buffer = view.buffer();
+                let line = buffer.line_of(view.cursor());
+                Window {
+                    file: view
+                        .document
+                        .path()
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    focused: view.focused,
+                    line: line + 1,
+                    column: view.cursor().get() - buffer.line_start(line).get(),
+                }
+            })
+            .collect();
+        windows.sort();
+        Panes {
+            mode: vim_mode(self.mode()).to_owned(),
+            windows,
+        }
+    }
+
     pub fn text(&self) -> String {
         self.view(self.pane()).buffer().to_string()
     }
@@ -166,5 +199,17 @@ impl Session {
     pub fn save(&mut self) -> Result<FileStats, FileError> {
         let id = self.workspace.panes[&self.pane()].document;
         self.workspace.documents.get_mut(id).unwrap().save()
+    }
+}
+
+/// Como `mode()` de vim.
+fn vim_mode(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Normal => "n",
+        Mode::Insert => "i",
+        Mode::CommandLine => "c",
+        Mode::OperatorPending(_) => "no",
+        Mode::Visual(nota_vim::VisualKind::Char) => "v",
+        Mode::Visual(nota_vim::VisualKind::Line) => "V",
     }
 }

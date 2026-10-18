@@ -155,6 +155,9 @@ impl Workspace {
     /// directorio de trabajo, como en vim.
     fn edit(&mut self, path: Option<&Path>, force: bool) -> Result<(), WorkspaceError> {
         let pane = self.focused();
+        // Desde `:` ya se está en Normal; desde el finder puede quedar un
+        // Insert, que termina antes, también si `:e` se niega.
+        self.interrupt(pane)?;
         let current = self.pane(pane)?.document;
         let target = match path {
             Some(path) if !self.document(current)?.is_file(path) => path,
@@ -237,12 +240,15 @@ impl Workspace {
     /// con el foco. El documento se abre antes de dividir, así que si no se
     /// puede leer no queda un panel de más; si ya está abierto (también si
     /// es el del panel enfocado) se comparte, con el cursor de un panel que
-    /// lo muestra.
+    /// lo muestra. Como al cambiar de panel, lo que estuviera a medias en el
+    /// de antes termina como con `ctrl-c`.
     ///
     /// # Errors
     /// Solo si el estado está inconsistente, lo que sería un bug.
     pub fn open_in_split(&mut self, axis: Axis, path: &Path) -> Result<(), WorkspaceError> {
-        let numbers = self.pane(self.focused())?.numbers;
+        let focused = self.focused();
+        self.interrupt(focused)?;
+        let numbers = self.pane(focused)?.numbers;
         let shown = match self.documents.find(path) {
             Some(id) => self.pane_on(id, numbers),
             None => match Document::open(path) {

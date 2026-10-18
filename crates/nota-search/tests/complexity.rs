@@ -14,7 +14,9 @@ use tempfile::TempDir;
 fn fuzzy_search_is_linear_in_the_paths() {
     let mut matcher = FuzzyMatcher::paths();
     let query = Query::new("tema nota");
-    assert_linear(8_000, vault_paths, |paths| matcher.rank(&query, &paths).len());
+    assert_linear(8_000, vault_paths, |paths| {
+        matcher.rank(&query, &paths).len()
+    });
 }
 
 fn query(pattern: &str) -> TextQuery {
