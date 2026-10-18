@@ -75,7 +75,7 @@ impl Workspace {
         };
         let focused_unsaved = focused.is_some_and(Document::is_modified);
         self.message = Some(if focused_unsaved {
-            Message::unsaved("usa :q! para cerrar igual")
+            Message::unsaved()
         } else {
             Message::unsaved_in(unsaved)
         });
@@ -88,13 +88,7 @@ impl Workspace {
             Command::Save => self.save(path).map(|_| Effect::Stay),
             Command::Quit => self.quit(false),
             Command::ForceQuit => self.quit(true),
-            Command::SaveAndQuit => {
-                if self.save(path)? {
-                    self.quit(false)
-                } else {
-                    Ok(Effect::Stay)
-                }
-            }
+            Command::SaveAndQuit => self.save_and_quit(path),
             Command::Edit => self.edit(path, false).map(|()| Effect::Stay),
             Command::ForceEdit => self.edit(path, true).map(|()| Effect::Stay),
             Command::SplitRight => self.split(Axis::Row).map(|()| Effect::Stay),
@@ -141,6 +135,20 @@ impl Workspace {
         Ok(saved)
     }
 
+    /// `:wq [ruta]`. Si `ruta` es otro archivo y el buffer tiene cambios,
+    /// escribe la copia pero no cierra, como vim con un solo panel; en un
+    /// split, vim cierra y pierde los cambios, y nota se niega igual.
+    fn save_and_quit(&mut self, path: Option<&Path>) -> Result<Effect, WorkspaceError> {
+        if !self.save(path)? {
+            return Ok(Effect::Stay);
+        }
+        if self.would_lose_changes(self.focused())? {
+            self.message = Some(Message::unsaved_after_write());
+            return Ok(Effect::Stay);
+        }
+        self.quit(false)
+    }
+
     /// `:q` cierra el panel; el último cierra la ventana.
     fn quit(&mut self, force: bool) -> Result<Effect, WorkspaceError> {
         let pane = self.focused();
@@ -153,7 +161,7 @@ impl Workspace {
             });
         }
         if !force && self.would_lose_changes(pane)? {
-            self.message = Some(Message::unsaved("usa :q! para cerrar igual"));
+            self.message = Some(Message::unsaved());
             return Ok(Effect::Stay);
         }
         self.close(pane);
@@ -181,7 +189,7 @@ impl Workspace {
             _ => return self.reload(force),
         };
         if !force && self.would_lose_changes(pane)? {
-            self.message = Some(Message::unsaved("usa :e! para descartarlos"));
+            self.message = Some(Message::unsaved());
             return Ok(());
         }
         let numbers = self.pane(pane)?.numbers;
@@ -224,7 +232,7 @@ impl Workspace {
         let id = self.pane(self.focused())?.document;
         let document = self.document(id)?;
         if !force && document.is_modified() {
-            self.message = Some(Message::unsaved("usa :e! para descartarlos"));
+            self.message = Some(Message::unsaved());
             return Ok(());
         }
         let Some(path) = document.path() else {

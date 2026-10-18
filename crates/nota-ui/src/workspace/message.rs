@@ -46,9 +46,17 @@ impl Message {
         Self::Info(format!("\"{name}\" {stats} escritos"))
     }
 
+    /// `:q` o `:e` que perderían cambios, con el texto de vim (`nohidden`).
     #[must_use]
-    pub fn unsaved(hint: &str) -> Self {
-        Self::Error(format!("E37: hay cambios sin guardar ({hint})"))
+    pub fn unsaved() -> Self {
+        Self::Error("E37: No write since last change (add ! to override)".to_owned())
+    }
+
+    /// `:wq ruta` que escribió una copia pero no cierra porque el buffer
+    /// sigue con cambios: vim no sugiere el `!` aquí.
+    #[must_use]
+    pub fn unsaved_after_write() -> Self {
+        Self::Error("E37: No write since last change".to_owned())
     }
 
     #[must_use]
