@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use toml::Spanned;
 
 use crate::diagnostic::Loaded;
 use crate::parse::parse;
@@ -13,7 +14,7 @@ use crate::theme::DEFAULT_THEME;
 #[serde(default)]
 pub struct Settings {
     /// Nombre del tema: uno de `<config>/themes/*.toml` o uno embebido.
-    pub theme: String,
+    theme: Spanned<String>,
     /// Vault que se abre si no se pasa ninguno; `~/` se expande.
     vault: Option<PathBuf>,
     pub font: Font,
@@ -69,6 +70,16 @@ impl Settings {
         }
     }
 
+    #[must_use]
+    pub fn theme(&self) -> &str {
+        self.theme.get_ref()
+    }
+
+    /// Dónde empieza el valor de `theme` en el texto leído.
+    pub(crate) fn theme_offset(&self) -> usize {
+        self.theme.span().start
+    }
+
     /// El vault por defecto, con `~/` resuelto contra `home`.
     #[must_use]
     pub fn vault(&self, home: &Path) -> Option<PathBuf> {
@@ -83,7 +94,7 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: DEFAULT_THEME.to_owned(),
+            theme: Spanned::new(0..0, DEFAULT_THEME.to_owned()),
             vault: None,
             font: Font::default(),
             editor: Editor::default(),
@@ -168,7 +179,7 @@ mod tests {
         let loaded = Settings::parse("");
         assert_eq!(loaded.value, Settings::default());
         assert_eq!(loaded.diagnostics, []);
-        assert_eq!(loaded.value.theme, "nota-oscuro");
+        assert_eq!(loaded.value.theme(), "nota-oscuro");
         assert_eq!(loaded.value.font.size, FontSize(15.));
         assert_eq!(loaded.value.editor.tabstop.get(), 4);
     }
@@ -197,7 +208,7 @@ smartcase = true
         assert_eq!(
             loaded.value,
             Settings {
-                theme: "nota-claro".to_owned(),
+                theme: Spanned::new(0..0, "nota-claro".to_owned()),
                 vault: Some("/notas".into()),
                 font: Font {
                     family: Some("Iosevka".to_owned()),
