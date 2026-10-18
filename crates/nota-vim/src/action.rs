@@ -64,6 +64,15 @@ pub enum Action {
     Visual(VisualKind),
     /// `o` en Visual: el cursor pasa al otro extremo de la selección.
     OtherEnd,
+    /// `O` en Visual: en un bloque, el cursor pasa a la otra esquina de su
+    /// misma línea; si no, como [`Action::OtherEnd`].
+    OtherCorner,
+    /// `I`, o `A` si `append`, en Visual por bloque: escribe antes o
+    /// después del bloque, y al salir de Insert lo escrito se repite en cada
+    /// línea.
+    BlockInsert {
+        append: bool,
+    },
     /// `gv`: vuelve a la última selección; en Visual, la intercambia con la
     /// actual.
     RestoreVisual,
@@ -233,7 +242,11 @@ impl Action {
         Self::CurrentLine,
         Self::Visual(VisualKind::Char),
         Self::Visual(VisualKind::Line),
+        Self::Visual(VisualKind::Block),
         Self::OtherEnd,
+        Self::OtherCorner,
+        Self::BlockInsert { append: false },
+        Self::BlockInsert { append: true },
         Self::RestoreVisual,
         Self::Replace,
         Self::Insert(InsertAt::Before),
@@ -319,7 +332,11 @@ impl Action {
             Self::CurrentLine => "vim::current_line",
             Self::Visual(VisualKind::Char) => "vim::toggle_visual",
             Self::Visual(VisualKind::Line) => "vim::toggle_visual_line",
+            Self::Visual(VisualKind::Block) => "vim::toggle_visual_block",
             Self::OtherEnd => "vim::other_end",
+            Self::OtherCorner => "vim::other_corner",
+            Self::BlockInsert { append: false } => "vim::insert_in_block",
+            Self::BlockInsert { append: true } => "vim::append_to_block",
             Self::RestoreVisual => "vim::restore_visual_selection",
             Self::Replace => "vim::replace",
             Self::Insert(at) => insert_name(at),

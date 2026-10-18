@@ -82,7 +82,7 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), Failure> {
         while let Some(line) = buffer.pop_marked_line() {
-            let goal = Want::of(buffer, selections.primary()).goal();
+            let goal = Want::of(buffer, selections.primary(), true, self.viewport.columns()).goal();
             *selections = Selections::single(Selection {
                 goal,
                 ..Selection::cursor(buffer.line_start(line))
@@ -126,7 +126,12 @@ impl Vim {
     ) -> Result<KeyOutcome, Failure> {
         if command.trim().is_empty() {
             let line = buffer.line_of(selections.primary().head);
-            *selections = Selections::single(keep_column(buffer, selections.primary(), line));
+            *selections = Selections::single(keep_column(
+                buffer,
+                self.viewport.columns(),
+                selections.primary(),
+                line,
+            ));
             return Ok(done());
         }
         Ok(self.run_ex(command, buffer, selections, clipboard)?)

@@ -1,6 +1,7 @@
 use nota_buffer::{Buffer, ByteOffset, Goal, Selection};
 
 use crate::Operator;
+use crate::columns::Columns;
 use crate::cursor::Cursor;
 use crate::lines::{Want, first_non_blank, is_blank, last_char};
 use crate::scroll::{Place, Viewport};
@@ -99,6 +100,7 @@ impl Motion {
         let head = selection.head;
         let times = count.unwrap_or(1);
         let line = buffer.line_of(head);
+        let columns = viewport.columns();
         let destination = match self {
             Self::Left => Destination::new(step_left(buffer, head, times), SpanKind::Exclusive),
             Self::Right => {
@@ -109,8 +111,20 @@ impl Motion {
                 };
                 Destination::new(step_right(buffer, head, times, limit), SpanKind::Exclusive)
             }
-            Self::Up => vertical(buffer, selection, line_above(line, times)?, purpose),
-            Self::Down => vertical(buffer, selection, line_below(buffer, line, times)?, purpose),
+            Self::Up => vertical(
+                buffer,
+                selection,
+                line_above(line, times)?,
+                purpose,
+                columns,
+            ),
+            Self::Down => vertical(
+                buffer,
+                selection,
+                line_below(buffer, line, times)?,
+                purpose,
+                columns,
+            ),
             Self::NextWordStart { big } => next_word_start(buffer, head, times, big, purpose),
             Self::NextWordEnd { big } => {
                 let mut cursor = Cursor::new(buffer, head);
@@ -128,20 +142,26 @@ impl Motion {
                 Destination::new(offset, SpanKind::Exclusive)
             }
             Self::LineEnd => line_end(buffer, line, times, purpose)?,
-            Self::DocumentStart => {
-                vertical(buffer, selection, line_number(buffer, count, 0), purpose)
-            }
+            Self::DocumentStart => vertical(
+                buffer,
+                selection,
+                line_number(buffer, count, 0),
+                purpose,
+                columns,
+            ),
             Self::DocumentEnd => vertical(
                 buffer,
                 selection,
                 line_number(buffer, count, buffer.last_line()),
                 purpose,
+                columns,
             ),
             Self::Window(place) => vertical(
                 buffer,
                 selection,
                 viewport.line_at(place, times, buffer),
                 purpose,
+                columns,
             ),
         };
         Some(destination)
@@ -188,12 +208,15 @@ pub(crate) fn vertical(
     selection: &Selection,
     line: usize,
     purpose: Purpose,
+    columns: Columns,
 ) -> Destination {
-    let want = Want::of(buffer, selection);
-    let offset = if purpose == Purpose::Select {
-        want.visual_offset_on(buffer, line)
+    let visual = purpose == Purpose::Select;
+    let tab_end = !visual || selection.head > selection.anchor;
+    let want = Want::of(buffer, selection, tab_end, columns);
+    let offset = if visual {
+        want.visual_offset_on(buffer, line, columns)
     } else {
-        want.offset_on(buffer, line)
+        want.offset_on(buffer, line, columns)
     };
     Destination {
         offset,

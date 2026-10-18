@@ -282,6 +282,14 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab cd", "veyw2vd", "ab| ")]
 #[case("a|b\ncd", "Vjrx.", "|xx\nxx")]
 #[case("|abc", "vlUgvd", "|c")]
+// columnas de pantalla con tabs, también en `.` y `[count]v`
+#[case("a\tb|c\nxyzwvutsrqp", "vjd", "a\tb|p")]
+#[case("a\tb|c\nxyzwvutsrqp", "vkd", "a\t|b\nxyzwvutsrqp")]
+#[case("xyzwvut|srqp\na\tbc", "vjd", "xyzwvut|bc")]
+#[case("xyzwvutsr|qp\na\tbc", "vjohd", "xyzwvut|s")]
+#[case("x\t|ab\nxyz\tcd", "vlyj0vd", "x\tab\n|yz\tcd")]
+#[case("|a\tbc\na\tbc", "vlly1vd", "|c\na\tbc")]
+#[case("|a\tbc\na\tbc\nxyzwvutsrqp", "vlldj0.", "c\n|c\nxyzwvutsrqp")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]

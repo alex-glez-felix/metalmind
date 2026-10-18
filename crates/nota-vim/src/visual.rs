@@ -4,14 +4,27 @@
 use nota_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
 
 use crate::VisualKind;
+use crate::block::BlockSize;
+use crate::columns::Columns;
 use crate::span::{Region, Target};
+
+/// Lo que reusan `[count]v`, `[count]V` y `[count]ctrl-v`: el tamaño de la
+/// última selección sobre la que se operó.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Reselect {
+    Range(VisualSize),
+    Block(BlockSize),
+}
 
 /// El texto que abarca una selección Visual. Vim incluye el carácter bajo
 /// los dos extremos, y el salto de línea si el final está sobre él.
 pub(crate) fn target(buffer: &Buffer, selection: &Selection, kind: VisualKind) -> Target {
     let (start, end) = (selection.start(), selection.end());
     let (region, start) = match kind {
-        VisualKind::Char => (Region::Chars(start..buffer.next_boundary(end)), start),
+        // Los operadores de un bloque no pasan por aquí (ver `crate::block`).
+        VisualKind::Char | VisualKind::Block => {
+            (Region::Chars(start..buffer.next_boundary(end)), start)
+        }
         VisualKind::Line => {
             let first = buffer.line_of(start);
             let last = buffer.line_of(end);
@@ -36,23 +49,24 @@ pub(crate) enum Area {
 }
 
 impl Area {
-    pub fn target(self, buffer: &Buffer, selection: &Selection) -> Target {
+    pub fn target(self, buffer: &Buffer, selection: &Selection, columns: Columns) -> Target {
         match self {
             Self::Selection(kind) => target(buffer, selection, kind),
             Self::Sized(size) => {
-                let sized = size.select_from(buffer, selection.head, 1);
-                target(buffer, &sized, size.kind)
+                let sized = size.select_from(buffer, selection.head, 1, columns);
+                target(buffer, &sized, size.kind())
             }
         }
     }
 }
 
-/// El tamaño de la última selección sobre la que se operó, como lo guarda
-/// vim para `.` y `[count]v` (`resel_VIsual_*`). Las columnas son de
-/// caracteres; vim mide columnas de pantalla.
+/// El tamaño de la última selección por caracteres o por líneas sobre la
+/// que se operó, como lo guarda vim para `.` y `[count]v`
+/// (`resel_VIsual_*`), en columnas de pantalla. El de un bloque es un
+/// [`BlockSize`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct VisualSize {
-    kind: VisualKind,
+    linewise: bool,
     lines: usize,
     reach: Reach,
 }
@@ -60,59 +74,70 @@ pub(crate) struct VisualSize {
 /// Hasta dónde llega la selección en su última línea.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Reach {
-    /// En una sola línea: cuántos caracteres abarca.
+    /// En una sola línea: cuántas columnas abarca.
     Width(usize),
-    /// En varias líneas: la columna del final.
+    /// En varias líneas: la última columna del carácter del final.
     Column(usize),
     /// Hasta el fin de línea, tras `$`.
     LineEnd,
 }
 
 impl VisualSize {
-    pub fn of(buffer: &Buffer, selection: &Selection, kind: VisualKind) -> Self {
+    pub fn of(buffer: &Buffer, selection: &Selection, kind: VisualKind, columns: Columns) -> Self {
         let (start, end) = (selection.start(), selection.end());
         let lines = buffer.line_of(end) - buffer.line_of(start) + 1;
-        let end_column = buffer.column_of(end);
+        let (_, end_column) = columns.span_of(buffer, end);
         let reach = if selection.goal == Goal::LineEnd {
             Reach::LineEnd
         } else if lines == 1 {
-            Reach::Width(end_column - buffer.column_of(start) + 1)
+            let (start_column, _) = columns.span_of(buffer, start);
+            Reach::Width(end_column - start_column + 1)
         } else {
             Reach::Column(end_column)
         };
-        Self { kind, lines, reach }
+        Self {
+            linewise: kind == VisualKind::Line,
+            lines,
+            reach,
+        }
     }
 
     pub fn kind(self) -> VisualKind {
-        self.kind
+        if self.linewise {
+            VisualKind::Line
+        } else {
+            VisualKind::Char
+        }
     }
 
     /// Una selección desde `head` con este tamaño multiplicado por `times`.
     /// Como en vim, solo se multiplican las líneas de una selección por
-    /// líneas o de varias, y el ancho de una de una sola línea.
-    pub fn select_from(self, buffer: &Buffer, head: ByteOffset, times: usize) -> Selection {
+    /// líneas o de varias, y el ancho de una de una sola línea, que se mide
+    /// desde donde se ve el cursor.
+    pub fn select_from(
+        self,
+        buffer: &Buffer,
+        head: ByteOffset,
+        times: usize,
+        columns: Columns,
+    ) -> Selection {
         let line = buffer.line_of(head);
-        let end_line = if self.kind == VisualKind::Line || self.lines > 1 {
+        let end_line = if self.linewise || self.lines > 1 {
             let lines = self.lines.saturating_mul(times);
             line.saturating_add(lines - 1).min(buffer.last_line())
         } else {
             line
         };
-        let column = buffer.column_of(head);
-        let (end, goal) = match (self.reach, self.kind) {
+        let column = columns.cursor_at(buffer, head, true);
+        let at = |column| columns.offset_at(buffer, end_line, column, true);
+        let (end, goal) = match (self.reach, self.linewise) {
             (Reach::LineEnd, _) => (buffer.line_end(end_line), Goal::LineEnd),
-            (Reach::Width(width), VisualKind::Char) => {
+            (Reach::Width(width), false) => {
                 let column = column + width.saturating_mul(times) - 1;
-                (
-                    buffer.offset_at_column(end_line, column),
-                    Goal::Column(column),
-                )
+                (at(column), Goal::Column(column))
             }
-            (Reach::Column(column), VisualKind::Char) => (
-                buffer.offset_at_column(end_line, column),
-                Goal::Column(column),
-            ),
-            (_, VisualKind::Line) => (buffer.offset_at_column(end_line, column), Goal::None),
+            (Reach::Column(column), false) => (at(column), Goal::Column(column)),
+            (_, true) => (at(column), Goal::None),
         };
         Selection {
             anchor: head,

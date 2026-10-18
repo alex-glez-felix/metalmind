@@ -25,7 +25,11 @@ impl Vim {
             self.fail();
             return Ok(());
         };
-        self.count = count.or(dot.count);
+        // Como el `redo_VIsual` de vim, un bloque se repite con su count.
+        self.count = match dot.change {
+            Change::Block(..) => dot.count,
+            _ => count.or(dot.count),
+        };
         self.selected = dot.register.map(RegisterName::next_for_repeat);
         // Como vim, repetir `d/foo<CR>` o `d*` vuelve a teclear la búsqueda:
         // `n` sigue buscando lo que buscó.
@@ -45,6 +49,9 @@ impl Vim {
             Change::Paste(side) => self.paste(side, buffer, selections, clipboard)?,
             Change::Insert(at) => self.enter_insert(at, buffer, selections)?,
             Change::Replace(c, size) => self.replace_sized(c, size, buffer, selections)?,
+            Change::Block(change, size) => {
+                self.repeat_block(change, size, buffer, selections, clipboard)?;
+            }
         }
         if self.mode != Mode::Insert {
             return Ok(());
@@ -52,7 +59,6 @@ impl Vim {
         for typed in &dot.typed {
             self.type_in_insert(typed, buffer, selections)?;
         }
-        self.repeat_insert(buffer, selections)?;
-        self.leave_insert(buffer, selections)
+        self.finish_insert(buffer, selections)
     }
 }

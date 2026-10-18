@@ -139,10 +139,7 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         match action {
-            Action::NormalMode => {
-                self.repeat_insert(buffer, selections)?;
-                self.leave_insert(buffer, selections)?;
-            }
+            Action::NormalMode => self.finish_insert(buffer, selections)?,
             Action::Interrupt => self.leave_insert(buffer, selections)?,
             Action::Backspace => self.type_in_insert(&Typed::Backspace, buffer, selections)?,
             Action::Newline => {

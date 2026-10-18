@@ -17,7 +17,7 @@ pub(crate) enum Transform {
 }
 
 impl Transform {
-    fn text(self, text: &str) -> String {
+    pub(crate) fn text(self, text: &str) -> String {
         text.chars()
             .map(|c| if c == '\n' { c } else { self.char(c) })
             .collect()

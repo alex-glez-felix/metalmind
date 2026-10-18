@@ -8,7 +8,7 @@ use crate::dot::{Change, Dot, MarkJump, Subject};
 use crate::insert;
 use crate::object::Object;
 use crate::operator::{Operand, Outcome};
-use crate::register::{Clipboard, Register, RegisterName, Write};
+use crate::register::{Clipboard, Register, RegisterName, Shape, Write};
 use crate::search::Query;
 use crate::travel::Travel;
 use crate::{InsertAt, Operator, PasteSide, Viewport, VimError, paste};
@@ -107,7 +107,8 @@ impl Vim {
             self.fail();
             return Ok(());
         }
-        let (applied, written, spans_lines) = match operator.apply(buffer, operands)? {
+        let outcome = operator.apply(buffer, operands, self.viewport.columns())?;
+        let (applied, written, spans_lines) = match outcome {
             Outcome::Missed(moved) => {
                 *selections = moved;
                 self.fail();
@@ -155,12 +156,18 @@ impl Vim {
         }
         // Como en vim, `.` repite un `p` aunque el registro estuviera vacío.
         self.last_change = Some(Dot::new(Change::Paste(side), count, register));
-        match self.read_register(register, clipboard) {
-            Some(content) => {
-                let times = count.unwrap_or(1);
+        let times = count.unwrap_or(1);
+        let Some(content) = self.read_register(register, clipboard) else {
+            self.fail();
+            return Ok(());
+        };
+        match content.shape {
+            Shape::Block { width } => {
+                self.put_block(&content, width, side, times, buffer, selections)?;
+            }
+            Shape::Chars | Shape::Lines => {
                 *selections = paste::paste(buffer, selections, &content, side, times)?;
             }
-            None => self.fail(),
         }
         Ok(())
     }
@@ -175,10 +182,7 @@ impl Vim {
             return self.registers.read(name, clipboard);
         }
         let pattern = self.search.pattern.as_ref()?;
-        Some(Register {
-            text: pattern.source().to_owned(),
-            linewise: false,
-        })
+        Some(Register::chars(pattern.source()))
     }
 
     /// `".p` y `".P` vuelven a teclear lo último insertado, como `a` o `i`
@@ -240,7 +244,8 @@ pub(super) fn run(
         selection: *selection,
         target: object.target(buffer, selection, operator, None, viewport),
     });
-    Ok(match operator.apply(buffer, &operands)? {
+    let outcome = operator.apply(buffer, &operands, viewport.columns())?;
+    Ok(match outcome {
         Outcome::Missed(selections) | Outcome::Applied { selections, .. } => selections,
     })
 }

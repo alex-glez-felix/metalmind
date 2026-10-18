@@ -1,5 +1,8 @@
 use nota_buffer::{Buffer, ByteOffset, Goal, Selection};
 
+use crate::Mode;
+use crate::columns::Columns;
+
 pub(crate) fn is_blank(c: char) -> bool {
     c == ' ' || c == '\t'
 }
@@ -41,7 +44,19 @@ pub(crate) fn in_indent(buffer: &Buffer, offset: ByteOffset) -> bool {
     offset <= first_non_blank(buffer, buffer.line_of(offset))
 }
 
-/// Columna que `j`/`k` intentan conservar, ya resuelta.
+/// Si el cursor sobre un tab se ve en su final, como en Normal; en Visual,
+/// solo si va después del otro extremo, y en Insert nunca (`getvvcol` de
+/// vim).
+pub(crate) fn tab_end(mode: Mode, selection: &Selection) -> bool {
+    match mode {
+        Mode::Visual(_) => selection.head > selection.anchor,
+        Mode::Insert => false,
+        Mode::Normal | Mode::OperatorPending(_) | Mode::CommandLine => true,
+    }
+}
+
+/// Columna de pantalla que `j`/`k` intentan conservar, ya resuelta: el
+/// `curswant` de vim.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Want {
     Column(usize),
@@ -49,18 +64,21 @@ pub(crate) enum Want {
 }
 
 impl Want {
-    pub fn of(buffer: &Buffer, selection: &Selection) -> Self {
+    /// Sin columna guardada, la del cursor, que sobre un tab se ve en su
+    /// final si `tab_end` (ver [`tab_end`]).
+    pub fn of(buffer: &Buffer, selection: &Selection, tab_end: bool, columns: Columns) -> Self {
         match selection.goal {
-            Goal::None => Self::Column(buffer.column_of(selection.head)),
+            Goal::None => Self::Column(columns.cursor_at(buffer, selection.head, tab_end)),
             Goal::Column(column) => Self::Column(column),
             Goal::LineEnd => Self::LineEnd,
         }
     }
 
-    /// Posición en Normal sobre `line` que mejor respeta esta columna.
-    pub fn offset_on(self, buffer: &Buffer, line: usize) -> ByteOffset {
+    /// Posición en Normal sobre `line` que mejor respeta esta columna: el
+    /// carácter que la ocupa o, si la línea no llega, el último.
+    pub fn offset_on(self, buffer: &Buffer, line: usize, columns: Columns) -> ByteOffset {
         match self {
-            Self::Column(column) => clamp_normal(buffer, buffer.offset_at_column(line, column)),
+            Self::Column(column) => columns.offset_at(buffer, line, column, false),
             Self::LineEnd => last_char(buffer, line),
         }
     }
@@ -68,9 +86,9 @@ impl Want {
     /// Como [`Self::offset_on`], pero en Visual: puede quedar sobre el fin
     /// de línea, que así entra en la selección (`coladvance` de vim con
     /// `selection=inclusive`).
-    pub fn visual_offset_on(self, buffer: &Buffer, line: usize) -> ByteOffset {
+    pub fn visual_offset_on(self, buffer: &Buffer, line: usize, columns: Columns) -> ByteOffset {
         match self {
-            Self::Column(column) => buffer.offset_at_column(line, column),
+            Self::Column(column) => columns.offset_at(buffer, line, column, true),
             Self::LineEnd => buffer.line_end(line),
         }
     }

@@ -183,3 +183,14 @@ fn a_system_register_action_drops_what_was_pending() {
         assert_eq!(editor.vim.mode(), Mode::Normal, "tras {pending:?}");
     }
 }
+
+/// Como nvim con un proveedor, un bloque va al portapapeles con sus líneas,
+/// sin `\n` final, y de vuelta se pega por caracteres.
+#[test]
+fn a_block_goes_to_the_clipboard_as_its_lines() {
+    let mut editor = Editor::new("a|bc\ndef");
+    editor.keys("<C-v>jl\"+y");
+    assert_eq!(editor.clipboard.clipboard.as_deref(), Some("bc\nef"));
+    editor.keys("\"+P");
+    assert_eq!(editor.text(), "a|bc\nefbc\ndef");
+}

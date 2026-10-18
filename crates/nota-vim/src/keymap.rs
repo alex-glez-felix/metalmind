@@ -272,6 +272,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch(':')], Action::CommandLine),
         (Normal, &[ch('v')], Action::Visual(VisualKind::Char)),
         (Normal, &[ch('V')], Action::Visual(VisualKind::Line)),
+        (Normal, &[Key::Ctrl('v')], Action::Visual(VisualKind::Block)),
         (Normal, &[ch('g'), ch('v')], Action::RestoreVisual),
         (DELETE, &[ch('d')], Action::CurrentLine),
         (CHANGE, &[ch('c')], Action::CurrentLine),
@@ -281,7 +282,11 @@ const VIM: &[(Context, &[Key], Action)] = {
         (TOGGLE_CASE, &[ch('~')], Action::CurrentLine),
         (Visual, &[ch('v')], Action::Visual(VisualKind::Char)),
         (Visual, &[ch('V')], Action::Visual(VisualKind::Line)),
+        (Visual, &[Key::Ctrl('v')], Action::Visual(VisualKind::Block)),
         (Visual, &[ch('o')], Action::OtherEnd),
+        (Visual, &[ch('O')], Action::OtherCorner),
+        (Visual, &[ch('I')], Action::BlockInsert { append: false }),
+        (Visual, &[ch('A')], Action::BlockInsert { append: true }),
         (Visual, &[ch('g'), ch('v')], Action::RestoreVisual),
         (Visual, &[Key::Ctrl('c')], Action::Interrupt),
         (Visual, &[ch('d')], operator(Operator::Delete)),
@@ -403,7 +408,7 @@ const VIM: &[(Context, &[Key], Action)] = {
 mod tests {
     use super::*;
 
-    const MODES: [Mode; 11] = [
+    const MODES: [Mode; 12] = [
         Mode::Normal,
         Mode::Insert,
         Mode::CommandLine,
@@ -415,6 +420,7 @@ mod tests {
         Mode::OperatorPending(Operator::ToggleCase),
         Mode::Visual(VisualKind::Char),
         Mode::Visual(VisualKind::Line),
+        Mode::Visual(VisualKind::Block),
     ];
 
     fn overlap(a: Context, b: Context) -> bool {

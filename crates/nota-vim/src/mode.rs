@@ -1,10 +1,14 @@
 use crate::Operator;
 
-/// Cómo abarca una selección Visual: por caracteres (`v`) o por líneas (`V`).
+/// Cómo abarca una selección Visual: por caracteres (`v`), por líneas
+/// (`V`) o por bloque (`ctrl-v`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VisualKind {
     Char,
     Line,
+    /// Las columnas de pantalla entre los dos extremos, en cada línea entre
+    /// ellos (ver el README del crate).
+    Block,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

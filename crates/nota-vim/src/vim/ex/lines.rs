@@ -6,6 +6,7 @@ use nota_buffer::{Buffer, ByteOffset, Edit, Selection, Selections};
 
 use super::Failure;
 use super::range::Lines;
+use crate::columns::Columns;
 use crate::ex;
 use crate::lines::{Want, first_non_blank, last_char};
 use crate::register::{Clipboard, Register, RegisterName, Write};
@@ -32,7 +33,7 @@ impl Vim {
         self.registers.write(register, deleted, write, clipboard);
         let edits = vec![Edit::delete(whole_lines(buffer, &lines))];
         let first = *lines.start();
-        let undo = keep_column(buffer, selections.primary(), first);
+        let undo = keep_column(buffer, self.viewport.columns(), selections.primary(), first);
         edit_lines(buffer, selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first.min(buffer.last_line()))
         })
@@ -74,7 +75,7 @@ impl Vim {
         let joined = ex::join(texts.iter().map(AsRef::as_ref), spaces);
         let range = buffer.line_start(first)..buffer.line_end(last);
         let edits = vec![Edit::replace(range, joined)];
-        let undo = keep_column(buffer, selections.primary(), first);
+        let undo = keep_column(buffer, self.viewport.columns(), selections.primary(), first);
         edit_lines(buffer, selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first)
         })
@@ -99,7 +100,12 @@ impl Vim {
             })
             .collect();
         let last = *lines.end();
-        let undo = keep_column(buffer, selections.primary(), *lines.start());
+        let undo = keep_column(
+            buffer,
+            self.viewport.columns(),
+            selections.primary(),
+            *lines.start(),
+        );
         edit_lines(buffer, selections, undo, edits, |buffer| {
             line_start_cursor(buffer, last)
         })
@@ -112,6 +118,7 @@ impl Vim {
 pub(super) fn move_lines(
     lines: RangeInclusive<usize>,
     below: usize,
+    columns: Columns,
     buffer: &mut Buffer,
     selections: &mut Selections,
 ) -> Result<(), Failure> {
@@ -137,10 +144,10 @@ pub(super) fn move_lines(
     }
     let cursor = buffer.line_of(selections.primary().head);
     let top = first.min(below.min(buffer.last_line()));
-    let undo = undo_cursor(buffer, selections, lines.contains(&cursor), top);
-    let want = Want::of(buffer, selections.primary());
+    let undo = undo_cursor(buffer, columns, selections, lines.contains(&cursor), top);
+    let want = Want::of(buffer, selections.primary(), true, columns);
     Ok(edit_lines(buffer, selections, undo, edits, |buffer| {
-        at_column(buffer, want, cursor_line)
+        at_column(buffer, columns, want, cursor_line)
     })?)
 }
 
@@ -148,6 +155,7 @@ pub(super) fn move_lines(
 pub(super) fn copy_lines(
     lines: RangeInclusive<usize>,
     below: usize,
+    columns: Columns,
     buffer: &mut Buffer,
     selections: &mut Selections,
 ) -> Result<(), VimError> {
@@ -156,16 +164,22 @@ pub(super) fn copy_lines(
     let edits = vec![insert_lines(buffer, below, &text)];
     let cursor_line = below + last - first;
     let above = buffer.line_of(selections.primary().head) < below;
-    let undo = undo_cursor(buffer, selections, above, below.min(buffer.last_line()));
-    let want = Want::of(buffer, selections.primary());
+    let undo = undo_cursor(
+        buffer,
+        columns,
+        selections,
+        above,
+        below.min(buffer.last_line()),
+    );
+    let want = Want::of(buffer, selections.primary(), true, columns);
     edit_lines(buffer, selections, undo, edits, |buffer| {
-        at_column(buffer, want, cursor_line)
+        at_column(buffer, columns, want, cursor_line)
     })
 }
 
 /// `:12`: a esa línea, desde 0, en la columna buscada.
-pub(super) fn go_to(line: usize, buffer: &Buffer, selections: &mut Selections) {
-    *selections = Selections::single(keep_column(buffer, selections.primary(), line));
+pub(super) fn go_to(line: usize, columns: Columns, buffer: &Buffer, selections: &mut Selections) {
+    *selections = Selections::single(keep_column(buffer, columns, selections.primary(), line));
 }
 
 /// Las ediciones de un comando de `:` en un paso de undo, que vuelve a
@@ -189,6 +203,7 @@ pub(super) fn edit_lines(
 /// `line` en la columna buscada.
 pub(super) fn undo_cursor(
     buffer: &Buffer,
+    columns: Columns,
     selections: &Selections,
     stays: bool,
     line: usize,
@@ -197,20 +212,30 @@ pub(super) fn undo_cursor(
     if stays {
         *primary
     } else {
-        keep_column(buffer, primary, line)
+        keep_column(buffer, columns, primary, line)
     }
 }
 
 /// A `line` en la columna que busca `selection`, como `beginline` de vim
 /// con `nostartofline`.
-pub(super) fn keep_column(buffer: &Buffer, selection: &Selection, line: usize) -> Selection {
-    at_column(buffer, Want::of(buffer, selection), line)
+pub(super) fn keep_column(
+    buffer: &Buffer,
+    columns: Columns,
+    selection: &Selection,
+    line: usize,
+) -> Selection {
+    at_column(
+        buffer,
+        columns,
+        Want::of(buffer, selection, true, columns),
+        line,
+    )
 }
 
-fn at_column(buffer: &Buffer, want: Want, line: usize) -> Selection {
+fn at_column(buffer: &Buffer, columns: Columns, want: Want, line: usize) -> Selection {
     Selection {
         goal: want.goal(),
-        ..Selection::cursor(want.offset_on(buffer, line))
+        ..Selection::cursor(want.offset_on(buffer, line, columns))
     }
 }
 
@@ -220,12 +245,7 @@ pub(super) fn line_start_cursor(buffer: &Buffer, line: usize) -> Selection {
 }
 
 fn lines_register(buffer: &Buffer, lines: &RangeInclusive<usize>) -> Register {
-    Register {
-        text: buffer
-            .lines_text(*lines.start()..lines.end() + 1)
-            .into_owned(),
-        linewise: true,
-    }
+    Register::lines(buffer.lines_text(*lines.start()..lines.end() + 1))
 }
 
 /// Lo que hay que borrar para quitar `lines` con un salto de línea: el de

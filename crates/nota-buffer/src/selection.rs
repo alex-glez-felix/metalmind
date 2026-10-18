@@ -10,7 +10,8 @@ pub enum Goal {
     /// Se usa la columna actual del cursor.
     #[default]
     None,
-    /// Columna en caracteres desde el inicio de la línea.
+    /// Columna de pantalla desde el inicio de la línea: un tab o un
+    /// carácter ancho ocupan varias, como las mide el motor vim.
     Column(usize),
     /// Fin de línea, como tras `$` en vim.
     LineEnd,

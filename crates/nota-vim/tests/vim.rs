@@ -39,6 +39,21 @@ use rstest_reuse::{self, apply, template};
 #[case("a\nb\n|c", "5k", "|a\nb\nc")]
 #[case("ab|c\n\nabc", "jj", "abc\n\nab|c")]
 #[case("a|bc\nxy\nlonger", "$jj", "abc\nxy\nlonge|r")]
+// la columna objetivo es de pantalla: un tab llega a la siguiente parada y
+// un carácter ancho ocupa dos
+#[case("a\tb|c\nxyzwvutsrqp", "j", "a\tbc\nxyzwvutsr|qp")]
+#[case("a|\tbc\nxyzwvutsrqp", "j", "a\tbc\nxyzwvut|srqp")]
+#[case("xyzwvut|srqp\na\tbc", "j", "xyzwvutsrqp\na|\tbc")]
+#[case(
+    "xyzwvut|srqp\na\tbc\nxyzwvutsrqp",
+    "jj",
+    "xyzwvutsrqp\na\tbc\nxyzwvut|srqp"
+)]
+#[case("xy|zw\na日本\nxyzw", "j", "xyzw\na|日本\nxyzw")]
+#[case("xy|zw\na日本\nxyzw", "jj", "xyzw\na日本\nxy|zw")]
+#[case("a|日本\nxyzw", "j", "a日本\nx|yzw")]
+#[case("a\tb|c\nxyzwvutsrqp", "jx", "a\tbc\nxyzwvutsr|p")]
+#[case("\t|ab\n\tcd\nxyzwvutsrqp", "jjx", "\tab\n\tcd\nxyzwvuts|qp")]
 // w W
 #[case("|foo bar baz", "w", "foo |bar baz")]
 #[case("|foo bar baz", "2w", "foo bar |baz")]

@@ -22,10 +22,11 @@ pub(crate) fn encode(keys: &[Key]) -> String {
 }
 
 /// Lo que ejecuta `@`: como en vim, cada línea de un registro por líneas
-/// termina en `\n`, que en Normal es `ctrl-j`.
+/// termina en `\n`, que en Normal es `ctrl-j`; en uno por bloque, todas
+/// menos la última.
 pub(crate) fn decode(register: &Register) -> Vec<Key> {
     let mut text = register.text.clone();
-    if register.linewise {
+    if register.is_linewise() {
         text.push('\n');
     }
     let mut keys = Vec::new();
@@ -87,10 +88,7 @@ mod tests {
     use super::*;
 
     fn chars(text: &str) -> Register {
-        Register {
-            text: text.to_owned(),
-            linewise: false,
-        }
+        Register::chars(text)
     }
 
     #[test]
@@ -127,10 +125,7 @@ mod tests {
 
     #[test]
     fn each_line_of_a_linewise_register_ends_in_ctrl_j() {
-        let register = Register {
-            text: "x\ny".to_owned(),
-            linewise: true,
-        };
+        let register = Register::lines("x\ny");
         let ctrl_j = Key::Ctrl('j');
         assert_eq!(
             decode(&register),

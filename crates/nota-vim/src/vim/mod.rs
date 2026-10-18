@@ -1,4 +1,5 @@
 mod awaiting;
+mod block;
 mod command_line;
 mod dispatch;
 mod ex;
@@ -23,6 +24,7 @@ pub use self::outcome::KeyOutcome;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
+use crate::block::Pending;
 use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
@@ -30,7 +32,7 @@ use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::mark::Marks;
 use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
-use crate::visual::{LastVisual, VisualSize};
+use crate::visual::{LastVisual, Reselect};
 use crate::{Action, Key, Keymap, Mode, Prompt, Viewport, VimError};
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
@@ -84,8 +86,14 @@ pub struct Vim {
     /// Lo que vuelve a seleccionar `gv`.
     last_visual: Option<LastVisual>,
     /// El tamaño de la última selección sobre la que se operó, para
-    /// `[count]v` y `[count]V`.
-    last_visual_size: Option<VisualSize>,
+    /// `[count]v`, `[count]V` y `[count]ctrl-v`.
+    last_visual_size: Option<Reselect>,
+    /// Tras `o` en un bloque, el `$` sigue valiendo para operar pero no para
+    /// la próxima motion, como el `w_set_curswant` de vim.
+    stale_line_end: bool,
+    /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert, por
+    /// selección.
+    block_insert: Option<Vec<Pending>>,
     /// La ventana del panel que se edita, prestada por quien aloja el motor.
     viewport: Viewport,
     scrolloff: usize,
@@ -136,6 +144,8 @@ impl Vim {
             failed: false,
             last_visual: None,
             last_visual_size: None,
+            stale_line_end: false,
+            block_insert: None,
             viewport: Viewport::default(),
             scrolloff: 0,
         }
@@ -313,6 +323,7 @@ impl Vim {
         if matches!(self.mode, Mode::Visual(_)) {
             self.mode = Mode::Normal;
         }
+        self.block_insert = None;
         if let Some(session) = &mut self.insert {
             session.cursor_moved();
         }

@@ -47,7 +47,7 @@ impl Vim {
         let mut notice = None;
         for line in lines {
             let line = line.min(buffer.last_line());
-            let goal = Want::of(buffer, selections.primary()).goal();
+            let goal = Want::of(buffer, selections.primary(), true, self.viewport.columns()).goal();
             *selections = Selections::single(Selection {
                 goal,
                 ..Selection::cursor(buffer.line_start(line))

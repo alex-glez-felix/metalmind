@@ -1,5 +1,6 @@
 //! Lo que `.` repite: el último cambio, como lo define vim.
 
+use crate::block::BlockSize;
 use crate::insert::Typed;
 use crate::mark::MarkName;
 use crate::object::Object;
@@ -64,6 +65,20 @@ pub(crate) enum Change {
     Insert(InsertAt),
     /// `r` en Visual, sobre la misma cantidad de texto.
     Replace(char, VisualSize),
+    /// Un cambio en Visual por bloque, sobre un bloque del mismo tamaño
+    /// desde el cursor.
+    Block(BlockChange, BlockSize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BlockChange {
+    /// `d`, `c`, `~`, `u` o `U`.
+    Operate(Operator),
+    Replace(char),
+    /// `I`, o `A` si `append`.
+    Insert {
+        append: bool,
+    },
 }
 
 /// Un cambio que `.` sabe repetir: la orden, su count, su registro y, si

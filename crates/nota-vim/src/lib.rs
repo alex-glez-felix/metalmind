@@ -10,6 +10,8 @@
 //! [`Vim::search_highlight`] para que la UI lo resalte.
 
 mod action;
+mod block;
+mod columns;
 mod command;
 mod cursor;
 mod dot;
@@ -41,6 +43,7 @@ mod visual;
 mod word;
 
 pub use action::{Action, InsertAt, PasteSide};
+pub use block::VisualBlock;
 pub use command::{Command, CommandError, Invocation};
 pub use error::VimError;
 pub use ex::GlobalMiss;
