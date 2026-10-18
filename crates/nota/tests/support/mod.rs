@@ -88,7 +88,8 @@ impl Smoke {
     }
 
     /// Lanza `nota args…` con la config por defecto: `HOME` y XDG apuntan a
-    /// una carpeta vacía, y sin `WAYLAND_DISPLAY` GPUI usa X11.
+    /// una carpeta vacía, y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET` GPUI usa
+    /// X11: nunca abre en el escritorio de quien corre los tests.
     pub fn launch(&self, args: &[&str]) -> Nota<'_> {
         let home = self.dir.path().join("home");
         let log_path = self.dir.path().join("nota.log");
@@ -98,6 +99,7 @@ impl Smoke {
             .current_dir(self.notes())
             .env("DISPLAY", self.xvfb.name())
             .env_remove("WAYLAND_DISPLAY")
+            .env_remove("WAYLAND_SOCKET")
             .env("HOME", &home)
             .env("XDG_CONFIG_HOME", home.join(".config"))
             .env("XDG_DATA_HOME", home.join(".local/share"))
