@@ -192,6 +192,8 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 
 **Decisión.** nota es una GUI con navegación estilo vim, no una TUI. El vim es para moverse y editar rápido con el teclado, pero no todo tiene que hacerse editando archivos a mano: toda función se puede usar desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
 
+**Referencia de estilo: Zed.** La experiencia buscada se parece a la de Zed: navegar con la facilidad de vim en una UI de escritorio bonita, no en una TUI. Zed es también de donde sale GPUI (02, 04) y el estilo de íconos que 05 §7 propone (Lucide).
+
 **Por qué.** Una ventana puede mostrar y ofrecer cosas que una terminal no; si la única forma de darle color a un tag es escribir YAML, nota desperdicia lo que la hace distinta de un editor en la terminal.
 
 **Restricciones desde ya:**

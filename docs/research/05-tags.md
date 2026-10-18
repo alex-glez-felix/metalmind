@@ -248,7 +248,7 @@ Inspirado en TagStudio, donde los tags tienen metadata y "tags de tags". Un tag 
 ```markdown
 ---
 color: naranja
-icon: 🦀
+icon: lucide:cog
 aliases: [rs]
 parents: [lenguajes, programacion]
 ---
@@ -259,7 +259,7 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 | Campo | Qué es |
 |---|---|
 | `color` | El color del tag en el panel, en los chips y en el `#tag` del texto. Un nombre de la paleta del tema (`rojo`, `naranja`, `azul`…, tokens `tag.color.*`) o un hex entre comillas (`"#d97706"`) **(propuesta para el formato)**. Con nombres, el color se adapta a temas claros y oscuros; el hex queda para quien lo quiera exacto. Sin comillas, `#d97706` es un comentario de YAML, y por eso la UI siempre escribe nombres o hex entre comillas. |
-| `icon` | Un emoji. Se muestra delante del nombre en el panel, en el autocompletado y en la vista del tag. |
+| `icon` | Un emoji (`🦀`) o, **(propuesta)**, un ícono con nombre de un set incluido (`lucide:book-open`). Se muestra delante del nombre en el panel, en el autocompletado y en la vista del tag. |
 | `aliases` | Otros nombres del mismo tag: con `aliases: [rs]`, `#rs` cuenta como `#rust` para filtrar, consultar, contar y en el panel. El texto no se toca: la nota sigue diciendo `#rs`. |
 | `parents` | Los padres del tag, **varios**. De aquí y solo de aquí sale la jerarquía. |
 
@@ -267,7 +267,15 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 - Un `parents` puede nombrar un alias: `parents: [rs]` es `parents: [rust]` **(propuesta)**.
 - En una página, `aliases` son alias del tag, no los alias de nota que M3 usa para resolver `[[links]]` **(propuesta)**.
 - Las claves desconocidas se ignoran y se conservan, como en cualquier frontmatter.
-- **Ícono (propuesta)**: solo emoji en M2.5. Nombres de ícono (`icon: lucide:cpu`) piden empaquetar un set de íconos, que el tema los pinte y un selector que los busque; van a `IDEAS.md`. Un `icon` que no es un solo emoji se ignora y se marca como problema.
+- **Ícono: emoji o ícono con nombre (propuesta).** Alex todavía no lo confirma. `icon` acepta dos formas:
+  - Un **emoji** (`icon: 🦀`): trae sus propios colores y se pinta con la fuente de emoji del sistema.
+  - Un **ícono con nombre de un set incluido**, `<set>:<nombre>` (`icon: lucide:book-open`). Se pinta en el `color` del tag (o en el color de texto del tema si el tag no tiene) y queda parejo con el resto de la UI. El set por defecto es [Lucide](https://lucide.dev), del que salen los íconos de Zed, la referencia de estilo de nota ([06](06-decisiones-de-fondo.md) §13; los `assets/icons/LICENSES` de Zed citan su licencia). El prefijo `lucide:` deja lugar para otros sets sin que un nombre de ícono se confunda con un emoji.
+  - El **selector de ícono** de la UI (§3) busca en los dos a la vez: por nombre de emoji y por nombre de ícono, con `nucleo-matcher`.
+  - Un `icon` que no es ni un solo emoji ni un `<set>:<nombre>` que exista se ignora y se marca como problema; el tag se muestra sin ícono.
+- **Lo que implica Lucide (datos de 2026-10-18):**
+  - **Licencia**: ISC, salvo unos 120 íconos que vienen de Feather y siguen bajo MIT (los dos textos van en el `LICENSE` de `lucide-static`). Las dos son permisivas y compatibles con GPL-3; basta con incluir los avisos de copyright en el binario y en los paquetes (`packaging/`); `cargo-deny` no los ve porque no son un crate.
+  - **Tamaño**: la versión 1.59.0 (17-oct-2026) trae 2159 íconos. Los SVG pesan 1,05 MB sin tocar, unos 0,9 MB con los espacios recortados y unos 100 KB con gzip. Embebidos con `include_bytes!` sin comprimir suman ~1 MB al binario; comprimidos, ~100 KB más el costo de descomprimir el set al abrir el selector la primera vez. Recomendación: embeber comprimido y descomprimir de forma perezosa. Solo se rasteriza lo que se ve en pantalla.
+  - **GPUI ya pinta SVG**: `svg()` de `gpui-pre` (0.3.9, con `resvg`/`usvg` 0.46 en el `Cargo.lock`) lee el SVG desde un `AssetSource` o desde bytes, y lo pinta como **máscara de un color** con el `text_color` del elemento. Eso encaja con Lucide, que solo usa trazos en `currentColor`, y es justamente lo que pinta un ícono en el color del tag. No hace falta ningún crate nuevo. Un SVG multicolor perdería sus colores, así que cualquier otro set tendría que ser monocromo.
 
 ### Padres: un grafo, no un árbol
 
@@ -312,7 +320,7 @@ Van a [`docs/IDEAS.md`](../IDEAS.md#tags):
 - **Vistas guardadas**: una consulta con nombre, como las carpetas inteligentes.
 - "O" en las consultas, paréntesis, comodines y "solo este tag sin descendientes".
 - Recordar el focus entre sesiones.
-- Íconos por nombre, además de emoji (§7).
+- Sets de íconos además de Lucide, si el ícono con nombre se confirma (§7).
 - Páginas para tags con `/` (§7).
 - Sugerir tags a partir del contenido.
 - Que el índice siga al buffer sin guardar (§2).
