@@ -68,6 +68,9 @@ fn tags(#[case] text: &str, #[case] expected: &[&str]) {
 #[case::after_multibyte_letter("é#a", &[])]
 #[case::cjk_punctuation("#日本語。", &["#日本語"])]
 #[case::ellipsis("#tag…", &["#tag"])]
+#[case::arabic_comma("#x، #y", &["#x", "#y"])]
+#[case::letters_in_punctuation_blocks("#xª #x々", &["#xª", "#x々"])]
+#[case::subdivision_flag("#🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}.", &["#🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}"])]
 #[case::emoji_link("[[🇲🇽|bandera]]", &["[[🇲🇽|bandera]]"])]
 fn multibyte(#[case] text: &str, #[case] expected: &[&str]) {
     assert_eq!(found(text), expected);

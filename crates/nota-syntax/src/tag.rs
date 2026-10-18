@@ -1,5 +1,7 @@
 use std::ops::Range;
 
+use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
+
 /// Un `#tag` en el cuerpo de la nota.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag {
@@ -16,27 +18,21 @@ impl Tag {
     }
 }
 
-/// Puntuación fuera de ASCII que corta un tag, como el espacio. El resto de
-/// lo que no es ASCII (letras, emoji, sus modificadores y el ZWJ) sí cabe.
-fn is_unicode_punctuation(c: char) -> bool {
-    matches!(c,
-        '\u{00A1}'..='\u{00BF}'
-        | '\u{2000}'..='\u{200C}'
-        | '\u{200E}'..='\u{206F}'
-        | '\u{3000}'..='\u{303F}'
-        | '\u{FF01}'..='\u{FF0F}'
-        | '\u{FF1A}'..='\u{FF20}'
-        | '\u{FF3B}'..='\u{FF40}'
-        | '\u{FF5B}'..='\u{FF65}')
-}
-
-/// Lo que puede ir en un tag: letras, números, `_`, `-`, `/`
-/// para anidar y casi cualquier cosa fuera de ASCII (emoji incluidos).
+/// Lo que puede ir en un tag: letras, números, `_`, `-`, `/` para anidar y,
+/// fuera de ASCII, letras, marcas, números y símbolos (emoji incluidos). La
+/// puntuación y los espacios de Unicode lo cortan; de los caracteres de
+/// formato solo caben el ZWJ y los de etiqueta de las banderas de emoji.
 fn is_tag_char(c: char) -> bool {
     if c.is_ascii() {
-        c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '/')
-    } else {
-        !c.is_whitespace() && !is_unicode_punctuation(c)
+        return c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '/');
+    }
+    match c.general_category_group() {
+        GeneralCategoryGroup::Letter
+        | GeneralCategoryGroup::Mark
+        | GeneralCategoryGroup::Number
+        | GeneralCategoryGroup::Symbol => true,
+        GeneralCategoryGroup::Punctuation | GeneralCategoryGroup::Separator => false,
+        GeneralCategoryGroup::Other => matches!(c, '\u{200D}' | '\u{E0020}'..='\u{E007F}'),
     }
 }
 
@@ -79,6 +75,11 @@ mod tests {
     #[case("canción", true)]
     #[case("🔥", true)]
     #[case("a.b", false)]
+    #[case("xª", true)]
+    #[case("x々", true)]
+    #[case("x،", false)]
+    #[case("x।", false)]
+    #[case("x\u{200B}", false)]
     fn valid_names(#[case] name: &str, #[case] valid: bool) {
         assert_eq!(is_valid_tag_name(name), valid);
     }
