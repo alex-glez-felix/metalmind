@@ -259,6 +259,13 @@ Los tags tienen su propio `TagIndex`, alimentado del mismo scan y del mismo watc
 - Config de rutas de `nucleo` (`match_paths`), mayúsculas y acentos "smart" (cuentan solo si el query los lleva). Orden: puntaje, luego ruta más corta, luego orden de entrada; el query vacío devuelve todo tal cual, para que la UI ponga primero las recientes.
 - Las posiciones salen en bytes: `nucleo` cuenta en grafemas (o en bytes si cada grafema empieza con ASCII) y se convierten en el borde, con `unicode-segmentation`, igual que el resto del núcleo.
 
+### Estado (M2, 2026-10-17): operaciones de archivo
+
+- `Vault::create_note`, `create_folder`, `rename` (renombrar y mover son lo mismo) y `move_to_trash`. No tocan el índice: el watcher ve el cambio en disco y lo publica como cualquier otro, así que hay un solo camino para que el índice cambie.
+- **Borrar va a `.trash/` del vault, no a la papelera del sistema** (crate `trash`). Es lo que hace Obsidian con su opción "papelera de Obsidian", así que un vault compartido con Obsidian ve las mismas cosas borradas; queda dentro del vault y viaja con git o Syncthing; es un `rename` atómico dentro del mismo filesystem, sin depender de que el escritorio implemente la spec de freedesktop ni de que la papelera del sistema esté en otro disco (con un vault en un USB, mover a `~/.local/share/Trash` sería copiar); y es determinista en los tests. `.trash/` es plana como la de Obsidian: si el nombre ya está, se prueba `nota 1.md`, `nota 2.md`, … **(el sufijo es decisión propia, sin verificar contra Obsidian)**.
+- Nada pisa nada: renombrar usa `renameat2(RENAME_NOREPLACE)` vía `rustix` (ya venía por `tempfile`), porque `rename(2)` reemplaza en silencio un archivo o una carpeta vacía, y mirar antes si existe deja una carrera. Crear usa `O_EXCL`. Un filesystem sin `RENAME_NOREPLACE` (algunos FUSE o NFS viejos) da error en vez de arriesgarse a pisar.
+- Nada sale de la raíz: `VaultPath` no admite `..` ni rutas absolutas, y antes de operar se revisa con `lstat` que ninguna carpeta entre la raíz y la ruta sea un enlace simbólico; tampoco la papelera. Entre esa revisión y la operación queda una ventana si alguien cambia una carpeta por un enlace a propósito; cerrarla del todo pide `openat2(RESOLVE_BENEATH)` y no vale la pena mientras quien escribe en el vault sea su dueño.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins

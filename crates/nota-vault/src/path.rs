@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 /// Ruta de un archivo o carpeta visible del vault, relativa a la raíz, con
 /// componentes separados por `/`. La cadena vacía es la raíz.
@@ -158,6 +158,14 @@ impl VaultPath {
     /// Las carpetas que contienen a `self`, de la más cercana a la raíz (incluida).
     pub fn ancestors(&self) -> impl Iterator<Item = Self> {
         std::iter::successors(self.parent(), Self::parent)
+    }
+
+    pub(crate) fn to_fs(&self, root: &Path) -> PathBuf {
+        if self.is_root() {
+            root.to_owned()
+        } else {
+            root.join(&self.0)
+        }
     }
 }
 

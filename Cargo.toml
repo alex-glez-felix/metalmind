@@ -33,6 +33,8 @@ notify-debouncer-full = "0.7.0"
 nucleo-matcher = "0.3.1"
 regex = "1.13.1"
 ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
+# Ya entra por tempfile; aquí por `renameat` con RENAME_NOREPLACE, sin unsafe.
+rustix = { version = "1.1.5", features = ["fs"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = { version = "2.0.0", default-features = false, features = ["deserialize"] }
 serde_ignored = "0.1.14"
