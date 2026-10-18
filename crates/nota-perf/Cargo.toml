@@ -15,6 +15,7 @@ nota-vim.workspace = true
 gungraun.workspace = true
 nota-search.workspace = true
 nota-syntax.workspace = true
+tempfile.workspace = true
 
 # Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
 [[bench]]

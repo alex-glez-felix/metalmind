@@ -3898,6 +3898,7 @@ dependencies = [
  "nota-search",
  "nota-syntax",
  "nota-vim",
+ "tempfile",
 ]
 
 [[package]]

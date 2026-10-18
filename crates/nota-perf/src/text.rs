@@ -39,7 +39,7 @@ const WORDS: [&str; 24] = [
 
 /// Generador lineal congruente: suficiente para variar el texto y sin
 /// depender de un crate de aleatorios cuya secuencia podría cambiar.
-struct Lcg(u64);
+pub(crate) struct Lcg(pub(crate) u64);
 
 impl Lcg {
     fn next(&mut self) -> usize {
@@ -126,7 +126,7 @@ impl Lines {
     }
 }
 
-fn paragraph_line(line: &mut String, rng: &mut Lcg, index: usize) {
+pub(crate) fn paragraph_line(line: &mut String, rng: &mut Lcg, index: usize) {
     let words = 8 + rng.below(8);
     for word in 0..words {
         if word > 0 {

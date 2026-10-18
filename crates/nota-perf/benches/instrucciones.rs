@@ -13,7 +13,7 @@ use std::hint::black_box;
 use gungraun::prelude::*;
 use nota_buffer::{Buffer, Edit, Selection, Selections};
 use nota_perf::{MISSING_WORD, Session, WORD};
-use nota_search::PathMatcher;
+use nota_search::{PathMatcher, TextMatcher, TextQuery};
 use nota_syntax::Scan;
 
 /// La nota de `lines` líneas en Normal, con el cursor a la mitad.
@@ -134,6 +134,21 @@ fn search_finder(paths: Vec<String>) -> usize {
     black_box(matcher.search("tema nota", &paths, 50).len())
 }
 
+fn note_and_matcher(lines: usize, pattern: &str) -> (String, TextMatcher) {
+    let query = TextQuery {
+        pattern: pattern.to_owned(),
+        ..TextQuery::default()
+    };
+    (nota_perf::note(lines), query.compile().unwrap())
+}
+
+#[library_benchmark]
+#[bench::palabra_comun_5k(args = (5_000, WORD), setup = note_and_matcher)]
+#[bench::sin_resultado_5k(args = (5_000, MISSING_WORD), setup = note_and_matcher)]
+fn search_texto_en_memoria((text, matcher): (String, TextMatcher)) -> usize {
+    black_box(matcher.find(black_box(&text)).unwrap().len())
+}
+
 library_benchmark_group!(
     name = buffer,
     benchmarks = [buffer_insertar_un_caracter, buffer_deshacer_y_rehacer]
@@ -146,6 +161,9 @@ library_benchmark_group!(
 
 library_benchmark_group!(name = syntax, benchmarks = [syntax_scan]);
 
-library_benchmark_group!(name = search, benchmarks = [search_finder]);
+library_benchmark_group!(
+    name = search,
+    benchmarks = [search_finder, search_texto_en_memoria]
+);
 
 main!(library_benchmark_groups = buffer, vim, syntax, search);
