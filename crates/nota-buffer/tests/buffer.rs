@@ -252,6 +252,53 @@ fn version_grows_with_every_change() {
     assert!(buffer.version() > start + 1);
 }
 
+#[test]
+fn transactions_in_a_group_are_one_undo_step() {
+    let mut buffer = Buffer::from("abc");
+    buffer.begin_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.end_undo_group();
+    edit(&mut buffer, vec![Edit::insert(at(0), "x")]);
+    assert_eq!((buffer.to_string().as_str(), seq(&buffer)), ("xc", 2));
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "c");
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "abc");
+    buffer.redo().unwrap();
+    assert_eq!(buffer.to_string(), "c");
+}
+
+#[test]
+fn moving_through_history_cuts_the_group() {
+    let mut buffer = Buffer::from("abc");
+    buffer.begin_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.undo().unwrap();
+    edit(&mut buffer, vec![Edit::delete(at(2)..at(3))]);
+    edit(&mut buffer, vec![Edit::delete(at(1)..at(2))]);
+    buffer.end_undo_group();
+    assert_eq!(buffer.to_string(), "a");
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "abc");
+}
+
+#[test]
+fn a_group_closed_mid_transaction_ends_with_it() {
+    let mut buffer = Buffer::from("abc");
+    buffer.begin_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.begin_transaction(cursor(0)).unwrap();
+    buffer.apply(vec![Edit::insert(at(0), "x")]).unwrap();
+    buffer.end_undo_group();
+    buffer.commit_transaction(cursor(1)).unwrap();
+    edit(&mut buffer, vec![Edit::insert(at(0), "y")]);
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "xbc");
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "abc");
+}
+
 fn anchored(text: &str, offset: usize) -> (Buffer, LineAnchor) {
     let mut buffer = Buffer::from(text);
     let anchor = buffer.create_anchor(at(offset)).unwrap();

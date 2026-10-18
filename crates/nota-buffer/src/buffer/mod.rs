@@ -170,6 +170,18 @@ impl Buffer {
         self.history.commit(after)
     }
 
+    /// Las transacciones que se guarden hasta [`Buffer::end_undo_group`]
+    /// forman un solo paso de undo, como los cambios de una macro de vim.
+    /// Moverse por el historial corta el grupo.
+    pub fn begin_undo_group(&mut self) {
+        self.history.begin_group();
+    }
+
+    /// Si hay una transacción abierta, el grupo termina cuando se guarde.
+    pub fn end_undo_group(&mut self) {
+        self.history.end_group();
+    }
+
     #[must_use]
     pub fn has_open_transaction(&self) -> bool {
         self.history.is_open()
