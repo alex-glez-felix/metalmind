@@ -71,9 +71,16 @@ fn destination(text: &str, from: usize) -> Option<(Range<usize>, usize)> {
     let bytes = text.as_bytes();
     if bytes.get(from) == Some(&b'<') {
         let start = from + 1;
-        let len = text[start..].find(['>', '<', '\n'])?;
-        let end = start + len;
-        return (bytes[end] == b'>').then_some((start..end, end + 1));
+        let mut i = start;
+        while let Some(&b) = bytes.get(i) {
+            match b {
+                _ if is_escape(bytes, i) => i += 2,
+                b'>' => return Some((start..i, i + 1)),
+                b'<' | b'\n' => return None,
+                _ => i += 1,
+            }
+        }
+        return None;
     }
     let mut depth = 0usize;
     let mut i = from;
