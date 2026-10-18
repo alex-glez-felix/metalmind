@@ -5,6 +5,7 @@ mod dispatch;
 mod ex;
 mod find;
 mod insert;
+mod jumps;
 mod macros;
 mod marks;
 mod operate;
@@ -14,6 +15,8 @@ mod scroll;
 mod search;
 mod substitute;
 mod visual;
+
+use std::collections::HashSet;
 
 use metalmind_buffer::{Buffer, Selections};
 
@@ -29,8 +32,9 @@ use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
+use crate::jumplist::{FileId, JumpList};
 use crate::keymap::Lookup;
-use crate::mark::Marks;
+use crate::mark::{FileMarks, Marks};
 use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, Reselect};
 use crate::{Action, Key, Keymap, Mode, Prompt, Viewport, VimError};
@@ -79,6 +83,16 @@ pub struct Vim {
     recording: Option<Recording>,
     playback: Playback,
     marks: Marks,
+    /// `A`–`Z`, de todos los buffers.
+    file_marks: FileMarks,
+    /// El archivo del buffer que se edita, prestado como las marks.
+    file: FileId,
+    /// La jumplist del panel que se edita, prestada como la ventana.
+    jumps: JumpList,
+    /// Los reemplazos del buffer que ya siguieron `jumps` y `file_marks`.
+    splices_seen: usize,
+    /// Los archivos que ya no existen: `ctrl-o` salta sus entradas.
+    missing_files: HashSet<FileId>,
     /// La última macro reproducida, para `@@`.
     last_played: Option<Replay>,
     /// La última tecla falló como un `beep_flush` de vim: corta la macro.
@@ -140,6 +154,11 @@ impl Vim {
             recording: None,
             playback: Playback::default(),
             marks: Marks::default(),
+            file_marks: FileMarks::default(),
+            file: FileId::default(),
+            jumps: JumpList::default(),
+            splices_seen: 0,
+            missing_files: HashSet::new(),
             last_played: None,
             failed: false,
             last_visual: None,

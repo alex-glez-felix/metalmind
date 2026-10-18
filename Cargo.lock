@@ -3955,6 +3955,7 @@ dependencies = [
  "metalmind-buffer",
  "metalmind-perf",
  "pretty_assertions",
+ "proptest",
  "regex",
  "rstest",
  "rstest_reuse",

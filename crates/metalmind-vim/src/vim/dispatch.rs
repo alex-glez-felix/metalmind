@@ -5,6 +5,8 @@ use metalmind_buffer::{Buffer, Selection, Selections};
 use super::Vim;
 use super::awaiting::Awaiting;
 use crate::insert::Typed;
+use crate::jumplist::Direction;
+use crate::matching;
 use crate::motion::Destination;
 use crate::object::Object;
 use crate::register::Clipboard;
@@ -45,7 +47,7 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
-                if motion.is_jump() {
+                if motion.is_jump() && self.lands(motion, buffer, selections) {
                     self.jumped(buffer, selections)?;
                 }
                 let object = Object::Motion(motion).into();
@@ -104,6 +106,14 @@ impl Vim {
             (Action::SetMark, Mode::Normal) => self.awaiting = Some(Awaiting::SetMark),
             (Action::GoToMark { exact }, Mode::Normal | Mode::OperatorPending(_)) => {
                 self.awaiting = Some(Awaiting::Mark { exact });
+            }
+            (Action::JumpOlder, Mode::Normal | Mode::OperatorPending(_)) => {
+                let jumped = self.jump_in_list(Direction::Older, buffer, selections)?;
+                return Ok(jumped.unwrap_or(KeyOutcome::Executed(action)));
+            }
+            (Action::JumpNewer, Mode::Normal | Mode::OperatorPending(_)) => {
+                let jumped = self.jump_in_list(Direction::Newer, buffer, selections)?;
+                return Ok(jumped.unwrap_or(KeyOutcome::Executed(action)));
             }
             (Action::DeleteRight, Mode::Normal) => {
                 let object = Object::Motion(Motion::Right).into();
@@ -184,9 +194,6 @@ impl Vim {
         }
         let count = self.take_count();
         self.reset();
-        if motion.is_jump() {
-            self.jumped(buffer, selections)?;
-        }
         let purpose = self.motion_purpose();
         let moved = move_cursors(selections, self.in_visual(), |s| {
             let destination = motion.resolve(buffer, s, count, purpose, &self.viewport)?;
@@ -194,7 +201,12 @@ impl Vim {
             (!stuck).then_some(destination)
         });
         match moved {
-            Some(moved) => *selections = moved,
+            Some(moved) => {
+                if motion.is_jump() {
+                    self.jumped(buffer, selections)?;
+                }
+                *selections = moved;
+            }
             None => self.fail(),
         }
         Ok(())
@@ -223,4 +235,18 @@ pub(super) fn move_cursors(
             goal: destination.goal,
         })
     }))
+}
+
+impl Vim {
+    /// Si un salto como objeto de operador llega a algún lado: un `d%` sin
+    /// pareja falla sin tocar la jumplist, como en vim.
+    fn lands(&self, motion: Motion, buffer: &Buffer, selections: &Selections) -> bool {
+        match motion {
+            Motion::Matching => match super::combined(self.operator_count, self.count) {
+                Some(percent) => percent <= 100,
+                None => matching::find(buffer, selections.primary().head).is_some(),
+            },
+            _ => true,
+        }
+    }
 }

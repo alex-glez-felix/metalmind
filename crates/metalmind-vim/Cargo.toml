@@ -18,6 +18,7 @@ unicode-width.workspace = true
 divan.workspace = true
 metalmind-perf.workspace = true
 pretty_assertions.workspace = true
+proptest.workspace = true
 rstest.workspace = true
 rstest_reuse.workspace = true
 tempfile.workspace = true

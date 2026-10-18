@@ -243,6 +243,7 @@ impl Vim {
             let error = SearchError::NotFound(pattern.to_owned());
             return Ok(Some(KeyOutcome::SearchFailed(error)));
         }
+        self.jumped(buffer, selections)?;
         let wrapped = hits
             .iter()
             .find_map(|(_, hit)| hit.and_then(|hit| hit.wrapped));

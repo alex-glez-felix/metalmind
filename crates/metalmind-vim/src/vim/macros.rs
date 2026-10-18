@@ -252,7 +252,7 @@ impl Vim {
             if self.playback.played >= MAX_PLAYED_KEYS {
                 self.playback.clear();
             }
-            if matches!(outcome, KeyOutcome::Command(_)) {
+            if matches!(outcome, KeyOutcome::Command(_) | KeyOutcome::SwitchFile(_)) {
                 return Ok(Some(outcome));
             }
             if !matches!(

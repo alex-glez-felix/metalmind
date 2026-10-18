@@ -78,6 +78,7 @@ impl Vim {
             KeyOutcome::Command(invocation) => KeyOutcome::InvalidCommand(
                 CommandError::HostCommandInside(invocation.command.name().to_owned()),
             ),
+            KeyOutcome::SwitchFile(_) => KeyOutcome::InvalidCommand(CommandError::FileSwitchInside),
             notice => notice,
         }))
     }

@@ -4,6 +4,7 @@ use crate::Operator;
 use crate::columns::Columns;
 use crate::cursor::Cursor;
 use crate::lines::{Want, first_non_blank, is_blank, last_char};
+use crate::matching;
 use crate::scroll::{Place, Viewport};
 use crate::span::{Span, SpanKind};
 use crate::word;
@@ -30,6 +31,9 @@ pub enum Motion {
     DocumentEnd,
     /// `H`, `M` y `L`: una línea de la ventana.
     Window(Place),
+    /// `%`: la pareja del paréntesis, corchete o llave; con count, ese
+    /// porcentaje del archivo.
+    Matching,
 }
 
 /// Para qué se resuelve una motion; cambia hasta dónde puede llegar.
@@ -78,12 +82,12 @@ impl Motion {
         matches!(self, Self::Left | Self::Right)
     }
 
-    /// Como en vim, `gg`, `G`, `H`, `M` y `L` dejan el cursor de antes como
-    /// la mark de `''`.
+    /// Como en vim, `gg`, `G`, `H`, `M`, `L` y `%` dejan el cursor de antes
+    /// como la mark de `''` y en la jumplist.
     pub(crate) fn is_jump(self) -> bool {
         matches!(
             self,
-            Self::DocumentStart | Self::DocumentEnd | Self::Window(_)
+            Self::DocumentStart | Self::DocumentEnd | Self::Window(_) | Self::Matching
         )
     }
 
@@ -163,6 +167,16 @@ impl Motion {
                 purpose,
                 columns,
             ),
+            Self::Matching => match count {
+                Some(percent) => vertical(
+                    buffer,
+                    selection,
+                    percent_line(buffer, percent)?,
+                    purpose,
+                    columns,
+                ),
+                None => Destination::new(matching::find(buffer, head)?, SpanKind::Inclusive),
+            },
         };
         Some(destination)
     }
@@ -223,6 +237,18 @@ pub(crate) fn vertical(
         goal: want.goal(),
         kind: SpanKind::Linewise,
     }
+}
+
+/// `{count}%`, como `nv_percent` de vim; más de 100 falla.
+fn percent_line(buffer: &Buffer, percent: usize) -> Option<usize> {
+    if percent > 100 {
+        return None;
+    }
+    let line = percent
+        .saturating_mul(buffer.line_count())
+        .saturating_add(99)
+        / 100;
+    Some(line.saturating_sub(1))
 }
 
 fn line_number(buffer: &Buffer, count: Option<usize>, default: usize) -> usize {

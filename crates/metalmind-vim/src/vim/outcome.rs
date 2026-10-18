@@ -1,6 +1,8 @@
 //! Lo que le cuenta el motor a quien lo aloja tras cada tecla.
 
-use crate::{Action, CommandError, GlobalMiss, Invocation, SearchError, Substitution, Wrap};
+use crate::{
+    Action, CommandError, GlobalMiss, Invocation, Landing, SearchError, Substitution, Wrap,
+};
 
 /// Qué pasó con una tecla o una acción.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,6 +17,10 @@ pub enum KeyOutcome {
     /// Se envió la línea de comandos, o se tecleó un atajo como `ctrl-w v`,
     /// con un comando que ejecuta quien aloja el editor.
     Command(Invocation),
+    /// Un salto a otro archivo: quien aloja el editor cambia el buffer del
+    /// panel y llama a [`Vim::land`](crate::Vim::land). Una macro se pausa
+    /// aquí, como con un comando.
+    SwitchFile(Landing),
     /// Se envió la línea de comandos con algo que no es un comando, o con
     /// un `:s` que falló.
     InvalidCommand(CommandError),
