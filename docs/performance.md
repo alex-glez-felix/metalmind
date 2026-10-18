@@ -78,8 +78,8 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | Tecla en Insert, 5 k / 50 k | 21.0 k / 31.4 k |
 | `dd` / `ciw` / `.` en 5 k | 41.5 k / 311 k / 132 k |
 | `100@a` en 5 k | 32.9 M |
-| `:%s` en 5 k | 111.6 M |
-| `/` sin resultado en 50 k | 249.2 M |
+| `:%s` en 5 k | 107.9 M |
+| `/` sin resultado en 50 k | 6.0 M |
 | Scan 5 k / 50 k | 18.0 M / 179.6 M |
 | Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 9.1 M / 4.4 M / 5.8 M / 29.1 M / 57.3 M |
 | Finder 5 k / 50 k | 17.3 M / 169.3 M |
