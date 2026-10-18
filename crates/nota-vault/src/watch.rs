@@ -40,6 +40,25 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
     touched
 }
 
+/// Tras un error del watcher pudo perderse algo: se relee lo que el error
+/// nombra, con las mismas reglas que un evento, o todo el vault si no nombra
+/// nada o nombra algo que no se puede ubicar.
+pub(crate) fn touched_by_errors(root: &Path, errors: &[notify::Error]) -> Touched {
+    let mut touched = Touched::default();
+    for error in errors {
+        if error.paths.is_empty() {
+            touched.paths.insert(VaultPath::root());
+        }
+        touched.paths.extend(
+            error
+                .paths
+                .iter()
+                .map(|path| relevant(root, path).unwrap_or_else(VaultPath::root)),
+        );
+    }
+    touched
+}
+
 /// Abrir, leer o cambiar permisos no cambia qué hay en el vault.
 fn affects_index(kind: EventKind) -> bool {
     !matches!(
@@ -144,6 +163,23 @@ mod tests {
             ),
         ];
         assert_eq!(paths(&touched(Path::new("/v"), &events)), [""]);
+    }
+
+    #[test]
+    fn un_error_relee_lo_que_nombra_con_las_reglas_de_los_eventos() {
+        let root = Path::new("/v");
+        let error = |paths: &[&str]| {
+            paths
+                .iter()
+                .fold(notify::Error::generic("x"), |error, path| {
+                    error.add_path(PathBuf::from(path))
+                })
+        };
+        let only = |errors: &[notify::Error]| paths(&touched_by_errors(root, errors)).join(",");
+        assert_eq!(only(&[error(&["/v/sub/a.md"])]), "sub/a.md");
+        assert_eq!(only(&[error(&["/v/sub/.gitignore"])]), "sub");
+        assert_eq!(only(&[error(&["/v/.git/index"])]), "");
+        assert_eq!(only(&[error(&[])]), "");
     }
 
     #[test]

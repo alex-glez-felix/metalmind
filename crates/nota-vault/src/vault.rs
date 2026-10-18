@@ -14,7 +14,7 @@ use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::scan::scan;
-use crate::watch::touched;
+use crate::watch::{touched, touched_by_errors};
 
 /// Cuánto tiene que calmarse una ruta antes de releerla. Junta el temporal y
 /// el rename de un guardado atómico, y una ráfaga en un solo lote.
@@ -194,27 +194,13 @@ impl Worker {
     fn touched(&self, result: DebounceEventResult) -> Touched {
         match result {
             Ok(events) => touched(&self.root, &events),
-            Err(errors) => self.touched_by_errors(errors),
-        }
-    }
-
-    /// Tras un error del watcher pudo perderse algo: se relee lo que el error
-    /// nombra o, si no nombra nada, todo el vault.
-    fn touched_by_errors(&self, errors: Vec<notify::Error>) -> Touched {
-        let mut touched = Touched::default();
-        for error in errors {
-            log::warn!("watcher de {}: {error}", self.root.display());
-            if error.paths.is_empty() {
-                touched.paths.insert(VaultPath::root());
+            Err(errors) => {
+                for error in &errors {
+                    log::warn!("watcher de {}: {error}", self.root.display());
+                }
+                touched_by_errors(&self.root, &errors)
             }
-            touched.paths.extend(
-                error
-                    .paths
-                    .iter()
-                    .filter_map(|path| VaultPath::from_fs(&self.root, path)),
-            );
         }
-        touched
     }
 }
 
