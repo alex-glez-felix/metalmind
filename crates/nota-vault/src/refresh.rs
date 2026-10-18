@@ -140,13 +140,13 @@ fn diff(
                 }
             }
             _ => {
-                removed.insert((path.clone(), *kind));
+                removed.insert(path.clone(), *kind);
             }
         }
     }
     for (path, kind) in after {
         if before.get(path) != Some(kind) {
-            created.insert((path.clone(), *kind));
+            created.insert(path.clone(), *kind);
         }
     }
     let mut changes = arrange(before, after, &removed, &created, &touched.renames);

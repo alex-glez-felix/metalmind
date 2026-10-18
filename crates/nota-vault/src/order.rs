@@ -2,14 +2,14 @@
 //! sobre un árbol nunca toque una carpeta que no existe ni pise un nombre.
 
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Bound;
 
 use crate::index::EntryKind;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
-pub(crate) type Entries = BTreeSet<(VaultPath, EntryKind)>;
+pub(crate) type Entries = BTreeMap<VaultPath, EntryKind>;
 
 /// Los cambios de un lote, en orden de aplicación. Los renames que se cruzan
 /// (uno ocupa lo que el otro libera y al revés) no tienen orden posible: el
@@ -135,16 +135,8 @@ impl Tree {
             }
             VaultChange::Created { path, kind } => self.insert(path.clone(), *kind),
             VaultChange::Renamed { from, to, .. } => {
-                // En orden de cadena, el contenido de `a` va seguido desde `a/`.
-                let inside = format!("{from}/");
-                let moved: Vec<_> = std::iter::once(from.clone())
-                    .chain(
-                        self.present
-                            .range::<str, _>((Bound::Included(inside.as_str()), Bound::Unbounded))
-                            .map(|(path, _)| path)
-                            .take_while(|path| path.as_str().starts_with(&inside))
-                            .cloned(),
-                    )
+                let moved: Vec<_> = subtree(&self.present, from)
+                    .map(|(path, _)| path.clone())
                     .collect();
                 let moved: Vec<_> = moved
                     .into_iter()
@@ -190,22 +182,16 @@ fn pair_renames(
 ) -> Vec<VaultChange> {
     let mut changes = Vec::new();
     for (from, to) in renames {
-        let Some(kind) = [EntryKind::Folder, EntryKind::Note, EntryKind::Attachment]
-            .into_iter()
-            .find(|&kind| {
-                removed.contains(&(from.clone(), kind)) && created.contains(&(to.clone(), kind))
-            })
+        let Some(&kind) = removed
+            .get(from)
+            .filter(|&kind| created.get(to) == Some(kind))
         else {
             continue;
         };
-        let moved: Vec<_> = removed
-            .iter()
-            .filter(|(path, _)| path.starts_with(from))
+        let moved: Vec<_> = subtree(removed, from)
             .filter_map(|(path, kind)| {
-                let target = (path.rebase(from, to)?, *kind);
-                created
-                    .contains(&target)
-                    .then(|| ((path.clone(), *kind), target))
+                let target = path.rebase(from, to)?;
+                (created.get(&target) == Some(kind)).then(|| (path.clone(), target))
             })
             .collect();
         for (old, new) in moved {
@@ -221,6 +207,20 @@ fn pair_renames(
     changes
 }
 
+/// `root` y lo que tiene dentro. En orden de cadena, el contenido de `a` va
+/// seguido desde `a/`, así que es un rango y no hace falta recorrer el resto.
+fn subtree<'a, V>(
+    entries: &'a BTreeMap<VaultPath, V>,
+    root: &VaultPath,
+) -> impl Iterator<Item = (&'a VaultPath, &'a V)> {
+    let inside = format!("{root}/");
+    let descendants = entries.range::<str, _>((Bound::Included(inside.as_str()), Bound::Unbounded));
+    entries
+        .get_key_value(root)
+        .into_iter()
+        .chain(descendants.take_while(move |(path, _)| path.as_str().starts_with(&inside)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -234,11 +234,11 @@ mod tests {
         let mut before = HashMap::new();
         let mut removed = Entries::new();
         before.insert(path("grande"), EntryKind::Folder);
-        removed.insert((path("grande"), EntryKind::Folder));
+        removed.insert(path("grande"), EntryKind::Folder);
         for note in 0..notes {
             let note = path(&format!("grande/n{note}.md"));
             before.insert(note.clone(), EntryKind::Note);
-            removed.insert((note, EntryKind::Note));
+            removed.insert(note, EntryKind::Note);
         }
         (before, removed)
     }
@@ -271,12 +271,12 @@ mod tests {
             }
             for (path, &kind) in &batch.before {
                 if !batch.after.contains_key(path) {
-                    batch.removed.insert((path.clone(), kind));
+                    batch.removed.insert(path.clone(), kind);
                 }
             }
             for (path, &kind) in &batch.after {
                 if !batch.before.contains_key(path) {
-                    batch.created.insert((path.clone(), kind));
+                    batch.created.insert(path.clone(), kind);
                 }
             }
             batch
@@ -317,7 +317,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "cuadrático en los renames del lote: #38"]
     fn ordenar_muchos_renames_es_lineal() {
         nota_perf::assert_linear(1_000, RenameBatch::new, |batch| batch.arrange());
     }
