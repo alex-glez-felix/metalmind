@@ -101,3 +101,28 @@ fn installed_version() -> &'static str {
         stdout.lines().next().unwrap_or_default().to_owned()
     })
 }
+
+const PARSE_SCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/parse_cmd.lua");
+
+/// Cómo entiende nvim cada línea de `:`: el nombre completo del comando,
+/// con `!` si lo lleva (`wa` → `wall`, `qa!` → `qall!`).
+pub fn command_names(lines: &[&str]) -> Vec<String> {
+    assert_eq!(
+        installed_version(),
+        VERSION,
+        "el oráculo necesita {VERSION}; el `nvim` del PATH es otro"
+    );
+    let output = tempfile::NamedTempFile::new().unwrap();
+    let status = Command::new("nvim")
+        .args(["--clean", "--headless", "-n", "-l", PARSE_SCRIPT])
+        .arg(output.path())
+        .args(lines)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success(), "nvim terminó con {status}");
+    let dump = std::fs::read_to_string(output.path()).unwrap();
+    dump.lines().map(str::to_owned).collect()
+}
