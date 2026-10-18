@@ -34,10 +34,10 @@ fn reports_the_register_being_recorded() {
 fn a_macro_hands_its_commands_to_the_host() {
     let (mut vim, mut buffer, mut selections) = engine("|ab");
     let typed = support::feed(&mut vim, &mut buffer, &mut selections, "qax:w<CR>");
-    assert_eq!(typed, Some(KeyOutcome::Command(Command::Save)));
+    assert_eq!(typed, Some(KeyOutcome::Command(Command::Save.into())));
     support::feed(&mut vim, &mut buffer, &mut selections, "q");
     let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
-    assert_eq!(played, Some(KeyOutcome::Command(Command::Save)));
+    assert_eq!(played, Some(KeyOutcome::Command(Command::Save.into())));
     assert_eq!(buffer.to_string(), "");
 }
 

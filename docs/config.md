@@ -90,6 +90,6 @@ Para heredar un color, no pongas la clave: una clave vacía o `null` es un error
 
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.yaml`](../crates/nota-config/themes/nota-oscuro.yaml) y [`nota-claro.yaml`](../crates/nota-config/themes/nota-claro.yaml).
 
-- `ui`: `background`, `foreground`, `selection`, `current_line`, `gutter`, `gutter_foreground`, `status_background`, `status_foreground`, `status_border`, `modified`, `error`.
-- `cursor`: `normal`, `insert`, `visual`, `replace`.
+- `ui`: `background`, `foreground`, `selection`, `current_line`, `gutter`, `gutter_foreground`, `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`.
+- `cursor`: `normal`, `insert`, `visual`, `replace`, `unfocused` (el cursor de un panel sin foco).
 - `syntax`: `heading`, `bold`, `italic`, `link`, `tag`, `code`, `quote`, `list_marker`, `highlight`, `comment`, `frontmatter`, `markup`.

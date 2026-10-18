@@ -1,4 +1,4 @@
-use crate::{CharSearch, Motion, Operator, TextObject, VisualKind};
+use crate::{CharSearch, Command, Motion, Operator, TextObject, VisualKind};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +99,8 @@ pub enum Action {
     /// empieza con lo escrito.
     HistoryPrevious,
     HistoryNext,
+    /// Un comando que ejecuta quien aloja el editor, como los de `ctrl-w`.
+    Command(Command),
 }
 
 impl Action {
@@ -219,6 +221,20 @@ impl Action {
         Self::SubmitCommand,
         Self::HistoryPrevious,
         Self::HistoryNext,
+        Self::Command(Command::Save),
+        Self::Command(Command::Quit),
+        Self::Command(Command::ForceQuit),
+        Self::Command(Command::SaveAndQuit),
+        Self::Command(Command::Edit),
+        Self::Command(Command::ForceEdit),
+        Self::Command(Command::SplitRight),
+        Self::Command(Command::SplitDown),
+        Self::Command(Command::FocusLeft),
+        Self::Command(Command::FocusDown),
+        Self::Command(Command::FocusUp),
+        Self::Command(Command::FocusRight),
+        Self::Command(Command::FocusNext),
+        Self::Command(Command::Only),
     ];
 
     #[must_use]
@@ -276,6 +292,7 @@ impl Action {
             Self::SubmitCommand => "vim::submit_command",
             Self::HistoryPrevious => "vim::history_previous",
             Self::HistoryNext => "vim::history_next",
+            Self::Command(command) => command.name(),
         }
     }
 }
@@ -389,6 +406,16 @@ mod tests {
     fn every_action_round_trips_through_its_name() {
         for &action in Action::ALL {
             assert_eq!(Action::from_name(action.name()), Some(action));
+        }
+    }
+
+    #[test]
+    fn every_command_is_an_action() {
+        for &command in Command::ALL {
+            assert!(
+                Action::ALL.contains(&Action::Command(command)),
+                "{command:?}"
+            );
         }
     }
 

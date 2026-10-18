@@ -11,8 +11,8 @@ use nota_vim::Mode;
 
 use super::Editor;
 use super::layout::{FrameLayout, LaidLine, Viewport};
-use crate::document::Document;
 use crate::theme::Theme;
+use crate::workspace::PaneView;
 
 pub struct EditorElement {
     editor: Entity<Editor>,
@@ -93,21 +93,26 @@ impl gpui_kit::Element for EditorElement {
         };
         let editor = self.editor.read(cx);
         let viewport = Viewport::new(bounds, window.line_height(), editor.scroll);
-        let document = &editor.document;
-        let lines = shape_visible_lines(document, &viewport, &typeface, &self.theme, window);
+        let Some(view) = editor.view(cx) else {
+            return Prepainted {
+                layout: FrameLayout {
+                    viewport,
+                    lines: Vec::new(),
+                },
+                selection: Vec::new(),
+                cursor: None,
+                preedit: None,
+            };
+        };
+        let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
         let layout = FrameLayout { viewport, lines };
-        let selection = selection_quads(
-            document.buffer(),
-            document.selection(),
-            &layout,
-            &self.theme,
-        );
-        let cursor = cursor_quad(document, &layout, &typeface, &self.theme, window);
+        let selection = selection_quads(view.buffer(), view.selection, &layout, &self.theme);
+        let cursor = cursor_quad(&view, &layout, &typeface, &self.theme, window);
         let preedit = editor
             .marked
             .clone()
-            .filter(|_| document.mode() == Mode::Insert)
-            .and_then(|text| preedit(document, &layout, text, &typeface, &self.theme, window));
+            .filter(|_| view.mode == Mode::Insert)
+            .and_then(|text| preedit(&view, &layout, text, &typeface, &self.theme, window));
         self.editor
             .update(cx, |editor, _| editor.layout = Some(layout.clone()));
         Prepainted {
@@ -142,9 +147,7 @@ impl gpui_kit::Element for EditorElement {
             for laid in &prepainted.layout.lines {
                 paint_line(&laid.shaped, laid.origin, line_height, window, cx);
             }
-            if focus_handle.is_focused(window)
-                && let Some(cursor) = prepainted.cursor.take()
-            {
+            if let Some(cursor) = prepainted.cursor.take() {
                 window.paint_quad(cursor);
             }
             if let Some(preedit) = prepainted.preedit.take() {
@@ -170,18 +173,19 @@ fn paint_line(
 }
 
 fn shape_visible_lines(
-    document: &Document,
+    view: &PaneView<'_>,
     viewport: &Viewport,
     typeface: &Typeface,
     theme: &Theme,
     window: &Window,
 ) -> Vec<LaidLine> {
-    let last_line = document.buffer().last_line();
+    let last_line = view.buffer().last_line();
     (viewport.first_line..=last_line)
         .take(viewport.painted_rows())
         .enumerate()
         .filter_map(|(row, line)| {
-            let text = document
+            let text = view
+                .document
                 .line_text(line)
                 .inspect_err(|error| log::error!("línea {line} ilegible: {error}"))
                 .ok()?;
@@ -248,23 +252,28 @@ fn selection_quads(
 }
 
 /// Bloque en Normal y Visual, barra en Insert; en la línea de comandos el
-/// cursor está abajo, en la barra de estado.
+/// cursor está abajo, en la barra de estado. Un panel sin foco muestra un
+/// bloque tenue.
 fn cursor_quad(
-    document: &Document,
+    view: &PaneView<'_>,
     layout: &FrameLayout,
     typeface: &Typeface,
     theme: &Theme,
     window: &Window,
 ) -> Option<PaintQuad> {
-    let (width, color) = match document.mode() {
+    let (width, color) = match view.mode {
         Mode::CommandLine => return None,
         Mode::Insert => (theme.caret_width, theme.caret),
-        Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => (
-            block_width(document, layout, typeface, window)?,
-            theme.block_cursor,
-        ),
+        Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => {
+            let color = if view.focused {
+                theme.block_cursor
+            } else {
+                theme.unfocused_cursor
+            };
+            (block_width(view, layout, typeface, window)?, color)
+        }
     };
-    let (laid, column) = cursor_position(document, layout)?;
+    let (laid, column) = cursor_position(view, layout)?;
     let left = laid.shaped.x_for_index(column);
     Some(fill(
         Bounds::new(
@@ -277,14 +286,14 @@ fn cursor_quad(
 
 /// Ancho del carácter bajo el cursor; sobre el fin de línea, el de una `M`.
 fn block_width(
-    document: &Document,
+    view: &PaneView<'_>,
     layout: &FrameLayout,
     typeface: &Typeface,
     window: &Window,
 ) -> Option<Pixels> {
-    let (laid, column) = cursor_position(document, layout)?;
-    let cursor = document.cursor();
-    let next = document.buffer().next_boundary(cursor);
+    let (laid, column) = cursor_position(view, layout)?;
+    let cursor = view.cursor();
+    let next = view.buffer().next_boundary(cursor);
     if next > cursor && column < laid.shaped.len() {
         let left = laid.shaped.x_for_index(column);
         Some(
@@ -299,11 +308,11 @@ fn block_width(
 
 /// La línea pintada del cursor y su columna en bytes dentro de ella.
 pub fn cursor_position<'a>(
-    document: &Document,
+    view: &PaneView<'_>,
     layout: &'a FrameLayout,
 ) -> Option<(&'a LaidLine, usize)> {
-    let cursor = document.cursor();
-    let buffer = document.buffer();
+    let cursor = view.cursor();
+    let buffer = view.buffer();
     let line = buffer.line_of(cursor);
     let laid = layout.line(line)?;
     let column = cursor.get() - buffer.line_start(line).get();
@@ -322,14 +331,14 @@ fn em_width(typeface: &Typeface, window: &Window) -> Pixels {
 /// El texto provisional del IME o de una tecla muerta, subrayado sobre el
 /// cursor; no entra al buffer hasta el commit.
 fn preedit(
-    document: &Document,
+    view: &PaneView<'_>,
     layout: &FrameLayout,
     text: String,
     typeface: &Typeface,
     theme: &Theme,
     window: &Window,
 ) -> Option<Preedit> {
-    let (laid, column) = cursor_position(document, layout)?;
+    let (laid, column) = cursor_position(view, layout)?;
     let underline = UnderlineStyle {
         color: Some(theme.foreground),
         thickness: theme.underline_thickness,

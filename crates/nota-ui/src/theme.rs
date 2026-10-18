@@ -27,10 +27,15 @@ pub struct Theme {
     pub caret: Hsla,
     /// El cursor de bloque deja ver el carácter que tapa.
     pub block_cursor: Hsla,
+    /// El cursor de un panel sin foco.
+    pub unfocused_cursor: Hsla,
     pub selection: Hsla,
     pub status_background: Hsla,
     pub status_foreground: Hsla,
+    pub status_unfocused_foreground: Hsla,
     pub status_border: Hsla,
+    /// La línea entre dos paneles.
+    pub pane_border: Hsla,
     pub modified: Hsla,
     pub error: Hsla,
     pub font_family: SharedString,
@@ -66,10 +71,13 @@ impl Theme {
             foreground: hsla(ui.foreground),
             caret: hsla(cursor.insert),
             block_cursor: hsla(cursor.normal),
+            unfocused_cursor: hsla(cursor.unfocused),
             selection: hsla(ui.selection),
             status_background: hsla(ui.status_background),
             status_foreground: hsla(ui.status_foreground),
+            status_unfocused_foreground: hsla(ui.status_unfocused_foreground),
             status_border: hsla(ui.status_border),
+            pane_border: hsla(ui.pane_border),
             modified: hsla(ui.modified),
             error: hsla(ui.error),
             font_family,
@@ -139,18 +147,23 @@ mod tests {
         assert_eq!(pick_font(None, &fonts).unwrap(), "DejaVu Sans Mono");
     }
 
-    /// Los valores que `nota-ui` tenía fijos antes de leer temas.
+    /// Los valores que `nota-ui` tenía fijos antes de leer temas, y los de paneles.
     #[test]
     fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
         let dark = config::Themes::builtin().load("nota-oscuro").unwrap().value;
         let font = config::Font::default();
         let theme = Theme::with_font(&dark, "Mono".into(), px(font.size.get()));
         let blue = Hsla::from(rgb(0x7a_a2_f7));
-        let expected: [(&str, Hsla, Hsla); 10] = [
+        let expected: [(&str, Hsla, Hsla); 13] = [
             ("background", theme.background, rgb(0x1c_1f_24).into()),
             ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
             ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
             ("block_cursor", theme.block_cursor, blue.opacity(0.5)),
+            (
+                "unfocused_cursor",
+                theme.unfocused_cursor,
+                Hsla::from(rgb(0x9a_a0_a6)).opacity(0.35),
+            ),
             ("selection", theme.selection, blue.opacity(0.3)),
             (
                 "status_background",
@@ -162,7 +175,13 @@ mod tests {
                 theme.status_foreground,
                 rgb(0x9a_a0_a6).into(),
             ),
+            (
+                "status_unfocused_foreground",
+                theme.status_unfocused_foreground,
+                rgb(0x5c_63_70).into(),
+            ),
             ("status_border", theme.status_border, rgb(0x2a_2e_36).into()),
+            ("pane_border", theme.pane_border, rgb(0x2a_2e_36).into()),
             ("modified", theme.modified, rgb(0xe0_af_68).into()),
             ("error", theme.error, rgb(0xf7_76_8e).into()),
         ];

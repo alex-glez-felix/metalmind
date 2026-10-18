@@ -13,7 +13,9 @@ Theme {
         gutter_foreground: #a0a6b0,
         status_background: #e6e8ec,
         status_foreground: #5f6670,
+        status_unfocused_foreground: #8a909a,
         status_border: #d2d6dc,
+        pane_border: #d2d6dc,
         modified: #8f6400,
         error: #c4304f,
     },
@@ -22,6 +24,7 @@ Theme {
         insert: #2e5cd6,
         visual: #8a3fc4 α0.4,
         replace: #c4304f α0.4,
+        unfocused: #5f6670 α0.35,
     },
     syntax: SyntaxColors {
         heading: #2e5cd6,

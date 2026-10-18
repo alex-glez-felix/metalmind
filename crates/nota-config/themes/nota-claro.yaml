@@ -26,7 +26,9 @@ ui:
   gutter_foreground: fg_faint
   status_background: bg_dark
   status_foreground: fg_dim
+  status_unfocused_foreground: comment
   status_border: border
+  pane_border: border
   modified: yellow
   error: red
 
@@ -35,6 +37,7 @@ cursor:
   insert: blue
   visual: { color: magenta, alpha: 0.4 }
   replace: { color: red, alpha: 0.4 }
+  unfocused: { color: fg_dim, alpha: 0.35 }
 
 syntax:
   heading: blue

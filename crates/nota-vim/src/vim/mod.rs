@@ -27,8 +27,8 @@ use crate::mark::Marks;
 use crate::register::{Clipboard, Detached, RegisterName, Registers};
 use crate::visual::{LastVisual, VisualSize};
 use crate::{
-    Action, Command, CommandError, Key, Keymap, Mode, Prompt, SearchError, Substitution, VimError,
-    Wrap,
+    Action, CommandError, Invocation, Key, Keymap, Mode, Prompt, SearchError, Substitution,
+    VimError, Wrap,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -41,9 +41,9 @@ pub enum KeyOutcome {
     Inserted,
     /// Ningún binding la usa; la capa de arriba puede probar otro keymap.
     Unbound,
-    /// Se envió la línea de comandos con un comando que ejecuta quien aloja
-    /// el editor.
-    Command(Command),
+    /// Se envió la línea de comandos, o se tecleó un atajo como `ctrl-w v`,
+    /// con un comando que ejecuta quien aloja el editor.
+    Command(Invocation),
     /// Se envió la línea de comandos con algo que no es un comando, o con
     /// un `:s` que falló.
     InvalidCommand(CommandError),

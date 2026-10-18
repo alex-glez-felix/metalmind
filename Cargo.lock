@@ -3678,6 +3678,7 @@ dependencies = [
  "nota-vault",
  "nota-vim",
  "pretty_assertions",
+ "proptest",
  "tempfile",
  "thiserror 2.0.21",
 ]

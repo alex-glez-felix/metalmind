@@ -1,5 +1,6 @@
-//! Comandos de `:` que el motor reconoce pero no ejecuta: guardar y cerrar
-//! hacen I/O, así que los corre quien aloja el editor.
+//! Comandos de `:` y de `ctrl-w` que el motor reconoce pero no ejecuta:
+//! guardar, abrir y cerrar hacen I/O y los paneles son de quien aloja el
+//! editor.
 
 use crate::SearchError;
 
@@ -8,12 +9,51 @@ use crate::SearchError;
 pub enum Command {
     /// `:w`
     Save,
-    /// `:q`, que se niega si hay cambios sin guardar.
+    /// `:q`, que cierra el panel y se niega si se perderían cambios.
     Quit,
     /// `:q!`
     ForceQuit,
     /// `:wq`
     SaveAndQuit,
+    /// `:e [ruta]`, que se niega si se perderían cambios. Sin ruta, relee
+    /// el archivo del panel.
+    Edit,
+    /// `:e! [ruta]`, que descarta los cambios.
+    ForceEdit,
+    /// `ctrl-w v`, `:vsplit`
+    SplitRight,
+    /// `ctrl-w s`, `:split`
+    SplitDown,
+    /// `ctrl-w h`
+    FocusLeft,
+    /// `ctrl-w j`
+    FocusDown,
+    /// `ctrl-w k`
+    FocusUp,
+    /// `ctrl-w l`
+    FocusRight,
+    /// `ctrl-w w`
+    FocusNext,
+    /// `ctrl-w o`, `:only`
+    Only,
+}
+
+/// Un comando con el argumento que se le escribió, como `:e notas/a.md`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Invocation {
+    pub command: Command,
+    /// Lo escrito tras el nombre, sin espacios alrededor; solo lo aceptan
+    /// los comandos con [`Command::takes_argument`].
+    pub argument: Option<String>,
+}
+
+impl From<Command> for Invocation {
+    fn from(command: Command) -> Self {
+        Self {
+            command,
+            argument: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -40,10 +80,30 @@ const COMMANDS: &[(&str, usize, Command)] = &[
     ("quit", 1, Command::Quit),
     ("quit!", 1, Command::ForceQuit),
     ("wq", 2, Command::SaveAndQuit),
+    ("edit", 1, Command::Edit),
+    ("edit!", 1, Command::ForceEdit),
+    ("split", 2, Command::SplitDown),
+    ("vsplit", 2, Command::SplitRight),
+    ("only", 2, Command::Only),
 ];
 
 impl Command {
-    pub const ALL: &[Self] = &[Self::Save, Self::Quit, Self::ForceQuit, Self::SaveAndQuit];
+    pub const ALL: &[Self] = &[
+        Self::Save,
+        Self::Quit,
+        Self::ForceQuit,
+        Self::SaveAndQuit,
+        Self::Edit,
+        Self::ForceEdit,
+        Self::SplitRight,
+        Self::SplitDown,
+        Self::FocusLeft,
+        Self::FocusDown,
+        Self::FocusUp,
+        Self::FocusRight,
+        Self::FocusNext,
+        Self::Only,
+    ];
 
     #[must_use]
     pub fn name(self) -> &'static str {
@@ -52,6 +112,16 @@ impl Command {
             Self::Quit => "editor::quit",
             Self::ForceQuit => "editor::force_quit",
             Self::SaveAndQuit => "editor::save_and_quit",
+            Self::Edit => "editor::edit",
+            Self::ForceEdit => "editor::force_edit",
+            Self::SplitRight => "pane::split_right",
+            Self::SplitDown => "pane::split_down",
+            Self::FocusLeft => "pane::focus_left",
+            Self::FocusDown => "pane::focus_down",
+            Self::FocusUp => "pane::focus_up",
+            Self::FocusRight => "pane::focus_right",
+            Self::FocusNext => "pane::focus_next",
+            Self::Only => "pane::only",
         }
     }
 
@@ -63,22 +133,59 @@ impl Command {
             .find(|command| command.name() == name)
     }
 
+    #[must_use]
+    pub fn takes_argument(self) -> bool {
+        matches!(self, Self::Edit | Self::ForceEdit)
+    }
+}
+
+impl Invocation {
     /// Interpreta lo escrito tras `:`. Como vim, ignora espacios y `:` de
-    /// más y acepta abreviaturas (`:wri`, `:qu!`); una línea vacía no es nada.
+    /// más y acepta abreviaturas (`:wri`, `:qu!`, `:e!nota.md`); una línea
+    /// vacía no es nada. El argumento va tal cual: no se expanden `%`, `#`
+    /// ni `~` y los espacios no se escapan.
     ///
     /// # Errors
-    /// [`CommandError::Unknown`] si no es ningún comando conocido.
+    /// [`CommandError::Unknown`] si no es ningún comando conocido y
+    /// [`CommandError::TrailingCharacters`] si lleva un argumento que no
+    /// acepta.
     pub fn parse(line: &str) -> Result<Option<Self>, CommandError> {
         let typed = line.trim_start_matches([' ', ':']).trim_end();
         if typed.is_empty() {
             return Ok(None);
         }
-        COMMANDS
+        let (name, rest) = split_name(typed);
+        let command = COMMANDS
             .iter()
-            .find(|&&(full, min, _)| abbreviates(typed, full, min))
-            .map(|&(_, _, command)| Some(command))
-            .ok_or_else(|| CommandError::Unknown(typed.to_owned()))
+            .find(|&&(full, min, _)| abbreviates(name, full, min))
+            .map(|&(_, _, command)| command)
+            .ok_or_else(|| CommandError::Unknown(typed.to_owned()))?;
+        let argument = rest.trim_start();
+        if argument.is_empty() {
+            return Ok(Some(command.into()));
+        }
+        if !command.takes_argument() {
+            return Err(CommandError::TrailingCharacters(argument.to_owned()));
+        }
+        Ok(Some(Self {
+            command,
+            argument: Some(argument.to_owned()),
+        }))
     }
+}
+
+/// El nombre son las letras del principio con su `!`, si lo lleva; lo
+/// demás es el argumento.
+fn split_name(typed: &str) -> (&str, &str) {
+    let letters = typed
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(typed.len());
+    let end = if typed[letters..].starts_with('!') {
+        letters + 1
+    } else {
+        letters
+    };
+    typed.split_at(end)
 }
 
 /// `typed` es `full` recortado a `min` letras o más, conservando el `!`.
@@ -121,20 +228,62 @@ mod tests {
             ("wq", Some(Command::SaveAndQuit)),
             ("  :w  ", Some(Command::Save)),
             ("::q", Some(Command::Quit)),
+            ("e", Some(Command::Edit)),
+            ("edit!", Some(Command::ForceEdit)),
+            ("sp", Some(Command::SplitDown)),
+            ("vs", Some(Command::SplitRight)),
+            ("vsplit", Some(Command::SplitRight)),
+            ("on", Some(Command::Only)),
             ("", None),
             ("   ", None),
         ];
         for (line, expected) in cases {
-            assert_eq!(Command::parse(line), Ok(expected), "{line:?}");
+            assert_eq!(
+                Invocation::parse(line),
+                Ok(expected.map(Invocation::from)),
+                "{line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn edit_takes_the_rest_of_the_line_as_its_path() {
+        let cases = [
+            ("e a.md", Command::Edit, "a.md"),
+            ("edit   notas/b c.md  ", Command::Edit, "notas/b c.md"),
+            ("e! ../a.md", Command::ForceEdit, "../a.md"),
+            ("e!a.md", Command::ForceEdit, "a.md"),
+        ];
+        for (line, command, path) in cases {
+            assert_eq!(
+                Invocation::parse(line),
+                Ok(Some(Invocation {
+                    command,
+                    argument: Some(path.to_owned()),
+                })),
+                "{line:?}"
+            );
         }
     }
 
     #[test]
     fn rejects_what_it_does_not_know() {
-        for line in ["x", "writes", "wq!", "w!", "q!!", "!", "e foo.md"] {
+        for line in ["x", "writes", "wq!", "w!", "!", "efoo", "s", "v", "o"] {
             assert_eq!(
-                Command::parse(line),
+                Invocation::parse(line),
                 Err(CommandError::Unknown(line.to_owned())),
+                "{line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_an_argument_it_does_not_take() {
+        let cases = [("q!!", "!"), ("w otro.md", "otro.md"), ("vs a.md", "a.md")];
+        for (line, rest) in cases {
+            assert_eq!(
+                Invocation::parse(line),
+                Err(CommandError::TrailingCharacters(rest.to_owned())),
                 "{line:?}"
             );
         }

@@ -59,9 +59,9 @@ impl EntityInputHandler for Editor {
         range: Range<usize>,
         adjusted_range: &mut Option<Range<usize>>,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<String> {
-        let (text, adjusted) = self.ime_line()?.slice(range);
+        let (text, adjusted) = self.ime_line(cx)?.slice(range);
         *adjusted_range = Some(adjusted);
         Some(text)
     }
@@ -70,9 +70,9 @@ impl EntityInputHandler for Editor {
         &mut self,
         _ignore_disabled_input: bool,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<UTF16Selection> {
-        let caret = self.ime_line()?.caret();
+        let caret = self.ime_line(cx)?.caret();
         Some(UTF16Selection {
             range: caret..caret,
             reversed: false,
@@ -82,10 +82,10 @@ impl EntityInputHandler for Editor {
     fn marked_text_range(
         &self,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<Range<usize>> {
         self.marked.as_ref()?;
-        Some(self.ime_line()?.marked_range())
+        Some(self.ime_line(cx)?.marked_range())
     }
 
     fn unmark_text(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -120,13 +120,14 @@ impl EntityInputHandler for Editor {
         _range_utf16: Range<usize>,
         _element_bounds: Bounds<Pixels>,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<Bounds<Pixels>> {
-        if self.document.command_line().is_some() {
+        let view = self.view(cx)?;
+        if view.command_line.is_some() {
             return None;
         }
         let layout = self.layout.as_ref()?;
-        let (laid, column) = cursor_position(&self.document, layout)?;
+        let (laid, column) = cursor_position(&view, layout)?;
         let line_height = layout.viewport.line_height;
         Some(Bounds::new(
             point(
@@ -141,15 +142,15 @@ impl EntityInputHandler for Editor {
         &mut self,
         position: Point<Pixels>,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> Option<usize> {
-        if self.document.command_line().is_some() {
+        let view = self.view(cx)?;
+        if view.command_line.is_some() {
             return None;
         }
         let (line, index) = self.layout.as_ref()?.hit(position)?;
-        let buffer = self.document.buffer();
-        (line == buffer.line_of(self.document.cursor()))
-            .then(|| self.ime_line().map(|ime| ime.utf16_at(index)))
+        (line == view.buffer().line_of(view.cursor()))
+            .then(|| self.ime_line(cx).map(|ime| ime.utf16_at(index)))
             .flatten()
     }
 }

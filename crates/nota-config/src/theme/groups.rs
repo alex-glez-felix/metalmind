@@ -120,7 +120,11 @@ color_group! {
         gutter_foreground,
         status_background,
         status_foreground,
+        /// La barra de estado de un panel sin foco.
+        status_unfocused_foreground,
         status_border,
+        /// La línea entre dos paneles.
+        pane_border,
         /// El `[+]` de un archivo con cambios sin guardar.
         modified,
         error,
@@ -134,6 +138,8 @@ color_group! {
         insert,
         visual,
         replace,
+        /// El cursor de un panel sin foco, en cualquier modo.
+        unfocused,
     }
 }
 

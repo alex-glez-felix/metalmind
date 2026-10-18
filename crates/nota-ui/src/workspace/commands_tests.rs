@@ -1,0 +1,257 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use nota_buffer::ByteOffset;
+use pretty_assertions::assert_eq;
+use tempfile::TempDir;
+
+use super::*;
+use crate::workspace::test_session::Session;
+
+/// Una carpeta con `a.md` y `b.md`, y una sesión abierta en `a.md`.
+fn two_files() -> (TempDir, Session) {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "a\n").unwrap();
+    fs::write(dir.path().join("b.md"), "b1\nb2\n").unwrap();
+    let session = Session::open(&dir.path().join("a.md"));
+    (dir, session)
+}
+
+fn path(dir: &TempDir, name: &str) -> PathBuf {
+    dir.path().join(name)
+}
+
+fn edit(session: &mut Session, command: &str, path: &Path) {
+    session.keys(&format!(":{command} {}⏎", path.display()));
+}
+
+fn shown(session: &Session) -> PathBuf {
+    session.view(session.pane()).document.path().to_owned()
+}
+
+fn error(session: &Session) -> Option<&str> {
+    match session.workspace.message() {
+        Some(Message::Error(text)) => Some(text),
+        _ => None,
+    }
+}
+
+#[test]
+fn e_abre_otro_archivo_en_el_panel() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.text(), "b1\nb2\n");
+    assert_eq!(session.cursor(), ByteOffset::ZERO);
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    let opened = format!("\"{}\" 3L, 6B", path(&dir, "b.md").display());
+    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+}
+
+#[test]
+fn e_de_un_archivo_que_no_existe_lo_empieza_vacio() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "e", &path(&dir, "nueva.md"));
+    assert_eq!(session.text(), "");
+    assert!(!session.exists_on_disk());
+    session.keys("ihola⎋:w⏎");
+    assert_eq!(fs::read_to_string(path(&dir, "nueva.md")).unwrap(), "hola");
+}
+
+#[test]
+fn e_se_niega_si_se_perderian_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("x");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+    assert_eq!(session.text(), "\n");
+    assert_eq!(
+        error(&session),
+        Some("E37: hay cambios sin guardar (usa :e! para descartarlos)")
+    );
+}
+
+#[test]
+fn e_con_bang_descarta_los_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("x");
+    edit(&mut session, "e!", &path(&dir, "b.md"));
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "a\n");
+}
+
+#[test]
+fn e_cambia_si_el_buffer_sigue_en_otro_panel() {
+    let (dir, mut session) = two_files();
+    session.keys("x⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 2);
+    session.keys("⌃wh");
+    assert_eq!(session.text(), "\n");
+    assert!(session.is_modified());
+}
+
+#[test]
+fn e_de_un_archivo_abierto_comparte_el_documento() {
+    let (dir, mut session) = two_files();
+    session.keys("⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("j");
+    let right = session.pane();
+    session.keys("⌃wh");
+    edit(&mut session, "e", &dir.path().join(".").join("b.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(session.cursor(), ByteOffset::new(3));
+    session.keys("x");
+    assert_eq!(session.view(right).buffer().to_string(), "b1\n2\n");
+}
+
+#[test]
+fn e_sin_ruta_relee_el_archivo() {
+    let (dir, mut session) = two_files();
+    fs::write(path(&dir, "a.md"), "a\nfuera\n").unwrap();
+    session.keys("j");
+    session.keys(":e⏎");
+    assert_eq!(session.text(), "a\nfuera\n");
+    assert_eq!(session.cursor(), ByteOffset::new(2));
+    session.keys("x");
+    session.keys(":e⏎");
+    assert_eq!(session.text(), "a\nuera\n");
+    assert!(error(&session).is_some());
+    session.keys(":e!⏎");
+    assert_eq!(session.text(), "a\nfuera\n");
+    assert!(!session.is_modified());
+}
+
+#[test]
+fn e_con_la_ruta_del_mismo_archivo_relee() {
+    let (dir, mut session) = two_files();
+    session.keys("x");
+    edit(&mut session, "e!", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "a\n");
+    assert!(!session.is_modified());
+}
+
+#[test]
+fn e_de_algo_ilegible_lo_avisa_y_no_cambia_nada() {
+    let (dir, mut session) = two_files();
+    fs::write(path(&dir, "binario.md"), [0xff, 0xfe]).unwrap();
+    edit(&mut session, "e", &path(&dir, "binario.md"));
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+    assert!(error(&session).is_some());
+}
+
+#[test]
+fn q_cierra_el_panel_y_el_ultimo_la_ventana() {
+    let mut session = Session::new("abc\n");
+    let left = session.pane();
+    session.keys("⌃wv");
+    session.keys(":q⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(session.workspace.tree().panes(), [left]);
+    assert_eq!(session.pane(), left);
+    session.keys("⌃wq");
+    assert_eq!(session.effect, Effect::CloseWindow);
+}
+
+#[test]
+fn q_cierra_un_panel_con_cambios_si_otro_muestra_el_buffer() {
+    let mut session = Session::new("abc\n");
+    session.keys("x⌃wv:q⏎");
+    assert_eq!(session.workspace.tree().len(), 1);
+    assert!(session.is_modified());
+    session.keys(":q⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(
+        error(&session),
+        Some("E37: hay cambios sin guardar (usa :q! para cerrar igual)")
+    );
+    session.keys(":q!⏎");
+    assert_eq!(session.effect, Effect::CloseWindow);
+}
+
+#[test]
+fn q_se_niega_si_el_panel_es_el_unico_con_esos_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("x:q⏎");
+    assert_eq!(session.workspace.tree().len(), 2);
+    assert!(error(&session).is_some());
+    session.keys(":q!⏎");
+    assert_eq!(session.workspace.tree().len(), 1);
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+}
+
+#[test]
+fn wq_guarda_y_cierra_el_panel() {
+    let (dir, mut session) = two_files();
+    session.keys("⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("x:wq⏎");
+    assert_eq!(fs::read_to_string(path(&dir, "b.md")).unwrap(), "1\nb2\n");
+    assert_eq!(session.workspace.tree().len(), 1);
+    session.keys(":wq⏎");
+    assert_eq!(session.effect, Effect::CloseWindow);
+}
+
+#[test]
+fn cerrar_la_ventana_mira_todos_los_buffers() {
+    let (dir, mut session) = two_files();
+    session.keys("x⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    assert!(!session.workspace.may_close_window());
+    let unsaved = format!(
+        "E162: hay cambios sin guardar en \"{}\"",
+        path(&dir, "a.md").display()
+    );
+    assert_eq!(error(&session), Some(unsaved.as_str()));
+    session.keys("⌃wh:w⏎");
+    assert!(session.workspace.may_close_window());
+}
+
+#[test]
+fn dividir_copia_el_cursor_y_moverse_cambia_el_foco() {
+    let mut session = Session::new("uno dos\n");
+    session.keys("w⌃ws");
+    let bottom = session.pane();
+    assert_eq!(session.cursor(), ByteOffset::new(4));
+    session.keys("⌃wk");
+    assert_ne!(session.pane(), bottom);
+    session.keys("⌃wj");
+    assert_eq!(session.pane(), bottom);
+    session.keys("⌃ww");
+    assert_ne!(session.pane(), bottom);
+    session.keys("⌃wl");
+    assert_ne!(session.pane(), bottom);
+}
+
+#[test]
+fn only_cierra_los_demas_salvo_los_que_perderian_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("⌃wv⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("x⌃wv");
+    let keep = session.pane();
+    edit(&mut session, "e", &path(&dir, "nueva.md"));
+    session.keys("⌃wo");
+    assert_eq!(session.workspace.tree().len(), 2);
+    assert_eq!(session.pane(), keep);
+    assert_eq!(
+        error(&session),
+        Some("E445: otros paneles tienen cambios sin guardar")
+    );
+    assert_eq!(session.workspace.documents.iter().count(), 2);
+}
+
+#[test]
+fn only_con_un_solo_panel_no_hace_nada() {
+    let mut session = Session::new("abc\n");
+    session.keys(":on⏎");
+    assert_eq!(session.workspace.tree().len(), 1);
+    assert_eq!(error(&session), None);
+}

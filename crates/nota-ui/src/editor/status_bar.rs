@@ -1,5 +1,7 @@
-//! Barra de estado: modo, si se graba una macro, archivo, `[+]` si hay cambios sin guardar, el
-//! último mensaje o la línea de comandos, y la posición del cursor.
+//! Barra de estado de un panel: modo, si se graba una macro, archivo, `[+]`
+//! si hay cambios sin guardar, el último mensaje o la línea de comandos, y
+//! la posición del cursor. Modo, macro, mensaje y línea de comandos solo los
+//! muestra el panel con el foco.
 
 use gpui_kit::{
     Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _,
@@ -7,17 +9,13 @@ use gpui_kit::{
 use nota_vim::{Mode, VisualKind};
 
 use crate::theme::Theme;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Message {
-    Info(String),
-    Error(String),
-}
+use crate::workspace::Message;
 
 /// Lo que muestra la barra, ya calculado por el editor.
 #[derive(Clone, Debug)]
 pub struct Status {
-    pub mode: Mode,
+    /// `None` en un panel sin foco.
+    pub mode: Option<Mode>,
     /// El registro de la macro que se está grabando.
     pub recording: Option<char>,
     pub file: SharedString,
@@ -36,6 +34,11 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         (None, Some(message)) => message_line(message, theme),
         (None, None) => div(),
     };
+    let foreground = if status.mode.is_some() {
+        theme.status_foreground
+    } else {
+        theme.status_unfocused_foreground
+    };
     div()
         .flex()
         .flex_row()
@@ -43,10 +46,10 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .px(theme.status_padding_x)
         .py(theme.status_padding_y)
         .bg(theme.status_background)
-        .text_color(theme.status_foreground)
+        .text_color(foreground)
         .border_t(theme.border_width)
         .border_color(theme.status_border)
-        .child(mode_label(status.mode))
+        .children(status.mode.map(mode_label))
         .when_some(status.recording, |bar, register| {
             bar.child(format!("grabando @{register}"))
         })
