@@ -1,5 +1,6 @@
 use nota_buffer::{Buffer, Selection};
 
+use crate::find::Find;
 use crate::span::{Region, Target};
 use crate::{Motion, Operator, TextObject};
 
@@ -7,6 +8,7 @@ use crate::{Motion, Operator, TextObject};
 #[derive(Clone, Copy)]
 pub(crate) enum Object {
     Motion(Motion),
+    Find(Find),
     TextObject(TextObject),
     CurrentLine,
 }
@@ -23,6 +25,9 @@ impl Object {
         let span = match self {
             Self::Motion(motion) => motion
                 .resolve(buffer, selection, count, Some(operator))?
+                .span_from(selection.head),
+            Self::Find(find) => find
+                .resolve(buffer, selection.head, count.unwrap_or(1))?
                 .span_from(selection.head),
             Self::TextObject(object) => {
                 object.resolve(buffer, selection.head, count.unwrap_or(1))?

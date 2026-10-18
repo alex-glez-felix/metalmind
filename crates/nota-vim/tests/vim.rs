@@ -74,6 +74,75 @@ use rstest_reuse::{self, apply, template};
 #[case("ab\ncd\n|ef", "2gg", "ab\n|cd\nef")]
 #[case("|ab\ncd", "9G", "ab\n|cd")]
 #[case("  abc\nx|y", "gg", " | abc\nxy")]
+// f F t T
+#[case("|a,b,c", "f,", "a|,b,c")]
+#[case("|a,b,c", "2f,", "a,b|,c")]
+#[case("|a,b,c", "3f,", "|a,b,c")]
+#[case("|abc", "fz", "|abc")]
+#[case("ab|c", "fc", "ab|c")]
+#[case("|a,b\nc,d", "2f,", "|a,b\nc,d")]
+#[case("a,b,|c", "F,", "a,b|,c")]
+#[case("a,b,|c", "2F,", "a|,b,c")]
+#[case("|abc", "Fa", "|abc")]
+#[case("|ab,c", "t,", "a|b,c")]
+#[case("|a,b,c", "t,", "|a,b,c")]
+#[case("|a,b,c", "2t,", "a,|b,c")]
+#[case("a,bc|d", "T,", "a,|bcd")]
+#[case("a,|bc", "T,", "a,|bc")]
+#[case("|a3b", "f3", "a|3b")]
+#[case("|a b", "f ", "a| b")]
+#[case("|a\tb", "f<Tab>", "a|\tb")]
+#[case("|abcd", "f<Esc>x", "|bcd")]
+#[case("|abcd", "3f<Esc>x", "|bcd")]
+#[case("|aéb🦀c", "fé", "a|éb🦀c")]
+#[case("|aéb🦀c", "f🦀", "aéb|🦀c")]
+#[case("|aéb🦀c", "t🦀", "aé|b🦀c")]
+#[case("aéb🦀|c", "Fé", "a|éb🦀c")]
+#[case("aéb🦀|c", "Té", "aé|b🦀c")]
+#[case("|ñañaña", "2fñ", "ñaña|ña")]
+// ; ,
+#[case("|a,b,c,d", "f,;", "a,b|,c,d")]
+#[case("|a,b,c,d", "f,;;", "a,b,c|,d")]
+#[case("|a,b,c,d", "f,;,", "a|,b,c,d")]
+#[case("|a,b,c,d", "f,2;", "a,b,c|,d")]
+#[case("|a,b,c,d", "f,9;", "a|,b,c,d")]
+#[case("a,b,c,|d", "F,;", "a,b|,c,d")]
+#[case("a,b,c,|d", "F,;,", "a,b,c|,d")]
+#[case("|a)b)c)", "t);", "a)|b)c)")]
+#[case("|a)b)c)", "t);;", "a)b)|c)")]
+#[case("|a)b)c)", "t)2;", "a)|b)c)")]
+#[case("|a)b)c)", "t);;,", "a)|b)c)")]
+#[case("(a(b(|c", "T(;", "(a(|b(c")]
+#[case("(a(b(|c", "T(,", "(a(b(|c")]
+#[case("|aéb🦀cé", "té;", "aéb🦀|cé")]
+#[case("|abc", ";", "|abc")]
+#[case("|abc", ",", "|abc")]
+#[case("|a,b,c", "f,fz;", "a|,b,c")]
+// d c y con f t F T ; ,
+#[case("|a,b,c", "df,", "|b,c")]
+#[case("|a,b,c", "dt,", "|,b,c")]
+#[case("a|bc", "dtc", "a|c")]
+#[case("|a,b,c", "d2f,", "|c")]
+#[case("|a,b,c", "2df,", "|c")]
+#[case("|a,b,c", "d3f,", "|a,b,c")]
+#[case("|a,b,c", "dfz", "|a,b,c")]
+#[case("a,b,|c", "dF,", "a,b|c")]
+#[case("a,b,|c", "dT,", "a,b,|c")]
+#[case("a,bc|d", "dT,", "a,|d")]
+#[case("|aéb🦀c", "df🦀", "|c")]
+#[case("aéb🦀|c", "dTé", "aé|c")]
+#[case("|a,b,c,d", "f,d;", "a|c,d")]
+#[case("|a,b,c,d", "f,d2;", "a|d")]
+#[case("|a,b,c,d", "t,d;", "|,c,d")]
+#[case("a,b,c,|d", "T,d,", "a,b,c,|d")]
+#[case("|a,b,c", "df,;", "b|,c")]
+#[case("|a,b,c", "d;", "|a,b,c")]
+#[case("|f(a, b)", "ct)X<Esc>", "|X)")]
+#[case("f(a|, b)", "ct)X<Esc>", "f(a|X)")]
+#[case("|a,b,c", "cfzX<Esc>", "|a,b,c")]
+#[case("|a,b,c", "yf,P", "a|,a,b,c")]
+#[case("call(x)|;", "yT(P", "call(x|)x);")]
+#[case("call(x)|;", "yF(P", "call(x|)(x);")]
 // d con motions
 #[case("hel|lo world", "dw", "hel|world")]
 #[case("|foo bar", "dw", "|bar")]
@@ -405,4 +474,26 @@ fn operators_wait_in_their_own_mode() {
     vim.feed(Key::Escape, &mut buffer, &mut selections).unwrap();
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(buffer.to_string(), "ab");
+}
+
+#[test]
+fn find_by_name_waits_for_the_char() {
+    use nota_vim::{Action, CharSearch, Key, KeyOutcome, Vim};
+
+    let (mut buffer, mut selections) = support::parse("|abc");
+    let mut vim = Vim::new();
+    let find = Action::from_name("vim::find_forward").unwrap();
+    vim.execute(find, &mut buffer, &mut selections).unwrap();
+    let outcome = vim
+        .feed(Key::Char('c'), &mut buffer, &mut selections)
+        .unwrap();
+    let search = CharSearch {
+        backward: false,
+        till: false,
+    };
+    assert_eq!(outcome, KeyOutcome::Executed(Action::FindChar(search)));
+    assert_eq!(
+        support::render(&buffer, [selections.primary().head]),
+        "ab|c"
+    );
 }

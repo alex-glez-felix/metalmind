@@ -31,7 +31,7 @@ pub(crate) struct Destination {
 }
 
 impl Destination {
-    const fn new(offset: ByteOffset, kind: SpanKind) -> Self {
+    pub const fn new(offset: ByteOffset, kind: SpanKind) -> Self {
         Self {
             offset,
             goal: Goal::None,

@@ -1,4 +1,4 @@
-use crate::{Action, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject};
+use crate::{Action, CharSearch, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject};
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +92,10 @@ const fn motion(motion: Motion) -> Action {
     Action::Motion(motion)
 }
 
+const fn find(backward: bool, till: bool) -> Action {
+    Action::FindChar(CharSearch { backward, till })
+}
+
 const fn object(object: TextObject) -> Action {
     Action::TextObject(object)
 }
@@ -154,6 +158,12 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[ch('$')], motion(Motion::LineEnd)),
         (Control, &[ch('g'), ch('g')], motion(Motion::DocumentStart)),
         (Control, &[ch('G')], motion(Motion::DocumentEnd)),
+        (Control, &[ch('f')], find(false, false)),
+        (Control, &[ch('F')], find(true, false)),
+        (Control, &[ch('t')], find(false, true)),
+        (Control, &[ch('T')], find(true, true)),
+        (Control, &[ch(';')], Action::RepeatFind { reversed: false }),
+        (Control, &[ch(',')], Action::RepeatFind { reversed: true }),
         (Control, &[Key::Escape], Action::NormalMode),
         (Normal, &[ch('d')], Action::Operator(Operator::Delete)),
         (Normal, &[ch('c')], Action::Operator(Operator::Change)),

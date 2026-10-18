@@ -1,4 +1,4 @@
-use crate::{Motion, Operator, TextObject};
+use crate::{CharSearch, Motion, Operator, TextObject};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,6 +22,12 @@ pub enum PasteSide {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Motion(Motion),
+    /// `f`, `F`, `t`, `T`: el carácter que buscan es la tecla siguiente.
+    FindChar(CharSearch),
+    /// `;`, o `,` si `reversed`: repite el último [`Action::FindChar`].
+    RepeatFind {
+        reversed: bool,
+    },
     TextObject(TextObject),
     Operator(Operator),
     /// El objeto de `dd`, `cc` y `yy`.
@@ -64,6 +70,24 @@ impl Action {
         Self::Motion(Motion::LineEnd),
         Self::Motion(Motion::DocumentStart),
         Self::Motion(Motion::DocumentEnd),
+        Self::FindChar(CharSearch {
+            backward: false,
+            till: false,
+        }),
+        Self::FindChar(CharSearch {
+            backward: true,
+            till: false,
+        }),
+        Self::FindChar(CharSearch {
+            backward: false,
+            till: true,
+        }),
+        Self::FindChar(CharSearch {
+            backward: true,
+            till: true,
+        }),
+        Self::RepeatFind { reversed: false },
+        Self::RepeatFind { reversed: true },
         Self::TextObject(TextObject::Word {
             big: false,
             around: false,
@@ -121,6 +145,9 @@ impl Action {
     pub fn name(self) -> &'static str {
         match self {
             Self::Motion(motion) => motion_name(motion),
+            Self::FindChar(search) => find_name(search),
+            Self::RepeatFind { reversed: false } => "vim::repeat_find",
+            Self::RepeatFind { reversed: true } => "vim::repeat_find_reversed",
             Self::TextObject(object) => text_object_name(object),
             Self::Operator(Operator::Delete) => "vim::delete",
             Self::Operator(Operator::Change) => "vim::change",
@@ -161,6 +188,27 @@ fn motion_name(motion: Motion) -> &'static str {
         Motion::LineEnd => "vim::end_of_line",
         Motion::DocumentStart => "vim::start_of_document",
         Motion::DocumentEnd => "vim::end_of_document",
+    }
+}
+
+fn find_name(search: CharSearch) -> &'static str {
+    match search {
+        CharSearch {
+            backward: false,
+            till: false,
+        } => "vim::find_forward",
+        CharSearch {
+            backward: true,
+            till: false,
+        } => "vim::find_backward",
+        CharSearch {
+            backward: false,
+            till: true,
+        } => "vim::till_forward",
+        CharSearch {
+            backward: true,
+            till: true,
+        } => "vim::till_backward",
     }
 }
 
