@@ -29,6 +29,8 @@ pub(crate) enum Outcome {
     Applied {
         selections: Selections,
         register: Option<Register>,
+        /// Abarca más de una línea o líneas enteras: va a `"1`, como en vim.
+        spans_lines: bool,
     },
 }
 
@@ -48,6 +50,7 @@ impl Operator {
         }
         let regions = || steps.iter().filter_map(Step::region);
         let has_text = regions().any(|region| !region.is_empty());
+        let spans_lines = regions().any(|region| region.spans_lines(buffer));
         let register = if has_text || self == Self::Yank {
             Some(Register::from_regions(buffer, regions())?)
         } else {
@@ -67,6 +70,7 @@ impl Operator {
         Ok(Outcome::Applied {
             selections,
             register,
+            spans_lines,
         })
     }
 }

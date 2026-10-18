@@ -614,6 +614,113 @@ use rstest_reuse::{self, apply, template};
     "ix<LeftMouse><4,0><LeftRelease><4,0><PasteStart>Q<PasteEnd><Esc>0.",
     "|QxabcQ def"
 )]
+// registros con nombre "a–"z: guardan lo copiado o borrado y p respeta si es por líneas
+#[case("foo |bar baz", "\"ayiw$\"ap", "foo bar bazba|r")]
+#[case("foo |bar baz", "\"ayiwyiw$\"ap", "foo bar bazba|r")]
+#[case("a|b\ncd", "\"ayyj\"ap", "ab\ncd\n|ab")]
+#[case("a|b\ncd", "\"ayyj\"aP", "ab\n|ab\ncd")]
+#[case("|ab\ncd", "\"addj\"ap", "cd\n|ab")]
+#[case("|ab\ncd", "\"ayyjyy\"ap", "ab\ncd\n|ab")]
+#[case("a|b\ncd", "\"ayyp", "ab\n|ab\ncd")]
+#[case("|abc", "\"ax\"bx\"ap\"bp", "ca|b")]
+#[case("|abc", "\"bxp", "b|ac")]
+#[case("foo |bar", "\"acwX<Esc>$\"ap", "foo Xba|r")]
+// con mayúscula se agrega al final, y uno por líneas vuelve todo por líneas
+#[case("foo |bar baz", "\"ayiww\"Ayiw$\"ap", "foo bar bazbarba|z")]
+#[case("|foo bar", "\"ayw\"Ayy\"ap", "foo bar\n|foo \nfoo bar")]
+#[case("|foo\nbar", "\"ayyj\"Ayw\"ap", "foo\nbar\n|foo\nbar")]
+#[case("|foo\nbar", "\"ayyj\"Ayy\"ap", "foo\nbar\n|foo\nbar")]
+#[case("|foo\nbar", "\"Ayy\"ap", "foo\n|foo\nbar")]
+#[case("|ab cd", "\"Ax\"ap", "b|a cd")]
+#[case("|ab\ncd", "\"ayy\"Addp", "cd\n|ab\nab")]
+// count antes y después del registro
+#[case("|abcdef", "2\"a3x\"ap", "abcde|f")]
+#[case("|abc", "\"a3yl$\"ap", "abcab|c")]
+#[case("|abc", "yl\"a2p", "|abc")]
+#[case("a|b\ncd", "\"ayy3\"ap", "ab\n|ab\nab\nab\ncd")]
+// "0 guarda el último yank sin registro
+#[case("|ab cd", "ywwdw\"0p", "ab ab| ")]
+#[case("|ab cd", "yw\"byww\"0p", "ab cab| d")]
+#[case("|ab\ncd", "yyjdd\"0p", "ab\n|ab")]
+#[case("|ab\ncd", "yyj\"_dd\"0p", "ab\n|ab")]
+#[case("|ab\ncd", "yyj\"_ddp", "ab\n|ab")]
+#[case("|ab\ncd\nef", "ddyy\"_ddp", "ef\n|cd")]
+#[case("|ab\ncd", "\"\"yyj\"0p", "ab\ncd\n|ab")]
+#[case("|ab\ncd\nef", "yyj\"\"dd\"0p", "ab\nef\n|cd")]
+// "1–"9: los borrados de líneas se recorren
+#[case("|a\nb\nc\nd", "dddddd\"1p\"2p\"3p", "d\nc\nb\n|a")]
+#[case("|a\nb\nc\nd", "dddddd\"3p", "d\n|a")]
+#[case("|a\nb\nc\nd\ne", "dddddd\"1p..", "d\nc\nb\n|a\ne")]
+#[case("|a\nb\nc\nd\ne", "dddddd\"1pu.u.", "d\n|a\ne")]
+#[case(
+    "|a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk",
+    "10dd\"1p",
+    "k\n|a\nb\nc\nd\ne\nf\ng\nh\ni\nj"
+)]
+#[case(
+    "|a\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk",
+    "dddddddddddddddddddd\"9p",
+    "k\n|b"
+)]
+#[case("|ab\ncd\nef", "dj\"1p", "ef\n|ab\ncd")]
+#[case("|ab cd\nef", "wd$\"1p\"-p", "ab c|d\nef")]
+#[case("|ab\ncd\nef", "ldj\"1p", "ef\n|ab\ncd")]
+#[case("|ab\ncd\nef", "yydd\"1p", "cd\n|ab\nef")]
+#[case("|ab\ncd\nef", "\"addj\"1p", "cd\nef\n|ab")]
+#[case("|ab\ncd\nef", "\"Addj\"1p", "cd\nef\n|ab")]
+#[case("|ab\ncd\nef", "\"Addjp", "cd\nef\n|ab")]
+#[case("|ab\ncd\nef", "\"addjp", "cd\nef\n|ab")]
+// "-: el borrado chico, sin registro y dentro de una línea
+#[case("|abc def", "dw\"-p", "dabc| ef")]
+#[case("|abc def", "x\"axw\"-p", "c d|aef")]
+#[case("|abc def", "yw\"adw\"-p", "|def")]
+#[case("|abc def", "ciwX<Esc>\"-p", "Xab|c def")]
+#[case("|ab\ncd", "dd\"-p", "|cd")]
+#[case("|abc def", "dwx\"-p", "e|df")]
+// "_: el agujero negro
+#[case("|abc def", "yw\"_dwP", "abc| def")]
+#[case("|abc def", "x\"_xp", "c|a def")]
+#[case("|abc", "\"_yl\"_p", "|abc")]
+#[case("|abc", "\"_x\"-p", "|bc")]
+// ". y "/ son de solo lectura
+#[case("|abc def", "\".dwx", "|bc def")]
+#[case("|abc", "\".yy\"0p", "|abc")]
+#[case("|abc def", "\"/p", "|abc def")]
+#[case("|abc", "\".x", "|abc")]
+// ". pega lo último insertado tecleándolo de nuevo
+#[case("|abc", "ihola<Esc>\".p", "holahol|aabc")]
+#[case("|abc", "ihola<Esc>$\".P", "holaabhol|ac")]
+#[case("|abc", "ihola<Esc>3\".p", "holaholaholahol|aabc")]
+#[case("|abc", "ihola<Esc>\".p.", "holaholahol|aabc")]
+#[case("|abc", "iab<BS>c<Esc>\".p", "aca|cabc")]
+#[case("|abc", "\".px", "|bc")]
+#[case("|abc", "cwxy<Esc>\".P", "xx|yy")]
+#[case("|abc", "ox<CR>y<Esc>gg\".p", "ax\n|ybc\nx\ny")]
+#[case("|abc", "ihola<Esc>\".pu", "hol|aabc")]
+#[case("|abc", "ihola<Esc>\".p.u", "holahola|abc")]
+#[case("|abc", "ihola<Esc>\".pu<C-r>", "hol|aholaabc")]
+// registros que no existen cancelan
+#[case("|abc def", "\"!x", "|bc def")]
+#[case("|abc def", "\"!p", "|abc def")]
+#[case("|abc def", "\"<Esc>x", "|bc def")]
+#[case("|abc def", "d\"ax", "ax|bc def")]
+// . usa el registro del cambio
+#[case("|ab cd ef", "\"adw.\"ap", "ecd| f")]
+#[case("|ab cd ef", "\"Adw.\"ap", "eab cd| f")]
+#[case("|ab\ncd", "\"ayyj\"ap.", "ab\ncd\nab\n|ab")]
+#[case("|ab\ncd", "\"ayy\"bdd.", "|")]
+// multibyte
+#[case("|ñandú añil", "\"ayiww\"Ayiw$\"ap", "ñandú añilñandúañi|l")]
+#[case("|aé\nb", "\"ax\"bdd\"ap\"bp", "ba\n|é")]
+// "/ es el último patrón, de una búsqueda o de :s, y una búsqueda como motion usa el registro
+#[case("|ab cd ab", "/cd<CR>\"/P", "ab c|dcd ab")]
+#[case("|ab cd ab", "*$\"/p", "ab cd ab\\<ab\\|>")]
+#[case("|ab cd", ":s/b/x/<CR>\"/p", "a|bx cd")]
+#[case("|ab cd ab", "\"ad/ab<CR>$\"ap", "abab cd| ")]
+#[case("|ab cd ab", "/ab<CR>gg\"bdn$\"bp", "abab cd| ")]
+#[case("|ab cd ab", "\"cd*$\"cp", "abab cd| ")]
+#[case("|ab\ncd\nab", "\"Ad/ab<CR>\"ap", "ab\n|ab\ncd")]
+#[case("|ab cd", "\"_d/cd<CR>p", "|cd")]
 // línea de comandos: entrar, editar y salir sin ejecutar nada
 #[case("ab|c", ":w", "ab|c")]
 #[case("ab|c", ":wq<BS>", "ab|c")]

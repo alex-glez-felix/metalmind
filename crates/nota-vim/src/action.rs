@@ -46,6 +46,8 @@ pub enum Action {
     /// `:noh`: deja de resaltar la búsqueda hasta la próxima.
     ClearSearchHighlight,
     Operator(Operator),
+    /// `"`: lo siguiente usa el registro que nombre la tecla siguiente.
+    SelectRegister,
     /// El objeto de `dd`, `cc` y `yy`.
     CurrentLine,
     Insert(InsertAt),
@@ -156,6 +158,7 @@ impl Action {
         Self::Operator(Operator::Delete),
         Self::Operator(Operator::Change),
         Self::Operator(Operator::Yank),
+        Self::SelectRegister,
         Self::CurrentLine,
         Self::Insert(InsertAt::Before),
         Self::Insert(InsertAt::After),
@@ -209,6 +212,7 @@ impl Action {
             Self::Operator(Operator::Delete) => "vim::delete",
             Self::Operator(Operator::Change) => "vim::change",
             Self::Operator(Operator::Yank) => "vim::yank",
+            Self::SelectRegister => "vim::select_register",
             Self::CurrentLine => "vim::current_line",
             Self::Insert(at) => insert_name(at),
             Self::NormalMode => "vim::normal_mode",

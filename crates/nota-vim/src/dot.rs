@@ -3,6 +3,7 @@
 use crate::find::Find;
 use crate::insert::Typed;
 use crate::object::Object;
+use crate::register::RegisterName;
 use crate::search::Query;
 use crate::{InsertAt, Operator, PasteSide};
 
@@ -58,21 +59,28 @@ pub(crate) enum Change {
     Insert(InsertAt),
 }
 
-/// Un cambio que `.` sabe repetir: la orden, su count y, si pasó por Insert,
-/// lo tecleado. Como en vim, se repiten las teclas y no el texto que quedó.
+/// Un cambio que `.` sabe repetir: la orden, su count, su registro y, si
+/// pasó por Insert, lo tecleado. Como en vim, se repiten las teclas y no el
+/// texto que quedó.
 #[derive(Clone, Debug)]
 pub(crate) struct Dot {
     pub change: Change,
     /// El total: `2d3w` se repite como `d6w`.
     pub count: Option<usize>,
+    pub register: Option<RegisterName>,
     pub typed: Vec<Typed>,
 }
 
 impl Dot {
-    pub(crate) fn new(change: Change, count: Option<usize>) -> Self {
+    pub(crate) fn new(
+        change: Change,
+        count: Option<usize>,
+        register: Option<RegisterName>,
+    ) -> Self {
         Self {
             change,
             count,
+            register,
             typed: Vec::new(),
         }
     }

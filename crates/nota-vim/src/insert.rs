@@ -11,7 +11,24 @@ pub(crate) fn enter(
     selections: &Selections,
     at: InsertAt,
 ) -> Result<Selections, VimError> {
-    let point = |selection: &Selection| {
+    let points = insertion_points(buffer, selections, at);
+    match at {
+        InsertAt::LineBelow => open_line(buffer, selections, &points, Bias::After),
+        InsertAt::LineAbove => open_line(buffer, selections, &points, Bias::Before),
+        _ => {
+            buffer.begin_transaction(points.clone())?;
+            Ok(points)
+        }
+    }
+}
+
+/// Dónde empieza a escribirse en cada selección.
+pub(crate) fn insertion_points(
+    buffer: &Buffer,
+    selections: &Selections,
+    at: InsertAt,
+) -> Selections {
+    selections.map(|selection| {
         let head = selection.head;
         let line = buffer.line_of(head);
         let offset = match at {
@@ -22,16 +39,7 @@ pub(crate) fn enter(
             InsertAt::LineAbove => buffer.line_start(line),
         };
         Selection::cursor(offset)
-    };
-    let points = selections.map(point);
-    match at {
-        InsertAt::LineBelow => open_line(buffer, selections, &points, Bias::After),
-        InsertAt::LineAbove => open_line(buffer, selections, &points, Bias::Before),
-        _ => {
-            buffer.begin_transaction(points.clone())?;
-            Ok(points)
-        }
-    }
+    })
 }
 
 /// `o`/`O`: el undo vuelve al cursor original, no a la línea nueva.
@@ -122,7 +130,7 @@ impl Session {
 
     pub(crate) fn record(&mut self, typed: &Typed) {
         if self.cursor_moved {
-            self.dot = Dot::new(Change::Insert(InsertAt::Before), None);
+            self.dot = Dot::new(Change::Insert(InsertAt::Before), None, None);
             self.cursor_moved = false;
         }
         self.dot.record(typed);

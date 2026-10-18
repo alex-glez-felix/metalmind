@@ -70,6 +70,13 @@ impl Region {
     pub fn is_empty(&self) -> bool {
         matches!(self, Self::Chars(range) if range.is_empty())
     }
+
+    pub fn spans_lines(&self, buffer: &Buffer) -> bool {
+        match self {
+            Self::Chars(range) => buffer.line_of(range.start) != buffer.line_of(range.end),
+            Self::Lines { .. } => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

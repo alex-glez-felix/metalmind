@@ -6,26 +6,28 @@ use super::{Vim, move_cursors};
 use crate::dot::Subject;
 use crate::find::Find;
 use crate::object::Object;
-use crate::{Action, CharSearch, Key, KeyOutcome, Mode, VimError};
+use crate::register::Clipboard;
+use crate::{CharSearch, Mode, VimError};
 
 impl Vim {
-    /// Completa `f`, `F`, `t` o `T`; una tecla que no es carácter se usa
-    /// para cancelar, como `<Esc>`.
+    /// Completa `f`, `F`, `t` o `T` con el carácter a buscar.
     pub(super) fn find_char(
         &mut self,
         search: CharSearch,
-        key: Key,
+        target: char,
         buffer: &mut Buffer,
         selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
-        let Some(target) = searched_char(key) else {
-            self.reset();
-            return Ok(KeyOutcome::Executed(Action::NormalMode));
-        };
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), VimError> {
         let find = Find::new(search, target);
         self.last_find = Some(find);
-        self.jump(find, Object::Find(find).into(), buffer, selections)?;
-        Ok(KeyOutcome::Executed(Action::FindChar(search)))
+        self.jump(
+            find,
+            Object::Find(find).into(),
+            buffer,
+            selections,
+            clipboard,
+        )
     }
 
     /// `;` o `,`; sin una búsqueda anterior solo cancela lo pendiente.
@@ -34,13 +36,20 @@ impl Vim {
         reversed: bool,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
         let Some(find) = self.last_find else {
             self.reset();
             return Ok(());
         };
         let subject = Subject::RepeatFind { reversed };
-        self.jump(find.repeat(reversed), subject, buffer, selections)
+        self.jump(
+            find.repeat(reversed),
+            subject,
+            buffer,
+            selections,
+            clipboard,
+        )
     }
 
     /// Con un operador pendiente opera sobre `subject`, que `.` repite.
@@ -50,20 +59,14 @@ impl Vim {
         subject: Subject,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
         if let Mode::OperatorPending(operator) = self.mode {
-            return self.operate(operator, subject, buffer, selections);
+            return self.operate(operator, subject, buffer, selections, clipboard);
         }
-        let times = self.count.take().unwrap_or(1);
+        let times = self.take_count().unwrap_or(1);
+        self.reset();
         *selections = move_cursors(selections, |s| find.resolve(buffer, s.head, times));
         Ok(())
-    }
-}
-
-fn searched_char(key: Key) -> Option<char> {
-    match key {
-        Key::Char(c) => Some(c),
-        Key::Tab => Some('\t'),
-        _ => None,
     }
 }
