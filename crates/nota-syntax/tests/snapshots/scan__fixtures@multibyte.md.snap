@@ -1,0 +1,21 @@
+---
+source: crates/nota-syntax/tests/scan.rs
+expression: "support::render(&text, &scan(&text))"
+input_file: crates/nota-syntax/tests/fixtures/multibyte.md
+---
+wikilink 8..20 "[[canción]]"
+    target 10..18 "canción"
+wikilink 23..55 "[[日本語のノート|日本]]"
+    target 25..46 "日本語のノート"
+    alias 47..53 "日本"
+wikilink 137..157 "[[🇲🇽 México]]"
+    target 139..155 "🇲🇽 México"
+tag 56..66 "#étiqueta" name "étiqueta"
+tag 67..77 "#日本語" name "日本語"
+tag 78..83 "#🔥" name "🔥"
+tag 84..97 "#emoji🎉fin" name "emoji🎉fin"
+tag 107..126 "#👨\u{200d}👩\u{200d}👧" name "👨\u{200d}👩\u{200d}👧"
+tag 180..184 "#tag" name "tag"
+tag 188..193 "#otro" name "otro"
+tag 199..203 "#fin" name "fin"
+tag 208..214 "#corto" name "corto"
