@@ -4,6 +4,7 @@
 mod file;
 mod index;
 mod ops;
+mod order;
 mod path;
 mod refresh;
 mod scan;

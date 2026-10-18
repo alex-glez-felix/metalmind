@@ -8,11 +8,13 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use crate::index::{EntryKind, VaultIndex};
+use crate::order::{Entries, arrange};
 use crate::path::VaultPath;
 use crate::scan::scan_partial;
 
-/// Un cambio del índice. En un lote van en orden de aplicación: primero los
-/// `Removed` (en rutas de antes), luego `Renamed`, `Created` y `Modified`.
+/// Un cambio del índice. Los de un lote van en un orden que se puede aplicar
+/// sobre un árbol: nada se crea ni se mueve a una carpeta que todavía no
+/// existe, nada pisa un nombre ocupado y ninguna carpeta se borra con hijos.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultChange {
     Created {
@@ -60,7 +62,7 @@ pub(crate) fn refresh(index: &mut VaultIndex, root: &Path, touched: &Touched) ->
     }
     index.insert_all(scan_partial(root, &dirty));
     let after = subtrees(index, &dirty);
-    diff(&before, after, touched)
+    diff(&before, &after, touched)
 }
 
 /// Las rutas a releer, sin las que ya cubre otra. Si la carpeta de una ruta
@@ -97,11 +99,11 @@ fn subtrees(index: &VaultIndex, roots: &[VaultPath]) -> HashMap<VaultPath, Entry
 
 fn diff(
     before: &HashMap<VaultPath, EntryKind>,
-    after: HashMap<VaultPath, EntryKind>,
+    after: &HashMap<VaultPath, EntryKind>,
     touched: &Touched,
 ) -> Vec<VaultChange> {
-    let mut removed: BTreeSet<(VaultPath, EntryKind)> = BTreeSet::new();
-    let mut created: BTreeSet<(VaultPath, EntryKind)> = BTreeSet::new();
+    let mut removed = Entries::new();
+    let mut created = Entries::new();
     let mut modified = Vec::new();
     for (path, kind) in before {
         match after.get(path) {
@@ -116,69 +118,17 @@ fn diff(
         }
     }
     for (path, kind) in after {
-        if before.get(&path) != Some(&kind) {
-            created.insert((path, kind));
+        if before.get(path) != Some(kind) {
+            created.insert((path.clone(), *kind));
         }
     }
-    let renamed = pair_renames(&touched.renames, &mut removed, &mut created);
-    // Lo borrado va en rutas de antes: tiene que aplicarse antes de mover su carpeta.
-    let mut changes: Vec<_> = removed
-        .into_iter()
-        .map(|(path, kind)| VaultChange::Removed { path, kind })
-        .collect();
-    changes.extend(renamed);
-    let mut created: Vec<_> = created.into_iter().collect();
-    created.sort_by_cached_key(|(path, _)| (path.depth(), path.clone()));
-    changes.extend(
-        created
-            .into_iter()
-            .map(|(path, kind)| VaultChange::Created { path, kind }),
-    );
+    let mut changes = arrange(before, after, &removed, &created, &touched.renames);
     modified.sort();
     changes.extend(
         modified
             .into_iter()
             .map(|path| VaultChange::Modified { path }),
     );
-    changes
-}
-
-/// Convierte en `Renamed` lo que se borró en `from` y apareció igual en `to`.
-fn pair_renames(
-    renames: &[(VaultPath, VaultPath)],
-    removed: &mut BTreeSet<(VaultPath, EntryKind)>,
-    created: &mut BTreeSet<(VaultPath, EntryKind)>,
-) -> Vec<VaultChange> {
-    let mut changes = Vec::new();
-    for (from, to) in renames {
-        let Some(kind) = [EntryKind::Folder, EntryKind::Note, EntryKind::Attachment]
-            .into_iter()
-            .find(|&kind| {
-                removed.contains(&(from.clone(), kind)) && created.contains(&(to.clone(), kind))
-            })
-        else {
-            continue;
-        };
-        let moved: Vec<_> = removed
-            .iter()
-            .filter(|(path, _)| path.starts_with(from))
-            .filter_map(|(path, kind)| {
-                let target = (path.rebase(from, to)?, *kind);
-                created
-                    .contains(&target)
-                    .then(|| ((path.clone(), *kind), target))
-            })
-            .collect();
-        for (old, new) in moved {
-            removed.remove(&old);
-            created.remove(&new);
-        }
-        changes.push(VaultChange::Renamed {
-            from: from.clone(),
-            to: to.clone(),
-            kind,
-        });
-    }
     changes
 }
 
@@ -254,27 +204,65 @@ mod tests {
     /// Lo que haría la UI con los cambios sobre su propia copia del índice.
     fn replay(mirror: &mut Mirror, changes: &[VaultChange]) {
         for change in changes {
-            match change {
-                VaultChange::Created { path, kind } => {
-                    mirror.insert(path.clone(), *kind);
+            replay_one(mirror, change).unwrap_or_else(|error| panic!("{change:?}: {error}"));
+        }
+    }
+
+    /// Como un árbol de verdad: no se crea ni se mueve nada a una carpeta que
+    /// no existe, ni se pisa algo, ni se borra una carpeta con hijos.
+    fn replay_one(mirror: &mut Mirror, change: &VaultChange) -> Result<(), &'static str> {
+        let has_folder = |mirror: &Mirror, path: &VaultPath| {
+            path.parent().is_some_and(|parent| {
+                parent.is_root() || mirror.get(&parent) == Some(&EntryKind::Folder)
+            })
+        };
+        match change {
+            VaultChange::Created { path, kind } => {
+                if !has_folder(mirror, path) {
+                    return Err("su carpeta no existe");
                 }
-                VaultChange::Removed { path, .. } => {
-                    mirror.remove(path);
+                if mirror.insert(path.clone(), *kind).is_some() {
+                    return Err("pisa algo que existe");
                 }
-                VaultChange::Renamed { from, to, .. } => {
-                    let moved: Vec<_> = mirror
-                        .keys()
-                        .filter(|path| path.starts_with(from))
-                        .cloned()
-                        .collect();
-                    for path in moved {
-                        let kind = mirror.remove(&path).unwrap();
-                        mirror.insert(path.rebase(from, to).unwrap(), kind);
-                    }
+            }
+            VaultChange::Removed { path, .. } => {
+                if mirror
+                    .keys()
+                    .any(|other| other != path && other.starts_with(path))
+                {
+                    return Err("borra una carpeta con hijos");
                 }
-                VaultChange::Modified { .. } => {}
+                if mirror.remove(path).is_none() {
+                    return Err("borra algo que no existe");
+                }
+            }
+            VaultChange::Renamed { from, to, .. } => {
+                if !mirror.contains_key(from) {
+                    return Err("mueve algo que no existe");
+                }
+                if mirror.contains_key(to) {
+                    return Err("pisa algo que existe");
+                }
+                if !has_folder(mirror, to) {
+                    return Err("su destino no tiene carpeta");
+                }
+                let moved: Vec<_> = mirror
+                    .keys()
+                    .filter(|path| path.starts_with(from))
+                    .cloned()
+                    .collect();
+                for path in moved {
+                    let kind = mirror.remove(&path).unwrap();
+                    mirror.insert(path.rebase(from, to).unwrap(), kind);
+                }
+            }
+            VaultChange::Modified { path } => {
+                if !mirror.contains_key(path) {
+                    return Err("modifica algo que no existe");
+                }
             }
         }
+        Ok(())
     }
 
     proptest! {
@@ -300,6 +288,39 @@ mod tests {
                 prop_assert_eq!(&copy, &mirror(&index), "cambios de {:?}: {:?}", batch, changes);
             }
         }
+    }
+
+    #[test]
+    fn mover_a_una_carpeta_nueva_crea_la_carpeta_antes() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::write(root.join("x.md"), "").unwrap();
+        let mut index = scan(&root);
+        let mut copy = mirror(&index);
+        fs::create_dir(root.join("nueva")).unwrap();
+        fs::rename(root.join("x.md"), root.join("nueva/x.md")).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            paths: [path("nueva"), path("x.md"), path("nueva/x.md")].into(),
+            renames: vec![(path("x.md"), path("nueva/x.md"))],
+        };
+        let changes = refresh(&mut index, &root, &touched);
+        assert_eq!(
+            changes,
+            [
+                VaultChange::Created {
+                    path: path("nueva"),
+                    kind: EntryKind::Folder
+                },
+                VaultChange::Renamed {
+                    from: path("x.md"),
+                    to: path("nueva/x.md"),
+                    kind: EntryKind::Note
+                },
+            ]
+        );
+        replay(&mut copy, &changes);
+        assert_eq!(copy, mirror(&index));
     }
 
     #[test]
