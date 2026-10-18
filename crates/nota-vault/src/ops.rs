@@ -162,10 +162,23 @@ pub(crate) fn create_parents(root: &Path, path: &VaultPath) -> Result<Vec<VaultP
         match fs::create_dir(dir.to_fs(root)) {
             Ok(()) => created.push(dir),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(io_error("crear", &dir, error)),
+            Err(error) => {
+                remove_empty(root, &created);
+                return Err(io_error("crear", &dir, error));
+            }
         }
     }
     Ok(created)
+}
+
+/// Borra `folders` de la más profunda a la más cercana a la raíz, mientras
+/// estén vacías.
+pub(crate) fn remove_empty(root: &Path, folders: &[VaultPath]) {
+    for folder in folders.iter().rev() {
+        if fs::remove_dir(folder.to_fs(root)).is_err() {
+            return;
+        }
+    }
 }
 
 /// La ruta en disco donde crear `path`, con sus carpetas ya creadas.

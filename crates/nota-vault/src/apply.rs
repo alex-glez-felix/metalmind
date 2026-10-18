@@ -26,6 +26,8 @@ struct Renamed {
     /// El texto con que se movió, si es un archivo: deshacer no lo devuelve
     /// a su lugar si cambió después. Una carpeta se mueve de vuelta entera.
     text: Option<String>,
+    /// Las carpetas que hubo que crear para el destino.
+    folders: Vec<VaultPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,12 +170,18 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
     }
     for rename in &changes.renames {
         let text = moved_text(root, &applied, &rename.from);
+        let folders = match ops::create_parents(root, &rename.to) {
+            Ok(folders) => folders,
+            Err(error) => return interrupted(applied, Interruption::Rename(error)),
+        };
         if let Err(error) = ops::rename(root, &rename.from, &rename.to) {
+            ops::remove_empty(root, &folders);
             return interrupted(applied, Interruption::Rename(error));
         }
         applied.renamed.push(Renamed {
             rename: rename.clone(),
             text,
+            folders,
         });
     }
     Ok(applied)
@@ -224,7 +232,7 @@ fn create(root: &Path, file: &NewFile) -> Result<Created, CreateFailed> {
     match create_atomic(&file.path.to_fs(root), &file.text) {
         Ok(()) => Ok(created),
         Err(FileError::Write { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists => {
-            remove_folders(root, &created.folders);
+            ops::remove_empty(root, &created.folders);
             Err(failed(FileOpError::AlreadyExists(file.path.clone()).into()))
         }
         Err(error) if read(root, &file.path).is_ok_and(|text| text == file.text) => {
@@ -234,7 +242,7 @@ fn create(root: &Path, file: &NewFile) -> Result<Created, CreateFailed> {
             })
         }
         Err(error) => {
-            remove_folders(root, &created.folders);
+            ops::remove_empty(root, &created.folders);
             Err(failed(error.into()))
         }
     }
@@ -258,7 +266,7 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
     }
     let mut report = UndoReport::default();
     // Antes de devolver los textos: un archivo movido que cambió se queda donde está.
-    let moved_back: Vec<&Rename> = applied
+    let moved_back: Vec<&Renamed> = applied
         .renamed
         .iter()
         .filter(|renamed| {
@@ -271,7 +279,6 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
             }
             unchanged
         })
-        .map(|renamed| &renamed.rename)
         .collect();
     for file in &applied.files {
         let path = file.path.clone();
@@ -296,7 +303,7 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
         match read(root, &now) {
             Ok(text) if text == created.file.text => match remove(root, &now) {
                 Ok(()) => {
-                    remove_folders(root, &created.folders);
+                    ops::remove_empty(root, &created.folders);
                     report.restored.push(path);
                 }
                 Err(error) => report.failed.push((path, error.into())),
@@ -305,9 +312,10 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
             Err(error) => report.failed.push((path, error)),
         }
     }
-    for rename in moved_back.into_iter().rev() {
-        if let Err(error) = ops::rename(root, &rename.to, &rename.from) {
-            report.renames.push(error);
+    for renamed in moved_back.into_iter().rev() {
+        match ops::rename(root, &renamed.rename.to, &renamed.rename.from) {
+            Ok(()) => ops::remove_empty(root, &renamed.folders),
+            Err(error) => report.renames.push(error),
         }
     }
     Ok(report)
@@ -334,13 +342,4 @@ fn remove(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
         path: path.clone(),
         source,
     })
-}
-
-/// Borra las carpetas que se crearon para un archivo, si quedaron vacías.
-fn remove_folders(root: &Path, folders: &[VaultPath]) {
-    for folder in folders.iter().rev() {
-        if fs::remove_dir(folder.to_fs(root)).is_err() {
-            return;
-        }
-    }
 }

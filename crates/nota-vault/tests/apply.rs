@@ -209,3 +209,19 @@ fn undo_leaves_a_moved_page_that_changed_where_it_is() {
         RENAME[3].1
     );
 }
+
+#[test]
+fn undoing_a_move_into_new_folders_removes_them() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), &[("a.md", "[[plan]]"), ("plan.md", "")]);
+    let before = contents(dir.path());
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let plan = vault
+        .links()
+        .rename_plan(&path("plan.md"), &path("nuevo/sub/plan.md"))
+        .unwrap();
+    let applied = vault.apply(&plan.changes()).unwrap();
+    assert!(dir.path().join("nuevo/sub/plan.md").is_file());
+    vault.undo(&applied).unwrap();
+    assert_eq!(contents(dir.path()), before);
+}
