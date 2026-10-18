@@ -157,7 +157,13 @@ impl Store {
             file.set_len(valid_len)?;
             file.seek(SeekFrom::Start(valid_len))?;
             file.write_all(frames)?;
-            file.sync_data()
+            file.sync_data()?;
+            // Un log nuevo: que su entrada en `notes/` llegue al disco antes que
+            // el índice que lo nombra.
+            if valid_len == 0 {
+                File::open(self.notes_dir())?.sync_all()?;
+            }
+            Ok(())
         };
         write().map_err(|source| HistoryError::io("guardar", &path, source))
     }
@@ -172,17 +178,27 @@ impl Store {
             .map_err(|error| HistoryError::File(Box::new(error)))
     }
 
-    /// Aparta un log dañado como `<id>.log.damaged`: no se pierde, pero ya
-    /// no es parte del historial y su id puede empezar uno nuevo.
+    /// Aparta un log dañado como `<id>.log.damaged` (o `.damaged.1`, `.2`…
+    /// si ya hay otro): no se pierde, pero ya no es parte del historial y su
+    /// id puede empezar uno nuevo.
     pub(super) fn set_aside(&self, _lock: &Lock, id: u64) -> Result<(), HistoryError> {
         let path = self.log_path(id);
-        let mut aside = path.clone().into_os_string();
-        aside.push(".damaged");
-        match fs::rename(&path, &aside) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(source) => Err(HistoryError::io("apartar", &path, source)),
+        let failed = |source| HistoryError::io("apartar", &path, source);
+        for copy in 0_u32.. {
+            let mut aside = path.clone().into_os_string();
+            aside.push(".damaged");
+            if copy > 0 {
+                aside.push(format!(".{copy}"));
+            }
+            // Un enlace nuevo nunca pisa una copia anterior, a diferencia de `rename`.
+            match fs::hard_link(&path, &aside) {
+                Ok(()) => return fs::remove_file(&path).map_err(failed),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+                Err(source) => return Err(failed(source)),
+            }
         }
+        Ok(())
     }
 
     pub(super) fn remove_log(&self, _lock: &Lock, id: u64) -> Result<(), HistoryError> {

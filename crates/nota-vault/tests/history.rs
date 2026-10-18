@@ -490,3 +490,41 @@ fn una_nota_con_el_log_danado_sigue_guardando_versiones() {
     aside.push(".damaged");
     assert_eq!(fs::read_to_string(aside).unwrap(), "no es un historial");
 }
+
+#[test]
+fn las_apartadas_dentro_de_una_carpeta_movida_van_con_ella() {
+    let dir = TempDir::new().unwrap();
+    let history = history(&dir);
+    let (vieja, nueva) = (path("a/x.md"), path("a/y.md"));
+    history.record(&vieja, "vieja", epoch()).unwrap();
+    history.record(&nueva, "nueva", epoch() + HOUR).unwrap();
+    history.rename(&nueva, &vieja, epoch() + 2 * HOUR).unwrap();
+    history
+        .rename(&path("a"), &path("b"), epoch() + DAY)
+        .unwrap();
+    let [old] = history.deleted_notes().unwrap().try_into().unwrap();
+    assert_eq!(old.path, path("b/x.md"));
+    assert_eq!(contents(&history, &path("b/x.md")), ["nueva"]);
+}
+
+#[test]
+fn dos_logs_danados_de_la_misma_nota_se_apartan_los_dos() {
+    let dir = TempDir::new().unwrap();
+    let history = history(&dir);
+    let note = path("a.md");
+    history.record(&note, "uno", epoch()).unwrap();
+    let log = logs(&dir).remove(0);
+    fs::write(&log, "primer daño").unwrap();
+    history.record(&note, "dos", epoch() + HOUR).unwrap();
+    fs::write(&log, "segundo daño").unwrap();
+    history.record(&note, "tres", epoch() + 2 * HOUR).unwrap();
+    assert_eq!(contents(&history, &note), ["tres"]);
+    let mut aside: Vec<String> = fs::read_dir(dir.path().join("notes"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path != &log)
+        .map(|path| fs::read_to_string(path).unwrap())
+        .collect();
+    aside.sort();
+    assert_eq!(aside, ["primer daño", "segundo daño"]);
+}

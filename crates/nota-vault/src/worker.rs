@@ -101,7 +101,7 @@ impl Worker {
         }
         // Antes de publicar, para que quien reciba el cambio ya vea el
         // historial en la ruta nueva.
-        self.follow_in_history(&changes);
+        self.follow_disk_changes(&changes, inbox);
         let snapshot = Arc::new(files.clone());
         let published = Arc::new(links.clone());
         let published_tags = Arc::new(tags.clone());
@@ -118,6 +118,21 @@ impl Worker {
             tag_changes,
         });
         self.record_external(&external, inbox);
+    }
+
+    /// Sigue los renombres y borrados del lote. Antes registra los guardados
+    /// que ya se escribieron, que son de antes del cambio: si no, la versión
+    /// de uno que se escribió justo antes de un renombre quedaría en la ruta
+    /// vieja.
+    fn follow_disk_changes(&self, changes: &[VaultChange], inbox: &mut Inbox) {
+        let saves = {
+            let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
+            inbox.pending_saves()
+        };
+        for save in saves {
+            self.record(&save);
+        }
+        self.follow_in_history(changes);
     }
 
     /// Solo llegan guardados si hay historial.
@@ -329,6 +344,37 @@ mod tests {
             .iter()
             .map(|version| history.content(note, version.id).unwrap())
             .collect()
+    }
+
+    #[test]
+    fn un_guardado_ya_escrito_se_registra_antes_de_seguir_un_renombre() {
+        let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let worker = worker(root.path(), &history);
+        let (a, b) = (
+            VaultPath::new("a.md").unwrap(),
+            VaultPath::new("b.md").unwrap(),
+        );
+        history.record(&a, "uno", SystemTime::now()).unwrap();
+        // Se guardó "dos" en `a.md` y después se renombró, pero el hilo ve el
+        // renombre antes que el mensaje del guardado.
+        let (messages, received) = mpsc::channel();
+        let (done, _recorded) = mpsc::channel();
+        messages
+            .send(Message::Save(Save {
+                path: a.clone(),
+                text: "dos".to_owned(),
+                at: SystemTime::now(),
+                done,
+            }))
+            .unwrap();
+        let changes = [VaultChange::Renamed {
+            from: a,
+            to: b.clone(),
+            kind: EntryKind::Note,
+        }];
+        worker.follow_disk_changes(&changes, &mut Inbox::new(&received));
+        assert_eq!(contents(&history, &b), ["uno", "dos"]);
     }
 
     #[test]
