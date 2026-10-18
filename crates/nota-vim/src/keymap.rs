@@ -1,5 +1,6 @@
 use crate::{
-    Action, CharSearch, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject, VisualKind,
+    Action, CharSearch, Command, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject,
+    VisualKind,
 };
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
@@ -69,11 +70,20 @@ impl Keymap {
     /// El keymap de vim por defecto.
     #[must_use]
     pub fn vim() -> Self {
-        Self::new(VIM.iter().map(|&(context, keys, action)| Binding {
-            context,
-            keys: keys.to_vec(),
-            action,
-        }))
+        let panes = PANES
+            .iter()
+            .flatten()
+            .map(|(c, k, a)| (*c, k.as_slice(), *a));
+        Self::new(
+            VIM.iter()
+                .copied()
+                .chain(panes)
+                .map(|(context, keys, action)| Binding {
+                    context,
+                    keys: keys.to_vec(),
+                    action,
+                }),
+        )
     }
 
     pub(crate) fn lookup(&self, mode: Mode, keys: &[Key]) -> Lookup {
@@ -133,6 +143,31 @@ const fn search_word(backward: bool, whole_word: bool) -> Action {
 const fn operator(operator: Operator) -> Action {
     Action::Operator(operator)
 }
+
+const CTRL_W: Key = Key::Ctrl('w');
+
+/// `ctrl-w` seguido de `key` o de `ctrl-key`, como acepta vim.
+const fn pane(key: char, command: Command) -> [(Context, [Key; 2], Action); 2] {
+    let action = Action::Command(command);
+    [
+        (Context::Normal, [CTRL_W, Key::Char(key)], action),
+        (Context::Normal, [CTRL_W, Key::Ctrl(key)], action),
+    ]
+}
+
+/// Los paneles van en el keymap de vim porque `ctrl-w` comparte prefijo,
+/// count y cancelación con el resto de Normal.
+const PANES: &[[(Context, [Key; 2], Action); 2]] = &[
+    pane('v', Command::SplitRight),
+    pane('s', Command::SplitDown),
+    pane('h', Command::FocusLeft),
+    pane('j', Command::FocusDown),
+    pane('k', Command::FocusUp),
+    pane('l', Command::FocusRight),
+    pane('w', Command::FocusNext),
+    pane('q', Command::Quit),
+    pane('o', Command::Only),
+];
 
 const DELETE: Context = Context::Operator(Operator::Delete);
 const CHANGE: Context = Context::Operator(Operator::Change);
@@ -307,8 +342,12 @@ mod tests {
     /// el timeout de vim para decidir; el default no debe tener ninguna.
     #[test]
     fn default_keymap_is_unambiguous() {
-        for (i, &(context, keys, action)) in VIM.iter().enumerate() {
-            for &(other_context, other_keys, other_action) in &VIM[i + 1..] {
+        let bindings = Keymap::vim().bindings;
+        for (i, binding) in bindings.iter().enumerate() {
+            let (context, keys, action) = (binding.context, &binding.keys, binding.action);
+            for other in &bindings[i + 1..] {
+                let (other_context, other_keys, other_action) =
+                    (other.context, &other.keys, other.action);
                 if !overlap(context, other_context) {
                     continue;
                 }
@@ -335,6 +374,25 @@ mod tests {
         );
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('g'), ch('x')]),
+            Lookup::Unbound
+        );
+    }
+
+    #[test]
+    fn ctrl_w_takes_the_next_key_with_or_without_ctrl() {
+        let keymap = Keymap::vim();
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[Key::Ctrl('w')]),
+            Lookup::Pending
+        );
+        for next in [ch('v'), Key::Ctrl('v')] {
+            assert_eq!(
+                keymap.lookup(Mode::Normal, &[Key::Ctrl('w'), next]),
+                Lookup::Action(Action::Command(Command::SplitRight))
+            );
+        }
+        assert_eq!(
+            keymap.lookup(Mode::Insert, &[Key::Ctrl('w')]),
             Lookup::Unbound
         );
     }

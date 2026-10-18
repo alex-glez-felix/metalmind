@@ -1,8 +1,9 @@
 //! Ratón, rueda y portapapeles. En Linux, seleccionar con el ratón copia a
-//! la selección primaria y el clic medio la pega.
+//! la selección primaria y el clic medio la pega. Un clic en un panel le da
+//! el foco.
 
 use gpui_kit::{
-    ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    App, ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
     ScrollWheelEvent, Window,
 };
 use nota_buffer::ByteOffset;
@@ -11,9 +12,9 @@ use super::Editor;
 use crate::actions::{Copy, Paste};
 
 impl Editor {
-    fn offset_at(&self, position: Point<Pixels>) -> Option<ByteOffset> {
+    fn offset_at(&self, position: Point<Pixels>, cx: &App) -> Option<ByteOffset> {
         let (line, index) = self.layout.as_ref()?.hit(position)?;
-        Some(self.document.buffer().line_start(line) + index)
+        Some(self.view(cx)?.buffer().line_start(line) + index)
     }
 
     pub(super) fn on_scroll(
@@ -25,8 +26,10 @@ impl Editor {
         let Some(line_height) = self.layout.as_ref().map(|l| l.viewport.line_height) else {
             return;
         };
+        let Some(last_line) = self.view(cx).map(|view| view.buffer().last_line()) else {
+            return;
+        };
         let delta = event.delta.pixel_delta(line_height).y;
-        let last_line = self.document.buffer().last_line();
         self.scroll
             .scroll_by(-f64::from(delta / line_height), last_line);
         cx.notify();
@@ -38,13 +41,12 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.focus_handle, cx);
-        let Some(offset) = self.offset_at(event.position) else {
+        self.take_focus(window, cx);
+        let Some(offset) = self.offset_at(event.position, cx) else {
             return;
         };
         self.drag_anchor = Some(offset);
-        self.document.select(offset, offset);
-        cx.notify();
+        self.select(offset, offset, cx);
     }
 
     pub(super) fn on_mouse_move(
@@ -56,11 +58,10 @@ impl Editor {
         let Some(anchor) = self.drag_anchor.filter(|_| event.dragging()) else {
             return;
         };
-        let Some(head) = self.offset_at(event.position) else {
+        let Some(head) = self.offset_at(event.position, cx) else {
             return;
         };
-        self.document.select(anchor, head);
-        cx.notify();
+        self.select(anchor, head, cx);
     }
 
     pub(super) fn on_left_up(
@@ -72,10 +73,11 @@ impl Editor {
         if self.drag_anchor.take().is_none() {
             return;
         }
-        match self.document.selected_text() {
+        let selected = self.workspace.read(cx).selected_text(self.pane);
+        match selected {
             Ok(Some(text)) => cx.write_to_primary(ClipboardItem::new_string(text)),
             Ok(None) => {}
-            Err(error) => self.report_error(&error),
+            Err(error) => self.report(&error, cx),
         }
     }
 
@@ -85,23 +87,23 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&self.focus_handle, cx);
-        if let Some(offset) = self.offset_at(event.position) {
-            self.document.select(offset, offset);
+        self.take_focus(window, cx);
+        if let Some(offset) = self.offset_at(event.position, cx) {
+            self.select(offset, offset, cx);
         }
         let text = cx.read_from_primary().and_then(|item| item.text());
         self.paste_text(text, cx);
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _window: &mut Window, cx: &mut Context<Self>) {
-        let text = self
-            .document
-            .selected_text()
+        let workspace = self.workspace.read(cx);
+        let text = workspace
+            .selected_text(self.pane)
             .transpose()
-            .unwrap_or_else(|| self.document.current_line());
+            .unwrap_or_else(|| workspace.current_line(self.pane));
         match text {
             Ok(text) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
-            Err(error) => self.report_error(&error),
+            Err(error) => self.report(&error, cx),
         }
     }
 
@@ -110,10 +112,28 @@ impl Editor {
         self.paste_text(text, cx);
     }
 
+    fn take_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus_handle, cx);
+        let focused = self.update_workspace(cx, |workspace, pane, _| workspace.focus(pane));
+        if let Err(error) = focused {
+            self.report(&error, cx);
+        }
+    }
+
+    fn select(&mut self, anchor: ByteOffset, head: ByteOffset, cx: &mut Context<Self>) {
+        let selected = self.update_workspace(cx, |workspace, pane, _| {
+            workspace.select(pane, anchor, head)
+        });
+        if let Err(error) = selected {
+            self.report(&error, cx);
+        }
+    }
+
     fn paste_text(&mut self, text: Option<String>, cx: &mut Context<Self>) {
         let Some(text) = text else { return };
-        if let Err(error) = self.document.paste(&text) {
-            self.report_error(&error);
+        let pasted = self.update_workspace(cx, |workspace, pane, _| workspace.paste(pane, &text));
+        if let Err(error) = pasted {
+            self.report(&error, cx);
         }
         self.reveal_cursor(cx);
     }

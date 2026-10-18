@@ -14,7 +14,7 @@
 )]
 mod support;
 
-use nota_vim::{Action, Command, CommandError, KeyOutcome, Mode, Vim};
+use nota_vim::{Action, Command, CommandError, Invocation, KeyOutcome, Mode, Vim};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -36,11 +36,58 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":x<BS>wq<CR>", Command::SaveAndQuit)]
 #[case("3: w <CR>", Command::Save)]
 #[case("ihola<Esc>:w<CR>", Command::Save)]
+#[case(":e<CR>", Command::Edit)]
+#[case(":e!<CR>", Command::ForceEdit)]
+#[case(":vs<CR>", Command::SplitRight)]
+#[case(":sp<CR>", Command::SplitDown)]
+#[case(":on<CR>", Command::Only)]
+#[case("<C-w>v", Command::SplitRight)]
+#[case("<C-w><C-v>", Command::SplitRight)]
+#[case("<C-w>s", Command::SplitDown)]
+#[case("<C-w>h", Command::FocusLeft)]
+#[case("<C-w>j", Command::FocusDown)]
+#[case("<C-w>k", Command::FocusUp)]
+#[case("<C-w>l", Command::FocusRight)]
+#[case("<C-w>w", Command::FocusNext)]
+#[case("<C-w><C-w>", Command::FocusNext)]
+#[case("<C-w>q", Command::Quit)]
+#[case("<C-w>o", Command::Only)]
+#[case("3<C-w>v", Command::SplitRight)]
 fn envia_el_comando(#[case] keys: &str, #[case] command: Command) {
     let (outcome, vim, _) = submit(keys);
-    assert_eq!(outcome, KeyOutcome::Command(command));
+    assert_eq!(outcome, KeyOutcome::Command(command.into()));
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(vim.command_line(), None);
+}
+
+#[test]
+fn e_lleva_la_ruta() {
+    let (outcome, _, text) = submit(":e notas/otra nota.md<CR>");
+    assert_eq!(
+        outcome,
+        KeyOutcome::Command(Invocation {
+            command: Command::Edit,
+            argument: Some("notas/otra nota.md".to_owned()),
+        })
+    );
+    assert_eq!(text, "ab|c");
+}
+
+#[test]
+fn ctrl_w_cancela_un_operador_pendiente() {
+    let (outcome, vim, text) = submit("d<C-w>v");
+    assert_eq!(outcome, KeyOutcome::Unbound);
+    assert_eq!(vim.mode(), Mode::Normal);
+    assert_eq!(text, "ab|c");
+}
+
+#[test]
+fn ctrl_w_seguido_de_otra_tecla_no_hace_nada() {
+    let (outcome, vim, _) = submit("<C-w>x");
+    assert_eq!(outcome, KeyOutcome::Unbound);
+    assert_eq!(vim.mode(), Mode::Normal);
+    let (_, _, text) = submit("<C-w>xh");
+    assert_eq!(text, "a|bc");
 }
 
 #[test]
@@ -49,6 +96,17 @@ fn un_comando_desconocido_no_toca_el_texto() {
     assert_eq!(
         outcome,
         KeyOutcome::InvalidCommand(CommandError::Unknown("dd".to_owned()))
+    );
+    assert_eq!(vim.mode(), Mode::Normal);
+    assert_eq!(text, "ab|c");
+}
+
+#[test]
+fn un_argumento_de_mas_no_toca_el_texto() {
+    let (outcome, vim, text) = submit(":w otra.md<CR>");
+    assert_eq!(
+        outcome,
+        KeyOutcome::InvalidCommand(CommandError::TrailingCharacters("otra.md".to_owned()))
     );
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(text, "ab|c");

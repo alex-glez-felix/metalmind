@@ -1,5 +1,5 @@
-//! La ventana de nota: un editor como raíz, sin el `Root` de gpui-kit, que
-//! se queda con `tab`, `shift-tab` y `ctrl-c` (04 §riesgo 1).
+//! La ventana de nota: el árbol de paneles como raíz, sin el `Root` de
+//! gpui-kit, que se queda con `tab`, `shift-tab` y `ctrl-c` (04 §riesgo 1).
 
 use std::time::Instant;
 
@@ -8,8 +8,8 @@ use nota_config::Config;
 
 use crate::actions;
 use crate::document::Document;
-use crate::editor::Editor;
 use crate::theme::{NoMonoFont, Theme};
+use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
@@ -40,19 +40,13 @@ pub fn open(
     .detach();
     let options = window_options(&document);
     cx.open_window(options, move |window, cx| {
-        let editor = cx.new(|cx| Editor::new(document, launched, cx));
-        let focus_handle = editor.read(cx).focus_handle().clone();
-        window.focus(&focus_handle, cx);
-        let closing = editor.downgrade();
+        let view = cx.new(|cx| WorkspaceView::new(document, launched, cx));
+        view.update(cx, |view, cx| view.focus(window, cx));
+        let closing = view.downgrade();
         window.on_window_should_close(cx, move |_window, cx| {
-            closing
-                .update(cx, |editor, cx| {
-                    cx.notify();
-                    editor.may_close()
-                })
-                .unwrap_or(true)
+            closing.update(cx, WorkspaceView::may_close).unwrap_or(true)
         });
-        editor
+        view
     })
     .map_err(OpenError::Window)?;
     Ok(())

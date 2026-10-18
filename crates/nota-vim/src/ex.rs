@@ -1,13 +1,13 @@
 //! Lo escrito tras `:`: los comandos que corre el motor (`:s`, `:noh`) y los
-//! que corre quien aloja el editor ([`Command`]).
+//! que corre quien aloja el editor ([`Invocation`]).
 
 use crate::range::LineRange;
 use crate::substitute::SubstituteCommand;
-use crate::{Command, CommandError};
+use crate::{CommandError, Invocation};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ExCommand {
-    Host(Command),
+    Host(Invocation),
     Substitute(SubstituteCommand),
     /// `:noh`: deja de resaltar la búsqueda hasta la próxima.
     ClearSearchHighlight,
@@ -38,13 +38,14 @@ impl ExCommand {
         {
             return Ok(Some(Self::ClearSearchHighlight));
         }
-        Command::parse(line).map(|command| command.map(Self::Host))
+        Invocation::parse(line).map(|invocation| invocation.map(Self::Host))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Command;
 
     #[test]
     fn tells_engine_commands_from_host_ones() {
@@ -70,14 +71,18 @@ mod tests {
         );
         assert_eq!(
             ExCommand::parse("wq"),
-            Ok(Some(ExCommand::Host(Command::SaveAndQuit)))
+            Ok(Some(ExCommand::Host(Command::SaveAndQuit.into())))
+        );
+        assert_eq!(
+            ExCommand::parse("sp"),
+            Ok(Some(ExCommand::Host(Command::SplitDown.into())))
         );
         assert_eq!(ExCommand::parse("  "), Ok(None));
     }
 
     #[test]
     fn does_not_take_other_commands_for_substitute() {
-        for line in ["sp", "sx/a/b/", "no", "3w"] {
+        for line in ["sx/a/b/", "no", "3w"] {
             assert_eq!(
                 ExCommand::parse(line),
                 Err(CommandError::Unknown(line.to_owned())),

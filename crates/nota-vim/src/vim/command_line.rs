@@ -91,7 +91,7 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         Ok(match ExCommand::parse(line) {
             Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
-            Ok(Some(ExCommand::Host(command))) => KeyOutcome::Command(command),
+            Ok(Some(ExCommand::Host(invocation))) => KeyOutcome::Command(invocation),
             Ok(Some(ExCommand::Substitute(command))) => {
                 return self.substitute(&command, buffer, selections);
             }

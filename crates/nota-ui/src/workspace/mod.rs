@@ -1,0 +1,299 @@
+//! Lo que hay abierto en una ventana, sin nada de GPUI: los documentos, el
+//! árbol de paneles con el cursor de cada uno y el motor vim.
+//!
+//! Hay un solo [`Vim`] para todos los paneles, como en vim, donde el modo,
+//! los registros, `.` y `;` son globales: lo copiado en un buffer se pega en
+//! otro. Cambiar de panel lo deja en Normal antes, como un `ctrl-c`.
+
+mod commands;
+mod documents;
+mod editing;
+mod message;
+mod pane_tree;
+
+use std::collections::BTreeMap;
+
+use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
+use nota_vim::{Action, Mode, Vim, VimError};
+
+pub use self::commands::Effect;
+pub use self::documents::DocumentId;
+use self::documents::Documents;
+pub use self::message::Message;
+pub use self::pane_tree::{Axis, Node, PaneId, PaneTree};
+use crate::document::Document;
+
+#[derive(Debug, thiserror::Error)]
+pub enum WorkspaceError {
+    #[error(transparent)]
+    Vim(#[from] VimError),
+    #[error(transparent)]
+    Buffer(#[from] BufferError),
+    #[error("no existe el panel {0}")]
+    NoPane(PaneId),
+    #[error("no existe el documento {0}")]
+    NoDocument(DocumentId),
+}
+
+/// Lo que muestra un panel.
+#[derive(Clone, Debug)]
+struct Pane {
+    document: DocumentId,
+    selections: Selections,
+}
+
+impl Pane {
+    fn at_start(document: DocumentId) -> Self {
+        Self {
+            document,
+            selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Workspace {
+    documents: Documents,
+    panes: BTreeMap<PaneId, Pane>,
+    tree: PaneTree,
+    vim: Vim,
+    message: Option<Message>,
+}
+
+/// Un panel visto desde la UI.
+#[derive(Clone, Copy, Debug)]
+pub struct PaneView<'a> {
+    pub document: &'a Document,
+    pub selection: Selection,
+    pub focused: bool,
+    /// El modo de vim si tiene el foco; los demás se ven en Normal.
+    pub mode: Mode,
+    /// El registro de la macro que se graba, solo en el panel con el foco.
+    pub recording: Option<char>,
+    pub command_line: Option<&'a str>,
+}
+
+impl PaneView<'_> {
+    #[must_use]
+    pub fn buffer(&self) -> &Buffer {
+        self.document.buffer()
+    }
+
+    #[must_use]
+    pub fn cursor(&self) -> ByteOffset {
+        self.selection.head
+    }
+}
+
+impl Workspace {
+    /// Un panel con `document`, avisando como vim al abrirlo.
+    #[must_use]
+    pub fn new(document: Document) -> Self {
+        let message = Message::opened(&document);
+        let mut documents = Documents::default();
+        let id = documents.insert(document);
+        let tree = PaneTree::new();
+        Self {
+            documents,
+            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id))]),
+            tree,
+            vim: Vim::new(),
+            message: Some(message),
+        }
+    }
+
+    #[must_use]
+    pub fn tree(&self) -> &PaneTree {
+        &self.tree
+    }
+
+    #[must_use]
+    pub fn focused(&self) -> PaneId {
+        self.tree.focus()
+    }
+
+    #[must_use]
+    pub fn message(&self) -> Option<&Message> {
+        self.message.as_ref()
+    }
+
+    pub fn report(&mut self, error: &WorkspaceError) {
+        log::error!("{error}");
+        self.message = Some(Message::Error(error.to_string()));
+    }
+
+    /// # Errors
+    /// Si `pane` no existe o su documento tampoco, lo que sería un bug.
+    pub fn view(&self, pane: PaneId) -> Result<PaneView<'_>, WorkspaceError> {
+        let state = self.pane(pane)?;
+        let focused = pane == self.focused();
+        Ok(PaneView {
+            document: self.document(state.document)?,
+            selection: *state.selections.primary(),
+            focused,
+            mode: if focused {
+                self.vim.mode()
+            } else {
+                Mode::Normal
+            },
+            recording: self.vim.recording().filter(|_| focused),
+            command_line: self.vim.command_line().filter(|_| focused),
+        })
+    }
+
+    /// El documento del panel enfocado.
+    ///
+    /// # Errors
+    /// Solo si el estado está inconsistente, lo que sería un bug.
+    pub fn focused_document(&self) -> Result<&Document, WorkspaceError> {
+        self.view(self.focused()).map(|view| view.document)
+    }
+
+    /// Le da el foco a `pane`. Lo que estuviera a medias en el anterior (un
+    /// Insert, un operador, la línea de comandos) termina como con `ctrl-c`.
+    ///
+    /// # Errors
+    /// Si `pane` no existe.
+    pub fn focus(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
+        let previous = self.focused();
+        if pane == previous {
+            return Ok(());
+        }
+        if !self.tree.contains(pane) {
+            return Err(WorkspaceError::NoPane(pane));
+        }
+        self.edit_pane(previous, |vim, buffer, selections| {
+            vim.execute(Action::Interrupt, buffer, selections)?;
+            Ok(())
+        })?;
+        self.tree.set_focus(pane);
+        Ok(())
+    }
+
+    fn pane(&self, pane: PaneId) -> Result<&Pane, WorkspaceError> {
+        self.panes.get(&pane).ok_or(WorkspaceError::NoPane(pane))
+    }
+
+    fn document(&self, id: DocumentId) -> Result<&Document, WorkspaceError> {
+        self.documents.get(id).ok_or(WorkspaceError::NoDocument(id))
+    }
+
+    fn document_mut(&mut self, id: DocumentId) -> Result<&mut Document, WorkspaceError> {
+        self.documents
+            .get_mut(id)
+            .ok_or(WorkspaceError::NoDocument(id))
+    }
+
+    /// Corre `edit` sobre el buffer y los cursores de `pane`; después, los
+    /// cursores de los otros paneles del mismo documento siguen al texto.
+    fn edit_pane<T>(
+        &mut self,
+        pane: PaneId,
+        edit: impl FnOnce(&mut Vim, &mut Buffer, &mut Selections) -> Result<T, WorkspaceError>,
+    ) -> Result<T, WorkspaceError> {
+        let state = self
+            .panes
+            .get_mut(&pane)
+            .ok_or(WorkspaceError::NoPane(pane))?;
+        let id = state.document;
+        let document = self
+            .documents
+            .get_mut(id)
+            .ok_or(WorkspaceError::NoDocument(id))?;
+        let buffer = document.buffer_mut();
+        let result = edit(&mut self.vim, buffer, &mut state.selections);
+        let splices = buffer.take_splices();
+        self.follow(pane, id, &splices)?;
+        result
+    }
+
+    fn follow(
+        &mut self,
+        edited: PaneId,
+        id: DocumentId,
+        splices: &[Splice],
+    ) -> Result<(), WorkspaceError> {
+        if splices.is_empty() {
+            return Ok(());
+        }
+        let buffer = self
+            .documents
+            .get(id)
+            .ok_or(WorkspaceError::NoDocument(id))?
+            .buffer();
+        for (_, other) in self
+            .panes
+            .iter_mut()
+            .filter(|(pane, other)| **pane != edited && other.document == id)
+        {
+            other.selections = other.selections.map(|selection| {
+                let anchor = Splice::map_all(splices, selection.anchor);
+                let head = Splice::map_all(splices, selection.head);
+                normal_selection(buffer, anchor, head)
+            });
+        }
+        Ok(())
+    }
+
+    /// Paneles que muestran `id`.
+    fn panes_showing(&self, id: DocumentId) -> impl Iterator<Item = PaneId> + '_ {
+        self.panes
+            .iter()
+            .filter(move |(_, pane)| pane.document == id)
+            .map(|(&pane, _)| pane)
+    }
+
+    /// Cerrar o cambiar el documento de `pane` perdería cambios: está
+    /// modificado y ningún otro panel lo muestra.
+    fn would_lose_changes(&self, pane: PaneId) -> Result<bool, WorkspaceError> {
+        let id = self.pane(pane)?.document;
+        let shown_elsewhere = self.panes_showing(id).any(|other| other != pane);
+        Ok(!shown_elsewhere && self.document(id)?.is_modified())
+    }
+
+    /// Suelta los documentos que ya no muestra ningún panel.
+    fn drop_unshown(&mut self) {
+        let unshown: Vec<DocumentId> = self
+            .documents
+            .iter()
+            .map(|(id, _)| id)
+            .filter(|&id| self.panes_showing(id).next().is_none())
+            .collect();
+        for id in unshown {
+            self.documents.remove(id);
+        }
+    }
+}
+
+/// Una selección en Normal: sin cursor sobre el salto de línea.
+fn normal_selection(buffer: &Buffer, anchor: ByteOffset, head: ByteOffset) -> Selection {
+    if anchor == head {
+        Selection::cursor(clamp_cursor(buffer, head, Mode::Normal))
+    } else {
+        Selection {
+            anchor,
+            head,
+            goal: Goal::None,
+        }
+    }
+}
+
+/// Dentro del texto y, salvo en Insert, no sobre el salto de línea, como en
+/// vim.
+fn clamp_cursor(buffer: &Buffer, offset: ByteOffset, mode: Mode) -> ByteOffset {
+    let offset = offset.min(buffer.len());
+    let line = buffer.line_of(offset);
+    let line_end = buffer.line_end(line);
+    let on_newline = offset == line_end && line_end > buffer.line_start(line);
+    if on_newline && mode != Mode::Insert {
+        buffer.prev_boundary(line_end)
+    } else {
+        offset
+    }
+}
+
+#[cfg(test)]
+mod test_session;
+#[cfg(test)]
+#[path = "workspace_tests.rs"]
+mod tests;
