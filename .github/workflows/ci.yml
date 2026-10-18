@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Para correr gui-smoke en una rama: gh workflow run CI --ref <rama>.
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -85,7 +87,7 @@ jobs:
   # tecleando; ver docs/testing.md. Solo en main: sin caché tardó 11 min
   # (10,5 compilando y 6 s de tests), más de los 5 que se le dan a una PR.
   gui-smoke:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
