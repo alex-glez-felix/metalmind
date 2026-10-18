@@ -1,7 +1,9 @@
-//! Recorrer el disco con `ignore`.
+//! Recorrer el disco con `ignore`. El walk completo y el parcial del watcher
+//! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
 
-use std::path::Path;
-use std::sync::mpsc;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, mpsc};
 
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
@@ -81,4 +83,50 @@ pub(crate) fn scan(root: &Path) -> VaultIndex {
         });
     drop(sender);
     VaultIndex::from_entries(receiver.into_iter().collect())
+}
+
+/// Lo que hay hoy en disco en `dirty` y en sus carpetas. Recorre desde la raíz
+/// para que apliquen todos los `.gitignore` de por medio, pero solo entra en
+/// los ancestros de `dirty`.
+pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Vec<(VaultPath, EntryKind)> {
+    let scope = Arc::new(Scope::new(dirty));
+    let root_owned: PathBuf = root.to_owned();
+    let filter_scope = Arc::clone(&scope);
+    walker(root)
+        .filter_entry(move |entry| {
+            is_visible(entry)
+                && VaultPath::from_fs(&root_owned, entry.path())
+                    .is_some_and(|path| filter_scope.allows(&path))
+        })
+        .build()
+        .filter_map(|result| accept(root, result))
+        .filter(|(path, _)| scope.contains(path))
+        .collect()
+}
+
+/// Las rutas sucias y sus ancestros: lo que el walk parcial tiene que pisar.
+struct Scope {
+    dirty: HashSet<VaultPath>,
+    ancestors: HashSet<VaultPath>,
+}
+
+impl Scope {
+    fn new(dirty: &[VaultPath]) -> Self {
+        Self {
+            dirty: dirty.iter().cloned().collect(),
+            ancestors: dirty.iter().flat_map(VaultPath::ancestors).collect(),
+        }
+    }
+
+    /// Si `path` es sucia o está dentro de una sucia.
+    fn contains(&self, path: &VaultPath) -> bool {
+        self.dirty.contains(path)
+            || path
+                .ancestors()
+                .any(|ancestor| self.dirty.contains(&ancestor))
+    }
+
+    fn allows(&self, path: &VaultPath) -> bool {
+        self.ancestors.contains(path) || self.contains(path)
+    }
 }

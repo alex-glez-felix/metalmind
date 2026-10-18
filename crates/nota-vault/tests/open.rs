@@ -21,7 +21,7 @@ fn indexa_notas_adjuntos_y_carpetas() {
         dir.path(),
         &["a.md", "img.png", "sub/b.md", "sub/hondo/c.MD", "vacia/"],
     );
-    let vault = Vault::open(dir.path()).unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(
         listing(&vault.snapshot()),
         [
@@ -52,7 +52,7 @@ fn ignora_siempre_obsidian_git_trash_y_ocultos() {
     );
     // Ni volviéndolas a incluir desde .gitignore.
     fs::write(dir.path().join(".gitignore"), "!.obsidian/\n!.oculta.md\n").unwrap();
-    let vault = Vault::open(dir.path()).unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(listing(&vault.snapshot()), ["sub/", "a.md (nota)"]);
 }
 
@@ -72,7 +72,7 @@ fn respeta_gitignore_e_ignore_aunque_no_sea_un_repo() {
     fs::write(dir.path().join(".gitignore"), "build/\n").unwrap();
     fs::write(dir.path().join("sub/.gitignore"), "*.log\n").unwrap();
     fs::write(dir.path().join(".ignore"), "privado/\n").unwrap();
-    let vault = Vault::open(dir.path()).unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(
         listing(&vault.snapshot()),
         ["sub/", "sub/b.md (nota)", "a.md (nota)"]
@@ -84,7 +84,7 @@ fn no_lee_ignores_de_fuera_del_vault() {
     let outer = TempDir::new().unwrap();
     fs::write(outer.path().join(".gitignore"), "*.md\n").unwrap();
     make_tree(outer.path(), &["vault/a.md"]);
-    let vault = Vault::open(outer.path().join("vault")).unwrap();
+    let (vault, _updates) = Vault::open(outer.path().join("vault")).unwrap();
     assert_eq!(listing(&vault.snapshot()), ["a.md (nota)"]);
 }
 
@@ -100,7 +100,7 @@ fn no_sigue_ni_lista_enlaces_simbolicos() {
     )
     .unwrap();
     symlink(outside.path().join("carpeta"), dir.path().join("enlace")).unwrap();
-    let vault = Vault::open(dir.path()).unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(listing(&vault.snapshot()), ["a.md (nota)"]);
 }
 
@@ -109,7 +109,7 @@ fn la_raiz_puede_ser_un_enlace() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["real/a.md"]);
     symlink(dir.path().join("real"), dir.path().join("enlace")).unwrap();
-    let vault = Vault::open(dir.path().join("enlace")).unwrap();
+    let (vault, _updates) = Vault::open(dir.path().join("enlace")).unwrap();
     assert_eq!(
         vault.root(),
         dir.path().join("real").canonicalize().unwrap()
@@ -135,7 +135,7 @@ fn abrir_algo_que_no_es_carpeta_falla() {
 fn el_arbol_se_recorre_desde_la_raiz() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["b/x.md", "a.md"]);
-    let index = Vault::open(dir.path()).unwrap().snapshot();
+    let index = Vault::open(dir.path()).unwrap().0.snapshot();
     let root: Vec<_> = index
         .children(&VaultPath::root())
         .map(|entry| (entry.path.as_str(), entry.kind))
