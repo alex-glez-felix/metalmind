@@ -5,6 +5,9 @@ expression: render(&tags(files))
 panel:
 raro (0)
 rust (3)
+  · a.md
+  · tags/mi tag.md
+  · tags/viejo/x.md
 tags:
   raro: padres [] alias [] trae [raro]
   rust: padres [] alias [] trae [rust]

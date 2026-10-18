@@ -511,7 +511,24 @@ fn tag_at(marked: &str) -> Option<(String, TagPlace)> {
     let at = marked.find('|').unwrap();
     let text = marked.replacen('|', "", 1);
     let spot = scan(&text).tag_at(at)?;
+    assert!(spot.replace.start <= spot.name.start && spot.name.end <= spot.replace.end);
     Some((text[spot.name].to_owned(), spot.place))
+}
+
+#[test]
+fn completion_replaces_the_whole_yaml_scalar() {
+    let text = "---
+tags: [\"#ru\", ok]
+---
+#gp";
+    let scan = scan(text);
+    let yaml = scan.tag_at(text.find("ru").unwrap() + 2).unwrap();
+    assert_eq!((&text[yaml.name], &text[yaml.replace]), ("ru", "\"#ru\""));
+    let inline = scan.tag_at(text.len()).unwrap();
+    assert_eq!(
+        (&text[inline.name.clone()], &text[inline.replace]),
+        ("gp", "gp")
+    );
 }
 
 #[rstest]

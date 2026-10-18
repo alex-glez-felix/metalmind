@@ -5,11 +5,17 @@ expression: render(&tags(files))
 panel:
 graficos (1) (solo como padre)
   gpui (1)
+    · a.md
 lenguajes (3)
   rust (2)
     gpui (1)
+      · a.md
+    · b.md
+  · c.md
 ui (2)
   gpui (1)
+    · a.md
+  · b.md
 tags:
   gpui: padres [rust, graficos, ui] alias [] trae [gpui]
   graficos: padres [] alias [] trae [gpui, graficos]

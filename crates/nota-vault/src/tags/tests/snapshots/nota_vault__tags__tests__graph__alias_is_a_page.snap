@@ -4,7 +4,9 @@ expression: render(&tags(files))
 ---
 panel:
 rs (1)
+  · a.md
 rust (1)
+  · b.md
 tags:
   rs: padres [] alias [] trae [rs]
   rust: padres [] alias [] trae [rust]

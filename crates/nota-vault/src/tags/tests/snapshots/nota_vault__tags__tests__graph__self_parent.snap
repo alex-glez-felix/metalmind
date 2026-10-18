@@ -5,6 +5,7 @@ expression: render(&tags(files))
 panel:
 b (1) (solo como padre)
   a (1)
+    · x.md
 tags:
   a: padres [b] alias [] trae [a]
   b: padres [] alias [] trae [a, b]

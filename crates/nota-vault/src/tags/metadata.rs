@@ -252,7 +252,7 @@ fn names_of(names: &[String]) -> Result<Vec<&str>, PlanError> {
 
 fn list_yaml(names: &[&str]) -> Option<String> {
     (!names.is_empty()).then(|| {
-        let names: Vec<String> = names.iter().map(|name| scalar(name)).collect();
+        let names: Vec<String> = names.iter().map(|name| yaml_scalar(name)).collect();
         format!("[{}]", names.join(", "))
     })
 }
@@ -266,7 +266,7 @@ fn color_yaml(color: &TagColor) -> Result<String, PlanError> {
         return Err(PlanError::InvalidValue(text.clone()));
     }
     Ok(match color {
-        TagColor::Named(name) => scalar(name),
+        TagColor::Named(name) => yaml_scalar(name),
         TagColor::Hex(hex) => format!("\"{hex}\""),
     })
 }
@@ -279,13 +279,13 @@ fn icon_yaml(icon: &TagIcon) -> Result<String, PlanError> {
     if TagIcon::parse(&text).as_ref() != Some(icon) {
         return Err(PlanError::InvalidValue(text));
     }
-    Ok(scalar(&text))
+    Ok(yaml_scalar(&text))
 }
 
 /// `text` como escalar de YAML que se lee como el mismo texto: entre
 /// comillas si sin ellas sería un número, un booleano, un nulo o un
 /// comentario. Nada de lo que se escribe aquí lleva `"` ni `\`.
-fn scalar(text: &str) -> String {
+pub(crate) fn yaml_scalar(text: &str) -> String {
     let starts_like_other = text
         .chars()
         .next()
@@ -308,7 +308,7 @@ mod tests {
 
     /// Lo que el scanner lee de vuelta de `key: <escalar>`.
     fn read_back(text: &str) -> Option<String> {
-        let note = format!("---\naliases: [{}]\n---\n", scalar(text));
+        let note = format!("---\naliases: [{}]\n---\n", yaml_scalar(text));
         let frontmatter = nota_syntax::scan(&note).frontmatter?;
         frontmatter.aliases.first().map(|value| value.text.clone())
     }
@@ -325,7 +325,7 @@ mod tests {
     #[case("tabler:book", "tabler:book")]
     #[case("canción", "canción")]
     fn scalars_read_back_as_written(#[case] text: &str, #[case] yaml: &str) {
-        assert_eq!(scalar(text), yaml);
+        assert_eq!(yaml_scalar(text), yaml);
         assert_eq!(read_back(text).as_deref(), Some(text));
     }
 }
