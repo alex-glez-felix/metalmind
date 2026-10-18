@@ -23,11 +23,17 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+metalmind-perf.workspace = true
 metalmind-syntax.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 x11rb.workspace = true
+
+# Necesita Xvfb y un driver Vulkan, como el smoke (ver docs/performance.md).
+[[bench]]
+name = "ui"
+harness = false
 
 [lints]
 workspace = true

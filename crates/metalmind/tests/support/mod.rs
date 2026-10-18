@@ -2,8 +2,8 @@
 //! con `XTest` tecleando. Se comprueba el efecto en disco y cómo termina el
 //! proceso, no los píxeles. Cómo agregar un caso: `docs/testing.md`.
 
-mod keys;
-mod wait;
+pub mod keys;
+pub mod wait;
 mod x11;
 mod xvfb;
 
