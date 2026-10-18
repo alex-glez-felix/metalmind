@@ -45,9 +45,9 @@ pub struct Editor {
     marked: Option<String>,
     drag_anchor: Option<ByteOffset>,
     /// La primera línea del panel en el workspace la última vez que se
-    /// leyó o se escribió: si el motor la cambia, el scroll salta ahí; si
-    /// no, conserva la fracción que dejó la rueda.
-    synced_top: usize,
+    /// leyó o se escribió (ver [`Scroll::follow`]); `None` tras una tecla,
+    /// para que la vista quede alineada a las filas del motor.
+    synced_top: Option<usize>,
     /// Arranque del proceso, hasta que se pinta el primer frame.
     launched: Option<Instant>,
     _repaint: Subscription,
@@ -69,7 +69,7 @@ impl Editor {
             layout: None,
             marked: None,
             drag_anchor: None,
-            synced_top: 0,
+            synced_top: None,
             launched,
             _repaint: repaint,
         }
@@ -175,6 +175,7 @@ impl Editor {
             Ok(_) => {}
             Err(error) => self.report(&error, cx),
         }
+        self.synced_top = None;
         cx.notify();
     }
 

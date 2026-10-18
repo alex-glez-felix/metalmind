@@ -150,3 +150,33 @@ fn cambiar_la_altura_vuelve_a_mostrar_el_cursor() {
     session.workspace.resize(pane, 10).unwrap();
     assert_eq!(session.top(pane), 26);
 }
+
+#[test]
+fn la_rueda_cancela_un_operador_pendiente() {
+    let mut session = Session::new(&numbered(100));
+    let pane = session.pane();
+    session.workspace.resize(pane, 10).unwrap();
+    session.keys("2d");
+    session.workspace.scroll_to(pane, 20).unwrap();
+    session.keys("j");
+    assert_eq!(session.text(), numbered(100));
+    assert_eq!((session.line(pane), session.mode()), (22, Mode::Normal));
+}
+
+#[test]
+fn arrastrar_hasta_el_margen_no_mueve_la_ventana() {
+    let mut session = Session::with_scrolloff(&numbered(100), 3);
+    let pane = session.pane();
+    session.workspace.resize(pane, 10).unwrap();
+    let start = session.view(pane).buffer().line_start(0);
+    for line in [7, 8, 9] {
+        let head = session.view(pane).buffer().line_start(line);
+        session.select(start, head);
+        assert_eq!(
+            session.top(pane),
+            1,
+            "arrastrando hasta la línea {}",
+            line + 1
+        );
+    }
+}

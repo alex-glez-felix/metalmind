@@ -34,8 +34,8 @@ impl Editor {
         self.scroll
             .scroll_by(-f64::from(delta / line_height), last_line);
         let top = self.scroll.first_full_line();
-        if top != self.synced_top {
-            self.synced_top = top;
+        if self.synced_top != Some(top) {
+            self.synced_top = Some(top);
             let scrolled =
                 self.update_workspace(cx, |workspace, pane, _| workspace.scroll_to(pane, top));
             if let Err(error) = scrolled {

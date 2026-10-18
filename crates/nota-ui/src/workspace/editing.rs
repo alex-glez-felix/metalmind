@@ -89,7 +89,9 @@ impl Workspace {
 
     /// Selección hecha con el ratón, con `head` exclusivo. Un clic en Normal
     /// no deja el cursor sobre el salto de línea, y en Insert descarta la
-    /// repetición del count, como en vim.
+    /// repetición del count, como en vim. Como vim al arrastrar, muestra el
+    /// cursor sin `scrolloff`: si no, la ventana se movería a cada paso y la
+    /// selección se escaparía del ratón.
     ///
     /// # Errors
     /// Si `pane` no existe.
@@ -100,7 +102,7 @@ impl Workspace {
         head: ByteOffset,
     ) -> Result<(), WorkspaceError> {
         self.focus(pane)?;
-        self.edit_pane(pane, |vim, buffer, selections| {
+        self.edit_pane_with(pane, 0, |vim, buffer, selections| {
             vim.cursor_moved();
             let selection = if anchor == head {
                 Selection::cursor(clamp_cursor(buffer, head, vim.mode()))
