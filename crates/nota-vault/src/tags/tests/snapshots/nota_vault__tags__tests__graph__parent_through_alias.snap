@@ -1,0 +1,11 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+rust (1)
+  gpui (1)
+tags:
+  gpui: padres [rust] alias [] trae [gpui]
+  rust: padres [] alias [rs] trae [gpui, rs, rust]
+avisos:

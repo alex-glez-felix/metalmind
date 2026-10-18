@@ -58,6 +58,12 @@ impl VaultPath {
         Ok(Self(path.to_owned()))
     }
 
+    /// Un nombre fijo del programa, que ya se sabe válido.
+    pub(crate) fn fixed(name: &'static str) -> Self {
+        debug_assert!(check_component(name).is_ok(), "{name}");
+        Self(name.to_owned())
+    }
+
     /// La ruta de `path` dentro de `root`, o `None` si está fuera, no es
     /// UTF-8 o no sería válida.
     pub(crate) fn from_fs(root: &Path, path: &Path) -> Option<Self> {

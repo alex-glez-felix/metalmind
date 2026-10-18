@@ -1,6 +1,6 @@
 [package]
 name = "nota-vault"
-description = "El vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico."
+description = "El vault en disco: índices de archivos, links y tags, watcher, operaciones de archivo y guardado atómico."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,14 +9,17 @@ publish.workspace = true
 
 [dependencies]
 arc-swap.workspace = true
+caseless.workspace = true
 ignore.workspace = true
-nota-syntax.workspace = true
 log.workspace = true
+nota-syntax.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
 rustix.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+unicode-normalization.workspace = true
+unicode-properties.workspace = true
 
 [dev-dependencies]
 divan.workspace = true

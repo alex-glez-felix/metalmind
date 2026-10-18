@@ -1,0 +1,23 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+a (2)
+  c (2)
+    b (2)
+      a (2) ↻
+b (2)
+  a (2)
+    c (2)
+      b (2) ↻
+c (2)
+  b (2)
+    a (2)
+      c (2) ↻
+tags:
+  a: padres [b] alias [] trae [a, b, c]
+  b: padres [c] alias [] trae [a, b, c]
+  c: padres [a] alias [] trae [a, b, c]
+avisos:
+  ciclo: a → b → c → a

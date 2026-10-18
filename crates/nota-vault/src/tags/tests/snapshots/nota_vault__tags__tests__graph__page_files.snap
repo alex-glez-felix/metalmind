@@ -1,0 +1,16 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+raro (0)
+rust (3)
+tags:
+  raro: padres [] alias [] trae [raro]
+  rust: padres [] alias [] trae [rust]
+avisos:
+  nombre inválido: tags/mi tag.md
+  tags/raro.md: Color no se entiende: "rojo oscuro"
+  tags/raro.md: Icon no se entiende: "libro"
+  tags/raro.md: Aliases no se entiende: "a/b"
+  página repetida: vale tags/Rust.md, no tags/rust.md

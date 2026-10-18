@@ -1,5 +1,5 @@
-//! El vault en disco: abrir una carpeta, su índice de archivos al día con lo
-//! que pasa en disco, los links entre notas, crear, mover y borrar, y el
+//! El vault en disco: abrir una carpeta, sus índices de archivos, links y
+//! tags al día con lo que pasa en disco, crear, mover y borrar, y el
 //! guardado atómico de cada nota.
 
 mod file;
@@ -11,6 +11,7 @@ mod path;
 mod refactor;
 mod refresh;
 mod scan;
+pub mod tags;
 mod vault;
 mod watch;
 
@@ -25,4 +26,4 @@ pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refactor::{AccessError, AppliedRename, ApplyRenameError, Interruption, UndoReport};
 pub use refresh::VaultChange;
 pub use scan::walk_notes;
-pub use vault::{Vault, VaultError, VaultUpdate};
+pub use vault::{Vault, VaultError, VaultOptions, VaultUpdate};

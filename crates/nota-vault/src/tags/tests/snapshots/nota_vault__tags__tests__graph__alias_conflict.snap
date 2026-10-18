@@ -1,0 +1,14 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+rescript (0)
+rs (1)
+rust (0)
+tags:
+  rescript: padres [] alias [] trae [rescript]
+  rs: padres [] alias [] trae [rs]
+  rust: padres [] alias [] trae [rust]
+avisos:
+  alias rs en varias páginas: tags/rescript.md, tags/rust.md
