@@ -40,6 +40,16 @@ Los cambios que importan a quien usa nota. El formato sigue
   `ctrl-c` sale sin repetir.
 - Cada caso de la tabla de vim se verifica contra Neovim 0.12.6.
 
+#### Registros, macros y marks
+
+- Registros de vim: `"a`–`"z` (con mayúscula se agrega al final), `"0`,
+  `"1`–`"9`, `"-`, `"_`, `".` y `"/`, con `y d c p P x`, counts y `.`.
+- `"+` y `"*` usan el portapapeles y la selección primaria del sistema.
+- Macros con `q`, `@`, `@@` y count; una macro que falla se detiene, y `u`
+  deshace la reproducción entera.
+- Marks `a`–`z` con `m`, `'` y `` ` ``, también como motions de operador, y
+  `''` para volver del último salto. Siguen al texto cuando se edita arriba.
+
 #### Configuración
 
 - `config.toml` en el directorio de configuración del usuario (XDG), con tema y
