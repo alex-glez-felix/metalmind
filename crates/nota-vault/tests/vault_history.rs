@@ -455,3 +455,65 @@ fn al_abrir_se_aplica_la_retencion() {
         Vec::<Version>::new()
     );
 }
+
+/// Toma el lock del historial como otro proceso que escribe en él (la CLI):
+/// mientras lo tenga, el hilo del vault espera al registrar una versión.
+fn lock_history(data: &Path, root: &Path) -> fs::File {
+    let lock = Paths::under(data)
+        .vault_data(&root.canonicalize().unwrap())
+        .join("history/lock");
+    let file = fs::File::open(lock).unwrap();
+    rustix::fs::flock(&file, rustix::fs::FlockOperation::LockExclusive).unwrap();
+    file
+}
+
+#[test]
+fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
+    let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let (a, b, c) = (path("a.md"), path("b.md"), path("c.md"));
+    let (vault, updates) = open_vault(dir.path(), data.path());
+    save(&vault, &a, "uno");
+    wait_for_changes(&updates, |changes| {
+        changes
+            .iter()
+            .any(|change| matches!(change, VaultChange::Created { path, .. } if *path == a))
+    });
+    // Otro vault sobre la misma carpeta dice cuándo el watcher ya entregó
+    // un cambio; el de `vault` lo entrega con el mismo debounce.
+    let (_witness, witnessed) = Vault::open(dir.path()).unwrap();
+
+    let lock = lock_history(data.path(), dir.path());
+    // El hilo se queda esperando el lock con este guardado, que el lote no toca.
+    let untouched = vault.save(&c, "c".to_owned()).unwrap().unwrap();
+    // Guardado en `a.md` antes del renombre: su mensaje va antes que el lote.
+    let before = vault.save(&a, "dos".to_owned()).unwrap().unwrap();
+    // El renombre en otro lote que esa escritura, para que llegue como
+    // renombre y no como borrar y crear.
+    wait_for_changes(&witnessed, |changes| {
+        changes
+            .iter()
+            .any(|change| matches!(change, VaultChange::Modified { path } if *path == a))
+    });
+    fs::rename(dir.path().join("a.md"), dir.path().join("b.md")).unwrap();
+    wait_for_changes(&witnessed, |changes| {
+        changes
+            .iter()
+            .any(|change| matches!(change, VaultChange::Renamed { to, .. } if *to == b))
+    });
+    // Margen para que el watcher de `vault` también lo haya entregado: el
+    // hilo está trabado, así que esperar solo alarga el test.
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    // Guardado en el destino después del renombre: su mensaje va después
+    // del lote, y tiene que registrarse después de seguir el renombre.
+    let after = vault.save(&b, "tres".to_owned()).unwrap().unwrap();
+    drop(lock);
+
+    let after = after.wait().unwrap().unwrap();
+    assert!(untouched.wait().unwrap().is_some());
+    assert!(before.wait().unwrap().is_some());
+    let history = vault.history().unwrap();
+    assert_eq!(contents(history, &b), ["uno", "dos", "tres"]);
+    assert_eq!(history.content(&b, after).unwrap(), "tres");
+    assert_eq!(history.deleted_notes().unwrap(), []);
+    assert_eq!(contents(history, &c), ["c"]);
+}
