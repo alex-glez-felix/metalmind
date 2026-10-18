@@ -1,6 +1,6 @@
 use nota_buffer::{Bias, Buffer, ByteOffset, Edit, Selection, Selections};
 
-use crate::dot::{Change, Dot};
+use crate::dot::{BlockChange, Change, Dot};
 use crate::lines::first_non_blank;
 use crate::{InsertAt, VimError};
 
@@ -141,18 +141,22 @@ impl Session {
     }
 
     /// Lo que el count pide repetir al salir con `<Esc>`. Las repeticiones de
-    /// `o` y `O` abren cada una su línea debajo de la anterior.
+    /// `o` y `O` abren cada una su línea debajo de la anterior; las de `I` y
+    /// `A` en un bloque van seguidas en la primera línea.
     pub(crate) fn replay(
         &self,
         buffer: &mut Buffer,
         selections: &Selections,
     ) -> Result<Selections, VimError> {
         let mut selections = selections.clone();
-        let (&Change::Insert(at), false) = (&self.dot.change, self.cursor_moved) else {
-            return Ok(selections);
+        let opens_line = match (&self.dot.change, self.cursor_moved) {
+            (&Change::Insert(at), false) => {
+                matches!(at, InsertAt::LineBelow | InsertAt::LineAbove)
+            }
+            (Change::Block(BlockChange::Insert { .. }, _), false) => false,
+            _ => return Ok(selections),
         };
         let newline = Typed::Text("\n".to_owned());
-        let opens_line = matches!(at, InsertAt::LineBelow | InsertAt::LineAbove);
         let opened = opens_line.then_some(&newline);
         for _ in 1..self.dot.count.unwrap_or(1) {
             for typed in opened.into_iter().chain(&self.dot.typed) {
@@ -167,16 +171,14 @@ impl Session {
     }
 }
 
-/// Cierra la transacción y deja el cursor sobre el último carácter escrito.
-pub(crate) fn leave(buffer: &mut Buffer, selections: &Selections) -> Result<Selections, VimError> {
-    let after = selections.map(|selection| {
+/// Al salir de Insert el cursor queda sobre el último carácter escrito.
+pub(crate) fn left_of_cursors(buffer: &Buffer, selections: &Selections) -> Selections {
+    selections.map(|selection| {
         let line_start = buffer.line_start(buffer.line_of(selection.head));
         if selection.head > line_start {
             Selection::cursor(buffer.prev_boundary(selection.head))
         } else {
             *selection
         }
-    });
-    buffer.commit_transaction(after.clone())?;
-    Ok(after)
+    })
 }

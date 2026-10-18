@@ -165,6 +165,7 @@ pub fn mode_name(mode: Mode) -> &'static str {
         Mode::OperatorPending(_) => "no",
         Mode::Visual(VisualKind::Char) => "v",
         Mode::Visual(VisualKind::Line) => "V",
+        Mode::Visual(VisualKind::Block) => "\u{16}",
         Mode::CommandLine => "c",
     }
 }

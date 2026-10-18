@@ -60,7 +60,8 @@ impl TextObject {
 
     /// En Visual, selecciona el objeto o extiende la selección con él. Como
     /// en vim, si falla la selección puede quedar a medio mover; el modo
-    /// pasa a ser por caracteres, o por líneas con `ip` y `ap`.
+    /// pasa a ser por caracteres, o por líneas con `ip` y `ap`. Un bloque
+    /// sigue siéndolo con las palabras y las comillas.
     pub(crate) fn select(
         self,
         buffer: &Buffer,
@@ -73,15 +74,19 @@ impl TextObject {
             head: selection.head,
         };
         let by_chars = |found: bool| if found { VisualKind::Char } else { kind };
+        let keeps_block = |found: bool| match kind {
+            VisualKind::Block => VisualKind::Block,
+            _ => by_chars(found),
+        };
         let kind = match self {
             Self::Word { big, around } => {
-                by_chars(word::select(buffer, &mut ends, count, big, around))
+                keeps_block(word::select(buffer, &mut ends, count, big, around))
             }
             Self::Parentheses { around } => {
                 by_chars(block::select(buffer, &mut ends, count, around, ('(', ')')))
             }
             Self::DoubleQuotes { around } => {
-                by_chars(quote::select(buffer, &mut ends, count, around, '"'))
+                keeps_block(quote::select(buffer, &mut ends, count, around, '"'))
             }
             Self::Paragraph { around } => paragraph::select(buffer, &mut ends, kind, count, around),
         };

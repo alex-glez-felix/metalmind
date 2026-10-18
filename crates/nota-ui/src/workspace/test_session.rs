@@ -215,5 +215,6 @@ fn vim_mode(mode: Mode) -> &'static str {
         Mode::OperatorPending(_) => "no",
         Mode::Visual(nota_vim::VisualKind::Char) => "v",
         Mode::Visual(nota_vim::VisualKind::Line) => "V",
+        Mode::Visual(nota_vim::VisualKind::Block) => "\u{16}",
     }
 }

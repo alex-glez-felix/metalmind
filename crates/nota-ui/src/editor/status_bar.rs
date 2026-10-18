@@ -80,6 +80,7 @@ fn mode_label(mode: Mode) -> &'static str {
         Mode::OperatorPending(_) => "OPERADOR",
         Mode::Visual(VisualKind::Char) => "VISUAL",
         Mode::Visual(VisualKind::Line) => "VISUAL LÍNEA",
+        Mode::Visual(VisualKind::Block) => "VISUAL BLOQUE",
         Mode::CommandLine => "COMANDO",
     }
 }

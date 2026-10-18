@@ -71,7 +71,7 @@ impl Vim {
         };
         self.viewport.apply(&window);
         if let Some(shift) = shift {
-            *selections = shift.apply(buffer, selections, self.mode);
+            *selections = shift.apply(buffer, selections, self.mode, self.viewport.columns());
         }
     }
 
@@ -148,8 +148,9 @@ impl Vim {
         window.cursor_correct();
         self.viewport.apply(&window);
         let purpose = self.motion_purpose();
+        let columns = self.viewport.columns();
         if let Some(moved) = move_cursors(selections, self.in_visual(), |s| {
-            Some(vertical(buffer, s, window.cursor, purpose))
+            Some(vertical(buffer, s, window.cursor, purpose, columns))
         }) {
             *selections = moved;
         }

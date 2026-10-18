@@ -80,7 +80,7 @@ impl Object {
                 return current_lines(buffer, selection, operator, count.unwrap_or(1))
                     .ok_or(Missed::Stay);
             }
-            Self::Visual(area) => return Ok(area.target(buffer, selection)),
+            Self::Visual(area) => return Ok(area.target(buffer, selection, viewport.columns())),
         };
         Ok(span.into_target(buffer))
     }

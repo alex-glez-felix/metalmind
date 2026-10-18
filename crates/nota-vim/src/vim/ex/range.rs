@@ -124,8 +124,12 @@ impl Vim {
             };
             if step.moves_cursor {
                 cursor = last.clamp(1, buffer.line_count());
-                *selections =
-                    Selections::single(keep_column(buffer, selections.primary(), cursor - 1));
+                *selections = Selections::single(keep_column(
+                    buffer,
+                    self.viewport.columns(),
+                    selections.primary(),
+                    cursor - 1,
+                ));
             }
         }
         if steps.len() == 1 {

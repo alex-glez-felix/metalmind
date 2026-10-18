@@ -113,7 +113,9 @@ impl Vim {
             _ => resolved.checked(buffer)?,
         };
         match parsed.command {
-            ExCommand::GoTo => lines::go_to(lines.last - 1, buffer, selections),
+            ExCommand::GoTo => {
+                lines::go_to(lines.last - 1, self.viewport.columns(), buffer, selections);
+            }
             ExCommand::Substitute(command) => {
                 return Ok(self.substitute(&command, lines.zero_based(), buffer, selections)?);
             }
@@ -131,11 +133,23 @@ impl Vim {
             }
             ExCommand::Move(address) => {
                 let below = self.resolve_destination(&address, buffer, selections)?;
-                lines::move_lines(lines.zero_based(), below, buffer, selections)?;
+                lines::move_lines(
+                    lines.zero_based(),
+                    below,
+                    self.viewport.columns(),
+                    buffer,
+                    selections,
+                )?;
             }
             ExCommand::Copy(address) => {
                 let below = self.resolve_destination(&address, buffer, selections)?;
-                lines::copy_lines(lines.zero_based(), below, buffer, selections)?;
+                lines::copy_lines(
+                    lines.zero_based(),
+                    below,
+                    self.viewport.columns(),
+                    buffer,
+                    selections,
+                )?;
             }
             ExCommand::Join { spaces, count } => {
                 self.join_lines(lines.counted(count, buffer), spaces, buffer, selections)?;

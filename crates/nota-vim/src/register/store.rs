@@ -76,10 +76,7 @@ impl Registers {
         match slot {
             Some(old) if append => old.text.push_str(&keys),
             _ => {
-                *slot = Some(Register {
-                    text: keys,
-                    linewise: false,
-                });
+                *slot = Some(Register::chars(keys));
             }
         }
     }

@@ -92,13 +92,38 @@ impl Vim {
         Ok(())
     }
 
+    /// `<Esc>`: lo que pide el count, lo que un bloque repite en sus demás
+    /// líneas y salir.
+    pub(super) fn finish_insert(
+        &mut self,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        self.repeat_insert(buffer, selections)?;
+        let corners = self.replicate_in_block(buffer, selections)?;
+        self.leave_insert_to(corners, buffer, selections)
+    }
+
     /// Sale a Normal; lo hecho en Insert pasa a ser lo que repite `.`.
     pub(super) fn leave_insert(
         &mut self,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
-        *selections = insert::leave(buffer, selections)?;
+        self.leave_insert_to(None, buffer, selections)
+    }
+
+    /// Cierra la transacción con el cursor en `after` o, si no, sobre el
+    /// último carácter escrito.
+    fn leave_insert_to(
+        &mut self,
+        after: Option<Selections>,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        self.block_insert = None;
+        *selections = after.unwrap_or_else(|| insert::left_of_cursors(buffer, selections));
+        buffer.commit_transaction(selections.clone())?;
         if let Some(session) = self.insert.take() {
             let dot = session.into_dot();
             self.last_insert = Some(dot.typed.clone());

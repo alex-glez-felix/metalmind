@@ -18,28 +18,43 @@ pub(crate) fn paste(
     side: PasteSide,
     count: usize,
 ) -> Result<Selections, VimError> {
-    let text = repeated(register, count, register.linewise);
+    if repeated(register, count, register.is_linewise()).is_empty() {
+        return Ok(selections.clone());
+    }
+    buffer.begin_transaction(selections.clone())?;
+    let after = put(buffer, selections, register, side, count)?;
+    buffer.commit_transaction(after.clone())?;
+    Ok(after)
+}
+
+/// Como [`paste`], dentro de una transacción ya abierta.
+pub(crate) fn put(
+    buffer: &mut Buffer,
+    selections: &Selections,
+    register: &Register,
+    side: PasteSide,
+    count: usize,
+) -> Result<Selections, VimError> {
+    let linewise = register.is_linewise();
+    let text = repeated(register, count, linewise);
     if text.is_empty() {
         return Ok(selections.clone());
     }
-    let insertions = selections
-        .map_to(|selection| insertion_point(buffer, selection.head, register.linewise, side));
-    let piece = match (register.linewise, side) {
+    let insertions =
+        selections.map_to(|selection| insertion_point(buffer, selection.head, linewise, side));
+    let piece = match (linewise, side) {
         (true, PasteSide::After) => format!("\n{text}"),
         (true, PasteSide::Before) => format!("{text}\n"),
         (false, _) => text,
     };
-    buffer.begin_transaction(selections.clone())?;
     let map = buffer.apply(
         insertions
             .iter()
             .map(|&at| Edit::insert(at, piece.clone()))
             .collect(),
     )?;
-    let after = insertions
-        .to_selections(|&at| Selection::cursor(cursor_after(buffer, &map, at, register, side)));
-    buffer.commit_transaction(after.clone())?;
-    Ok(after)
+    Ok(insertions
+        .to_selections(|&at| Selection::cursor(cursor_after(buffer, &map, at, register, side))))
 }
 
 fn repeated(register: &Register, count: usize, linewise: bool) -> String {
@@ -70,7 +85,7 @@ fn cursor_after(
     side: PasteSide,
 ) -> ByteOffset {
     let start = map.map(at, Bias::Before);
-    if register.linewise {
+    if register.is_linewise() {
         let first_pasted = match side {
             PasteSide::After => buffer.line_of(start) + 1,
             PasteSide::Before => buffer.line_of(start),
@@ -123,7 +138,7 @@ impl Replacement {
                 lines: true,
                 split: false,
             },
-            Region::Chars(_) if register.linewise => Self {
+            Region::Chars(_) if register.is_linewise() => Self {
                 range,
                 text: format!("\n{}\n", repeated(register, count, true)),
                 lines: true,

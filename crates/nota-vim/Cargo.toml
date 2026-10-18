@@ -12,6 +12,7 @@ nota-buffer.workspace = true
 regex.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
+unicode-width.workspace = true
 
 [dev-dependencies]
 divan.workspace = true

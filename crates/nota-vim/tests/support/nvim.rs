@@ -80,7 +80,7 @@ fn dump(before: &str, keys: &str, screen: Option<Screen>) -> Dump {
     let at = |row: usize, col| ByteOffset::new(result.line_start(row - 1).get() + col);
     let head = at(row, col);
     let anchor = at(anchor_row, anchor_col);
-    let visual = matches!(mode.as_str(), "v" | "V");
+    let visual = matches!(mode.as_str(), "v" | "V" | "\u{16}");
     let state = State {
         text: render(&result, [head]),
         selection: render_visual(&result, visual.then_some(anchor), head),

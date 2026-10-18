@@ -57,6 +57,7 @@ thiserror = "2.0.21"
 unicode-normalization = "0.1.26"
 unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }
 unicode-segmentation = "1.13.3"
+unicode-width = "0.2.2"
 divan = "0.1.21"
 gungraun = "0.20.0"
 insta = { version = "1.49.0", features = ["glob"] }

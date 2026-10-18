@@ -9,7 +9,8 @@ use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
 
 pub(crate) use self::window::Window;
 use crate::Mode;
-use crate::lines::Want;
+use crate::columns::Columns;
+use crate::lines::{Want, tab_end};
 
 /// La primera línea visible de un panel y cuántas filas caben. Quien aloja
 /// el motor guarda uno por panel, le da su altura en cada layout
@@ -25,6 +26,8 @@ pub struct Viewport {
     half_page: Option<usize>,
     /// La línea del cursor con la que `top` quedó validado.
     settled: Option<usize>,
+    /// Cómo se miden las columnas en esta ventana (su `tabstop`).
+    columns: Columns,
 }
 
 /// `ctrl-e`, `ctrl-y`, `ctrl-d`, `ctrl-u`, `ctrl-f` y `ctrl-b`.
@@ -61,7 +64,20 @@ impl Viewport {
             height: height.max(1),
             half_page: None,
             settled: None,
+            columns: Columns::default(),
         }
+    }
+
+    /// Cuántas columnas avanza un tab; 8, como en vim, si no se dice otra
+    /// cosa. Cuenta para la columna que conservan `j` y `k` y para los
+    /// bloques de `ctrl-v`, así que tiene que ser el mismo con el que se
+    /// pinta el texto.
+    pub fn set_tabstop(&mut self, tabstop: usize) {
+        self.columns = Columns::new(tabstop);
+    }
+
+    pub(crate) fn columns(&self) -> Columns {
+        self.columns
     }
 
     #[must_use]
@@ -124,7 +140,7 @@ impl Viewport {
                 from: buffer.line_of(head),
                 line: window.cursor,
             };
-            *selections = shift.apply(buffer, selections, mode);
+            *selections = shift.apply(buffer, selections, mode, self.columns);
         }
         moved
     }
@@ -191,7 +207,13 @@ pub(crate) struct Shift {
 impl Shift {
     /// En Visual el otro extremo de cada selección se queda; ahí y en
     /// Insert el cursor puede quedar sobre el fin de línea.
-    pub fn apply(self, buffer: &Buffer, selections: &Selections, mode: Mode) -> Selections {
+    pub fn apply(
+        self,
+        buffer: &Buffer,
+        selections: &Selections,
+        mode: Mode,
+        columns: Columns,
+    ) -> Selections {
         let extend = matches!(mode, Mode::Visual(_));
         let past_line_end = mode.reaches_line_end();
         selections.map(|selection| {
@@ -202,11 +224,11 @@ impl Shift {
             } else {
                 line.saturating_sub(self.from - self.line)
             };
-            let want = Want::of(buffer, selection);
+            let want = Want::of(buffer, selection, tab_end(mode, selection), columns);
             let head = if past_line_end {
-                want.visual_offset_on(buffer, target)
+                want.visual_offset_on(buffer, target, columns)
             } else {
-                want.offset_on(buffer, target)
+                want.offset_on(buffer, target, columns)
             };
             Selection {
                 anchor: if extend { selection.anchor } else { head },

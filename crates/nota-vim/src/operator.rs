@@ -3,6 +3,7 @@ use std::ops::Range;
 use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selection, Selections};
 
 use crate::VimError;
+use crate::columns::Columns;
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
 use crate::span::{Missed, Region, Target};
@@ -79,9 +80,10 @@ impl Operator {
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
+        columns: Columns,
     ) -> Result<Outcome, VimError> {
         match self.effect() {
-            Effect::Cut(cut) => cut.apply(buffer, operands),
+            Effect::Cut(cut) => cut.apply(buffer, operands, columns),
             Effect::Transform(transform) => transform.apply(buffer, operands),
         }
     }
@@ -92,10 +94,11 @@ impl Cut {
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
+        columns: Columns,
     ) -> Result<Outcome, VimError> {
         let steps = operands.map(|operand| Step {
             selection: operand.selection,
-            plan: Plan::new(buffer, self, operand),
+            plan: Plan::new(buffer, self, operand, columns),
         });
         if steps.iter().all(|step| step.plan.is_err()) {
             return Ok(Outcome::Missed(at_starts(buffer, &steps)));
@@ -148,10 +151,11 @@ struct Plan {
     want: Want,
     adjusted: bool,
     cut: Cut,
+    columns: Columns,
 }
 
 impl Plan {
-    fn new(buffer: &Buffer, cut: Cut, operand: &Operand) -> Result<Self, Missed> {
+    fn new(buffer: &Buffer, cut: Cut, operand: &Operand, columns: Columns) -> Result<Self, Missed> {
         let target = operand.target.clone()?;
         let region = match cut {
             Cut::Delete if !target.visual => whole_lines_if_delimited(buffer, target.region),
@@ -165,9 +169,10 @@ impl Plan {
             region,
             removal,
             start: target.start,
-            want: Want::of(buffer, &operand.selection),
+            want: Want::of(buffer, &operand.selection, true, columns),
             adjusted: target.adjusted,
             cut,
+            columns,
         })
     }
 
@@ -180,7 +185,8 @@ impl Plan {
                 if self.adjusted {
                     Selection::cursor(first_non_blank(buffer, line).min(last_char(buffer, line)))
                 } else {
-                    Selection::cursor(self.want.offset_on(buffer, line)).with_goal(self.want.goal())
+                    let offset = self.want.offset_on(buffer, line, self.columns);
+                    Selection::cursor(offset).with_goal(self.want.goal())
                 }
             }
             (_, Cut::Delete) => Selection::cursor(clamp_normal(buffer, start)),

@@ -60,7 +60,13 @@ impl Vim {
             edits.push(Edit::replace(range, sorted.join("\n")));
         }
         let cursor = buffer.line_of(selections.primary().head);
-        let undo = undo_cursor(buffer, selections, lines.contains(&cursor), first);
+        let undo = undo_cursor(
+            buffer,
+            self.viewport.columns(),
+            selections,
+            lines.contains(&cursor),
+            first,
+        );
         Ok(edit_lines(buffer, selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first)
         })?)

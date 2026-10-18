@@ -61,6 +61,8 @@ pub fn selection_spans(
                 .collect();
         }
         Mode::Visual(VisualKind::Char) => inclusive_end(buffer, end),
+        // Un bloque todavía no se pinta: solo se ve el cursor.
+        Mode::Visual(VisualKind::Block) => return Vec::new(),
         _ if selection.is_cursor() => return Vec::new(),
         _ => SpanEnd::At(end.get() - buffer.line_start(*lines.end()).get()),
     };
