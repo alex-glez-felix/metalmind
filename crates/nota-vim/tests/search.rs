@@ -165,6 +165,11 @@ use rstest_reuse::{self, apply, template};
 #[case("|Abc abc", ":s/A/X/g<CR>", "|Xbc abc")]
 #[case("|Abc abc", ":s/a/X/gI<CR>", "|Abc Xbc")]
 #[case("|Abc abc", ":s/A/X/gi<CR>", "|Xbc Xbc")]
+// i e I valen solo para ese :s: lo que se recuerda vuelve a smartcase
+#[case("|Foo foo foo", ":s/Foo/X/i<CR>n", "|X foo foo")]
+#[case("|Foo foo foo", ":s/Foo/X/i<CR>/<CR>", "|X foo foo")]
+#[case("|Foo foo\nFoo foo", ":s/Foo/X/gi<CR>j:s<CR>", "X X\n|X foo")]
+#[case("|Foo foo\nFoo foo", ":s/Foo/X/gi<CR>j:s//Y/g<CR>", "X X\n|Y foo")]
 #[case("|abc\nabc", ":s/z/X/<CR>", "|abc\nabc")]
 #[case("|abc\nabc", ":s/z/X/e<CR>", "|abc\nabc")]
 #[case("|a/b", ":s#/#-#<CR>", "|a-b")]
