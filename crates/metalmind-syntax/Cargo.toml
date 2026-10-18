@@ -25,5 +25,9 @@ rstest.workspace = true
 name = "scan"
 harness = false
 
+[[bench]]
+name = "style"
+harness = false
+
 [lints]
 workspace = true

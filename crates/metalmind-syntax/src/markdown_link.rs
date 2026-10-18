@@ -61,7 +61,10 @@ impl Brackets {
 /// Un link markdown reconocido. `link` es `None` si apunta fuera del vault:
 /// igual se salta entero para no ver tags en su URL.
 pub(crate) struct MarkdownLink {
-    pub end: usize,
+    /// Desde el `!` o el `[` hasta tras el `)`.
+    pub span: Range<usize>,
+    /// Lo de entre los corchetes.
+    pub label: Range<usize>,
     pub link: Option<Link>,
 }
 
@@ -182,17 +185,21 @@ pub(crate) fn markdown_link_at(
     }
     let (dest, dest_end) = destination(text, skip_spaces(text.as_bytes(), paren + 1))?;
     let end = closing_paren(text, dest_end)?;
+    let outside = MarkdownLink {
+        span: start..end,
+        label: open + 1..label_close,
+        link: None,
+    };
     if is_external(&text[dest.clone()]) {
-        return Some(MarkdownLink { end, link: None });
+        return Some(outside);
     }
     let hash = unescaped_hash(text.as_bytes(), dest.clone());
     let (target, subpath) = split_subpath(text, dest, hash);
     if target.is_empty() && subpath.is_none() {
-        return Some(MarkdownLink { end, link: None });
+        return Some(outside);
     }
     let alias = trim(text, open + 1..label_close);
     Some(MarkdownLink {
-        end,
         link: Some(Link {
             syntax: LinkSyntax::Markdown,
             embed: start != open,
@@ -201,6 +208,7 @@ pub(crate) fn markdown_link_at(
             subpath,
             alias: (!alias.is_empty()).then_some(alias),
         }),
+        ..outside
     })
 }
 

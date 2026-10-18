@@ -13,6 +13,8 @@ mod link;
 mod markdown_link;
 mod resolve;
 mod scanner;
+mod sink;
+mod style;
 mod tag;
 
 use std::ops::Range;
@@ -22,6 +24,10 @@ pub use frontmatter::{Entry, Frontmatter, Value};
 pub use link::{Link, LinkSyntax, Subpath};
 pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
+};
+pub use style::{
+    Conceal, Decorations, FencePart, LineKind, LineStyle, Lines, LinkSpot, Role, Span, Style,
+    Styles, TextLines, Token,
 };
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 
