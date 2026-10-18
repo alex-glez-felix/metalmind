@@ -213,7 +213,7 @@ keymap:
 | Recorrido | `ignore` | 0.4.33 | `WalkBuilder::build_parallel()`, respeta `.gitignore`; añadir filtro propio para `.obsidian/`, `.trash/`. |
 | Vigilar cambios | `notify` + `notify-debouncer-full` | 8.2.0 / 0.7.0 | inotify en Linux. El debouncer junta rename-from/rename-to. Ojo con el límite `fs.inotify.max_user_watches` en vaults enormes **(sin verificar umbral)**. |
 | Fuzzy finder | `nucleo` (o `nucleo-matcher`) | 0.5.0 / 0.3.1 | El de Helix. Matching en hilos de fondo, inyección incremental de ítems, snapshot sin bloquear la UI. Sin release desde 2024 pero estable. Alternativa: `frizbee` 0.13 (SIMD, el de blink.cmp). |
-| Full-text | `tantivy` | 0.26.2 | Lucene en Rust; índice en disco, BM25, frases, fuzzy. Post-MVP: para "buscar en el vault" basta un grep paralelo (`grep-searcher`/`regex`) hasta ~10 k notas **(sin verificar umbral)**. |
+| Full-text | `tantivy` | 0.26.2 | Lucene en Rust; índice en disco, BM25, frases, fuzzy. Post-MVP: para "buscar en el vault" basta el grep paralelo (`grep-searcher`/`grep-regex`/`ignore`) **hasta ~50 k notas, medido** (abajo, "Medido (M6…)"): con caché caliente una búsqueda completa en 50 k notas tarda 67 ms. Vale la pena un índice a partir de ~75 k notas (extrapolado) o si el primer grep en frío molesta en un vault real. |
 | Persistencia de caché | `redb` 4.4.0 o `rusqlite` 0.40.2 | — | Ver abajo. |
 | Grafo | `petgraph` 0.8.3 | — | Solo si hace falta la vista de grafo / algoritmos; para backlinks bastan dos `HashMap`. |
 
@@ -288,9 +288,29 @@ Benchmarks con `divan` 0.1.21, en release, **medido en la máquina de CI** (x86_
 | Qué | Bench | Mediana |
 |---|---|---|
 | Abrir e indexar 5 000 notas + 100 adjuntos en 110 carpetas anidadas (walk + watcher puesto) | `cargo bench -p nota-vault` | **57 ms** (objetivo de M2: < 1 s) |
-| Búsqueda difusa sobre esas 5 100 rutas, página de 50: `n` / `tema nota` / `a3t7n42` / `zzz` | `cargo bench -p nota-search` | 0.56 / 4.2 / 0.61 / 0.41 ms |
+| Búsqueda difusa sobre esas 5 100 rutas, página de 50: `n` / `tema nota` / `a3t7n42` / `zzz` | `cargo bench -p nota-search --bench fuzzy` | 0.56 / 4.2 / 0.61 / 0.41 ms |
 
 Falta el número con la caché de disco fría y en un vault real de Obsidian; el de la máquina de pruebas es el que vale para el hito. Los objetivos de cada operación y los números más recientes (también 50 k notas) están en el [presupuesto de rendimiento](../performance.md).
+
+### Medido (M6, 2026-10-18): búsqueda de texto completo
+
+`cargo bench -p nota-search --bench text`, en release, en un contenedor Linux x86_64 de 4 hilos con disco virtual, caché caliente. Vaults sintéticos de notas de ~1.5 KB (frontmatter, encabezado, 24 líneas de palabras al azar, links y una fecha), 100 por carpeta:
+
+| Búsqueda (mediana) | 5 k notas | 20 k notas | 50 k notas |
+|---|---|---|---|
+| `zafiro`, literal: 1 nota de cada 1 000 (lo que cuesta leer todo) | 9.1 ms | 28 ms | 67 ms |
+| `proyecto`, literal: casi todas, ~7.5 coincidencias por nota | 18 ms | 72 ms | 229 ms |
+| `\d{4}-\d{2}-1\d`, regex sin literal que la acelere | 23 ms | 72 ms | 152 ms |
+| Empezar, recibir la primera nota y cancelar | 4.0 ms | 3.0 ms | 2.6 ms |
+
+En frío (caché de disco vaciada con `drop_caches`, una corrida, `zafiro`): ~0.1 s con 5 k notas, ~0.37 s con 20 k y ~1.1 s con 50 k, unos 22 µs por nota en ese disco virtual.
+
+Qué dice del umbral de `tantivy`:
+
+- Leer el vault escala lineal, ~1.3 µs por nota con 4 hilos (unas 750 k notas/s). Una búsqueda completa pasa los 100 ms recién cerca de las 75 k notas (extrapolado); antes, cada tecla puede lanzar una búsqueda nueva, que cancela la anterior en ~3 ms, y los primeros resultados llegan en streaming mucho antes del final.
+- Con una palabra común el tiempo extra es armar los resultados (~325 k líneas con coincidencias en 50 k notas), y eso un índice no lo ahorra: `tantivy` devuelve documentos, y las líneas y columnas igual hay que sacarlas de cada nota. Lo que lo resuelve es que la UI pida un tope de resultados.
+- En frío sí gana un índice, porque lee menos que el corpus. Pero M3 lee todas las notas al abrir el vault para indexar los links, y eso deja la caché caliente antes de la primera búsqueda.
+- Conclusión: el grep alcanza para vaults de hasta ~50 k notas, cinco veces más que los ~10 k que se suponían. `tantivy` vuelve a evaluarse si aparece un vault real de más de ~75 k notas, o si el primer grep en frío molesta en un vault real con disco lento.
 
 ---
 
