@@ -1,32 +1,19 @@
+mod find;
+
 use nota_buffer::{Buffer, Selection, Selections};
 
+use crate::find::Find;
 use crate::insert::{Repeat, Typed};
 use crate::keymap::Lookup;
+use crate::motion::Destination;
 use crate::object::Object;
 use crate::operator::Operand;
 use crate::register::Register;
 use crate::travel::Travel;
 use crate::{
-    Action, Command, CommandError, InsertAt, Key, Keymap, Motion, Operator, PasteSide, VimError,
-    insert, paste,
+    Action, CharSearch, Command, CommandError, InsertAt, Key, Keymap, Mode, Motion, Operator,
+    PasteSide, VimError, insert, paste,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
-    Normal,
-    Insert,
-    OperatorPending(Operator),
-    /// Escribiendo tras `:`.
-    CommandLine,
-}
-
-impl Mode {
-    /// Las teclas de texto se escriben en vez de ser comandos.
-    #[must_use]
-    pub fn takes_text(self) -> bool {
-        matches!(self, Self::Insert | Self::CommandLine)
-    }
-}
 
 /// Qué pasó con una tecla o una acción.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -57,6 +44,9 @@ pub struct Vim {
     register: Option<Register>,
     command_line: String,
     repeat: Repeat,
+    /// Tras `f`, `F`, `t` o `T`, la tecla siguiente es el carácter a buscar.
+    awaiting_char: Option<CharSearch>,
+    last_find: Option<Find>,
 }
 
 impl Default for Vim {
@@ -82,6 +72,8 @@ impl Vim {
             register: None,
             command_line: String::new(),
             repeat: Repeat::default(),
+            awaiting_char: None,
+            last_find: None,
         }
     }
 
@@ -104,6 +96,9 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
+        if let Some(search) = self.awaiting_char.take() {
+            return self.find_char(search, key, buffer, selections);
+        }
         if self.push_count_digit(key) {
             return Ok(KeyOutcome::Pending);
         }
@@ -131,13 +126,20 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
+        self.awaiting_char = None;
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
                 self.operate(operator, Object::Motion(motion), buffer, selections)?;
             }
             (Action::Motion(motion), Mode::Normal) => {
                 let count = self.count.take();
-                *selections = move_cursors(buffer, selections, motion, count);
+                *selections = move_cursors(selections, |s| motion.resolve(buffer, s, count, None));
+            }
+            (Action::FindChar(search), Mode::Normal | Mode::OperatorPending(_)) => {
+                self.awaiting_char = Some(search);
+            }
+            (Action::RepeatFind { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
+                self.repeat_find(reversed, buffer, selections)?;
             }
             (Action::TextObject(object), Mode::OperatorPending(operator)) => {
                 self.operate(operator, Object::TextObject(object), buffer, selections)?;
@@ -267,6 +269,7 @@ impl Vim {
         self.pending.clear();
         self.count = None;
         self.operator_count = None;
+        self.awaiting_char = None;
         if matches!(self.mode, Mode::OperatorPending(_)) {
             self.mode = Mode::Normal;
         }
@@ -363,18 +366,15 @@ impl Vim {
     }
 }
 
-fn move_cursors(
-    buffer: &Buffer,
+/// Cada cursor va a donde lo lleve `resolve`; si falla, se queda.
+pub(super) fn move_cursors(
     selections: &Selections,
-    motion: Motion,
-    count: Option<usize>,
+    resolve: impl Fn(&Selection) -> Option<Destination>,
 ) -> Selections {
     selections.map(|selection| {
-        motion
-            .resolve(buffer, selection, count, None)
-            .map_or(*selection, |destination| {
-                Selection::cursor(destination.offset).with_goal(destination.goal)
-            })
+        resolve(selection).map_or(*selection, |destination| {
+            Selection::cursor(destination.offset).with_goal(destination.goal)
+        })
     })
 }
 
