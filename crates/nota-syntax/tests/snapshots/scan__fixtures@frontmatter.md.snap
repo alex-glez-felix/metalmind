@@ -10,3 +10,5 @@ frontmatter 0..167 yaml 4..164
 wikilink 199..210 "[[un link]]"
     target 201..208 "un link"
 tag 181..185 "#tag" name "tag"
+heading 1 168..176 "# Cuerpo"
+    text 170..176 "Cuerpo"

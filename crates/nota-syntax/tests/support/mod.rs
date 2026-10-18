@@ -83,5 +83,18 @@ pub fn render(text: &str, scan: &Scan) -> String {
         )
         .unwrap();
     }
+    for heading in &scan.headings {
+        writeln!(
+            out,
+            "heading {} {}\n    text {}",
+            heading.level,
+            part(text, &heading.span),
+            part(text, &heading.text)
+        )
+        .unwrap();
+    }
+    for block in &scan.blocks {
+        writeln!(out, "block {}", part(text, &block.span)).unwrap();
+    }
     out
 }

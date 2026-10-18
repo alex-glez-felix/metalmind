@@ -1,6 +1,6 @@
 use crate::code::{self, CodeSpans};
 use crate::markdown_link::{self, Brackets};
-use crate::{Scan, frontmatter, link, tag};
+use crate::{Scan, anchor, frontmatter, link, tag};
 
 /// Recorre la nota de izquierda a derecha. Todo disparador es ASCII, así que
 /// avanzar de a un byte nunca deja un rango en medio de un carácter.
@@ -52,9 +52,18 @@ impl Scanner<'_> {
             b'%' if next == Some(b'%') => code::comment_end(self.text, at),
             b'!' if next == Some(b'[') => self.link(at, at + 1).unwrap_or(at + 1),
             b'[' => self.link(at, at).unwrap_or(at + 1),
-            b'#' if self.after_space(at) => self.tag(at),
+            b'#' | b'^' if self.after_space(at) => self.after_space_trigger(at),
             _ => at + 1,
         }
+    }
+
+    /// Un `#` (heading o tag) o un `^` (bloque) que empieza tras un espacio.
+    fn after_space_trigger(&mut self, at: usize) -> usize {
+        if self.text.as_bytes()[at] == b'^' {
+            return self.block(at);
+        }
+        self.heading(at);
+        self.tag(at)
     }
 
     fn link(&mut self, start: usize, open: usize) -> Option<usize> {
@@ -76,14 +85,56 @@ impl Scanner<'_> {
         Some(markdown.end)
     }
 
-    /// Un `#` solo abre un tag al inicio de línea o tras un espacio: así no
-    /// son tags el fragmento de una URL ni `texto#algo`.
+    /// Un `#` o un `^` solo abren algo al inicio de línea o tras un espacio:
+    /// así no son tags el fragmento de una URL ni `texto#algo`.
     fn after_space(&self, at: usize) -> bool {
-        at == self.body
-            || self.text[..at]
-                .chars()
-                .next_back()
-                .is_none_or(char::is_whitespace)
+        at == self.body || {
+            let before = self.text.as_bytes()[at - 1];
+            before.is_ascii_whitespace()
+                || ((!before.is_ascii() || before == 0x0b) && self.after_other_space(at))
+        }
+    }
+
+    /// Lo que `is_ascii_whitespace` no cubre: el tab vertical y los
+    /// espacios de Unicode. Aparte para que `after_space`, que corre en cada
+    /// `#`, se siga inlineando.
+    #[cold]
+    fn after_other_space(&self, at: usize) -> bool {
+        self.text[..at]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_whitespace)
+    }
+
+    /// Un heading empieza con el primer `#` de la línea, tras hasta tres
+    /// espacios.
+    fn heading(&mut self, at: usize) {
+        let indent = self.text.as_bytes()[self.body..at]
+            .iter()
+            .rev()
+            .take(4)
+            .take_while(|&&b| b == b' ')
+            .count();
+        let line_start = at - indent;
+        let at_line_start =
+            line_start == self.body || self.text.as_bytes()[line_start - 1] == b'\n';
+        if indent <= 3
+            && at_line_start
+            && let Some(heading) = anchor::heading_at(self.text, line_start)
+        {
+            self.scan.headings.push(heading);
+        }
+    }
+
+    fn block(&mut self, at: usize) -> usize {
+        match anchor::block_at(self.text, at) {
+            Some(block) => {
+                let end = block.span.end;
+                self.scan.blocks.push(block);
+                end
+            }
+            None => at + 1,
+        }
     }
 
     fn tag(&mut self, at: usize) -> usize {

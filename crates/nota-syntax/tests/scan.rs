@@ -357,3 +357,29 @@ fn link_at_finds_the_link_under_the_cursor() {
     assert_eq!(target(14), None);
     assert_eq!(target(22).as_deref(), Some("c.md"));
 }
+
+/// La línea del heading que nombra cada subruta.
+#[rstest]
+#[case::by_name("# Uno\n## Dos", "dos", Some(1))]
+#[case::nested("# A\n## X\n# B\n## X", "B#X", Some(3))]
+#[case::nested_stays_in_section("# A\n# B\n## X", "A#X", None)]
+#[case::first_of_repeated("## X\n## X", "X", Some(0))]
+#[case::missing("# Uno", "Dos", None)]
+#[case::in_code("```\n# Uno\n```", "Uno", None)]
+fn headings_by_subpath(#[case] text: &str, #[case] path: &str, #[case] line: Option<usize>) {
+    let found = scan(text)
+        .heading(text, path)
+        .map(|heading| text[..heading.span.start].matches('\n').count());
+    assert_eq!(found, line);
+}
+
+#[test]
+fn blocks_by_id() {
+    let text = "a ^Uno\nb ^dos";
+    let scan = scan(text);
+    assert_eq!(
+        scan.block(text, "uno").map(|block| block.span.clone()),
+        Some(2..6)
+    );
+    assert_eq!(scan.block(text, "tres"), None);
+}

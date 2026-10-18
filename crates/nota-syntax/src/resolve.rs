@@ -80,25 +80,53 @@ where
     }
 }
 
-/// La clave con que un índice encuentra las rutas que `target`, escrito en
-/// `source`, puede resolver: su último componente en minúsculas. Toda ruta
-/// que [`resolve_from`] pueda elegir tiene esa clave entre sus [`path_keys`],
-/// así que basta con pasarle esas. `None` si no puede resolver nada.
-#[must_use]
-pub fn target_key(source: &str, target: &str) -> Option<String> {
-    let target = absolute(source, target)?;
-    let target = target.trim();
-    let target = target.strip_prefix('/').unwrap_or(target);
-    let name = target.rsplit('/').next()?;
-    (!name.is_empty()).then(|| name.to_lowercase())
+/// Con qué buscar en un índice las rutas que un destino puede resolver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetKey {
+    /// El último componente, en minúsculas: está entre los [`path_keys`] de
+    /// toda ruta que el destino pueda elegir.
+    pub name: String,
+    /// Si el destino lleva carpeta, la de antes del nombre en minúsculas, o
+    /// vacía si es la raíz (`/nota`): es la [`path_parent_key`] de toda ruta
+    /// que pueda elegir. `None` en un nombre solo, que puede estar en
+    /// cualquier carpeta.
+    pub parent: Option<String>,
 }
 
-/// Las claves con que se encuentra `path` (ver [`target_key`]): su nombre en
-/// minúsculas y, si termina en `.md`, también sin la extensión.
+/// La clave de `target`, escrito en `source`, para buscar sus candidatas
+/// sin recorrer todo el vault: basta con pasarle a [`resolve_from`] las
+/// rutas con esas claves. `None` si no puede resolver nada.
+#[must_use]
+pub fn target_key(source: &str, target: &str) -> Option<TargetKey> {
+    let target = absolute(source, target)?;
+    let target = target.trim();
+    let (target, from_root) = match target.strip_prefix('/') {
+        Some(rest) => (rest, true),
+        None => (target, false),
+    };
+    let mut parts = target.rsplit('/');
+    let name = parts.next().filter(|name| !name.is_empty())?.to_lowercase();
+    let parent = match parts.next() {
+        Some(parent) => Some(parent.to_lowercase()),
+        None => from_root.then(String::new),
+    };
+    Some(TargetKey { name, parent })
+}
+
+/// Los nombres con que se encuentra `path` (ver [`TargetKey::name`]): su
+/// nombre en minúsculas y, si termina en `.md`, también sin la extensión.
 pub fn path_keys(path: &str) -> impl Iterator<Item = String> {
     let name = path.rsplit('/').next().unwrap_or_default().to_lowercase();
     let stem = strip_md(&name).map(str::to_owned);
     std::iter::once(name).chain(stem)
+}
+
+/// La carpeta que contiene a `path`, solo su nombre y en minúsculas; vacía
+/// en la raíz (ver [`TargetKey::parent`]).
+#[must_use]
+pub fn path_parent_key(path: &str) -> String {
+    let mut parts = path.rsplit('/').skip(1);
+    parts.next().unwrap_or_default().to_lowercase()
 }
 
 /// `target` como lo compara [`resolve`]: los relativos se vuelven una ruta
@@ -193,17 +221,25 @@ mod tests {
     }
 
     #[test]
-    fn keys_are_the_lowercase_last_component() {
+    fn keys_are_the_lowercase_last_components() {
+        let key = |source, target| target_key(source, target).map(|key| (key.name, key.parent));
+        let owned =
+            |name: &str, parent: Option<&str>| Some((name.to_owned(), parent.map(str::to_owned)));
+        assert_eq!(key("a/b.md", "Nota.MD"), owned("nota.md", None));
         assert_eq!(
-            target_key("a/b.md", "Carpeta/Nota.MD").as_deref(),
-            Some("nota.md")
+            key("a/b.md", "Carpeta/Nota.MD"),
+            owned("nota.md", Some("carpeta"))
         );
-        assert_eq!(target_key("a/b.md", "../x/./").as_deref(), Some("x"));
-        assert_eq!(target_key("a/b.md", "../../x"), None);
-        assert_eq!(target_key("a/b.md", "/"), None);
+        assert_eq!(key("a/b.md", "/Nota"), owned("nota", Some("")));
+        assert_eq!(key("a/b.md", "./Nota"), owned("nota", Some("a")));
+        assert_eq!(key("a/b.md", "../x/./"), owned("x", Some("")));
+        assert_eq!(key("a/b.md", "../../x"), None);
+        assert_eq!(key("a/b.md", "/"), None);
         let keys: Vec<String> = path_keys("a/Nota.MD").collect();
         assert_eq!(keys, ["nota.md", "nota"]);
         assert_eq!(path_keys("img.png").collect::<Vec<_>>(), ["img.png"]);
+        assert_eq!(path_parent_key("A/B/nota.md"), "b");
+        assert_eq!(path_parent_key("nota.md"), "");
     }
 
     #[test]
