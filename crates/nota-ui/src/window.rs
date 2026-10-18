@@ -14,9 +14,17 @@ use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OpenError {
+    #[error(
+        "no hay sesión gráfica: nota necesita Wayland o X11, y ni WAYLAND_DISPLAY ni DISPLAY \
+         nombran una; ábrelo desde el escritorio"
+    )]
+    NoDisplay,
     #[error(transparent)]
     NoMonoFont(#[from] NoMonoFont),
-    #[error("no se pudo abrir la ventana: {0:#}")]
+    #[error(
+        "no se pudo abrir la ventana: {0:#}\nnota dibuja con Vulkan u OpenGL: instala el driver \
+         de la GPU (o mesa, que trae ambos por software) y compruébalo con `vulkaninfo --summary`"
+    )]
     Window(#[source] anyhow::Error),
 }
 
@@ -24,13 +32,17 @@ pub enum OpenError {
 /// cierra la última ventana.
 ///
 /// # Errors
-/// Si no hay fuente monoespaciada o la plataforma no puede abrir la ventana.
+/// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede abrir la ventana.
 pub fn open(
     document: Document,
     config: &Config,
     launched: Instant,
     cx: &mut App,
 ) -> Result<(), OpenError> {
+    // Sin display, GPUI arranca headless y la ventana se abriría sin que nadie la vea.
+    if cx.graphical_environment().is_none() {
+        return Err(OpenError::NoDisplay);
+    }
     cx.set_global(Theme::new(config, cx)?);
     actions::bind_keys(cx);
     cx.on_window_closed(|cx, _| {

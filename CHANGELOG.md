@@ -27,6 +27,9 @@ Los cambios que importan a quien usa nota. El formato sigue
   el ratón y el clic medio.
 - La fuente es la primera monoespaciada instalada de una lista; si no hay
   ninguna, nota lo dice y no abre.
+- Sin sesión gráfica (ni Wayland ni X11) o sin driver de Vulkan ni OpenGL,
+  nota dice qué falta y sale con error en vez de quedarse corriendo sin
+  ventana.
 
 #### Modo vim (M1)
 

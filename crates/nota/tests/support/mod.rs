@@ -91,6 +91,21 @@ impl Smoke {
     /// una carpeta vacía, y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET` GPUI usa
     /// X11: nunca abre en el escritorio de quien corre los tests.
     pub fn launch(&self, args: &[&str]) -> Nota<'_> {
+        self.launch_with_env(args, &[])
+    }
+
+    /// Como `launch`, pero los loaders de Vulkan y de EGL no encuentran
+    /// ningún driver: GPUI no tiene con qué dibujar la ventana.
+    pub fn launch_without_gpu(&self, args: &[&str]) -> Nota<'_> {
+        let missing = "/no-existe.json";
+        let env = [
+            ("VK_DRIVER_FILES", missing),
+            ("__EGL_VENDOR_LIBRARY_FILENAMES", missing),
+        ];
+        self.launch_with_env(args, &env)
+    }
+
+    fn launch_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> Nota<'_> {
         let home = self.dir.path().join("home");
         let log_path = self.dir.path().join("nota.log");
         let log = File::create(&log_path).expect("crear el log");
@@ -106,6 +121,7 @@ impl Smoke {
             .env("XDG_CACHE_HOME", home.join(".cache"))
             .env("XDG_STATE_HOME", home.join(".local/state"))
             .env("RUST_LOG", "info")
+            .envs(env.iter().copied())
             .stdin(Stdio::null())
             .stdout(log.try_clone().expect("duplicar el log"))
             .stderr(log)
@@ -150,6 +166,11 @@ impl<'a> Nota<'a> {
                 .next()
                 .ok_or_else(|| "ninguna ventana".to_owned())
         })
+    }
+
+    /// Lo que lleva escrito en stdout y stderr.
+    pub fn log(&self) -> String {
+        fs::read_to_string(&self.log).expect("leer el log de nota")
     }
 
     pub fn is_running(&mut self) -> bool {

@@ -36,6 +36,19 @@ fn edita_y_guarda(#[case] before: &str, #[case] keys: &str, #[case] after: &str)
     assert_eq!(smoke.files(), ["a.md"]);
 }
 
+/// Sin adaptador no hay ventana: dice qué falta y sale, no se queda corriendo (#31).
+#[test]
+#[ignore = "necesita Xvfb: ver docs/testing.md"]
+fn sin_adaptador_termina_con_error() {
+    let smoke = Smoke::new();
+    let mut nota = smoke.launch_without_gpu(&["a.md"]);
+    let status = nota.wait_exit();
+    let log = nota.log();
+    assert_eq!(status.code(), Some(1), "{log}");
+    assert!(log.contains("no se pudo abrir la ventana"), "{log}");
+    assert!(log.contains("vulkaninfo"), "{log}");
+}
+
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn wq_crea_un_archivo_nuevo() {
