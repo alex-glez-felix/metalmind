@@ -5,6 +5,7 @@
 //! en transacciones que forman un árbol de historial: deshacer y editar abre
 //! una rama nueva sin perder la anterior.
 
+mod anchor;
 mod buffer;
 mod edit;
 mod error;
@@ -12,6 +13,7 @@ mod history;
 mod offset;
 mod selection;
 
+pub use anchor::LineAnchor;
 pub use buffer::Buffer;
 pub use edit::{Bias, Edit, EditMap};
 pub use error::BufferError;

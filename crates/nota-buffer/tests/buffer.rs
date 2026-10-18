@@ -3,7 +3,9 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
-use nota_buffer::{Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, Selection, Selections};
+use nota_buffer::{
+    Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, LineAnchor, Selection, Selections,
+};
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 
@@ -250,6 +252,76 @@ fn version_grows_with_every_change() {
     assert!(buffer.version() > start + 1);
 }
 
+fn anchored(text: &str, offset: usize) -> (Buffer, LineAnchor) {
+    let mut buffer = Buffer::from(text);
+    let anchor = buffer.create_anchor(at(offset)).unwrap();
+    (buffer, anchor)
+}
+
+#[test]
+fn an_anchor_follows_lines_inserted_or_deleted_above() {
+    let (mut buffer, anchor) = anchored("ab\ncd\nef", 7);
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(3))]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(4)));
+    edit(&mut buffer, vec![Edit::insert(at(0), "xyz\n\n")]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(9)));
+}
+
+#[test]
+fn an_anchor_keeps_its_column_on_its_own_line() {
+    let (mut buffer, anchor) = anchored("abcdef", 4);
+    edit(&mut buffer, vec![Edit::insert(at(0), "xy")]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(4)));
+    edit(&mut buffer, vec![Edit::delete(at(1)..at(8))]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(1)));
+}
+
+#[test]
+fn an_anchor_never_splits_a_character() {
+    let (mut buffer, anchor) = anchored("abcd", 3);
+    edit(&mut buffer, vec![Edit::replace(at(0)..at(3), "ñé")]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(2)));
+}
+
+#[test]
+fn deleting_its_line_drops_the_anchor_and_undo_brings_it_back() {
+    let (mut buffer, anchor) = anchored("ab\ncd\nef", 4);
+    edit(&mut buffer, vec![Edit::delete(at(3)..at(6))]);
+    assert_eq!(buffer.anchor_offset(anchor), None);
+    buffer.undo().unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(4)));
+    buffer.redo().unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), None);
+}
+
+/// Como las marks de vim: cada lado de un cambio guarda dónde estaban.
+#[test]
+fn undo_and_redo_put_anchors_back_where_they_were() {
+    let (mut buffer, anchor) = anchored("ab\ncd", 4);
+    edit(&mut buffer, vec![Edit::delete(at(2)..at(3))]);
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(3)));
+    buffer.undo().unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(4)));
+    buffer.move_anchor(anchor, at(0)).unwrap();
+    buffer.redo().unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(3)));
+}
+
+#[test]
+fn anchors_belong_to_their_buffer() {
+    let (_, anchor) = anchored("ab", 0);
+    let mut other = Buffer::from("ab");
+    assert_eq!(
+        other.move_anchor(anchor, at(0)),
+        Err(BufferError::UnknownAnchor(anchor))
+    );
+    assert_eq!(other.anchor_offset(anchor), None);
+    assert!(matches!(
+        other.create_anchor(at(3)),
+        Err(BufferError::OutOfBounds { .. })
+    ));
+}
+
 fn char_boundaries(text: &str) -> Vec<usize> {
     text.char_indices()
         .map(|(i, _)| i)
@@ -329,6 +401,51 @@ proptest! {
                 texts.push(buffer.to_string());
             }
             prop_assert_eq!(&buffer.to_string(), &texts[seq(&buffer)]);
+        }
+    }
+
+    /// Mientras nadie las mueva a mano, las anclas dependen solo del estado
+    /// del historial, se llegue por donde se llegue, y nunca parten un
+    /// carácter.
+    #[test]
+    fn each_history_seq_always_shows_the_same_anchors(
+        text in "[a-zé\n ]{0,40}",
+        moves in prop::collection::vec(arbitrary_move(), 1..40),
+    ) {
+        let mut buffer = Buffer::from(text.as_str());
+        let anchors: Vec<LineAnchor> = char_boundaries(&text)
+            .into_iter()
+            .map(|offset| buffer.create_anchor(at(offset)).unwrap())
+            .collect();
+        let resolve = |buffer: &Buffer| -> Vec<Option<ByteOffset>> {
+            anchors.iter().map(|&anchor| buffer.anchor_offset(anchor)).collect()
+        };
+        let mut seen = std::collections::HashMap::from([(seq(&buffer), resolve(&buffer))]);
+        for step in &moves {
+            match step {
+                Move::Edit(picks) => {
+                    let edits = arbitrary_edits(&buffer.to_string(), picks);
+                    edit(&mut buffer, edits);
+                }
+                Move::Undo => {
+                    buffer.undo().unwrap();
+                }
+                Move::Redo => {
+                    buffer.redo().unwrap();
+                }
+                Move::Earlier(steps) => {
+                    buffer.earlier(*steps).unwrap();
+                }
+                Move::Later(steps) => {
+                    buffer.later(*steps).unwrap();
+                }
+            }
+            let now = resolve(&buffer);
+            for offset in now.iter().flatten() {
+                prop_assert!(buffer.is_char_boundary(*offset));
+            }
+            let first_visit = seen.entry(seq(&buffer)).or_insert_with(|| now.clone());
+            prop_assert_eq!(&*first_visit, &now);
         }
     }
 
