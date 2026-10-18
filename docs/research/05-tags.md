@@ -28,7 +28,7 @@ Reglas del texto (las del scanner de `nota-syntax`, 03 §2):
 
 - Empieza al inicio de línea o tras un espacio: `texto#algo` y el fragmento de una URL no son tags.
 - Letras, números, `_`, `-` y `/`; fuera de ASCII, letras, marcas, números y símbolos (emoji incluidos). La puntuación lo corta: `#rust.` es `#rust`.
-- No puede ser solo números (`PR #15` no es un tag; `#y2024` y `#2024/10` sí).
+- **Decisión: puede ser solo números.** `#2024`, `#1` y `#2024/10` son tags, porque en nota los tags son el eje de organización y `#2024` sirve para agrupar un año; la regla contraria venía de Obsidian. Costo aceptado: en texto como "PR #12", `#12` se vuelve tag.
 - `# Título` es un heading, no un tag: el espacio lo decide.
 
 Reglas del frontmatter:
@@ -194,7 +194,7 @@ Filtrar, enfocar o consultar por `#a` incluye `#a/…` (§4). En el panel, el no
 | `#tag` en un bloque cercado, en código indentado o en `` `código inline` `` | **No cuenta** | Es código, no una nota sobre el tema: `#include`, `#[derive]` y comentarios de shell llenarían el índice. Lo resuelve el scanner (03 §2), que ya ignora código. |
 | `#tag` dentro de `%% comentario %%` | **No cuenta** | El scanner ya los ignora (03 §2); un comentario no es contenido. |
 | `#tag` en una URL o en `[[Nota#Sección]]` | No es tag | No va tras espacio o inicio de línea. |
-| `#2024` | No es tag | Solo números (03 §2). `#y2024` o `#2024/10` sí. |
+| `#2024` | **Sí es tag** | Agrupa un año, y en nota los tags son el eje de organización (§1). Costo aceptado: `PR #12` deja un tag `#12`. |
 | Mismo tag en el texto y en `tags:` | La nota cuenta una vez | El índice es por nota; las dos ocurrencias se guardan para renombrar. |
 | Frontmatter roto | Los tags del cuerpo cuentan igual | El scanner trata el YAML roto como problema recuperable (03 §2). |
 | Tag muy largo o muy profundo | Sin límite | Un límite es un caso especial más; si un vault real lo necesita, se mide primero. |
