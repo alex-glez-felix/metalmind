@@ -1,3 +1,4 @@
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,10 +7,12 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use arc_swap::ArcSwap;
+use jiff::civil::DateTime;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
+use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
 use crate::file;
 use crate::index::VaultIndex;
@@ -67,6 +70,35 @@ impl Default for VaultOptions {
     }
 }
 
+/// La raíz de un vault, ya comprobada y sin índice: lo que basta para crear
+/// una nota sin recorrer todo el vault.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VaultRoot(PathBuf);
+
+impl VaultRoot {
+    /// # Errors
+    /// Si `root` no existe, no es una carpeta o no se puede leer.
+    pub fn new(root: impl AsRef<Path>) -> Result<Self, VaultError> {
+        canonical_dir(root.as_ref()).map(Self)
+    }
+
+    /// La raíz, sin enlaces simbólicos.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
+    /// Crea en la raíz una nota con `note` como `slug.md`, que nunca pisa
+    /// otra; `now` solo nombra la que no tiene slug. Es lo que hace `nota add`.
+    ///
+    /// # Errors
+    /// Si `note` está vacía o tiene un tag o un título inválido, o si falla la
+    /// escritura.
+    pub fn capture(&self, note: &NewNote, now: DateTime) -> Result<Captured, CaptureError> {
+        capture::capture(&self.0, note, now)
+    }
+}
+
 /// Un vault abierto: la carpeta raíz, sus índices y el watcher que los
 /// mantiene al día en un hilo propio.
 pub struct Vault {
@@ -87,7 +119,7 @@ impl Vault {
     /// Abre la carpeta `root` con las opciones por defecto: ver [`Vault::open_with`].
     ///
     /// # Errors
-    /// Si `root` no existe, no es una carpeta o no se puede vigilar.
+    /// Si `root` no existe, no es una carpeta o no se puede leer ni vigilar.
     pub fn open(root: impl AsRef<Path>) -> Result<(Self, mpsc::Receiver<VaultUpdate>), VaultError> {
         Self::open_with(root, VaultOptions::default())
     }
@@ -109,17 +141,7 @@ impl Vault {
         let mut debouncer = new_debouncer(DEBOUNCE, None, events)?;
         // Vigilar antes del walk: lo que cambie mientras tanto llega como evento.
         debouncer.watch(&root, RecursiveMode::Recursive)?;
-        let files = scan(&root);
-        let links = LinkIndex::build(
-            files.files().map(|entry| (entry.path.clone(), entry.kind)),
-            |path| read_note(&root, path),
-        );
-        let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
-            read_note(&root, path)
-        });
-        let index = Arc::new(ArcSwap::from_pointee(files));
-        let links = Arc::new(ArcSwap::from_pointee(links));
-        let tags = Arc::new(ArcSwap::from_pointee(tags));
+        let (index, links, tags) = build(&root, options);
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let worker = Worker {
@@ -146,6 +168,24 @@ impl Vault {
             }),
         };
         Ok((vault, receiver))
+    }
+
+    /// Abre e indexa `root` como [`Vault::open_with`], pero sin vigilarlo:
+    /// para quien lee el vault una vez y sale, como la CLI. Los índices quedan
+    /// como estaban al abrir.
+    ///
+    /// # Errors
+    /// Si `root` no existe, no es una carpeta o no se puede leer.
+    pub fn load(root: impl AsRef<Path>, options: VaultOptions) -> Result<Self, VaultError> {
+        let root = canonical_dir(root.as_ref())?;
+        let (index, links, tags) = build(&root, options);
+        Ok(Self {
+            root,
+            index,
+            links,
+            tags,
+            watch: None,
+        })
     }
 
     /// La raíz, sin enlaces simbólicos.
@@ -345,14 +385,41 @@ fn read_note(root: &Path, path: &VaultPath) -> Option<String> {
     }
 }
 
+type Indexes = (
+    Arc<ArcSwap<VaultIndex>>,
+    Arc<ArcSwap<LinkIndex>>,
+    Arc<ArcSwap<Tags>>,
+);
+
+/// Los índices de archivos, links y tags de `root`, de cero.
+fn build(root: &Path, options: VaultOptions) -> Indexes {
+    let files = scan(root);
+    let links = LinkIndex::build(
+        files.files().map(|entry| (entry.path.clone(), entry.kind)),
+        |path| read_note(root, path),
+    );
+    let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
+        read_note(root, path)
+    });
+    (
+        Arc::new(ArcSwap::from_pointee(files)),
+        Arc::new(ArcSwap::from_pointee(links)),
+        Arc::new(ArcSwap::from_pointee(tags)),
+    )
+}
+
 fn canonical_dir(root: &Path) -> Result<PathBuf, VaultError> {
     let canonical = root.canonicalize().map_err(|source| VaultError::Open {
         root: root.to_owned(),
         source,
     })?;
-    if canonical.is_dir() {
-        Ok(canonical)
-    } else {
-        Err(VaultError::NotADirectory(root.to_owned()))
+    if !canonical.is_dir() {
+        return Err(VaultError::NotADirectory(root.to_owned()));
     }
+    // Sin esto, una raíz sin permiso de lectura se abriría como un vault vacío.
+    fs::read_dir(&canonical).map_err(|source| VaultError::Open {
+        root: root.to_owned(),
+        source,
+    })?;
+    Ok(canonical)
 }

@@ -2,7 +2,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::path::VaultPath;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EntryKind {
     Folder,
     /// Un `.md`.
@@ -12,7 +13,9 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
-    pub(crate) fn of_file(path: &VaultPath) -> Self {
+    /// Por la extensión: `.md`, sin distinguir mayúsculas, es una nota.
+    #[must_use]
+    pub fn of_file(path: &VaultPath) -> Self {
         let is_markdown = path
             .name()
             .rsplit_once('.')

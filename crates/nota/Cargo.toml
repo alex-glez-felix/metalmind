@@ -12,13 +12,19 @@ clap.workspace = true
 dirs.workspace = true
 env_logger.workspace = true
 gpui-kit.workspace = true
+jiff.workspace = true
 log.workspace = true
 nota-config.workspace = true
+nota-search.workspace = true
 nota-ui.workspace = true
 nota-vault.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+nota-syntax.workspace = true
+pretty_assertions.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 x11rb.workspace = true

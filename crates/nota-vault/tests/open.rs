@@ -7,9 +7,10 @@
 mod support;
 
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::fs::Permissions;
+use std::os::unix::fs::{PermissionsExt as _, symlink};
 
-use nota_vault::{EntryKind, Vault, VaultError, VaultPath};
+use nota_vault::{EntryKind, Vault, VaultError, VaultOptions, VaultPath};
 use pretty_assertions::assert_eq;
 use support::{listing, make_tree};
 use tempfile::TempDir;
@@ -148,4 +149,30 @@ fn el_arbol_se_recorre_desde_la_raiz() {
         index.kind(&VaultPath::new("b/x.md").unwrap()),
         Some(EntryKind::Note)
     );
+}
+
+#[test]
+fn load_indexa_igual_que_open_sin_vigilar() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a.md", "sub/b.md", "img.png"]);
+    let loaded = Vault::load(dir.path(), VaultOptions::default()).unwrap();
+    let (opened, _updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(loaded.root(), opened.root());
+    assert_eq!(listing(&loaded.snapshot()), listing(&opened.snapshot()));
+    // Sin watcher, lo que cambie después no entra.
+    make_tree(dir.path(), &["c.md"]);
+    assert_eq!(loaded.snapshot().files().count(), 3);
+}
+
+#[test]
+fn una_raiz_que_no_se_puede_leer_no_es_un_vault_vacio() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().join("cerrada");
+    make_tree(dir.path(), &["cerrada/a.md"]);
+    fs::set_permissions(&root, Permissions::from_mode(0o300)).unwrap();
+    let loaded = Vault::load(&root, VaultOptions::default());
+    let opened = Vault::open(&root).map(|(vault, _)| vault);
+    fs::set_permissions(&root, Permissions::from_mode(0o700)).unwrap();
+    assert!(matches!(loaded, Err(VaultError::Open { .. })));
+    assert!(matches!(opened, Err(VaultError::Open { .. })));
 }

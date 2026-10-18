@@ -1,5 +1,7 @@
 //! Todo lo que se lee al arrancar.
 
+use std::path::PathBuf;
+
 use crate::diagnostic::{Diagnostic, Loaded};
 use crate::file::{YamlFile, read_yaml};
 use crate::paths::Paths;
@@ -32,23 +34,7 @@ impl Config {
     /// Solo si el tema embebido por defecto no carga, lo que es un bug.
     pub fn load(paths: &Paths) -> Result<Loaded<Self>, Diagnostic> {
         let mut diagnostics = Vec::new();
-        let (settings, file) = match read_yaml(&paths.config_file()) {
-            Ok(Some(YamlFile { path, text })) => {
-                let loaded = Settings::parse(&text);
-                diagnostics.extend(
-                    loaded
-                        .diagnostics
-                        .into_iter()
-                        .map(|diagnostic| diagnostic.in_file(&path)),
-                );
-                (loaded.value, Some(path))
-            }
-            Ok(None) => (Settings::default(), None),
-            Err(error) => {
-                diagnostics.push(error);
-                (Settings::default(), None)
-            }
-        };
+        let (settings, file) = read_settings(paths, &mut diagnostics);
         let theme = match Themes::new(paths.themes_dir()).load(settings.theme()) {
             Ok(loaded) => loaded,
             Err(LoadError { error, warnings }) => {
@@ -69,6 +55,37 @@ impl Config {
             },
             diagnostics,
         })
+    }
+}
+
+impl Settings {
+    /// Solo `config.yaml`, sin el tema: para quien no pinta nada, como la CLI.
+    #[must_use]
+    pub fn load(paths: &Paths) -> Loaded<Self> {
+        let mut diagnostics = Vec::new();
+        let (value, _) = read_settings(paths, &mut diagnostics);
+        Loaded { value, diagnostics }
+    }
+}
+
+/// Los settings y de qué archivo salieron, si había uno.
+fn read_settings(paths: &Paths, diagnostics: &mut Vec<Diagnostic>) -> (Settings, Option<PathBuf>) {
+    match read_yaml(&paths.config_file()) {
+        Ok(Some(YamlFile { path, text })) => {
+            let loaded = Settings::parse(&text);
+            diagnostics.extend(
+                loaded
+                    .diagnostics
+                    .into_iter()
+                    .map(|diagnostic| diagnostic.in_file(&path)),
+            );
+            (loaded.value, Some(path))
+        }
+        Ok(None) => (Settings::default(), None),
+        Err(error) => {
+            diagnostics.push(error);
+            (Settings::default(), None)
+        }
     }
 }
 
