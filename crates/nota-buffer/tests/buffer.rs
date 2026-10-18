@@ -101,6 +101,31 @@ fn rejects_invalid_edits() {
     assert_eq!(buffer.to_string(), "aé");
 }
 
+/// Que no cambie nada no la vuelve válida: un rango fuera del texto es un
+/// bug de quien edita.
+#[test]
+fn rejects_invalid_no_op_edits() {
+    let mut buffer = Buffer::from("aé");
+    buffer.begin_transaction(cursor(0)).unwrap();
+    assert!(matches!(
+        buffer.apply(vec![Edit::insert(at(9), "")]),
+        Err(BufferError::OutOfBounds { .. })
+    ));
+    assert_eq!(
+        buffer.apply(vec![Edit::delete(at(2)..at(2))]),
+        Err(BufferError::NotCharBoundary(at(2)))
+    );
+    assert_eq!(
+        buffer.apply(vec![Edit::insert(at(0), "x"), Edit::insert(at(9), "")]),
+        Err(BufferError::OutOfBounds {
+            start: at(9),
+            end: at(9),
+            len: at(3)
+        })
+    );
+    assert_eq!(buffer.to_string(), "aé");
+}
+
 #[test]
 fn a_transaction_is_one_undo_step() {
     let mut buffer = Buffer::from("abc");
