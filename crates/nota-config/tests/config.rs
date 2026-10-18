@@ -19,7 +19,7 @@ fn paths() -> (tempfile::TempDir, Paths) {
 fn sin_archivo_arranca_con_los_defaults() {
     let root = tempfile::tempdir().unwrap();
     let loaded = Config::load(&Paths::under(root.path())).unwrap();
-    assert!(loaded.diagnostics.is_empty());
+    assert_eq!(loaded.diagnostics, []);
     assert_eq!(loaded.value, Config::defaults().unwrap());
     assert_eq!(loaded.value.settings, Settings::default());
     assert_eq!(loaded.value.theme.name, DEFAULT_THEME);
@@ -35,7 +35,7 @@ fn lee_la_config_y_el_tema_del_usuario() {
     )
     .unwrap();
     let loaded = Config::load(&paths).unwrap();
-    assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+    assert_eq!(loaded.diagnostics, []);
     assert_eq!(
         loaded.value.settings.font.size,
         FontSize::try_from(18.).unwrap()
