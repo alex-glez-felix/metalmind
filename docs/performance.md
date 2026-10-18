@@ -26,10 +26,11 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Backspace en Insert, 5 k / 50 k | ≤ 1 ms | 1.1 / 2.6 µs | ✅ | `nota-vim` `backspace_en_insert` |
 | `dd` / `ciw` / `.` / `u` en 5 k | ≤ 1 ms | 3.1 / 12.7 / 6.2 / 2.9 µs | ✅ | `nota-vim` |
 | Macro de 7 teclas, `100@a`, en 5 k | ≤ 16 ms | 1.8 ms | ✅ | `nota-vim` `macro_100_veces` |
-| `:%s/nota/apunte/g` en 5 k (cada `nota` del texto) | ≤ 16 ms | 7.3 ms | ⚠️ | `nota-vim` `sustituir_todo` |
+| `:%s/nota/apunte/g` en 5 k (cada `nota` del texto) | ≤ 16 ms | 6.6 ms | ✅ | `nota-vim` `sustituir_todo` |
 | `u` de ese `:%s` | ≤ 16 ms | 2.9 ms | ✅ | `nota-vim` `deshacer_sustituir_todo` |
-| `:%s` en 50 k | ≤ 160 ms | 92 ms | ⚠️ | `nota-vim` `sustituir_todo` |
-| `/` sin coincidencias en 50 k (recorre todo) | ≤ 8 ms | 15.1 ms | ❌ [#37](https://github.com/alex-glez-felix/nota/issues/37) | `nota-vim` `buscar_sin_resultado` |
+| `:%s` en 50 k | ≤ 160 ms | 84 ms | ⚠️ | `nota-vim` `sustituir_todo` |
+| `/` sin coincidencias en 50 k (recorre todo) | ≤ 8 ms | 0.34 ms | ✅ | `nota-vim` `buscar_sin_resultado` |
+| `?`, `/\<…\>` y `:%s` sin coincidencias en 50 k | ≤ 8 ms | 0.35 / 0.37 / 0.35 ms | ✅ | `nota-vim` `…_sin_resultado` |
 | `/` hasta la siguiente coincidencia en 50 k; `n` | ≤ 1 ms | 36 µs; 2 µs | ✅ | `nota-vim` |
 | Scan de `nota-syntax`, nota de 5 k | ≤ 8 ms | 1.3 ms | ✅ | `nota-syntax` `nota` |
 | Scan, nota de 50 k | ≤ 50 ms | 14 ms | ✅ | `nota-syntax` `nota` |
@@ -42,7 +43,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Buffer: undo + redo de una edición en 50 k | ≤ 0.1 ms | 2.0 µs | ✅ | `nota-buffer` |
 | Buffer: una edición por línea en un lote, 5 k / 50 k | ≤ 16 / 160 ms | 4.4 / 60 ms | ✅ | `nota-buffer` `una_edicion_por_linea` |
 | Buffer: undo de ese lote, 5 k / 50 k | ≤ 16 / 160 ms | 2.5 / 34 ms | ✅ | `nota-buffer` |
-| Ordenar un lote del watcher con muchos renames | lineal | cuadrático (×14 de N a 4N) | ❌ [#38](https://github.com/alex-glez-felix/nota/issues/38) | test `ordenar_muchos_renames_es_lineal` |
+| Ordenar un lote del watcher con muchos renames | lineal | lineal: 1.4 / 7.8 / 35 ms con 1 k / 5 k / 20 k | ✅ | test `ordenar_muchos_renames_es_lineal` |
 
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
 
