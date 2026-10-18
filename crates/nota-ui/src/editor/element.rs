@@ -2,7 +2,7 @@
 //! que el scroll solo da forma a las líneas que entran.
 
 use gpui_kit::{
-    App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, Font, GlobalElementId,
+    App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, Font, GlobalElementId, Hsla,
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine, SharedString,
     Style, TextAlign, TextRun, UnderlineStyle, Window, fill, point, relative, size,
 };
@@ -10,6 +10,7 @@ use nota_buffer::{Buffer, Selection};
 use nota_vim::Mode;
 
 use super::Editor;
+use super::gutter::{Gutter, PaintedGutter};
 use super::layout::{FrameLayout, LaidLine, Viewport};
 use crate::theme::Theme;
 use crate::workspace::PaneView;
@@ -27,6 +28,7 @@ impl EditorElement {
 
 pub struct Prepainted {
     layout: FrameLayout,
+    gutter: Option<PaintedGutter>,
     selection: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
     preedit: Option<Preedit>,
@@ -39,7 +41,7 @@ struct Preedit {
 }
 
 /// Fuente y tamaño heredados del contenedor, resueltos para este frame.
-struct Typeface {
+pub struct Typeface {
     font: Font,
     size: Pixels,
 }
@@ -100,6 +102,7 @@ impl gpui_kit::Element for EditorElement {
                     viewport,
                     lines: Vec::new(),
                 },
+                gutter: None,
                 selection: Vec::new(),
                 cursor: None,
                 preedit: None,
@@ -110,9 +113,12 @@ impl gpui_kit::Element for EditorElement {
         let mut scroll = editor.scroll;
         let rows = Viewport::new(bounds, line_height, scroll).full_rows();
         scroll.settle(view.buffer().last_line(), moved, rows);
-        let viewport = Viewport::new(bounds, line_height, scroll);
+        let gutter = Gutter::new(&view, rows, em_width(&typeface, window));
+        let viewport = Viewport::new(gutter.text_bounds(bounds), line_height, scroll);
         let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
         let layout = FrameLayout { viewport, lines };
+        let painted_gutter = (gutter.columns > 0)
+            .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
         let selection = selection_quads(view.buffer(), view.selection, &layout, &self.theme);
         let cursor = cursor_quad(&view, &layout, &typeface, &self.theme, window);
         let preedit = editor
@@ -127,6 +133,7 @@ impl gpui_kit::Element for EditorElement {
         });
         Prepainted {
             layout,
+            gutter: painted_gutter,
             selection,
             cursor,
             preedit,
@@ -151,6 +158,12 @@ impl gpui_kit::Element for EditorElement {
         );
         let line_height = prepainted.layout.viewport.line_height;
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
+            if let Some(gutter) = prepainted.gutter.take() {
+                window.paint_quad(gutter.background);
+                for (origin, shaped) in &gutter.labels {
+                    paint_line(shaped, *origin, line_height, window, cx);
+                }
+            }
             for quad in prepainted.selection.drain(..) {
                 window.paint_quad(quad);
             }
@@ -202,23 +215,23 @@ fn shape_visible_lines(
             Some(LaidLine {
                 line,
                 origin: viewport.row_origin(row),
-                shaped: shape(text.into(), typeface, theme, None, window),
+                shaped: shape(text.into(), typeface, theme.foreground, None, window),
             })
         })
         .collect()
 }
 
-fn shape(
+pub fn shape(
     text: SharedString,
     typeface: &Typeface,
-    theme: &Theme,
+    color: Hsla,
     underline: Option<UnderlineStyle>,
     window: &Window,
 ) -> ShapedLine {
     let run = TextRun {
         len: text.len(),
         font: typeface.font.clone(),
-        color: theme.foreground,
+        color,
         background_color: None,
         underline,
         strikethrough: None,
@@ -354,7 +367,13 @@ fn preedit(
         thickness: theme.underline_thickness,
         wavy: false,
     };
-    let shaped = shape(text.into(), typeface, theme, Some(underline), window);
+    let shaped = shape(
+        text.into(),
+        typeface,
+        theme.foreground,
+        Some(underline),
+        window,
+    );
     let origin = point(
         laid.origin.x + laid.shaped.x_for_index(column),
         laid.origin.y,

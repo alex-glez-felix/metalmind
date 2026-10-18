@@ -23,6 +23,8 @@ font:
   size: 15                  # entre 4 y 200
 
 editor:
+  number: true            # el número de cada línea
+  relativenumber: true    # la distancia de cada línea a la del cursor
   scrolloff: 0            # líneas visibles alrededor del cursor
   tabstop: 4              # ancho del tab, al menos 1
   expandtab: true         # Tab inserta espacios
@@ -30,6 +32,13 @@ editor:
 search:
   ignorecase: false
   smartcase: false        # con ignorecase, una mayúscula vuelve la búsqueda exacta
+```
+
+Los números de línea siguen a vim: con solo `number`, el número de cada línea; con solo `relativenumber`, la distancia al cursor; con los dos (el default), el modo híbrido: el número de la línea del cursor y la distancia en las demás. El margen crece con el número de líneas y resalta la del cursor (`ui.gutter_current`). Cada panel tiene los suyos: `:set nu`, `:set rnu`, `:set nonu`, `:set nornu`, `:set nu!` (o `invnu`) cambian solo el panel enfocado, y un split hereda los del panel que se divide. Por ejemplo, solo números absolutos:
+
+```yaml
+editor:
+  relativenumber: false
 ```
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
@@ -90,6 +99,6 @@ Para heredar un color, no pongas la clave: una clave vacía o `null` es un error
 
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.yaml`](../crates/nota-config/themes/nota-oscuro.yaml) y [`nota-claro.yaml`](../crates/nota-config/themes/nota-claro.yaml).
 
-- `ui`: `background`, `foreground`, `selection`, `current_line`, `gutter`, `gutter_foreground`, `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`.
+- `ui`: `background`, `foreground`, `selection`, `current_line`, `gutter`, `gutter_foreground`, `gutter_current` (el número de la línea del cursor), `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`.
 - `cursor`: `normal`, `insert`, `visual`, `replace`, `unfocused` (el cursor de un panel sin foco).
 - `syntax`: `heading`, `bold`, `italic`, `link`, `tag`, `code`, `quote`, `list_marker`, `highlight`, `comment`, `frontmatter`, `markup`.

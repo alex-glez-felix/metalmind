@@ -41,6 +41,7 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":vs<CR>", Command::SplitRight)]
 #[case(":sp<CR>", Command::SplitDown)]
 #[case(":on<CR>", Command::Only)]
+#[case(":set<CR>", Command::Set)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]

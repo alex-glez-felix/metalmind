@@ -36,6 +36,9 @@ pub enum Command {
     FocusNext,
     /// `ctrl-w o`, `:only`
     Only,
+    /// `:set {opciones}`: las opciones son de quien aloja el editor, como
+    /// los números de línea de cada panel.
+    Set,
 }
 
 /// Un comando con el argumento que se le escribió, como `:e notas/a.md`.
@@ -85,6 +88,7 @@ const COMMANDS: &[(&str, usize, Command)] = &[
     ("split", 2, Command::SplitDown),
     ("vsplit", 2, Command::SplitRight),
     ("only", 2, Command::Only),
+    ("set", 2, Command::Set),
 ];
 
 impl Command {
@@ -103,6 +107,7 @@ impl Command {
         Self::FocusRight,
         Self::FocusNext,
         Self::Only,
+        Self::Set,
     ];
 
     #[must_use]
@@ -122,6 +127,7 @@ impl Command {
             Self::FocusRight => "pane::focus_right",
             Self::FocusNext => "pane::focus_next",
             Self::Only => "pane::only",
+            Self::Set => "editor::set",
         }
     }
 
@@ -135,7 +141,7 @@ impl Command {
 
     #[must_use]
     pub fn takes_argument(self) -> bool {
-        matches!(self, Self::Edit | Self::ForceEdit)
+        matches!(self, Self::Edit | Self::ForceEdit | Self::Set)
     }
 }
 
@@ -247,12 +253,14 @@ mod tests {
     }
 
     #[test]
-    fn edit_takes_the_rest_of_the_line_as_its_path() {
+    fn edit_and_set_take_the_rest_of_the_line() {
         let cases = [
             ("e a.md", Command::Edit, "a.md"),
             ("edit   notas/b c.md  ", Command::Edit, "notas/b c.md"),
             ("e! ../a.md", Command::ForceEdit, "../a.md"),
             ("e!a.md", Command::ForceEdit, "a.md"),
+            ("set nu", Command::Set, "nu"),
+            ("se nonu rnu!", Command::Set, "nonu rnu!"),
         ];
         for (line, command, path) in cases {
             assert_eq!(

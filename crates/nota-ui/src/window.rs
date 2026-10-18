@@ -9,6 +9,7 @@ use nota_config::Config;
 use crate::actions;
 use crate::document::Document;
 use crate::theme::{NoMonoFont, Theme};
+use crate::workspace::LineNumbers;
 use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
@@ -39,8 +40,13 @@ pub fn open(
     })
     .detach();
     let options = window_options(&document);
+    let editor = config.settings.editor;
+    let numbers = LineNumbers {
+        absolute: editor.number,
+        relative: editor.relativenumber,
+    };
     cx.open_window(options, move |window, cx| {
-        let view = cx.new(|cx| WorkspaceView::new(document, launched, cx));
+        let view = cx.new(|cx| WorkspaceView::new(document, numbers, launched, cx));
         view.update(cx, |view, cx| view.focus(window, cx));
         let closing = view.downgrade();
         window.on_window_should_close(cx, move |_window, cx| {

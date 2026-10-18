@@ -2,6 +2,7 @@
 //! entrada al [`Workspace`], que es quien edita.
 
 mod element;
+mod gutter;
 mod input;
 mod keys;
 mod layout;

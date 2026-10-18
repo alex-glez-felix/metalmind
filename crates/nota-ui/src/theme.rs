@@ -30,6 +30,11 @@ pub struct Theme {
     /// El cursor de un panel sin foco.
     pub unfocused_cursor: Hsla,
     pub selection: Hsla,
+    /// Fondo del margen de los números de línea.
+    pub gutter: Hsla,
+    pub gutter_foreground: Hsla,
+    /// El número de la línea del cursor.
+    pub gutter_current: Hsla,
     pub status_background: Hsla,
     pub status_foreground: Hsla,
     pub status_unfocused_foreground: Hsla,
@@ -73,6 +78,9 @@ impl Theme {
             block_cursor: hsla(cursor.normal),
             unfocused_cursor: hsla(cursor.unfocused),
             selection: hsla(ui.selection),
+            gutter: hsla(ui.gutter),
+            gutter_foreground: hsla(ui.gutter_foreground),
+            gutter_current: hsla(ui.gutter_current),
             status_background: hsla(ui.status_background),
             status_foreground: hsla(ui.status_foreground),
             status_unfocused_foreground: hsla(ui.status_unfocused_foreground),

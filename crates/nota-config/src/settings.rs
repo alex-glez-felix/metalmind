@@ -35,6 +35,11 @@ pub struct FontSize(f32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Editor {
+    /// El número de cada línea en el margen izquierdo.
+    pub number: bool,
+    /// La distancia de cada línea a la del cursor; con `number`, la del
+    /// cursor muestra su número (el modo híbrido de vim).
+    pub relativenumber: bool,
     /// Líneas que se dejan visibles por encima y por debajo del cursor.
     pub scrolloff: u32,
     pub tabstop: TabStop,
@@ -113,6 +118,8 @@ impl Default for Font {
 impl Default for Editor {
     fn default() -> Self {
         Self {
+            number: true,
+            relativenumber: true,
             scrolloff: 0,
             tabstop: TabStop(4),
             expandtab: true,
@@ -181,6 +188,8 @@ font:
   size: 13.5
 
 editor:
+  number: false
+  relativenumber: false
   scrolloff: 5
   tabstop: 2
   expandtab: false
@@ -199,6 +208,8 @@ search:
                 size: FontSize(13.5),
             },
             editor: Editor {
+                number: false,
+                relativenumber: false,
                 scrolloff: 5,
                 tabstop: TabStop(2),
                 expandtab: false,
@@ -218,6 +229,11 @@ search:
         assert_eq!(loaded.value.theme(), "nota-oscuro");
         assert_eq!(loaded.value.font.size, FontSize(15.));
         assert_eq!(loaded.value.editor.tabstop.get(), 4);
+        let editor = loaded.value.editor;
+        assert!(
+            editor.number && editor.relativenumber,
+            "híbrido por defecto"
+        );
     }
 
     #[test]
@@ -233,7 +249,13 @@ search:
   "theme": "nota-claro",
   "vault": "/notas",
   "font": { "family": "Iosevka", "size": 13.5 },
-  "editor": { "scrolloff": 5, "tabstop": 2, "expandtab": false },
+  "editor": {
+    "number": false,
+    "relativenumber": false,
+    "scrolloff": 5,
+    "tabstop": 2,
+    "expandtab": false
+  },
   "search": { "ignorecase": true, "smartcase": true }
 }"#;
         let loaded = Settings::parse(json);

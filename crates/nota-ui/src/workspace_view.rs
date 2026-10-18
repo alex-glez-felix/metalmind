@@ -15,13 +15,13 @@ use nota_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
-    ForceQuit, Only, Quit, Save, SaveAndQuit, SplitDown, SplitRight,
+    ForceQuit, Only, Quit, Save, SaveAndQuit, Set, SplitDown, SplitRight,
 };
 use crate::clipboard::SystemClipboard;
 use crate::document::Document;
 use crate::editor::Editor;
 use crate::theme::Theme;
-use crate::workspace::{Axis, Effect, Node, PaneId, Workspace};
+use crate::workspace::{Axis, Effect, LineNumbers, Node, PaneId, Workspace};
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -31,8 +31,13 @@ pub struct WorkspaceView {
 }
 
 impl WorkspaceView {
-    pub fn new(document: Document, launched: Instant, cx: &mut Context<Self>) -> Self {
-        let workspace = cx.new(|_| Workspace::new(document));
+    pub fn new(
+        document: Document,
+        numbers: LineNumbers,
+        launched: Instant,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let workspace = cx.new(|_| Workspace::new(document, numbers));
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
         let pane = workspace.read(cx).focused();
         let first = cx.new(|cx| Editor::new(workspace.clone(), pane, Some(launched), cx));
@@ -165,6 +170,7 @@ impl Render for WorkspaceView {
         element = on_command::<FocusRight>(element, cx);
         element = on_command::<FocusNext>(element, cx);
         element = on_command::<Only>(element, cx);
+        element = on_command::<Set>(element, cx);
         element.child(self.render_node(&root, &theme))
     }
 }

@@ -235,6 +235,7 @@ impl Action {
         Self::Command(Command::FocusRight),
         Self::Command(Command::FocusNext),
         Self::Command(Command::Only),
+        Self::Command(Command::Set),
     ];
 
     #[must_use]
