@@ -269,6 +269,8 @@ use rstest_reuse::{self, apply, template};
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>j$djj.", "a\ne\n|\n")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jld3.", "|a\ne\nijkl\nmnop")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jldu.", "a|d\neh\nijkl\nmnop")]
+// tras o, un $ no sigue valiendo para la selección siguiente
+#[case("a|bc\ndefgh\nijklmn", "<C-v>j$o<Esc>$<C-v>jjd", "a|b\nde\nij")]
 // clic en Insert, tabs escritos y r<Tab>
 #[case(
     "a|bc\ndef\nghi",
@@ -414,6 +416,22 @@ fn block_actions_run_by_name() {
     let escape = Action::from_name("vim::normal_mode").unwrap();
     vim.execute(escape, &mut buffer, &mut selections).unwrap();
     assert_eq!(buffer.to_string(), "aXb\ncXd");
+}
+
+/// Un clic termina la selección como `<Esc>`: el `$` que `o` dejó valiendo
+/// para operar no pasa a la selección siguiente.
+#[test]
+fn a_click_ends_the_line_end_left_by_o() {
+    use nota_buffer::{ByteOffset, Selection, Selections};
+    use nota_vim::Vim;
+
+    let (mut buffer, mut selections) = support::parse("a|bc\ndefgh\nijklmn");
+    let mut vim = Vim::new();
+    support::feed(&mut vim, &mut buffer, &mut selections, "<C-v>j$o");
+    vim.cursor_moved();
+    selections = Selections::single(Selection::cursor(ByteOffset::new(2)));
+    support::feed(&mut vim, &mut buffer, &mut selections, "$<C-v>jjd");
+    assert_eq!(buffer.to_string(), "ab\nde\nij");
 }
 
 /// El `tabstop` es el de la ventana que presta quien aloja el motor.

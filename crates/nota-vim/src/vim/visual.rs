@@ -108,6 +108,7 @@ impl Vim {
     ) {
         let count = self.count.take();
         self.reset();
+        self.stale_line_end = false;
         let cursors = selections.map(|s| Selection::cursor(s.head).with_goal(s.goal));
         self.mode = Mode::Visual(kind);
         *selections = match (count, self.last_visual_size) {

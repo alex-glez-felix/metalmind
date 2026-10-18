@@ -53,12 +53,14 @@ struct Pane {
 }
 
 impl Pane {
-    fn at_start(document: DocumentId, numbers: LineNumbers) -> Self {
+    fn at_start(document: DocumentId, numbers: LineNumbers, tabstop: usize) -> Self {
+        let mut viewport = Viewport::default();
+        viewport.set_tabstop(tabstop);
         Self {
             document,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
             numbers,
-            viewport: Viewport::default(),
+            viewport,
         }
     }
 }
@@ -71,6 +73,8 @@ pub struct Workspace {
     vim: Vim,
     /// Las líneas que se dejan visibles alrededor del cursor en cada panel.
     scrolloff: usize,
+    /// Las columnas hasta la siguiente parada de un tab, en cada panel.
+    tabstop: usize,
     message: Option<Message>,
 }
 
@@ -116,7 +120,7 @@ impl Workspace {
     /// Un panel con `document` y los números `numbers`, avisando como vim
     /// al abrirlo.
     #[must_use]
-    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize) -> Self {
+    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize, tabstop: usize) -> Self {
         let message = Message::opened(&document);
         let mut documents = Documents::default();
         let id = documents.insert(document);
@@ -125,10 +129,11 @@ impl Workspace {
         vim.set_scrolloff(scrolloff);
         Self {
             documents,
-            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers))]),
+            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers, tabstop))]),
             tree,
             vim,
             scrolloff,
+            tabstop,
             message: Some(message),
         }
     }

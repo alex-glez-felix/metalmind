@@ -39,6 +39,16 @@ pub(crate) fn clamp_normal(buffer: &Buffer, offset: ByteOffset) -> ByteOffset {
     }
 }
 
+/// El byte `column` de `line`, sin pasar de su fin ni quedar a mitad de un
+/// carácter, como `check_cursor_col` de vim tras cambiar de línea.
+pub(crate) fn at_byte_column(buffer: &Buffer, line: usize, column: usize) -> ByteOffset {
+    let mut at = (buffer.line_start(line) + column).min(buffer.line_end(line));
+    while !buffer.is_char_boundary(at) {
+        at = at.saturating_sub(1);
+    }
+    at
+}
+
 /// Si `offset` está antes o sobre el primer no blanco de su línea.
 pub(crate) fn in_indent(buffer: &Buffer, offset: ByteOffset) -> bool {
     offset <= first_non_blank(buffer, buffer.line_of(offset))

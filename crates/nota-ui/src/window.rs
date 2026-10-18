@@ -88,9 +88,10 @@ pub fn open(
         relative: editor.relativenumber,
     };
     let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
+    let tabstop = usize::from(editor.tabstop.get());
     let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {
-        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
+        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff, tabstop));
         let session = cx.new(|cx| VaultSession::new(prepared, cx));
         let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
         if let Some(file) = &file {
