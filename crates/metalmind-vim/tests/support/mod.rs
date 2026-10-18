@@ -5,7 +5,9 @@
 pub mod nvim;
 
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
-use metalmind_vim::{Key, KeyOutcome, Mode, Viewport, Vim, VisualKind};
+use metalmind_vim::{
+    Key, KeyOutcome, Layout, LineHeights, Mode, Rows, Uniform, Viewport, Vim, VisualKind,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
@@ -177,7 +179,19 @@ pub struct Screen {
     pub rows: usize,
     pub scrolloff: usize,
     pub top: usize,
+    /// Si un heading ocupa más de una fila: [`TALL_HEADINGS`] en el motor,
+    /// y en nvim lo que ocupa una línea larga que `wrap` parte en 80
+    /// columnas.
+    pub tall_headings: bool,
 }
+
+/// Lo que mide cada nivel de heading con `tall_headings`: el `#` mide tres
+/// filas y el `##` dos, como una línea de 161 a 240 caracteres y una de 81
+/// a 160 en nvim.
+pub const TALL_HEADINGS: Rows = Rows {
+    text: 1,
+    headings: [3, 2, 1, 1, 1, 1],
+};
 
 pub fn run_engine(before: &str, keys: &str) -> State {
     run_engine_on(before, keys, None).0
@@ -190,17 +204,35 @@ pub fn run_engine_on(before: &str, keys: &str, screen: Option<Screen>) -> (State
     let mut vim = Vim::new();
     if let Some(screen) = screen {
         let mut viewport = Viewport::new(screen.rows);
+        let mut layout = screen.tall_headings.then(|| {
+            let mut layout = Layout::new(&buffer);
+            layout.set_rows(TALL_HEADINGS);
+            layout.ensure(&buffer, usize::MAX);
+            layout
+        });
+        let uniform = Uniform(1);
+        let heights: &dyn LineHeights = match &layout {
+            Some(layout) => layout,
+            None => &uniform,
+        };
         let moved = viewport.scroll_to(
             screen.top,
             &buffer,
             &mut selections,
             screen.scrolloff,
             Mode::Normal,
+            heights,
         );
         assert!(!moved, "el cursor del caso tiene que verse en la ventana");
-        viewport.reveal(&buffer, selections.primary().head, screen.scrolloff);
+        viewport.reveal(
+            &buffer,
+            selections.primary().head,
+            screen.scrolloff,
+            heights,
+        );
         vim.set_scrolloff(screen.scrolloff);
         vim.swap_viewport(&mut viewport);
+        vim.swap_layout(&mut layout);
     }
     feed(&mut vim, &mut buffer, &mut selections, keys);
     let visual = matches!(vim.mode(), Mode::Visual(_));

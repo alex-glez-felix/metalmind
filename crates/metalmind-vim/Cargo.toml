@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 metalmind-buffer.workspace = true
+metalmind-syntax.workspace = true
 regex.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
