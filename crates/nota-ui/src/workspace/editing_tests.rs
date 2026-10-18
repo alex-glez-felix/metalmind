@@ -152,3 +152,34 @@ fn copiar_fuera_de_visual_no_mueve_el_cursor() {
     assert_eq!(session.cursor(), ByteOffset::new(5));
     assert_eq!(session.mode(), Mode::Normal);
 }
+
+/// Lo que hace la paleta con una acción del motor: lo mismo que su atajo.
+#[test]
+fn execute_corre_una_accion_del_motor_como_su_atajo() {
+    use nota_vim::{Action, KeyOutcome, Motion};
+
+    let mut session = Session::new("uno\ndos\ntres");
+    let pane = session.pane();
+    let outcome = session
+        .workspace
+        .execute(
+            pane,
+            Action::Motion(Motion::DocumentEnd),
+            &mut session.clipboard,
+        )
+        .unwrap();
+    assert_eq!(
+        outcome,
+        KeyOutcome::Executed(Action::Motion(Motion::DocumentEnd))
+    );
+    assert_eq!(session.line(pane), 3);
+    let outcome = session
+        .workspace
+        .execute(
+            pane,
+            Action::Command(nota_vim::Command::SplitRight),
+            &mut session.clipboard,
+        )
+        .unwrap();
+    assert!(matches!(outcome, KeyOutcome::Command(_)));
+}

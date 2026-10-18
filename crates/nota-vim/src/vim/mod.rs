@@ -156,6 +156,11 @@ impl Vim {
         self.mode
     }
 
+    #[must_use]
+    pub fn keymap(&self) -> &Keymap {
+        &self.keymap
+    }
+
     /// Como [`Vim::feed_with_clipboard`], con `"+` y `"*` como registros
     /// normales.
     ///

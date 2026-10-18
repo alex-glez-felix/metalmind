@@ -49,6 +49,12 @@ pub struct Theme {
     pub pane_border: Hsla,
     pub modified: Hsla,
     pub error: Hsla,
+    pub picker_background: Hsla,
+    pub picker_border: Hsla,
+    pub picker_selected: Hsla,
+    pub picker_hover: Hsla,
+    pub picker_match: Hsla,
+    pub picker_muted: Hsla,
     pub font_family: SharedString,
     pub font_size: Pixels,
     /// Alto de línea relativo al tamaño de la fuente.
@@ -63,6 +69,14 @@ pub struct Theme {
     pub status_padding_x: Pixels,
     pub status_padding_y: Pixels,
     pub status_gap: Pixels,
+    pub picker_width: Pixels,
+    /// Del borde de arriba de la ventana al picker.
+    pub picker_top: Pixels,
+    /// Cuántas filas se ven antes de hacer scroll.
+    pub picker_rows: u8,
+    pub picker_padding_x: Pixels,
+    pub picker_padding_y: Pixels,
+    pub picker_radius: Pixels,
 }
 
 impl Global for Theme {}
@@ -103,6 +117,12 @@ impl Theme {
             pane_border: hsla(ui.pane_border),
             modified: hsla(ui.modified),
             error: hsla(ui.error),
+            picker_background: hsla(ui.picker_background),
+            picker_border: hsla(ui.picker_border),
+            picker_selected: hsla(ui.picker_selected),
+            picker_hover: hsla(ui.picker_hover),
+            picker_match: hsla(ui.picker_match),
+            picker_muted: hsla(ui.picker_muted),
             font_family,
             font_size: px(settings.font.size.get()),
             line_height: 1.4,
@@ -115,6 +135,12 @@ impl Theme {
             status_padding_x: px(10.),
             status_padding_y: px(3.),
             status_gap: px(16.),
+            picker_width: px(640.),
+            picker_top: px(64.),
+            picker_rows: 12,
+            picker_padding_x: px(12.),
+            picker_padding_y: px(6.),
+            picker_radius: px(8.),
         }
     }
 

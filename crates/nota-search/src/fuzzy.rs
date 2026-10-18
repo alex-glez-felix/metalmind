@@ -1,4 +1,4 @@
-//! La búsqueda difusa de rutas del finder: una función pura de query y
+//! La búsqueda difusa del finder y de la paleta: una función pura de query y
 //! candidatos a resultados ordenados.
 
 use std::cmp::Reverse;
@@ -7,95 +7,101 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use unicode_segmentation::UnicodeSegmentation as _;
 
+/// Lo escrito en el finder, ya interpretado. Sigue la sintaxis de `nucleo`:
+/// palabras separadas por espacio que tienen que coincidir todas.
+/// Mayúsculas y acentos cuentan solo si el query los lleva: `nino`
+/// encuentra `niño`, pero `ñandu` no a `ñandú`.
+#[derive(Clone, Debug)]
+pub struct Query(Pattern);
+
+impl Query {
+    #[must_use]
+    pub fn new(text: &str) -> Self {
+        Self(Pattern::parse(
+            text,
+            CaseMatching::Smart,
+            Normalization::Smart,
+        ))
+    }
+
+    /// Un query vacío (o solo espacios) deja pasar todo.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.atoms.is_empty()
+    }
+}
+
 /// Un candidato que coincide con el query.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PathMatch {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Ranked {
     /// Su posición en los candidatos de entrada.
     pub index: usize,
     pub score: u32,
-    /// Offsets en bytes, crecientes, del inicio de cada grafema que coincide.
-    pub positions: Vec<usize>,
 }
 
-/// Busca rutas como `fzf`: los caracteres del query en orden, con bonus por
-/// empezar palabra o componente. Guarda los buffers de `nucleo` entre búsquedas.
-pub struct PathMatcher {
+/// Busca como `fzf`: los caracteres del query en orden, con bonus por
+/// empezar palabra. Guarda los buffers de `nucleo` entre búsquedas.
+pub struct FuzzyMatcher {
     matcher: Matcher,
     chars: Vec<char>,
     indices: Vec<u32>,
 }
 
-impl Default for PathMatcher {
-    fn default() -> Self {
+impl FuzzyMatcher {
+    /// Para rutas: bonus extra al empezar cada componente.
+    #[must_use]
+    pub fn paths() -> Self {
+        Self::with_config(Config::DEFAULT.match_paths())
+    }
+
+    /// Para nombres sueltos, como los de las acciones de la paleta.
+    #[must_use]
+    pub fn text() -> Self {
+        Self::with_config(Config::DEFAULT)
+    }
+
+    fn with_config(config: Config) -> Self {
         Self {
-            matcher: Matcher::new(Config::DEFAULT.match_paths()),
+            matcher: Matcher::new(config),
             chars: Vec::new(),
             indices: Vec::new(),
         }
     }
-}
 
-impl PathMatcher {
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Los `limit` candidatos que mejor coinciden con `query`, del mejor al
-    /// peor; a igual puntaje, la ruta más corta y luego el orden de entrada.
-    /// Con el query vacío coinciden todos, en el orden de entrada. Solo esos
-    /// `limit` pagan el cálculo de posiciones: la UI pide una página.
-    ///
-    /// El query sigue la sintaxis de `nucleo`: palabras separadas por espacio
-    /// que tienen que coincidir todas. Mayúsculas y acentos cuentan solo si el
-    /// query los lleva: `nino` encuentra `niño`, pero `ñandu` no a `ñandú`.
-    pub fn search(
-        &mut self,
-        query: &str,
-        candidates: &[impl AsRef<str>],
-        limit: usize,
-    ) -> Vec<PathMatch> {
-        let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
-        if pattern.atoms.is_empty() {
-            return (0..candidates.len().min(limit))
-                .map(|index| PathMatch {
-                    index,
-                    score: 0,
-                    positions: Vec::new(),
-                })
+    /// Los candidatos que coinciden con `query`, del mejor al peor; a igual
+    /// puntaje, el más corto y luego el orden de entrada. Con el query vacío
+    /// coinciden todos, en el orden de entrada. No calcula posiciones: la
+    /// UI las pide con [`FuzzyMatcher::positions`] solo para lo que pinta.
+    pub fn rank(&mut self, query: &Query, candidates: &[impl AsRef<str>]) -> Vec<Ranked> {
+        if query.is_empty() {
+            return (0..candidates.len())
+                .map(|index| Ranked { index, score: 0 })
                 .collect();
         }
-        let mut ranked: Vec<(u32, usize)> = candidates
+        let mut ranked: Vec<Ranked> = candidates
             .iter()
             .enumerate()
             .filter_map(|(index, candidate)| {
                 let haystack = Utf32Str::new(candidate.as_ref(), &mut self.chars);
-                Some((pattern.score(haystack, &mut self.matcher)?, index))
+                let score = query.0.score(haystack, &mut self.matcher)?;
+                Some(Ranked { index, score })
             })
             .collect();
-        let rank = |&(score, index): &(u32, usize)| {
-            (Reverse(score), candidates[index].as_ref().len(), index)
-        };
-        if ranked.len() > limit {
-            ranked.select_nth_unstable_by_key(limit, rank);
-            ranked.truncate(limit);
-        }
-        ranked.sort_unstable_by_key(rank);
+        ranked.sort_unstable_by_key(|ranked| {
+            let length = candidates[ranked.index].as_ref().len();
+            (Reverse(ranked.score), length, ranked.index)
+        });
         ranked
-            .into_iter()
-            .map(|(score, index)| PathMatch {
-                index,
-                score,
-                positions: self.positions(&pattern, candidates[index].as_ref()),
-            })
-            .collect()
     }
 
-    fn positions(&mut self, pattern: &Pattern, candidate: &str) -> Vec<usize> {
+    /// Offsets en bytes, crecientes, del inicio de cada grafema de
+    /// `candidate` que coincide con `query`; vacío si no coincide.
+    pub fn positions(&mut self, query: &Query, candidate: &str) -> Vec<usize> {
         self.indices.clear();
         let haystack = Utf32Str::new(candidate, &mut self.chars);
         let in_bytes = matches!(haystack, Utf32Str::Ascii(_));
-        if pattern
+        if query
+            .0
             .indices(haystack, &mut self.matcher, &mut self.indices)
             .is_none()
         {

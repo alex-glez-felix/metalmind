@@ -1,4 +1,5 @@
-//! Teclas en la notación de vim: `ihola<Esc>:wq<CR>`, `<C-r>`, `<lt>`.
+//! Teclas en la notación de vim: `ihola<Esc>:wq<CR>`, `<C-r>`, `<C-S-p>`,
+//! `<lt>`.
 
 /// Una tecla con su keysym de X11; las mayúsculas y los símbolos que piden
 /// shift los resuelve el mapa de teclado del servidor.
@@ -37,6 +38,16 @@ pub fn parse(notation: &str) -> Vec<Stroke> {
 }
 
 fn named(name: &str, notation: &str) -> Stroke {
+    // Con shift va la mayúscula: el mapa de teclado del servidor pone el shift.
+    if let Some(key) = name.strip_prefix("C-S-") {
+        let mut chars = key.chars();
+        if let (Some(c), None) = (chars.next(), chars.next()) {
+            return Stroke {
+                keysym: char_keysym(c.to_ascii_uppercase()),
+                ctrl: true,
+            };
+        }
+    }
     if let Some(key) = name.strip_prefix("C-").or_else(|| name.strip_prefix("c-")) {
         let mut chars = key.chars();
         if let (Some(c), None) = (chars.next(), chars.next()) {
@@ -80,7 +91,7 @@ fn char_keysym(c: char) -> u32 {
 #[test]
 fn notacion_de_teclas() {
     let ctrl = |keysym| Stroke { keysym, ctrl: true };
-    let cases: [(&str, Vec<Stroke>); 7] = [
+    let cases: [(&str, Vec<Stroke>); 8] = [
         ("iA", vec![plain(0x69), plain(0x41)]),
         (
             "<Esc>:w<CR>",
@@ -88,6 +99,7 @@ fn notacion_de_teclas() {
         ),
         ("<esc><Enter>", vec![plain(ESCAPE), plain(RETURN)]),
         ("<C-r><C-W>", vec![ctrl(0x72), ctrl(0x77)]),
+        ("<C-S-p>", vec![ctrl(0x50)]),
         ("<lt>x>", vec![plain(0x3c), plain(0x78), plain(0x3e)]),
         ("ñ€", vec![plain(0xf1), plain(0x0100_20ac)]),
         (

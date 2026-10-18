@@ -29,6 +29,25 @@ impl Workspace {
         Ok(outcome)
     }
 
+    /// Ejecuta `action` en `pane` como si se hubiera tecleado su atajo; así
+    /// la paleta invoca las acciones del motor.
+    ///
+    /// # Errors
+    /// Si `pane` no existe o una edición resulta inválida, lo que sería un bug.
+    pub fn execute(
+        &mut self,
+        pane: PaneId,
+        action: Action,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, WorkspaceError> {
+        self.focus(pane)?;
+        let outcome = self.edit_pane(pane, |vim, buffer, selections| {
+            Ok(vim.execute_with_clipboard(action, buffer, selections, clipboard)?)
+        })?;
+        self.note(&outcome);
+        Ok(outcome)
+    }
+
     /// Sigue la macro pausada en el panel enfocado; devuelve su próximo
     /// comando, si llega a uno.
     pub(super) fn resume_macro(&mut self, clipboard: &mut dyn Clipboard) -> Option<Invocation> {

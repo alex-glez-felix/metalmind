@@ -140,3 +140,75 @@ fn e_edita_otro_archivo_en_la_misma_ventana() {
     assert_eq!(smoke.read("b.md"), "ydos\n");
     assert_eq!(smoke.files(), ["a.md", "b.md"]);
 }
+
+/// `space f`, parte del nombre y `enter`: el finder abre la nota en el panel.
+/// La lista viene del vault de la carpeta de la nota, que se indexa al abrir
+/// el finder; el `enter` espera a que llegue.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_finder_abre_una_nota_por_parte_de_su_nombre() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("receta de pan.md", "harina\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("<Space>frecpan<CR>");
+    window.wait_title("de la receta", |title| {
+        title.starts_with("receta de pan.md")
+    });
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("receta de pan.md"), "xharina\n");
+    assert_eq!(smoke.read("a.md"), "uno\n");
+    assert_eq!(smoke.files(), ["a.md", "receta de pan.md"]);
+}
+
+/// `ctrl-v` en el finder abre en un split: `:q` cierra ese panel y deja el
+/// de antes, que sigue editando su nota.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_finder_abre_en_un_split_con_ctrl_v() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("<Space>fb.md<C-v>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("ix<Esc>:wq<CR>iy<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("b.md"), "xdos\n");
+    assert_eq!(smoke.read("a.md"), "yuno\n");
+}
+
+/// `escape` cierra el finder sin abrir nada y las teclas vuelven al editor.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn escape_cierra_el_finder() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("<Space>fb<Esc>ix<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\n");
+    assert_eq!(smoke.read("b.md"), "dos\n");
+}
+
+/// La paleta ejecuta una acción de la ventana (`editor: save`, con
+/// `ctrl-shift-p`) y una del motor (`vim: end of document`, con `space p`).
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_paleta_ejecuta_acciones_con_nombre() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\ndos\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("ix<Esc><C-S-p>editor save<CR>");
+    smoke.wait_contents("a.md", "xuno\ndos\n");
+    window.type_keys("<Space>pend of document<CR>iy<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\nydos\n");
+    assert_eq!(smoke.files(), ["a.md"]);
+}

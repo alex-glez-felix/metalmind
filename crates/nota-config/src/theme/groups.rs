@@ -134,6 +134,18 @@ color_group! {
         /// El `[+]` de un archivo con cambios sin guardar.
         modified,
         error,
+        /// La ventana flotante del finder y de la paleta.
+        picker_background,
+        picker_border,
+        /// La fila elegida de la lista.
+        picker_selected,
+        /// La fila bajo el ratón.
+        picker_hover,
+        /// Las letras que coinciden con lo escrito.
+        picker_match,
+        /// Lo secundario: carpeta de una nota, atajo de una acción, el
+        /// texto de ayuda del input vacío.
+        picker_muted,
     }
 }
 

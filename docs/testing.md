@@ -60,7 +60,7 @@ Si el caso es "nota con este texto → teclas → `:wq` → este texto", es una 
 #[case::nombre("antes\n", "teclas<Esc>:wq<CR>", "después\n")]
 ```
 
-Las teclas van en la notación de vim: `<Esc>`, `<CR>`, `<BS>`, `<Tab>`, `<Space>`, `<Up>`… `<C-r>` para control y `<lt>` para un `<` literal (`support/keys.rs`). Las mayúsculas y los símbolos con shift los resuelve el mapa de teclado del Xvfb.
+Las teclas van en la notación de vim: `<Esc>`, `<CR>`, `<BS>`, `<Tab>`, `<Space>`, `<Up>`… `<C-r>` para control, `<C-S-p>` para control con shift y `<lt>` para un `<` literal (`support/keys.rs`). Las mayúsculas y los símbolos con shift los resuelve el mapa de teclado del Xvfb.
 
 Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]` y la API de `support/`:
 

@@ -13,7 +13,7 @@ use std::hint::black_box;
 use gungraun::prelude::*;
 use nota_buffer::{Buffer, Edit, Selection, Selections};
 use nota_perf::{MISSING_WORD, Session, WORD};
-use nota_search::{PathMatcher, TextMatcher, TextQuery};
+use nota_search::{FuzzyMatcher, Query, TextMatcher, TextQuery};
 use nota_syntax::Scan;
 
 /// La nota de `lines` líneas en Normal, con el cursor a la mitad.
@@ -130,8 +130,13 @@ fn syntax_scan(text: String) -> Scan {
 #[bench::rutas_5k(args = (5_000), setup = nota_perf::vault_paths)]
 #[bench::rutas_50k(args = (50_000), setup = nota_perf::vault_paths)]
 fn search_finder(paths: Vec<String>) -> usize {
-    let mut matcher = PathMatcher::new();
-    black_box(matcher.search("tema nota", &paths, 50).len())
+    let mut matcher = FuzzyMatcher::paths();
+    let query = Query::new("tema nota");
+    let ranked = matcher.rank(&query, &paths);
+    for found in ranked.iter().take(50) {
+        black_box(matcher.positions(&query, &paths[found.index]));
+    }
+    black_box(ranked.len())
 }
 
 fn note_and_matcher(lines: usize, pattern: &str) -> (String, TextMatcher) {

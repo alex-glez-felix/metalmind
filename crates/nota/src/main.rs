@@ -22,7 +22,10 @@ fn main() -> ExitCode {
 }
 
 fn open(path: &Path, launched: Instant) -> ExitCode {
-    let config = match load_config() {
+    let paths = Paths::detect()
+        .inspect_err(|error| log::error!("{error}; se usa la configuración por defecto"))
+        .ok();
+    let config = match load_config(paths.as_ref()) {
         Ok(config) => config,
         Err(error) => {
             eprintln!("nota: {error}");
@@ -39,7 +42,7 @@ fn open(path: &Path, launched: Instant) -> ExitCode {
     let failed = Rc::new(Cell::new(false));
     let failed_in_app = Rc::clone(&failed);
     gpui_kit::application().run(move |cx| {
-        if let Err(error) = nota_ui::open(document, &config, launched, cx) {
+        if let Err(error) = nota_ui::open(document, &config, paths, launched, cx) {
             eprintln!("nota: {error}");
             failed_in_app.set(true);
             quit_from_event_loop(cx);
@@ -59,14 +62,12 @@ fn quit_from_event_loop(cx: &mut App) {
 }
 
 /// La config del usuario; lo que esté mal se reporta y se usa el default.
-fn load_config() -> Result<Config, Diagnostic> {
-    let loaded = match Paths::detect() {
-        Ok(paths) => Config::load(&paths)?,
-        Err(error) => {
-            log::error!("{error}; se usa la configuración por defecto");
-            return Config::defaults();
-        }
+/// Sin `paths` no hay de dónde leerla.
+fn load_config(paths: Option<&Paths>) -> Result<Config, Diagnostic> {
+    let Some(paths) = paths else {
+        return Config::defaults();
     };
+    let loaded = Config::load(paths)?;
     for diagnostic in &loaded.diagnostics {
         match diagnostic.severity {
             Severity::Warning => log::warn!("{diagnostic}"),

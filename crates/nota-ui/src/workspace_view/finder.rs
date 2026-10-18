@@ -1,0 +1,217 @@
+//! `space f` en la ventana: abre el vault del finder si hace falta, le pasa
+//! las notas al picker cada vez que el watcher trae otro índice y abre lo
+//! elegido con los mismos comandos que `:e` y `ctrl-w v`.
+
+use std::path::{Path, PathBuf};
+
+use gpui_kit::{AppContext as _, Context, Entity, Subscription, Task, Window};
+use nota_vim::{Command, Invocation};
+
+use super::WorkspaceView;
+use super::overlay::Overlay;
+use crate::finder::{Note, VaultSession};
+use crate::picker::{Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
+use crate::workspace::Message;
+
+/// El vault sobre el que busca el finder. Hasta que nota abra vaults, es la
+/// carpeta del archivo enfocado, y se abre la primera vez que se pide.
+#[derive(Default)]
+pub struct FinderVault {
+    open: Option<OpenVault>,
+    /// La carpeta que se está abriendo.
+    opening: Option<(PathBuf, Task<()>)>,
+    /// La última nota que se marcó como reciente.
+    touched: Option<PathBuf>,
+}
+
+struct OpenVault {
+    session: Entity<VaultSession>,
+    _changes: Subscription,
+}
+
+impl FinderVault {
+    fn session(&self) -> Option<&Entity<VaultSession>> {
+        self.open.as_ref().map(|open| &open.session)
+    }
+}
+
+fn options() -> PickerOptions {
+    PickerOptions {
+        haystack: Haystack::Paths,
+        placeholder: "Buscar una nota…".into(),
+        empty: "No hay notas".into(),
+        splits: true,
+    }
+}
+
+impl WorkspaceView {
+    pub(super) fn open_finder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ensure_vault(cx);
+        let mut options = options();
+        let state = if let Some(session) = self.vault.session() {
+            PickerState::new(session.read(cx).notes())
+        } else {
+            options.empty = "Indexando…".into();
+            PickerState::loading()
+        };
+        let picker = cx.new(|cx| PickerView::new(state, options, cx));
+        let events = cx.subscribe_in(&picker, window, Self::on_finder_event);
+        self.show(
+            Overlay::Finder {
+                picker,
+                _events: events,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn on_finder_event(
+        &mut self,
+        picker: &Entity<PickerView<Note>>,
+        event: &PickerEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let chosen = match event {
+            PickerEvent::Dismissed => None,
+            PickerEvent::Chosen(chosen) => picker
+                .read(cx)
+                .items()
+                .get(chosen.item)
+                .map(|note| (note.clone(), chosen.open)),
+        };
+        self.close_overlay(window, cx);
+        if let Some((note, open)) = chosen {
+            self.open_note(&note, open, window, cx);
+        }
+    }
+
+    /// Como `ctrl-w v` o `ctrl-w s` si va en split, y después `:e ruta`.
+    fn open_note(&mut self, note: &Note, open: Open, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = self.vault.session() else {
+            return;
+        };
+        let path = session.read(cx).root().join(note.0.as_str());
+        let Some(argument) = argument(&path) else {
+            let error = format!("{} no es una ruta UTF-8", path.display());
+            self.workspace.update(cx, |workspace, _| {
+                workspace.set_message(Message::Error(error));
+            });
+            return;
+        };
+        let split = match open {
+            Open::Here => None,
+            Open::SplitRight => Some(Command::SplitRight),
+            Open::SplitDown => Some(Command::SplitDown),
+        };
+        if let Some(split) = split {
+            self.run(&split.into(), window, cx);
+        }
+        let edit = Invocation {
+            command: Command::Edit,
+            argument: Some(argument),
+        };
+        self.run(&edit, window, cx);
+    }
+
+    /// Si el archivo enfocado no está dentro del vault del finder, abre su
+    /// carpeta en el fondo.
+    fn ensure_vault(&mut self, cx: &mut Context<Self>) {
+        let Some(folder) = self.focused_folder(cx) else {
+            return;
+        };
+        let inside = |root: &Path| folder.starts_with(root);
+        let open = self
+            .vault
+            .session()
+            .map(|session| session.read(cx).root().to_owned());
+        let opening = self.vault.opening.as_ref().map(|(root, _)| root.clone());
+        if open.as_deref().is_some_and(inside) || opening.as_deref().is_some_and(inside) {
+            return;
+        }
+        let task = VaultSession::open(folder.clone(), self.paths.clone(), cx);
+        let finish = cx.spawn(async move |this, cx| {
+            let session = task.await;
+            let _ = this.update(cx, |this, cx| this.vault_opened(session, cx));
+        });
+        self.vault.opening = Some((folder, finish));
+    }
+
+    fn vault_opened(
+        &mut self,
+        session: Result<Entity<VaultSession>, crate::finder::SessionError>,
+        cx: &mut Context<Self>,
+    ) {
+        self.vault.opening = None;
+        let session = match session {
+            Ok(session) => session,
+            Err(error) => {
+                log::error!("{error}");
+                self.workspace.update(cx, |workspace, _| {
+                    workspace.set_message(Message::Error(error.to_string()));
+                });
+                return;
+            }
+        };
+        let changes = cx.observe(&session, |this, _, cx| this.refresh_finder(cx));
+        self.vault.open = Some(OpenVault {
+            session,
+            _changes: changes,
+        });
+        self.vault.touched = None;
+        self.touch_focused(cx);
+        self.refresh_finder(cx);
+    }
+
+    fn refresh_finder(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = self.vault.session() else {
+            return;
+        };
+        let notes = session.read(cx).notes();
+        if let Some(Overlay::Finder { picker, .. }) = &self.overlay {
+            picker.update(cx, |picker, cx| picker.set_items(notes, cx));
+        }
+    }
+
+    /// La nota enfocada pasa a ser la más reciente del vault, si está en él.
+    pub(super) fn touch_focused(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = self.vault.session().cloned() else {
+            return;
+        };
+        let Ok(document) = self.workspace.read(cx).focused_document() else {
+            return;
+        };
+        let path = document.path().to_owned();
+        if self.vault.touched.as_ref() == Some(&path) {
+            return;
+        }
+        if let Some(note) = session.read(cx).vault_path(&path) {
+            session.update(cx, |session, cx| session.touch(note, cx));
+        }
+        self.vault.touched = Some(path);
+    }
+
+    /// La carpeta del archivo enfocado, sin enlaces simbólicos.
+    fn focused_folder(&self, cx: &Context<Self>) -> Option<PathBuf> {
+        let document = self.workspace.read(cx).focused_document().ok()?;
+        let parent = document
+            .path()
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty());
+        std::fs::canonicalize(parent.unwrap_or(Path::new("."))).ok()
+    }
+}
+
+/// La ruta para `:e`: relativa al directorio de trabajo si está dentro,
+/// como la escribiría quien usa vim.
+fn argument(path: &Path) -> Option<String> {
+    let relative = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_owned));
+    relative
+        .as_deref()
+        .unwrap_or(path)
+        .to_str()
+        .map(str::to_owned)
+}

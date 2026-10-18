@@ -1,7 +1,12 @@
 //! La raíz de la ventana: pinta el árbol de paneles, un [`Editor`] por
 //! hoja, y ejecuta los comandos de `:` y `ctrl-w` sobre el [`Workspace`].
 //! La lógica vive en el workspace; aquí solo se crean y sueltan editores y
-//! se mueve el foco de GPUI adonde diga.
+//! se mueve el foco de GPUI adonde diga. Encima de los paneles flota, si
+//! está abierto, el finder o la paleta.
+
+mod finder;
+mod overlay;
+mod palette;
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -11,11 +16,13 @@ use gpui_kit::{
     ParentElement as _, Render, Styled as _, Subscription, Window, div,
     prelude::FluentBuilder as _, relative,
 };
+use nota_config::Paths;
 use nota_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
-    ForceQuit, Only, Quit, Save, SaveAndQuit, Set, SplitDown, SplitRight,
+    ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, Set, SplitDown,
+    SplitRight,
 };
 use crate::clipboard::SystemClipboard;
 use crate::document::Document;
@@ -23,10 +30,17 @@ use crate::editor::Editor;
 use crate::theme::Theme;
 use crate::workspace::{Axis, Effect, LineNumbers, Node, PaneId, Workspace};
 
+use self::finder::FinderVault;
+use self::overlay::Overlay;
+
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
     editors: HashMap<PaneId, Entity<Editor>>,
     title: String,
+    /// Dónde guardar el estado de cada vault; `None` si no hay `HOME`.
+    paths: Option<Paths>,
+    vault: FinderVault,
+    overlay: Option<Overlay>,
     _repaint: Subscription,
 }
 
@@ -35,6 +49,7 @@ impl WorkspaceView {
         document: Document,
         numbers: LineNumbers,
         scrolloff: usize,
+        paths: Option<Paths>,
         launched: Instant,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -46,12 +61,20 @@ impl WorkspaceView {
             workspace,
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
+            paths,
+            vault: FinderVault::default(),
+            overlay: None,
             _repaint: repaint,
         }
     }
 
-    /// Le da el foco de GPUI al editor del panel enfocado.
+    /// Le da el foco de GPUI al editor del panel enfocado, o al finder o
+    /// la paleta si hay uno abierto.
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(overlay) = &self.overlay {
+            window.focus(&overlay.focus_handle(cx), cx);
+            return;
+        }
         let focused = self.workspace.read(cx).focused();
         if let Some(editor) = self.editors.get(&focused) {
             let handle = editor.read(cx).focus_handle().clone();
@@ -74,7 +97,12 @@ impl WorkspaceView {
         });
         match effect {
             Effect::CloseWindow => window.remove_window(),
-            Effect::Stay => self.sync_editors(window, cx),
+            Effect::Stay => {
+                self.sync_editors(window, cx);
+                self.touch_focused(cx);
+            }
+            Effect::OpenFinder => self.open_finder(window, cx),
+            Effect::OpenCommandPalette => self.open_palette(window, cx),
         }
     }
 
@@ -88,6 +116,18 @@ impl WorkspaceView {
                 .entry(pane)
                 .or_insert_with(|| cx.new(|cx| Editor::new(workspace.clone(), pane, None, cx)));
         }
+        self.focus(window, cx);
+        cx.notify();
+    }
+
+    fn show(&mut self, overlay: Overlay, window: &mut Window, cx: &mut Context<Self>) {
+        self.overlay = Some(overlay);
+        self.focus(window, cx);
+        cx.notify();
+    }
+
+    fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.overlay = None;
         self.focus(window, cx);
         cx.notify();
     }
@@ -171,6 +211,11 @@ impl Render for WorkspaceView {
         element = on_command::<FocusNext>(element, cx);
         element = on_command::<Only>(element, cx);
         element = on_command::<Set>(element, cx);
-        element.child(self.render_node(&root, &theme))
+        element = on_command::<OpenFinder>(element, cx);
+        element = on_command::<OpenCommandPalette>(element, cx);
+        element
+            .relative()
+            .child(self.render_node(&root, &theme))
+            .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }
 }

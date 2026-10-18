@@ -39,6 +39,10 @@ pub enum Command {
     /// `:set {opciones}`: las opciones son de quien aloja el editor, como
     /// los números de línea de cada panel.
     Set,
+    /// `space f`: el finder de notas.
+    OpenFinder,
+    /// `space p`: la paleta de comandos.
+    OpenCommandPalette,
 }
 
 /// Un comando con el argumento que se le escribió, como `:e notas/a.md`.
@@ -108,6 +112,8 @@ impl Command {
         Self::FocusNext,
         Self::Only,
         Self::Set,
+        Self::OpenFinder,
+        Self::OpenCommandPalette,
     ];
 
     #[must_use]
@@ -128,6 +134,8 @@ impl Command {
             Self::FocusNext => "pane::focus_next",
             Self::Only => "pane::only",
             Self::Set => "editor::set",
+            Self::OpenFinder => "workspace::open_finder",
+            Self::OpenCommandPalette => "workspace::open_command_palette",
         }
     }
 

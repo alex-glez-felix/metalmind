@@ -4,10 +4,11 @@
 use std::time::Instant;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
-use nota_config::Config;
+use nota_config::{Config, Paths};
 
 use crate::actions;
 use crate::document::Document;
+use crate::picker;
 use crate::theme::{NoMonoFont, Theme};
 use crate::workspace::LineNumbers;
 use crate::workspace_view::WorkspaceView;
@@ -28,14 +29,16 @@ pub enum OpenError {
     Window(#[source] anyhow::Error),
 }
 
-/// Abre `document` en una ventana nueva, con el tema y la fuente de `config`. La aplicación termina cuando se
-/// cierra la última ventana.
+/// Abre `document` en una ventana nueva, con el tema y la fuente de
+/// `config`; el estado de cada vault va bajo `paths`. La aplicación termina
+/// cuando se cierra la última ventana.
 ///
 /// # Errors
 /// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede abrir la ventana.
 pub fn open(
     document: Document,
     config: &Config,
+    paths: Option<Paths>,
     launched: Instant,
     cx: &mut App,
 ) -> Result<(), OpenError> {
@@ -45,6 +48,7 @@ pub fn open(
     }
     cx.set_global(Theme::new(config, cx)?);
     actions::bind_keys(cx);
+    picker::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
             cx.quit();
@@ -59,7 +63,8 @@ pub fn open(
     };
     let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
     cx.open_window(options, move |window, cx| {
-        let view = cx.new(|cx| WorkspaceView::new(document, numbers, scrolloff, launched, cx));
+        let view =
+            cx.new(|cx| WorkspaceView::new(document, numbers, scrolloff, paths, launched, cx));
         view.update(cx, |view, cx| view.focus(window, cx));
         let closing = view.downgrade();
         window.on_window_should_close(cx, move |_window, cx| {

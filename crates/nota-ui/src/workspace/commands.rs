@@ -21,6 +21,8 @@ use crate::document::Document;
 pub enum Effect {
     Stay,
     CloseWindow,
+    OpenFinder,
+    OpenCommandPalette,
 }
 
 impl Workspace {
@@ -32,7 +34,9 @@ impl Workspace {
         let mut invocation = invocation.clone();
         loop {
             let effect = self.run_one(&invocation);
-            if effect == Effect::CloseWindow {
+            if effect != Effect::Stay {
+                // Lo que quede de la macro no tiene a dónde ir: la ventana
+                // se cierra o el picker se lleva las teclas.
                 self.vim.abort_macro();
                 return effect;
             }
@@ -99,6 +103,8 @@ impl Workspace {
             }
             Command::Only => self.only().map(|()| Effect::Stay),
             Command::Set => self.set_options(invocation.argument.as_deref()),
+            Command::OpenFinder => Ok(Effect::OpenFinder),
+            Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
         }
     }
 
