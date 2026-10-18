@@ -33,11 +33,17 @@ fn to_diagnostic(text: &str, error: &toml::de::Error) -> Diagnostic {
         .at(error.span().map(|span| Location::of(text, span.start)))
 }
 
+const SPANNED_KEY_PREFIX: &str = "$__serde_spanned_private_";
+
 fn segments(path: &serde_ignored::Path<'_>) -> Vec<String> {
     use serde_ignored::Path;
     let (parent, key) = match path {
         Path::Root => return Vec::new(),
         Path::Seq { parent, index } => (parent, index.to_string()),
+        // `Spanned` envuelve el valor en una tabla con claves propias.
+        Path::Map { parent, key } if key.starts_with(SPANNED_KEY_PREFIX) => {
+            return segments(parent);
+        }
         Path::Map { parent, key } => (parent, key.clone()),
         Path::Some { parent }
         | Path::NewtypeStruct { parent }
