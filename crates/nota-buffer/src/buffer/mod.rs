@@ -202,9 +202,12 @@ impl Buffer {
     /// no se aplica ninguna.
     pub fn apply(&mut self, mut edits: Vec<Edit>) -> Result<EditMap, BufferError> {
         self.history.ensure_open()?;
+        for edit in &edits {
+            self.check_range(&edit.range)?;
+        }
         edits.retain(|edit| !(edit.range.is_empty() && edit.text.is_empty()));
         edits.sort_by_key(|edit| edit.range.start);
-        self.check_edits(&edits)?;
+        check_overlaps(&edits)?;
         let mut applied = Vec::with_capacity(edits.len());
         for edit in edits.iter().rev() {
             let deleted = self.text_in(edit.range.clone())?;
@@ -332,21 +335,18 @@ impl Buffer {
         }
         Ok(())
     }
+}
 
-    fn check_edits(&self, sorted: &[Edit]) -> Result<(), BufferError> {
-        for edit in sorted {
-            self.check_range(&edit.range)?;
+fn check_overlaps(sorted: &[Edit]) -> Result<(), BufferError> {
+    for pair in sorted.windows(2) {
+        if pair[0].range.end > pair[1].range.start {
+            return Err(BufferError::OverlappingEdits {
+                first: pair[0].range.clone(),
+                second: pair[1].range.clone(),
+            });
         }
-        for pair in sorted.windows(2) {
-            if pair[0].range.end > pair[1].range.start {
-                return Err(BufferError::OverlappingEdits {
-                    first: pair[0].range.clone(),
-                    second: pair[1].range.clone(),
-                });
-            }
-        }
-        Ok(())
     }
+    Ok(())
 }
 
 fn splice(
