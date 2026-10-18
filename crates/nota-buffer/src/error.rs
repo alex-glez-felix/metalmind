@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::ByteOffset;
+use crate::{ByteOffset, LineAnchor};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BufferError {
@@ -23,4 +23,6 @@ pub enum BufferError {
     NoOpenTransaction,
     #[error("ya hay una transacción abierta")]
     TransactionAlreadyOpen,
+    #[error("el ancla {0:?} no es de este buffer")]
+    UnknownAnchor(LineAnchor),
 }

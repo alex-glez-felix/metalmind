@@ -4,6 +4,9 @@ use std::ops::Range;
 
 use ropey::Rope;
 
+mod anchored;
+
+use crate::anchor::{Anchors, LineChange};
 use crate::history::{AppliedEdit, Direction, History, Step};
 use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Transaction};
 
@@ -12,6 +15,7 @@ use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Tran
 pub struct Buffer {
     rope: Rope,
     history: History,
+    anchors: Anchors,
     version: u64,
 }
 
@@ -155,7 +159,7 @@ impl Buffer {
     /// # Errors
     /// [`BufferError::TransactionAlreadyOpen`] si ya hay una abierta.
     pub fn begin_transaction(&mut self, before: Selections) -> Result<(), BufferError> {
-        self.history.begin(before)
+        self.history.begin(before, self.anchors.clone())
     }
 
     /// Cierra la transacción abierta; si no tuvo ediciones no se guarda.
@@ -198,7 +202,13 @@ impl Buffer {
                 deleted,
                 inserted: edit.text.clone(),
             });
-            splice(&mut self.rope, edit.range.start, removed, &edit.text)?;
+            splice(
+                &mut self.rope,
+                &mut self.anchors,
+                edit.range.start,
+                removed,
+                &edit.text,
+            )?;
             self.version += 1;
         }
         self.history.record(applied)?;
@@ -212,7 +222,7 @@ impl Buffer {
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn undo(&mut self) -> Result<Option<&Transaction>, BufferError> {
         let steps = self.history.undo()?;
-        replay(&mut self.rope, &mut self.version, &steps)
+        self.travel(&steps)
     }
 
     /// Rehace la transacción deshecha o visitada más recientemente desde el
@@ -222,7 +232,7 @@ impl Buffer {
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn redo(&mut self) -> Result<Option<&Transaction>, BufferError> {
         let steps = self.history.redo()?;
-        replay(&mut self.rope, &mut self.version, &steps)
+        self.travel(&steps)
     }
 
     /// Retrocede `steps` estados en orden cronológico, aunque estén en otra
@@ -232,7 +242,7 @@ impl Buffer {
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn earlier(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
         let steps = self.history.earlier(steps)?;
-        replay(&mut self.rope, &mut self.version, &steps)
+        self.travel(&steps)
     }
 
     /// Avanza `steps` estados en orden cronológico, aunque estén en otra
@@ -242,7 +252,51 @@ impl Buffer {
     /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
     pub fn later(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
         let steps = self.history.later(steps)?;
-        replay(&mut self.rope, &mut self.version, &steps)
+        self.travel(&steps)
+    }
+
+    /// Deshace o rehace cada transacción del recorrido y devuelve la última.
+    /// Como en vim, cada una deja las anclas donde estaban del otro lado.
+    fn travel(&mut self, steps: &[Step]) -> Result<Option<&Transaction>, BufferError> {
+        for step in steps {
+            let Some(transaction) = self.history.transaction(step.seq) else {
+                continue;
+            };
+            let anchors_before = self.anchors.clone();
+            let edits = transaction.edits();
+            match step.direction {
+                Direction::Undo => {
+                    for edit in edits.iter().rev() {
+                        let removed = edit.inserted.len();
+                        splice(
+                            &mut self.rope,
+                            &mut self.anchors,
+                            edit.start,
+                            removed,
+                            &edit.deleted,
+                        )?;
+                    }
+                }
+                Direction::Redo => {
+                    for edit in edits {
+                        let removed = edit.deleted.len();
+                        splice(
+                            &mut self.rope,
+                            &mut self.anchors,
+                            edit.start,
+                            removed,
+                            &edit.inserted,
+                        )?;
+                    }
+                }
+            }
+            self.version += 1;
+            let saved = self.history.swap_anchors(step.seq, anchors_before);
+            self.anchors.restore(&saved);
+        }
+        Ok(steps
+            .last()
+            .and_then(|step| self.history.transaction(step.seq)))
     }
 
     fn check_range(&self, range: &Range<ByteOffset>) -> Result<(), BufferError> {
@@ -283,33 +337,9 @@ impl Buffer {
     }
 }
 
-/// Deshace o rehace cada transacción del recorrido y devuelve la última.
-fn replay<'a>(
-    rope: &mut Rope,
-    version: &mut u64,
-    steps: &[Step<'a>],
-) -> Result<Option<&'a Transaction>, BufferError> {
-    for step in steps {
-        let edits = step.transaction.edits();
-        match step.direction {
-            Direction::Undo => {
-                for edit in edits.iter().rev() {
-                    splice(rope, edit.start, edit.inserted.len(), &edit.deleted)?;
-                }
-            }
-            Direction::Redo => {
-                for edit in edits {
-                    splice(rope, edit.start, edit.deleted.len(), &edit.inserted)?;
-                }
-            }
-        }
-        *version += 1;
-    }
-    Ok(steps.last().map(|step| step.transaction))
-}
-
 fn splice(
     rope: &mut Rope,
+    anchors: &mut Anchors,
     start: ByteOffset,
     removed: usize,
     text: &str,
@@ -324,6 +354,7 @@ fn splice(
     let last = rope
         .try_byte_to_char(start.get() + removed)
         .map_err(out_of_bounds)?;
+    anchors.adjust(&LineChange::new(rope, start.get(), removed, text));
     rope.try_remove(first..last).map_err(out_of_bounds)?;
     rope.try_insert(first, text).map_err(out_of_bounds)?;
     Ok(())

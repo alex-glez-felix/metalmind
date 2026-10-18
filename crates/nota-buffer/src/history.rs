@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::anchor::Anchors;
 use crate::{BufferError, ByteOffset, Selections};
 
 /// Edición ya aplicada, con lo necesario para deshacerla y rehacerla.
@@ -16,6 +17,9 @@ pub struct Transaction {
     edits: Vec<AppliedEdit>,
     selections_before: Selections,
     selections_after: Selections,
+    /// Las anclas del otro lado de la transacción: las de antes mientras
+    /// está hecha, las de después mientras está deshecha.
+    anchors: Anchors,
 }
 
 impl Transaction {
@@ -61,10 +65,11 @@ pub(crate) enum Direction {
     Redo,
 }
 
-/// Un paso de un recorrido por el historial.
+/// Un paso de un recorrido por el historial: la transacción que lleva al
+/// estado `seq` y si se deshace o se rehace.
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Step<'a> {
-    pub transaction: &'a Transaction,
+pub(crate) struct Step {
+    pub seq: HistorySeq,
     pub direction: Direction,
 }
 
@@ -86,6 +91,7 @@ struct Node {
 struct OpenTransaction {
     before: Selections,
     edits: Vec<AppliedEdit>,
+    anchors: Anchors,
 }
 
 /// Árbol de transacciones. Los nodos viven en un arena en orden de creación
@@ -126,13 +132,14 @@ impl History {
             .is_some_and(|open| !open.edits.is_empty())
     }
 
-    pub fn begin(&mut self, before: Selections) -> Result<(), BufferError> {
+    pub fn begin(&mut self, before: Selections, anchors: Anchors) -> Result<(), BufferError> {
         if self.is_open() {
             return Err(BufferError::TransactionAlreadyOpen);
         }
         self.open = Some(OpenTransaction {
             before,
             edits: Vec::new(),
+            anchors,
         });
         Ok(())
     }
@@ -158,9 +165,13 @@ impl History {
     /// Una transacción sin ediciones no deja rastro en el historial.
     pub fn commit(&mut self, after: Selections) -> Result<(), BufferError> {
         let open = self.open.take().ok_or(BufferError::NoOpenTransaction)?;
-        if open.edits.is_empty() {
-            return Ok(());
+        if !open.edits.is_empty() {
+            self.push(open, after);
         }
+        Ok(())
+    }
+
+    fn push(&mut self, open: OpenTransaction, after: Selections) {
         let seq = HistorySeq(self.nodes.len());
         self.nodes.push(Node {
             edge: Some(Edge {
@@ -169,38 +180,51 @@ impl History {
                     edits: open.edits,
                     selections_before: open.before,
                     selections_after: after,
+                    anchors: open.anchors,
                 },
             }),
             children: Vec::new(),
         });
         self.node_mut(self.current).children.push(seq);
         self.current = seq;
-        Ok(())
+    }
+
+    pub fn transaction(&self, seq: HistorySeq) -> Option<&Transaction> {
+        self.node(seq).edge.as_ref().map(|edge| &edge.transaction)
+    }
+
+    /// Guarda `anchors` en la transacción que lleva a `seq` y devuelve las
+    /// que tenía.
+    pub fn swap_anchors(&mut self, seq: HistorySeq, anchors: Anchors) -> Anchors {
+        match self.node_mut(seq).edge.as_mut() {
+            Some(edge) => std::mem::replace(&mut edge.transaction.anchors, anchors),
+            None => Anchors::default(),
+        }
     }
 
     /// Al padre del estado actual.
-    pub fn undo(&mut self) -> Result<Vec<Step<'_>>, BufferError> {
+    pub fn undo(&mut self) -> Result<Vec<Step>, BufferError> {
         self.ensure_closed()?;
         let target = self.parent(self.current).unwrap_or(self.current);
         Ok(self.travel_to(target))
     }
 
     /// Al hijo visitado más recientemente, como en vim.
-    pub fn redo(&mut self) -> Result<Vec<Step<'_>>, BufferError> {
+    pub fn redo(&mut self) -> Result<Vec<Step>, BufferError> {
         self.ensure_closed()?;
         let target = self.node(self.current).children.last().copied();
         Ok(self.travel_to(target.unwrap_or(self.current)))
     }
 
     /// `steps` estados atrás en orden cronológico, cruzando ramas (`g-`).
-    pub fn earlier(&mut self, steps: usize) -> Result<Vec<Step<'_>>, BufferError> {
+    pub fn earlier(&mut self, steps: usize) -> Result<Vec<Step>, BufferError> {
         self.ensure_closed()?;
         let target = HistorySeq(self.current.0.saturating_sub(steps));
         Ok(self.travel_to(target))
     }
 
     /// `steps` estados adelante en orden cronológico, cruzando ramas (`g+`).
-    pub fn later(&mut self, steps: usize) -> Result<Vec<Step<'_>>, BufferError> {
+    pub fn later(&mut self, steps: usize) -> Result<Vec<Step>, BufferError> {
         self.ensure_closed()?;
         let last = self.nodes.len() - 1;
         let target = HistorySeq(self.current.0.saturating_add(steps).min(last));
@@ -209,7 +233,7 @@ impl History {
 
     /// Sube desde el estado actual hasta el ancestro común con `target` y
     /// baja hasta él. Cada hijo por el que baja pasa a ser el destino de redo.
-    fn travel_to(&mut self, target: HistorySeq) -> Vec<Step<'_>> {
+    fn travel_to(&mut self, target: HistorySeq) -> Vec<Step> {
         let (undone, mut redone) = self.path(self.current, target);
         redone.reverse();
         for &child in &redone {
@@ -220,13 +244,7 @@ impl History {
         let redone = redone.into_iter().map(|seq| (seq, Direction::Redo));
         undone
             .chain(redone)
-            .filter_map(|(seq, direction)| {
-                let edge = self.node(seq).edge.as_ref()?;
-                Some(Step {
-                    transaction: &edge.transaction,
-                    direction,
-                })
-            })
+            .map(|(seq, direction)| Step { seq, direction })
             .collect()
     }
 
