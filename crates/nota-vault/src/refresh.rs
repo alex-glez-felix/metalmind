@@ -11,6 +11,8 @@ use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
 use crate::scan::scan_partial;
 
+/// Un cambio del índice. En un lote van en orden de aplicación: primero los
+/// `Removed` (en rutas de antes), luego `Renamed`, `Created` y `Modified`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultChange {
     Created {
@@ -40,6 +42,13 @@ pub(crate) struct Touched {
     pub paths: BTreeSet<VaultPath>,
     /// Pares `(de, a)` que el debouncer pudo emparejar.
     pub renames: Vec<(VaultPath, VaultPath)>,
+}
+
+impl Touched {
+    pub fn merge(&mut self, other: Self) {
+        self.paths.extend(other.paths);
+        self.renames.extend(other.renames);
+    }
 }
 
 /// Relee del disco lo que dice `touched` y devuelve qué cambió.
@@ -111,12 +120,13 @@ fn diff(
             created.insert((path, kind));
         }
     }
-    let mut changes = pair_renames(&touched.renames, &mut removed, &mut created);
-    changes.extend(
-        removed
-            .into_iter()
-            .map(|(path, kind)| VaultChange::Removed { path, kind }),
-    );
+    let renamed = pair_renames(&touched.renames, &mut removed, &mut created);
+    // Lo borrado va en rutas de antes: tiene que aplicarse antes de mover su carpeta.
+    let mut changes: Vec<_> = removed
+        .into_iter()
+        .map(|(path, kind)| VaultChange::Removed { path, kind })
+        .collect();
+    changes.extend(renamed);
     let mut created: Vec<_> = created.into_iter().collect();
     created.sort_by_cached_key(|(path, _)| (path.depth(), path.clone()));
     changes.extend(
@@ -269,21 +279,62 @@ mod tests {
 
     proptest! {
         /// Reindexar a pedazos da el mismo índice que un walk completo, y los
-        /// cambios emitidos llevan de un índice al otro.
+        /// cambios emitidos llevan de un índice al otro. Varias operaciones
+        /// pueden caer en un mismo lote, como cuando el debouncer las junta.
         #[test]
-        fn incremental_igual_a_walk_completo(ops in prop::collection::vec(op(), 1..30)) {
+        fn incremental_igual_a_walk_completo(
+            batches in prop::collection::vec(prop::collection::vec(op(), 1..5), 1..12),
+        ) {
             let dir = TempDir::new().unwrap();
             let root = dir.path().canonicalize().unwrap();
             let mut index = scan(&root);
             let mut copy = mirror(&index);
-            for op in &ops {
-                let touched = apply(&root, op);
+            for batch in &batches {
+                let mut touched = Touched::default();
+                for op in batch {
+                    touched.merge(apply(&root, op));
+                }
                 let changes = refresh(&mut index, &root, &touched);
                 replay(&mut copy, &changes);
-                prop_assert_eq!(&index, &scan(&root), "tras {:?}", op);
-                prop_assert_eq!(&copy, &mirror(&index), "cambios de {:?}: {:?}", op, changes);
+                prop_assert_eq!(&index, &scan(&root), "tras {:?}", batch);
+                prop_assert_eq!(&copy, &mirror(&index), "cambios de {:?}: {:?}", batch, changes);
             }
         }
+    }
+
+    #[test]
+    fn borrar_un_hijo_y_renombrar_su_carpeta_en_un_lote() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::write(root.join("a/x.md"), "").unwrap();
+        fs::write(root.join("a/y.md"), "").unwrap();
+        let mut index = scan(&root);
+        let mut copy = mirror(&index);
+        fs::remove_file(root.join("a/x.md")).unwrap();
+        fs::rename(root.join("a"), root.join("b")).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            paths: [path("a/x.md"), path("a"), path("b")].into(),
+            renames: vec![(path("a"), path("b"))],
+        };
+        let changes = refresh(&mut index, &root, &touched);
+        assert_eq!(
+            changes,
+            [
+                VaultChange::Removed {
+                    path: path("a/x.md"),
+                    kind: EntryKind::Note
+                },
+                VaultChange::Renamed {
+                    from: path("a"),
+                    to: path("b"),
+                    kind: EntryKind::Folder
+                },
+            ]
+        );
+        replay(&mut copy, &changes);
+        assert_eq!(copy, mirror(&index));
     }
 
     #[test]
