@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 nota-buffer = { path = "crates/nota-buffer" }
 nota-config = { path = "crates/nota-config" }
+nota-search = { path = "crates/nota-search" }
 nota-syntax = { path = "crates/nota-syntax" }
 nota-ui = { path = "crates/nota-ui" }
 nota-vault = { path = "crates/nota-vault" }
@@ -29,6 +30,7 @@ ignore = "0.4.33"
 log = "0.4.34"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
+nucleo-matcher = "0.3.1"
 regex = "1.13.1"
 ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -37,6 +39,7 @@ serde_ignored = "0.1.14"
 smallvec = "1.16.3"
 thiserror = "2.0.21"
 unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }
+unicode-segmentation = "1.13.3"
 insta = { version = "1.49.0", features = ["glob"] }
 proptest = "1.12.0"
 rstest = "0.27.0"

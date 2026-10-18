@@ -1,0 +1,20 @@
+[package]
+name = "nota-search"
+description = "Búsqueda del vault: por ahora, búsqueda difusa de rutas con nucleo-matcher."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nucleo-matcher.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+
+[lints]
+workspace = true
