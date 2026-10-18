@@ -36,6 +36,7 @@ pub(crate) fn target(buffer: &Buffer, selection: &Selection, kind: VisualKind) -
         start,
         adjusted: false,
         visual: true,
+        nested: false,
     }
 }
 

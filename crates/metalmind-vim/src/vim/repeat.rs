@@ -53,6 +53,7 @@ impl Vim {
             Change::Block(change, size) => {
                 self.repeat_block(change, size, buffer, selections, clipboard)?;
             }
+            Change::ToggleCheckbox => self.toggle_checkbox(buffer, selections)?,
         }
         if self.mode != Mode::Insert {
             return Ok(());

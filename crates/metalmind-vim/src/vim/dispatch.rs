@@ -6,6 +6,7 @@ use super::Vim;
 use super::awaiting::Awaiting;
 use crate::insert::Typed;
 use crate::jumplist::Direction;
+use crate::markdown::LazyOutline;
 use crate::matching;
 use crate::motion::Destination;
 use crate::object::Object;
@@ -22,6 +23,7 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         self.awaiting = None;
+        self.sync_layout(buffer);
         match self.mode {
             Mode::Insert => self.run_in_insert(action, buffer, selections)?,
             Mode::CommandLine => {
@@ -90,7 +92,7 @@ impl Vim {
                 self.operate(operator, object, buffer, selections, clipboard)?;
             }
             (Action::CurrentLine, Mode::OperatorPending(operator)) => {
-                let object = Object::CurrentLine.into();
+                let object = self.doubled_object(operator).into();
                 self.operate(operator, object, buffer, selections, clipboard)?;
             }
             (Action::Operator(operator), Mode::Normal) => {
@@ -133,6 +135,7 @@ impl Vim {
             (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
             (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
+            (Action::ToggleCheckbox, Mode::Normal) => self.toggle_checkbox(buffer, selections)?,
             (Action::Command(command), Mode::Normal) => {
                 self.reset();
                 return Ok(KeyOutcome::Command(command.into()));
@@ -152,9 +155,7 @@ impl Vim {
             Action::NormalMode => self.finish_insert(buffer, selections)?,
             Action::Interrupt => self.leave_insert(buffer, selections)?,
             Action::Backspace => self.type_in_insert(&Typed::Backspace, buffer, selections)?,
-            Action::Newline => {
-                self.type_in_insert(&Typed::Text("\n".to_owned()), buffer, selections)?;
-            }
+            Action::Newline => self.type_in_insert(&Typed::Newline, buffer, selections)?,
             _ => self.reset(),
         }
         Ok(())
@@ -180,6 +181,23 @@ impl Vim {
         Ok(KeyOutcome::Executed(action))
     }
 
+    /// Lo que lea el estilo de las líneas tiene que ver el texto de ahora.
+    fn sync_layout(&mut self, buffer: &mut Buffer) {
+        if let Some(layout) = self.layout.as_mut() {
+            layout.sync(buffer);
+        }
+    }
+
+    /// Sobre qué actúa un operador doblado (`dd`, `>>`): la línea o, en
+    /// `>>` y `<<` con `indent_list_children`, el ítem con sus hijos.
+    fn doubled_object(&self, operator: Operator) -> Object {
+        if operator.shift().is_some() && self.markdown.indent_list_children {
+            Object::ListItems
+        } else {
+            Object::CurrentLine
+        }
+    }
+
     /// Una motion en Normal o, extendiendo la selección, en Visual. Como en
     /// vim, falla si falla en todos los cursores, y `h` y `l` también si no
     /// se mueven.
@@ -195,8 +213,11 @@ impl Vim {
         let count = self.take_count();
         self.reset();
         let purpose = self.motion_purpose();
-        let moved = move_cursors(selections, self.in_visual(), |s| {
-            let destination = motion.resolve(buffer, s, count, purpose, &self.viewport)?;
+        let visual = self.in_visual();
+        let outline = LazyOutline::new(self.layout.as_mut());
+        let moved = move_cursors(selections, visual, |s| {
+            let destination =
+                motion.resolve(buffer, s, count, purpose, &self.viewport, &outline)?;
             let stuck = motion.fails_without_moving() && destination.offset == s.head;
             (!stuck).then_some(destination)
         });

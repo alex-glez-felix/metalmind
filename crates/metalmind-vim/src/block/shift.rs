@@ -9,7 +9,7 @@ use super::Block;
 use super::plan::Plan;
 use super::prep::{Piece, Purpose, is_white, prep};
 use crate::columns::Columns;
-use crate::indent::{self, Shift};
+use crate::indent::{Indent, Shift};
 
 /// Las ediciones de cada línea que llega al bloque; las vacías y las que
 /// terminan antes de su borde izquierdo no cambian. `at` es el inicio de la
@@ -20,6 +20,7 @@ pub(crate) fn shift(
     shift: Shift,
     levels: usize,
     columns: Columns,
+    indent: Indent,
 ) -> Plan {
     let purpose = match shift {
         Shift::Right => Purpose::ShiftRight,
@@ -33,8 +34,8 @@ pub(crate) fn shift(
             continue;
         }
         let (range, new) = match shift {
-            Shift::Right => right(&text, &piece, levels, columns),
-            Shift::Left => left(&text, &piece, block, levels, columns),
+            Shift::Right => right(&text, &piece, indent.levels_width(levels), columns, indent),
+            Shift::Left => left(&text, &piece, block, indent.levels_width(levels), columns),
         };
         if text.get(range.clone()) != Some(new.as_str()) {
             let start = buffer.line_start(line);
@@ -48,10 +49,16 @@ pub(crate) fn shift(
     }
 }
 
-/// Junta los blancos que tocan el borde izquierdo con los que se agregan y
-/// los vuelve a escribir con tabs y espacios desde donde empezaban.
-fn right(line: &str, piece: &Piece, levels: usize, columns: Columns) -> (Range<usize>, String) {
-    let mut total = indent::levels_width(levels) + piece.pre_whitesp;
+/// Junta los blancos que tocan el borde izquierdo con los `width` que se
+/// agregan y los vuelve a escribir desde donde empezaban.
+fn right(
+    line: &str,
+    piece: &Piece,
+    width: usize,
+    columns: Columns,
+    indent: Indent,
+) -> (Range<usize>, String) {
+    let mut total = width + piece.pre_whitesp;
     let mut ws_vcol = piece.start_vcol - piece.pre_whitesp;
     let mut textstart = piece.textcol;
     let mut splits = piece.startspaces != 0;
@@ -73,17 +80,17 @@ fn right(line: &str, piece: &Piece, levels: usize, columns: Columns) -> (Range<u
         textstart = cell.end;
     }
     let first_white = (piece.textcol + usize::from(splits)).saturating_sub(piece.pre_whitesp_c);
-    let new = indent::whitespace(ws_vcol, ws_vcol + total, columns);
+    let new = indent.whitespace(ws_vcol, ws_vcol + total, columns);
     (first_white..textstart, new)
 }
 
-/// Quita hasta `levels` niveles de los blancos que siguen al borde
+/// Quita hasta `width` columnas de los blancos que siguen al borde
 /// izquierdo; un tab que queda a medias se cambia por espacios.
 fn left(
     line: &str,
     piece: &Piece,
     block: &Block,
-    levels: usize,
+    width: usize,
     columns: Columns,
 ) -> (Range<usize>, String) {
     let splits = piece.startspaces != 0;
@@ -101,7 +108,7 @@ fn left(
         non_white = cell.end;
     }
     let block_space_width = non_white_col.saturating_sub(block.start);
-    let destination = non_white_col - block_space_width.min(indent::levels_width(levels));
+    let destination = non_white_col - block_space_width.min(width);
     let mut kept_end = piece.textcol;
     let mut kept_width = piece.start_vcol;
     if splits {

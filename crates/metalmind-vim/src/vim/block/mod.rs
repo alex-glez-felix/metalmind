@@ -223,7 +223,16 @@ impl Vim {
             .collect();
         let plans: Vec<_> = blocks
             .iter()
-            .map(|block| block::shift(buffer, block, shift, count.unwrap_or(1), columns))
+            .map(|block| {
+                block::shift(
+                    buffer,
+                    block,
+                    shift,
+                    count.unwrap_or(1),
+                    columns,
+                    self.indent,
+                )
+            })
             .collect();
         buffer.begin_transaction(self.at_corners(blocks, buffer))?;
         let (line_starts, _) = block::apply(buffer, &plans)?;

@@ -4,6 +4,7 @@ use crate::Operator;
 use crate::columns::Columns;
 use crate::cursor::Cursor;
 use crate::lines::{Want, first_non_blank, is_blank, last_char};
+use crate::markdown::{self, LazyOutline};
 use crate::matching;
 use crate::scroll::{Place, Viewport};
 use crate::span::{Span, SpanKind};
@@ -34,6 +35,10 @@ pub enum Motion {
     /// `%`: la pareja del paréntesis, corchete o llave; con count, ese
     /// porcentaje del archivo.
     Matching,
+    /// `]]`: al inicio del heading siguiente.
+    NextHeading,
+    /// `[[`: al inicio del heading anterior.
+    PreviousHeading,
 }
 
 /// Para qué se resuelve una motion; cambia hasta dónde puede llegar.
@@ -100,6 +105,7 @@ impl Motion {
         count: Option<usize>,
         purpose: Purpose,
         viewport: &Viewport,
+        outline: &LazyOutline,
     ) -> Option<Destination> {
         let head = selection.head;
         let times = count.unwrap_or(1);
@@ -177,9 +183,23 @@ impl Motion {
                 ),
                 None => Destination::new(matching::find(buffer, head)?, SpanKind::Inclusive),
             },
+            Self::NextHeading => heading(
+                buffer,
+                markdown::next_heading(outline.get(buffer), line, times)?,
+            ),
+            Self::PreviousHeading => heading(
+                buffer,
+                markdown::previous_heading(outline.get(buffer), line, times)?,
+            ),
         };
         Some(destination)
     }
+}
+
+/// Como `]]` de vim, exclusiva: `d]]` desde el inicio de una línea borra
+/// líneas enteras hasta el heading.
+fn heading(buffer: &Buffer, line: usize) -> Destination {
+    Destination::new(buffer.line_start(line), SpanKind::Exclusive)
 }
 
 fn step_left(buffer: &Buffer, head: ByteOffset, times: usize) -> ByteOffset {

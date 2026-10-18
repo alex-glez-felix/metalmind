@@ -143,6 +143,10 @@ const fn paragraph(around: bool) -> Action {
     object(TextObject::Paragraph { around })
 }
 
+const fn section(around: bool) -> Action {
+    object(TextObject::Section { around })
+}
+
 const fn search_word(backward: bool, whole_word: bool) -> Action {
     Action::SearchWord {
         backward,
@@ -239,6 +243,12 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[ch('g'), ch('g')], motion(Motion::DocumentStart)),
         (Control, &[ch('G')], motion(Motion::DocumentEnd)),
         (Control, &[ch('%')], motion(Motion::Matching)),
+        (Control, &[ch(']'), ch(']')], motion(Motion::NextHeading)),
+        (
+            Control,
+            &[ch('['), ch('[')],
+            motion(Motion::PreviousHeading),
+        ),
         (Control, &[ch('f')], find(false, false)),
         (Control, &[ch('F')], find(true, false)),
         (Control, &[ch('t')], find(false, true)),
@@ -333,6 +343,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Object, &[ch('a'), ch('"')], quotes(true)),
         (Object, &[ch('i'), ch('p')], paragraph(false)),
         (Object, &[ch('a'), ch('p')], paragraph(true)),
+        (Object, &[ch('i'), ch('h')], section(false)),
+        (Object, &[ch('a'), ch('h')], section(true)),
         (Insert, &[Key::Escape], Action::NormalMode),
         (Insert, &[Key::Ctrl('c')], Action::Interrupt),
         (Insert, &[Key::Backspace], Action::Backspace),

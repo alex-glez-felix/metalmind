@@ -1,8 +1,11 @@
 use metalmind_buffer::{Buffer, ByteOffset, Selection};
 
+use crate::columns::Columns;
 use crate::find::Find;
-use crate::lines::{first_non_blank, last_char};
+use crate::indent::leading_blanks;
+use crate::lines::{first_non_blank, is_blank, last_char};
 use crate::mark;
+use crate::markdown::{LazyOutline, ListItem};
 use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
 use crate::span::{Missed, Region, Span, SpanKind, Target};
@@ -20,6 +23,9 @@ pub(crate) enum Object {
     SearchWord(WordSearch),
     TextObject(TextObject),
     CurrentLine,
+    /// El de `>>` y `<<`: como [`Object::CurrentLine`], pero un ítem de
+    /// lista lleva consigo a sus hijos.
+    ListItems,
     /// `'x` o, si `exact`, `` `x ``, con la mark ya resuelta.
     Mark {
         offset: ByteOffset,
@@ -38,6 +44,7 @@ impl Object {
         operator: Operator,
         count: Option<usize>,
         viewport: &Viewport,
+        outline: &LazyOutline,
     ) -> Result<Target, Missed> {
         let span = match *self {
             Self::Motion(motion) => motion
@@ -47,6 +54,7 @@ impl Object {
                     count,
                     Purpose::Operate(operator),
                     viewport,
+                    outline,
                 )
                 .ok_or(Missed::Stay)?
                 .span_from(selection.head),
@@ -65,7 +73,7 @@ impl Object {
                 .destination()
                 .span_from(selection.head),
             Self::TextObject(object) => {
-                object.resolve(buffer, selection.head, count.unwrap_or(1))?
+                object.resolve(buffer, selection.head, count.unwrap_or(1), outline)?
             }
             Self::Mark { offset, exact } => {
                 let kind = if exact {
@@ -79,6 +87,11 @@ impl Object {
             Self::CurrentLine => {
                 return current_lines(buffer, selection, operator, count.unwrap_or(1))
                     .ok_or(Missed::Stay);
+            }
+            Self::ListItems => {
+                let target = current_lines(buffer, selection, operator, count.unwrap_or(1))
+                    .ok_or(Missed::Stay)?;
+                return Ok(with_children(buffer, target, viewport.columns()));
             }
             Self::Visual(area) => return Ok(area.target(buffer, selection, viewport.columns())),
         };
@@ -104,7 +117,42 @@ fn current_lines(
         start: line_start_for(buffer, selection, operator, last),
         adjusted: false,
         visual: false,
+        nested: false,
     })
+}
+
+/// Si la primera línea es un ítem de lista, extiende las líneas hasta el
+/// último hijo de cada ítem: lo que sigue más indentado, con las líneas en
+/// blanco de en medio.
+fn with_children(buffer: &Buffer, target: Target, columns: Columns) -> Target {
+    let Region::Lines { first, last } = target.region else {
+        return target;
+    };
+    if ListItem::parse(&buffer.line_text(first)).is_none() {
+        return target;
+    }
+    let last = (first..=last).fold(last, |end, line| end.max(last_child(buffer, line, columns)));
+    Target {
+        region: Region::Lines { first, last },
+        nested: true,
+        ..target
+    }
+}
+
+fn last_child(buffer: &Buffer, line: usize, columns: Columns) -> usize {
+    let level_of = |line| columns.line_width(leading_blanks(&buffer.line_text(line)));
+    let level = level_of(line);
+    let mut last = line;
+    for next in line + 1..buffer.line_count() {
+        if buffer.line_text(next).chars().all(is_blank) {
+            continue;
+        }
+        if level_of(next) <= level {
+            break;
+        }
+        last = next;
+    }
+    last
 }
 
 /// Como `nv_lineop` de vim: `g~~`, `guu` y `gUU` llevan antes el cursor al
