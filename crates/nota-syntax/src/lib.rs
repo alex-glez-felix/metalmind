@@ -18,7 +18,7 @@ use std::ops::Range;
 
 pub use frontmatter::Frontmatter;
 pub use link::{Link, LinkSyntax, Subpath};
-pub use resolve::{Resolution, resolve};
+pub use resolve::{Resolution, resolve, resolve_from};
 pub use tag::{Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.

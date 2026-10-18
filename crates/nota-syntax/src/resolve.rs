@@ -13,7 +13,8 @@ pub enum Resolution<'p> {
 /// menos carpetas. Si empatan, desempata la única escrita con las mismas
 /// mayúsculas; si no, es `Ambiguous` en vez de elegir una al azar. Un `/` al
 /// principio exige la ruta completa. El destino vacío de `[[#Heading]]` es la
-/// nota misma y aquí no resuelve.
+/// nota misma y aquí no resuelve; los relativos (`./`, `../`) necesitan la
+/// nota de origen y van por [`resolve_from`].
 pub fn resolve<'p, I>(target: &str, paths: I) -> Resolution<'p>
 where
     I: IntoIterator<Item = &'p str>,
@@ -51,6 +52,41 @@ where
             _ => Resolution::Ambiguous(best),
         },
     }
+}
+
+/// Resuelve `target` escrito en la nota `source` (su ruta en el vault). Un
+/// destino que empieza con `./` o `../` es relativo a la carpeta de `source`,
+/// como en un link markdown, y un `../` que sale del vault no resuelve;
+/// cualquier otro se resuelve con [`resolve`].
+pub fn resolve_from<'p, I>(source: &str, target: &str, paths: I) -> Resolution<'p>
+where
+    I: IntoIterator<Item = &'p str>,
+{
+    let target = target.trim();
+    if !target.starts_with("./") && !target.starts_with("../") {
+        return resolve(target, paths);
+    }
+    let folder = source.rsplit_once('/').map_or("", |(folder, _)| folder);
+    match join(folder, target) {
+        Some(path) => resolve(&format!("/{path}"), paths),
+        None => Resolution::Unresolved,
+    }
+}
+
+/// `relative` sobre `folder`, con `.` y `..` resueltos. `None` si sube más
+/// allá de la raíz.
+fn join(folder: &str, relative: &str) -> Option<String> {
+    let mut parts: Vec<&str> = folder.split('/').filter(|part| !part.is_empty()).collect();
+    for part in relative.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            _ => parts.push(part),
+        }
+    }
+    Some(parts.join("/"))
 }
 
 /// En un sistema de archivos que distingue mayúsculas, `Casa.md` y `casa.md`
