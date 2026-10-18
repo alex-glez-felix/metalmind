@@ -37,7 +37,7 @@ pub struct Link {
 
 impl Link {
     /// El texto de una de las partes del link. En un link markdown se
-    /// decodifican los `%20`, porque Obsidian los escribe así.
+    /// decodifican los `%20`: un destino markdown no puede llevar espacios.
     #[must_use]
     pub fn text<'t>(&self, text: &'t str, part: Range<usize>) -> Cow<'t, str> {
         let raw = &text[part];

@@ -3,7 +3,7 @@ use std::ops::Range;
 use nota_syntax::{Link, Problem, Subpath, scan};
 use proptest::prelude::*;
 
-/// Trozos que arman sintaxis de Obsidian a medias: la idea es dar con los
+/// Trozos que arman sintaxis de nota a medias: la idea es dar con los
 /// bordes (cierres que faltan, saltos de línea en medio, multibyte).
 fn piece() -> impl Strategy<Value = String> {
     prop_oneof![

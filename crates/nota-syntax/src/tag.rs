@@ -30,7 +30,7 @@ fn is_unicode_punctuation(c: char) -> bool {
         | '\u{FF5B}'..='\u{FF65}')
 }
 
-/// Lo que puede ir en un tag según Obsidian: letras, números, `_`, `-`, `/`
+/// Lo que puede ir en un tag: letras, números, `_`, `-`, `/`
 /// para anidar y casi cualquier cosa fuera de ASCII (emoji incluidos).
 fn is_tag_char(c: char) -> bool {
     if c.is_ascii() {

@@ -1,5 +1,5 @@
-//! La sintaxis propia de Obsidian sobre el texto de una nota: wikilinks,
-//! embeds, tags, links markdown a notas locales y frontmatter YAML. Todo
+//! La sintaxis de nota sobre el texto de una nota: wikilinks, embeds, tags,
+//! links markdown a notas locales y frontmatter YAML. Todo
 //! rango es en bytes sobre el texto escaneado.
 //!
 //! Es un scanner a mano, sin árbol de markdown: solo sabe lo necesario para

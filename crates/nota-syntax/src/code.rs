@@ -1,4 +1,4 @@
-//! Lo que tapa la sintaxis de Obsidian: bloques de código cercados, código
+//! Lo que tapa la sintaxis de nota: bloques de código cercados, código
 //! inline y comentarios `%% %%`. Cada función recibe dónde empieza la
 //! construcción y devuelve dónde termina.
 
@@ -117,7 +117,7 @@ impl CodeSpans {
 }
 
 /// Comentario `%% %%` desde `at`. Un `%%` sin cierre comenta hasta el final,
-/// como en Obsidian.
+/// igual que una cerca sin cierre.
 pub(crate) fn comment_end(text: &str, at: usize) -> usize {
     let body = at + 2;
     text[body..].find("%%").map_or(text.len(), |i| body + i + 2)
