@@ -7,6 +7,7 @@ La sintaxis propia de Obsidian sobre el texto de una nota, sin GUI ni I/O. Todo 
 - `Tag`: `#tag` y `#a/b/c` al inicio de línea o tras un espacio, terminados en espacio o puntuación, nunca solo números (`is_valid_tag_name`).
 - `Frontmatter`: el bloque `---` del principio con `tags`, `aliases` y `cssclasses` en forma de lista o de texto (y sus nombres viejos `tag`, `alias`, `cssclass`), leído con `yaml-rust2`. Un YAML roto queda en `Scan::problems` y el resto se escanea igual.
 - Nada se reconoce dentro de bloques cercados (``` y ~~~, también en listas y citas), código inline ni comentarios `%% %%`; un `%%` sin cierre comenta hasta el final.
+- `resolve(target, rutas) -> Resolution`: como Obsidian, sin distinguir mayúsculas, con o sin `.md`, por nombre o final de ruta (`carpeta/nota`); gana la de menos carpetas y un empate es `Ambiguous`.
 - Lineal en el tamaño de la nota, también con corchetes o backticks sin cerrar.
 
-No sabe de bloques de markdown (listas, citas, código indentado) ni de tree-sitter, que entra en M4. Tampoco de `^block-id` ni headings: eso es del índice.
+No sabe de bloques de markdown (listas, citas, código indentado) ni de tree-sitter, que entra en M4. Tampoco de `^block-id`, headings ni aliases del vault al resolver: eso es del índice.

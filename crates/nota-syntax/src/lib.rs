@@ -10,6 +10,7 @@ mod code;
 mod frontmatter;
 mod link;
 mod markdown_link;
+mod resolve;
 mod scanner;
 mod tag;
 
@@ -17,6 +18,7 @@ use std::ops::Range;
 
 pub use frontmatter::Frontmatter;
 pub use link::{Link, LinkSyntax, Subpath};
+pub use resolve::{Resolution, resolve};
 pub use tag::{Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.

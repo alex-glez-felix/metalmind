@@ -1,0 +1,28 @@
+---
+source: crates/nota-syntax/tests/resolve.rs
+expression: table
+---
+"nota" → nota.md
+"nota.md" → nota.md
+"NOTA" → nota.md
+"proyectos/nota" → proyectos/nota.md
+"Proyectos/Nota.md" → proyectos/nota.md
+"/nota" → nota.md
+"/proyectos/nota" → proyectos/nota.md
+"/Plan" → sin resolver
+"plan" → proyectos/Plan.md
+"2023/plan" → archivo/2023/Plan.md
+"chivo/2023/plan" → sin resolver
+"2024-10-01" → diario/2024-10-01.md
+"duplicada" → ambiguo: a/Duplicada.md, b/Duplicada.md
+"a/duplicada" → a/Duplicada.md
+"d/duplicada" → c/d/Duplicada.md
+"diagrama.png" → adjuntos/diagrama.png
+"diagrama" → sin resolver
+"notas.md" → adjuntos/notas.md.md
+"árbol" → Mayúsculas/Árbol.md
+"mayúsculas/ÁRBOL" → Mayúsculas/Árbol.md
+"  nota  " → nota.md
+"no existe" → sin resolver
+"" → sin resolver
+"/" → sin resolver
