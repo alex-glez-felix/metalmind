@@ -10,7 +10,9 @@ mod marked;
 use crate::anchor::{Anchors, LineChange};
 use crate::history::{AppliedEdit, Direction, History, Step};
 use crate::marked::MarkedLines;
-use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Splice, Transaction};
+use crate::{
+    BufferError, ByteOffset, Edit, EditMap, HistorySeq, LineEdit, Selections, Splice, Transaction,
+};
 
 /// Texto editable. Las líneas se separan solo por `\n`.
 #[derive(Debug, Default)]
@@ -20,8 +22,16 @@ pub struct Buffer {
     anchors: Anchors,
     marked: MarkedLines,
     version: u64,
-    /// Lo reemplazado desde el último [`Buffer::take_splices`].
+    changes: Changes,
+}
+
+/// Lo reemplazado, para quien guarda posiciones o líneas fuera del buffer.
+#[derive(Debug, Default)]
+struct Changes {
+    /// Desde el último [`Buffer::take_splices`].
     splices: Vec<Splice>,
+    /// Lo mismo por líneas, desde el último [`Buffer::take_line_edits`].
+    lines: Vec<LineEdit>,
 }
 
 impl Buffer {
@@ -42,7 +52,14 @@ impl Buffer {
     /// cursor de otro panel) las mueve con [`Splice::map_all`] y lo llama
     /// tras cada cambio para que la lista no crezca.
     pub fn take_splices(&mut self) -> Vec<Splice> {
-        std::mem::take(&mut self.splices)
+        std::mem::take(&mut self.changes.splices)
+    }
+
+    /// Los reemplazos desde la última llamada, por líneas y en orden. Es
+    /// otra lista que la de [`Buffer::take_splices`]: la lee otro (el
+    /// estilo de las líneas) en otro momento.
+    pub fn take_line_edits(&mut self) -> Vec<LineEdit> {
+        std::mem::take(&mut self.changes.lines)
     }
 
     /// Los reemplazos hechos desde el último [`Buffer::take_splices`], sin
@@ -50,7 +67,7 @@ impl Buffer {
     /// posiciones que guarda mientras edita.
     #[must_use]
     pub fn splices(&self) -> &[Splice] {
-        &self.splices
+        &self.changes.splices
     }
 
     /// Estado del historial en el que está el texto.
@@ -253,7 +270,7 @@ impl Buffer {
                 &mut self.rope,
                 &mut self.anchors,
                 &mut self.marked,
-                &mut self.splices,
+                &mut self.changes,
                 edit.range.start,
                 removed,
                 &edit.text,
@@ -321,7 +338,7 @@ impl Buffer {
                             &mut self.rope,
                             &mut self.anchors,
                             &mut self.marked,
-                            &mut self.splices,
+                            &mut self.changes,
                             edit.start,
                             removed,
                             &edit.deleted,
@@ -335,7 +352,7 @@ impl Buffer {
                             &mut self.rope,
                             &mut self.anchors,
                             &mut self.marked,
-                            &mut self.splices,
+                            &mut self.changes,
                             edit.start,
                             removed,
                             &edit.inserted,
@@ -391,7 +408,7 @@ fn splice(
     rope: &mut Rope,
     anchors: &mut Anchors,
     marked: &mut MarkedLines,
-    log: &mut Vec<Splice>,
+    log: &mut Changes,
     start: ByteOffset,
     removed: usize,
     text: &str,
@@ -411,12 +428,13 @@ fn splice(
     marked.adjust(&change);
     rope.try_remove(first..last).map_err(out_of_bounds)?;
     rope.try_insert(first, text).map_err(out_of_bounds)?;
-    log.push(Splice {
+    log.splices.push(Splice {
         start,
         removed,
         inserted: text.len(),
         lines: change,
     });
+    log.lines.push(change.line_edit());
     Ok(())
 }
 

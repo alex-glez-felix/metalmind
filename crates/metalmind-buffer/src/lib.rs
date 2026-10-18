@@ -22,4 +22,4 @@ pub use error::BufferError;
 pub use history::{HistorySeq, Transaction};
 pub use offset::ByteOffset;
 pub use selection::{Goal, PerSelection, Selection, Selections};
-pub use splice::Splice;
+pub use splice::{LineEdit, Splice};
