@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 
@@ -183,6 +184,14 @@ fn check_component(name: &str) -> Result<(), InvalidReason> {
 /// nunca muestra ni toca nombres con punto (`.obsidian/`, `.git/`, `.trash/`, …).
 pub(crate) fn is_hidden_name(name: &str) -> bool {
     name.starts_with('.')
+}
+
+/// Para buscar por prefijo en un `BTreeMap<VaultPath, _>`: el orden y el hash
+/// son los de la cadena.
+impl Borrow<str> for VaultPath {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
 }
 
 impl fmt::Debug for VaultPath {
