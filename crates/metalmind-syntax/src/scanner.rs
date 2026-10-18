@@ -1,14 +1,18 @@
 use crate::code::{self, CodeSpans};
 use crate::markdown_link::{self, Brackets};
+use crate::sink::Sink;
 use crate::{Scan, anchor, frontmatter, link, tag};
 
 /// Recorre la nota de izquierda a derecha. Todo disparador es ASCII, así que
 /// avanzar de a un byte nunca deja un rango en medio de un carácter.
-struct Scanner<'t> {
+pub(crate) struct Scanner<'t, S> {
     text: &'t str,
     /// Dónde empieza el cuerpo: tras el frontmatter o el BOM.
     body: usize,
-    scan: Scan,
+    /// Si `body` es el inicio de una línea. No lo es en un tramo que sigue
+    /// al cierre de un comentario en medio de la línea.
+    body_starts_line: bool,
+    sink: S,
     code_spans: CodeSpans,
     brackets: Brackets,
 }
@@ -17,23 +21,40 @@ pub(crate) fn scan(text: &str) -> Scan {
     let mut scan = Scan::default();
     let (frontmatter, body) = frontmatter::parse(text, &mut scan.problems);
     scan.frontmatter = frontmatter;
-    let mut scanner = Scanner {
-        text,
-        body,
-        scan,
-        code_spans: CodeSpans::default(),
-        brackets: Brackets::default(),
-    };
+    let mut scanner = Scanner::new(text, body, true, scan);
     scanner.run();
-    scanner.scan
+    scanner.sink
 }
 
-impl Scanner<'_> {
+/// Dónde se detuvo [`Scanner::run_region`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RegionEnd {
+    /// Llegó al final del tramo.
+    End,
+    /// Un comentario sigue tras la línea: su tramo llega hasta `line_end`.
+    InComment { line_end: usize },
+}
+
+impl<'t, S: Sink> Scanner<'t, S> {
+    pub(crate) fn new(text: &'t str, body: usize, body_starts_line: bool, sink: S) -> Self {
+        Self {
+            text,
+            body,
+            body_starts_line,
+            sink,
+            code_spans: CodeSpans::default(),
+            brackets: Brackets::default(),
+        }
+    }
+
+    pub(crate) fn into_sink(self) -> S {
+        self.sink
+    }
+
     fn run(&mut self) {
         let mut at = self.body;
         while at < self.text.len() {
-            let line_start = at == self.body || self.text.as_bytes()[at - 1] == b'\n';
-            let fence_end = if line_start {
+            let fence_end = if self.line_start(at) {
                 code::fenced_block_end(self.text, at)
             } else {
                 None
@@ -42,19 +63,64 @@ impl Scanner<'_> {
         }
     }
 
+    /// Recorre un tramo sin cercas desde `body`, como lo recorrería
+    /// [`scan`], salvo que un comentario que sigue en otra línea corta el
+    /// tramo al final de la suya: quien llama sigue desde ahí línea a línea.
+    pub(crate) fn run_region(&mut self) -> RegionEnd {
+        let mut at = self.body;
+        while at < self.text.len() {
+            if self.text.as_bytes()[at..].starts_with(b"%%") {
+                let line_end = code::line_end(self.text, at);
+                let Some(i) = self.text[at + 2..line_end].find("%%") else {
+                    self.sink.comment(at..line_end);
+                    return RegionEnd::InComment { line_end };
+                };
+                let end = at + 2 + i + 2;
+                self.sink.comment(at..end);
+                at = end;
+            } else {
+                at = self.step(at);
+            }
+        }
+        RegionEnd::End
+    }
+
+    fn line_start(&self, at: usize) -> bool {
+        if at == self.body {
+            self.body_starts_line
+        } else {
+            at > self.body && self.text.as_bytes()[at - 1] == b'\n'
+        }
+    }
+
     /// Reconoce lo que empiece en `at` y devuelve dónde seguir.
     fn step(&mut self, at: usize) -> usize {
         let bytes = self.text.as_bytes();
         let next = bytes.get(at + 1).copied();
         match bytes[at] {
-            b'\\' if next.is_some_and(|b| b.is_ascii_punctuation()) => at + 2,
-            b'`' => self.code_spans.end(self.text, at),
-            b'%' if next == Some(b'%') => code::comment_end(self.text, at),
+            b'\\' if next.is_some_and(|b| b.is_ascii_punctuation()) => {
+                self.sink.escape(at);
+                at + 2
+            }
+            b'`' => self.code_span(at),
+            b'%' if next == Some(b'%') => {
+                let end = code::comment_end(self.text, at);
+                self.sink.comment(at..end);
+                end
+            }
             b'!' if next == Some(b'[') => self.link(at, at + 1).unwrap_or(at + 1),
             b'[' => self.link(at, at).unwrap_or(at + 1),
             b'#' | b'^' if self.after_space(at) => self.after_space_trigger(at),
             _ => at + 1,
         }
+    }
+
+    fn code_span(&mut self, at: usize) -> usize {
+        let (end, closed) = self.code_spans.find(self.text, at);
+        if closed {
+            self.sink.code_span(at..end);
+        }
+        end
     }
 
     /// Un `#` (heading o tag) o un `^` (bloque) que empieza tras un espacio.
@@ -71,7 +137,7 @@ impl Scanner<'_> {
             && let Some(link) = link::wikilink_at(self.text, start, open)
         {
             let end = link.span.end;
-            self.scan.links.push(link);
+            self.sink.link(link);
             return Some(end);
         }
         let markdown = markdown_link::markdown_link_at(
@@ -81,18 +147,20 @@ impl Scanner<'_> {
             start,
             open,
         )?;
-        self.scan.links.extend(markdown.link);
-        Some(markdown.end)
+        let end = markdown.span.end;
+        self.sink.markdown_link(markdown);
+        Some(end)
     }
 
     /// Un `#` o un `^` solo abren algo al inicio de línea o tras un espacio:
     /// así no son tags el fragmento de una URL ni `texto#algo`.
     fn after_space(&self, at: usize) -> bool {
-        at == self.body || {
-            let before = self.text.as_bytes()[at - 1];
-            before.is_ascii_whitespace()
-                || ((!before.is_ascii() || before == 0x0b) && self.after_other_space(at))
+        if at == self.body {
+            return self.body_starts_line;
         }
+        let before = self.text.as_bytes()[at - 1];
+        before.is_ascii_whitespace()
+            || ((!before.is_ascii() || before == 0x0b) && self.after_other_space(at))
     }
 
     /// Lo que `is_ascii_whitespace` no cubre: el tab vertical y los
@@ -100,7 +168,7 @@ impl Scanner<'_> {
     /// `#`, se siga inlineando.
     #[cold]
     fn after_other_space(&self, at: usize) -> bool {
-        self.text[..at]
+        self.text[self.body..at]
             .chars()
             .next_back()
             .is_some_and(char::is_whitespace)
@@ -116,13 +184,11 @@ impl Scanner<'_> {
             .take_while(|&&b| b == b' ')
             .count();
         let line_start = at - indent;
-        let at_line_start =
-            line_start == self.body || self.text.as_bytes()[line_start - 1] == b'\n';
         if indent <= 3
-            && at_line_start
+            && self.line_start(line_start)
             && let Some(heading) = anchor::heading_at(self.text, line_start)
         {
-            self.scan.headings.push(heading);
+            self.sink.heading(heading);
         }
     }
 
@@ -130,7 +196,7 @@ impl Scanner<'_> {
         match anchor::block_at(self.text, at) {
             Some(block) => {
                 let end = block.span.end;
-                self.scan.blocks.push(block);
+                self.sink.block(block);
                 end
             }
             None => at + 1,
@@ -141,10 +207,23 @@ impl Scanner<'_> {
         match tag::tag_at(self.text, at) {
             Some(tag) => {
                 let end = tag.span.end;
-                self.scan.tags.push(tag);
+                self.sink.tag(tag);
                 end
             }
             None => at + 1,
         }
     }
+}
+
+/// Recorre `text`, un tramo sin cercas, desde `from`; `starts_line` dice si
+/// `from` es el inicio de una línea.
+pub(crate) fn region<S: Sink>(
+    text: &str,
+    from: usize,
+    starts_line: bool,
+    sink: S,
+) -> (S, RegionEnd) {
+    let mut scanner = Scanner::new(text, from, starts_line, sink);
+    let end = scanner.run_region();
+    (scanner.into_sink(), end)
 }

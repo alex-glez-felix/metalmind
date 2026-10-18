@@ -22,20 +22,21 @@ fn next_line(text: &str, start: usize) -> usize {
         .map_or(text.len(), |i| start + i + 1)
 }
 
-fn is_blank(line: &str) -> bool {
+pub(crate) fn is_blank(line: &str) -> bool {
     line.trim().is_empty()
 }
 
-struct Fence {
-    marker: u8,
-    len: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Fence {
+    pub marker: u8,
+    pub len: usize,
 }
 
 /// Una línea de cerca: tres o más `` ` `` o `~`. Se acepta cualquier sangría,
 /// los `>` de una cita y los marcadores de lista (`-`, `*`, `+`, `1.`) porque las
 /// cercas dentro de listas y citas son comunes en notas y aquí no se parsean
 /// bloques.
-fn fence(line: &str) -> Option<(Fence, &str)> {
+pub(crate) fn fence(line: &str) -> Option<(Fence, &str)> {
     let mut rest = line.trim_start_matches([' ', '\t', '>']);
     while let Some(item) = strip_list_marker(rest) {
         rest = item.trim_start_matches([' ', '\t', '>']);
@@ -60,13 +61,13 @@ fn strip_list_marker(line: &str) -> Option<&str> {
     after.starts_with([' ', '\t']).then_some(after)
 }
 
-fn opening_fence(line: &str) -> Option<Fence> {
+pub(crate) fn opening_fence(line: &str) -> Option<Fence> {
     let (fence, info) = fence(line)?;
     // CommonMark: el info string de una cerca de backticks no lleva backticks.
     (fence.marker != b'`' || !info.contains('`')).then_some(fence)
 }
 
-fn closes(open: &Fence, line: &str) -> bool {
+pub(crate) fn closes(open: &Fence, line: &str) -> bool {
     fence(line).is_some_and(|(close, rest)| {
         close.marker == open.marker && close.len >= open.len && is_blank(rest)
     })
@@ -118,6 +119,11 @@ impl CodeSpans {
     /// El fin del código inline que abre la racha en `at`; si no cierra, la
     /// racha es texto y se devuelve su fin.
     pub(crate) fn end(&mut self, text: &str, at: usize) -> usize {
+        self.find(text, at).0
+    }
+
+    /// Como [`CodeSpans::end`], y si la racha cerró.
+    pub(crate) fn find(&mut self, text: &str, at: usize) -> (usize, bool) {
         let len = backtick_run(text, at);
         let run_end = at + len;
         if !self.paragraph.contains(&at) {
@@ -126,7 +132,7 @@ impl CodeSpans {
         self.starts_by_len
             .get(&len)
             .and_then(|starts| starts.get(starts.partition_point(|&start| start < run_end)))
-            .map_or(run_end, |&close| close + len)
+            .map_or((run_end, false), |&close| (close + len, true))
     }
 
     fn index(&mut self, text: &str, from: usize) {

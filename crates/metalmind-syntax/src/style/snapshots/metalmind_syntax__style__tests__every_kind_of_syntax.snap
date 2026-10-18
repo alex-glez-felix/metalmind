@@ -1,0 +1,40 @@
+---
+source: crates/metalmind-syntax/src/style/tests.rs
+expression: render(NOTE)
+---
+Frontmatter | [---]Markup
+Frontmatter | [tags]FrontmatterKey [: []Frontmatter [markdown]Tag [, ]Frontmatter [estilo]Tag []]Frontmatter
+Frontmatter | [---]Markup
+Heading(1) | [# ]Markup~ [Heading 1]Heading
+Heading(2) | [## ]Markup~ [Heading 2]Heading
+Heading(3) | [### ]Markup~ [Heading 3]Heading
+Heading(4) | [#### ]Markup~ [Heading 4]Heading
+Heading(5) | [##### ]Markup~ [Heading 5]Heading
+Heading(6) | [###### ]Markup~ [Heading 6]Heading
+Text |
+Text | [**]Markup~ [negrita]Text+strong [**]Markup~ [*]Markup~ [cursiva]Text+em [*]Markup~ [`]Markup~ [código]Code+code [`]Markup~ [~~]Markup~ [tachado]Text+strike [~~]Markup~ [==]Markup~ [resaltado]Text+mark [==]Markup~
+Text | [[[]Markup~ [Nota existente]Wikilink []]]Markup~ [[[nota existente|]Markup~ [alias]Wikilink []]]Markup~ ->"Nota existente" ->"nota existente"
+Text | [[[]Markup~ [Nota que no existe]Wikilink []]]Markup~ [[]Markup~ [link markdown]Link [](otra.md)]Markup~ [[]Markup~ [externo]Url [](https://example.com)]Markup~ ->"Nota que no existe" ->"otra.md"
+Text | [#proyecto]Tag [#idea]Tag [![[]Markup~ [diagrama.png]Embed []]]Markup~ [\]Markup~ [\]Markup~ ->"diagrama.png"
+Text |
+Fence(Open) | [```]Markup~ [rust]FenceInfo
+Fence(Body) | [fn]Token(Keyword) [ main() {]Code
+Fence(Body) | [    ]Code [let]Token(Keyword) [ x = ]Code [42]Token(Number) [; ]Code [// comentario]Token(Comment)
+Fence(Body) | [    println!(]Code ["hola {x}"]Token(String) [);]Code
+Fence(Body) | [}]Code
+Fence(Close) | [```]Markup~
+Text |
+Text | [-]ListMarker~Bullet
+Text | [-]ListMarker~Bullet [*]Markup~ [énfasis]Text+em [*]Markup~
+Text | [1.]ListMarker
+Text | [2.]ListMarker
+Text | [-]ListMarker~Bullet [[ ]]Checkbox~Checkbox { checked: false }
+Text | [-]ListMarker~Bullet [[x]]Checkbox~Checkbox { checked: true } [ Tarea hecha]TaskDone
+Text |
+Text >1 | [>]Markup~QuoteBar [ Una cita con ]Quote [**]Markup~ [negrita]Quote+strong [**]Markup~
+Text >2 | [>]Markup~QuoteBar [>]Markup~QuoteBar [ y una anidada]Quote
+Text |
+Rule | [---]Markup~Rule
+Text |
+Text | [%%un comentario%%]Comment [^id-1]BlockId
+Text |
