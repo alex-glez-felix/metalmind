@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use nota_buffer::{Buffer, ByteOffset};
-use regex::{Regex, RegexBuilder};
+use regex::{Captures, Regex, RegexBuilder};
 
 use super::SearchError;
 use super::translate::{has_uppercase, translate};
@@ -11,8 +11,10 @@ use super::translate::{has_uppercase, translate};
 pub(crate) enum Case {
     /// `ignorecase` + `smartcase`: distingue solo si el patrón tiene mayúsculas.
     Smart,
-    /// `ignorecase` sin `smartcase`, como `*` y `#`.
+    /// `ignorecase` sin `smartcase`, como `*` y `#` o el flag `i` de `:s`.
     Ignore,
+    /// El flag `I` de `:s`.
+    Match,
 }
 
 /// Un patrón de búsqueda ya compilado, con el texto tal como se escribió.
@@ -29,6 +31,7 @@ impl Pattern {
         let ignore_case = translation.ignore_case.unwrap_or(match case {
             Case::Smart => !has_uppercase(source),
             Case::Ignore => true,
+            Case::Match => false,
         });
         let regex = RegexBuilder::new(&translation.regex)
             .case_insensitive(ignore_case)
@@ -38,6 +41,11 @@ impl Pattern {
             source: source.to_owned(),
             regex,
         })
+    }
+
+    /// El mismo patrón con otra regla de mayúsculas.
+    pub(crate) fn with_case(&self, case: Case) -> Result<Self, SearchError> {
+        Self::compile(&self.source, case)
     }
 
     /// Lo que se escribió, en el dialecto de vim.
@@ -70,6 +78,25 @@ impl Pattern {
             let found = self.regex.find_at(line, next?)?.range();
             next = resume_after(line, &found);
             Some(found)
+        })
+    }
+
+    /// Lo que reemplaza `:s` en una línea: como en la búsqueda, pero una
+    /// coincidencia vacía justo donde terminó otra no cuenta (`do_sub()`).
+    pub(crate) fn line_captures<'a>(&'a self, line: &'a str) -> impl Iterator<Item = Captures<'a>> {
+        let mut next = Some(0);
+        let mut previous_end = None;
+        std::iter::from_fn(move || {
+            loop {
+                let captures = self.regex.captures_at(line, next?)?;
+                let found = captures.get(0)?.range();
+                let follows_previous = found.is_empty() && previous_end == Some(found.start);
+                next = resume_after(line, &found);
+                previous_end = Some(found.end);
+                if !follows_previous {
+                    return Some(captures);
+                }
+            }
         })
     }
 }
@@ -109,6 +136,8 @@ mod tests {
         assert_eq!(forced.line_matches("Foo foo").count(), 2);
         let ignore = Pattern::compile("Foo", Case::Ignore).unwrap();
         assert_eq!(ignore.line_matches("Foo foo").count(), 2);
+        let exact = Pattern::compile("foo", Case::Match).unwrap();
+        assert_eq!(spans(exact.line_matches("Foo foo")), [(4, 7)]);
     }
 
     #[test]
@@ -122,6 +151,23 @@ mod tests {
         let end = pattern("$");
         assert_eq!(spans(end.line_matches("abc")), [(3, 3)]);
         assert_eq!(spans(end.line_matches("")), [(0, 0)]);
+    }
+
+    #[test]
+    fn substitution_skips_an_empty_match_right_after_another() {
+        let ranges = |source, line| {
+            let pattern = pattern(source);
+            pattern
+                .line_captures(line)
+                .map(|c| {
+                    let found = c.get(0).unwrap();
+                    (found.start(), found.end())
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ranges("a*", "ab"), [(0, 1)]);
+        assert_eq!(ranges("a*", "baab"), [(0, 0), (1, 3)]);
+        assert_eq!(ranges("a\\=", "baab"), [(0, 0), (1, 2), (2, 3)]);
     }
 
     #[test]

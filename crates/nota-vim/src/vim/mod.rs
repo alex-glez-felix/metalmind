@@ -3,10 +3,12 @@ mod find;
 mod insert;
 mod repeat;
 mod search;
+mod substitute;
 
 use nota_buffer::{Buffer, PerSelection, Selection, Selections};
 
 use self::search::{AwaitingSearch, SearchMemory};
+use self::substitute::LastSubstitute;
 
 use crate::dot::{Change, Dot, Subject};
 use crate::find::Find;
@@ -20,7 +22,7 @@ use crate::register::Register;
 use crate::travel::Travel;
 use crate::{
     Action, CharSearch, Command, CommandError, Key, Keymap, Mode, Motion, Operator, PasteSide,
-    Prompt, SearchError, VimError, Wrap, paste,
+    Prompt, SearchError, Substitution, VimError, Wrap, paste,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -36,12 +38,15 @@ pub enum KeyOutcome {
     /// Se envió la línea de comandos con un comando que ejecuta quien aloja
     /// el editor.
     Command(Command),
-    /// Se envió la línea de comandos con algo que no es un comando.
+    /// Se envió la línea de comandos con algo que no es un comando, o con
+    /// un `:s` que falló.
     InvalidCommand(CommandError),
     /// Una búsqueda llegó a un borde y siguió por el otro; la UI lo avisa.
     SearchWrapped(Wrap),
     /// Una búsqueda no movió el cursor: no encontró nada o no se pudo hacer.
     SearchFailed(SearchError),
+    /// Un `:s` reemplazó algo.
+    Substituted(Substitution),
 }
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
@@ -60,6 +65,7 @@ pub struct Vim {
     /// Tras `d/` o `3/`, el operador y el count esperan al patrón.
     awaiting_search: Option<AwaitingSearch>,
     search: SearchMemory,
+    last_substitute: Option<LastSubstitute>,
     /// La pasada por Insert en curso, si se está en Insert.
     insert: Option<Session>,
     /// Lo que repite `.`.
@@ -95,6 +101,7 @@ impl Vim {
             command_history: History::default(),
             awaiting_search: None,
             search: SearchMemory::default(),
+            last_substitute: None,
             insert: None,
             last_change: None,
             awaiting_char: None,
