@@ -4,12 +4,13 @@
 
 use std::cell::RefCell;
 use std::io;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::Instant;
 
 use gpui_kit::App;
 use metalmind_config::{Config, Diagnostic, Paths, Severity};
-use metalmind_ui::{Document, OpenError, Startup};
+use metalmind_ui::{Document, FrameClock, OpenError, Startup};
 use metalmind_vault::{FileError, Vault, VaultError};
 
 use crate::target::{self, Sources, Target};
@@ -27,6 +28,8 @@ pub enum StartError {
     File(#[from] FileError),
     #[error("no se pudo entrar en el vault: {0}")]
     EnterVault(io::Error),
+    #[error("no se pudo crear el registro de frames: {0}")]
+    FrameLog(io::Error),
     #[error(transparent)]
     Window(OpenError),
 }
@@ -86,17 +89,23 @@ pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError
     Ok(Prepared { startup, config })
 }
 
-/// Abre la ventana y vuelve cuando se cierra.
+/// Abre la ventana y vuelve cuando se cierra; con `frame_log`, escribe ahí
+/// los tiempos de cada frame.
 ///
 /// # Errors
 /// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede
-/// abrir la ventana.
-pub fn run(prepared: Prepared, launched: Instant) -> Result<(), StartError> {
+/// abrir la ventana, o si no se puede crear `frame_log`.
+pub fn run(
+    prepared: Prepared,
+    frame_log: Option<&Path>,
+    launched: Instant,
+) -> Result<(), StartError> {
     let Prepared { startup, config } = prepared;
+    let clock = FrameClock::new(launched, frame_log).map_err(StartError::FrameLog)?;
     let failed = Rc::new(RefCell::new(None));
     let failed_in_app = Rc::clone(&failed);
     gpui_kit::application().run(move |cx| {
-        if let Err(error) = metalmind_ui::open(startup, &config, launched, cx) {
+        if let Err(error) = metalmind_ui::open(startup, &config, clock, cx) {
             *failed_in_app.borrow_mut() = Some(error);
             quit_from_event_loop(cx);
         }

@@ -20,7 +20,6 @@ mod text;
 
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use gpui_kit::{
     App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
@@ -39,6 +38,7 @@ use self::status_bar::{Status, status_bar};
 use crate::actions::{self, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{VaultChanged, VaultSession};
+use crate::frames::FrameClock;
 use crate::ime::ImeLine;
 use crate::theme::Theme;
 use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
@@ -61,8 +61,6 @@ pub struct Editor {
     /// leyó o se escribió (ver [`Scroll::follow`]); `None` tras una tecla,
     /// para que la vista quede alineada a las filas del motor.
     synced_top: Option<usize>,
-    /// Arranque del proceso, hasta que se pinta el primer frame.
-    launched: Option<Instant>,
     _repaint: Subscription,
     _vault_changed: Subscription,
 }
@@ -72,7 +70,6 @@ impl Editor {
         workspace: Entity<Workspace>,
         session: Entity<VaultSession>,
         pane: PaneId,
-        launched: Option<Instant>,
         cx: &mut Context<Self>,
     ) -> Self {
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
@@ -89,7 +86,6 @@ impl Editor {
             marked: None,
             drag_anchor: None,
             synced_top: None,
-            launched,
             _repaint: repaint,
             _vault_changed: vault_changed,
         }
@@ -153,6 +149,7 @@ impl Editor {
     }
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        FrameClock::input(cx);
         let keystroke = &event.keystroke;
         match keys::route(keystroke, self.mode(cx)) {
             Route::Engine(key) => {
@@ -231,15 +228,6 @@ impl Editor {
         let text = view.document.line_text(line).ok()?;
         let column = view.cursor().get() - buffer.line_start(line).get();
         Some(ImeLine::new(text, column, marked))
-    }
-
-    fn report_first_paint(&mut self) {
-        if let Some(launched) = self.launched.take() {
-            log::info!(
-                "primer frame a {} ms del arranque",
-                launched.elapsed().as_millis()
-            );
-        }
     }
 
     fn status(&self, cx: &App) -> Option<Status> {

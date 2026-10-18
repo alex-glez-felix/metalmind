@@ -8,6 +8,7 @@ mod document;
 mod editor;
 mod file_tree;
 mod finder;
+mod frames;
 mod ime;
 mod palette;
 mod panel;
@@ -23,6 +24,7 @@ mod workspace_view;
 
 pub use document::{Document, FileStats, SaveError};
 pub use file_tree::{FileTree, Row};
+pub use frames::FrameClock;
 pub use session::last_vault;
 pub use theme::{NoMonoFont, Theme};
 pub use window::{OpenError, Startup, open};

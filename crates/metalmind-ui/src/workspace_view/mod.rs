@@ -12,7 +12,6 @@ mod palette;
 mod text_search;
 
 use std::collections::HashMap;
-use std::time::Instant;
 
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Div, Entity, InteractiveElement as _, IntoElement,
@@ -31,6 +30,7 @@ use crate::actions::{
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
+use crate::frames::FrameClock;
 use crate::panel::PanelView;
 use crate::session::VaultState;
 use crate::sidebar::{self, Sidebar, SidebarEvent};
@@ -59,7 +59,6 @@ impl WorkspaceView {
         sidebar: Entity<Sidebar>,
         session: Entity<VaultSession>,
         paths: Option<Paths>,
-        launched: Instant,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -68,8 +67,7 @@ impl WorkspaceView {
             view.on_sidebar_event(*event, window, cx);
         });
         let pane = workspace.read(cx).focused();
-        let first =
-            cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, Some(launched), cx));
+        let first = cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, cx));
         let vault = FinderVault::new(session.clone(), &workspace, cx);
         Self {
             workspace,
@@ -211,7 +209,7 @@ impl WorkspaceView {
         for pane in panes {
             let (workspace, session) = (&self.workspace, &self.session);
             self.editors.entry(pane).or_insert_with(|| {
-                cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, None, cx))
+                cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, cx))
             });
         }
         cx.notify();
@@ -283,6 +281,7 @@ fn on_command<A: CommandAction>(root: Div, cx: &mut Context<WorkspaceView>) -> D
 
 impl Render for WorkspaceView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        FrameClock::render_started(cx);
         self.update_title(window, cx);
         let theme = Theme::get(cx).clone();
         let root = self.workspace.read(cx).tree().root().clone();
