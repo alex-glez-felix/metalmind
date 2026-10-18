@@ -8,10 +8,11 @@ pkgdesc='Editor de notas markdown con modo vim, nativo para Linux (rama main)'
 arch=('x86_64' 'aarch64')
 url='https://github.com/alex-glez-felix/nota'
 license=('GPL-3.0-or-later')
-depends=('gcc-libs' 'glibc' 'libxcb' 'libxkbcommon' 'libxkbcommon-x11' 'vulkan-icd-loader' 'wayland')
-makedepends=('cargo' 'git')
-optdepends=('ttf-jetbrains-mono: la fuente monoespaciada preferida'
-            'ttf-dejavu: fuente monoespaciada alternativa')
+# ttf-dejavu: nota no abre sin una monoespaciada de su lista (nota-ui/src/theme.rs).
+depends=('gcc-libs' 'glibc' 'libxcb' 'libxkbcommon' 'libxkbcommon-x11' 'ttf-dejavu' 'vulkan-icd-loader' 'wayland')
+# fontconfig: yeslogic-fontconfig-sys lo busca con pkg-config al compilar.
+makedepends=('cargo' 'fontconfig' 'git')
+optdepends=('ttf-jetbrains-mono: la fuente monoespaciada preferida')
 provides=('nota')
 conflicts=('nota')
 source=("nota::git+$url.git")
