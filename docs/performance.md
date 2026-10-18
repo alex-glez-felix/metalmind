@@ -42,6 +42,10 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Scan de `metalmind-syntax`, nota de 5 k | ≤ 8 ms | 1.3 ms | ✅ | `metalmind-syntax` `nota` |
 | Scan, nota de 50 k | ≤ 50 ms | 11.7 ms | ✅ | `metalmind-syntax` `nota` |
 | Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 3.2 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `metalmind-syntax` |
+| Estilo de las líneas tras una tecla en un párrafo (repintar el tramo y la ventana), nota de 5 k / 50 k | ≤ 1 ms | 8.8 / 38 µs | ✅ | `metalmind-syntax` `tecla_en_un_parrafo` |
+| Estilo tras abrir una cerca sin cierre arriba (todo lo de abajo pasa a ser código; se pinta la ventana), 5 k / 50 k | ≤ 1 ms | 22 / 375 µs | ✅ | `metalmind-syntax` `abrir_una_cerca_arriba` |
+| Estilo de todas las líneas de cero (abrir e ir al final), 5 k / 50 k | ≤ 16 / 160 ms | 3.9 / 39 ms | ✅ | `metalmind-syntax` `estilo_de_cero` |
+| Estilo tras una tecla en un párrafo de 5 k líneas sin ninguna en blanco (repinta el párrafo) | ≤ 16 ms y lineal | 5.9 ms | ✅ | `metalmind-syntax` `tecla_en_un_parrafo_de_5k` |
 | Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 38.7 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 479 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `metalmind-vault` `indexar_links`, `indexar_links_nombres_unicos` |
@@ -85,6 +89,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 
 Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `metalmind_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault también escanea los tags de cada nota: en la misma máquina, `main` con solo el índice de links abría 5 k y 50 k notas en 33.9 y 434 ms, y los tags suman 4.8 y 45 ms (un 14 % y un 10 %). El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 13 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
 
+El estilo de las líneas del editor (03 §2, "Estilo en el editor"), medido el 2026-10-18 en la misma máquina: tras cada tecla se repinta el tramo editado (hasta la línea en blanco o la cerca que lo cierran) y lo que falta de la ventana, y lo de abajo se reusa en cuanto el estado coincide. Pintar de cero solo pasa la primera vez que se va al final de una nota larga: al abrirla se pinta la ventana. Abrir una cerca que no cierra cambia el estado de todo lo de abajo, pero se pinta solo la ventana; lo que cuesta con 50 k líneas es correr un lugar las 50 k entradas del estilo. La tecla del motor en Insert subió un 2 % en instrucciones (22.3 k a 22.8 k con 5 k líneas): mover la ventana ahora mide lo que mide cada línea.
+
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
 
 ❌ no cumple y tiene su issue. `:g` y `:normal` corren su comando en cada línea como una edición aparte, igual que vim, y lo que cuesta es la transacción del buffer: unos 3 µs por línea.
@@ -103,7 +109,7 @@ No sirven para CI: en los runners de GitHub el tiempo de pared varía más que l
 
 ### 2. Conteo de instrucciones en cada PR (`gungraun`, CI)
 
-`crates/metalmind-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal y patológico), el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
+`crates/metalmind-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal y patológico), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
 
 `gungraun` 0.20 y no `iai-callgrind`: es el mismo proyecto renombrado; `iai-callgrind` se quedó en 0.16.1 (julio de 2025) y `gungraun` sigue publicando (0.20.0, septiembre de 2026).
 
@@ -128,6 +134,7 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | `/` sin resultado en 50 k | 6.0 M |
 | Scan 5 k / 50 k | 16.5 M / 165.0 M |
 | Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 8.8 M / 4.2 M / 5.7 M / 29.1 M / 52.7 M |
+| Estilo tras una tecla en un párrafo (editar el buffer, seguir la edición y pintar la ventana), 5 k / 50 k | 177 k / 551 k |
 | Finder 5 k / 50 k (ordenar todas las coincidencias, para la lista virtual) | 18.9 M / 187.8 M |
 | Texto completo en una nota de 5 k: palabra frecuente / sin resultado | 12.4 M / 459 k |
 
@@ -143,7 +150,7 @@ cargo bench -p metalmind-perf --bench instrucciones -- --baseline=antes
 
 ### 3. Pruebas de complejidad (`cargo nextest`, en cada PR)
 
-Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner, la búsqueda, `:s`, el índice del vault, el de links y el de tags, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `metalmind-vault`) que corre la operación con tamaño N y **16N**:
+Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner y el estilo de las líneas, la búsqueda, `:s`, el índice del vault, el de links y el de tags, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `metalmind-vault`) que corre la operación con tamaño N y **16N**:
 
 - El paso es ×16 y no ×4 porque con ×4 un `N^1.5` da ×8, justo entre lineal (×4) y cuadrático (×16), y ningún umbral lo separa de lo lineal con margen. No es teórico: las rachas de backticks sin pareja de largos 1…k miden k² bytes y el código anterior al arreglo costaba k³, o sea `N^1.5` en bytes, y con ×4 pasaba.
 - `metalmind_perf::assert_linear` falla si 16N tarda más de **×40** lo que N. Lineal da ×16; lo peor que se vio en verde, con la suite completa en paralelo, fue ×22 (ordenar el borrado de una carpeta grande del vault, un `N log N` con la caché en contra). `N^1.5` da ×64 y cuadrático ×256: ×40 deja casi el doble de margen hacia los dos lados.
