@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 nota-buffer = { path = "crates/nota-buffer" }
 nota-config = { path = "crates/nota-config" }
+nota-perf = { path = "crates/nota-perf" }
 nota-search = { path = "crates/nota-search" }
 nota-syntax = { path = "crates/nota-syntax" }
 nota-ui = { path = "crates/nota-ui" }
@@ -43,6 +44,7 @@ thiserror = "2.0.21"
 unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }
 unicode-segmentation = "1.13.3"
 divan = "0.1.21"
+gungraun = "0.20.0"
 insta = { version = "1.49.0", features = ["glob"] }
 proptest = "1.12.0"
 rstest = "0.27.0"

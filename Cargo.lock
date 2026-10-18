@@ -3761,6 +3761,8 @@ dependencies = [
 name = "nota-buffer"
 version = "0.0.0"
 dependencies = [
+ "divan",
+ "nota-perf",
  "pretty_assertions",
  "proptest",
  "ropey 1.6.1",
@@ -3783,10 +3785,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nota-perf"
+version = "0.0.0"
+dependencies = [
+ "nota-buffer",
+ "nota-vim",
+]
+
+[[package]]
 name = "nota-search"
 version = "0.0.0"
 dependencies = [
  "divan",
+ "nota-perf",
  "nucleo-matcher",
  "pretty_assertions",
  "proptest",
@@ -3798,7 +3809,9 @@ dependencies = [
 name = "nota-syntax"
 version = "0.0.0"
 dependencies = [
+ "divan",
  "insta",
+ "nota-perf",
  "pretty_assertions",
  "proptest",
  "rstest",
@@ -3834,6 +3847,7 @@ dependencies = [
  "divan",
  "ignore",
  "log",
+ "nota-perf",
  "notify",
  "notify-debouncer-full",
  "pretty_assertions",
@@ -3847,7 +3861,9 @@ dependencies = [
 name = "nota-vim"
 version = "0.0.0"
 dependencies = [
+ "divan",
  "nota-buffer",
+ "nota-perf",
  "pretty_assertions",
  "regex",
  "rstest",

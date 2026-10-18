@@ -14,10 +14,16 @@ smallvec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
+nota-perf.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
 rstest_reuse.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "vim"
+harness = false
 
 [lints]
 workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "nota-perf"
+description = "Soporte de rendimiento, solo para benchmarks y tests: notas sintéticas deterministas y la prueba de crecimiento lineal."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+nota-buffer.workspace = true
+nota-vim.workspace = true
+
+[lints]
+workspace = true

@@ -13,6 +13,7 @@ unicode-segmentation.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
+nota-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
 rstest.workspace = true
