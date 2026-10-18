@@ -51,9 +51,14 @@ impl Columns {
 
     /// Primera y última columna del carácter en `offset` del buffer.
     pub fn span_of(self, buffer: &Buffer, offset: ByteOffset) -> (usize, usize) {
+        let place = self.place_of(buffer, offset);
+        (place.start, place.end)
+    }
+
+    fn place_of(self, buffer: &Buffer, offset: ByteOffset) -> Place {
         let line = buffer.line_of(offset);
         let byte = offset.get() - buffer.line_start(line).get();
-        self.span_at(&buffer.line_text(line), byte)
+        self.place_at(&buffer.line_text(line), byte)
     }
 
     /// El carácter de `line` que ocupa la columna `vcol`, como `coladvance`;
@@ -73,9 +78,12 @@ impl Columns {
     /// inicio del carácter, salvo un tab con `tab_end`, que lo muestra al
     /// final, como en Normal.
     pub fn cursor_at(self, buffer: &Buffer, offset: ByteOffset, tab_end: bool) -> usize {
-        let (start, end) = self.span_of(buffer, offset);
-        let on_tab = buffer.char_at(offset) == Some('\t');
-        if on_tab && tab_end { end } else { start }
+        let place = self.place_of(buffer, offset);
+        if place.on_tab && tab_end {
+            place.end
+        } else {
+            place.start
+        }
     }
 
     /// Ancho de la línea entera: la columna de su fin de línea.
@@ -102,14 +110,27 @@ impl Columns {
     /// Primera y última columna del carácter que empieza en `byte`, como
     /// `getvvcol`; en el fin de línea, una sola columna tras el texto.
     pub fn span_at(self, line: &str, byte: usize) -> (usize, usize) {
+        let place = self.place_at(line, byte);
+        (place.start, place.end)
+    }
+
+    fn place_at(self, line: &str, byte: usize) -> Place {
         let mut vcol = 0;
         for cell in self.cells(line) {
             if cell.end > byte {
-                return (cell.vcol, cell.vcol + cell.width - 1);
+                return Place {
+                    start: cell.vcol,
+                    end: cell.vcol + cell.width - 1,
+                    on_tab: cell.is_tab,
+                };
             }
             vcol = cell.vcol + cell.width;
         }
-        (vcol, vcol)
+        Place {
+            start: vcol,
+            end: vcol,
+            on_tab: false,
+        }
     }
 
     /// El byte del carácter que ocupa la columna `vcol`, como `coladvance`.
@@ -134,6 +155,15 @@ impl Columns {
             c => c.width().unwrap_or(1).max(1),
         }
     }
+}
+
+/// Las columnas del carácter en un byte, y si es un tab: medirlo en la
+/// misma pasada evita volver al rope a preguntar qué carácter es.
+#[derive(Clone, Copy)]
+struct Place {
+    start: usize,
+    end: usize,
+    on_tab: bool,
 }
 
 pub(crate) struct Cells<'a> {
