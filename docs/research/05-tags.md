@@ -99,7 +99,7 @@ struct TagGraph {                                              // sale solo de l
 
 nota es una GUI con navegación estilo vim ([06](06-decisiones-de-fondo.md) §13). Para los tags, eso quiere decir:
 
-- **Clic derecho sobre un tag**, en el panel o en el texto (un `#tag` del cuerpo o un valor de `tags:`), abre un menú con: color (selector de color), ícono (selector de emoji), alias, padres, renombrar (§5), fusionar (§5) y abrir su página (§7). Cada entrada es una acción con nombre (`tags::set_color`, `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`, `tags::rename`, `tags::merge`, `tags::open_page`) **(propuesta para los nombres)**, y por eso también se llega desde la paleta, desde `:` y con atajos. Con el cursor sobre un tag, la misma lista sale con una tecla **(propuesta: `space T`)**.
+- **Clic derecho sobre un tag**, en el panel o en el texto (un `#tag` del cuerpo o un valor de `tags:`), abre un menú con: color (selector de color), ícono (selector de emoji e íconos), alias, padres, renombrar (§5), fusionar (§5) y abrir su página (§7). Cada entrada es una acción con nombre (`tags::set_color`, `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`, `tags::rename`, `tags::merge`, `tags::open_page`) **(propuesta para los nombres)**, y por eso también se llega desde la paleta, desde `:` y con atajos. Con el cursor sobre un tag, la misma lista sale con una tecla **(propuesta: `space T`)**.
 - **nota crea la página sola** en cuanto le pones metadata desde la UI: elegir un color para `#rust` escribe `tags/rust.md` con `color:` en el frontmatter. El usuario nunca necesita crear la página a mano, aunque puede.
 - **Escribir un `#tag-nuevo` no crea página.** `tags/` se llena solo con los tags que de verdad tienen algo que decir.
 - **El archivo es el almacenamiento, no la interfaz.** Lo que se cambia desde la UI se escribe en el frontmatter de la página, tocando solo el campo editado (regla de `CLAUDE.md`), y editar ese frontmatter a mano da el mismo resultado.
@@ -248,7 +248,7 @@ Inspirado en TagStudio, donde los tags tienen metadata y "tags de tags". Un tag 
 ```markdown
 ---
 color: naranja
-icon: lucide:cog
+icon: tabler:brand-rust
 aliases: [rs]
 parents: [lenguajes, programacion]
 ---
@@ -259,7 +259,7 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 | Campo | Qué es |
 |---|---|
 | `color` | El color del tag en el panel, en los chips y en el `#tag` del texto. Un nombre de la paleta del tema (`rojo`, `naranja`, `azul`…, tokens `tag.color.*`) o un hex entre comillas (`"#d97706"`) **(propuesta para el formato)**. Con nombres, el color se adapta a temas claros y oscuros; el hex queda para quien lo quiera exacto. Sin comillas, `#d97706` es un comentario de YAML, y por eso la UI siempre escribe nombres o hex entre comillas. |
-| `icon` | Un emoji (`🦀`) o, **(propuesta)**, un ícono con nombre de un set incluido (`lucide:book-open`). Se muestra delante del nombre en el panel, en el autocompletado y en la vista del tag. |
+| `icon` | Un emoji (`🦀`) o, **(propuesta)**, un ícono con prefijo de set (`tabler:book`). Se muestra delante del nombre en el panel, en el autocompletado y en la vista del tag. |
 | `aliases` | Otros nombres del mismo tag: con `aliases: [rs]`, `#rs` cuenta como `#rust` para filtrar, consultar, contar y en el panel. El texto no se toca: la nota sigue diciendo `#rs`. |
 | `parents` | Los padres del tag, **varios**. De aquí y solo de aquí sale la jerarquía. |
 
@@ -267,15 +267,20 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 - Un `parents` puede nombrar un alias: `parents: [rs]` es `parents: [rust]` **(propuesta)**.
 - En una página, `aliases` son alias del tag, no los alias de nota que M3 usa para resolver `[[links]]` **(propuesta)**.
 - Las claves desconocidas se ignoran y se conservan, como en cualquier frontmatter.
-- **Ícono: emoji o ícono con nombre (propuesta).** Alex todavía no lo confirma. `icon` acepta dos formas:
+- **Ícono: emoji o ícono con prefijo de set (propuesta).** Alex todavía no lo confirma. `icon` acepta:
   - Un **emoji** (`icon: 🦀`): trae sus propios colores y se pinta con la fuente de emoji del sistema.
-  - Un **ícono con nombre de un set incluido**, `<set>:<nombre>` (`icon: lucide:book-open`). Se pinta en el `color` del tag (o en el color de texto del tema si el tag no tiene) y queda parejo con el resto de la UI. El set por defecto es [Lucide](https://lucide.dev), del que salen los íconos de Zed, la referencia de estilo de nota ([06](06-decisiones-de-fondo.md) §13; los `assets/icons/LICENSES` de Zed citan su licencia). El prefijo `lucide:` deja lugar para otros sets sin que un nombre de ícono se confunda con un emoji.
-  - El **selector de ícono** de la UI (§3) busca en los dos a la vez: por nombre de emoji y por nombre de ícono, con `nucleo-matcher`.
-  - Un `icon` que no es ni un solo emoji ni un `<set>:<nombre>` que exista se ignora y se marca como problema; el tag se muestra sin ícono.
-- **Lo que implica Lucide (datos de 2026-10-18):**
-  - **Licencia**: ISC, salvo unos 120 íconos que vienen de Feather y siguen bajo MIT (los dos textos van en el `LICENSE` de `lucide-static`). Las dos son permisivas y compatibles con GPL-3; basta con incluir los avisos de copyright en el binario y en los paquetes (`packaging/`); `cargo-deny` no los ve porque no son un crate.
-  - **Tamaño**: la versión 1.59.0 (17-oct-2026) trae 2159 íconos. Los SVG pesan 1,05 MB sin tocar, unos 0,9 MB con los espacios recortados y unos 100 KB con gzip. Embebidos con `include_bytes!` sin comprimir suman ~1 MB al binario; comprimidos, ~100 KB más el costo de descomprimir el set al abrir el selector la primera vez. Recomendación: embeber comprimido y descomprimir de forma perezosa. Solo se rasteriza lo que se ve en pantalla.
-  - **GPUI ya pinta SVG**: `svg()` de `gpui-pre` (0.3.9, con `resvg`/`usvg` 0.46 en el `Cargo.lock`) lee el SVG desde un `AssetSource` o desde bytes, y lo pinta como **máscara de un color** con el `text_color` del elemento. Eso encaja con Lucide, que solo usa trazos en `currentColor`, y es justamente lo que pinta un ícono en el color del tag. No hace falta ningún crate nuevo. Un SVG multicolor perdería sus colores, así que cualquier otro set tendría que ser monocromo.
+  - Un **ícono con prefijo de set**, `<set>:<nombre>` al estilo de [Iconify](https://iconify.design) (`icon: tabler:book`, `icon: tabler:book-filled`, `icon: ph:books`). El prefijo deja lugar a varios sets sin que un nombre de ícono se confunda con un emoji.
+  - **Set incluido por defecto: [Tabler](https://tabler.io/icons)**, que viene con nota. Lucide, del que salen los íconos de Zed, se descartó como set por defecto por limitado: tiene 2159 íconos, contra los más de 6000 de Tabler.
+  - **Sets extra del usuario**: SVGs en `<config>/icons/<set>/*.svg` (`Paths::config` de `nota-config`), con el nombre del archivo como nombre del ícono: `~/.config/nota/icons/ph/books.svg` es `ph:books`. Así se agregan Phosphor (MIT), Material Symbols (Apache-2.0) o Lucide (ISC), todos compatibles con GPL-3. nota no los descarga ni los trae; la carpeta es del usuario. Un set del usuario no puede llamarse `tabler`: esa carpeta se ignora y se avisa.
+  - **Color**: los íconos de línea y los rellenos se pintan en el `color` del tag (sin color, en el color de texto del tema) y quedan parejos con la UI. Un SVG multicolor de un set del usuario se pinta en un solo color (ver GPUI, abajo).
+  - El **selector de ícono** de la UI (§3) busca a la vez en los emoji y en todos los sets cargados, con `nucleo-matcher`, y muestra el set de cada resultado.
+  - Un `icon` que no es ni un emoji ni un `<set>:<nombre>` válido es un problema y el tag se muestra sin ícono. Un set que no está en esta máquina (la página dice `ph:books` y nadie dejó Phosphor en la config) no es un problema de la página: el tag se muestra sin ícono, con un aviso en el selector, y el campo no se toca. La config es por máquina y el vault se sincroniza; la página no puede quedar mal por eso.
+- **Lo que implica Tabler (datos de 2026-10-18):**
+  - **Licencia**: MIT (`@tabler/icons` en npm y el repo `tabler/tabler-icons`). Es compatible con GPL-3; basta con incluir el aviso de copyright en el binario y en los paquetes (`packaging/`). `cargo-deny` no lo ve porque no es un crate.
+  - **Cuánto**: `@tabler/icons` 3.49.0 trae 5184 íconos de línea y 1054 rellenos. El paquete de npm ocupa 11,3 MB sin comprimir, pero solo 3,65 MB son SVG (2,90 MB de línea y 0,75 MB rellenos); el resto son otros formatos.
+  - **Peso comprimido**: los 6238 SVG concatenados quedan en ~365 KB con gzip -9 y ~290 KB con zstd -19. Para nota, ~300–400 KB más en el binario, frente a unos 3,7 MB embebidos sin comprimir.
+  - **Embebido o como recurso**: recomendación, embebido y comprimido con gzip. `flate2` (1.1.10) ya está en el `Cargo.lock` como dependencia transitiva, así que no agrega un crate al árbol, y un solo binario sigue funcionando sin instalar nada (CLI, AppImage, tarball). Como recurso aparte (`/usr/share/nota/icons/tabler.tar.gz`), el binario no crece, pero cada paquete tiene que instalarlo y nota tiene que buscarlo. El set se descomprime la primera vez que hace falta (abrir el selector o pintar un ícono) y queda en memoria; solo se rasteriza lo que se ve en pantalla.
+  - **GPUI ya pinta SVG**: `svg()` de `gpui-pre` (0.3.9, con `resvg`/`usvg` 0.46 en el `Cargo.lock`) lee el SVG desde un `AssetSource` o desde bytes, y lo pinta como **máscara de un color** con el `text_color` del elemento. Eso encaja con Tabler, cuyos íconos de línea usan `stroke="currentColor"` y los rellenos `fill="currentColor"`, y es justamente lo que pinta un ícono en el color del tag. No hace falta ningún crate nuevo. Un SVG multicolor de un set del usuario pierde sus colores; eso se documenta, no se arregla con un segundo camino de pintado.
 
 ### Padres: un grafo, no un árbol
 
@@ -320,7 +325,7 @@ Van a [`docs/IDEAS.md`](../IDEAS.md#tags):
 - **Vistas guardadas**: una consulta con nombre, como las carpetas inteligentes.
 - "O" en las consultas, paréntesis, comodines y "solo este tag sin descendientes".
 - Recordar el focus entre sesiones.
-- Sets de íconos además de Lucide, si el ícono con nombre se confirma (§7).
+- Descargar sets de íconos desde la UI, en vez de dejar los SVG a mano en `<config>/icons/` (§7).
 - Páginas para tags con `/` (§7).
 - Sugerir tags a partir del contenido.
 - Que el índice siga al buffer sin guardar (§2).
