@@ -1,0 +1,52 @@
+name: Fuzz
+
+# Aparte del CI de las PRs: tarda y necesita nightly. Ver docs/fuzzing.md.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Segundos por target
+        default: "300"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [buffer_edits, vim_keys, vim_search_subst]
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install nightly --profile minimal
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+          key: ${{ matrix.target }}
+      # El corpus crece con cada corrida: se guarda con una llave nueva y se
+      # restaura el más reciente.
+      - uses: actions/cache@v6
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Fuzz
+        run: >
+          cargo +nightly fuzz run ${{ matrix.target }} --
+          -max_total_time=${{ inputs.seconds || '300' }}
+          -timeout=10 -rss_limit_mb=2048
+      - name: Minimizar el corpus
+        if: success()
+        run: cargo +nightly fuzz cmin ${{ matrix.target }}
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: crash-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
