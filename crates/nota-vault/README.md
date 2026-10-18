@@ -9,7 +9,7 @@ El vault en disco, sin GUI.
 - Operaciones: `create_note`, `create_folder`, `rename` (nunca pisa el destino) y `move_to_trash` (a `.trash/` del vault, como Obsidian). No pasan por enlaces simbólicos; el índice se entera por el watcher.
 - `read` / `write_atomic`: leer una nota y guardarla sin dejarla nunca a medias.
 - `walk_notes(raíz, visitante)`: recorre en paralelo las notas con las reglas del índice, para quien lea el disco por su cuenta (la búsqueda de texto de `nota-search`).
-- `LinkIndex`: los links de cada nota ya resueltos (`outgoing`), quién enlaza a cada archivo con la línea y su contexto (`backlinks`), y los links sin resolver o ambiguos. `LinkIndex::apply` le aplica cada `VaultChange`, y da lo mismo que armarlo de cero.
+- `LinkIndex` (`Vault::links()`, y en cada `VaultUpdate`): los links de cada nota ya resueltos (`outgoing`), quién enlaza a cada archivo con la línea y su contexto (`backlinks`), y los links sin resolver o ambiguos. Se arma al abrir y el watcher lo mantiene al día; aplicar cambios da lo mismo que armarlo de cero.
 - `LinkIndex::follow(nota, texto, offset)`: a dónde lleva el link bajo el cursor (archivo, heading o bloque), para `gd`.
 - `LinkIndex::rename_plan(de, a)`: las ediciones, con rangos exactos, que mantienen cada link apuntando a lo mismo tras renombrar o mover; cada link conserva su forma. `FileEdits::apply` comprueba que el archivo no cambió y devuelve también las ediciones que lo deshacen.
 
