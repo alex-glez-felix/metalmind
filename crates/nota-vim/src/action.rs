@@ -29,6 +29,22 @@ pub enum Action {
         reversed: bool,
     },
     TextObject(TextObject),
+    /// `/` o `?`: abre la línea donde se escribe el patrón.
+    Search {
+        backward: bool,
+    },
+    /// `n`, o `N` si `reversed`: repite la última búsqueda.
+    SearchNext {
+        reversed: bool,
+    },
+    /// `*` y `#`, o `g*` y `g#` sin `whole_word`: busca la palabra bajo el
+    /// cursor.
+    SearchWord {
+        backward: bool,
+        whole_word: bool,
+    },
+    /// `:noh`: deja de resaltar la búsqueda hasta la próxima.
+    ClearSearchHighlight,
     Operator(Operator),
     /// El objeto de `dd`, `cc` y `yy`.
     CurrentLine,
@@ -53,6 +69,10 @@ pub enum Action {
     CommandLine,
     /// Envía lo escrito en la línea de comandos.
     SubmitCommand,
+    /// En la línea de comandos, la entrada anterior del historial que
+    /// empieza con lo escrito.
+    HistoryPrevious,
+    HistoryNext,
 }
 
 impl Action {
@@ -112,6 +132,27 @@ impl Action {
         Self::TextObject(TextObject::DoubleQuotes { around: true }),
         Self::TextObject(TextObject::Paragraph { around: false }),
         Self::TextObject(TextObject::Paragraph { around: true }),
+        Self::Search { backward: false },
+        Self::Search { backward: true },
+        Self::SearchNext { reversed: false },
+        Self::SearchNext { reversed: true },
+        Self::SearchWord {
+            backward: false,
+            whole_word: true,
+        },
+        Self::SearchWord {
+            backward: true,
+            whole_word: true,
+        },
+        Self::SearchWord {
+            backward: false,
+            whole_word: false,
+        },
+        Self::SearchWord {
+            backward: true,
+            whole_word: false,
+        },
+        Self::ClearSearchHighlight,
         Self::Operator(Operator::Delete),
         Self::Operator(Operator::Change),
         Self::Operator(Operator::Yank),
@@ -136,6 +177,8 @@ impl Action {
         Self::Newline,
         Self::CommandLine,
         Self::SubmitCommand,
+        Self::HistoryPrevious,
+        Self::HistoryNext,
     ];
 
     #[must_use]
@@ -154,6 +197,15 @@ impl Action {
             Self::RepeatFind { reversed: false } => "vim::repeat_find",
             Self::RepeatFind { reversed: true } => "vim::repeat_find_reversed",
             Self::TextObject(object) => text_object_name(object),
+            Self::Search { backward: false } => "vim::search_forward",
+            Self::Search { backward: true } => "vim::search_backward",
+            Self::SearchNext { reversed: false } => "vim::search_next",
+            Self::SearchNext { reversed: true } => "vim::search_previous",
+            Self::SearchWord {
+                backward,
+                whole_word,
+            } => search_word_name(backward, whole_word),
+            Self::ClearSearchHighlight => "vim::clear_search_highlight",
             Self::Operator(Operator::Delete) => "vim::delete",
             Self::Operator(Operator::Change) => "vim::change",
             Self::Operator(Operator::Yank) => "vim::yank",
@@ -173,6 +225,8 @@ impl Action {
             Self::Newline => "editor::newline",
             Self::CommandLine => "vim::command_line",
             Self::SubmitCommand => "vim::submit_command",
+            Self::HistoryPrevious => "vim::history_previous",
+            Self::HistoryNext => "vim::history_next",
         }
     }
 }
@@ -215,6 +269,15 @@ fn find_name(search: CharSearch) -> &'static str {
             backward: true,
             till: true,
         } => "vim::till_backward",
+    }
+}
+
+fn search_word_name(backward: bool, whole_word: bool) -> &'static str {
+    match (backward, whole_word) {
+        (false, true) => "vim::search_word_forward",
+        (true, true) => "vim::search_word_backward",
+        (false, false) => "vim::search_partial_word_forward",
+        (true, false) => "vim::search_partial_word_backward",
     }
 }
 

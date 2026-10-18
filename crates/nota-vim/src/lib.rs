@@ -4,7 +4,9 @@
 //! [`Action`]s con nombre; [`Vim`] las ejecuta sobre un
 //! [`nota_buffer::Buffer`] y sus selecciones. La paleta y `:` podrán invocar
 //! las mismas acciones con [`Vim::execute`]. Los [`Command`]s de `:` que
-//! hacen I/O (guardar, cerrar) se devuelven a quien aloja el editor.
+//! hacen I/O (guardar, cerrar) se devuelven a quien aloja el editor. La
+//! búsqueda (`/`, `n`, `*`) deja el patrón activo en
+//! [`Vim::search_highlight`] para que la UI lo resalte.
 
 mod action;
 mod command;
@@ -12,6 +14,7 @@ mod cursor;
 mod dot;
 mod error;
 mod find;
+mod history;
 mod insert;
 mod key;
 mod keymap;
@@ -22,6 +25,7 @@ mod object;
 mod operator;
 mod paste;
 mod register;
+mod search;
 mod span;
 mod text_object;
 mod travel;
@@ -34,8 +38,9 @@ pub use error::VimError;
 pub use find::CharSearch;
 pub use key::Key;
 pub use keymap::{Binding, Context, Keymap};
-pub use mode::Mode;
+pub use mode::{Mode, Prompt};
 pub use motion::Motion;
 pub use operator::Operator;
+pub use search::{Pattern, SearchError, Wrap};
 pub use text_object::TextObject;
 pub use vim::{KeyOutcome, Vim};

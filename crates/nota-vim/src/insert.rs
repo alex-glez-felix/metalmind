@@ -140,7 +140,7 @@ impl Session {
         selections: &Selections,
     ) -> Result<Selections, VimError> {
         let mut selections = selections.clone();
-        let (Change::Insert(at), false) = (self.dot.change, self.cursor_moved) else {
+        let (&Change::Insert(at), false) = (&self.dot.change, self.cursor_moved) else {
             return Ok(selections);
         };
         let newline = Typed::Text("\n".to_owned());

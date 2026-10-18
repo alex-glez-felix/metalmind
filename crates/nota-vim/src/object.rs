@@ -1,14 +1,17 @@
 use nota_buffer::{Buffer, Selection};
 
 use crate::find::Find;
+use crate::search::Query;
 use crate::span::{Missed, Region, Target};
 use crate::{Motion, Operator, TextObject};
 
 /// Sobre qué actúa un operador.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Object {
     Motion(Motion),
     Find(Find),
+    /// `d/foo<CR>`, `dn`, `d*`: hasta donde empieza la coincidencia.
+    Search(Query),
     TextObject(TextObject),
     CurrentLine,
 }
@@ -17,13 +20,13 @@ impl Object {
     /// Lo que abarca `operator` desde `selection`, o dónde queda el cursor si
     /// falla ahí.
     pub(crate) fn target(
-        self,
+        &self,
         buffer: &Buffer,
         selection: &Selection,
         operator: Operator,
         count: Option<usize>,
     ) -> Result<Target, Missed> {
-        let span = match self {
+        let span = match *self {
             Self::Motion(motion) => motion
                 .resolve(buffer, selection, count, Some(operator))
                 .ok_or(Missed::Stay)?
@@ -31,6 +34,11 @@ impl Object {
             Self::Find(find) => find
                 .resolve(buffer, selection.head, count.unwrap_or(1))
                 .ok_or(Missed::Stay)?
+                .span_from(selection.head),
+            Self::Search(ref query) => query
+                .find(buffer, selection.head, count.unwrap_or(1))
+                .ok_or(Missed::Stay)?
+                .destination()
                 .span_from(selection.head),
             Self::TextObject(object) => {
                 object.resolve(buffer, selection.head, count.unwrap_or(1))?

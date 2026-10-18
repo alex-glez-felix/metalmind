@@ -24,7 +24,7 @@ impl Vim {
             Mode::Insert => {
                 self.type_in_insert(&Typed::Text(text.to_owned()), buffer, selections)?;
             }
-            Mode::CommandLine => self.command_line.push_str(text),
+            Mode::CommandLine => self.type_in_command_line(text),
             Mode::Normal | Mode::OperatorPending(_) => return Ok(KeyOutcome::Unbound),
         }
         Ok(KeyOutcome::Inserted)

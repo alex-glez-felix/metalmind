@@ -16,6 +16,9 @@ exec(
   local text, row, col = ...
   -- nota todavía no implementa autoindent.
   vim.o.autoindent = false
+  -- La búsqueda de nota usa estos defaults, como casi toda config de vim.
+  vim.o.ignorecase = true
+  vim.o.smartcase = true
   -- Cargar el texto sin dejarlo en el historial de undo.
   vim.o.undolevels = -1
   vim.api.nvim_buf_set_lines(0, 0, -1, true, vim.split(text, "\n", { plain = true }))

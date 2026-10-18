@@ -116,6 +116,13 @@ const fn paragraph(around: bool) -> Action {
     object(TextObject::Paragraph { around })
 }
 
+const fn search_word(backward: bool, whole_word: bool) -> Action {
+    Action::SearchWord {
+        backward,
+        whole_word,
+    }
+}
+
 const DELETE: Context = Context::Operator(Operator::Delete);
 const CHANGE: Context = Context::Operator(Operator::Change);
 const YANK: Context = Context::Operator(Operator::Yank);
@@ -212,6 +219,17 @@ const VIM: &[(Context, &[Key], Action)] = {
         (CommandLine, &[Key::Ctrl('c')], Action::Interrupt),
         (CommandLine, &[Key::Backspace], Action::Backspace),
         (CommandLine, &[Key::Enter], Action::SubmitCommand),
+        (CommandLine, &[Key::Up], Action::HistoryPrevious),
+        (CommandLine, &[Key::Down], Action::HistoryNext),
+        // Búsqueda: `/`, `?` y lo que repite o busca la palabra del cursor.
+        (Control, &[ch('/')], Action::Search { backward: false }),
+        (Control, &[ch('?')], Action::Search { backward: true }),
+        (Control, &[ch('n')], Action::SearchNext { reversed: false }),
+        (Control, &[ch('N')], Action::SearchNext { reversed: true }),
+        (Control, &[ch('*')], search_word(false, true)),
+        (Control, &[ch('#')], search_word(true, true)),
+        (Control, &[ch('g'), ch('*')], search_word(false, false)),
+        (Control, &[ch('g'), ch('#')], search_word(true, false)),
     ]
 };
 

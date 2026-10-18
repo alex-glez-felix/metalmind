@@ -131,6 +131,8 @@ fn special_key(text: &str) -> Option<(Key, usize)> {
         "CR" => Key::Enter,
         "BS" => Key::Backspace,
         "Tab" => Key::Tab,
+        "Up" => Key::Up,
+        "Down" => Key::Down,
         "lt" => Key::Char('<'),
         name => Key::Ctrl(name.strip_prefix("C-")?.chars().next()?),
     };

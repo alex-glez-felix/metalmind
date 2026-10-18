@@ -1,11 +1,16 @@
+mod command_line;
 mod find;
 mod insert;
 mod repeat;
+mod search;
 
-use nota_buffer::{Buffer, Selection, Selections};
+use nota_buffer::{Buffer, PerSelection, Selection, Selections};
+
+use self::search::{AwaitingSearch, SearchMemory};
 
 use crate::dot::{Change, Dot, Subject};
 use crate::find::Find;
+use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::motion::Destination;
@@ -15,7 +20,7 @@ use crate::register::Register;
 use crate::travel::Travel;
 use crate::{
     Action, CharSearch, Command, CommandError, Key, Keymap, Mode, Motion, Operator, PasteSide,
-    VimError, paste,
+    Prompt, SearchError, VimError, Wrap, paste,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -33,6 +38,10 @@ pub enum KeyOutcome {
     Command(Command),
     /// Se envió la línea de comandos con algo que no es un comando.
     InvalidCommand(CommandError),
+    /// Una búsqueda llegó a un borde y siguió por el otro; la UI lo avisa.
+    SearchWrapped(Wrap),
+    /// Una búsqueda no movió el cursor: no encontró nada o no se pudo hacer.
+    SearchFailed(SearchError),
 }
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
@@ -46,6 +55,11 @@ pub struct Vim {
     operator_count: Option<usize>,
     register: Option<Register>,
     command_line: String,
+    prompt: Prompt,
+    command_history: History,
+    /// Tras `d/` o `3/`, el operador y el count esperan al patrón.
+    awaiting_search: Option<AwaitingSearch>,
+    search: SearchMemory,
     /// La pasada por Insert en curso, si se está en Insert.
     insert: Option<Session>,
     /// Lo que repite `.`.
@@ -77,6 +91,10 @@ impl Vim {
             operator_count: None,
             register: None,
             command_line: String::new(),
+            prompt: Prompt::Command,
+            command_history: History::default(),
+            awaiting_search: None,
+            search: SearchMemory::default(),
             insert: None,
             last_change: None,
             awaiting_char: None,
@@ -87,12 +105,6 @@ impl Vim {
     #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode
-    }
-
-    /// Lo escrito tras `:`, mientras se está en la línea de comandos.
-    #[must_use]
-    pub fn command_line(&self) -> Option<&str> {
-        (self.mode == Mode::CommandLine).then_some(self.command_line.as_str())
     }
 
     /// # Errors
@@ -148,6 +160,23 @@ impl Vim {
             (Action::RepeatFind { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
                 self.repeat_find(reversed, buffer, selections)?;
             }
+            (Action::Search { backward }, Mode::Normal | Mode::OperatorPending(_)) => {
+                self.open_search(backward);
+            }
+            (Action::SearchNext { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
+                return self.search_next(reversed, buffer, selections);
+            }
+            (
+                Action::SearchWord {
+                    backward,
+                    whole_word,
+                },
+                Mode::Normal | Mode::OperatorPending(_),
+            ) => return self.search_word(backward, whole_word, buffer, selections),
+            (Action::ClearSearchHighlight, Mode::Normal) => {
+                self.reset();
+                self.search.highlight = false;
+            }
             (Action::TextObject(object), Mode::OperatorPending(operator)) => {
                 self.operate(
                     operator,
@@ -189,20 +218,16 @@ impl Vim {
             (Action::Newline, Mode::Insert) => {
                 self.type_in_insert(&Typed::Text("\n".to_owned()), buffer, selections)?;
             }
-            (Action::CommandLine, Mode::Normal) => {
-                self.reset();
-                self.command_line.clear();
-                self.mode = Mode::CommandLine;
-            }
+            (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
             (Action::NormalMode | Action::Interrupt, Mode::CommandLine) => {
-                self.mode = Mode::Normal;
+                self.close_command_line();
             }
-            (Action::Backspace, Mode::CommandLine) => {
-                if self.command_line.pop().is_none() {
-                    self.mode = Mode::Normal;
-                }
+            (Action::Backspace, Mode::CommandLine) => self.command_line_backspace(),
+            (Action::HistoryPrevious, Mode::CommandLine) => self.recall(true),
+            (Action::HistoryNext, Mode::CommandLine) => self.recall(false),
+            (Action::SubmitCommand, Mode::CommandLine) => {
+                return self.submit_command_line(buffer, selections);
             }
-            (Action::SubmitCommand, Mode::CommandLine) => return Ok(self.submit_command()),
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))
@@ -252,15 +277,6 @@ impl Vim {
         self.insert_text(&text, buffer, selections)
     }
 
-    fn submit_command(&mut self) -> KeyOutcome {
-        self.mode = Mode::Normal;
-        match Command::parse(&std::mem::take(&mut self.command_line)) {
-            Ok(Some(command)) => KeyOutcome::Command(command),
-            Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
-            Err(error) => KeyOutcome::InvalidCommand(error),
-        }
-    }
-
     fn reset(&mut self) {
         self.pending.clear();
         self.count = None;
@@ -280,14 +296,27 @@ impl Vim {
     ) -> Result<(), VimError> {
         let count = combined(self.operator_count.take(), self.count.take());
         self.reset();
-        let Some(object) = subject.object(self.last_find) else {
+        let Some(object) = subject.object(self.last_find, self.search.query()) else {
             return Ok(());
         };
         let operands = selections.map_to(|selection| Operand {
             selection: *selection,
             target: object.target(buffer, selection, operator, count),
         });
-        let (applied, register) = match operator.apply(buffer, &operands)? {
+        self.finish_operator(operator, subject, count, &operands, buffer, selections)
+    }
+
+    /// Aplica `operator` sobre lo ya resuelto y graba el cambio para `.`.
+    fn finish_operator(
+        &mut self,
+        operator: Operator,
+        subject: Subject,
+        count: Option<usize>,
+        operands: &PerSelection<Operand>,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        let (applied, register) = match operator.apply(buffer, operands)? {
             Outcome::Missed(moved) => {
                 *selections = moved;
                 return Ok(());
