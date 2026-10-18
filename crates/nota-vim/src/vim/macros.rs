@@ -1,6 +1,7 @@
 //! Macros: `q{a-z}` graba, `q` termina, `@{a-z}` reproduce y `@@` repite.
 
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use nota_buffer::{Buffer, Selections};
 
@@ -22,8 +23,53 @@ const MAX_PLAYED_KEYS: usize = 1 << 20;
 
 /// Teclas por reproducir, como el typebuf de vim: `@a` mete las de `"a`
 /// al principio, así que una macro que se llama a sí misma no crece la pila.
+/// Las repeticiones de `{count}@a` no se copian: un count enorme no ocupa
+/// más memoria que uno chico.
 #[derive(Debug, Default)]
-pub(super) struct Playback(VecDeque<Key>);
+pub(super) struct Playback(VecDeque<Repeated>);
+
+/// Las teclas de una macro, `times` veces, desde `next`.
+#[derive(Debug)]
+struct Repeated {
+    keys: Rc<[Key]>,
+    times: usize,
+    next: usize,
+}
+
+impl Playback {
+    fn push_front(&mut self, keys: Vec<Key>, times: usize) {
+        if keys.is_empty() || times == 0 {
+            return;
+        }
+        self.0.push_front(Repeated {
+            keys: keys.into(),
+            times,
+            next: 0,
+        });
+    }
+
+    fn pop_front(&mut self) -> Option<Key> {
+        let front = self.0.front_mut()?;
+        let key = front.keys[front.next];
+        front.next += 1;
+        if front.next == front.keys.len() {
+            front.next = 0;
+            front.times -= 1;
+            if front.times == 0 {
+                self.0.pop_front();
+            }
+        }
+        Some(key)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+}
 
 impl Vim {
     /// La letra del registro en que se graba, si se está grabando.
@@ -84,12 +130,7 @@ impl Vim {
             return self.fail();
         };
         self.last_played = Some(letter);
-        let keys = macros::decode(&register);
-        for _ in 0..times {
-            for &key in keys.iter().rev() {
-                self.playback.0.push_front(key);
-            }
-        }
+        self.playback.push_front(macros::decode(&register), times);
     }
 
     /// Reproduce lo que dejó `@` en la cola. Como en vim, todo cuenta como
@@ -103,7 +144,7 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
-        if self.playback.0.is_empty() {
+        if self.playback.is_empty() {
             return Ok(typed);
         }
         buffer.begin_undo_group();
@@ -120,7 +161,7 @@ impl Vim {
     ) -> Result<Option<KeyOutcome>, VimError> {
         let mut for_host = None;
         let mut played = 0;
-        while let Some(key) = self.playback.0.pop_front() {
+        while let Some(key) = self.playback.pop_front() {
             played += 1;
             let outcome = self.process(key, buffer, selections, clipboard)?;
             if !matches!(
@@ -133,7 +174,7 @@ impl Vim {
                 for_host = Some(outcome);
             }
             if self.failed || played >= MAX_PLAYED_KEYS {
-                self.playback.0.clear();
+                self.playback.clear();
             }
         }
         Ok(for_host)

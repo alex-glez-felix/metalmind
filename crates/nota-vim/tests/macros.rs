@@ -64,3 +64,11 @@ fn a_macro_that_never_fails_stops_eventually() {
     support::feed(&mut vim, &mut buffer, &mut selections, "x");
     assert_eq!(buffer.to_string(), "b");
 }
+
+/// Las repeticiones no se copian a la cola: un count enorme no reserva
+/// memoria para todas antes de empezar.
+#[test]
+fn a_huge_count_does_not_queue_every_repetition() {
+    let state = support::run_engine("|abc", "qalq999999999@ax");
+    assert_eq!(state.text, "a|b");
+}
