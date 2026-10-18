@@ -52,11 +52,13 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 #### Configuración
 
-- `config.toml` en el directorio de configuración del usuario (XDG), con tema y
-  fuente. Un archivo roto o con tipos equivocados se reemplaza por los
-  defaults y el error dice la línea y la columna; una clave desconocida es
-  solo un aviso. Detalle en [docs/config.md](docs/config.md).
-- Temas `nota-oscuro` y `nota-claro`, y temas propios en `themes/*.toml` que
+- `config.yaml` (o `config.yml`) en el directorio de configuración del usuario
+  (XDG), con tema y fuente. Es YAML 1.2, así que también se puede escribir en
+  JSON, y `yes`, `on` o `NO` nunca se leen como booleanos. Un archivo roto o
+  con tipos equivocados se reemplaza por los defaults y el error dice la línea
+  y la columna; una clave desconocida es solo un aviso. Detalle en
+  [docs/config.md](docs/config.md).
+- Temas `nota-oscuro` y `nota-claro`, y temas propios en `themes/*.yaml` que
   pueden extender a otro.
 
 #### Release

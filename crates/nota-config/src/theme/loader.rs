@@ -1,12 +1,12 @@
 //! Buscar un tema por nombre, seguir su cadena de `extends` y resolverla.
 
 use std::borrow::Cow;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use super::groups::{Palette, PartialCursor, PartialSyntax, PartialUi, UnknownColor};
 use super::{BUILTIN_THEMES, Theme, ThemeFile};
 use crate::diagnostic::{Diagnostic, Loaded, Location};
+use crate::file::{YamlFile, read_yaml};
 use crate::parse::parse;
 
 /// Dónde se buscan los temas: primero los del usuario, luego los embebidos.
@@ -29,19 +29,18 @@ struct Layer {
     name: String,
     builtin: bool,
     file: PathBuf,
-    text: Cow<'static, str>,
     theme: ThemeFile,
 }
 
 impl Layer {
-    fn locate(&self, offset: usize) -> Location {
-        Location::of(&self.text, offset)
-    }
-
     fn unknown_color(&self, unknown: UnknownColor) -> Diagnostic {
-        let UnknownColor { key, name, offset } = unknown;
+        let UnknownColor {
+            key,
+            name,
+            location,
+        } = unknown;
         Diagnostic::error(format!("`{name}` no está en la paleta (en {key})"))
-            .at(Some(self.locate(offset)))
+            .at(location)
             .in_file(&self.file)
     }
 }
@@ -122,12 +121,10 @@ impl Themes {
     fn chain(&self, name: &str, warnings: &mut Vec<Diagnostic>) -> Result<Vec<Layer>, Diagnostic> {
         let mut chain: Vec<Layer> = Vec::new();
         let mut next = name.to_owned();
-        let mut extended_at: Option<usize> = None;
+        let mut extended_at: Option<Location> = None;
         loop {
             let referrer = |error: Diagnostic| match chain.last() {
-                Some(layer) => error
-                    .at(extended_at.map(|offset| layer.locate(offset)))
-                    .in_file(&layer.file),
+                Some(layer) => error.at(extended_at).in_file(&layer.file),
                 None => error,
             };
             // Un tema del usuario que extiende directamente su mismo nombre
@@ -139,7 +136,9 @@ impl Themes {
             if !extends_builtin && chain.iter().any(|layer| layer.name == next) {
                 return Err(referrer(circular(&chain, &next)));
             }
-            let (file, text, builtin) = self.read(&next, !extends_builtin).map_err(referrer)?;
+            let (file, text, builtin) = self
+                .read(&next, !extends_builtin, warnings)
+                .map_err(referrer)?;
             let (theme, layer_warnings) =
                 parse::<ThemeFile>(&text).map_err(|error| error.in_file(&file))?;
             warnings.extend(
@@ -152,13 +151,12 @@ impl Themes {
                 name: next,
                 builtin,
                 file,
-                text,
                 theme,
             });
             let Some(extends) = extends else {
                 return Ok(chain);
             };
-            extended_at = Some(extends.span().start);
+            extended_at = extends.location();
             next = extends.into_inner();
         }
     }
@@ -169,6 +167,7 @@ impl Themes {
         &self,
         name: &str,
         user: bool,
+        warnings: &mut Vec<Diagnostic>,
     ) -> Result<(PathBuf, Cow<'static, str>, bool), Diagnostic> {
         if name.is_empty()
             || !name
@@ -179,24 +178,18 @@ impl Themes {
                 "`{name}` no es un nombre de tema válido: solo letras, números, `-` y `_`"
             )));
         }
-        if let Some(dir) = self.user_dir.as_ref().filter(|_| user) {
-            let file = dir.join(format!("{name}.toml"));
-            match std::fs::read_to_string(&file) {
-                Ok(text) => return Ok((file, Cow::Owned(text), false)),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => {
-                    return Err(
-                        Diagnostic::error(format!("no se pudo leer: {error}")).in_file(&file)
-                    );
-                }
-            }
+        if let Some(dir) = self.user_dir.as_ref().filter(|_| user)
+            && let Some(YamlFile { path, text }) =
+                read_yaml(&dir.join(format!("{name}.yaml")), warnings)?
+        {
+            return Ok((path, Cow::Owned(text), false));
         }
         BUILTIN_THEMES
             .iter()
             .find(|(builtin, _)| *builtin == name)
             .map(|&(_, text)| {
                 (
-                    Path::new("<embebido>").join(format!("{name}.toml")),
+                    Path::new("<embebido>").join(format!("{name}.yaml")),
                     Cow::Borrowed(text),
                     true,
                 )

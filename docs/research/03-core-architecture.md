@@ -97,12 +97,24 @@ Resolución de wikilinks (como Obsidian): por nombre de archivo sin extensión, 
 
 ### Frontmatter YAML
 
-`serde_yaml` está **deprecado** (0.9.34+deprecated). `serde_yml` tuvo polémica de calidad en 2025 **(sin verificar el estado actual)**. Opciones sanas:
+El mismo crate lee la config (§5) y el frontmatter. Requisito: **YAML 1.2**, no 1.1. En 1.1, `NO`, `on`, `yes` y `off` son booleanos y `0755` es octal aunque el campo espere texto (el "problema de Noruega"); 1.2 (core schema) solo reconoce `true`/`false` y es superset de JSON, así que una config en JSON puro también vale.
 
-- `serde_norway` 0.9.42 — fork mantenido de serde_yaml, misma API.
-- `yaml-rust2` 0.13.0 (sep-2026) — parser puro sin serde, bueno para "leer lo que haya" sin fallar ante YAML raro.
+Candidatos (versiones y dependencias en crates.io, 2026-10-18; versión de YAML según la documentación de cada uno):
 
-Recomendación: extraer el bloque `---...---` a mano (rangos exactos para el editor), parsear con `yaml-rust2` a un `Frontmatter { aliases, tags, raw }` tolerante, y **nunca reescribir** el YAML del usuario salvo petición explícita.
+| Crate | Versión | YAML | Serde | Notas |
+|---|---|---|---|---|
+| `serde_yaml` | 0.9.34+deprecated | 1.1 (libyaml) | Sí | Deprecado. |
+| `serde_norway` | 0.9.42 | 1.1 | Sí | Fork de serde_yaml sobre `unsafe-libyaml-norway`, es decir, libyaml. Sin release desde dic-2024. |
+| `serde_yaml_ng` | 0.10.0 | 1.1 | Sí | Otro fork sobre `unsafe-libyaml`. Sin release desde may-2024. |
+| `serde_yml` | 0.0.13 | — | — | Él mismo se declara deprecado y sin mantenimiento; reenvía a `noyalib`. |
+| `noyalib` | 0.0.58 | 1.2 | Sí | Nuevo (may-2026), API 0.0.x y un árbol de dependencias grande. |
+| `yaml-rust2` | 0.13.0 | 1.2 | No | Parser y árbol propio; sin serde ni spans en los valores. |
+| `saphyr` | 0.2.2 | 1.2 | No | Sucesor de yaml-rust2, con spans (`MarkedYaml`); sin serde. |
+| **`serde-saphyr`** | **2.0.0** | **1.2** | Sí | Sobre `granit-parser` 2.0 (fork de saphyr-parser, YAML 1.2). Sin `unsafe`, sin panics ante YAML malformado (fuzzing), cubre el yaml-test-suite, `Spanned<T>` con línea y columna, errores con posición, límites contra alias bombs. |
+
+Elegido **`serde-saphyr`**, sin las features por defecto (solo `deserialize`: no hace falta serializar porque nota nunca reescribe el YAML del usuario). Ojo: por defecto acepta `yes`/`on` en un campo `bool` (lo hace por compatibilidad con 1.1); `nota-config` activa `strict_booleans`, así que en un `bool` solo valen `true` y `false` y lo demás es un error de tipo con posición. En un campo de texto, `NO` o `on` son ese texto porque el tipo de destino manda. Las claves repetidas son error (default). Para el frontmatter sirve igual: `Spanned<T>` da la posición de cada valor para el editor, `render_options!{ line_offset }` corre la línea de un error al número de línea real de la nota, y un `deserialize_any` tolera lo que haya.
+
+Plan para el frontmatter: extraer el bloque `---...---` a mano (rangos exactos para el editor), deserializar con `serde-saphyr` a un `Frontmatter { aliases, tags, raw }` tolerante, y **nunca reescribir** el YAML del usuario salvo petición explícita.
 
 ---
 
@@ -171,15 +183,17 @@ El truco de Zed: **vim no es especial**; es un conjunto de bindings en contextos
 - `FileTree`: `j/k` mover, `h/l` colapsar/expandir, `gg/G`, `/` filtrar, `a` crear, `r` renombrar, `dd` borrar (con confirmación), `o` abrir en split.
 - `Picker`/paleta: el input es un `Editor` de una línea (contexto `Picker > Editor`) en insert por defecto; `Esc` pasa a normal y `j/k` mueve la lista.
 - `:` abre una línea de comandos que parsea a las **mismas** acciones (`:w` → `buffer::save`, `:e nota` → `workspace::open`, `:vsp`, `:q`, `:%s/a/b/g`). Un solo registro de acciones = paleta, `:` y keymap comparten nombres. Los nombres de `nota` van en snake_case (`vim::next_word_start`), a diferencia del CamelCase de Zed.
-- Leader: `"space f": "workspace::open_finder"` en el contexto `VimControl && !editing`; configurable por TOML.
+- Leader: `"space f": "workspace::open_finder"` en el contexto `VimControl && !editing`; configurable por YAML.
 - Ventanas: `ctrl-w h/j/k/l/v/s/q` como acciones de `pane::`.
 
-Keymap del usuario en **TOML** (coherente con el resto de la config) que se fusiona sobre el default embebido:
+Keymap del usuario en **YAML** (coherente con el resto de la config) que se fusiona sobre el default embebido:
 
-```toml
-[[keymap]]
-context = "Editor && vim_mode == normal"
-bindings = { "space f" = "workspace::open_finder", "g d" = "editor::follow_link" }
+```yaml
+keymap:
+  - context: Editor && vim_mode == normal
+    bindings:
+      space f: workspace::open_finder
+      g d: editor::follow_link
 ```
 
 ---
@@ -237,7 +251,7 @@ struct LinkIndex {
 
 ### Config
 
-- TOML con `toml` 1.1 + `serde`. Rutas XDG con `dirs` 7.0 (elegido sobre `etcetera` 0.11: no pide autor ni dominio para las rutas de macOS y Windows): `~/.config/nota/config.toml`, `keymap.toml`, `themes/`.
+- YAML 1.2 con `serde-saphyr` 2.0 + `serde` (por qué este crate: §2, Frontmatter YAML). Rutas XDG con `dirs` 7.0 (elegido sobre `etcetera` 0.11: no pide autor ni dominio para las rutas de macOS y Windows): `~/.config/nota/config.yaml`, `keymap.yaml`, `themes/`. Antes fue TOML; se cambió a YAML (2026-10-18) para que quien prefiera JSON lo pueda escribir tal cual. No hay migración del TOML: un `config.toml` que quede solo produce un aviso.
 - Config **por vault** opcional en `<vault>/.nota/` (no tocar `.obsidian/`; leerlo de solo lectura, p. ej. para respetar `attachmentFolderPath`, más adelante).
 - Defaults embebidos con `include_str!`; config del usuario se fusiona encima; recarga en caliente vía `notify`.
 - Validar y reportar errores de config en la UI, nunca hacer panic.
@@ -245,9 +259,9 @@ struct LinkIndex {
 #### Estado (`nota-config`, 2026-10-18)
 
 - Crate `nota-config`, sin GPUI. Rutas con `dirs` 7.0: en Linux la especificación XDG se resuelve a mano (`Paths::from_xdg`, con el entorno inyectado para probarla; una `XDG_*` relativa se ignora, como pide la especificación); en macOS y Windows, lo que `dirs` da para cada plataforma. `Paths::under(raíz)` lo pone todo en una carpeta, para tests.
-- `config.toml`: tema, fuente (familia, tamaño), `scrolloff`, `tabstop`, `expandtab`, `ignorecase`, `smartcase` y vault por defecto; todo con default. `Settings::parse(texto)` es pura y sirve para la recarga: devuelve settings más diagnósticos y nunca falla. Un TOML roto, un tipo equivocado o un valor fuera de rango cambian el archivo entero por los defaults, con el error en archivo:línea:columna. Una clave desconocida es solo un aviso (vía `serde_ignored`, con su posición): se descartó `deny_unknown_fields` porque un typo costaría toda la config.
-- Temas: paleta con nombres más grupos semánticos `ui`, `cursor` (por modo) y `syntax` (para M4). Un color semántico es un hex, un nombre de la paleta o `{ color, alpha }`; el alpha va aparte para que `0.5` sea exacto y el tema oscuro embebido dé los mismos `Hsla` que los colores fijos de antes (hay un test). Embebidos: `nota-oscuro` (default y respaldo) y `nota-claro`. Los del usuario, en `<config>/themes/*.toml`, reemplazan a uno embebido del mismo nombre (y pueden extenderlo: un `extends` a su propio nombre va al embebido) y pueden usar `extends`; la paleta se fusiona primero, así que una referencia heredada usa la paleta final. Cadenas circulares, temas inexistentes, nombres de paleta desconocidos y colores faltantes son errores con posición; el tema que falla se cambia por `nota-oscuro`.
-- El binario lee la config al arrancar y reporta los diagnósticos por el log; `nota-ui` toma colores y fuente del tema. Pendiente: mostrar los diagnósticos en la UI, el watcher de `notify` para la recarga en caliente, `keymap.toml` y la config por vault.
+- `config.yaml` (o `config.yml`; con los dos gana `.yaml` y se avisa): tema, fuente (familia, tamaño), `scrolloff`, `tabstop`, `expandtab`, `ignorecase`, `smartcase` y vault por defecto; todo con default. `Settings::parse(texto)` es pura y sirve para la recarga: devuelve settings más diagnósticos y nunca falla. Un YAML roto (sintaxis o indentación), un tipo equivocado (también `on`/`yes` en un booleano) o un valor fuera de rango cambian el archivo entero por los defaults, con el error en archivo:línea:columna. Una clave desconocida es solo un aviso (vía `serde_ignored`, con su posición: una segunda pasada, solo si hubo claves ignoradas, ubica cada clave): se descartó `deny_unknown_fields` porque un typo costaría toda la config.
+- Temas: paleta con nombres más grupos semánticos `ui`, `cursor` (por modo) y `syntax` (para M4). Un color semántico es un hex, un nombre de la paleta o `{ color, alpha }`; el alpha va aparte para que `0.5` sea exacto y el tema oscuro embebido dé los mismos `Hsla` que los colores fijos de antes (hay un test). Embebidos: `nota-oscuro` (default y respaldo) y `nota-claro`. Los del usuario, en `<config>/themes/*.yaml` (o `.yml`), reemplazan a uno embebido del mismo nombre (y pueden extenderlo: un `extends` a su propio nombre va al embebido) y pueden usar `extends`; la paleta se fusiona primero, así que una referencia heredada usa la paleta final. Cadenas circulares, temas inexistentes, nombres de paleta desconocidos y colores faltantes son errores con posición; el tema que falla se cambia por `nota-oscuro`.
+- El binario lee la config al arrancar y reporta los diagnósticos por el log; `nota-ui` toma colores y fuente del tema. Pendiente: mostrar los diagnósticos en la UI, el watcher de `notify` para la recarga en caliente, `keymap.yaml` y la config por vault.
 
 ### Plugins (post-MVP, solo nota)
 
@@ -267,7 +281,7 @@ nota/
 │   ├── nota-buffer/        # Buffer (ropey), Edit, Transaction, History (con grupos de undo), Selections, LineAnchor (marks), newtypes de offset
 │   ├── nota-syntax/        # tree-sitter-md + scanner Obsidian (wikilinks, tags, embeds, frontmatter)
 │   ├── nota-vim/           # Mode, Motion, Operator, TextObject, registros, macros, marks, VimState → Transaction; búsqueda `/ ? n N * #` y `:s` sobre `regex`. `"+`/`"*` vía el trait Clipboard que da la UI. Depende de nota-buffer y regex (+ nota-syntax para text objects md)
-│   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo TOML, registro de Actions
+│   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo YAML, registro de Actions
 │   ├── nota-vault/         # leer y guardar notas (atómico); luego walk, watch, índice, links, backlinks, caché redb
 │   ├── nota-search/        # nucleo (fuzzy) y luego tantivy
 │   ├── nota-config/        # settings, rutas XDG, temas
@@ -376,13 +390,13 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 | **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), tags, links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
 | **M4 — Live preview** | tree-sitter-md incremental; ocultar marcadores fuera de la línea del cursor, headings con tamaño, negrita/cursiva, links como texto clicable, listas y checkboxes (`ctrl-enter`/`gx` alterna), código con resaltado, `==highlight==`, comentarios `%%`. Toggle source/live/lectura. | Escribir en una nota de 5 k líneas sin latencia perceptible (< 16 ms por tecla **objetivo**). |
 | **M5 — Embeds y callouts** | `![[img]]` imágenes, `![[nota]]` transclusión (solo lectura), callouts, tablas renderizadas. | El vault de prueba se ve "como en Obsidian" en lo común. |
-| **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo, registros ✅, macros ✅, `:%s`, marks ✅ (falta `A`–`Z`), keymap y tema del usuario en TOML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. Listo para el tag (2026-10-17): dist, `nota --version`, `.desktop` + metainfo, PKGBUILD de `nota-bin` y `nota-git`, CHANGELOG y `docs/release.md`. Falta publicar. |
+| **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo, registros ✅, macros ✅, `:%s`, marks ✅ (falta `A`–`Z`), keymap y tema del usuario en YAML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. Listo para el tag (2026-10-17): dist, `nota --version`, `.desktop` + metainfo, PKGBUILD de `nota-bin` y `nota-git`, CHANGELOG y `docs/release.md`. Falta publicar. |
 | Post-MVP | Multi-cursor, vista de grafo, daily notes/plantillas, math, export HTML/PDF, plugins WASM. | — |
 
 ---
 
 ## Crates verificados (crates.io, 2026-10-15)
 
-`ropey 1.6.1` · `crop 0.4.3` · `lapce-xi-rope 0.4.0` · `zed-sum-tree 0.2.0` · `pulldown-cmark 0.13.4` · `comrak 0.56.0` · `markdown 1.0.0` · `tree-sitter 0.27.1` · `tree-sitter-md 0.5.3` · `tree-sitter-highlight 0.27.1` · `modalkit 0.0.31` · `editor-types 0.0.6` · `keybindings 0.0.4` · `ignore 0.4.33` · `notify 8.2.0` · `notify-debouncer-full 0.7.0` · `nucleo 0.5.0` · `nucleo-matcher 0.3.1` · `frizbee 0.13.0` · `tantivy 0.26.2` · `redb 4.4.0` · `rusqlite 0.40.2` · `petgraph 0.8.3` · `tempfile 3.27.0` · `toml 1.1.8` · `serde_norway 0.9.42` · `yaml-rust2 0.13.0` · `etcetera 0.11.0` · `dirs 7.0.0` · `crossbeam-channel 0.5.17` · `flume 0.12.0` · `rayon 1.12.0` · `arc-swap 1.9.2` · `smallvec 1.16.3` · `smol_str 0.3.6` · `unicode-segmentation 1.13.3` · `unicode-width 0.2.2` · `regex 1.13.1` (2026-10-18) · `regex-automata 0.4.18` · `similar 3.2.0` · `imara-diff 0.2.0` · `wasmtime 49.0.3` · `insta 1.49.0` · `proptest 1.12.0` · `rstest 0.27.0` · `pretty_assertions 1.4.1` · `cargo-nextest 0.9.148` · `cargo-deny 0.20.2` · `cargo-machete 0.9.2` · `typos-cli 1.51.1` · `cargo-dist 0.32.0` · `cargo-deb 3.8.0` · `cargo-generate-rpm 0.21.0` · `cargo-appimage 2.4.0` · `cargo-aur 1.7.1` · `gpui 0.2.2` · `gpui-component 0.7.3` · `iced 0.14.0`.
+`ropey 1.6.1` · `crop 0.4.3` · `lapce-xi-rope 0.4.0` · `zed-sum-tree 0.2.0` · `pulldown-cmark 0.13.4` · `comrak 0.56.0` · `markdown 1.0.0` · `tree-sitter 0.27.1` · `tree-sitter-md 0.5.3` · `tree-sitter-highlight 0.27.1` · `modalkit 0.0.31` · `editor-types 0.0.6` · `keybindings 0.0.4` · `ignore 0.4.33` · `notify 8.2.0` · `notify-debouncer-full 0.7.0` · `nucleo 0.5.0` · `nucleo-matcher 0.3.1` · `frizbee 0.13.0` · `tantivy 0.26.2` · `redb 4.4.0` · `rusqlite 0.40.2` · `petgraph 0.8.3` · `tempfile 3.27.0` · `toml 1.1.8` · `serde_norway 0.9.42` · `yaml-rust2 0.13.0` · `serde-saphyr 2.0.0` (2026-10-18) · `granit-parser 2.0.0` · `saphyr 0.2.2` · `serde_yaml_ng 0.10.0` · `noyalib 0.0.58` · `etcetera 0.11.0` · `dirs 7.0.0` · `crossbeam-channel 0.5.17` · `flume 0.12.0` · `rayon 1.12.0` · `arc-swap 1.9.2` · `smallvec 1.16.3` · `smol_str 0.3.6` · `unicode-segmentation 1.13.3` · `unicode-width 0.2.2` · `regex 1.13.1` (2026-10-18) · `regex-automata 0.4.18` · `similar 3.2.0` · `imara-diff 0.2.0` · `wasmtime 49.0.3` · `insta 1.49.0` · `proptest 1.12.0` · `rstest 0.27.0` · `pretty_assertions 1.4.1` · `cargo-nextest 0.9.148` · `cargo-deny 0.20.2` · `cargo-machete 0.9.2` · `typos-cli 1.51.1` · `cargo-dist 0.32.0` · `cargo-deb 3.8.0` · `cargo-generate-rpm 0.21.0` · `cargo-appimage 2.4.0` · `cargo-aur 1.7.1` · `gpui 0.2.2` · `gpui-component 0.7.3` · `iced 0.14.0`.
 
-Descartados o trampas: `vim-like` (no existe), `helix-core` (placeholder 0.0.0), `tree-sitter-markdown` (otro crate, 2021), `xi-rope` (2019, usar `lapce-xi-rope`), `serde_yaml` (deprecado), `zed-rope` (no publicado).
+Descartados o trampas: `vim-like` (no existe), `helix-core` (placeholder 0.0.0), `tree-sitter-markdown` (otro crate, 2021), `xi-rope` (2019, usar `lapce-xi-rope`), `serde_yaml` (deprecado), `serde_norway` y `serde_yaml_ng` (libyaml: YAML 1.1), `serde_yml` (deprecado, reenvía a `noyalib`), `zed-rope` (no publicado).

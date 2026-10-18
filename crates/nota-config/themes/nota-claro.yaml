@@ -1,0 +1,51 @@
+# nota-claro: el tema claro, con el mismo esquema que nota-oscuro.
+
+palette:
+  bg: "#f5f6f8"
+  bg_dark: "#e6e8ec"
+  bg_highlight: "#eceef2"
+  fg: "#2b2f36"
+  fg_dim: "#5f6670"
+  fg_faint: "#a0a6b0"
+  border: "#d2d6dc"
+  blue: "#2e5cd6"
+  cyan: "#0f7a99"
+  green: "#3f7a1e"
+  magenta: "#8a3fc4"
+  orange: "#b35a00"
+  yellow: "#8f6400"
+  red: "#c4304f"
+  comment: "#8a909a"
+
+ui:
+  background: bg
+  foreground: fg
+  selection: { color: blue, alpha: 0.2 }
+  current_line: bg_highlight
+  gutter: bg
+  gutter_foreground: fg_faint
+  status_background: bg_dark
+  status_foreground: fg_dim
+  status_border: border
+  modified: yellow
+  error: red
+
+cursor:
+  normal: { color: blue, alpha: 0.4 }
+  insert: blue
+  visual: { color: magenta, alpha: 0.4 }
+  replace: { color: red, alpha: 0.4 }
+
+syntax:
+  heading: blue
+  bold: orange
+  italic: magenta
+  link: cyan
+  tag: green
+  code: green
+  quote: fg_dim
+  list_marker: yellow
+  highlight: { color: yellow, alpha: 0.25 }
+  comment: comment
+  frontmatter: fg_dim
+  markup: fg_faint

@@ -1,5 +1,5 @@
 //! Colores de un tema: `"#rrggbb"` en la paleta y, en los campos semánticos,
-//! un hex, un nombre de la paleta o `{ color = …, alpha = … }`.
+//! un hex, un nombre de la paleta o `{ color: …, alpha: … }`.
 
 use std::fmt;
 
@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde::de::value::MapAccessDeserializer;
 use serde::de::{self, MapAccess, Visitor};
 
-/// Un color sRGB con opacidad aparte, para que `alpha = 0.5` sea exactamente
+/// Un color sRGB con opacidad aparte, para que `alpha: 0.5` sea exactamente
 /// 0.5 y no el 128/255 de un `#rrggbbaa`.
 #[derive(Clone, Copy, PartialEq)]
 pub struct Color {
@@ -90,7 +90,7 @@ impl<'de> Visitor<'de> for ColorRefVisitor {
     type Value = ColorRef;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("un color `#rrggbb`, un nombre de la paleta o `{ color = …, alpha = … }`")
+        f.write_str("un color `#rrggbb`, un nombre de la paleta o `{ color: …, alpha: … }`")
     }
 
     fn visit_str<E: de::Error>(self, text: &str) -> Result<ColorRef, E> {
@@ -125,9 +125,9 @@ mod tests {
         struct Field {
             c: ColorRef,
         }
-        toml::from_str::<Field>(&format!("c = {text}"))
+        serde_saphyr::from_str::<Field>(&format!("c: {text}"))
             .map(|field| field.c)
-            .map_err(|error| error.message().to_owned())
+            .map_err(|error| error.to_string())
     }
 
     #[test]
@@ -151,7 +151,7 @@ mod tests {
             })
         );
         assert_eq!(
-            color_ref("{ color = \"azul\", alpha = 0.5 }"),
+            color_ref("{ color: azul, alpha: 0.5 }"),
             Ok(ColorRef {
                 base: Base::Palette("azul".to_owned()),
                 alpha: 0.5
@@ -165,10 +165,10 @@ mod tests {
             ("\"#7aa2f\"", "no es un color"),
             ("\"#7aa2fg\"", "no es un color"),
             (
-                "{ color = \"azul\", alpha = 2.0 }",
+                "{ color: azul, alpha: 2.0 }",
                 "alpha debe estar entre 0 y 1",
             ),
-            ("{ alpha = 0.5 }", "missing field `color`"),
+            ("{ alpha: 0.5 }", "missing field `color`"),
             ("3", "un color `#rrggbb`"),
         ] {
             let error = color_ref(text).unwrap_err();

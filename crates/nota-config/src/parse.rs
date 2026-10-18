@@ -1,86 +1,107 @@
-//! Lectura de TOML a tipos de serde. Una clave desconocida es un aviso y no
+//! Lectura de YAML 1.2 a tipos de serde. Una clave desconocida es un aviso y no
 //! tumba el archivo: un typo no debe costar el resto de la config.
+//!
+//! Solo `true` y `false` son booleanos: `on`, `yes` o `no` en un campo
+//! booleano son un error de tipo, y en uno de texto son ese texto.
 
-use serde::de::DeserializeOwned;
-use toml::Spanned;
-use toml::de::{DeTable, DeValue};
+mod keys;
+mod message;
+
+use serde::Deserialize;
+use serde::de::{DeserializeOwned, Deserializer};
 
 use crate::diagnostic::{Diagnostic, Location};
+
+/// Un valor con dónde se escribió. Dos valores son iguales si lo son sus
+/// contenidos, se hayan escrito donde se hayan escrito.
+#[derive(Clone, Debug)]
+pub(crate) struct Spanned<T> {
+    value: T,
+    at: Option<Location>,
+}
+
+impl<T> Spanned<T> {
+    /// Un valor que no salió de ningún archivo.
+    pub(crate) fn new(value: T) -> Self {
+        Self { value, at: None }
+    }
+
+    pub(crate) fn get_ref(&self) -> &T {
+        &self.value
+    }
+
+    pub(crate) fn into_inner(self) -> T {
+        self.value
+    }
+
+    pub(crate) fn location(&self) -> Option<Location> {
+        self.at
+    }
+}
+
+impl<T: PartialEq> PartialEq for Spanned<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Spanned<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let spanned = serde_saphyr::Spanned::<T>::deserialize(deserializer)?;
+        Ok(Self {
+            at: location(spanned.referenced),
+            value: spanned.value,
+        })
+    }
+}
 
 /// El valor leído y los avisos por claves ignoradas.
 ///
 /// # Errors
-/// Si el TOML está roto o un valor no tiene el tipo esperado.
+/// Si el YAML está roto o un valor no tiene el tipo esperado.
 pub(crate) fn parse<T: DeserializeOwned>(text: &str) -> Result<(T, Vec<Diagnostic>), Diagnostic> {
-    let table = DeTable::parse(text).map_err(|error| to_diagnostic(text, &error))?;
     let mut ignored = Vec::new();
-    let value = serde_ignored::deserialize(toml::Deserializer::from(table.clone()), |path| {
-        ignored.push(segments(&path));
+    let value = serde_saphyr::with_deserializer_from_str_with_options(text, options(), |yaml| {
+        serde_ignored::deserialize(yaml, |path| ignored.extend(keys::segments(&path)))
     })
-    .map_err(|error| to_diagnostic(text, &error))?;
+    .map_err(|error| to_diagnostic(&error))?;
+    // Solo con claves ignoradas hace falta una segunda pasada para ubicarlas.
+    let tree = if ignored.is_empty() {
+        None
+    } else {
+        serde_saphyr::from_str_with_options::<keys::Node>(text, options()).ok()
+    };
     let warnings = ignored
         .into_iter()
-        .map(|keys| {
-            Diagnostic::warning(format!("clave desconocida `{}`, se ignora", keys.join(".")))
-                .at(key_span(&table, &keys).map(|start| Location::of(text, start)))
+        .map(|path| {
+            Diagnostic::warning(format!("clave desconocida `{}`, se ignora", path.join(".")))
+                .at(tree.as_ref().and_then(|tree| tree.key_location(&path)))
         })
         .collect();
     Ok((value, warnings))
 }
 
-fn to_diagnostic(text: &str, error: &toml::de::Error) -> Diagnostic {
-    Diagnostic::error(error.message().trim_end())
-        .at(error.span().map(|span| Location::of(text, span.start)))
+fn options() -> serde_saphyr::Options {
+    serde_saphyr::options! { strict_booleans: true }
 }
 
-const SPANNED_KEY_PREFIX: &str = "$__serde_spanned_private_";
-
-fn segments(path: &serde_ignored::Path<'_>) -> Vec<String> {
-    use serde_ignored::Path;
-    let (parent, key) = match path {
-        Path::Root => return Vec::new(),
-        Path::Seq { parent, index } => (parent, index.to_string()),
-        // `Spanned` envuelve el valor en una tabla con claves propias.
-        Path::Map { parent, key } if key.starts_with(SPANNED_KEY_PREFIX) => {
-            return segments(parent);
-        }
-        Path::Map { parent, key } => (parent, key.clone()),
-        Path::Some { parent }
-        | Path::NewtypeStruct { parent }
-        | Path::NewtypeVariant { parent } => {
-            return segments(parent);
-        }
-    };
-    let mut keys = segments(parent);
-    keys.push(key);
-    keys
+fn to_diagnostic(error: &serde_saphyr::Error) -> Diagnostic {
+    Diagnostic::error(message::render(error)).at(error.location().and_then(location))
 }
 
-/// Dónde empieza la última clave de `keys` en el texto.
-fn key_span(table: &Spanned<DeTable<'_>>, keys: &[String]) -> Option<usize> {
-    let (last, parents) = keys.split_last()?;
-    let mut current = table.get_ref();
-    for key in parents {
-        match lookup(current, key)?.1.get_ref() {
-            DeValue::Table(inner) => current = inner,
-            _ => return None,
-        }
+fn location(at: serde_saphyr::Location) -> Option<Location> {
+    if at == serde_saphyr::Location::UNKNOWN {
+        return None;
     }
-    lookup(current, last).map(|(key, _)| key.span().start)
-}
-
-fn lookup<'t, 'i>(
-    table: &'t DeTable<'i>,
-    key: &str,
-) -> Option<(
-    &'t Spanned<toml::de::DeString<'i>>,
-    &'t Spanned<DeValue<'i>>,
-)> {
-    table.iter().find(|(name, _)| name.get_ref() == key)
+    Some(Location {
+        line: usize::try_from(at.line()).ok()?,
+        column: usize::try_from(at.column()).ok()?,
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
     use serde::Deserialize;
 
     use super::*;
@@ -90,6 +111,7 @@ mod tests {
     #[serde(default)]
     struct Sample {
         size: u32,
+        name: String,
         inner: Inner,
     }
 
@@ -97,39 +119,107 @@ mod tests {
     #[serde(default)]
     struct Inner {
         on: bool,
+        label: Option<Spanned<String>>,
     }
 
     #[test]
     fn clave_desconocida_avisa_con_posicion_y_aplica_el_resto() {
         let (value, warnings) =
-            parse::<Sample>("size = 3\n[inner]\non = true\n  typo = 1\n").unwrap();
+            parse::<Sample>("size: 3\ninner:\n  on: true\n  typo: 1\n").unwrap();
         assert_eq!(
             value,
             Sample {
                 size: 3,
-                inner: Inner { on: true }
+                inner: Inner {
+                    on: true,
+                    label: None
+                },
+                ..Sample::default()
             }
         );
-        assert_eq!(warnings.len(), 1);
-        assert_eq!(warnings[0].severity, Severity::Warning);
-        assert_eq!(
-            warnings[0].message,
-            "clave desconocida `inner.typo`, se ignora"
-        );
-        assert_eq!(warnings[0].location, Some(Location { line: 4, column: 3 }));
+        let [warning] = warnings.as_slice() else {
+            panic!("{warnings:?}")
+        };
+        assert_eq!(warning.severity, Severity::Warning);
+        assert_eq!(warning.message, "clave desconocida `inner.typo`, se ignora");
+        assert_eq!(warning.location, Some(Location { line: 4, column: 3 }));
     }
 
     #[test]
-    fn toml_roto_da_error_con_posicion() {
-        let error = parse::<Sample>("size = 3\nsize = = 4\n").unwrap_err();
+    fn un_valor_con_posicion_no_es_una_clave_desconocida() {
+        let (value, warnings) = parse::<Sample>("inner:\n  label: ñandú\n").unwrap();
+        assert_eq!(warnings, []);
+        let label = value.inner.label.unwrap();
+        assert_eq!(label.get_ref(), "ñandú");
+        assert_eq!(
+            label.location(),
+            Some(Location {
+                line: 2,
+                column: 10
+            })
+        );
+    }
+
+    #[test]
+    fn yaml_roto_da_error_con_linea_y_columna() {
+        let error = parse::<Sample>("size: 3\nname: [a\n").unwrap_err();
         assert_eq!(error.severity, Severity::Error);
         assert_eq!(error.location.map(|at| at.line), Some(2));
     }
 
     #[test]
+    fn indentacion_equivocada_da_error_con_linea_y_columna() {
+        let error = parse::<Sample>("inner:\n  on: true\n label: x\n").unwrap_err();
+        assert_eq!(error.location, Some(Location { line: 3, column: 2 }));
+        let error = parse::<Sample>("name: a\n  size: 3\n").unwrap_err();
+        assert_eq!(error.location, Some(Location { line: 2, column: 7 }));
+    }
+
+    #[test]
+    fn el_mensaje_no_repite_la_posicion() {
+        let error = parse::<Sample>("name: a\n  size: 3\n").unwrap_err();
+        assert!(!error.message.contains("line"), "{}", error.message);
+        assert!(!error.message.contains('\n'), "{}", error.message);
+    }
+
+    #[test]
     fn tipo_equivocado_da_error_con_posicion() {
-        let error = parse::<Sample>("[inner]\non = \"sí\"\n").unwrap_err();
-        assert_eq!(error.location, Some(Location { line: 2, column: 6 }));
-        assert!(error.message.contains("bool"), "{}", error.message);
+        let error = parse::<Sample>("inner:\n  on: \"sí\"\n").unwrap_err();
+        assert_eq!(error.location, Some(Location { line: 2, column: 7 }));
+        assert!(error.message.contains("boolean"), "{}", error.message);
+    }
+
+    #[test]
+    fn una_clave_repetida_es_error() {
+        let error = parse::<Sample>("size: 1\nsize: 2\n").unwrap_err();
+        assert_eq!(error.location, Some(Location { line: 2, column: 1 }));
+    }
+
+    /// El problema de Noruega: en YAML 1.1, `NO`, `on`, `yes` y `off` son
+    /// booleanos aunque el campo espere texto.
+    #[test]
+    fn yes_no_on_off_nunca_son_booleanos_silenciosos() {
+        for word in ["NO", "no", "on", "yes", "off", "y", "n", "Yes", "OFF"] {
+            let (value, _) = parse::<Sample>(&format!("name: {word}\n")).unwrap();
+            assert_eq!(value.name, word);
+            let error = parse::<Sample>(&format!("inner:\n  on: {word}\n")).unwrap_err();
+            assert_eq!(error.severity, Severity::Error, "{word}");
+            assert_eq!(error.location, Some(Location { line: 2, column: 7 }));
+            assert!(error.message.contains("true or false"), "{}", error.message);
+        }
+    }
+
+    #[test]
+    fn json_puro_es_yaml() {
+        let yaml = parse::<Sample>("size: 3\ninner:\n  on: true\n  label: x\n").unwrap();
+        let json = parse::<Sample>(r#"{"size": 3, "inner": {"on": true, "label": "x"}}"#).unwrap();
+        assert_eq!(json, yaml);
+    }
+
+    #[test]
+    fn vacio_o_solo_comentarios_es_todo_por_defecto() {
+        for text in ["", "\n", "# nada\n"] {
+            assert_eq!(parse::<Sample>(text).unwrap(), (Sample::default(), vec![]));
+        }
     }
 }

@@ -1,9 +1,7 @@
 //! Todo lo que se lee al arrancar.
 
-use std::io;
-use std::path::Path;
-
-use crate::diagnostic::{Diagnostic, Loaded, Location};
+use crate::diagnostic::{Diagnostic, Loaded};
+use crate::file::{YamlFile, read_yaml};
 use crate::paths::Paths;
 use crate::settings::Settings;
 use crate::theme::{DEFAULT_THEME, LoadError, Theme, Themes};
@@ -26,40 +24,38 @@ impl Config {
         })
     }
 
-    /// Lee `config.toml` y el tema que elige. Sin archivo valen los
-    /// defaults; con uno inválido también, y el error vuelve en los
+    /// Lee `config.yaml` (o `config.yml`) y el tema que elige. Sin archivo
+    /// valen los defaults; con uno inválido también, y el error vuelve en los
     /// diagnósticos. Un tema que no carga se cambia por [`DEFAULT_THEME`].
     ///
     /// # Errors
     /// Solo si el tema embebido por defecto no carga, lo que es un bug.
     pub fn load(paths: &Paths) -> Result<Loaded<Self>, Diagnostic> {
-        let file = paths.config_file();
-        let text = read(&file);
-        let Loaded {
-            value: settings,
-            mut diagnostics,
-        } = match &text {
-            Ok(Some(text)) => Settings::parse(text),
-            Ok(None) | Err(_) => Loaded {
-                value: Settings::default(),
-                diagnostics: Vec::new(),
-            },
+        let mut diagnostics = Vec::new();
+        let (settings, file) = match read_yaml(&paths.config_file(), &mut diagnostics) {
+            Ok(Some(YamlFile { path, text })) => {
+                let loaded = Settings::parse(&text);
+                diagnostics.extend(
+                    loaded
+                        .diagnostics
+                        .into_iter()
+                        .map(|diagnostic| diagnostic.in_file(&path)),
+                );
+                (loaded.value, Some(path))
+            }
+            Ok(None) => (Settings::default(), None),
+            Err(error) => {
+                diagnostics.push(error);
+                (Settings::default(), None)
+            }
         };
-        if let Err(error) = &text {
-            diagnostics.push(error.clone());
-        }
-        for diagnostic in &mut diagnostics {
-            diagnostic.file = Some(file.clone());
-        }
         let theme = match Themes::new(paths.themes_dir()).load(settings.theme()) {
             Ok(loaded) => loaded,
             Err(LoadError { error, warnings }) => {
                 diagnostics.extend(warnings);
-                diagnostics.push(match (&error.file, &text) {
-                    // El tema elegido no se encontró: el error está en `config.toml`.
-                    (None, Ok(Some(text))) => error
-                        .at(Some(Location::of(text, settings.theme_offset())))
-                        .in_file(&file),
+                diagnostics.push(match (&error.file, &file) {
+                    // El tema elegido no se encontró: el error está en la config.
+                    (None, Some(file)) => error.at(settings.theme_location()).in_file(file),
                     _ => error,
                 });
                 builtin_theme()?
@@ -73,15 +69,6 @@ impl Config {
             },
             diagnostics,
         })
-    }
-}
-
-/// El texto de `file`, `None` si no existe.
-fn read(file: &Path) -> Result<Option<String>, Diagnostic> {
-    match std::fs::read_to_string(file) {
-        Ok(text) => Ok(Some(text)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(Diagnostic::error(format!("no se pudo leer: {error}"))),
     }
 }
 
