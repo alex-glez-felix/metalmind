@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 arc-swap.workspace = true
 ignore.workspace = true
+nota-syntax.workspace = true
 log.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
@@ -19,9 +20,11 @@ thiserror.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
+insta.workspace = true
 nota-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
+rstest.workspace = true
 
 [[bench]]
 name = "open"

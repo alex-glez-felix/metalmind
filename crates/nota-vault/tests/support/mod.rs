@@ -5,6 +5,8 @@
     reason = "cada archivo de tests usa una parte distinta de support"
 )]
 
+pub mod links;
+
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc::Receiver;
