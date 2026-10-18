@@ -43,14 +43,18 @@ impl FileIds {
     }
 
     /// `id`, que no tenía archivo, pasa a ser el de `path`, como un `[No
-    /// Name]` al que `:w ruta` le da archivo. Si `path` ya tenía uno, sigue
-    /// con ese.
-    pub fn adopt(&mut self, id: FileId, path: &Path) {
-        if self.by_path.contains_key(path) {
-            return;
+    /// Name]` al que `:w ruta` le da archivo. Si `path` ya era de otro (un
+    /// archivo que se borró), devuelve ese, que se queda sin archivo.
+    pub fn adopt(&mut self, id: FileId, path: &Path) -> Option<FileId> {
+        let displaced = self
+            .by_path
+            .insert(path.to_owned(), id)
+            .filter(|&old| old != id);
+        if let Some(old) = displaced {
+            self.paths.remove(&old);
         }
-        self.by_path.insert(path.to_owned(), id);
         self.paths.insert(id, path.to_owned());
+        displaced
     }
 
     #[must_use]
@@ -125,10 +129,19 @@ mod tests {
         let mut ids = FileIds::default();
         let unnamed = ids.fresh();
         assert_eq!(ids.path(unnamed), None);
-        ids.adopt(unnamed, Path::new("/v/n.md"));
+        assert_eq!(ids.adopt(unnamed, Path::new("/v/n.md")), None);
         assert_eq!(ids.of_path(Path::new("/v/n.md")), unnamed);
-        let taken = ids.fresh();
-        ids.adopt(taken, Path::new("/v/n.md"));
+    }
+
+    /// La ruta era de un archivo que se borró: pasa a ser del buffer que se
+    /// guardó ahí, y la vieja queda sin archivo.
+    #[test]
+    fn una_ruta_ocupada_pasa_al_buffer_que_la_adopta() {
+        let mut ids = FileIds::default();
+        let old = ids.of_path(Path::new("/v/n.md"));
+        let unnamed = ids.fresh();
+        assert_eq!(ids.adopt(unnamed, Path::new("/v/n.md")), Some(old));
         assert_eq!(ids.of_path(Path::new("/v/n.md")), unnamed);
+        assert_eq!(ids.path(old), None);
     }
 }

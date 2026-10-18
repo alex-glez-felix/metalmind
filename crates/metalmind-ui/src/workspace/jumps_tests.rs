@@ -196,3 +196,65 @@ fn una_macro_con_ctrl_o_cruza_de_archivo_y_sigue() {
     session.keys("⌃i@q");
     assert_eq!(at(&session), ("a.md".into(), 3));
 }
+
+/// Guardar un `[No Name]` en la ruta de una nota que se mandó a la papelera
+/// le da esa ruta: el documento y su archivo son el mismo para la jumplist.
+#[test]
+fn un_buffer_guardado_en_la_ruta_de_una_nota_borrada_se_queda_con_ella() {
+    let (_dir, vault, mut session) = vault_session(&[("a.md", "uno\n"), ("b.md", B)], "a.md");
+    session.keys("mA");
+    let a = VaultPath::new("a.md").unwrap();
+    session.workspace.trash_file(&vault, &a).unwrap();
+    let path = vault.root().join("a.md");
+    session.keys(&format!("inueva⎋:w {}⏎", path.display()));
+    session.keys(&format!(":e {}⏎", vault.root().join("b.md").display()));
+    session.keys("⌃o");
+    assert_eq!(
+        (session.file(), session.text()),
+        ("a.md".into(), "nueva".into())
+    );
+    session.keys("'A");
+    assert_eq!(error(&session).as_deref(), Some("E20: Mark not set"));
+}
+
+/// Una nota borrada que vuelve a existir y se abre antes de que el watcher
+/// avise vuelve a valer para la jumplist.
+#[test]
+fn reabrir_una_nota_borrada_la_devuelve_a_la_jumplist() {
+    let notes = [("a.md", A), ("b.md", B), ("c.md", C)];
+    let (_dir, vault, mut session) = vault_session(&notes, "a.md");
+    let b = VaultPath::new("b.md").unwrap();
+    session.workspace.trash_file(&vault, &b).unwrap();
+    fs::write(vault.root().join("b.md"), B).unwrap();
+    session.keys(&format!(":e {}⏎", vault.root().join("b.md").display()));
+    session.keys("jjgd");
+    assert_eq!(session.file(), "c.md");
+    session.keys("⌃o");
+    assert_eq!(at(&session), ("b.md".into(), 3));
+}
+
+/// Como `autoread`: una nota oculta sin cambios que cambió en disco se
+/// relee; una con cambios se queda como estaba.
+#[test]
+fn una_nota_oculta_se_relee_si_cambia_en_disco() {
+    let (_dir, vault, mut session) =
+        vault_session(&[("a.md", "uno\n"), ("b.md", B), ("c.md", C)], "a.md");
+    let path = |name: &str| vault.root().join(name);
+    session.keys(&format!(
+        ":e {}⏎Ax⎋:e! {}⏎",
+        path("c.md").display(),
+        path("b.md").display()
+    ));
+    fs::write(path("a.md"), "de fuera\n").unwrap();
+    fs::write(path("c.md"), "de fuera\n").unwrap();
+    let modified = |name: &str| VaultChange::Modified {
+        path: VaultPath::new(name).unwrap(),
+    };
+    session
+        .workspace
+        .files_changed(vault.root(), &[modified("a.md"), modified("c.md")]);
+    session.keys(&format!(":e {}⏎", path("a.md").display()));
+    assert_eq!(session.text(), "de fuera");
+    session.keys(&format!(":e {}⏎", path("c.md").display()));
+    assert_eq!(session.text(), "c1x");
+}
