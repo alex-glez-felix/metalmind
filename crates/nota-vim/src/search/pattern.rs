@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use nota_buffer::{Buffer, ByteOffset};
 use regex::{Captures, Regex, RegexBuilder};
@@ -25,7 +26,10 @@ pub(crate) enum Case {
 #[derive(Clone, Debug)]
 pub struct Pattern {
     source: String,
-    regex: Regex,
+    case: Case,
+    /// Compartido: un `Regex` clonado arma sus cachés de cero en la primera
+    /// búsqueda, y el motor clona el último patrón a cada `:s` de un `:g`.
+    regex: Arc<Regex>,
 }
 
 impl Pattern {
@@ -43,13 +47,22 @@ impl Pattern {
             .map_err(|_| SearchError::Invalid(source.to_owned()))?;
         Ok(Self {
             source: source.to_owned(),
-            regex,
+            case,
+            regex: Arc::new(regex),
         })
     }
 
     /// El mismo patrón con otra regla de mayúsculas.
     pub(crate) fn with_case(&self, case: Case) -> Result<Self, SearchError> {
+        if self.case == case {
+            return Ok(self.clone());
+        }
         Self::compile(&self.source, case)
+    }
+
+    /// Si es `source` compilado con `case`, para no compilarlo de nuevo.
+    pub(crate) fn is(&self, source: &str, case: Case) -> bool {
+        self.case == case && self.source == source
     }
 
     /// Lo que se escribió, en el dialecto de vim.

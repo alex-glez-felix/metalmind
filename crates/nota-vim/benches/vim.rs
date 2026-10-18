@@ -103,3 +103,33 @@ fn buscar_la_siguiente(bencher: Bencher, lines: usize) {
 fn n_tras_buscar(bencher: Bencher) {
     keys(bencher, 50_000, &format!("/{WORD}\n"), "n");
 }
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn global_borrar(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", &format!(":g/{WORD}/d\n"));
+}
+
+#[divan::bench(sample_size = 1, sample_count = 20)]
+fn deshacer_global_borrar(bencher: Bencher) {
+    keys(bencher, 5_000, &format!(":g/{WORD}/d\n"), "u");
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn global_mover_arriba(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", ":g/^/m0\n");
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn normal_en_cada_linea(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", ":%norm Ax\n");
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn ordenar(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", ":sort\n");
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn global_sustituir(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", &format!(":g/{WORD}/s/{WORD}/apunte/\n"));
+}

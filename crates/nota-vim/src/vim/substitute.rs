@@ -84,12 +84,16 @@ impl Vim {
         Ok((remembered, used))
     }
 
-    /// Vacío es el último patrón usado.
+    /// Vacío es el último patrón usado. Si se repite el último, como en cada
+    /// línea de `:g/x/s/x/y/`, no se vuelve a compilar.
     pub(super) fn typed_pattern(&mut self, source: &str) -> Result<Pattern, SearchError> {
         if source.is_empty() {
             return self.search.pattern.clone().ok_or(SearchError::NoPrevious);
         }
         self.search.history.push(source);
-        Pattern::compile(source, Case::Smart)
+        match &self.search.pattern {
+            Some(last) if last.is(source, Case::Smart) => Ok(last.clone()),
+            _ => Pattern::compile(source, Case::Smart),
+        }
     }
 }
