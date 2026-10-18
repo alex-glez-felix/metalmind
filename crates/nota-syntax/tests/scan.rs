@@ -6,6 +6,7 @@
 
 mod support;
 
+use std::borrow::Cow;
 use std::fs;
 
 use nota_syntax::{LinkSyntax, Problem, Resolution, Subpath, resolve, scan};
@@ -120,15 +121,16 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
     let [link] = scan.links.as_slice() else {
         panic!("se esperaba un link en {text:?}: {:?}", scan.links);
     };
-    let subpath = link.subpath.as_ref().map(|subpath| match subpath {
-        Subpath::Heading(range) => format!("#{}", &text[range.clone()]),
-        Subpath::Block(range) => format!("^{}", &text[range.clone()]),
-    });
-    let alias = link.alias.clone().map(|range| text[range].to_owned());
+    let subpath = link
+        .subpath_text(text)
+        .map(|subpath_text| match link.subpath {
+            Some(Subpath::Block(_)) => format!("^{subpath_text}"),
+            _ => format!("#{subpath_text}"),
+        });
     (
-        link.text(text, link.target.clone()).into_owned(),
+        link.target_text(text).into_owned(),
         subpath,
-        alias,
+        link.alias_text(text).map(Cow::into_owned),
         link.embed,
     )
 }
@@ -156,7 +158,7 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
 #[case(
     "[texto](Mi%20Nota.md#Un%20H)",
     "Mi Nota.md",
-    Some("#Un%20H"),
+    Some("#Un H"),
     Some("texto"),
     false
 )]
@@ -164,6 +166,13 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
 #[case("[a](nota.md \"título\")", "nota.md", None, Some("a"), false)]
 #[case("![](img.png)", "img.png", None, None, true)]
 #[case("[x](a\\).md)", "a).md", None, Some("x"), false)]
+#[case(
+    "[50%25 \\*off\\*](nota.md)",
+    "nota.md",
+    None,
+    Some("50%25 *off*"),
+    false
+)]
 #[case("[x](nota\\#1.md#H)", "nota#1.md", Some("#H"), Some("x"), false)]
 fn link_parts(
     #[case] text: &str,
@@ -299,6 +308,6 @@ fn unclosed_backtick_runs_of_many_lengths_stay_linear() {
 #[case("[x](Mi%20Nota.md)", "Mi Nota.md")]
 fn escaped_markdown_destinations_resolve(#[case] text: &str, #[case] path: &str) {
     let scan = scan(text);
-    let target = scan.links[0].text(text, scan.links[0].target.clone());
+    let target = scan.links[0].target_text(text);
     assert_eq!(resolve(&target, [path]), Resolution::Resolved(path));
 }
