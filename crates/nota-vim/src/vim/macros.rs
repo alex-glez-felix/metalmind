@@ -26,7 +26,12 @@ const MAX_PLAYED_KEYS: usize = 1 << 20;
 /// Las repeticiones de `{count}@a` no se copian: un count enorme no ocupa
 /// más memoria que uno chico.
 #[derive(Debug, Default)]
-pub(super) struct Playback(VecDeque<Repeated>);
+pub(super) struct Playback {
+    queue: VecDeque<Repeated>,
+    /// Teclas reproducidas desde la tecla que empezó la macro, también entre
+    /// las pausas para un comando del host.
+    played: usize,
+}
 
 /// Las teclas de una macro, `times` veces, desde `next`.
 #[derive(Debug)]
@@ -41,7 +46,7 @@ impl Playback {
         if keys.is_empty() || times == 0 {
             return;
         }
-        self.0.push_front(Repeated {
+        self.queue.push_front(Repeated {
             keys: keys.into(),
             times,
             next: 0,
@@ -49,25 +54,26 @@ impl Playback {
     }
 
     fn pop_front(&mut self) -> Option<Key> {
-        let front = self.0.front_mut()?;
+        let front = self.queue.front_mut()?;
         let key = front.keys[front.next];
         front.next += 1;
         if front.next == front.keys.len() {
             front.next = 0;
             front.times -= 1;
             if front.times == 0 {
-                self.0.pop_front();
+                self.queue.pop_front();
             }
         }
+        self.played += 1;
         Some(key)
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.queue.is_empty()
     }
 
     fn clear(&mut self) {
-        self.0.clear();
+        self.queue.clear();
     }
 }
 
@@ -133,10 +139,38 @@ impl Vim {
         self.playback.push_front(macros::decode(&register), times);
     }
 
+    /// Sigue con la macro que se pausó en un comando del host (como
+    /// `ctrl-w l` o `:e`), ahora sobre el buffer y los cursores del panel
+    /// que quedó con el foco. `None` si no queda nada por reproducir.
+    ///
+    /// # Errors
+    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
+    pub fn resume_macro(
+        &mut self,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<Option<KeyOutcome>, VimError> {
+        if self.playback.is_empty() {
+            return Ok(None);
+        }
+        buffer.begin_undo_group();
+        let played = self.play(buffer, selections, clipboard);
+        buffer.end_undo_group();
+        played
+    }
+
+    /// Descarta lo que queda de la macro, como cuando falla un comando.
+    pub fn abort_macro(&mut self) {
+        self.playback.clear();
+    }
+
     /// Reproduce lo que dejó `@` en la cola. Como en vim, todo cuenta como
-    /// un solo cambio para `u`, y un comando que falla descarta lo que
-    /// queda. Devuelve lo último que quien aloja el editor tiene que hacer o
-    /// avisar, como un `:w` o una búsqueda que dio la vuelta.
+    /// un solo cambio para `u` en cada buffer, y un comando que falla
+    /// descarta lo que queda. Devuelve lo último que quien aloja el editor
+    /// tiene que avisar, como una búsqueda que dio la vuelta; un comando
+    /// suyo, como `:w` o `ctrl-w l`, pausa la macro para que lo ejecute antes
+    /// de seguir con [`Vim::resume_macro`].
     pub(super) fn play_queued(
         &mut self,
         typed: KeyOutcome,
@@ -147,6 +181,7 @@ impl Vim {
         if self.playback.is_empty() {
             return Ok(typed);
         }
+        self.playback.played = 0;
         buffer.begin_undo_group();
         let played = self.play(buffer, selections, clipboard);
         buffer.end_undo_group();
@@ -160,10 +195,14 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let mut for_host = None;
-        let mut played = 0;
         while let Some(key) = self.playback.pop_front() {
-            played += 1;
             let outcome = self.process(key, buffer, selections, clipboard)?;
+            if self.playback.played >= MAX_PLAYED_KEYS {
+                self.playback.clear();
+            }
+            if matches!(outcome, KeyOutcome::Command(_)) {
+                return Ok(Some(outcome));
+            }
             if !matches!(
                 outcome,
                 KeyOutcome::Pending
@@ -173,7 +212,7 @@ impl Vim {
             ) {
                 for_host = Some(outcome);
             }
-            if self.failed || played >= MAX_PLAYED_KEYS {
+            if self.failed {
                 self.playback.clear();
             }
         }

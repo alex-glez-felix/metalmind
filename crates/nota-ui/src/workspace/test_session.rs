@@ -76,7 +76,7 @@ impl Session {
                 .feed(self.pane(), key, &mut self.clipboard)
                 .unwrap();
             if let KeyOutcome::Command(invocation) = &outcome {
-                self.effect = self.workspace.run(invocation);
+                self.effect = self.workspace.run(invocation, &mut self.clipboard);
             }
             last = Some(outcome);
         }

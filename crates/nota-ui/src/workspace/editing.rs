@@ -1,7 +1,7 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
 use nota_buffer::{Bias, ByteOffset, Edit, Goal, Selection, Selections};
-use nota_vim::{Action, Clipboard, Key, KeyOutcome};
+use nota_vim::{Action, Clipboard, Invocation, Key, KeyOutcome};
 
 use super::{Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 
@@ -25,6 +25,27 @@ impl Workspace {
         })?;
         self.note(&outcome);
         Ok(outcome)
+    }
+
+    /// Sigue la macro pausada en el panel enfocado; devuelve su próximo
+    /// comando, si llega a uno.
+    pub(super) fn resume_macro(&mut self, clipboard: &mut dyn Clipboard) -> Option<Invocation> {
+        let resumed = self.edit_pane(self.focused(), |vim, buffer, selections| {
+            Ok(vim.resume_macro(buffer, selections, clipboard)?)
+        });
+        match resumed {
+            Ok(Some(KeyOutcome::Command(invocation))) => Some(invocation),
+            Ok(Some(outcome)) => {
+                self.note(&outcome);
+                None
+            }
+            Ok(None) => None,
+            Err(error) => {
+                self.vim.abort_macro();
+                self.report(&error);
+                None
+            }
+        }
     }
 
     /// El aviso que deja una tecla. Abrir la línea de comandos o encontrar

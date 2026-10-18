@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use nota_buffer::Selection;
-use nota_vim::{Command, Invocation, Mode};
+use nota_vim::{Clipboard, Command, Invocation, Mode};
 
 use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor};
@@ -22,15 +22,36 @@ pub enum Effect {
 
 impl Workspace {
     /// Ejecuta `invocation` en el panel enfocado y deja el aviso, si lo hay,
-    /// en [`Workspace::message`].
-    pub fn run(&mut self, invocation: &Invocation) -> Effect {
-        match self.try_run(invocation) {
-            Ok(effect) => effect,
-            Err(error) => {
-                self.report(&error);
-                Effect::Stay
+    /// en [`Workspace::message`]. Si el comando salió de una macro, la
+    /// macro sigue en el panel que quedó con el foco, hasta su próximo
+    /// comando o hasta terminar; como en vim, un error la corta.
+    pub fn run(&mut self, invocation: &Invocation, clipboard: &mut dyn Clipboard) -> Effect {
+        let mut invocation = invocation.clone();
+        loop {
+            let effect = self.run_one(&invocation);
+            if effect == Effect::CloseWindow {
+                self.vim.abort_macro();
+                return effect;
+            }
+            match self.resume_macro(clipboard) {
+                Some(next) => invocation = next,
+                None => return effect,
             }
         }
+    }
+
+    fn run_one(&mut self, invocation: &Invocation) -> Effect {
+        let before = self.message.take();
+        let effect = self.try_run(invocation).unwrap_or_else(|error| {
+            self.report(&error);
+            Effect::Stay
+        });
+        match &self.message {
+            Some(Message::Error(_)) => self.vim.abort_macro(),
+            Some(Message::Info(_)) => {}
+            None => self.message = before,
+        }
+        effect
     }
 
     /// Si se puede cerrar la ventana sin perder cambios; si no, lo avisa.
