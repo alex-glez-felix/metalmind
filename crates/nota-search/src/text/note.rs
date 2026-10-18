@@ -10,6 +10,8 @@ use grep_matcher::{LineTerminator, Matcher as _};
 use grep_regex::RegexMatcher;
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 
+use super::SearchError;
+
 /// Una línea de una nota con al menos una coincidencia.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineMatch {
@@ -24,22 +26,42 @@ pub struct LineMatch {
     pub matches: Vec<Range<usize>>,
 }
 
+/// El patrón de una [`TextQuery`](super::TextQuery) ya compilado.
+#[derive(Debug, Clone)]
+pub struct TextMatcher {
+    regex: RegexMatcher,
+}
+
+impl TextMatcher {
+    pub(super) fn new(regex: RegexMatcher) -> Self {
+        Self { regex }
+    }
+
+    /// Las líneas de `text` que coinciden: la búsqueda en una nota que ya está
+    /// en memoria, como la de un buffer con cambios sin guardar.
+    ///
+    /// # Errors
+    /// Si falla el motor de búsqueda.
+    pub fn find(&self, text: &str) -> Result<Vec<LineMatch>, SearchError> {
+        let mut sink = Collect::new(&self.regex, None);
+        searcher(BinaryDetection::none())
+            .search_slice(&self.regex, text.as_bytes(), &mut sink)
+            .map_err(SearchError::Engine)?;
+        Ok(sink.lines)
+    }
+}
+
 /// Lo que cada hilo reusa de una nota a la siguiente.
 pub(super) struct NoteSearcher {
     searcher: Searcher,
-    matcher: RegexMatcher,
+    matcher: TextMatcher,
     bytes: Vec<u8>,
 }
 
 impl NoteSearcher {
-    pub(super) fn new(matcher: RegexMatcher) -> Self {
-        let searcher = SearcherBuilder::new()
-            .line_terminator(LineTerminator::crlf())
-            .binary_detection(BinaryDetection::quit(b'\0'))
-            .line_number(true)
-            .build();
+    pub(super) fn new(matcher: TextMatcher) -> Self {
         Self {
-            searcher,
+            searcher: searcher(BinaryDetection::quit(b'\0')),
             matcher,
             bytes: Vec::new(),
         }
@@ -54,14 +76,9 @@ impl NoteSearcher {
     ) -> io::Result<Vec<LineMatch>> {
         self.bytes.clear();
         File::open(path)?.read_to_end(&mut self.bytes)?;
-        let mut sink = Collect {
-            matcher: &self.matcher,
-            cancel,
-            lines: Vec::new(),
-            not_text: false,
-        };
-        self.searcher
-            .search_slice(&self.matcher, &self.bytes, &mut sink)?;
+        let regex = &self.matcher.regex;
+        let mut sink = Collect::new(regex, Some(cancel));
+        self.searcher.search_slice(regex, &self.bytes, &mut sink)?;
         let complete = !sink.not_text && !cancel.load(Ordering::Relaxed);
         if sink.lines.is_empty() || !complete || str::from_utf8(&self.bytes).is_err() {
             return Ok(Vec::new());
@@ -70,19 +87,36 @@ impl NoteSearcher {
     }
 }
 
+fn searcher(binary: BinaryDetection) -> Searcher {
+    SearcherBuilder::new()
+        .line_terminator(LineTerminator::crlf())
+        .binary_detection(binary)
+        .line_number(true)
+        .build()
+}
+
 struct Collect<'a> {
-    matcher: &'a RegexMatcher,
-    cancel: &'a AtomicBool,
+    regex: &'a RegexMatcher,
+    cancel: Option<&'a AtomicBool>,
     lines: Vec<LineMatch>,
     /// Se encontró un NUL o una línea que no es UTF-8.
     not_text: bool,
 }
 
-impl Collect<'_> {
+impl<'a> Collect<'a> {
+    fn new(regex: &'a RegexMatcher, cancel: Option<&'a AtomicBool>) -> Self {
+        Self {
+            regex,
+            cancel,
+            lines: Vec::new(),
+            not_text: false,
+        }
+    }
+
     /// Las coincidencias no vacías de `text`: un `^` o un `x*` no marcan nada.
     fn matches(&self, text: &str) -> io::Result<Vec<Range<usize>>> {
         let mut matches = Vec::new();
-        self.matcher
+        self.regex
             .find_iter(text.as_bytes(), |found| {
                 if !found.is_empty() {
                     matches.push(found.start()..found.end());
@@ -98,7 +132,10 @@ impl Sink for Collect<'_> {
     type Error = io::Error;
 
     fn matched(&mut self, _: &Searcher, found: &SinkMatch<'_>) -> io::Result<bool> {
-        if self.cancel.load(Ordering::Relaxed) {
+        if self
+            .cancel
+            .is_some_and(|cancel| cancel.load(Ordering::Relaxed))
+        {
             return Ok(false);
         }
         let first_line = found

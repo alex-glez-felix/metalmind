@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use grep_regex::{RegexMatcher, RegexMatcherBuilder};
+use grep_regex::RegexMatcherBuilder;
 use nota_vault::VaultPath;
+
+use super::{SearchError, TextMatcher};
 
 /// Cómo se lee el patrón.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -39,7 +41,11 @@ pub struct TextQuery {
 }
 
 impl TextQuery {
-    pub(super) fn matcher(&self) -> Result<RegexMatcher, grep_regex::Error> {
+    /// El patrón compilado, para buscar en texto que ya está en memoria.
+    ///
+    /// # Errors
+    /// Si el patrón no compila.
+    pub fn compile(&self) -> Result<TextMatcher, SearchError> {
         let mut builder = RegexMatcherBuilder::new();
         builder
             .fixed_strings(self.syntax == Syntax::Literal)
@@ -47,6 +53,6 @@ impl TextQuery {
             .crlf(true)
             .case_smart(self.case == Case::Smart)
             .case_insensitive(self.case == Case::Insensitive);
-        builder.build(&self.pattern)
+        Ok(TextMatcher::new(builder.build(&self.pattern)?))
     }
 }

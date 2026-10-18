@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 use std::io;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
 
@@ -11,10 +12,36 @@ use ignore::{DirEntry, WalkBuilder, WalkState};
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::{VaultPath, is_hidden_name};
 
-/// Un walk de `root` con las reglas del vault, el mismo que arma su índice,
-/// para quien recorra el disco por su cuenta (la búsqueda de texto).
-#[must_use]
-pub fn walker(root: &Path) -> WalkBuilder {
+/// Recorre en paralelo las notas (`.md`) de `root` con las reglas del índice,
+/// para quien lea el disco por su cuenta (la búsqueda de texto). Cada hilo
+/// arma su visitante con `visitor`, que recibe la ruta en el vault y la del
+/// disco; un `Break` corta el walk en todos los hilos.
+pub fn walk_notes<'s, V>(root: &'s Path, mut visitor: impl FnMut() -> V)
+where
+    V: FnMut(VaultPath, &Path) -> ControlFlow<()> + Send + 's,
+{
+    walker(root).build_parallel().run(|| {
+        let mut visit = visitor();
+        Box::new(move |result| {
+            let entry = match result {
+                Ok(entry) => entry,
+                Err(error) => {
+                    log::warn!("al recorrer el vault: {error}");
+                    return WalkState::Continue;
+                }
+            };
+            match classify(root, &entry) {
+                Some((path, EntryKind::Note)) => match visit(path, entry.path()) {
+                    ControlFlow::Continue(()) => WalkState::Continue,
+                    ControlFlow::Break(()) => WalkState::Quit,
+                },
+                _ => WalkState::Continue,
+            }
+        })
+    });
+}
+
+fn walker(root: &Path) -> WalkBuilder {
     let mut builder = rules(root);
     builder.filter_entry(is_visible);
     builder
@@ -46,8 +73,7 @@ fn is_visible(entry: &DirEntry) -> bool {
 /// La ruta y el tipo de una entrada del walk, como los guarda el índice: nada
 /// para la raíz, los enlaces simbólicos (podrían sacar al vault de su raíz) y
 /// lo que no es una ruta válida del vault.
-#[must_use]
-pub fn classify(root: &Path, entry: &DirEntry) -> Option<(VaultPath, EntryKind)> {
+fn classify(root: &Path, entry: &DirEntry) -> Option<(VaultPath, EntryKind)> {
     if entry.depth() == 0 {
         return None;
     }

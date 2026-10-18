@@ -3908,7 +3908,6 @@ dependencies = [
  "grep-matcher",
  "grep-regex",
  "grep-searcher",
- "ignore",
  "log",
  "nota-perf",
  "nota-vault",
