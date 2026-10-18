@@ -27,6 +27,7 @@ pub struct LoadError {
 /// Un archivo de la cadena de `extends`.
 struct Layer {
     name: String,
+    builtin: bool,
     file: PathBuf,
     text: Cow<'static, str>,
     theme: ThemeFile,
@@ -129,14 +130,22 @@ impl Themes {
                     .in_file(&layer.file),
                 None => error,
             };
-            if chain.iter().any(|layer| layer.name == next) {
-                let names: Vec<&str> = chain.iter().map(|layer| layer.name.as_str()).collect();
-                return Err(referrer(Diagnostic::error(format!(
-                    "`extends` circular: {} → {next}",
-                    names.join(" → ")
-                ))));
+            // Un tema del usuario que extiende su mismo nombre extiende al embebido.
+            let shadowed = chain
+                .iter()
+                .any(|layer| layer.name == next && !layer.builtin);
+            let looped = |builtin: bool| {
+                chain
+                    .iter()
+                    .any(|layer| layer.name == next && layer.builtin == builtin)
+            };
+            if shadowed && !is_builtin(&next) {
+                return Err(referrer(circular(&chain, &next)));
             }
-            let (file, text) = self.read(&next).map_err(referrer)?;
+            let (file, text, builtin) = self.read(&next, !shadowed).map_err(referrer)?;
+            if looped(builtin) {
+                return Err(referrer(circular(&chain, &next)));
+            }
             let (theme, layer_warnings) =
                 parse::<ThemeFile>(&text).map_err(|error| error.in_file(&file))?;
             warnings.extend(
@@ -147,6 +156,7 @@ impl Themes {
             let extends = theme.extends.clone();
             chain.push(Layer {
                 name: next,
+                builtin,
                 file,
                 text,
                 theme,
@@ -159,7 +169,13 @@ impl Themes {
         }
     }
 
-    fn read(&self, name: &str) -> Result<(PathBuf, Cow<'static, str>), Diagnostic> {
+    /// El archivo del tema, su texto y si es embebido. Con `user` en falso
+    /// solo se buscan los embebidos.
+    fn read(
+        &self,
+        name: &str,
+        user: bool,
+    ) -> Result<(PathBuf, Cow<'static, str>, bool), Diagnostic> {
         if name.is_empty()
             || !name
                 .chars()
@@ -169,10 +185,10 @@ impl Themes {
                 "`{name}` no es un nombre de tema válido: solo letras, números, `-` y `_`"
             )));
         }
-        if let Some(dir) = &self.user_dir {
+        if let Some(dir) = self.user_dir.as_ref().filter(|_| user) {
             let file = dir.join(format!("{name}.toml"));
             match std::fs::read_to_string(&file) {
-                Ok(text) => return Ok((file, Cow::Owned(text))),
+                Ok(text) => return Ok((file, Cow::Owned(text), false)),
                 Err(error) if error.kind() == io::ErrorKind::NotFound => {}
                 Err(error) => {
                     return Err(
@@ -188,10 +204,23 @@ impl Themes {
                 (
                     Path::new("<embebido>").join(format!("{name}.toml")),
                     Cow::Borrowed(text),
+                    true,
                 )
             })
             .ok_or_else(|| Diagnostic::error(format!("no existe el tema `{name}`")))
     }
+}
+
+fn is_builtin(name: &str) -> bool {
+    BUILTIN_THEMES.iter().any(|(builtin, _)| *builtin == name)
+}
+
+fn circular(chain: &[Layer], next: &str) -> Diagnostic {
+    let names: Vec<&str> = chain.iter().map(|layer| layer.name.as_str()).collect();
+    Diagnostic::error(format!(
+        "`extends` circular: {} → {next}",
+        names.join(" → ")
+    ))
 }
 
 fn complete(
