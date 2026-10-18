@@ -14,7 +14,7 @@ const VAULT: [&str; 6] = [
 
 fn ranked(query: &str) -> Vec<&'static str> {
     PathMatcher::new()
-        .search(query, VAULT)
+        .search(query, &VAULT, usize::MAX)
         .into_iter()
         .map(|found| VAULT[found.index])
         .collect()
@@ -22,7 +22,7 @@ fn ranked(query: &str) -> Vec<&'static str> {
 
 /// Lo que coincide marcado entre corchetes, para leer las posiciones.
 fn highlighted(query: &str, candidate: &str) -> String {
-    let found = PathMatcher::new().search(query, [candidate]);
+    let found = PathMatcher::new().search(query, &[candidate], 1);
     let Some(PathMatch { positions, .. }) = found.first() else {
         return "(nada)".to_owned();
     };
@@ -56,18 +56,29 @@ fn el_query_vacio_devuelve_todo_en_orden() {
 }
 
 #[test]
+fn limit_corta_la_lista_ordenada() {
+    let matcher = &mut PathMatcher::new();
+    let all = matcher.search("a", &VAULT, usize::MAX);
+    for limit in 0..=all.len() + 1 {
+        let page = matcher.search("a", &VAULT, limit);
+        assert_eq!(page, all[..limit.min(all.len())]);
+    }
+    assert_eq!(matcher.search("", &VAULT, 2).len(), 2);
+}
+
+#[test]
 fn mayusculas_solo_si_el_query_las_lleva() {
     let matcher = &mut PathMatcher::new();
-    assert_eq!(matcher.search("readme", ["README.md"]).len(), 1);
-    assert_eq!(matcher.search("README", ["readme.md"]).len(), 0);
+    assert_eq!(matcher.search("readme", &["README.md"], 1).len(), 1);
+    assert_eq!(matcher.search("README", &["readme.md"], 1).len(), 0);
 }
 
 #[test]
 fn acentos_solo_si_el_query_los_lleva() {
     let matcher = &mut PathMatcher::new();
-    assert_eq!(matcher.search("cancion", ["canción.md"]).len(), 1);
-    assert_eq!(matcher.search("canción", ["canción.md"]).len(), 1);
-    assert_eq!(matcher.search("canción", ["cancion.md"]).len(), 0);
+    assert_eq!(matcher.search("cancion", &["canción.md"], 1).len(), 1);
+    assert_eq!(matcher.search("canción", &["canción.md"], 1).len(), 1);
+    assert_eq!(matcher.search("canción", &["cancion.md"], 1).len(), 0);
 }
 
 #[rstest]
@@ -88,7 +99,7 @@ fn las_posiciones_son_bytes(#[case] query: &str, #[case] candidate: &str, #[case
 #[test]
 fn las_posiciones_caen_en_fronteras_de_caracter() {
     let candidate = "señal/ñandú.md";
-    let found = PathMatcher::new().search("nandu", [candidate]);
+    let found = PathMatcher::new().search("nandu", &[candidate], 1);
     for &offset in &found[0].positions {
         assert!(candidate.is_char_boundary(offset), "{offset}");
     }
@@ -108,7 +119,7 @@ proptest! {
             .filter(|(c, pick)| **pick && c.is_alphanumeric() && c.is_ascii())
             .map(|(c, _)| c)
             .collect();
-        let found = PathMatcher::new().search(&query, [candidate.as_str()]);
+        let found = PathMatcher::new().search(&query, &[candidate.as_str()], 1);
         prop_assert_eq!(found.len(), 1);
         let positions = &found[0].positions;
         prop_assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
