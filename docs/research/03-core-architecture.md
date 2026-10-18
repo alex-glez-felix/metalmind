@@ -346,6 +346,14 @@ Con `divan`, en release, en una máquina de escritorio x86_64 con Linux, sobre `
 
 Los objetivos de cada fila están en el [presupuesto](../performance.md). La primera versión volvía a resolver los links afectados una vez por cada archivo de una carpeta borrada (borrar 100 notas de un vault de 1 000 tardaba 556 ms; ahora 17 ms) y comparaba cada link por nombre contra todas las candidatas empatadas; lo encontraron las pruebas de complejidad de `crates/nota-vault/tests/complexity.rs`.
 
+Tags (M2.5, 2026-10-18), `cargo bench -p nota-vault --bench tags`, en release, medido en el contenedor de una sesión de agente en la nube (x86_64, 4 hilos, Linux), no en la máquina de CI: el vault de arriba con 200 páginas de tag en un árbol de `parents` (algunas con dos padres) y cada nota con un tag en `tags:`, dos en el texto y un alias.
+
+| Qué | Mediana |
+|---|---|
+| Abrir e indexar archivos, tags y grafo (`abrir_5k_notas_con_tags`); en la misma corrida, `abrir_5k_notas` sin páginas dio 34 ms | **66 ms** (objetivo: < 200 ms) |
+| Consulta `#t1` (un tag con descendientes) / `#t1 -#t3` / `-#` | **0.69** / 0.76 / 0.46 ms (objetivo: < 16 ms) |
+| Plan de renombrar `#t1` (con página, hijos y alias) | 0.07 ms |
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins
@@ -399,7 +407,7 @@ nota/
 │   ├── nota-syntax/        # tree-sitter-md + scanner de la sintaxis de nota (wikilinks, tags, embeds, frontmatter)
 │   ├── nota-vim/           # Mode (Normal, Insert, Visual v/V, operador pendiente, `:` `/` `?`), Motion, Operator, TextObject, registros, macros, marks, VimState → Transaction; búsqueda `/ ? n N * #` y `:s` sobre `regex`. `"+`/`"*` vía el trait Clipboard que da la UI. Depende de nota-buffer y regex (+ nota-syntax para text objects md)
 │   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo YAML, registro de Actions
-│   ├── nota-vault/         # hecho (M2): abrir un vault, índice de archivos, watcher, operaciones de archivo, guardado atómico; (M3) índice de links y backlinks, seguir un link, plan de renombre; luego caché redb
+│   ├── nota-vault/         # hecho (M2): abrir un vault, índice de archivos, watcher, operaciones de archivo, guardado atómico; (M2.5) núcleo de los tags; (M3) índice de links y backlinks, seguir un link, plan de renombre; luego caché redb
 │   ├── nota-search/        # hecho (M2): fuzzy de rutas con nucleo-matcher; texto completo con grep paralelo (M6, sin UI); tantivy solo si hace falta (§4)
 │   ├── nota-config/        # settings, rutas XDG, temas
 │   ├── nota-ui/            # vistas sobre el framework elegido (editor, file tree, picker, paleta)
@@ -408,7 +416,7 @@ nota/
 └── tests/fixtures/vaults/  # vaults de ejemplo (incluir uno exportado de Obsidian real)
 ```
 
-Estado (2026-10-18): existen `nota-buffer`, `nota-config`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault` (con el índice de links de M3), `nota-ui` y `nota`.
+Estado (2026-10-18): existen `nota-buffer`, `nota-config`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault` (con el índice de links de M3 y el índice, el grafo, las consultas y los planes de renombrar de los tags, M2.5), `nota-ui` y `nota`.
 
 Regla de dependencias (verificable con `cargo tree` en CI): **solo `nota-ui` y `nota` dependen del framework de GUI**. Todo lo demás compila y se testea sin ventana. Eso hace que cambiar GPUI ↔ iced cueste una sola capa.
 
