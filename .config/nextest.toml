@@ -1,0 +1,4 @@
+[profile.default]
+# Una prueba de complejidad que se volvió cuadrática puede tardar minutos en
+# fallar por tiempo; aquí falla al minuto. La más lenta hoy tarda ~7 s.
+slow-timeout = { period = "30s", terminate-after = 2 }

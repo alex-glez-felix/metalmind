@@ -1,0 +1,87 @@
+name: Rendimiento
+
+# Conteo de instrucciones con callgrind (gungraun): determinista, así que el
+# ruido del runner no cuenta. Cada PR se compara contra su base medida en el
+# mismo runner, no contra un número guardado: el conteo cambia con las
+# extensiones del CPU (memchr y ropey eligen SIMD al arrancar), y dos runners
+# de GitHub no siempre tienen el mismo. Ver docs/performance.md.
+
+on:
+  push:
+    branches: [main]
+    paths: &nucleo
+      - "crates/nota-buffer/**"
+      - "crates/nota-vim/**"
+      - "crates/nota-syntax/**"
+      - "crates/nota-search/**"
+      - "crates/nota-perf/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/perf.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths: *nucleo
+
+env:
+  CARGO_TERM_COLOR: always
+  GUNGRAUN_VERSION: 0.20.0
+  # Una regresión de más de esto en instrucciones hace fallar el job.
+  LIMITE: ir=5%
+  # Con esta etiqueta, una regresión justificada se reporta sin fallar.
+  ETIQUETA_ACEPTADA: rendimiento-aceptado
+
+jobs:
+  instrucciones:
+    # Otras etiquetas no cambian nada; esta sí cambia el resultado.
+    if: >-
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || github.event.label.name == 'rendimiento-aceptado'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # En una PR, HEAD es el merge con la base y HEAD^1 es la base.
+          fetch-depth: 2
+      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-perf
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: gungraun-runner@${{ env.GUNGRAUN_VERSION }}
+
+      - name: Medir la base
+        if: github.event_name == 'pull_request'
+        id: base
+        run: |
+          git worktree add ../base HEAD^1
+          if [ ! -f ../base/crates/nota-perf/benches/instrucciones.rs ]; then
+            echo "::notice::La base no tiene los benchmarks de instrucciones; no hay contra qué comparar."
+            exit 0
+          fi
+          echo "medida=true" >> "$GITHUB_OUTPUT"
+          cd ../base
+          CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" \
+            cargo bench -p nota-perf --bench instrucciones -- --save-baseline=base
+
+      - name: Comparar contra la base
+        if: steps.base.outputs.medida == 'true'
+        env:
+          ACEPTADA: ${{ contains(github.event.pull_request.labels.*.name, 'rendimiento-aceptado') }}
+        run: |
+          limite=()
+          if [ "$ACEPTADA" = "true" ]; then
+            echo "::warning::Etiqueta $ETIQUETA_ACEPTADA: las regresiones se reportan sin fallar."
+          else
+            limite=(--callgrind-limits="$LIMITE")
+          fi
+          cargo bench -p nota-perf --bench instrucciones -- --baseline=base "${limite[@]}"
+
+      # En main y en una PR sin base medible: que los benchmarks corran.
+      - name: Medir
+        if: steps.base.outputs.medida != 'true'
+        run: cargo bench -p nota-perf --bench instrucciones
