@@ -1,5 +1,5 @@
-//! Los tags del vault (05): el índice de lo que escriben las notas y el grafo
-//! de las páginas de tag.
+//! Los tags del vault (05): el índice de lo que escriben las notas, el grafo
+//! de las páginas de tag y las consultas.
 
 mod cycles;
 mod graph;
@@ -7,6 +7,7 @@ mod index;
 mod key;
 mod note;
 mod page;
+mod query;
 #[cfg(test)]
 mod tests;
 mod update;
@@ -20,6 +21,7 @@ pub use index::{TagEntry, TagIndex};
 pub use key::{TagKey, tag_name};
 pub use note::{FrontmatterSpot, NoteTags, TagOccurrence, TagSource, content_hash};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage};
+pub use query::{ParsedQuery, TagQuery};
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;

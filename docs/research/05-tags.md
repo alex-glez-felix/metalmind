@@ -168,6 +168,7 @@ Sintaxis mínima, la misma en `space f`, en `:focus` y en el filtro del panel:
 | `#a` | La nota lleva `a`, un alias de `a` o un descendiente de `a` por `parents` (§7). |
 | `#a #b` | Las dos (espacio = "y"). |
 | `-#a` | No lleva `a`, ni sus alias, ni sus descendientes. |
+| `-#` | No lleva ningún tag: el buzón ([06](06-decisiones-de-fondo.md) §9). Se lee "no `#` cualquiera"; las páginas de tag no salen. |
 | `carpeta/` | Está bajo esa carpeta (solo en `:focus`, §3). |
 | cualquier otra palabra | En `space f`, texto para el fuzzy de rutas, como hoy. |
 
@@ -178,7 +179,7 @@ Sintaxis mínima, la misma en `space f`, en `:focus` y en el filtro del panel:
 - Las páginas de tag no son resultados, salvo que se pida (§7).
 - **No hay "o"**, ni paréntesis, ni comodines. Cubren casos reales pero convierten esto en un lenguaje; si hacen falta, se ven junto con las vistas guardadas (`IDEAS.md`).
 - Un tag que no existe en el vault no es error: da cero resultados y el prompt lo marca en el color de aviso del tema.
-- En código, `TagQuery { include: Vec<TagKey>, exclude: Vec<TagKey> }` y `Scope { folder: Option<VaultPath>, tags: TagQuery }`, con `fn notes(&self, &TagIndex, &TagGraph, &VaultIndex) -> NoteSet`. El parseo es una función pura con tabla de casos en `insta`.
+- En código, `TagQuery { include: Vec<TagKey>, exclude: Vec<TagKey>, untagged: bool }` y `Scope { folder: Option<VaultPath>, tags: TagQuery }`, con `fn notes(&self, &TagIndex, &TagGraph, &VaultIndex) -> NoteSet`. El parseo es una función pura con tabla de casos en `insta`.
 
 ## 5. Operaciones
 
