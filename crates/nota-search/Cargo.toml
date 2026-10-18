@@ -12,9 +12,14 @@ nucleo-matcher.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
 rstest.workspace = true
+
+[[bench]]
+name = "search"
+harness = false
 
 [lints]
 workspace = true

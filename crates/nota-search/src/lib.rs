@@ -1,6 +1,8 @@
 //! Búsqueda del vault. Por ahora, la difusa de rutas del finder: una función
 //! pura de query y candidatos a resultados ordenados.
 
+use std::cmp::Reverse;
+
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use unicode_segmentation::UnicodeSegmentation as _;
@@ -39,65 +41,74 @@ impl PathMatcher {
         Self::default()
     }
 
-    /// Los candidatos que coinciden con `query`, del mejor al peor; a igual
-    /// puntaje, la ruta más corta y luego el orden de entrada. Con el query
-    /// vacío coinciden todos, en el orden de entrada.
+    /// Los `limit` candidatos que mejor coinciden con `query`, del mejor al
+    /// peor; a igual puntaje, la ruta más corta y luego el orden de entrada.
+    /// Con el query vacío coinciden todos, en el orden de entrada. Solo esos
+    /// `limit` pagan el cálculo de posiciones: la UI pide una página.
     ///
     /// El query sigue la sintaxis de `nucleo`: palabras separadas por espacio
     /// que tienen que coincidir todas. Mayúsculas y acentos cuentan solo si el
     /// query los lleva: `nino` encuentra `niño`, pero `ñandu` no a `ñandú`.
-    pub fn search<'a>(
+    pub fn search(
         &mut self,
         query: &str,
-        candidates: impl IntoIterator<Item = &'a str>,
+        candidates: &[impl AsRef<str>],
+        limit: usize,
     ) -> Vec<PathMatch> {
         let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
         if pattern.atoms.is_empty() {
-            return candidates
-                .into_iter()
-                .enumerate()
-                .map(|(index, _)| PathMatch {
+            return (0..candidates.len().min(limit))
+                .map(|index| PathMatch {
                     index,
                     score: 0,
                     positions: Vec::new(),
                 })
                 .collect();
         }
-        let mut found: Vec<(PathMatch, usize)> = candidates
-            .into_iter()
+        let mut ranked: Vec<(u32, usize)> = candidates
+            .iter()
             .enumerate()
             .filter_map(|(index, candidate)| {
-                let found = self.match_one(&pattern, index, candidate)?;
-                Some((found, candidate.len()))
+                let haystack = Utf32Str::new(candidate.as_ref(), &mut self.chars);
+                Some((pattern.score(haystack, &mut self.matcher)?, index))
             })
             .collect();
-        found.sort_by(|(a, a_len), (b, b_len)| {
-            b.score
-                .cmp(&a.score)
-                .then(a_len.cmp(b_len))
-                .then(a.index.cmp(&b.index))
-        });
-        found.into_iter().map(|(found, _)| found).collect()
+        let rank = |&(score, index): &(u32, usize)| {
+            (Reverse(score), candidates[index].as_ref().len(), index)
+        };
+        if ranked.len() > limit {
+            ranked.select_nth_unstable_by_key(limit, rank);
+            ranked.truncate(limit);
+        }
+        ranked.sort_unstable_by_key(rank);
+        ranked
+            .into_iter()
+            .map(|(score, index)| PathMatch {
+                index,
+                score,
+                positions: self.positions(&pattern, candidates[index].as_ref()),
+            })
+            .collect()
     }
 
-    fn match_one(&mut self, pattern: &Pattern, index: usize, candidate: &str) -> Option<PathMatch> {
+    fn positions(&mut self, pattern: &Pattern, candidate: &str) -> Vec<usize> {
         self.indices.clear();
         let haystack = Utf32Str::new(candidate, &mut self.chars);
         let in_bytes = matches!(haystack, Utf32Str::Ascii(_));
-        let score = pattern.indices(haystack, &mut self.matcher, &mut self.indices)?;
+        if pattern
+            .indices(haystack, &mut self.matcher, &mut self.indices)
+            .is_none()
+        {
+            return Vec::new();
+        }
         // Cada palabra del query agrega sus índices por separado.
         self.indices.sort_unstable();
         self.indices.dedup();
-        let positions = if in_bytes {
+        if in_bytes {
             self.indices.iter().map(|&offset| offset as usize).collect()
         } else {
             grapheme_offsets(candidate, &self.indices)
-        };
-        Some(PathMatch {
-            index,
-            score,
-            positions,
-        })
+        }
     }
 }
 
