@@ -118,3 +118,38 @@ fn un_buffer_sin_nombre_no_se_guarda() {
     assert!(matches!(document.save(), Err(SaveError::NoFileName)));
     assert_eq!(SaveError::NoFileName.to_string(), "E32: No file name");
 }
+
+#[test]
+fn w_con_ruta_le_da_archivo_a_un_buffer_sin_nombre() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nueva.md");
+    let mut document = Document::with_path(None, "hola");
+    document.save_to(&path).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "hola\n");
+    assert_eq!(document.path(), Some(path.as_path()));
+    assert!(!document.is_modified());
+}
+
+#[test]
+fn w_con_otra_ruta_escribe_una_copia_sin_pisar_nada() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("a.md");
+    fs::write(&path, "a\n").unwrap();
+    fs::write(dir.path().join("ocupado.md"), "no\n").unwrap();
+    let mut document = Document::open(&path).unwrap();
+    let copy = dir.path().join("copia.md");
+    document.save_to(&copy).unwrap();
+    assert_eq!(fs::read_to_string(&copy).unwrap(), "a\n");
+    assert_eq!(document.path(), Some(path.as_path()), "sigue en el suyo");
+    let taken = document.save_to(&dir.path().join("ocupado.md"));
+    assert!(matches!(taken, Err(SaveError::Exists)));
+    assert_eq!(
+        SaveError::Exists.to_string(),
+        "E13: File exists (add ! to override)"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("ocupado.md")).unwrap(),
+        "no\n"
+    );
+    assert!(Document::unnamed().save_to(&path).is_err());
+}

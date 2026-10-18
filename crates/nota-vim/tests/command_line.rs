@@ -107,7 +107,7 @@ fn un_comando_desconocido_no_toca_el_texto() {
 
 #[test]
 fn un_argumento_de_mas_no_toca_el_texto() {
-    let (outcome, vim, text) = submit(":w otra.md<CR>");
+    let (outcome, vim, text) = submit(":q otra.md<CR>");
     assert_eq!(
         outcome,
         KeyOutcome::InvalidCommand(CommandError::TrailingCharacters("otra.md".to_owned()))

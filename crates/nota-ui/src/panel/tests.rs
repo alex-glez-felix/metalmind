@@ -186,3 +186,20 @@ fn el_filtro_se_aplica_al_escribir_y_escape_lo_quita() {
     assert_eq!(panel.tree.filter(), "");
     assert_eq!(panel.tree.rows().len(), 3);
 }
+
+#[test]
+fn un_clic_abre_o_cierra_la_carpeta_y_el_doble_abre_el_archivo() {
+    let mut panel = panel();
+    assert_eq!(panel.click(0, 1), None);
+    assert_eq!(panel.tree.rows().len(), 2, "diario se cerró");
+    assert_eq!(panel.click(0, 2), None);
+    assert_eq!(
+        panel.tree.rows().len(),
+        2,
+        "el segundo clic no la vuelve a abrir"
+    );
+    assert_eq!(panel.click(1, 1), None);
+    assert_eq!(panel.tree.selected(), Some(&path("a.md")));
+    assert_eq!(panel.click(1, 2), Some(path("a.md")));
+    assert_eq!(panel.click(1, 3), Some(path("a.md")));
+}

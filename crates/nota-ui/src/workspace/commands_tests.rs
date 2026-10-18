@@ -534,3 +534,41 @@ fn ctrl_w_hacia_el_borde_sale_de_los_paneles() {
     session.keys("⌃wk");
     assert_eq!(session.effect, Effect::FocusPastEdge(Direction::Up));
 }
+
+/// Al abrir una carpeta, el buffer `[No Name]` se guarda con `:w ruta`.
+#[test]
+fn w_con_ruta_le_da_nombre_al_buffer_sin_nombre() {
+    let dir = TempDir::new().unwrap();
+    let mut session = Session::unnamed();
+    session.keys("ihola⎋:w⏎");
+    assert_eq!(error(&session), Some("E32: No file name"));
+    edit(&mut session, "w", &path(&dir, "nueva.md"));
+    assert_eq!(shown(&session), path(&dir, "nueva.md"));
+    assert_eq!(
+        fs::read_to_string(path(&dir, "nueva.md")).unwrap(),
+        "hola\n"
+    );
+    edit(&mut session, "w", &path(&dir, "nueva.md"));
+    assert_eq!(error(&session), None, ":w de su propio archivo guarda");
+    session.keys("0ix⎋");
+    edit(&mut session, "wq", &path(&dir, "nueva.md"));
+    assert_eq!(session.effect, Effect::CloseWindow);
+    assert_eq!(
+        fs::read_to_string(path(&dir, "nueva.md")).unwrap(),
+        "xhola\n"
+    );
+}
+
+#[test]
+fn w_con_otra_ruta_no_pisa_un_archivo() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "w", &path(&dir, "b.md"));
+    assert_eq!(
+        error(&session),
+        Some("E13: File exists (add ! to override)")
+    );
+    assert_eq!(fs::read_to_string(path(&dir, "b.md")).unwrap(), "b1\nb2\n");
+    edit(&mut session, "w", &path(&dir, "copia.md"));
+    assert_eq!(fs::read_to_string(path(&dir, "copia.md")).unwrap(), "a\n");
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+}

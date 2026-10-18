@@ -7,13 +7,14 @@ use crate::SearchError;
 /// Un comando de la línea de comandos, invocable también por su nombre.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
-    /// `:w`
+    /// `:w [ruta]`; con ruta, le da archivo a un buffer sin nombre o
+    /// escribe una copia.
     Save,
     /// `:q`, que cierra el panel y se niega si se perderían cambios.
     Quit,
     /// `:q!`
     ForceQuit,
-    /// `:wq`
+    /// `:wq [ruta]`
     SaveAndQuit,
     /// `:e [ruta]`, que se niega si se perderían cambios. Sin ruta, relee
     /// el archivo del panel.
@@ -202,7 +203,10 @@ impl Command {
 
     #[must_use]
     pub fn takes_argument(self) -> bool {
-        matches!(self, Self::Edit | Self::ForceEdit | Self::Set)
+        matches!(
+            self,
+            Self::Save | Self::SaveAndQuit | Self::Edit | Self::ForceEdit | Self::Set
+        )
     }
 
     /// Por qué no corre con un rango, que ningún comando del host admite.
@@ -330,6 +334,8 @@ mod tests {
             ("e! ../a.md", Command::ForceEdit, "../a.md"),
             ("e!a.md", Command::ForceEdit, "a.md"),
             ("set nu", Command::Set, "nu"),
+            ("w nueva.md", Command::Save, "nueva.md"),
+            ("wq notas/b.md", Command::SaveAndQuit, "notas/b.md"),
             ("se nonu rnu!", Command::Set, "nonu rnu!"),
         ];
         for (line, command, path) in cases {
@@ -357,7 +363,7 @@ mod tests {
 
     #[test]
     fn rejects_an_argument_it_does_not_take() {
-        let cases = [("q!!", "!"), ("w otro.md", "otro.md"), ("vs a.md", "a.md")];
+        let cases = [("q!!", "!"), ("q otro.md", "otro.md"), ("vs a.md", "a.md")];
         for (line, rest) in cases {
             assert_eq!(
                 Invocation::parse(line),

@@ -42,9 +42,8 @@ impl Message {
     }
 
     #[must_use]
-    pub fn written(document: &Document, stats: FileStats) -> Self {
-        let path = document.display_name();
-        Self::Info(format!("\"{path}\" {stats} escritos"))
+    pub fn written(name: &str, stats: FileStats) -> Self {
+        Self::Info(format!("\"{name}\" {stats} escritos"))
     }
 
     #[must_use]

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use nota_vault::{FileOpError, Vault, VaultPath};
 
 use super::pane_tree::Axis;
-use super::{DocumentId, Message, Workspace, WorkspaceError};
+use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError};
 use crate::document::Document;
 
 /// Dónde se abre un archivo.
@@ -89,6 +89,44 @@ impl Workspace {
                 document.set_path(path);
             }
         }
+        Ok(())
+    }
+
+    /// Manda `path` a la papelera de `vault` y cierra los documentos de lo
+    /// que se borró, con sus cambios: los paneles que los mostraban se
+    /// cierran y, si era el último, queda en `[No Name]`. Así un `:w` no
+    /// vuelve a crear lo que se acaba de borrar.
+    ///
+    /// # Errors
+    /// Los de [`Vault::move_to_trash`]; los documentos quedan como estaban.
+    pub fn trash_file(&mut self, vault: &Vault, path: &VaultPath) -> Result<(), FileOpError> {
+        let gone: Vec<DocumentId> = self
+            .documents_within(&vault.root().join(path.as_str()))
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        vault.move_to_trash(path)?;
+        let showing: Vec<PaneId> = self
+            .panes
+            .iter()
+            .filter(|(_, pane)| gone.contains(&pane.document))
+            .map(|(&id, _)| id)
+            .collect();
+        if showing.contains(&self.focused())
+            && let Err(error) = self.interrupt(self.focused())
+        {
+            self.report(&error);
+        }
+        for pane in showing {
+            if self.tree.len() > 1 {
+                self.close(pane);
+            } else if let Some(state) = self.panes.get_mut(&pane) {
+                let id = self.documents.insert(Document::unnamed());
+                *state = Pane::at_start(id, state.numbers);
+                self.drop_unshown();
+            }
+        }
+        self.vim.cursor_moved();
         Ok(())
     }
 

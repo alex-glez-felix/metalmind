@@ -114,6 +114,24 @@ impl Panel {
         self.visible
     }
 
+    /// Un clic en la fila `at`, el `count`-ésimo seguido: selecciona, el
+    /// primero abre o cierra una carpeta y el segundo sobre un archivo
+    /// devuelve el archivo a abrir. El segundo clic sobre una carpeta no
+    /// hace nada: si no, un doble clic la dejaría como estaba.
+    pub fn click(&mut self, at: usize, count: usize) -> Option<VaultPath> {
+        self.tree.select_row(at);
+        let row = self.tree.selected_entry()?;
+        let path = row.path.clone();
+        match (row.kind, count) {
+            (EntryKind::Folder, 1) => {
+                self.tree.toggle(&path);
+                None
+            }
+            (EntryKind::Folder, _) | (_, ..=1) => None,
+            _ => Some(path),
+        }
+    }
+
     /// El campo que se está editando, si hay uno.
     pub fn input_mut(&mut self) -> Option<&mut LineInput> {
         match self.prompt.as_mut()? {

@@ -85,11 +85,11 @@ impl Workspace {
     fn try_run(&mut self, invocation: &Invocation) -> Result<Effect, WorkspaceError> {
         let path = invocation.argument.as_deref().map(Path::new);
         match invocation.command {
-            Command::Save => self.save().map(|_| Effect::Stay),
+            Command::Save => self.save(path).map(|_| Effect::Stay),
             Command::Quit => self.quit(false),
             Command::ForceQuit => self.quit(true),
             Command::SaveAndQuit => {
-                if self.save()? {
+                if self.save(path)? {
                     self.quit(false)
                 } else {
                     Ok(Effect::Stay)
@@ -116,12 +116,21 @@ impl Workspace {
         }
     }
 
-    /// Guarda el documento enfocado; devuelve si se pudo.
-    fn save(&mut self) -> Result<bool, WorkspaceError> {
+    /// Guarda el documento enfocado, o lo escribe en `path` como `:w ruta`;
+    /// devuelve si se pudo.
+    fn save(&mut self, path: Option<&Path>) -> Result<bool, WorkspaceError> {
         let id = self.pane(self.focused())?.document;
         let document = self.document_mut(id)?;
-        let message = match document.save() {
-            Ok(stats) => Message::written(document, stats),
+        let saved = match path {
+            Some(path) => document.save_to(path),
+            None => document.save(),
+        };
+        let message = match saved {
+            Ok(stats) => {
+                let name =
+                    path.map_or_else(|| document.display_name(), |p| p.display().to_string());
+                Message::written(&name, stats)
+            }
             Err(error) => {
                 log::error!("{error}");
                 Message::Error(error.to_string())
@@ -151,7 +160,7 @@ impl Workspace {
         Ok(Effect::Stay)
     }
 
-    fn close(&mut self, pane: PaneId) {
+    pub(super) fn close(&mut self, pane: PaneId) {
         if self.tree.close(pane) {
             self.panes.remove(&pane);
             self.drop_unshown();

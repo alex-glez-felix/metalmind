@@ -37,6 +37,9 @@ pub enum SidebarEvent {
     Opened,
     /// El foco vuelve al panel de edición.
     FocusEditor,
+    /// Se cerraron paneles de edición (al borrar lo que mostraban); el
+    /// foco se queda en el panel lateral.
+    PanesChanged,
 }
 
 pub struct Sidebar {

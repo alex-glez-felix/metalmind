@@ -20,6 +20,8 @@ const NO_NAME: &str = "[No Name]";
 pub enum SaveError {
     #[error("E32: No file name")]
     NoFileName,
+    #[error("E13: File exists (add ! to override)")]
+    Exists,
     #[error(transparent)]
     File(#[from] FileError),
 }
@@ -192,13 +194,38 @@ impl Document {
     /// Si no tiene archivo o no se pudo escribir; el archivo en disco queda
     /// como estaba.
     pub fn save(&mut self) -> Result<FileStats, SaveError> {
-        let eol = self.final_eol();
         let path = self.path.as_deref().ok_or(SaveError::NoFileName)?;
-        nota_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))?;
+        self.write(path)?;
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
         self.noeol = false;
         Ok(self.stats())
+    }
+
+    /// `:w ruta`, como en vim: si es su archivo, lo guarda; un documento
+    /// sin archivo pasa a tener ese, y uno con otro archivo escribe una
+    /// copia y sigue en el suyo. Nunca pisa un archivo que ya existe.
+    ///
+    /// # Errors
+    /// Si `path` ya existe o no se pudo escribir.
+    pub fn save_to(&mut self, path: &Path) -> Result<FileStats, SaveError> {
+        if self.is_file(path) {
+            return self.save();
+        }
+        if path.symlink_metadata().is_ok() {
+            return Err(SaveError::Exists);
+        }
+        if self.path.is_none() {
+            self.path = Some(path.to_owned());
+            return self.save().inspect_err(|_| self.path = None);
+        }
+        self.write(path)?;
+        Ok(self.stats())
+    }
+
+    fn write(&self, path: &Path) -> Result<(), FileError> {
+        let eol = self.final_eol();
+        nota_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))
     }
 
     #[must_use]
