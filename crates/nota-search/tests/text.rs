@@ -143,6 +143,15 @@ fn crlf(#[case] pattern: &str, #[case] expected: &[&str]) {
 }
 
 #[test]
+fn un_retorno_suelto_al_final_es_texto() {
+    let dir = vault(&[("n.md", b"uno\r")]);
+    assert_eq!(
+        search(dir.path(), &query("o", Syntax::Literal, Case::Smart)),
+        ["n.md:0:2:2:un[o]\r"]
+    );
+}
+
+#[test]
 fn crlf_sin_salto_final() {
     let dir = vault(&[("n.md", b"uno\r\ndos")]);
     assert_eq!(
@@ -155,11 +164,14 @@ fn crlf_sin_salto_final() {
 fn solo_busca_en_notas_que_nota_puede_abrir() {
     let mut big_binary = b"aguja\n".repeat(10_000);
     big_binary.push(0);
+    let mut nul_past_64_kib = b"aguja\n".repeat(20_000);
+    nul_past_64_kib.push(0);
     let dir = vault(&[
         ("nota.md", b"aguja\n"),
         ("MAYUS.MD", b"aguja\n"),
         ("con-nul.md", b"aguja\0\n"),
         ("nul-al-final.md", &big_binary),
+        ("nul-despues-de-64-kib.md", &nul_past_64_kib),
         ("latin1.md", b"aguja \xf1\n"),
         ("adjunto.txt", b"aguja\n"),
         ("imagen.png", b"aguja\n"),
