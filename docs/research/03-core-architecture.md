@@ -281,7 +281,7 @@ Benchmarks con `divan` 0.1.21, en release, **medido en la máquina de CI** (x86_
 | Abrir e indexar 5 000 notas + 100 adjuntos en 110 carpetas anidadas (walk + watcher puesto) | `cargo bench -p nota-vault` | **57 ms** (objetivo de M2: < 1 s) |
 | Búsqueda difusa sobre esas 5 100 rutas, página de 50: `n` / `tema nota` / `a3t7n42` / `zzz` | `cargo bench -p nota-search` | 0.56 / 4.2 / 0.61 / 0.41 ms |
 
-Falta el número con la caché de disco fría y en un vault real de Obsidian; el de la máquina de pruebas es el que vale para el hito.
+Falta el número con la caché de disco fría y en un vault real de Obsidian; el de la máquina de pruebas es el que vale para el hito. Los objetivos de cada operación y los números más recientes (también 50 k notas) están en el [presupuesto de rendimiento](../performance.md).
 
 ---
 
@@ -379,7 +379,7 @@ dbg_macro = "deny"
 | Fuzzing | `cargo-fuzz` 0.13 (libFuzzer, nightly solo ahí) + `arbitrary` 1.5 | Lo inesperado: pánicos, offsets fuera de frontera de char, estados inválidos del motor vim. Crate `fuzz/` fuera del workspace; corre a diario en `fuzz.yml`, no en las PRs. Ver `docs/fuzzing.md`. |
 | Diff legible | `pretty_assertions` 1.4 | |
 | Runner | `cargo-nextest` 0.9.148 | Paralelo, rápido en CI. |
-| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) | Indexar vault de 10 k notas, latencia por tecla. Guardar baseline. |
+| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) y `gungraun` 0.20 (conteo de instrucciones con callgrind, para CI) | Tiempos por operación contra el [presupuesto](../performance.md); en cada PR, conteo de instrucciones contra la base y pruebas de complejidad N contra 16N. |
 | UI | test del framework (GPUI `TestAppContext`; iced: lógica pura en `update`) | Mínimo; la lógica vive fuera de la UI. |
 
 Formato de test de vim recomendado (copiado de cómo Zed testea su vim, con `|` como cursor **(estilo, sin verificar literalmente)**):
@@ -394,6 +394,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 ### CI y calidad
 
 - GitHub Actions / Forgejo Actions: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run`, `cargo deny check` (licencias y advisories; `cargo-deny` 0.20), `cargo machete` (deps sin usar), `typos`.
+- Rendimiento (`.github/workflows/perf.yml`): conteo de instrucciones con `gungraun` en cada PR que toque el núcleo, contra la base medida en el mismo runner; falla con más de 5 % ([`docs/performance.md`](../performance.md)).
 - `rustfmt.toml` mínimo (`imports_granularity = "Crate"` requiere nightly; mejor no).
 - Cache con `Swatinem/rust-cache` **(sin verificar versión)**.
 
@@ -424,11 +425,13 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 6. **Desconfiar de APIs recordadas.** GPUI cambia rápido y su versión en crates.io (0.2.2, oct-2025) va detrás del monorepo de Zed; iced 0.14 rompió API respecto a 0.13. Dar al agente el `docs.rs` o el código fuente de la versión fijada (vendored en `docs/vendor/` o con `cargo doc`), no dejar que adivine.
 7. **Rebanadas verticales chicas**: una tarea = un comportamiento observable + su test. "Implementa `ciw`" sí; "implementa vim" no.
 8. **Worktrees separados** si hay varios agentes en paralelo (comparten `target/` y se pisan los type-checks).
-9. **Benchmarks como guardas de rendimiento** (prioridad 1): un test que falle si indexar el vault fixture pasa de X ms evita regresiones silenciosas de código generado.
+9. **Benchmarks como guardas de rendimiento** (prioridad 1): un test que falle si indexar el vault fixture pasa de X ms evita regresiones silenciosas de código generado. *(Hecho el 2026-10-18 de otra forma: un umbral en milisegundos no sirve en runners ruidosos. En cada PR se cuentan instrucciones contra la base y las pruebas de complejidad comparan N contra 16N; ver [`docs/performance.md`](../performance.md).)*
 
 ---
 
 ## 8. Hitos del MVP
+
+Las metas de rendimiento de cada hito se juntan, con su justificación y los números de hoy, en el [presupuesto de rendimiento](../performance.md).
 
 ### Estado (M0b, 2026-10-17)
 
