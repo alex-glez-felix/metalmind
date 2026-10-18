@@ -11,6 +11,10 @@ pub(super) struct Translation {
 }
 
 pub(super) fn translate(source: &str) -> Result<Translation, SearchError> {
+    // Un salto de línea pegado, en cualquier parte, es un patrón de varias líneas.
+    if source.contains('\n') {
+        return Err(unsupported("\\n"));
+    }
     let mut translator = Translator {
         chars: source.chars().collect(),
         next: 0,
@@ -74,8 +78,6 @@ impl Translator {
             '.' => self.atom("."),
             '*' => self.quantifier("*", '*'),
             '[' => self.collection()?,
-            // Un salto de línea pegado es un patrón de varias líneas, como `\n`.
-            '\n' => return Err(unsupported("\\n")),
             c => self.literal(c),
         }
         Ok(())
@@ -369,7 +371,8 @@ mod tests {
     #[test]
     fn rejects_what_has_no_equivalent() {
         for source in [
-            "a\\nb", "a\nb", "\n\\|b", "\\zsa", "\\va", "\\1", "\\%V", "[\\n]", "\\l",
+            "a\\nb", "a\nb", "\n\\|b", "[a\n]", "[^\n]", "[\\\n]", "a\\\n", "\\zsa", "\\va", "\\1",
+            "\\%V", "[\\n]", "\\l",
         ] {
             assert!(
                 matches!(translate(source), Err(SearchError::Unsupported(_))),
