@@ -229,19 +229,79 @@ mod tests {
         VaultPath::new(path).unwrap()
     }
 
-    /// Borrar una carpeta con 5 000 notas desde fuera de la app llega como un
-    /// solo lote: los hijos salen antes que la carpeta.
-    #[test]
-    fn un_lote_grande_borra_los_hijos_antes_que_la_carpeta() {
+    /// Borrar desde fuera de la app la carpeta `grande` con `notes` notas.
+    fn folder_removal(notes: usize) -> (HashMap<VaultPath, EntryKind>, Entries) {
         let mut before = HashMap::new();
         let mut removed = Entries::new();
         before.insert(path("grande"), EntryKind::Folder);
         removed.insert((path("grande"), EntryKind::Folder));
-        for note in 0..5_000 {
+        for note in 0..notes {
             let note = path(&format!("grande/n{note}.md"));
             before.insert(note.clone(), EntryKind::Note);
             removed.insert((note, EntryKind::Note));
         }
+        (before, removed)
+    }
+
+    /// `notes` renames del lote; `chained` hace que cada uno ocupe el nombre
+    /// que libera el siguiente (`n0 → n1`, `n1 → n2`, …).
+    struct RenameBatch {
+        before: HashMap<VaultPath, EntryKind>,
+        after: HashMap<VaultPath, EntryKind>,
+        removed: Entries,
+        created: Entries,
+        renames: Vec<(VaultPath, VaultPath)>,
+    }
+
+    impl RenameBatch {
+        fn new(notes: usize, chained: bool) -> Self {
+            let mut batch = Self {
+                before: HashMap::new(),
+                after: HashMap::new(),
+                removed: Entries::new(),
+                created: Entries::new(),
+                renames: Vec::new(),
+            };
+            for note in 0..notes {
+                let from = path(&format!("n{note:06}.md"));
+                let to = if chained {
+                    path(&format!("n{:06}.md", note + 1))
+                } else {
+                    path(&format!("m{note:06}.md"))
+                };
+                batch.before.insert(from.clone(), EntryKind::Note);
+                batch.after.insert(to.clone(), EntryKind::Note);
+                batch.renames.push((from, to));
+            }
+            for (path, &kind) in &batch.before {
+                if !batch.after.contains_key(path) {
+                    batch.removed.insert((path.clone(), kind));
+                }
+            }
+            for (path, &kind) in &batch.after {
+                if !batch.before.contains_key(path) {
+                    batch.created.insert((path.clone(), kind));
+                }
+            }
+            batch
+        }
+
+        fn arrange(&self) -> Vec<VaultChange> {
+            arrange(
+                &self.before,
+                &self.after,
+                &self.removed,
+                &self.created,
+                &self.renames,
+            )
+        }
+    }
+
+    /// Borrar una carpeta con 5 000 notas desde fuera de la app llega como un
+    /// solo lote: los hijos salen antes que la carpeta.
+    #[test]
+    fn un_lote_grande_borra_los_hijos_antes_que_la_carpeta() {
+        let (before, removed) = folder_removal(5_000);
         let changes = arrange(&before, &HashMap::new(), &removed, &Entries::new(), &[]);
         assert_eq!(changes.len(), 5_001);
         assert_eq!(
@@ -250,6 +310,32 @@ mod tests {
                 path: path("grande"),
                 kind: EntryKind::Folder
             })
+        );
+    }
+
+    #[test]
+    fn ordenar_un_borrado_grande_es_lineal() {
+        nota_perf::assert_linear(1_500, folder_removal, |(before, removed)| {
+            arrange(&before, &HashMap::new(), &removed, &Entries::new(), &[])
+        });
+    }
+
+    #[test]
+    #[ignore = "cuadrático en los renames del lote: #38"]
+    fn ordenar_muchos_renames_es_lineal() {
+        nota_perf::assert_linear(
+            1_500,
+            |notes| RenameBatch::new(notes, false),
+            |batch| batch.arrange(),
+        );
+    }
+
+    #[test]
+    fn ordenar_una_cadena_de_renames_es_lineal() {
+        nota_perf::assert_linear(
+            2_000,
+            |notes| RenameBatch::new(notes, true),
+            |batch| batch.arrange(),
         );
     }
 }
