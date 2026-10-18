@@ -5,7 +5,7 @@
 pub mod nvim;
 
 use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_vim::{Key, KeyOutcome, Mode, Vim, VisualKind};
+use nota_vim::{Key, KeyOutcome, Mode, Viewport, Vim, VisualKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
@@ -169,15 +169,47 @@ pub fn mode_name(mode: Mode) -> &'static str {
     }
 }
 
+/// Una ventana de tamaño fijo: cuántas filas caben, `scrolloff` y la
+/// primera línea visible al empezar, desde 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Screen {
+    pub rows: usize,
+    pub scrolloff: usize,
+    pub top: usize,
+}
+
 pub fn run_engine(before: &str, keys: &str) -> State {
+    run_engine_on(before, keys, None).0
+}
+
+/// Como [`run_engine`], en una ventana como `screen`; devuelve además la
+/// primera línea visible.
+pub fn run_engine_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize) {
     let (mut buffer, mut selections) = parse(before);
     let mut vim = Vim::new();
+    if let Some(screen) = screen {
+        let mut viewport = Viewport::new(screen.rows);
+        let moved = viewport.scroll_to(
+            screen.top,
+            &buffer,
+            &mut selections,
+            screen.scrolloff,
+            Mode::Normal,
+        );
+        assert!(!moved, "el cursor del caso tiene que verse en la ventana");
+        viewport.reveal(&buffer, selections.primary().head, screen.scrolloff);
+        vim.set_scrolloff(screen.scrolloff);
+        vim.swap_viewport(&mut viewport);
+    }
     feed(&mut vim, &mut buffer, &mut selections, keys);
     let visual = matches!(vim.mode(), Mode::Visual(_));
     let primary = selections.primary();
-    State {
+    let state = State {
         text: render(&buffer, selections.iter().map(|s| s.head)),
         mode: mode_name(vim.mode()).to_owned(),
         selection: render_visual(&buffer, visual.then_some(primary.anchor), primary.head),
-    }
+    };
+    let mut viewport = Viewport::default();
+    vim.swap_viewport(&mut viewport);
+    (state, viewport.top())
 }

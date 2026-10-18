@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 
 use nota_buffer::{Buffer, ByteOffset};
 
-use super::{State, parse, render, render_visual};
+use super::{Screen, State, parse, render, render_visual};
 
 const SCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/oracle.lua");
 
@@ -12,6 +12,12 @@ const VERSION: &str = "NVIM v0.12.6";
 
 /// Corre las mismas teclas en `nvim --clean` y devuelve el estado final.
 pub fn run(before: &str, keys: &str) -> State {
+    run_on(before, keys, None).0
+}
+
+/// Como [`run`], en una ventana como `screen`; devuelve además la primera
+/// línea visible, desde 0.
+pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize) {
     assert_eq!(
         installed_version(),
         VERSION,
@@ -23,13 +29,21 @@ pub fn run(before: &str, keys: &str) -> State {
     let row = buffer.line_of(head);
     let col = head.get() - buffer.line_start(row).get();
     let output = tempfile::NamedTempFile::new().unwrap();
-    let status = Command::new("nvim")
+    let mut command = Command::new("nvim");
+    command
         .args(["--clean", "--headless", "-n", "-l", SCRIPT])
         .arg(buffer.to_string())
         .arg((row + 1).to_string())
         .arg(col.to_string())
         .arg(keys)
-        .arg(output.path())
+        .arg(output.path());
+    if let Some(screen) = screen {
+        command
+            .arg(screen.rows.to_string())
+            .arg(screen.scrolloff.to_string())
+            .arg((screen.top + 1).to_string());
+    }
+    let status = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -43,16 +57,18 @@ pub fn run(before: &str, keys: &str) -> State {
     let (row, col) = (number(0), number(1));
     let mode = fields[2].to_owned();
     let (anchor_row, anchor_col) = (number(3), number(4));
+    let top = number(5) - 1;
     let result = Buffer::from(text);
     let at = |row: usize, col| ByteOffset::new(result.line_start(row - 1).get() + col);
     let head = at(row, col);
     let anchor = at(anchor_row, anchor_col);
     let visual = matches!(mode.as_str(), "v" | "V");
-    State {
+    let state = State {
         text: render(&result, [head]),
         selection: render_visual(&result, visual.then_some(anchor), head),
         mode,
-    }
+    };
+    (state, top)
 }
 
 fn installed_version() -> &'static str {

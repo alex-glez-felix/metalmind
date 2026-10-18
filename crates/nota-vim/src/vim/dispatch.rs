@@ -71,6 +71,14 @@ impl Vim {
                 },
                 Mode::Normal | Mode::OperatorPending(_),
             ) => return self.search_word(backward, whole_word, buffer, selections, clipboard),
+            (Action::Scroll(scroll), Mode::Normal) => self.scroll(scroll, buffer, selections),
+            (
+                Action::Reposition {
+                    place,
+                    first_non_blank,
+                },
+                Mode::Normal,
+            ) => self.reposition(place, first_non_blank, buffer, selections)?,
             (Action::ClearSearchHighlight, Mode::Normal) => {
                 self.reset();
                 self.search.highlight = false;
@@ -174,6 +182,9 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
+        if let Motion::Window(place) = motion {
+            return self.move_to_window_line(place, buffer, selections);
+        }
         let count = self.take_count();
         self.reset();
         if motion.is_jump() {
@@ -181,7 +192,7 @@ impl Vim {
         }
         let purpose = self.motion_purpose();
         let moved = move_cursors(selections, self.in_visual(), |s| {
-            let destination = motion.resolve(buffer, s, count, purpose)?;
+            let destination = motion.resolve(buffer, s, count, purpose, &self.viewport)?;
             let stuck = motion.fails_without_moving() && destination.offset == s.head;
             (!stuck).then_some(destination)
         });

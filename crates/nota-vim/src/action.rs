@@ -1,4 +1,4 @@
-use crate::{CharSearch, Command, Motion, Operator, TextObject, VisualKind};
+use crate::{CharSearch, Command, Motion, Operator, Place, Scroll, TextObject, VisualKind};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,6 +45,15 @@ pub enum Action {
     },
     /// `:noh`: deja de resaltar la búsqueda hasta la próxima.
     ClearSearchHighlight,
+    /// Mueve la ventana y, si hace falta, el cursor.
+    Scroll(Scroll),
+    /// `zt`, `zz`, `zb`: mueve la ventana para que el cursor quede en ese
+    /// lugar; con `first_non_blank` (`z<CR>`, `z.`, `z-`) el cursor va
+    /// además al primer no blanco.
+    Reposition {
+        place: Place,
+        first_non_blank: bool,
+    },
     Operator(Operator),
     /// `"`: lo siguiente usa el registro que nombre la tecla siguiente.
     SelectRegister,
@@ -120,6 +129,39 @@ impl Action {
         Self::Motion(Motion::LineEnd),
         Self::Motion(Motion::DocumentStart),
         Self::Motion(Motion::DocumentEnd),
+        Self::Motion(Motion::Window(Place::Top)),
+        Self::Motion(Motion::Window(Place::Middle)),
+        Self::Motion(Motion::Window(Place::Bottom)),
+        Self::Scroll(Scroll::LineDown),
+        Self::Scroll(Scroll::LineUp),
+        Self::Scroll(Scroll::HalfPageDown),
+        Self::Scroll(Scroll::HalfPageUp),
+        Self::Scroll(Scroll::PageDown),
+        Self::Scroll(Scroll::PageUp),
+        Self::Reposition {
+            place: Place::Top,
+            first_non_blank: false,
+        },
+        Self::Reposition {
+            place: Place::Middle,
+            first_non_blank: false,
+        },
+        Self::Reposition {
+            place: Place::Bottom,
+            first_non_blank: false,
+        },
+        Self::Reposition {
+            place: Place::Top,
+            first_non_blank: true,
+        },
+        Self::Reposition {
+            place: Place::Middle,
+            first_non_blank: true,
+        },
+        Self::Reposition {
+            place: Place::Bottom,
+            first_non_blank: true,
+        },
         Self::FindChar(CharSearch {
             backward: false,
             till: false,
@@ -263,6 +305,11 @@ impl Action {
                 whole_word,
             } => search_word_name(backward, whole_word),
             Self::ClearSearchHighlight => "vim::clear_search_highlight",
+            Self::Scroll(scroll) => scroll_name(scroll),
+            Self::Reposition {
+                place,
+                first_non_blank,
+            } => reposition_name(place, first_non_blank),
             Self::Operator(operator) => operator_name(operator),
             Self::SelectRegister => "vim::select_register",
             Self::CurrentLine => "vim::current_line",
@@ -326,6 +373,31 @@ fn motion_name(motion: Motion) -> &'static str {
         Motion::LineEnd => "vim::end_of_line",
         Motion::DocumentStart => "vim::start_of_document",
         Motion::DocumentEnd => "vim::end_of_document",
+        Motion::Window(Place::Top) => "vim::window_top",
+        Motion::Window(Place::Middle) => "vim::window_middle",
+        Motion::Window(Place::Bottom) => "vim::window_bottom",
+    }
+}
+
+fn scroll_name(scroll: Scroll) -> &'static str {
+    match scroll {
+        Scroll::LineDown => "vim::scroll_line_down",
+        Scroll::LineUp => "vim::scroll_line_up",
+        Scroll::HalfPageDown => "vim::scroll_half_page_down",
+        Scroll::HalfPageUp => "vim::scroll_half_page_up",
+        Scroll::PageDown => "vim::scroll_page_down",
+        Scroll::PageUp => "vim::scroll_page_up",
+    }
+}
+
+fn reposition_name(place: Place, first_non_blank: bool) -> &'static str {
+    match (place, first_non_blank) {
+        (Place::Top, false) => "vim::scroll_cursor_top",
+        (Place::Middle, false) => "vim::scroll_cursor_center",
+        (Place::Bottom, false) => "vim::scroll_cursor_bottom",
+        (Place::Top, true) => "vim::scroll_cursor_top_first_non_blank",
+        (Place::Middle, true) => "vim::scroll_cursor_center_first_non_blank",
+        (Place::Bottom, true) => "vim::scroll_cursor_bottom_first_non_blank",
     }
 }
 
