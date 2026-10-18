@@ -1,0 +1,25 @@
+pkgbase = nota-git
+	pkgdesc = Editor de notas markdown con modo vim, nativo para Linux (rama main)
+	pkgver = 0.0.0.r0.g0000000
+	pkgrel = 1
+	url = https://github.com/alex-glez-felix/nota
+	arch = x86_64
+	arch = aarch64
+	license = GPL-3.0-or-later
+	makedepends = cargo
+	makedepends = git
+	depends = gcc-libs
+	depends = glibc
+	depends = libxcb
+	depends = libxkbcommon
+	depends = libxkbcommon-x11
+	depends = vulkan-icd-loader
+	depends = wayland
+	optdepends = ttf-jetbrains-mono: la fuente monoespaciada preferida
+	optdepends = ttf-dejavu: fuente monoespaciada alternativa
+	provides = nota
+	conflicts = nota
+	source = nota::git+https://github.com/alex-glez-felix/nota.git
+	sha256sums = SKIP
+
+pkgname = nota-git
