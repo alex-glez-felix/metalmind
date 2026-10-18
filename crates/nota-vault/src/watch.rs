@@ -22,7 +22,8 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
             touched.paths.insert(VaultPath::root());
             continue;
         }
-        if !affects_index(event.kind) {
+        // Abrir o leer no cambia qué hay en el vault.
+        if matches!(event.kind, EventKind::Access(_)) {
             continue;
         }
         let paths: Vec<Option<VaultPath>> = event
@@ -41,7 +42,11 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
         ) {
             touched.written.extend(paths.iter().flatten().cloned());
         }
-        touched.paths.extend(paths.into_iter().flatten());
+        if matches!(event.kind, EventKind::Modify(ModifyKind::Metadata(_))) {
+            touched.reread.extend(paths.into_iter().flatten());
+        } else {
+            touched.paths.extend(paths.into_iter().flatten());
+        }
     }
     touched
 }
@@ -63,14 +68,6 @@ pub(crate) fn touched_by_errors(root: &Path, errors: &[notify::Error]) -> Touche
         );
     }
     touched
-}
-
-/// Abrir, leer o cambiar permisos no cambia qué hay en el vault.
-fn affects_index(kind: EventKind) -> bool {
-    !matches!(
-        kind,
-        EventKind::Access(_) | EventKind::Modify(ModifyKind::Metadata(_))
-    )
 }
 
 /// La ruta del vault que hay que releer por un evento en `path`, si alguna.
@@ -112,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn ignora_ocultos_y_lo_que_no_cambia_el_arbol() {
+    fn ignora_ocultos_y_lo_que_no_cambia_el_contenido() {
         let root = Path::new("/v");
         let events = [
             event(EventKind::Create(CreateKind::File), &["/v/.nota-x.tmp"]),
@@ -128,7 +125,11 @@ mod tests {
             ),
             event(EventKind::Create(CreateKind::File), &["/fuera/d.md"]),
         ];
-        assert_eq!(paths(&touched(root, &events)), ["c.md"]);
+        let touched = touched(root, &events);
+        assert_eq!(paths(&touched), ["c.md"]);
+        // Un chmod puede volver legible una carpeta: se relee, sin ser una modificación.
+        let reread: Vec<_> = touched.reread.iter().map(VaultPath::as_str).collect();
+        assert_eq!(reread, ["b.md"]);
     }
 
     #[test]
