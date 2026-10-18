@@ -4,7 +4,7 @@
 use gpui_kit::{
     App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, Font, GlobalElementId, Hsla,
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine, SharedString,
-    Style, TextAlign, TextRun, UnderlineStyle, Window, fill, point, relative, size,
+    Style, TextAlign, TextRun, UnderlineStyle, Window, fill, point, px, relative, size,
 };
 use nota_buffer::{Buffer, Selection};
 use nota_vim::Mode;
@@ -28,6 +28,9 @@ impl EditorElement {
 
 pub struct Prepainted {
     layout: FrameLayout,
+    /// Lo que se puede pintar: todo el ancho y el alto sin el margen
+    /// vertical, para que una fila a medio scroll no lo invada.
+    clip: Bounds<Pixels>,
     gutter: Option<PaintedGutter>,
     selection: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
@@ -93,11 +96,17 @@ impl gpui_kit::Element for EditorElement {
             font: text_style.font(),
             size: text_style.font_size.to_pixels(window.rem_size()),
         };
+        let content = inset(bounds, &self.theme);
+        let clip = Bounds::new(
+            point(bounds.left(), content.top()),
+            size(bounds.size.width, content.size.height),
+        );
         let editor = self.editor.read(cx);
         let line_height = window.line_height();
         let Some(view) = editor.view(cx) else {
-            let viewport = Viewport::new(bounds, line_height, editor.scroll);
+            let viewport = Viewport::new(content, line_height, editor.scroll);
             return Prepainted {
+                clip,
                 layout: FrameLayout {
                     viewport,
                     lines: Vec::new(),
@@ -111,10 +120,10 @@ impl gpui_kit::Element for EditorElement {
         let head = view.cursor();
         let moved = (editor.revealed != Some(head)).then(|| view.buffer().line_of(head));
         let mut scroll = editor.scroll;
-        let rows = Viewport::new(bounds, line_height, scroll).full_rows();
+        let rows = Viewport::new(content, line_height, scroll).full_rows();
         scroll.settle(view.buffer().last_line(), moved, rows);
         let gutter = Gutter::new(&view, rows, em_width(&typeface, window));
-        let viewport = Viewport::new(gutter.text_bounds(bounds), line_height, scroll);
+        let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
         let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
         let layout = FrameLayout { viewport, lines };
         let painted_gutter = (gutter.columns > 0)
@@ -133,6 +142,7 @@ impl gpui_kit::Element for EditorElement {
         });
         Prepainted {
             layout,
+            clip,
             gutter: painted_gutter,
             selection,
             cursor,
@@ -157,7 +167,8 @@ impl gpui_kit::Element for EditorElement {
             cx,
         );
         let line_height = prepainted.layout.viewport.line_height;
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
+        let clip = prepainted.clip;
+        window.with_content_mask(Some(ContentMask { bounds: clip }), |window| {
             if let Some(gutter) = prepainted.gutter.take() {
                 window.paint_quad(gutter.background);
                 for (origin, shaped) in &gutter.labels {
@@ -181,6 +192,18 @@ impl gpui_kit::Element for EditorElement {
         self.editor
             .update(cx, |editor, _| editor.report_first_paint());
     }
+}
+
+/// El área del texto y los números, sin el margen del tema.
+fn inset(bounds: Bounds<Pixels>, theme: &Theme) -> Bounds<Pixels> {
+    let (x, y) = (theme.text_padding_x, theme.text_padding_y);
+    Bounds::new(
+        point(bounds.left() + x, bounds.top() + y),
+        size(
+            (bounds.size.width - x * 2.).max(px(0.)),
+            (bounds.size.height - y * 2.).max(px(0.)),
+        ),
+    )
 }
 
 fn paint_line(

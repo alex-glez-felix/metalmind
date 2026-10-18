@@ -28,6 +28,9 @@ editor:
   scrolloff: 0            # líneas visibles alrededor del cursor
   tabstop: 4              # ancho del tab, al menos 1
   expandtab: true         # Tab inserta espacios
+  padding:                # espacio entre el borde del panel y el texto, en píxeles (0–255)
+    horizontal: 12        # a la izquierda, antes de los números, y a la derecha
+    vertical: 8           # arriba y abajo
 
 search:
   ignorecase: false

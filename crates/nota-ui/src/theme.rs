@@ -50,6 +50,9 @@ pub struct Theme {
     pub caret_width: Pixels,
     pub underline_thickness: Pixels,
     pub border_width: Pixels,
+    /// Entre el borde del panel y el texto, con los números de línea.
+    pub text_padding_x: Pixels,
+    pub text_padding_y: Pixels,
     pub status_padding_x: Pixels,
     pub status_padding_y: Pixels,
     pub status_gap: Pixels,
@@ -58,19 +61,21 @@ pub struct Theme {
 impl Global for Theme {}
 
 impl Theme {
-    /// Los colores de `theme` con la fuente de `font`; si esa familia no está
-    /// instalada, la primera de [`MONO_FONTS`] que sí.
+    /// Los colores y tamaños de `config`; si la familia de su fuente no
+    /// está instalada, la primera de [`MONO_FONTS`] que sí.
     ///
     /// # Errors
     /// [`NoMonoFont`] si no hay ninguna.
-    pub fn new(theme: &config::Theme, font: &config::Font, cx: &App) -> Result<Self, NoMonoFont> {
+    pub fn new(config: &config::Config, cx: &App) -> Result<Self, NoMonoFont> {
         let installed = cx.text_system().all_font_names();
-        let font_family = pick_font(font.family.as_deref(), &installed)?;
-        Ok(Self::with_font(theme, font_family, px(font.size.get())))
+        let font_family = pick_font(config.settings.font.family.as_deref(), &installed)?;
+        Ok(Self::with_font(config, font_family))
     }
 
-    fn with_font(theme: &config::Theme, font_family: SharedString, font_size: Pixels) -> Self {
-        let config::Theme { ui, cursor, .. } = theme;
+    fn with_font(config: &config::Config, font_family: SharedString) -> Self {
+        let config::Theme { ui, cursor, .. } = &config.theme;
+        let settings = &config.settings;
+        let padding = settings.editor.padding;
         Self {
             background: hsla(ui.background),
             foreground: hsla(ui.foreground),
@@ -89,11 +94,13 @@ impl Theme {
             modified: hsla(ui.modified),
             error: hsla(ui.error),
             font_family,
-            font_size,
+            font_size: px(settings.font.size.get()),
             line_height: 1.4,
             caret_width: px(2.),
             underline_thickness: px(1.),
             border_width: px(1.),
+            text_padding_x: px(f32::from(padding.horizontal)),
+            text_padding_y: px(f32::from(padding.vertical)),
             status_padding_x: px(10.),
             status_padding_y: px(3.),
             status_gap: px(16.),
@@ -158,9 +165,7 @@ mod tests {
     /// Los valores que `nota-ui` tenía fijos antes de leer temas, y los de paneles.
     #[test]
     fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
-        let dark = config::Themes::builtin().load("nota-oscuro").unwrap().value;
-        let font = config::Font::default();
-        let theme = Theme::with_font(&dark, "Mono".into(), px(font.size.get()));
+        let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
         let blue = Hsla::from(rgb(0x7a_a2_f7));
         let expected: [(&str, Hsla, Hsla); 13] = [
             ("background", theme.background, rgb(0x1c_1f_24).into()),
@@ -197,6 +202,20 @@ mod tests {
             assert_eq!(actual, before, "{name}");
         }
         assert_eq!(theme.font_size, px(15.));
+    }
+
+    #[test]
+    fn el_margen_del_texto_sale_de_la_config() {
+        let mut config = config::Config::defaults().unwrap();
+        config.settings.editor.padding = config::Padding {
+            horizontal: 20,
+            vertical: 0,
+        };
+        let theme = Theme::with_font(&config, "Mono".into());
+        assert_eq!(
+            (theme.text_padding_x, theme.text_padding_y),
+            (px(20.), px(0.))
+        );
     }
 
     #[test]
