@@ -392,7 +392,7 @@ fn splices_follow_edits_and_history() {
         ]
     );
     assert_eq!(Splice::map_all(&splices, at(9)), at(9));
-    assert!(buffer.take_splices().is_empty());
+    assert_eq!(buffer.take_splices(), []);
 }
 
 fn char_boundaries(text: &str) -> Vec<usize> {
