@@ -9,7 +9,9 @@ use arc_swap::ArcSwap;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
+use crate::file;
 use crate::index::VaultIndex;
+use crate::links::LinkIndex;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
@@ -32,11 +34,12 @@ pub enum VaultError {
     Spawn(io::Error),
 }
 
-/// Lo que cambió en el vault, con el índice que ya lo incluye.
+/// Lo que cambió en el vault, con los índices que ya lo incluyen.
 #[derive(Debug, Clone)]
 pub struct VaultUpdate {
     pub changes: Vec<VaultChange>,
     pub snapshot: Arc<VaultIndex>,
+    pub links: Arc<LinkIndex>,
 }
 
 /// Un vault abierto: la carpeta raíz, su índice y el watcher que lo mantiene
@@ -44,6 +47,7 @@ pub struct VaultUpdate {
 pub struct Vault {
     root: PathBuf,
     index: Arc<ArcSwap<VaultIndex>>,
+    links: Arc<ArcSwap<LinkIndex>>,
     watch: Option<Watch>,
 }
 
@@ -67,12 +71,19 @@ impl Vault {
         let mut debouncer = new_debouncer(DEBOUNCE, None, events)?;
         // Vigilar antes del walk: lo que cambie mientras tanto llega como evento.
         debouncer.watch(&root, RecursiveMode::Recursive)?;
-        let index = Arc::new(ArcSwap::from_pointee(scan(&root)));
+        let files = scan(&root);
+        let links = LinkIndex::build(
+            files.files().map(|entry| (entry.path.clone(), entry.kind)),
+            |path| read_note(&root, path),
+        );
+        let index = Arc::new(ArcSwap::from_pointee(files));
+        let links = Arc::new(ArcSwap::from_pointee(links));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let worker = Worker {
             root: root.clone(),
             index: Arc::clone(&index),
+            links: Arc::clone(&links),
             updates,
             stop: Arc::clone(&stop),
         };
@@ -83,6 +94,7 @@ impl Vault {
         let vault = Self {
             root,
             index,
+            links,
             watch: Some(Watch {
                 debouncer,
                 worker,
@@ -102,6 +114,13 @@ impl Vault {
     #[must_use]
     pub fn snapshot(&self) -> Arc<VaultIndex> {
         self.index.load_full()
+    }
+
+    /// Los links del vault en este momento, al día con [`Vault::snapshot`]
+    /// salvo entre la publicación de uno y otro.
+    #[must_use]
+    pub fn links(&self) -> Arc<LinkIndex> {
+        self.links.load_full()
     }
 
     /// Crea una nota vacía, con las carpetas que le falten. El índice se
@@ -164,6 +183,7 @@ impl Drop for Vault {
 struct Worker {
     root: PathBuf,
     index: Arc<ArcSwap<VaultIndex>>,
+    links: Arc<ArcSwap<LinkIndex>>,
     updates: mpsc::Sender<VaultUpdate>,
     stop: Arc<AtomicBool>,
 }
@@ -171,6 +191,7 @@ struct Worker {
 impl Worker {
     fn run(self, events: &mpsc::Receiver<DebounceEventResult>) {
         let mut current = VaultIndex::clone(&self.index.load());
+        let mut links = LinkIndex::clone(&self.links.load());
         for first in events {
             // Si el refresh se atrasó, todo lo que espera se relee en una sola pasada.
             let mut touched = self.touched(first);
@@ -184,10 +205,19 @@ impl Worker {
             if changes.is_empty() {
                 continue;
             }
+            for change in &changes {
+                links.apply(change, |path| read_note(&self.root, path));
+            }
             let snapshot = Arc::new(current.clone());
+            let published = Arc::new(links.clone());
             self.index.store(Arc::clone(&snapshot));
-            // Si el receptor ya no existe, quien abrió el vault solo usa `snapshot`.
-            let _ = self.updates.send(VaultUpdate { changes, snapshot });
+            self.links.store(Arc::clone(&published));
+            // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
+            let _ = self.updates.send(VaultUpdate {
+                changes,
+                snapshot,
+                links: published,
+            });
         }
     }
 
@@ -200,6 +230,18 @@ impl Worker {
                 }
                 touched_by_errors(&self.root, &errors)
             }
+        }
+    }
+}
+
+/// El contenido de una nota para el índice de links; si no se puede leer,
+/// queda sin links hasta su próximo cambio.
+fn read_note(root: &Path, path: &VaultPath) -> Option<String> {
+    match file::read(&path.to_fs(root)) {
+        Ok(text) => text,
+        Err(error) => {
+            log::warn!("{error}");
+            None
         }
     }
 }
