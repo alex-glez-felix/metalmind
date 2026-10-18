@@ -451,7 +451,8 @@ fn w_con_ruta_relativa_escribe_en_el_vault() {
 }
 
 /// `--frame-log`, lo que lee el benchmark de la UI: el primer frame con su
-/// CPU y, en los siguientes, las teclas que muestra cada uno.
+/// CPU y, en los siguientes, las teclas que muestra cada uno. `<Left>` no
+/// llega al motor y no cuenta: si contara, la suma sería 4.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn el_registro_de_frames_anota_el_arranque_y_las_teclas() {
@@ -460,20 +461,18 @@ fn el_registro_de_frames_anota_el_arranque_y_las_teclas() {
     let log = smoke.home().join("frames.log");
     let mut metalmind = smoke.launch(&["--frame-log", log.to_str().unwrap(), "a.md"]);
     let window = metalmind.window();
-    window.type_keys("ix<Esc>");
+    window.type_keys("<Left>ix<Esc>");
     let lines = support::wait::until("los frames de 3 teclas", support::wait::TIMEOUT, || {
         let written = std::fs::read_to_string(&log).unwrap_or_default();
         let lines: Vec<String> = written.lines().map(ToOwned::to_owned).collect();
-        let keys: u32 = lines
-            .iter()
-            .filter_map(|line| line.split_once(" keys=")?.1.parse::<u32>().ok())
-            .sum();
+        let keys = keys_shown(&lines);
         if keys >= 3 {
             Ok(lines)
         } else {
             Err(format!("{keys} teclas en:\n{written}"))
         }
     });
+    assert_eq!(keys_shown(&lines), 3, "{lines:?}");
     assert!(lines[0].starts_with("frame=1 t="), "{lines:?}");
     assert!(lines[0].contains(" cpu="), "{lines:?}");
     assert!(
@@ -482,4 +481,12 @@ fn el_registro_de_frames_anota_el_arranque_y_las_teclas() {
     );
     window.type_keys(":q!<CR>");
     assert!(metalmind.wait_exit().success(), "{}", metalmind.log());
+}
+
+/// Las teclas que muestran, entre todos, los frames del registro.
+fn keys_shown(lines: &[String]) -> u32 {
+    lines
+        .iter()
+        .filter_map(|line| line.split_once(" keys=")?.1.parse::<u32>().ok())
+        .sum()
 }
