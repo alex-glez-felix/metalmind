@@ -36,8 +36,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Scan de `nota-syntax`, nota de 5 k | ≤ 8 ms | 1.3 ms | ✅ | `nota-syntax` `nota` |
 | Scan, nota de 50 k | ≤ 50 ms | 11.7 ms | ✅ | `nota-syntax` `nota` |
 | Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 3.2 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `nota-syntax` |
-| Abrir el vault, 5 k notas (walk, watcher e índice de links) | ≤ 200 ms | 36 ms | ✅ | `nota-vault` `abrir_5k_notas` |
-| Abrir el vault, 50 k notas | ≤ 2 s | 446 ms | ✅ | `nota-vault` `abrir_50k_notas` |
+| Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 38.7 ms | ✅ | `nota-vault` `abrir_5k_notas` |
+| Abrir el vault, 50 k notas | ≤ 2 s | 479 ms | ✅ | `nota-vault` `abrir_50k_notas` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `nota-vault` `indexar_links`, `indexar_links_nombres_unicos` |
 | Índice de links, un cambio del watcher: modificar una nota / crear una cuyo nombre usan 300 links | ≤ 16 ms | 23 µs / 0.35 ms | ✅ | `nota-vault` `modificar_una_nota`, `crear_una_nota_que_empata` |
 | Publicar el índice de links en cada lote (clonarlo), 5 k / 50 k | ≤ 16 / 160 ms | 5.7 / 88 ms | ⚠️ | `nota-vault` `clonar_el_indice` |
@@ -46,12 +46,12 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Autocompletado de `[[`: el destino de una página de 50 notas | ≤ 8 ms | 0.10 ms | ✅ | `nota-vault` `nombrar_50_notas_para_completar` |
 | Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 7.6 µs / 13.4 ms | ⚠️ | `nota-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
 | Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 37 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
-| Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 25 / 233 ms | ✅ | `nota-vault` `abrir_con_tags` |
-| Consulta de tags `#t1 -#t3`, un tag cuyos descendientes cubren el 99 % de las notas, 5 k / 50 k | ≤ 16 ms | 0.67 / 12 ms | ⚠️ | `nota-vault` `consulta_por_tag_con_descendientes` |
-| Panel de tags entero (conteos y orden), 5 k / 50 k | ≤ 16 / 160 ms | 1.06 / 23 ms | ✅ | `nota-vault` `panel_de_tags` |
-| Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.3 / 29 ms | ✅ | `nota-vault` `panel_en_focus` |
-| Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.87 / 19 ms | ✅ | `nota-vault` `candidatos_de_autocompletado` |
-| Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.1 ms | ✅ | `nota-vault` `plan_de_renombrar_un_tag_con_pagina` |
+| Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 40 / 465 ms | ✅ | `nota-vault` `abrir_con_tags` |
+| Consulta de tags `#t1 -#t3`, un tag cuyos descendientes cubren el 99 % de las notas, 5 k / 50 k | ≤ 16 ms | 0.67 / 13 ms | ⚠️ | `nota-vault` `consulta_por_tag_con_descendientes` |
+| Panel de tags entero (conteos y orden), 5 k / 50 k | ≤ 16 / 160 ms | 1.15 / 28 ms | ✅ | `nota-vault` `panel_de_tags` |
+| Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.35 / 30 ms | ✅ | `nota-vault` `panel_en_focus` |
+| Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.90 / 25 ms | ✅ | `nota-vault` `candidatos_de_autocompletado` |
+| Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.0 ms | ✅ | `nota-vault` `plan_de_renombrar_un_tag_con_pagina` |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
@@ -66,7 +66,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Buffer: undo de ese lote, 5 k / 50 k | ≤ 16 / 160 ms | 2.5 / 34 ms | ✅ | `nota-buffer` |
 | Ordenar un lote del watcher con muchos renames | lineal | lineal: 1.4 / 7.8 / 35 ms con 1 k / 5 k / 20 k | ✅ | test `ordenar_muchos_renames_es_lineal` |
 
-Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault ahora escanea los tags de cada nota: en la misma corrida, `main` sin tags abría 5 k y 50 k notas en 11.6 y 85 ms. El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 12 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
+Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault también escanea los tags de cada nota: en la misma máquina, `main` con solo el índice de links abría 5 k y 50 k notas en 33.9 y 434 ms, y los tags suman 4.8 y 45 ms (un 14 % y un 10 %). El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 13 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
 
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
 
