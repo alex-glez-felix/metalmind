@@ -15,7 +15,8 @@ use crate::register::{Clipboard, Register, RegisterName, Write};
 use crate::transform::Transform;
 use crate::visual::{self, Area, LastVisual, VisualSize};
 use crate::{
-    Action, KeyOutcome, Mode, Motion, Operator, PasteSide, TextObject, VimError, VisualKind, paste,
+    Action, KeyOutcome, Mode, Motion, Operator, PasteSide, Prompt, TextObject, VimError,
+    VisualKind, paste,
 };
 
 impl Vim {
@@ -56,6 +57,7 @@ impl Vim {
             Action::OtherEnd => self.other_end(selections),
             Action::RestoreVisual => self.restore_visual(buffer, selections),
             Action::NormalMode | Action::Interrupt => self.leave_visual(kind, buffer, selections),
+            Action::CommandLine => self.command_line_from_visual(kind, buffer, selections),
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))
@@ -133,6 +135,18 @@ impl Vim {
         self.last_visual = Some(LastVisual::save(buffer, selections, kind));
         self.mode = Mode::Normal;
         *selections = selections.map(|s| Selection::cursor(clamp_normal(buffer, s.head)));
+    }
+
+    /// `:` en Visual sale de la selección y empieza la línea con `'<,'>`.
+    fn command_line_from_visual(
+        &mut self,
+        kind: VisualKind,
+        buffer: &Buffer,
+        selections: &mut Selections,
+    ) {
+        self.leave_visual(kind, buffer, selections);
+        self.open_command_line(Prompt::Command);
+        self.type_in_command_line("'<,'>");
     }
 
     pub(super) fn other_end(&mut self, selections: &mut Selections) {

@@ -63,20 +63,53 @@ impl From<Command> for Invocation {
     }
 }
 
+/// Por qué no se pudo correr lo escrito tras `:`. Los errores de vim llevan
+/// su número y su texto original; los de nota, que vim no tiene, van en
+/// español.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum CommandError {
-    #[error("E492: no es un comando del editor: {0}")]
+    #[error("E492: Not an editor command: {0}")]
     Unknown(String),
-    #[error("E16: rango inválido")]
+    #[error("E16: Invalid range")]
     InvalidRange,
-    #[error("E493: el rango va hacia atrás")]
+    #[error("E493: Backwards range given")]
     BackwardsRange,
-    #[error("E488: sobra texto: {0}")]
+    #[error("E488: Trailing characters: {0}")]
     TrailingCharacters(String),
+    #[error("E20: Mark not set")]
+    MarkNotSet,
+    #[error("E14: Invalid address")]
+    InvalidAddress,
+    #[error("E134: Cannot move a range of lines into itself")]
+    MoveIntoItself,
+    #[error("E471: Argument required")]
+    ArgumentRequired,
+    #[error("E474: Invalid argument")]
+    InvalidArgument,
+    #[error("E477: No ! allowed")]
+    NoBangAllowed,
+    #[error("E481: No range allowed")]
+    NoRangeAllowed,
+    #[error("E654: Missing delimiter after search pattern: {0}")]
+    MissingDelimiter(String),
+    #[error("E939: Positive count required")]
+    PositiveCountRequired,
+    #[error("E146: Regular expressions can't be delimited by letters")]
+    LetterDelimiter,
+    #[error("E147: Cannot do :global recursive with a range")]
+    RecursiveGlobal,
+    #[error("E148: Regular expression missing from :global")]
+    GlobalPatternMissing,
     #[error("nota no soporta el flag {0} de :s")]
     UnsupportedFlag(char),
     #[error("nota no soporta {0} en el reemplazo de :s")]
     UnsupportedReplacement(String),
+    #[error("nota no soporta el flag {0} de :sort")]
+    UnsupportedSortFlag(char),
+    /// `:g` y `:normal` corren dentro del motor; un comando que tiene que
+    /// correr quien aloja el editor no puede ir dentro.
+    #[error("nota no corre :{0} dentro de :g ni de :normal")]
+    HostCommandInside(String),
     #[error(transparent)]
     Search(#[from] SearchError),
 }

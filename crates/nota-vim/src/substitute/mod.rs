@@ -9,13 +9,12 @@ use nota_buffer::{Buffer, Edit, Selection, Selections};
 pub(crate) use replacement::Replacement;
 
 use crate::lines::{first_non_blank, last_char};
-use crate::range::LineRange;
 use crate::search::{Case, Pattern, split_at_delimiter};
 use crate::{CommandError, VimError};
 
 /// Cuántos reemplazos hizo un `:s` y en cuántas líneas, para el mensaje de
 /// la UI ("3 substitutions on 2 lines").
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Substitution {
     pub replacements: usize,
     pub lines: usize,
@@ -24,7 +23,6 @@ pub struct Substitution {
 /// Un `:s` tal como se escribió.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SubstituteCommand {
-    pub range: Option<LineRange>,
     /// `None` en un `:s` sin patrón, que repite el último.
     pub new: Option<NewSubstitute>,
     pub flags: Flags,
@@ -52,10 +50,9 @@ impl SubstituteCommand {
     ///
     /// # Errors
     /// Con un flag que no se soporta o texto de más.
-    pub fn parse(range: Option<LineRange>, args: &str) -> Result<Self, CommandError> {
+    pub fn parse(args: &str) -> Result<Self, CommandError> {
         let Some(delimiter) = args.chars().next().filter(|&c| is_delimiter(c)) else {
             return Ok(Self {
-                range,
                 new: None,
                 flags: Flags::parse(args.trim_start())?,
             });
@@ -65,7 +62,6 @@ impl SubstituteCommand {
             split_at_delimiter(rest, delimiter)
         });
         Ok(Self {
-            range,
             new: Some(NewSubstitute {
                 pattern,
                 replacement,
@@ -173,7 +169,7 @@ mod tests {
     use super::*;
 
     fn parse(args: &str) -> Result<SubstituteCommand, CommandError> {
-        SubstituteCommand::parse(None, args)
+        SubstituteCommand::parse(args)
     }
 
     fn new(pattern: &str, replacement: &str) -> NewSubstitute {

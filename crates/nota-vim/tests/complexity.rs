@@ -96,3 +96,26 @@ fn a_macro_with_a_count_is_linear_in_the_count() {
         |(session, keys)| feed(session, &keys),
     );
 }
+
+/// Cada `d` de `:g` corre las marcas de las líneas que quedan: con el árbol
+/// de Fenwick de `nota-buffer` no es cuadrático.
+#[test]
+fn global_delete_is_linear() {
+    let keys = format!(":g/{WORD}/d\n");
+    assert_linear(400, session, |session| feed(session, &keys));
+}
+
+#[test]
+fn global_move_to_the_top_is_linear() {
+    assert_linear(400, session, |session| feed(session, ":g/^/m0\n"));
+}
+
+#[test]
+fn normal_on_every_line_is_linear() {
+    assert_linear(400, session, |session| feed(session, ":%norm Ax\n"));
+}
+
+#[test]
+fn sorting_every_line_is_linear() {
+    assert_linear(4_000, session, |session| feed(session, ":sort\n"));
+}

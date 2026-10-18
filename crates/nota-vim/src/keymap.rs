@@ -295,6 +295,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Visual, &[ch('P')], Action::Paste(PasteSide::Before)),
         (Visual, &[ch('r')], Action::Replace),
         (Visual, &[ch('"')], Action::SelectRegister),
+        (Visual, &[ch(':')], Action::CommandLine),
         (Object, &[ch('i'), ch('w')], word(false, false)),
         (Object, &[ch('a'), ch('w')], word(false, true)),
         (Object, &[ch('i'), ch('W')], word(true, false)),

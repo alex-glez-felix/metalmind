@@ -4,10 +4,9 @@
 use nota_buffer::{Buffer, Selections};
 
 use super::Vim;
-use crate::ex::ExCommand;
 use crate::history::History;
 use crate::register::Clipboard;
-use crate::{Action, KeyOutcome, Mode, Prompt, VimError};
+use crate::{KeyOutcome, Mode, Prompt, VimError};
 
 impl Vim {
     /// Lo escrito tras `:`, `/` o `?`, mientras se está en la línea de comandos.
@@ -78,29 +77,12 @@ impl Vim {
             }
             Prompt::Command => {
                 self.command_history.push(&line);
-                self.run_ex(&line, buffer, selections)
+                if !line.is_empty() {
+                    self.last_command_line = Some(line.clone());
+                }
+                self.run_ex(&line, buffer, selections, clipboard)
             }
         }
-    }
-
-    fn run_ex(
-        &mut self,
-        line: &str,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
-        Ok(match ExCommand::parse(line) {
-            Ok(None) => KeyOutcome::Executed(Action::SubmitCommand),
-            Ok(Some(ExCommand::Host(invocation))) => KeyOutcome::Command(invocation),
-            Ok(Some(ExCommand::Substitute(command))) => {
-                return self.substitute(&command, buffer, selections);
-            }
-            Ok(Some(ExCommand::ClearSearchHighlight)) => {
-                self.search.highlight = false;
-                KeyOutcome::Executed(Action::ClearSearchHighlight)
-            }
-            Err(error) => KeyOutcome::InvalidCommand(error),
-        })
     }
 
     fn history_mut(&mut self) -> &mut History {
