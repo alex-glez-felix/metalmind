@@ -25,9 +25,10 @@ impl Vim {
             self.fail();
             return Ok(());
         };
-        // Como el `redo_VIsual` de vim, un bloque se repite con su count.
+        // Como el `redo_VIsual` de vim, lo hecho en Visual se repite con su
+        // count.
         self.count = match dot.change {
-            Change::Block(..) => dot.count,
+            Change::Block(..) | Change::Operate(_, Subject::Object(Object::Visual(_))) => dot.count,
             _ => count.or(dot.count),
         };
         self.selected = dot.register.map(RegisterName::next_for_repeat);

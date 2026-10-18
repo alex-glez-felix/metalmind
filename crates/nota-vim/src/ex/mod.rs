@@ -6,7 +6,6 @@ mod address;
 mod args;
 mod global;
 mod join;
-mod shift;
 mod sort;
 
 pub(crate) use address::{Address, Base, LineRange};
@@ -14,10 +13,10 @@ pub(crate) use args::RegisterAndCount;
 pub(crate) use global::GlobalCommand;
 pub use global::GlobalMiss;
 pub(crate) use join::join;
-pub(crate) use shift::shift;
 pub(crate) use sort::{SortOptions, sort};
 
 use self::address::skip_blanks;
+use crate::indent::Shift;
 use crate::substitute::SubstituteCommand;
 use crate::{CommandError, Invocation};
 
@@ -56,7 +55,8 @@ pub(crate) enum ExCommand {
     },
     /// `:>` o `:<`, repetidos para varios niveles (`:>>`).
     Shift {
-        levels: isize,
+        shift: Shift,
+        levels: usize,
         count: Option<usize>,
     },
     /// `:normal {teclas}`; sin mapeos en nota, `:normal!` es lo mismo.
@@ -128,12 +128,20 @@ impl ParsedLine {
 fn parse_command(text: &str) -> Result<Option<ExCommand>, CommandError> {
     if let Some(shift) = text.chars().next().filter(|&c| c == '>' || c == '<') {
         let name_len = text.len() - text.trim_start_matches(shift).len();
-        let levels = name_len.cast_signed();
-        let levels = if shift == '>' { levels } else { -levels };
+        let levels = name_len;
+        let shift = if shift == '>' {
+            Shift::Right
+        } else {
+            Shift::Left
+        };
         let (bang, args) = split_bang(&text[name_len..]);
         no_bang(bang)?;
         let count = args::count(args)?;
-        return Ok(Some(ExCommand::Shift { levels, count }));
+        return Ok(Some(ExCommand::Shift {
+            shift,
+            levels,
+            count,
+        }));
     }
     let name_len = text
         .find(|c: char| !c.is_ascii_alphabetic())
@@ -285,7 +293,8 @@ mod tests {
         assert_eq!(
             command("<<< 2"),
             Ok(ExCommand::Shift {
-                levels: -3,
+                shift: Shift::Left,
+                levels: 3,
                 count: Some(2)
             })
         );

@@ -226,8 +226,9 @@ impl Vim {
         self.mode = Mode::Visual(kind);
     }
 
-    /// Como en vim, el count no cuenta y `.` repite el operador sobre la
-    /// misma cantidad de texto desde el cursor, con el mismo registro.
+    /// Como en vim, el count solo cuenta en `>` y `<`, y `.` repite el
+    /// operador sobre la misma cantidad de texto desde el cursor, con el
+    /// mismo registro y el mismo count.
     pub(super) fn operate_visual(
         &mut self,
         operator: Operator,
@@ -236,6 +237,7 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
+        let count = self.take_count();
         let register = self.selected.take();
         let size = self.finish_visual(kind, buffer, selections);
         let operands = visual_operands(
@@ -247,7 +249,7 @@ impl Vim {
         let operation = Operation {
             operator,
             subject: Subject::Object(Object::Visual(Area::Sized(size))),
-            count: None,
+            count,
             register,
         };
         self.finish_operator(operation, &operands, buffer, selections, clipboard)

@@ -192,6 +192,8 @@ const YANK: Context = Context::Operator(Operator::Yank);
 const LOWERCASE: Context = Context::Operator(Operator::Lowercase);
 const UPPERCASE: Context = Context::Operator(Operator::Uppercase);
 const TOGGLE_CASE: Context = Context::Operator(Operator::ToggleCase);
+const INDENT: Context = Context::Operator(Operator::Indent);
+const OUTDENT: Context = Context::Operator(Operator::Outdent);
 
 const VIM: &[(Context, &[Key], Action)] = {
     use Context::{CommandLine, Insert, Normal, Object, VimControl as Control, Visual};
@@ -251,6 +253,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('g'), ch('u')], operator(Operator::Lowercase)),
         (Normal, &[ch('g'), ch('U')], operator(Operator::Uppercase)),
         (Normal, &[ch('g'), ch('~')], operator(Operator::ToggleCase)),
+        (Normal, &[ch('>')], operator(Operator::Indent)),
+        (Normal, &[ch('<')], operator(Operator::Outdent)),
         (Normal, &[ch('"')], Action::SelectRegister),
         (Normal, &[ch('x')], Action::DeleteRight),
         (Normal, &[ch('p')], Action::Paste(PasteSide::After)),
@@ -280,6 +284,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (LOWERCASE, &[ch('u')], Action::CurrentLine),
         (UPPERCASE, &[ch('U')], Action::CurrentLine),
         (TOGGLE_CASE, &[ch('~')], Action::CurrentLine),
+        (INDENT, &[ch('>')], Action::CurrentLine),
+        (OUTDENT, &[ch('<')], Action::CurrentLine),
         (Visual, &[ch('v')], Action::Visual(VisualKind::Char)),
         (Visual, &[ch('V')], Action::Visual(VisualKind::Line)),
         (Visual, &[Key::Ctrl('v')], Action::Visual(VisualKind::Block)),
@@ -296,6 +302,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Visual, &[ch('u')], operator(Operator::Lowercase)),
         (Visual, &[ch('U')], operator(Operator::Uppercase)),
         (Visual, &[ch('~')], operator(Operator::ToggleCase)),
+        (Visual, &[ch('>')], operator(Operator::Indent)),
+        (Visual, &[ch('<')], operator(Operator::Outdent)),
         (Visual, &[ch('p')], Action::Paste(PasteSide::After)),
         (Visual, &[ch('P')], Action::Paste(PasteSide::Before)),
         (Visual, &[ch('r')], Action::Replace),
@@ -408,7 +416,7 @@ const VIM: &[(Context, &[Key], Action)] = {
 mod tests {
     use super::*;
 
-    const MODES: [Mode; 12] = [
+    const MODES: [Mode; 14] = [
         Mode::Normal,
         Mode::Insert,
         Mode::CommandLine,
@@ -418,6 +426,8 @@ mod tests {
         Mode::OperatorPending(Operator::Lowercase),
         Mode::OperatorPending(Operator::Uppercase),
         Mode::OperatorPending(Operator::ToggleCase),
+        Mode::OperatorPending(Operator::Indent),
+        Mode::OperatorPending(Operator::Outdent),
         Mode::Visual(VisualKind::Char),
         Mode::Visual(VisualKind::Line),
         Mode::Visual(VisualKind::Block),

@@ -7,6 +7,7 @@ mod insert;
 mod plan;
 mod prep;
 mod put;
+mod shift;
 
 use std::ops::{Range, RangeInclusive};
 
@@ -20,6 +21,7 @@ pub(crate) use edit::{BlockEdit, delete, edit, yank};
 pub(crate) use insert::{Insertion, Pending};
 pub(crate) use plan::{Plan, apply, without_overlaps};
 pub(crate) use put::{put, put_in_each_line};
+pub(crate) use shift::shift;
 
 /// Las líneas `first..=last` entre las columnas de pantalla `start` y `end`,
 /// las dos incluidas: el `oparg_T` de vim tras `get_op_vcol`.

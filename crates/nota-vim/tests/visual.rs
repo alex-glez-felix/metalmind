@@ -292,6 +292,52 @@ use rstest_reuse::{self, apply, template};
 #[case("|a\tbc\na\tbc\nxyzwvutsrqp", "vlldj0.", "c\n|c\nxyzwvutsrqp")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
+/// `>` y `<` en Visual corren las líneas de la selección tantos niveles
+/// como el count; `.` repite con el mismo count sobre las mismas líneas.
+#[template]
+#[rstest]
+#[case("a|b\ncd\nef", "vj>", "|\tab\n\tcd\nef")]
+#[case(
+    "  a|bcdefghijkl\n xyzxyzxyzxyzxyz",
+    "hlvj>",
+    "|\t  abcdefghijkl\n\t xyzxyzxyzxyzxyz"
+)]
+#[case(
+    "  a|bcdefghijkl\n xyzxyzxyzxyzxyz",
+    "hlvj3>",
+    "|\t\t\t  abcdefghijkl\n\t\t\t xyzxyzxyzxyzxyz"
+)]
+#[case(
+    "abcdefghijkl\n xyzx|yzxyzxyzxyz",
+    "vk>",
+    "|\tabcdefghijkl\n\t xyzxyzxyzxyzxyz"
+)]
+#[case("\t\tab|c\n\t\tdef", "Vj<lt>", "\tab|c\n\tdef")]
+#[case("\t\t\tab|c\n\t\t\tdef", "Vj2<lt>j.", "\tabc\nde|f")]
+#[case("|a\nb\nc\nd\ne", "Vj3>jj.", "\t\t\ta\n\t\t\tb\n|\t\t\tc\n\t\t\td\ne")]
+#[case(
+    "|a\nb\nc\nd\ne\nf",
+    "Vj3>jj3.",
+    "\t\t\ta\n\t\t\tb\n|\t\t\tc\n\t\t\td\ne\nf"
+)]
+#[case("|a\nb\nc\nd\ne\nf", "Vj>jj3.", "\ta\n\tb\n|\tc\n\td\ne\nf")]
+#[case("abc\nde|f\nx", "vk>u", "ab|c\ndef\nx")]
+#[case("a|b\n\ncd", "Vjj>", "|\tab\n\n\tcd")]
+fn shifts(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
+
+#[apply(shifts)]
+fn engine_shift(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
+    assert_eq!(support::run_engine(before, keys).text, after);
+}
+
+#[apply(shifts)]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn nvim_shift(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
+    let nvim = support::nvim::run(before, keys);
+    assert_eq!(nvim.text, after, "la tabla no coincide con nvim");
+    assert_eq!(nvim.mode, support::run_engine(before, keys).mode);
+}
+
 #[apply(cases)]
 fn engine(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);

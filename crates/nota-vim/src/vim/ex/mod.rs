@@ -154,9 +154,13 @@ impl Vim {
             ExCommand::Join { spaces, count } => {
                 self.join_lines(lines.counted(count, buffer), spaces, buffer, selections)?;
             }
-            ExCommand::Shift { levels, count } => {
+            ExCommand::Shift {
+                shift,
+                levels,
+                count,
+            } => {
                 let lines = lines.counted(count, buffer).zero_based();
-                self.shift_lines(lines, levels, buffer, selections)?;
+                self.shift_lines(lines, shift, levels, buffer, selections)?;
             }
             ExCommand::Sort(options) => {
                 self.sort_lines(lines.zero_based(), &options, buffer, selections)?;
