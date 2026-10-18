@@ -4,7 +4,6 @@
 //! fallo a medias dice qué quedó hecho para poder deshacerlo.
 
 use std::fs;
-use std::io;
 use std::path::Path;
 
 use crate::file::{self, FileError, write_atomic};
@@ -97,9 +96,7 @@ pub(crate) fn apply(root: &Path, plan: &RenamePlan) -> Result<AppliedRename, App
         });
     }
     // El rename lo vuelve a comprobar sin carrera; esto evita escribir para nada.
-    if exists(root, &plan.to) {
-        return Err(AccessError::from(FileOpError::AlreadyExists(plan.to.clone())).into());
-    }
+    ops::check_free(root, &plan.to).map_err(AccessError::from)?;
     let mut applied = AppliedRename {
         from: plan.from.clone(),
         to: plan.to.clone(),
@@ -130,8 +127,8 @@ pub(crate) fn apply(root: &Path, plan: &RenamePlan) -> Result<AppliedRename, App
 /// el rename: guardar encima del destino de un rename en el mismo lote del
 /// watcher le hace perder el origen a `notify-debouncer-full` 0.7 (#54).
 pub(crate) fn undo(root: &Path, applied: &AppliedRename) -> Result<UndoReport, FileOpError> {
-    if applied.renamed && exists(root, &applied.from) {
-        return Err(FileOpError::AlreadyExists(applied.from.clone()));
+    if applied.renamed {
+        ops::check_free(root, &applied.from)?;
     }
     let mut report = UndoReport::default();
     for file in &applied.files {
@@ -169,11 +166,4 @@ fn read(root: &Path, path: &VaultPath) -> Result<String, AccessError> {
 
 fn write(root: &Path, path: &VaultPath, text: &str) -> Result<(), FileError> {
     write_atomic(&path.to_fs(root), |out| out.write_all(text.as_bytes()))
-}
-
-fn exists(root: &Path, path: &VaultPath) -> bool {
-    !matches!(
-        fs::symlink_metadata(path.to_fs(root)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound
-    )
 }

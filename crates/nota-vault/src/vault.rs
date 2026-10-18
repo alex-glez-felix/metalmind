@@ -36,7 +36,9 @@ pub enum VaultError {
     Spawn(io::Error),
 }
 
-/// Lo que cambió en el vault, con los índices que ya lo incluyen.
+/// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
+/// puede venir vacío si solo cambiaron los links: un chmod que vuelve
+/// legible una nota.
 #[derive(Debug, Clone)]
 pub struct VaultUpdate {
     pub changes: Vec<VaultChange>,
@@ -170,7 +172,8 @@ impl Vault {
     /// salvo los que cambiaron desde entonces, y renombra de vuelta.
     ///
     /// # Errors
-    /// Si la ruta de antes del rename ya está ocupada; entonces no toca nada.
+    /// Si la ruta de antes del rename ya está ocupada o pasa por un archivo;
+    /// entonces no toca nada.
     pub fn undo_rename(&self, applied: &AppliedRename) -> Result<UndoReport, FileOpError> {
         refactor::undo(&self.root, applied)
     }
@@ -227,11 +230,15 @@ impl Worker {
                 return;
             }
             let changes = refresh(&mut current, &self.root, &touched);
-            if changes.is_empty() {
-                continue;
-            }
             for change in &changes {
                 links.apply(change, |path| read_note(&self.root, path));
+            }
+            let mut reread = false;
+            for path in &touched.reread {
+                reread |= links.reread(path, |note| read_note(&self.root, note));
+            }
+            if changes.is_empty() && !reread {
+                continue;
             }
             let snapshot = Arc::new(current.clone());
             let published = Arc::new(links.clone());

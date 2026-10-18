@@ -37,6 +37,9 @@ pub enum RenamePlanError {
     Exists(VaultPath),
     #[error("no se puede mover {from} dentro de sí mismo ({to})")]
     IntoItself { from: VaultPath, to: VaultPath },
+    /// Una carpeta del destino es un archivo.
+    #[error("{0} es un archivo, no una carpeta")]
+    NotAFolder(VaultPath),
 }
 
 impl LinkIndex {
@@ -46,7 +49,9 @@ impl LinkIndex {
     /// desde la raíz o relativa, y sus escapes si es markdown.
     ///
     /// # Errors
-    /// Si `to` ya existe o está dentro de `from`.
+    /// Si `to` ya existe, está dentro de `from` o debajo de un archivo. Una
+    /// carpeta vacía en `to` no la ve el índice: la frena
+    /// [`crate::Vault::apply_rename`] antes de escribir.
     pub fn rename_plan(
         &self,
         from: &VaultPath,
@@ -60,6 +65,9 @@ impl LinkIndex {
         }
         if !self.names.within(to).is_empty() {
             return Err(RenamePlanError::Exists(to.clone()));
+        }
+        if let Some(file) = to.ancestors().find(|folder| self.names.contains(folder)) {
+            return Err(RenamePlanError::NotAFolder(file));
         }
         let moved = self.names.within(from);
         let after = After::new(&self.names, from, to, &moved);

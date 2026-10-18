@@ -61,6 +61,11 @@ fn renamed(files: &[(&str, &str)], from: &str, to: &str, note: &str) -> String {
     "[x](b/Mi%20Nota.md) [y](<b/Mi Nota.md#H>)"
 )]
 #[case::markdown_sin_ruta("[x](nota.md)", "Mi Nota.md", "[x](Mi%20Nota.md)")]
+#[case::salto_de_linea_en_el_nombre(
+    "[x](<a/nota.md>) [y](a/nota.md)",
+    "dos\nlíneas.md",
+    "[x](<dos%0Alíneas.md>) [y](dos%0Alíneas.md)"
+)]
 #[case::en_codigo_no(
     "`[[nota]]`\n```\n[[nota]]\n```\n[[nota]]",
     "nueva.md",
@@ -134,6 +139,10 @@ fn the_destination_must_be_free() {
         index.rename_plan(&path("a"), &path("a/c")),
         Err(RenamePlanError::IntoItself { .. })
     ));
+    assert_eq!(
+        index.rename_plan(&path("a/x.md"), &path("b.md/c/x.md")),
+        Err(RenamePlanError::NotAFolder(path("b.md")))
+    );
 }
 
 /// Dónde resuelve cada link de cada nota, por nota y posición.
