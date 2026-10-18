@@ -237,6 +237,13 @@ Los tags tienen su propio `TagIndex`, alimentado del mismo scan y del mismo watc
 - **Reindex incremental**: evento de `notify` → reparse de ese archivo → diff de links salientes viejos vs nuevos → actualizar `incoming` de los afectados → emitir `IndexEvent::BacklinksChanged(Vec<NoteId>)` a la UI.
 - **Renombrar** una nota = actualizar todos los `[[links]]` que apuntan a ella (Obsidian lo hace). Requiere rangos exactos → otra razón para guardar `range` en cada `Link`. Escribir con escrituras atómicas y una sola transacción de undo multi-archivo **(diseño propio, sin verificar en otros editores)**.
 
+### Estado (M2, 2026-10-17): índice de archivos
+
+- `Vault::open(raíz)` canonicaliza la raíz y la recorre con `ignore` en paralelo. El resultado es un `VaultIndex`: cada ruta (`VaultPath`, relativa, con `/`) es carpeta, nota (`.md`, sin distinguir mayúsculas) o adjunto, y cada carpeta guarda sus hijos ya ordenados como el "A a Z" de Obsidian (carpetas primero, nombre sin mayúsculas). La UI recorre el árbol con `children(carpeta)` sin ordenar nada.
+- Reglas del walk, iguales en cualquier máquina: `.gitignore` e `.ignore` del vault aunque no sea un repo git (`require_git(false)`) y `.git/info/exclude`; no los de carpetas superiores a la raíz ni el `excludesFile` global de git, que harían que el mismo vault se vea distinto según quién lo abra.
+- Los ocultos (nombre con punto) no se muestran nunca, y eso cubre `.obsidian/`, `.git/` y `.trash/`. Va como filtro propio y no con `hidden(true)` a secas, porque en `ignore` un `!.obsidian/` en `.gitignore` le gana a `hidden`. `VaultPath` tampoco admite componentes ocultos, `..` ni `.`: una ruta del vault nunca sale de la raíz.
+- Los enlaces simbólicos no se siguen ni se listan (la raíz sí puede serlo): seguirlos podría sacar al vault de su raíz o duplicar carpetas. Los nombres que no son UTF-8 se saltan con un aviso en el log.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins
