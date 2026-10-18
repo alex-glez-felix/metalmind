@@ -156,7 +156,7 @@ Comandos tentativos **(propuesta)**:
 
 **Restricciones desde ya:**
 
-- `TagQuery` (05 §4) tiene que poder expresar "sin tags". Hoy no puede: `-#a` excluye un tag concreto, no "cualquiera".
+- `TagQuery` (05 §4) expresa "sin tags" con `-#`; `-#a` excluye un tag concreto.
 - El nodo **Sin tags** que 05 §3 proponía al final del panel es el buzón, y se llama así en la UI.
 - La captura nunca pone tags por su cuenta (ni `#inbox` ni similares): eso rompería la definición.
 - Las páginas de tag (`tags/<nombre>.md`, 05 §7) no son notas del buzón aunque no tengan tags, y "sin tags" en `TagQuery` no las devuelve.

@@ -1,6 +1,7 @@
 //! Tests de los tags sobre vaults en memoria: cada caso es una lista de
 //! archivos con su contenido.
 
+mod complexity;
 mod graph;
 mod metadata;
 mod panel;

@@ -13,6 +13,7 @@ mod query;
 mod refactor;
 mod rename;
 mod scope;
+mod tally;
 #[cfg(test)]
 mod tests;
 mod tree;
@@ -195,6 +196,28 @@ impl Tags {
         on_cycle
     }
 
+    /// Los tags como si los buffers con cambios sin guardar (ruta y texto)
+    /// ya estuvieran guardados. Un plan armado sobre esto trae, para esos
+    /// archivos, ediciones sobre el texto del buffer, que la UI aplica al
+    /// buffer como una transacción en vez de escribir el disco (05 §5).
+    #[must_use]
+    pub fn with_unsaved<'b>(
+        &self,
+        buffers: impl IntoIterator<Item = (&'b VaultPath, &'b str)>,
+    ) -> Self {
+        let mut tags = self.clone();
+        let mut pages_changed = false;
+        for (path, text) in buffers {
+            let (note, page) = scan_text(&tags.folder, path, text);
+            pages_changed |= page.is_some() || tags.pages.contains_key(path);
+            tags.store(path.clone(), note, page);
+        }
+        if pages_changed {
+            tags.graph = tags.rebuild_graph();
+        }
+        tags
+    }
+
     /// Si `path` es una página de tag: no cuenta como nota normal (05 §7).
     #[must_use]
     pub fn is_page(&self, path: &VaultPath) -> bool {
@@ -240,13 +263,16 @@ fn scan_one(
     path: &VaultPath,
     read: &impl ReadNote,
 ) -> (IndexedNote, Option<PageFile>) {
-    let text = read(path).unwrap_or_default();
-    let (tags, frontmatter) = scan_note(&text);
+    scan_text(folder, path, &read(path).unwrap_or_default())
+}
+
+fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, Option<PageFile>) {
+    let (tags, frontmatter) = scan_note(text);
     let page = page_name(folder, path).map(|name| match name {
         Ok(name) => PageFile::Page(Box::new(TagPage::new(
             path.clone(),
             name,
-            &text,
+            text,
             frontmatter.as_ref(),
         ))),
         Err(()) => PageFile::InvalidName,

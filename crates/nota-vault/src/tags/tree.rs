@@ -1,7 +1,7 @@
 //! Lo que muestra la vista de tags del panel (05 §3): un grafo por
 //! `parents` con el conteo de cada tag, sus notas y, al final, el buzón.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::path::VaultPath;
 use crate::tags::Tags;
@@ -32,10 +32,9 @@ pub struct TagNode {
     pub only_parent: bool,
     /// Notas distintas del alcance con el tag, sus alias o sus descendientes.
     pub count: usize,
-    /// Los tags que lo tienen de padre, en el orden del panel.
+    /// Los tags que lo tienen de padre, en el orden del panel. Sus notas,
+    /// que van después, se piden al expandirlo ([`Tags::tagged_notes`]).
     pub children: Vec<TagKey>,
-    /// Las notas del alcance que lo llevan escrito, o un alias suyo.
-    pub notes: Vec<VaultPath>,
 }
 
 impl TagTree {
@@ -68,17 +67,12 @@ impl Tags {
     /// tienen página o solo son padres.
     #[must_use]
     pub fn tree(&self, scope: &ScopeFilter<'_>) -> TagTree {
-        let in_scope: HashSet<&VaultPath> = self
-            .index
-            .notes()
-            .map(|(path, _)| path)
-            .filter(|path| scope.contains(path))
-            .collect();
+        let tally = self.tally(|path| scope.contains(path));
         let mut nodes = HashMap::new();
-        for key in self.node_keys() {
-            let node = self.node(key, &in_scope);
-            if scope.is_everything() || node.count > 0 {
-                nodes.insert(key.clone(), node);
+        for &key in &tally.keys {
+            let count = tally.count(key);
+            if scope.is_everything() || count > 0 {
+                nodes.insert(key.clone(), self.node(key, count));
             }
         }
         let names: HashMap<TagKey, (String, String)> = nodes
@@ -94,17 +88,10 @@ impl Tags {
         }
         let mut roots = self.roots();
         order(&mut roots);
-        let mut inbox: Vec<VaultPath> = self
-            .index
-            .notes()
-            .filter(|(path, note)| note.occurrences.is_empty() && in_scope.contains(path))
-            .map(|(path, _)| path.clone())
-            .collect();
-        inbox.sort_by_cached_key(path_order);
         TagTree {
             roots,
             nodes,
-            inbox,
+            inbox: sorted(&tally.inbox),
         }
     }
 
@@ -123,16 +110,24 @@ impl Tags {
         keys.into_iter()
     }
 
-    fn node(&self, key: &TagKey, scope: &HashSet<&VaultPath>) -> TagNode {
-        let page = self.graph.page(key);
-        let own: HashSet<&VaultPath> = std::iter::once(key)
+    /// Las notas del alcance que llevan escrito `key` o un alias suyo, en el
+    /// orden del panel: lo que se ve bajo el tag al expandirlo.
+    #[must_use]
+    pub fn tagged_notes(&self, key: &TagKey, scope: &ScopeFilter<'_>) -> Vec<VaultPath> {
+        let key = self.graph.resolve(key);
+        let mut notes: Vec<&VaultPath> = std::iter::once(key)
             .chain(self.graph.aliases(key))
             .filter_map(|key| self.index.tag(key))
             .flat_map(|entry| &entry.notes)
             .filter(|path| scope.contains(path))
             .collect();
-        let mut notes: Vec<VaultPath> = own.into_iter().cloned().collect();
-        notes.sort_by_cached_key(path_order);
+        notes.sort_unstable();
+        notes.dedup();
+        sorted(&notes)
+    }
+
+    fn node(&self, key: &TagKey, count: usize) -> TagNode {
+        let page = self.graph.page(key);
         TagNode {
             key: key.clone(),
             name: self.display_name(key).unwrap_or(key.as_str()).to_owned(),
@@ -140,13 +135,8 @@ impl Tags {
             icon: page.and_then(|page| page.icon.clone()),
             has_page: page.is_some(),
             only_parent: self.is_only_parent(key),
-            count: self
-                .notes_with(key)
-                .into_iter()
-                .filter(|path| scope.contains(path))
-                .count(),
+            count,
             children: self.graph.children(key).to_vec(),
-            notes,
         }
     }
 }
@@ -157,6 +147,9 @@ fn name_order(name: &str) -> (String, String) {
     (name.to_lowercase(), name.to_owned())
 }
 
-fn path_order(path: &VaultPath) -> (String, VaultPath) {
-    (path.name().to_lowercase(), path.clone())
+/// Las notas como en el árbol de carpetas, por nombre sin distinguir mayúsculas.
+fn sorted(notes: &[&VaultPath]) -> Vec<VaultPath> {
+    let mut notes: Vec<VaultPath> = notes.iter().map(|&path| path.clone()).collect();
+    notes.sort_by_cached_key(|path| (path.name().to_lowercase(), path.clone()));
+    notes
 }

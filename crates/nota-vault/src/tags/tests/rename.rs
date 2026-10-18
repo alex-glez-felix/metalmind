@@ -271,3 +271,31 @@ fn invalid_requests() {
         Err(PlanError::NotAnAlias("#nota".into()))
     );
 }
+
+#[test]
+fn an_unsaved_buffer_is_planned_on_its_text() {
+    let fixture = fixture();
+    let buffer = "Sin guardar: #rust y #Rust.\n";
+    let tags = fixture.tags().with_unsaved([(&path("d.md"), buffer)]);
+    let plan = tags.plan_rename("#rust", "#oxido").unwrap();
+    let edit = plan
+        .changes
+        .edits
+        .iter()
+        .find(|edit| edit.path == path("d.md"))
+        .unwrap();
+    assert_eq!(
+        edit.apply(buffer).unwrap(),
+        "Sin guardar: #oxido y #oxido.\n"
+    );
+    assert!(edit.apply(&fixture.files[&path("d.md")]).is_err());
+}
+
+#[test]
+fn an_unsaved_page_changes_the_graph() {
+    let fixture = fixture();
+    let page = "---\naliases: [rs, oxido]\n---\n";
+    let tags = fixture.tags().with_unsaved([(&path("tags/rust.md"), page)]);
+    assert_eq!(tags.graph().alias_of(&key("oxido")), Some(&key("rust")));
+    assert_eq!(fixture.tags().graph().alias_of(&key("oxido")), None);
+}

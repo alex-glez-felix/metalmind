@@ -354,6 +354,8 @@ Tags (M2.5, 2026-10-18), `cargo bench -p nota-vault --bench tags`, en release, m
 | Consulta `#t1` (un tag con descendientes) / `#t1 -#t3` / `-#` | **0.69** / 0.76 / 0.46 ms (objetivo: < 16 ms) |
 | Plan de renombrar `#t1` (con página, hijos y alias) | 0.07 ms |
 
+Tags (M2.5): abrir el vault con los tags, las consultas, el panel, el autocompletado y los planes tienen su fila en el [presupuesto de rendimiento](../performance.md), con 5 k y 50 k notas.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins
@@ -416,7 +418,7 @@ nota/
 └── tests/fixtures/vaults/  # vaults de ejemplo (incluir uno exportado de Obsidian real)
 ```
 
-Estado (2026-10-18): existen `nota-buffer`, `nota-config`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault` (con el índice de links de M3 y el índice, el grafo, las consultas y los planes de renombrar de los tags, M2.5), `nota-ui` y `nota`.
+Estado (2026-10-18): existen `nota-buffer`, `nota-config`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault` (con el índice de links de M3 y el núcleo de los tags de M2.5: índice, grafo, consultas, focus, panel, autocompletado y planes que se aplican y deshacen), `nota-ui` y `nota`.
 
 Regla de dependencias (verificable con `cargo tree` en CI): **solo `nota-ui` y `nota` dependen del framework de GUI**. Todo lo demás compila y se testea sin ventana. Eso hace que cambiar GPUI ↔ iced cueste una sola capa.
 

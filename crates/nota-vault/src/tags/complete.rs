@@ -42,9 +42,11 @@ impl Tags {
     /// nombre. Los alias no son candidatos propios: van en su tag.
     #[must_use]
     pub fn completions(&self) -> Vec<TagCompletion> {
-        let mut completions: Vec<TagCompletion> = self
-            .node_keys()
-            .map(|key| {
+        let tally = self.tally(|_| true);
+        let mut completions: Vec<TagCompletion> = tally
+            .keys
+            .iter()
+            .map(|&key| {
                 let page = self.graph.page(key);
                 let aliases = page
                     .into_iter()
@@ -56,7 +58,7 @@ impl Tags {
                     key: key.clone(),
                     name: self.display_name(key).unwrap_or(key.as_str()).to_owned(),
                     aliases,
-                    count: self.count(key),
+                    count: tally.count(key),
                     color: page.and_then(|page| page.color.clone()),
                     icon: page.and_then(|page| page.icon.clone()),
                 }

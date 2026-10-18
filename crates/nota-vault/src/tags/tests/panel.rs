@@ -31,8 +31,9 @@ fn fixture() -> Fixture {
 
 /// El panel dentro de `scope`, con el buzón al final.
 fn render(tags: &Tags, scope: &str) -> String {
-    let tree = tags.tree(&Scope::parse(scope).unwrap().filter(tags));
-    let mut out = panel(&tree);
+    let filter = Scope::parse(scope).unwrap().filter(tags);
+    let tree = tags.tree(&filter);
+    let mut out = panel(tags, &filter);
     writeln!(out, "Sin tags").unwrap();
     for note in tree.inbox() {
         writeln!(out, "  · {note}").unwrap();
