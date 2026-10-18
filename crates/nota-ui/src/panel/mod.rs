@@ -5,7 +5,7 @@
 
 mod input;
 
-use nota_vault::{EntryKind, InvalidPath, VaultPath};
+use nota_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
 use crate::file_tree::FileTree;
@@ -59,6 +59,20 @@ pub enum Prompt {
         /// Algún buffer de lo que se borra tiene cambios sin guardar.
         unsaved: bool,
     },
+}
+
+impl Prompt {
+    /// La entrada sobre la que actúa: la que se renombra, mueve o borra, o
+    /// la carpeta donde se crea. El filtro no tiene.
+    fn target_mut(&mut self) -> Option<&mut VaultPath> {
+        match self {
+            Self::Filter(_) => None,
+            Self::Create { parent, .. } => Some(parent),
+            Self::Rename { path, .. }
+            | Self::Move { path, .. }
+            | Self::ConfirmDelete { path, .. } => Some(path),
+        }
+    }
 }
 
 /// Una operación de archivo que el usuario confirmó.
@@ -192,6 +206,31 @@ impl Panel {
     /// `unsaved`: si algún buffer de lo que se borraría tiene cambios.
     pub fn start_delete(&mut self, path: VaultPath, unsaved: bool) {
         self.open(Prompt::ConfirmDelete { path, unsaved });
+    }
+
+    /// Tras un lote del watcher: la pregunta abierta sigue a su entrada en
+    /// los renombres y, si la entrada desaparece, se cierra con un aviso.
+    /// Así confirmar nunca actúa sobre otra entrada que ocupe la ruta vieja.
+    pub fn follow(&mut self, changes: &[VaultChange]) {
+        let Some(target) = self.prompt.as_mut().and_then(Prompt::target_mut) else {
+            return;
+        };
+        for change in changes {
+            match change {
+                VaultChange::Renamed { from, to, .. } => {
+                    if let Some(moved) = target.rebase(from, to) {
+                        *target = moved;
+                    }
+                }
+                VaultChange::Removed { path, .. } if target.starts_with(path) => {
+                    let gone = target.clone();
+                    self.prompt = None;
+                    self.error = Some(format!("«{gone}» ya no existe"));
+                    return;
+                }
+                _ => {}
+            }
+        }
     }
 
     fn open(&mut self, prompt: Prompt) {
