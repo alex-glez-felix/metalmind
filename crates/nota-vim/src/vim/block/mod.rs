@@ -10,7 +10,8 @@ use super::Vim;
 use crate::block::{self, Block, BlockEdit, BlockSize};
 use crate::columns::Columns;
 use crate::dot::{BlockChange, Change, Dot};
-use crate::lines::clamp_normal;
+use crate::indent::Shift;
+use crate::lines::{at_byte_column, clamp_normal};
 use crate::register::{Clipboard, Register, RegisterName, Shape, Write};
 use crate::transform::Transform;
 use crate::visual::{LastVisual, Reselect};
@@ -21,8 +22,9 @@ impl Vim {
         self.viewport.columns()
     }
 
-    /// `d`, `c`, `y`, `~`, `u` y `U` sobre cada bloque. Como en vim, el
-    /// count no cuenta y `.` repite sobre un bloque del mismo tamaño.
+    /// `d`, `c`, `y`, `~`, `u`, `U`, `>` y `<` sobre cada bloque. Como en
+    /// vim, el count solo cuenta en `>` y `<`, que corren tantos niveles, y
+    /// `.` repite sobre un bloque del mismo tamaño.
     pub(super) fn operate_block(
         &mut self,
         operator: Operator,
@@ -30,9 +32,15 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
+        let count = self.take_count();
         let register = self.selected.take();
         let blocks = self.finish_block(buffer, selections);
-        self.block_operator(operator, register, &blocks, buffer, selections, clipboard)
+        let operation = BlockOperation {
+            operator,
+            count,
+            register,
+        };
+        self.block_operator(operation, &blocks, buffer, selections, clipboard)
     }
 
     /// Completa `r` en un bloque.
@@ -112,7 +120,12 @@ impl Vim {
             selections.map_to(|selection| Block::sized(buffer, selection.head, size, columns));
         match change {
             BlockChange::Operate(operator) => {
-                self.block_operator(operator, register, &blocks, buffer, selections, clipboard)
+                let operation = BlockOperation {
+                    operator,
+                    count,
+                    register,
+                };
+                self.block_operator(operation, &blocks, buffer, selections, clipboard)
             }
             BlockChange::Replace(c) => self.replace_blocks(c, &blocks, buffer, selections),
             BlockChange::Insert { append } => {
@@ -135,13 +148,15 @@ impl Vim {
 
     fn block_operator(
         &mut self,
-        operator: Operator,
-        register: Option<RegisterName>,
+        operation: BlockOperation,
         blocks: &PerSelection<Block>,
         buffer: &mut Buffer,
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
+        let BlockOperation {
+            operator, register, ..
+        } = operation;
         let how = match operator {
             // Como vim, `".d` no opera, pero el cursor ya fue a la esquina.
             _ if register.is_some_and(|name| !name.is_writable()) => {
@@ -160,6 +175,9 @@ impl Vim {
             Operator::Lowercase => BlockEdit::Transform(Transform::Lowercase),
             Operator::Uppercase => BlockEdit::Transform(Transform::Uppercase),
             Operator::ToggleCase => BlockEdit::Transform(Transform::ToggleCase),
+            Operator::Indent | Operator::Outdent => {
+                return self.shift_blocks(operation, blocks, buffer, selections);
+            }
         };
         // Como `op_delete` de vim, `d` en una sola línea vacía no copia nada.
         let empty_line =
@@ -178,6 +196,48 @@ impl Vim {
         }
         self.edit_blocks(how, blocks, buffer, selections)?;
         self.last_change = Some(dot);
+        Ok(())
+    }
+
+    /// Corre cada bloque `count` niveles en un paso de undo; el cursor
+    /// vuelve al byte de la esquina en la primera línea, como en vim.
+    fn shift_blocks(
+        &mut self,
+        operation: BlockOperation,
+        blocks: &PerSelection<Block>,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        let BlockOperation {
+            operator,
+            count,
+            register,
+        } = operation;
+        let shift = operator.shift().unwrap_or(Shift::Right);
+        let columns = self.columns();
+        let corners: Vec<usize> = blocks
+            .iter()
+            .map(|block| {
+                block.top_left(buffer, columns).get() - buffer.line_start(block.first).get()
+            })
+            .collect();
+        let plans: Vec<_> = blocks
+            .iter()
+            .map(|block| block::shift(buffer, block, shift, count.unwrap_or(1), columns))
+            .collect();
+        buffer.begin_transaction(self.at_corners(blocks, buffer))?;
+        let (line_starts, _) = block::apply(buffer, &plans)?;
+        let cursors = line_starts
+            .into_iter()
+            .zip(corners)
+            .map(|(start, column)| at_byte_column(buffer, buffer.line_of(start), column))
+            .collect();
+        if let Some(after) = cursors_at(buffer, cursors) {
+            *selections = after;
+        }
+        buffer.commit_transaction(selections.clone())?;
+        let change = Change::Block(BlockChange::Operate(operator), primary_size(blocks));
+        self.last_change = Some(Dot::new(change, count, register));
         Ok(())
     }
 
@@ -249,6 +309,14 @@ impl Vim {
             Selection::cursor(clamp_normal(buffer, block.top_left(buffer, self.columns())))
         })
     }
+}
+
+/// Un operador sobre bloques, con su count y su registro.
+#[derive(Clone, Copy)]
+struct BlockOperation {
+    operator: Operator,
+    count: Option<usize>,
+    register: Option<RegisterName>,
 }
 
 /// Un cursor en cada offset, fuera del fin de línea; `None` si no hay

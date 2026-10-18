@@ -107,7 +107,13 @@ impl Vim {
             self.fail();
             return Ok(());
         }
-        let outcome = operator.apply(buffer, operands, self.viewport.columns())?;
+        // Como en vim, `>` y `<` corren tantos niveles como el count en
+        // Visual, y uno fuera de él, donde el count es del objeto.
+        let levels = match subject {
+            Subject::Object(Object::Visual(_)) => count.unwrap_or(1),
+            _ => 1,
+        };
+        let outcome = operator.apply(buffer, operands, self.viewport.columns(), levels)?;
         let (applied, written, spans_lines) = match outcome {
             Outcome::Missed(moved) => {
                 *selections = moved;
@@ -244,7 +250,7 @@ pub(super) fn run(
         selection: *selection,
         target: object.target(buffer, selection, operator, None, viewport),
     });
-    let outcome = operator.apply(buffer, &operands, viewport.columns())?;
+    let outcome = operator.apply(buffer, &operands, viewport.columns(), 1)?;
     Ok(match outcome {
         Outcome::Missed(selections) | Outcome::Applied { selections, .. } => selections,
     })

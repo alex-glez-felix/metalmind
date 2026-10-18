@@ -41,6 +41,10 @@ impl Columns {
         }
     }
 
+    pub fn tabstop(self) -> usize {
+        self.tabstop
+    }
+
     pub fn cells(self, line: &str) -> Cells<'_> {
         Cells {
             chars: line.char_indices().peekable(),

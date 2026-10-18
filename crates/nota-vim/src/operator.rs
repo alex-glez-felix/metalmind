@@ -4,8 +4,10 @@ use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selecti
 
 use crate::VimError;
 use crate::columns::Columns;
+use crate::indent::Shift;
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
+use crate::shift;
 use crate::span::{Missed, Region, Target};
 use crate::transform::Transform;
 
@@ -20,6 +22,10 @@ pub enum Operator {
     Uppercase,
     /// `g~`, o `~` en Visual.
     ToggleCase,
+    /// `>`: corre la sangría un `shiftwidth` a la derecha.
+    Indent,
+    /// `<`: la corre a la izquierda.
+    Outdent,
 }
 
 /// Una selección y lo que el operador abarca desde ella, o dónde queda el
@@ -49,6 +55,8 @@ enum Effect {
     Cut(Cut),
     /// Cambia cada carácter sin tocar el registro.
     Transform(Transform),
+    /// Corre la sangría de cada línea que abarca.
+    Shift(Shift),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,6 +75,8 @@ impl Operator {
             Self::Lowercase => Effect::Transform(Transform::Lowercase),
             Self::Uppercase => Effect::Transform(Transform::Uppercase),
             Self::ToggleCase => Effect::Transform(Transform::ToggleCase),
+            Self::Indent => Effect::Shift(Shift::Right),
+            Self::Outdent => Effect::Shift(Shift::Left),
         }
     }
 
@@ -75,16 +85,28 @@ impl Operator {
         matches!(self.effect(), Effect::Transform(_))
     }
 
-    /// `Change` deja la transacción abierta para el modo Insert.
+    /// Hacia dónde corre la sangría, si es `>` o `<`.
+    pub(crate) fn shift(self) -> Option<Shift> {
+        match self.effect() {
+            Effect::Shift(shift) => Some(shift),
+            Effect::Cut(_) | Effect::Transform(_) => None,
+        }
+    }
+
+    /// `Change` deja la transacción abierta para el modo Insert. `levels`
+    /// es cuánto corren `>` y `<` la sangría: el count en Visual y 1 fuera
+    /// de él, como en vim.
     pub(crate) fn apply(
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
         columns: Columns,
+        levels: usize,
     ) -> Result<Outcome, VimError> {
         match self.effect() {
             Effect::Cut(cut) => cut.apply(buffer, operands, columns),
             Effect::Transform(transform) => transform.apply(buffer, operands),
+            Effect::Shift(shift) => shift::apply(shift, levels, buffer, operands, columns),
         }
     }
 }

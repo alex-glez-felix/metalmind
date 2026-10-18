@@ -8,6 +8,7 @@ use super::Failure;
 use super::range::Lines;
 use crate::columns::Columns;
 use crate::ex;
+use crate::indent::{self, Shift};
 use crate::lines::{Want, first_non_blank, last_char};
 use crate::register::{Clipboard, Register, RegisterName, Write};
 use crate::vim::Vim;
@@ -86,15 +87,17 @@ impl Vim {
     pub(super) fn shift_lines(
         &mut self,
         lines: RangeInclusive<usize>,
-        levels: isize,
+        shift: Shift,
+        levels: usize,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         self.jumped(buffer, selections)?;
+        let columns = self.viewport.columns();
         let edits = lines
             .clone()
             .filter_map(|line| {
-                let (len, indent) = ex::shift(&buffer.line_text(line), levels)?;
+                let (len, indent) = indent::shift(&buffer.line_text(line), shift, levels, columns)?;
                 let start = buffer.line_start(line);
                 Some(Edit::replace(start..start + len, indent))
             })

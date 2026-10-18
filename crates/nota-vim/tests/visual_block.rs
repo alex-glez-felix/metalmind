@@ -269,6 +269,52 @@ use rstest_reuse::{self, apply, template};
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>j$djj.", "a\ne\n|\n")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jld3.", "|a\ne\nijkl\nmnop")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jldu.", "a|d\neh\nijkl\nmnop")]
+// > y <
+#[case("ab|cd\nefgh", "<C-v>j>", "ab|\t  cd\nef\t  gh")]
+#[case("ab|cd\nefgh", "<C-v>j2>", "ab|\t\t  cd\nef\t\t  gh")]
+#[case("ab|cd\nefgh\nij", "<C-v>jj>", "ab|\t  cd\nef\t  gh\nij\t  ")]
+#[case("ab|cd\ne\nfghi", "<C-v>jj>", "ab|\t  cd\ne\nfg\t  hi")]
+#[case("ab|cd\n\nefgh", "<C-v>jj>", "ab|\t  cd\n\nef\t  gh")]
+#[case("ab|cd\nefgh", "<C-v>j$>", "ab|\t  cd\nef\t  gh")]
+#[case("a  |b\nc  d", "<C-v>j>", "a\t |  b\nc\t   d")]
+#[case("a\t|b\ncdefghij", "<C-v>j>", "a\t|\tb\ncdefghij\t")]
+#[case(
+    "ab\tc|d\nefghijklmnop",
+    "<C-v>jhhh>",
+    "ab|\t\tcd\nefghij\t      klmnop"
+)]
+#[case(
+    "a|b\t\tcd\nxyzwvutsrqponm",
+    "<C-v>jll>",
+    "a|\t b\t\tcd\nx\t yzwvutsrqponm"
+)]
+#[case("añ|bc\nañbc", "<C-v>j>", "añ|\t  bc\nañ\t  bc")]
+#[case("a日|bc\nxyzw", "<C-v>j>", "a日|\t   bc\nxyz\t   w")]
+#[case("ab|\t\tcd\nef\t\tgh", "<C-v>j<lt>", "ab|\tcd\nef\tgh")]
+#[case("ab|\t\tcd\nef\t\tgh", "<C-v>j3<lt>", "ab|cd\nefgh")]
+#[case("ab   |    cd\nef        gh", "<C-v>j<lt>", "ab   |cd\nef   gh")]
+#[case("ab|cd\nef\t\tgh", "<C-v>j<lt>", "ab|cd\nef\tgh")]
+#[case(
+    "a|b\t\tcd\nxyzwvutsrqponm",
+    "<C-v>jll<lt>",
+    "a|b\t\tcd\nxyzwvutsrqponm"
+)]
+#[case(
+    "ab|cd\nefgh\nijkl\nmnop",
+    "<C-v>j>jj.",
+    "ab\t  cd\nef\t  gh\nijk|\t   l\nmno\t   p"
+)]
+#[case(
+    "ab|cd\nefgh\nijkl\nmnop",
+    "<C-v>j2>jj3.",
+    "ab\t\t  cd\nef\t\t  gh\nijk|\t\t   l\nmno\t\t   p"
+)]
+#[case("ab|cd\nefgh\nijkl\nmnop", "<C-v>j>u", "ab|cd\nefgh\nijkl\nmnop")]
+#[case(
+    "ab|\t\tcd\nef\t\tgh\nij\t\tkl",
+    "<C-v>j<lt>j.",
+    "ab\tcd\nef|gh\nij\tkl"
+)]
 // tras o, un $ no sigue valiendo para la selección siguiente
 #[case("a|bc\ndefgh\nijklmn", "<C-v>j$o<Esc>$<C-v>jjd", "a|b\nde\nij")]
 // clic en Insert, tabs escritos y r<Tab>

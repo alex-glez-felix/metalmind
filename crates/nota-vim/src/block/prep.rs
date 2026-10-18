@@ -14,6 +14,9 @@ pub(crate) enum Purpose {
     Insert,
     Append,
     Replace,
+    /// `>` y `<`: miden como al borrar, salvo `<` sobre un solo carácter.
+    ShiftRight,
+    ShiftLeft,
 }
 
 impl Purpose {
@@ -41,6 +44,10 @@ pub(crate) struct Piece {
     /// Lo que ocupa el carácter en el borde izquierdo y en el derecho.
     pub start_char_vcols: usize,
     pub end_char_vcols: usize,
+    /// Las columnas y los caracteres de los blancos seguidos que llegan al
+    /// borde izquierdo, contando el que lo parte.
+    pub pre_whitesp: usize,
+    pub pre_whitesp_c: usize,
 }
 
 impl Piece {
@@ -67,8 +74,16 @@ pub(crate) fn prep(line: &str, block: &Block, purpose: Purpose, columns: Columns
     let mut piece = Piece::default();
     let (mut index, mut incr, mut vcol) = (0, 0, 0);
     while vcol < block.start && index < cells.len() {
-        incr = cells[index].width;
+        let cell = cells[index];
+        incr = cell.width;
         vcol += incr;
+        if is_white(line, cell) {
+            piece.pre_whitesp += incr;
+            piece.pre_whitesp_c += 1;
+        } else {
+            piece.pre_whitesp = 0;
+            piece.pre_whitesp_c = 0;
+        }
         index += 1;
     }
     let prev_pstart = start_of(index.saturating_sub(1));
@@ -159,10 +174,15 @@ fn one_char(piece: &mut Piece, block: &Block, purpose: Purpose) {
             piece.startspaces += width;
             piece.endspaces = piece.start_char_vcols - piece.startspaces;
         }
-        Purpose::Copy => piece.startspaces = width,
-        Purpose::Delete | Purpose::Replace => {
+        Purpose::Copy | Purpose::ShiftLeft => piece.startspaces = width,
+        Purpose::Delete | Purpose::Replace | Purpose::ShiftRight => {
             piece.startspaces = piece.start_char_vcols - (piece.start_vcol - block.start);
             piece.endspaces = piece.end_vcol - block.end - 1;
         }
     }
+}
+
+/// Un espacio o un tab, como `ascii_iswhite` de vim.
+pub(crate) fn is_white(line: &str, cell: Cell) -> bool {
+    matches!(line.as_bytes().get(cell.start), Some(b' ' | b'\t'))
 }

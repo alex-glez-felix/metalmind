@@ -43,6 +43,10 @@ use rstest_reuse::{self, apply, template};
 #[case("a\nb|\nc\nd\ne", "Vj:d<CR>", "a\n|d\ne")]
 #[case("a\nb|\nc\nd\ne", "vj:d<CR>", "a\n|d\ne")]
 #[case("a\nb|\nc\nd\ne", "Vj:<BS><BS><BS><BS><BS>2d<CR>", "a\n|c\nd\ne")]
+#[case("a|bc\ndef\nghi", "<C-v>j:d<CR>", "|ghi")]
+#[case("a|bc\ndef\nghi", "<C-v>jl:s/./X/<CR>", "Xbc\n|Xef\nghi")]
+#[case("a|bc\ndef\nghi", "<C-v>j:><CR>", "\tabc\n\t|def\nghi")]
+#[case("abc\nd|ef\nghi\njkl", "j<C-v>kl<Esc>G:'<lt>,'>d<CR>", "abc\n|jkl")]
 // rangos con patrones: siguen desde el cursor, dan la vuelta y quedan como búsqueda
 #[case("a\nb|\nc\nd\ne", ":/d/d<CR>", "a\nb\nc\n|e")]
 #[case("a\nb|\nc\nd\ne", ":/d<CR>", "a\nb\nc\n|d\ne")]

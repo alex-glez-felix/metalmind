@@ -238,6 +238,8 @@ impl Action {
         Self::Operator(Operator::Lowercase),
         Self::Operator(Operator::Uppercase),
         Self::Operator(Operator::ToggleCase),
+        Self::Operator(Operator::Indent),
+        Self::Operator(Operator::Outdent),
         Self::SelectRegister,
         Self::CurrentLine,
         Self::Visual(VisualKind::Char),
@@ -374,6 +376,8 @@ fn operator_name(operator: Operator) -> &'static str {
         Operator::Lowercase => "vim::lowercase",
         Operator::Uppercase => "vim::uppercase",
         Operator::ToggleCase => "vim::toggle_case",
+        Operator::Indent => "vim::indent",
+        Operator::Outdent => "vim::outdent",
     }
 }
 
