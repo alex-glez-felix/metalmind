@@ -16,8 +16,8 @@ use clap::{Arg, ArgAction, Parser};
 )]
 pub struct Cli {
     /// Carpeta a abrir como vault, o archivo markdown a abrir en el vault de
-    /// su carpeta (si no existe, se crea al guardar con `:w`). Sin nada, el
-    /// último vault abierto.
+    /// su carpeta (si no existe, se crea al guardar con `:w`). Sin nada, la
+    /// carpeta de `NOTA_VAULT` o, si no está, el último vault abierto.
     #[arg(value_name = "CARPETA|ARCHIVO", help_heading = "Argumentos")]
     pub path: Option<PathBuf>,
 }

@@ -114,7 +114,8 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 - `nota carpeta/` abre la carpeta como vault; `nota archivo.md` abre el
   archivo en el vault de la carpeta que lo contiene, y `nota` sin argumentos,
-  el último vault abierto (o el `vault:` de la config).
+  la carpeta de `NOTA_VAULT`, el último vault abierto o el `vault:` de la
+  config, en ese orden.
 - Panel lateral con el árbol de carpetas del vault, que se actualiza solo
   cuando algo cambia en disco. Se muestra y se esconde con `space e` o con el
   botón de la barra de la izquierda, y recuerda por vault si estaba visible y

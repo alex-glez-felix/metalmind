@@ -3,14 +3,19 @@
 //! - `nota <carpeta>`: esa carpeta es el vault, sin archivo abierto.
 //! - `nota <archivo>`: el vault es la carpeta que contiene al archivo
 //!   (exista o no el archivo, la carpeta tiene que existir).
-//! - `nota`: el último vault abierto y, si no hay, el `vault:` de
-//!   `config.yaml` (06 §8).
+//! - `nota`: la carpeta de la variable `NOTA_VAULT`, si está; si no, el
+//!   último vault abierto y, si no hay, el `vault:` de `config.yaml`
+//!   (06 §8).
 //!
 //! Después nota trabaja dentro del vault, como tras un `:cd` de vim: las
 //! rutas relativas de `:e`, `:w` y el finder parten de su raíz.
 
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// La variable de entorno con el vault que abre `nota` sin argumentos.
+pub const VAULT_VARIABLE: &str = "NOTA_VAULT";
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Target {
@@ -22,18 +27,37 @@ pub struct Target {
 pub enum TargetError {
     #[error("no existe la carpeta {}", .0.display())]
     MissingFolder(PathBuf),
+    #[error("{VAULT_VARIABLE} apunta a {}, que no es una carpeta", .0.display())]
+    VariableNotAFolder(PathBuf),
     #[error("no hay un vault que abrir: pasa una carpeta o un archivo")]
     NoVault,
 }
 
-/// `remembered` es el último vault abierto y `configured` el de la config;
-/// de esos se usa el primero que todavía sea una carpeta.
+/// El vault de [`VAULT_VARIABLE`], con el valor que tenga en el entorno;
+/// vacía cuenta como no puesta.
+#[must_use]
+pub fn from_variable(value: Option<OsString>) -> Option<PathBuf> {
+    value.filter(|value| !value.is_empty()).map(PathBuf::from)
+}
+
+/// En orden: el argumento, `variable` (el vault de [`VAULT_VARIABLE`]),
+/// `remembered` (el último vault abierto) y `configured` (el de la
+/// config). El argumento y la variable se eligieron a propósito: si no
+/// sirven, es un error. De los otros dos se usa el primero que todavía sea
+/// una carpeta.
 pub fn resolve(
     argument: Option<&Path>,
+    variable: Option<PathBuf>,
     remembered: Option<PathBuf>,
     configured: Option<PathBuf>,
 ) -> Result<Target, TargetError> {
     let Some(path) = argument else {
+        if let Some(vault) = variable {
+            if !vault.is_dir() {
+                return Err(TargetError::VariableNotAFolder(vault));
+            }
+            return Ok(Target { vault, file: None });
+        }
         return remembered
             .into_iter()
             .chain(configured)
@@ -98,7 +122,7 @@ mod tests {
         let dir = vault();
         let notas = dir.path().join("notas");
         assert_eq!(
-            resolve(Some(&notas), None, None),
+            resolve(Some(&notas), None, None, None),
             Ok(Target {
                 vault: notas,
                 file: None
@@ -112,7 +136,7 @@ mod tests {
         for name in ["a.md", "nueva.md"] {
             let file = dir.path().join("notas").join(name);
             assert_eq!(
-                resolve(Some(&file), None, None),
+                resolve(Some(&file), None, None, None),
                 Ok(Target {
                     vault: dir.path().join("notas"),
                     file: Some(file),
@@ -120,7 +144,7 @@ mod tests {
             );
         }
         assert_eq!(
-            resolve(Some(Path::new("a.md")), None, None),
+            resolve(Some(Path::new("a.md")), None, None, None),
             Ok(Target {
                 vault: PathBuf::from("."),
                 file: Some(PathBuf::from("a.md")),
@@ -133,7 +157,7 @@ mod tests {
         let dir = vault();
         let file = dir.path().join("no/existe.md");
         assert_eq!(
-            resolve(Some(&file), None, None),
+            resolve(Some(&file), None, None, None),
             Err(TargetError::MissingFolder(dir.path().join("no")))
         );
     }
@@ -150,15 +174,18 @@ mod tests {
             })
         };
         assert_eq!(
-            resolve(None, Some(notas.clone()), Some(dir.path().to_owned())),
+            resolve(None, None, Some(notas.clone()), Some(dir.path().to_owned())),
             target(&notas)
         );
         assert_eq!(
-            resolve(None, Some(gone.clone()), Some(notas.clone())),
+            resolve(None, None, Some(gone.clone()), Some(notas.clone())),
             target(&notas)
         );
-        assert_eq!(resolve(None, None, Some(gone)), Err(TargetError::NoVault));
-        assert_eq!(resolve(None, None, None), Err(TargetError::NoVault));
+        assert_eq!(
+            resolve(None, None, None, Some(gone)),
+            Err(TargetError::NoVault)
+        );
+        assert_eq!(resolve(None, None, None, None), Err(TargetError::NoVault));
     }
 
     #[test]
@@ -172,5 +199,51 @@ mod tests {
         assert_eq!(in_vault(&root, &new), PathBuf::from("sub/nueva.md"));
         let outside = dir.path().join("fuera.md");
         assert_eq!(in_vault(&root, &outside), outside);
+    }
+
+    /// Alex, 06 §8: argumento → `NOTA_VAULT` → último vault → `vault:`.
+    #[test]
+    fn la_variable_va_despues_del_argumento_y_antes_que_lo_recordado() {
+        let dir = vault();
+        let notas = dir.path().join("notas");
+        let other = TempDir::new().unwrap();
+        let from_env = || Some(other.path().to_owned());
+        let target = |vault: &Path, file: Option<PathBuf>| {
+            Ok(Target {
+                vault: vault.to_owned(),
+                file,
+            })
+        };
+        let a = notas.join("a.md");
+        assert_eq!(
+            resolve(Some(&a), from_env(), None, None),
+            target(&notas, Some(a.clone())),
+            "el argumento gana"
+        );
+        assert_eq!(
+            resolve(None, from_env(), Some(notas.clone()), Some(notas.clone())),
+            target(other.path(), None),
+            "la variable gana a lo recordado y a la config"
+        );
+        let gone = dir.path().join("borrado");
+        assert_eq!(
+            resolve(None, Some(gone.clone()), Some(notas.clone()), None),
+            Err(TargetError::VariableNotAFolder(gone)),
+            "una variable que no sirve es un error, no se salta"
+        );
+        assert_eq!(
+            resolve(None, Some(a.clone()), None, None),
+            Err(TargetError::VariableNotAFolder(a))
+        );
+    }
+
+    #[test]
+    fn la_variable_vacia_cuenta_como_no_puesta() {
+        assert_eq!(from_variable(None), None);
+        assert_eq!(from_variable(Some(OsString::new())), None);
+        assert_eq!(
+            from_variable(Some(OsString::from("/notas"))),
+            Some(PathBuf::from("/notas"))
+        );
     }
 }
