@@ -1,11 +1,12 @@
 //! La sintaxis de nota sobre el texto de una nota: wikilinks, embeds, tags,
-//! links markdown a notas locales y frontmatter YAML. Todo
+//! links markdown a notas locales, headings, `^bloques` y frontmatter YAML. Todo
 //! rango es en bytes sobre el texto escaneado.
 //!
 //! Es un scanner a mano, sin árbol de markdown: solo sabe lo necesario para
 //! no ver links ni tags dentro de código o comentarios. El mismo scanner sirve
 //! al editor y al índice, para que nunca discrepen sobre qué es un link.
 
+mod anchor;
 mod code;
 mod frontmatter;
 mod link;
@@ -16,9 +17,12 @@ mod tag;
 
 use std::ops::Range;
 
+pub use anchor::{BlockId, Heading};
 pub use frontmatter::Frontmatter;
 pub use link::{Link, LinkSyntax, Subpath};
-pub use resolve::{Resolution, path_keys, resolve, resolve_from, target_key};
+pub use resolve::{
+    Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
+};
 pub use tag::{Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.
@@ -27,6 +31,8 @@ pub struct Scan {
     pub frontmatter: Option<Frontmatter>,
     pub links: Vec<Link>,
     pub tags: Vec<Tag>,
+    pub headings: Vec<Heading>,
+    pub blocks: Vec<BlockId>,
     /// Errores recuperables: el resto del scan sigue siendo válido.
     pub problems: Vec<Problem>,
 }

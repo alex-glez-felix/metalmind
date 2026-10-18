@@ -106,7 +106,7 @@ fn relative_resolution_table() {
 }
 
 mod keys {
-    use nota_syntax::{path_keys, resolve_from, target_key};
+    use nota_syntax::{path_keys, path_parent_key, resolve_from, target_key};
     use proptest::prelude::*;
 
     fn path() -> impl Strategy<Value = String> {
@@ -127,8 +127,8 @@ mod keys {
     }
 
     proptest! {
-        /// Un índice que solo le pasa a `resolve_from` las rutas con la
-        /// clave del destino resuelve igual que con todo el vault.
+        /// Un índice que solo le pasa a `resolve_from` las rutas con las
+        /// claves del destino resuelve igual que con todo el vault.
         #[test]
         fn the_key_never_hides_a_match(
             paths in prop::collection::btree_set(path(), 0..12),
@@ -140,7 +140,10 @@ mod keys {
             let candidates: Vec<&str> = all
                 .iter()
                 .copied()
-                .filter(|path| key.as_ref().is_some_and(|key| path_keys(path).any(|k| &k == key)))
+                .filter(|path| key.as_ref().is_some_and(|key| {
+                    path_keys(path).any(|name| name == key.name)
+                        && key.parent.as_ref().is_none_or(|parent| *parent == path_parent_key(path))
+                }))
                 .collect();
             prop_assert_eq!(
                 resolve_from(&source, &target, all.iter().copied()),
