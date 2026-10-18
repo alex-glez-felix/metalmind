@@ -18,8 +18,13 @@ tempfile.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
+
+[[bench]]
+name = "open"
+harness = false
 
 [lints]
 workspace = true

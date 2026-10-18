@@ -1,5 +1,5 @@
-//! Las notas en disco: abrir un vault, su índice de archivos al día con lo
-//! que pasa en disco y el guardado atómico de cada nota.
+//! El vault en disco: abrir una carpeta, su índice de archivos al día con lo
+//! que pasa en disco, crear, mover y borrar, y el guardado atómico de cada nota.
 
 mod file;
 mod index;
