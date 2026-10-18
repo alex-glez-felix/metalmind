@@ -370,9 +370,7 @@ fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa_en_la_barra() {
     session.keys("⎋/nada⏎");
     assert_eq!(
         session.workspace.message(),
-        Some(&Message::Error(
-            "E486: no se encontró el patrón: nada".to_owned()
-        ))
+        Some(&Message::Error("E486: Pattern not found: nada".to_owned()))
     );
     session.keys("G/uno⏎");
     assert!(matches!(

@@ -17,6 +17,15 @@ pub(super) struct Recording {
     keys: Vec<Key>,
 }
 
+/// Lo que repite `@@`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Replay {
+    /// `@a`, por el índice de la letra.
+    Register(u8),
+    /// `@:`, la última línea de `:`.
+    CommandLine,
+}
+
 /// Vim corta con `ctrl-c` una macro que se llama a sí misma sin fallar
 /// nunca; aquí no hay cómo interrumpirla, así que se corta al llegar a esto.
 const MAX_PLAYED_KEYS: usize = 1 << 20;
@@ -116,27 +125,62 @@ impl Vim {
         }
     }
 
-    /// `{count}@{a-z}`, o `@@` para la última macro reproducida.
+    /// `{count}@{a-z}`, `@:` para repetir la última línea de `:`, o `@@`
+    /// para lo último que se reprodujo.
     pub(super) fn play_macro(&mut self, c: char, clipboard: &mut dyn Clipboard) {
         let times = self.take_count().unwrap_or(1);
         self.reset();
-        let letter = match c {
+        let replay = match c {
             '@' => self.last_played,
+            ':' => Some(Replay::CommandLine),
             _ => RegisterName::parse(c)
                 .and_then(RegisterName::letter)
-                .map(|(letter, _)| letter),
+                .map(|(letter, _)| Replay::Register(letter)),
         };
-        let Some(letter) = letter else {
+        let keys = replay.and_then(|replay| self.replayed_keys(replay, clipboard));
+        let (Some(replay), Some(keys)) = (replay, keys) else {
             return self.fail();
         };
-        let register = self
-            .registers
-            .read(Some(RegisterName::Named(letter)), clipboard);
-        let Some(register) = register.filter(|register| !register.text.is_empty()) else {
-            return self.fail();
-        };
-        self.last_played = Some(letter);
-        self.playback.push_front(macros::decode(&register), times);
+        self.last_played = Some(replay);
+        self.playback.push_front(keys, times);
+    }
+
+    /// Como vim, `@:` teclea otra vez `:`, la línea y `<CR>`.
+    fn replayed_keys(&self, replay: Replay, clipboard: &mut dyn Clipboard) -> Option<Vec<Key>> {
+        match replay {
+            Replay::Register(letter) => {
+                let register = self
+                    .registers
+                    .read(Some(RegisterName::Named(letter)), clipboard)?;
+                (!register.text.is_empty()).then(|| macros::decode(&register))
+            }
+            Replay::CommandLine => {
+                let line = self.last_command_line.as_ref()?;
+                let typed = line.chars().map(Key::Char);
+                Some(
+                    std::iter::once(Key::Char(':'))
+                        .chain(typed)
+                        .chain([Key::Enter])
+                        .collect(),
+                )
+            }
+        }
+    }
+
+    /// Corre `keys` en su propia cola, como `:normal`: lo que reproduzca una
+    /// macro que las llamó sigue después, y un fallo solo descarta estas.
+    pub(super) fn play_isolated(
+        &mut self,
+        keys: &[Key],
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<Option<KeyOutcome>, VimError> {
+        let outer = std::mem::take(&mut self.playback);
+        self.playback.push_front(keys.to_vec(), 1);
+        let played = self.play(buffer, selections, clipboard);
+        self.playback = outer;
+        played
     }
 
     /// Sigue con la macro que se pausó en un comando del host (como

@@ -1,5 +1,7 @@
 //! `:s`, con el patrón y el reemplazo que recuerda el motor.
 
+use std::ops::RangeInclusive;
+
 use nota_buffer::{Buffer, Selections};
 
 use super::Vim;
@@ -15,19 +17,16 @@ pub(super) struct LastSubstitute {
 }
 
 impl Vim {
+    /// Dentro de `:g`, que el patrón no esté en una línea no es error y los
+    /// reemplazos se suman para un solo aviso al final.
     pub(super) fn substitute(
         &mut self,
         command: &SubstituteCommand,
+        lines: RangeInclusive<usize>,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
-        let current = buffer.line_of(selections.primary().head);
-        let lines = match command.range {
-            Some(range) => range.resolve(current, buffer.last_line()),
-            None => Ok(current..=current),
-        };
-        let parts = lines.and_then(|lines| Ok((lines, self.substitution_parts(command)?)));
-        let (lines, (remembered, used)) = match parts {
+        let (remembered, used) = match self.substitution_parts(command) {
             Ok(parts) => parts,
             Err(error) => return Ok(KeyOutcome::InvalidCommand(error)),
         };
@@ -41,13 +40,20 @@ impl Vim {
             command.flags.global,
         )?;
         self.last_substitute = Some(remembered);
-        Ok(match applied {
-            Some(applied) => {
+        Ok(match (applied, &mut self.global) {
+            (Some(applied), Some(run)) => {
+                *selections = applied.selections;
+                run.substituted.replacements += applied.summary.replacements;
+                run.substituted.lines += applied.summary.lines;
+                KeyOutcome::Executed(Action::SubmitCommand)
+            }
+            (Some(applied), None) => {
                 *selections = applied.selections;
                 KeyOutcome::Substituted(applied.summary)
             }
-            None if command.flags.quiet => KeyOutcome::Executed(Action::SubmitCommand),
-            None => {
+            (None, Some(_)) => KeyOutcome::Executed(Action::SubmitCommand),
+            (None, None) if command.flags.quiet => KeyOutcome::Executed(Action::SubmitCommand),
+            (None, None) => {
                 let source = used.source().to_owned();
                 KeyOutcome::InvalidCommand(SearchError::NotFound(source).into())
             }
@@ -79,7 +85,7 @@ impl Vim {
     }
 
     /// Vacío es el último patrón usado.
-    fn typed_pattern(&mut self, source: &str) -> Result<Pattern, SearchError> {
+    pub(super) fn typed_pattern(&mut self, source: &str) -> Result<Pattern, SearchError> {
         if source.is_empty() {
             return self.search.pattern.clone().ok_or(SearchError::NoPrevious);
         }

@@ -181,6 +181,15 @@ impl LastVisual {
         self.kind
     }
 
+    /// Las líneas de `'<` y `'>`: las de los extremos de la primera
+    /// selección, sin pasar del final.
+    pub fn lines(&self, buffer: &Buffer) -> Option<(usize, usize)> {
+        let last = buffer.last_line();
+        let ends = self.ends.first()?;
+        let (a, b) = (ends.anchor.line.min(last), ends.head.line.min(last));
+        Some((a.min(b), a.max(b)))
+    }
+
     pub fn restore(&self, buffer: &Buffer) -> Option<Selections> {
         Selections::new(self.ends.iter().map(|ends| Selection {
             anchor: ends.anchor.place(buffer),

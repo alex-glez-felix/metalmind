@@ -1,11 +1,13 @@
 mod awaiting;
 mod command_line;
 mod dispatch;
+mod ex;
 mod find;
 mod insert;
 mod macros;
 mod marks;
 mod operate;
+mod outcome;
 mod repeat;
 mod scroll;
 mod search;
@@ -15,7 +17,9 @@ mod visual;
 use nota_buffer::{Buffer, Selections};
 
 use self::awaiting::Awaiting;
-use self::macros::{Playback, Recording};
+use self::ex::GlobalRun;
+use self::macros::{Playback, Recording, Replay};
+pub use self::outcome::KeyOutcome;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
@@ -27,34 +31,7 @@ use crate::keymap::Lookup;
 use crate::mark::Marks;
 use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, VisualSize};
-use crate::{
-    Action, CommandError, Invocation, Key, Keymap, Mode, Prompt, SearchError, Substitution,
-    Viewport, VimError, Wrap,
-};
-
-/// Qué pasó con una tecla o una acción.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum KeyOutcome {
-    /// Falta el resto de la secuencia o del count.
-    Pending,
-    Executed(Action),
-    /// Texto escrito en modo Insert o en la línea de comandos.
-    Inserted,
-    /// Ningún binding la usa; la capa de arriba puede probar otro keymap.
-    Unbound,
-    /// Se envió la línea de comandos, o se tecleó un atajo como `ctrl-w v`,
-    /// con un comando que ejecuta quien aloja el editor.
-    Command(Invocation),
-    /// Se envió la línea de comandos con algo que no es un comando, o con
-    /// un `:s` que falló.
-    InvalidCommand(CommandError),
-    /// Una búsqueda llegó a un borde y siguió por el otro; la UI lo avisa.
-    SearchWrapped(Wrap),
-    /// Una búsqueda no movió el cursor: no encontró nada o no se pudo hacer.
-    SearchFailed(SearchError),
-    /// Un `:s` reemplazó algo.
-    Substituted(Substitution),
-}
+use crate::{Action, Key, Keymap, Mode, Prompt, Viewport, VimError};
 
 /// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
 /// buffer y las selecciones que le pasan.
@@ -75,6 +52,12 @@ pub struct Vim {
     command_line: String,
     prompt: Prompt,
     command_history: History,
+    /// La última línea de `:` enviada, que repite `@:`.
+    last_command_line: Option<String>,
+    /// Cuántos `:g` y `:normal` se están corriendo uno dentro de otro.
+    ex_depth: usize,
+    /// El `:g` en curso.
+    global: Option<GlobalRun>,
     /// Tras `d/` o `3/`, el operador y el count esperan al patrón.
     awaiting_search: Option<AwaitingSearch>,
     search: SearchMemory,
@@ -91,8 +74,8 @@ pub struct Vim {
     recording: Option<Recording>,
     playback: Playback,
     marks: Marks,
-    /// La letra de la última macro reproducida, para `@@`.
-    last_played: Option<u8>,
+    /// La última macro reproducida, para `@@`.
+    last_played: Option<Replay>,
     /// La última tecla falló como un `beep_flush` de vim: corta la macro.
     failed: bool,
     /// Lo que vuelve a seleccionar `gv`.
@@ -131,6 +114,9 @@ impl Vim {
             command_line: String::new(),
             prompt: Prompt::Command,
             command_history: History::default(),
+            last_command_line: None,
+            ex_depth: 0,
+            global: None,
             awaiting_search: None,
             search: SearchMemory::default(),
             last_substitute: None,

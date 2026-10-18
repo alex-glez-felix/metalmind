@@ -1,0 +1,60 @@
+//! `:sort` sobre las líneas del buffer.
+
+use std::ops::RangeInclusive;
+
+use nota_buffer::{Buffer, Edit, Selections};
+
+use super::Failure;
+use super::lines::{edit_lines, line_start_cursor, undo_cursor};
+use crate::ex::{self, SortOptions};
+use crate::search::{Case, Pattern, SearchError};
+use crate::vim::Vim;
+
+impl Vim {
+    /// Como vim, el cursor queda en el primer no blanco de la primera línea.
+    /// El patrón no queda como última búsqueda.
+    pub(super) fn sort_lines(
+        &mut self,
+        lines: RangeInclusive<usize>,
+        options: &SortOptions,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), Failure> {
+        let pattern = match options
+            .pattern
+            .as_ref()
+            .map(|pattern| pattern.source.as_str())
+        {
+            None => None,
+            Some("") => Some(self.search.pattern.clone().ok_or(SearchError::NoPrevious)?),
+            Some(source) => Some(Pattern::compile(source, Case::Smart)?),
+        };
+        let by_match = options
+            .pattern
+            .as_ref()
+            .is_some_and(|pattern| pattern.by_match);
+        let (first, last) = (*lines.start(), *lines.end());
+        let text = buffer.lines_text(first..last + 1).into_owned();
+        let unsorted: Vec<&str> = text.split('\n').collect();
+        let sorted = ex::sort(&unsorted, options, |line| {
+            let Some(pattern) = &pattern else {
+                return 0..line.len();
+            };
+            match pattern.line_matches(line).next() {
+                Some(found) if by_match => found,
+                Some(found) => found.end..line.len(),
+                None => 0..0,
+            }
+        });
+        let mut edits = Vec::new();
+        if sorted != unsorted {
+            let range = buffer.line_start(first)..buffer.line_end(last);
+            edits.push(Edit::replace(range, sorted.join("\n")));
+        }
+        let cursor = buffer.line_of(selections.primary().head);
+        let undo = undo_cursor(buffer, selections, lines.contains(&cursor), first);
+        Ok(edit_lines(buffer, selections, undo, edits, |buffer| {
+            line_start_cursor(buffer, first)
+        })?)
+    }
+}

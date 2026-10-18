@@ -55,6 +55,23 @@ Los cambios que importan a quien usa nota. El formato sigue
 - Marks `a`–`z` con `m`, `'` y `` ` ``, también como motions de operador, y
   `''` para volver del último salto. Siguen al texto cuando se edita arriba.
 
+#### Comandos de `:`
+
+- Rangos como en vim: `.`, `$`, `%`, números, marks (`'a`), `'<,'>` al
+  pulsar `:` en Visual, `/patrón/` y `?patrón?`, con `+N`/`-N` y separados
+  por `,` o `;`. Un rango solo (`:12`) va a esa línea.
+- `:d` y `:y` con registro y count, `:m` y `:t`/`:co` para mover y copiar
+  líneas, `:j` y `:j!`, `:>` y `:<`.
+- `:sort` con `!`, `i`, `n`, `u` y `/patrón/` (con `r`).
+- `:normal` (`:norm`) teclea lo que sigue en la línea del cursor o en cada
+  línea del rango.
+- `:g/patrón/comando`, `:g!` y `:v` corren `d`, `s`, `m0`, `t.`, `normal` o
+  cualquier otro comando en cada línea donde está (o no) el patrón.
+- `@:` repite la última línea de `:`, con count.
+- Cada comando es un solo paso de `u`, también dentro de una macro.
+- Los errores de vim se muestran con su número y su texto original
+  (`E492: Not an editor command`), para buscarlos en `:help`.
+
 #### Visual
 
 - Visual por carácter (`v`) y por línea (`V`), con `o`, `gv` y `[count]v`.

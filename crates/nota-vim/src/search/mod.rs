@@ -13,13 +13,15 @@ pub use scan::Wrap;
 pub(crate) use scan::{Hit, Query};
 pub(crate) use word::WordSearch;
 
+/// Los errores de vim llevan su número y su texto original; los de nota,
+/// que vim no tiene, van en español.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum SearchError {
-    #[error("E35: no hay un patrón anterior")]
+    #[error("E35: No previous regular expression")]
     NoPrevious,
-    #[error("E486: no se encontró el patrón: {0}")]
+    #[error("E486: Pattern not found: {0}")]
     NotFound(String),
-    #[error("E348: no hay texto bajo el cursor")]
+    #[error("E348: No string under cursor")]
     NoStringUnderCursor,
     #[error("patrón inválido: {0}")]
     Invalid(String),
