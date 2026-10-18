@@ -114,6 +114,16 @@ impl NoteLog {
         self.valid_len
     }
 
+    /// El contenido de la versión `entry`, si es el que dice su hash.
+    pub(super) fn version_text(&self, entry: &Entry) -> Result<String, Corrupt> {
+        let text = self.content(entry.record)?;
+        if ContentHash::of(&text) == entry.hash {
+            Ok(text)
+        } else {
+            Err(Corrupt("versión dañada"))
+        }
+    }
+
     pub(super) fn content(&self, record: usize) -> Result<String, Corrupt> {
         let mut chain = Vec::new();
         let mut at = record;

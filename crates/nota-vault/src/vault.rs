@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -21,7 +20,7 @@ use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
 use crate::file::{FileError, write_atomic};
 use crate::history::{History, HistoryError, VersionId};
-use crate::index::{EntryKind, VaultIndex};
+use crate::index::VaultIndex;
 use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
@@ -224,9 +223,7 @@ impl Vault {
         });
         let history = options.history.map(|options| {
             let dir = options.paths.vault_data(&root).join("history");
-            let history = History::new(dir, options.retention);
-            reconcile_history(&history, &root, &files);
-            Arc::new(history)
+            Arc::new(History::new(dir, options.retention))
         });
         let index = Arc::new(ArcSwap::from_pointee(files));
         let links = Arc::new(ArcSwap::from_pointee(links));
@@ -440,18 +437,6 @@ impl Drop for Vault {
         if worker.join().is_err() {
             log::error!("el watcher de {} terminó en pánico", self.root.display());
         }
-    }
-}
-
-/// Un historial que no se puede alinear no impide abrir el vault.
-fn reconcile_history(history: &History, root: &Path, index: &VaultIndex) {
-    let notes: HashSet<&VaultPath> = index
-        .files()
-        .filter(|entry| entry.kind == EntryKind::Note)
-        .map(|entry| entry.path)
-        .collect();
-    if let Err(error) = history.reconcile(root, &notes, SystemTime::now()) {
-        log::warn!("{error}");
     }
 }
 

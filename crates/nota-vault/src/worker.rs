@@ -2,7 +2,7 @@
 //! watcher y es el único que escribe el historial, así que las versiones y
 //! los renombres le llegan en el orden en que pasaron.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -51,12 +51,12 @@ pub(crate) struct Worker {
 
 impl Worker {
     pub(crate) fn run(self, messages: &mpsc::Receiver<Message>) {
-        self.prune_history();
         let mut indexes = Indexes {
             files: VaultIndex::clone(&self.index.load()),
             links: LinkIndex::clone(&self.links.load()),
             tags: Tags::clone(&self.tags.load()),
         };
+        self.open_history(&indexes.files);
         let mut inbox = Inbox::new(messages);
         while let Some(message) = inbox.next() {
             match message {
@@ -164,13 +164,23 @@ impl Worker {
             .collect()
     }
 
-    /// La retención se aplica al abrir el vault, aquí y no en `open`: podar
-    /// lee cada log y no tiene por qué demorar la apertura. Lo que llegue
-    /// mientras tanto espera en el canal.
-    fn prune_history(&self) {
+    /// Al abrir el vault, el historial se alinea con lo que pasó con el vault
+    /// cerrado y se aplica la retención. Va aquí y no en `open`: los dos leen
+    /// del disco y no tienen por qué demorar la apertura. Lo que llegue
+    /// mientras tanto espera en el canal, así que nada se registra antes.
+    fn open_history(&self, files: &VaultIndex) {
         let Some(history) = &self.history else {
             return;
         };
+        let notes: HashSet<&VaultPath> = files
+            .files()
+            .filter(|entry| entry.kind == EntryKind::Note)
+            .map(|entry| entry.path)
+            .collect();
+        // Un historial que no se puede alinear o podar no impide usar el vault.
+        if let Err(error) = history.reconcile(&self.root, &notes, SystemTime::now()) {
+            log::warn!("{error}");
+        }
         if let Err(error) = history.prune(SystemTime::now()) {
             log::warn!("{error}");
         }
@@ -217,6 +227,13 @@ fn edited_note(change: &VaultChange) -> Option<&VaultPath> {
             kind: EntryKind::Note,
         } => Some(path),
         VaultChange::Modified { path } if EntryKind::of_file(path) == EntryKind::Note => Some(path),
+        // Lo que tenga ahora: un cambio de antes del renombre puede llegar
+        // después nombrando la ruta vieja, que ya no existe.
+        VaultChange::Renamed {
+            to,
+            kind: EntryKind::Note,
+            ..
+        } => Some(to),
         _ => None,
     }
 }
@@ -287,13 +304,10 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn un_guardado_que_espera_se_registra_antes_que_lo_que_ya_hay_en_disco() {
-        let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+    fn worker(root: &Path, history: &Arc<History>) -> Worker {
         let (updates, _published) = mpsc::channel();
-        let worker = Worker {
-            root: root.path().to_owned(),
+        Worker {
+            root: root.to_owned(),
             index: Arc::new(ArcSwap::from_pointee(VaultIndex::default())),
             links: Arc::new(ArcSwap::from_pointee(LinkIndex::default())),
             tags: Arc::new(ArcSwap::from_pointee(Tags::build(
@@ -301,11 +315,51 @@ mod tests {
                 &VaultIndex::default(),
                 |_: &VaultPath| None,
             ))),
-            history: Some(Arc::clone(&history)),
+            history: Some(Arc::clone(history)),
             saving: Arc::new(Mutex::new(())),
             updates,
             stop: Arc::new(AtomicBool::new(false)),
-        };
+        }
+    }
+
+    fn contents(history: &History, note: &VaultPath) -> Vec<String> {
+        history
+            .versions(note)
+            .unwrap()
+            .iter()
+            .map(|version| history.content(note, version.id).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn al_renombrarse_lo_que_tiene_la_nota_tambien_es_una_version() {
+        let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let worker = worker(root.path(), &history);
+        let (a, b) = (
+            VaultPath::new("a.md").unwrap(),
+            VaultPath::new("b.md").unwrap(),
+        );
+        history.record(&a, "uno", SystemTime::now()).unwrap();
+        // Editada y renombrada; la edición llegará después, nombrando `a.md`.
+        fs::write(root.path().join("b.md"), "dos").unwrap();
+        let changes = [VaultChange::Renamed {
+            from: a,
+            to: b.clone(),
+            kind: EntryKind::Note,
+        }];
+        worker.follow_in_history(&changes);
+        let edited: Vec<VaultPath> = changes.iter().filter_map(edited_note).cloned().collect();
+        let (_messages, received) = mpsc::channel();
+        worker.record_external(&edited, &mut Inbox::new(&received));
+        assert_eq!(contents(&history, &b), ["uno", "dos"]);
+    }
+
+    #[test]
+    fn un_guardado_que_espera_se_registra_antes_que_lo_que_ya_hay_en_disco() {
+        let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let worker = worker(root.path(), &history);
         let note = VaultPath::new("a.md").unwrap();
         let (messages, received) = mpsc::channel();
         let (done, recorded) = mpsc::channel();
@@ -323,12 +377,6 @@ mod tests {
         worker.record_external(std::slice::from_ref(&note), &mut Inbox::new(&received));
 
         assert!(recorded.try_recv().unwrap().unwrap().is_some());
-        let contents: Vec<String> = history
-            .versions(&note)
-            .unwrap()
-            .iter()
-            .map(|version| history.content(&note, version.id).unwrap())
-            .collect();
-        assert_eq!(contents, ["vieja", "nueva"]);
+        assert_eq!(contents(&history, &note), ["vieja", "nueva"]);
     }
 }
