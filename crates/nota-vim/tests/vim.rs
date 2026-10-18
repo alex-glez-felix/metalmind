@@ -218,6 +218,8 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab\ncd", "ddp", "cd\n|ab")]
 #[case("|abc", "x2P", "a|abc")]
 #[case("a|b", "p", "a|b")]
+#[case("|b\nac", "v$ojyp", "|b\na\nac")]
+#[case("|ab\ncd", "lv$ojyjp", "ab\nc|d\ncd")]
 #[case("foo b|ar baz", "yiwP", "foo ba|rbar baz")]
 // u ctrl-r
 #[case("hel|lo world", "dwu", "hel|lo world")]
@@ -902,6 +904,7 @@ fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
 #[case("f|oo b|ar", "ciwX<Esc>.", "|X |X")]
 #[case("foo |qux foo |qux", "d2aw", "foo |qu|x")]
 #[case("x|yzw|a", "dfa", "|x")]
+#[case("|\n|ab", "xp", "|\na\n|b\na")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }

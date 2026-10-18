@@ -209,6 +209,7 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab cd", "yiwwv2p", "ab aba|bd")]
 #[case("|ab\ncd\nef", "yyjV2p", "ab\n|ab\nab\nef")]
 #[case("|abc\nd", "ywjvp", "abc\nab|c")]
+#[case("|b\nacd", "v$ojyjlvp", "b\n|a\nad")]
 #[case("|ab\ncd", "yjjvp", "ab\n\n|ab\ncd\nd")]
 #[case("|ab\ncd xy", "vjyjwvp", "ab\ncd |ab\ncy")]
 #[case("ab |cd", "yyvP", "ab \n|ab cd\nd")]
