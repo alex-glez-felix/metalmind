@@ -9,6 +9,7 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
 use crate::index::VaultIndex;
+use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::scan::scan;
@@ -92,6 +93,42 @@ impl Vault {
     #[must_use]
     pub fn snapshot(&self) -> Arc<VaultIndex> {
         self.index.load_full()
+    }
+
+    /// Crea una nota vacía, con las carpetas que le falten. El índice se
+    /// entera por el watcher, como de cualquier otro cambio en disco.
+    ///
+    /// # Errors
+    /// Si no termina en `.md`, ya existe o pasa por un enlace simbólico.
+    pub fn create_note(&self, path: &VaultPath) -> Result<(), FileOpError> {
+        ops::create_note(&self.root, path)
+    }
+
+    /// Crea una carpeta vacía, con las que le falten.
+    ///
+    /// # Errors
+    /// Si ya existe o pasa por un enlace simbólico.
+    pub fn create_folder(&self, path: &VaultPath) -> Result<(), FileOpError> {
+        ops::create_folder(&self.root, path)
+    }
+
+    /// Renombra o mueve un archivo o carpeta, creando las carpetas que le
+    /// falten al destino. Nunca pisa lo que ya exista ahí.
+    ///
+    /// # Errors
+    /// Si `from` no existe o es la raíz, `to` ya existe o está dentro de
+    /// `from`, o alguno pasa por un enlace simbólico.
+    pub fn rename(&self, from: &VaultPath, to: &VaultPath) -> Result<(), FileOpError> {
+        ops::rename(&self.root, from, to)
+    }
+
+    /// Manda un archivo o carpeta a la papelera del vault (`.trash/`, como
+    /// Obsidian) y devuelve dónde quedó.
+    ///
+    /// # Errors
+    /// Si no existe, es la raíz o pasa por un enlace simbólico.
+    pub fn move_to_trash(&self, path: &VaultPath) -> Result<PathBuf, FileOpError> {
+        ops::trash(&self.root, path)
     }
 }
 

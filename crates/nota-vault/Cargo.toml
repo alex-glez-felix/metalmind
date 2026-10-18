@@ -13,6 +13,7 @@ ignore.workspace = true
 log.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
+rustix.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 

@@ -177,3 +177,27 @@ impl Op {
         };
     }
 }
+
+/// Todo lo que hay bajo `root`, ocultos incluidos, ordenado.
+pub fn entries(root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    collect_entries(root, root, &mut found);
+    found.sort();
+    found
+}
+
+fn collect_entries(root: &Path, dir: &Path, found: &mut Vec<String>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        found.push(
+            path.strip_prefix(root)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned(),
+        );
+        if path.is_dir() && !path.is_symlink() {
+            collect_entries(root, &path, found);
+        }
+    }
+}
