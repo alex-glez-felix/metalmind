@@ -2,14 +2,15 @@ use std::ops::Range;
 
 use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selection, Selections};
 
-use crate::lines::first_non_blank;
+use crate::lines::{clamp_normal, first_non_blank};
 use crate::operator::content;
 use crate::register::Register;
 use crate::span::{Region, Target};
 use crate::{PasteSide, VimError};
 
 /// `p`/`P`. El cursor queda donde lo deja vim: en el primer no blanco de la
-/// primera línea pegada, o en el último carácter de un pegado de una línea.
+/// primera línea pegada, al inicio de un pegado de varias líneas o en el
+/// último carácter de un pegado de una línea.
 pub(crate) fn paste(
     buffer: &mut Buffer,
     selections: &Selections,
@@ -76,8 +77,9 @@ fn cursor_after(
         };
         return first_non_blank(buffer, first_pasted);
     }
+    // Lo pegado puede empezar con un salto de línea, al final de la línea.
     if register.text.contains('\n') {
-        start
+        clamp_normal(buffer, start)
     } else {
         buffer.prev_boundary(map.map(at, Bias::After))
     }
@@ -141,7 +143,7 @@ impl Replacement {
         let offset = if self.lines {
             first_non_blank(buffer, buffer.line_of(start) + usize::from(self.split))
         } else if self.text.contains('\n') {
-            start
+            clamp_normal(buffer, start)
         } else {
             buffer.prev_boundary(map.map(self.range.start, Bias::After))
         };
