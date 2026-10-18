@@ -97,13 +97,14 @@ impl Editor {
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _window: &mut Window, cx: &mut Context<Self>) {
+        // Sin reveal: si el yank de Visual mueve el cursor, lo muestra el
+        // próximo frame, y si no, la vista se queda donde se dejó.
         let copied = self.update_workspace(cx, |workspace, pane, cx| {
             workspace.copy(pane, &mut SystemClipboard(cx))
         });
         if let Err(error) = copied {
             self.report(&error, cx);
         }
-        self.reveal_cursor(cx);
     }
 
     pub(super) fn paste(&mut self, _: &Paste, _window: &mut Window, cx: &mut Context<Self>) {
