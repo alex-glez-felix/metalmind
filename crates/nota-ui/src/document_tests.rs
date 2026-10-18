@@ -34,3 +34,23 @@ fn abrir_lee_el_archivo() {
     );
     assert_eq!(document.stats().to_string(), "4L, 17B");
 }
+
+#[cfg(unix)]
+#[test]
+fn un_enlace_es_el_archivo_al_que_apunta_ahora() {
+    let dir = TempDir::new().unwrap();
+    let (a, b, link) = (
+        dir.path().join("a.md"),
+        dir.path().join("b.md"),
+        dir.path().join("enlace.md"),
+    );
+    fs::write(&a, "a\n").unwrap();
+    fs::write(&b, "b\n").unwrap();
+    std::os::unix::fs::symlink(&a, &link).unwrap();
+    let document = Document::open(&link).unwrap();
+    assert!(document.is_file(&a));
+    fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(&b, &link).unwrap();
+    assert!(document.is_file(&b), "guardar ya escribiría en b.md");
+    assert!(!document.is_file(&a));
+}

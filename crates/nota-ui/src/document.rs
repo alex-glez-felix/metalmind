@@ -32,10 +32,8 @@ impl fmt::Display for FileStats {
 
 #[derive(Debug)]
 pub struct Document {
-    /// La ruta como se escribió, para mostrarla.
+    /// La ruta como se escribió, para mostrarla y guardar ahí.
     path: PathBuf,
-    /// La misma ruta, absoluta y sin enlaces, para reconocer el archivo.
-    file: PathBuf,
     buffer: Buffer,
     /// Estado del historial que coincide con el disco; `None` si se guardó
     /// a mitad de una transacción y ningún estado coincide.
@@ -61,7 +59,6 @@ impl Document {
         let buffer = Buffer::from(text);
         Self {
             path: path.to_owned(),
-            file: resolve(path),
             saved: Some(buffer.history_seq()),
             buffer,
             exists_on_disk: false,
@@ -74,10 +71,11 @@ impl Document {
     }
 
     /// `path` nombra el archivo de este documento, aunque se escriba de
-    /// otra forma (relativa, con `..` o por un enlace).
+    /// otra forma (relativa, con `..` o por un enlace). Se resuelven las dos
+    /// rutas ahora, porque guardar sigue los enlaces como estén al guardar.
     #[must_use]
     pub fn is_file(&self, path: &Path) -> bool {
-        resolve(path) == self.file
+        resolve(path) == resolve(&self.path)
     }
 
     #[must_use]
