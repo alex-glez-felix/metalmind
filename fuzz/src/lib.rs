@@ -3,7 +3,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_vim::{Key, Mode, Vim};
+use nota_vim::{Clipboard, Key, Mode, SystemRegister, Vim};
 
 /// Más que esto y una sola tecla con count tarda segundos: el fuzzer
 /// buscaría lentitud esperada en vez de bugs.
@@ -62,14 +62,134 @@ impl FuzzKey {
     }
 }
 
+/// Comandos de varias teclas que el fuzzer casi nunca armaría tecla por
+/// tecla: una macro solo se reproduce si antes se grabó en la misma letra.
+#[derive(Clone, Debug, Arbitrary)]
+pub enum Chord {
+    /// `v`.
+    Visual,
+    /// `V`.
+    VisualLine,
+    /// `"{registro}`, antes de un operador o un pegado.
+    Register(FuzzRegister),
+    /// `q{registro}`: empieza a grabar.
+    Record(FuzzRegister),
+    /// `q`: termina la grabación.
+    StopRecording,
+    /// `@{registro}`.
+    Play(FuzzRegister),
+    /// `@@`.
+    PlayLast,
+    /// `m{mark}`.
+    SetMark(FuzzMark),
+    /// `'{mark}`, o `` `{mark} `` si `exact`.
+    JumpToMark { mark: FuzzMark, exact: bool },
+    /// `/{patrón}<CR>`, o `?` si `backward`, tecleado para que lo grabe `q`.
+    Search {
+        backward: bool,
+        pattern: Vec<FuzzChar>,
+    },
+    /// `n`.
+    Next,
+    /// `N`.
+    Previous,
+}
+
+/// Registros y nombres de mark, con algunos que no existen para que fallen.
+const REGISTERS: &[char] = &[
+    'a', 'b', 'z', 'A', 'B', '"', '0', '1', '2', '9', '-', '_', '.', '/', '+', '*', ':', '%', '=',
+];
+const MARKS: &[char] = &['a', 'b', 'z', '\'', '`', 'A', '0', '[', '<', '.'];
+
+#[derive(Clone, Copy, Debug)]
+pub struct FuzzRegister(pub char);
+
+impl<'a> Arbitrary<'a> for FuzzRegister {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self(*u.choose(REGISTERS)?))
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FuzzMark(pub char);
+
+impl<'a> Arbitrary<'a> for FuzzMark {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(Self(*u.choose(MARKS)?))
+    }
+}
+
+impl Chord {
+    #[must_use]
+    pub fn keys(&self) -> Vec<Key> {
+        match self {
+            Self::Visual => vec![Key::Char('v')],
+            Self::VisualLine => vec![Key::Char('V')],
+            Self::Register(register) => vec![Key::Char('"'), Key::Char(register.0)],
+            Self::Record(register) => vec![Key::Char('q'), Key::Char(register.0)],
+            Self::StopRecording => vec![Key::Char('q')],
+            Self::Play(register) => vec![Key::Char('@'), Key::Char(register.0)],
+            Self::PlayLast => vec![Key::Char('@'), Key::Char('@')],
+            Self::SetMark(mark) => vec![Key::Char('m'), Key::Char(mark.0)],
+            Self::JumpToMark { mark, exact } => {
+                let jump = if *exact { '`' } else { '\'' };
+                vec![Key::Char(jump), Key::Char(mark.0)]
+            }
+            Self::Search { backward, pattern } => {
+                let prompt = if *backward { '?' } else { '/' };
+                let typed = pattern.iter().map(|c| Key::Char(c.0));
+                std::iter::once(Key::Char(prompt))
+                    .chain(typed)
+                    .chain([Key::Enter])
+                    .collect()
+            }
+            Self::Next => vec![Key::Char('n')],
+            Self::Previous => vec![Key::Char('N')],
+        }
+    }
+}
+
 /// Lo que le llega al motor desde quien lo aloja.
 #[derive(Clone, Debug, Arbitrary)]
 pub enum Input {
     Key(FuzzKey),
+    Chord(Chord),
     /// Texto pegado entero, como `Document::paste` en Insert o en `:`.
     Paste(String),
     /// Clic que deja un solo cursor, como `Document::select`.
     Click(u16),
+    /// Otra aplicación deja texto en `"+` o, si `primary`, en `"*`.
+    CopyElsewhere {
+        primary: bool,
+        text: String,
+    },
+}
+
+/// El portapapeles del sistema, que otra aplicación puede cambiar entre
+/// tecla y tecla.
+#[derive(Debug, Default)]
+pub struct FuzzClipboard {
+    clipboard: Option<String>,
+    primary: Option<String>,
+}
+
+impl FuzzClipboard {
+    fn slot(&mut self, register: SystemRegister) -> &mut Option<String> {
+        match register {
+            SystemRegister::Clipboard => &mut self.clipboard,
+            SystemRegister::Primary => &mut self.primary,
+        }
+    }
+}
+
+impl Clipboard for FuzzClipboard {
+    fn read(&mut self, register: SystemRegister) -> Option<String> {
+        self.slot(register).clone()
+    }
+
+    fn write(&mut self, register: SystemRegister, text: String) {
+        *self.slot(register) = Some(text);
+    }
 }
 
 /// Corta los counts de más de dos dígitos: `999999999i` es tan lento en
@@ -120,19 +240,73 @@ pub fn initial_selections(buffer: &Buffer, raw: &[u16]) -> Selections {
         .unwrap_or_else(|| Selections::single(Selection::cursor(ByteOffset::ZERO)))
 }
 
-pub fn feed(vim: &mut Vim, input: &Input, buffer: &mut Buffer, selections: &mut Selections) {
-    let result = match input {
-        Input::Key(key) => vim.feed(key.key(), buffer, selections),
-        Input::Paste(text) => vim.insert_text(text, buffer, selections),
-        Input::Click(raw) => {
-            vim.cursor_moved();
-            let cursor = cursor_at(buffer, *raw, vim.mode());
-            *selections = Selections::single(Selection::cursor(cursor));
-            return;
+/// Quien aloja el motor: el texto, sus selecciones y el portapapeles.
+pub struct Host {
+    pub buffer: Buffer,
+    pub selections: Selections,
+    pub clipboard: FuzzClipboard,
+}
+
+impl Host {
+    #[must_use]
+    pub fn new(text: &str, cursors: &[u16]) -> Self {
+        let buffer = Buffer::from(text);
+        let selections = initial_selections(&buffer, cursors);
+        Self {
+            buffer,
+            selections,
+            clipboard: FuzzClipboard::default(),
         }
-    };
-    if let Err(error) = result {
-        panic!("{input:?} dio un error de buffer, que el motor promete que no pasa: {error}");
+    }
+
+    pub fn feed(&mut self, vim: &mut Vim, input: &Input) {
+        match input {
+            Input::Key(key) => self.press(vim, key.key()),
+            Input::Chord(chord) => {
+                for key in chord.keys() {
+                    self.press(vim, key);
+                }
+            }
+            Input::Paste(text) => {
+                if let Err(error) = vim.insert_text(text, &mut self.buffer, &mut self.selections) {
+                    panic!("pegar {text:?} dio un error de buffer: {error}");
+                }
+            }
+            Input::Click(raw) => {
+                vim.cursor_moved();
+                let cursor = cursor_at(&self.buffer, *raw, vim.mode());
+                self.selections = Selections::single(Selection::cursor(cursor));
+            }
+            Input::CopyElsewhere { primary, text } => {
+                let register = if *primary {
+                    SystemRegister::Primary
+                } else {
+                    SystemRegister::Clipboard
+                };
+                self.clipboard.write(register, text.clone());
+            }
+        }
+    }
+
+    pub fn press(&mut self, vim: &mut Vim, key: Key) {
+        let result = vim.feed_with_clipboard(
+            key,
+            &mut self.buffer,
+            &mut self.selections,
+            &mut self.clipboard,
+        );
+        if let Err(error) = result {
+            panic!("{key:?} dio un error de buffer, que el motor promete que no pasa: {error}");
+        }
+    }
+
+    pub fn check(&self, vim: &Vim) {
+        check_engine(vim, &self.buffer, &self.selections);
+    }
+
+    #[must_use]
+    pub fn too_long(&self) -> bool {
+        self.buffer.len().get() > MAX_BUFFER_LEN
     }
 }
 
