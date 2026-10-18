@@ -191,7 +191,7 @@ impl History {
         let Some(version) = log.entries().iter().find(|e| VersionId::of(e) == id) else {
             return Ok(None);
         };
-        log.content(version.record)
+        log.version_text(version)
             .map(Some)
             .map_err(|corrupt| self.store.corrupt_log(log_id, corrupt))
     }

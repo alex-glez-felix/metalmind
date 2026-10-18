@@ -116,10 +116,15 @@ fn un_marco_danado_en_medio_no_se_toma_por_cola_cortada() {
 
 /// Un marco `VERSION` bien armado, con lo que diga el test.
 fn version_frame(seq: u64, len: usize, record: usize) -> Vec<u8> {
+    version_frame_of("uno\n", seq, len, record)
+}
+
+/// Igual, pero con el hash de `text`.
+fn version_frame_of(text: &str, seq: u64, len: usize, record: usize) -> Vec<u8> {
     let mut payload = Vec::new();
     put_var(&mut payload, seq);
     payload.extend_from_slice(&0_i64.to_le_bytes());
-    payload.extend_from_slice(ContentHash::of("uno\n").as_bytes());
+    payload.extend_from_slice(ContentHash::of(text).as_bytes());
     put_var(&mut payload, len as u64);
     put_var(&mut payload, record as u64);
     let mut frame = Vec::new();
@@ -144,4 +149,16 @@ fn una_version_que_no_cuadra_con_su_registro_es_un_log_danado() {
         NoteLog::parse(&with(version_frame(u64::MAX, 4, 0))).is_err(),
         "sin siguiente"
     );
+}
+
+#[test]
+fn una_version_cuyo_hash_no_es_el_de_su_texto_no_se_lee() {
+    let (_, file) = write_all(&["uno\n"]);
+    let file = [file, version_frame_of("dos\n", 1, 4, 0)].concat();
+    let log = NoteLog::parse(&file).unwrap();
+    let [good, bad] = log.entries() else {
+        panic!("{:?}", log.entries())
+    };
+    assert_eq!(log.version_text(good).unwrap(), "uno\n");
+    assert!(log.version_text(bad).is_err());
 }

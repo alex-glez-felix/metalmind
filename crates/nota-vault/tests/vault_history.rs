@@ -34,6 +34,12 @@ fn open_vault(root: &Path, data: &Path) -> (Vault, Receiver<VaultUpdate>) {
     Vault::open_with(root, options).unwrap()
 }
 
+/// El hilo del vault alinea el historial con lo que pasó con el vault
+/// cerrado antes de atender nada: un guardado vuelve después de eso.
+fn wait_until_open(vault: &Vault) {
+    save(vault, &path("abierto.md"), "abierto");
+}
+
 /// Guarda desde el vault y espera a que se registre la versión.
 fn save(vault: &Vault, note: &VaultPath, text: &str) -> Option<VersionId> {
     vault
@@ -124,6 +130,7 @@ fn al_abrir_sigue_lo_que_paso_con_el_vault_cerrado() {
     fs::remove_file(dir.path().join("borrada.md")).unwrap();
 
     let (vault, _updates) = open_vault(dir.path(), data.path());
+    wait_until_open(&vault);
     let history = vault.history().unwrap();
     assert_eq!(contents(history, &path("x/nueva.md")), ["me movieron"]);
     assert_eq!(
@@ -280,6 +287,7 @@ fn al_abrir_dos_notas_iguales_movidas_no_se_adivina_cual_fue_a_donde() {
     fs::rename(dir.path().join("b.md"), dir.path().join("y.md")).unwrap();
 
     let (vault, _updates) = open_vault(dir.path(), data.path());
+    wait_until_open(&vault);
     let history = vault.history().unwrap();
     assert_eq!(deleted(history), [path("a.md"), path("b.md")]);
     assert_eq!(contents(history, &path("a.md")), ["de a", "igual"]);
@@ -305,6 +313,7 @@ fn al_abrir_un_contenido_vacio_o_repetido_no_se_toma_por_renombre() {
     fs::write(dir.path().join("otra vacia.md"), "").unwrap();
 
     let (vault, _updates) = open_vault(dir.path(), data.path());
+    wait_until_open(&vault);
     let history = vault.history().unwrap();
     assert_eq!(deleted(history), [path("plantilla.md"), path("vacia.md")]);
     for note in ["lunes.md", "martes.md", "otra vacia.md"] {
@@ -332,6 +341,7 @@ fn al_abrir_una_nota_movida_encima_de_una_borrada_la_deja_aparte() {
     fs::rename(dir.path().join("a.md"), dir.path().join("b.md")).unwrap();
 
     let (vault, _updates) = open_vault(dir.path(), data.path());
+    wait_until_open(&vault);
     let history = vault.history().unwrap();
     assert_eq!(contents(history, &path("b.md")), ["a"]);
     assert_eq!(
