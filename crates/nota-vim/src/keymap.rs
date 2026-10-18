@@ -112,6 +112,10 @@ const fn quotes(around: bool) -> Action {
     object(TextObject::DoubleQuotes { around })
 }
 
+const fn paragraph(around: bool) -> Action {
+    object(TextObject::Paragraph { around })
+}
+
 const DELETE: Context = Context::Operator(Operator::Delete);
 const CHANGE: Context = Context::Operator(Operator::Change);
 const YANK: Context = Context::Operator(Operator::Yank);
@@ -197,6 +201,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Pending, &[ch('a'), ch('b')], parentheses(true)),
         (Pending, &[ch('i'), ch('"')], quotes(false)),
         (Pending, &[ch('a'), ch('"')], quotes(true)),
+        (Pending, &[ch('i'), ch('p')], paragraph(false)),
+        (Pending, &[ch('a'), ch('p')], paragraph(true)),
         (Insert, &[Key::Escape], Action::NormalMode),
         (Insert, &[Key::Ctrl('c')], Action::Interrupt),
         (Insert, &[Key::Backspace], Action::Backspace),

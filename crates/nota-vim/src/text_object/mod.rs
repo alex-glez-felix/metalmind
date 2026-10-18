@@ -1,7 +1,8 @@
-//! Text objects con la lógica de `current_word`, `current_block` y
-//! `current_quote` de vim (`textobject.c`).
+//! Text objects con la lógica de `current_word`, `current_block`,
+//! `current_quote` y `current_par` de vim (`textobject.c`).
 
 mod block;
+mod paragraph;
 mod quote;
 mod word;
 
@@ -14,6 +15,7 @@ pub enum TextObject {
     Word { big: bool, around: bool },
     Parentheses { around: bool },
     DoubleQuotes { around: bool },
+    Paragraph { around: bool },
 }
 
 impl TextObject {
@@ -23,6 +25,7 @@ impl TextObject {
             Self::Word { big, around } => word::select(buffer, head, count, big, around),
             Self::Parentheses { around } => block::select(buffer, head, count, around, ('(', ')')),
             Self::DoubleQuotes { around } => quote::select(buffer, head, count, around, '"'),
+            Self::Paragraph { around } => paragraph::select(buffer, head, count, around),
         }
     }
 }
