@@ -1,0 +1,34 @@
+[workspace]
+members = ["cargo:."]
+
+# Config de dist (antes cargo-dist): `dist generate` reescribe el workflow a
+# partir de aquí. Cómo se hace un release: docs/release.md.
+[dist]
+cargo-dist-version = "0.33.0"
+ci = "github"
+hosting = "github"
+# Sin instalador shell: no instala el .desktop ni el ícono. Linux va por el
+# tarball y el AUR.
+installers = []
+# macOS y Windows no se declaran: ver docs/release.md.
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+# El workflow se llama v-release.yml y solo corre con tags v*; en las PRs ya
+# está ci.yml.
+tag-namespace = "v"
+pr-run-mode = "skip"
+# Junto al binario en la raíz del tarball; README, LICENSE y CHANGELOG entran solos.
+include = [
+    "packaging/linux/nota.desktop",
+    "packaging/linux/nota.svg",
+    "packaging/linux/io.github.alex_glez_felix.nota.metainfo.xml",
+]
+
+# Las mismas librerías que pide GPUI en ci.yml.
+[dist.dependencies.apt]
+libfontconfig-dev = "*"
+libfreetype-dev = "*"
+libwayland-dev = "*"
+libxkbcommon-x11-dev = "*"
+libxcb1-dev = "*"
+libx11-xcb-dev = "*"
+libvulkan-dev = "*"
