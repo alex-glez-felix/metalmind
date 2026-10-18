@@ -4,7 +4,7 @@
 cargo nextest run --workspace     # todo lo que no necesita pantalla
 ```
 
-Los casos de `nota-vim` también corren en `nvim --headless` 0.12.6; sin ese `nvim` en el `PATH` se ignoran (ver `crates/nota-vim/tests/support/nvim.rs`).
+Los casos de `nota-vim` también corren en `nvim --headless` 0.12.6; sin ese `nvim` en el `PATH` se ignoran (ver `crates/nota-vim/tests/support/nvim.rs`). Lo mismo los de `nota-ui` que cambian de panel o de archivo desde un modo a medias, que comparan modo, archivo y cursor de cada panel con nvim (`crates/nota-ui/src/workspace/panes_oracle.rs`).
 
 ## Smoke de la app real
 

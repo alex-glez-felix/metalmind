@@ -19,7 +19,9 @@ impl Recents {
     #[must_use]
     pub fn parse(text: &str) -> Self {
         let mut recents = Self::default();
-        for line in text.lines() {
+        // Solo `\n` separa: `lines()` quitaría también un `\r` del final, y
+        // en Linux un nombre puede terminar en `\r`.
+        for line in text.split('\n') {
             if let Ok(path) = VaultPath::new(line)
                 && !path.is_root()
                 && !recents.paths.contains(&path)
@@ -124,6 +126,12 @@ mod tests {
     fn ida_y_vuelta_por_el_archivo() {
         let recents = recents(&["notas/b c.md", "a.md"]);
         assert_eq!(recents.to_text(), "notas/b c.md\na.md\n");
+        assert_eq!(Recents::parse(&recents.to_text()), recents);
+    }
+
+    #[test]
+    fn una_ruta_que_termina_en_retorno_de_carro_vuelve_igual() {
+        let recents = recents(&["raro\r", "a.md"]);
         assert_eq!(Recents::parse(&recents.to_text()), recents);
     }
 
