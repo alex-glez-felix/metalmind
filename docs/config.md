@@ -58,7 +58,7 @@ background = "#101216"
 selection = { color = "blue", alpha = 0.25 }
 ```
 
-Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `nota-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza.
+Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `nota-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/nota-oscuro.toml` con `extends = "nota-oscuro"` parte del embebido.
 
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.toml`](../crates/nota-config/themes/nota-oscuro.toml) y [`nota-claro.toml`](../crates/nota-config/themes/nota-claro.toml).
 

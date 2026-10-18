@@ -106,6 +106,35 @@ fn un_tema_del_usuario_reemplaza_al_embebido_del_mismo_nombre() {
 }
 
 #[test]
+fn un_tema_del_usuario_puede_extender_al_embebido_que_reemplaza() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "nota-oscuro",
+        "extends = \"nota-oscuro\"\n[ui]\nerror = \"#000009\"\n",
+    );
+    let loaded = Themes::new(dir.path().to_owned())
+        .load("nota-oscuro")
+        .unwrap();
+    let base = Themes::builtin().load("nota-oscuro").unwrap().value;
+    assert_eq!(loaded.diagnostics, []);
+    assert_eq!(loaded.value.ui.error.rgb, 9);
+    assert_eq!(loaded.value.ui.background, base.ui.background);
+}
+
+#[test]
+fn un_ciclo_que_pasa_por_el_reemplazo_de_un_embebido_es_circular() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "nota-oscuro", "extends = \"x\"\n");
+    write(dir.path(), "x", "extends = \"x\"\n");
+    let error = Themes::new(dir.path().to_owned())
+        .load("nota-oscuro")
+        .unwrap_err()
+        .error;
+    assert_eq!(error.message, "`extends` circular: nota-oscuro → x → x");
+}
+
+#[test]
 fn extends_circular_es_error_con_la_cadena() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "extends = \"b\"\n");
