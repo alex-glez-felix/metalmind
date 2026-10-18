@@ -144,8 +144,10 @@ impl LineChange {
 
     /// Una línea desaparece si se borra con su salto de línea: las de en
     /// medio, la primera si se borra desde su inicio hasta el inicio de otra
-    /// (`dd`) y la última si se borra hasta su final (`dd` en la última
-    /// línea, o un borrado que sigue desde una línea anterior).
+    /// (`dd`) y, si no, la última si se borra hasta su final (`dd` en la
+    /// última línea, o un borrado que sigue desde una línea anterior). Si
+    /// las dos de los bordes están vacías, el rango no dice cuál se borró:
+    /// se toma como un `dd` de la primera.
     fn vanishes(&self, line: usize) -> bool {
         let (first, last) = (self.start.line, self.end.line);
         if self.clears_text {
@@ -154,10 +156,11 @@ impl LineChange {
         if first == last {
             return false;
         }
+        let whole_lines = self.start.column == 0 && self.end.column == 0;
         if line == first {
-            self.start.column == 0 && self.end.column == 0
+            whole_lines
         } else if line == last {
-            self.end.column == self.end_line_len
+            !whole_lines && self.end.column == self.end_line_len
         } else {
             true
         }
@@ -198,6 +201,13 @@ mod tests {
         assert_eq!(moved(TEXT, 3, 3, "", point(1, 1)), None);
         assert_eq!(moved(TEXT, 3, 5, "", point(2, 1)), None);
         assert_eq!(moved(TEXT, 3, 5, "", point(1, 1)), Some(point(1, 1)));
+    }
+
+    #[test]
+    fn deleting_a_line_keeps_the_empty_one_below() {
+        let text = "x\ny\n\nz";
+        assert_eq!(moved(text, 2, 2, "", point(2, 0)), Some(point(1, 0)));
+        assert_eq!(moved("x\n\n\ny", 2, 1, "", point(2, 0)), Some(point(1, 0)));
         assert_eq!(moved(TEXT, 5, 3, "", point(2, 0)), None);
         assert_eq!(moved(TEXT, 0, 8, "", point(0, 1)), None);
         assert_eq!(moved(TEXT, 1, 6, "", point(1, 0)), None);
