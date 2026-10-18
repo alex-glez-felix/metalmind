@@ -8,8 +8,11 @@ use std::path::Path;
 use nota_buffer::Selection;
 use nota_vim::{Clipboard, Command, Invocation, Mode};
 
+use super::options;
 use super::pane_tree::{Axis, Direction};
-use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor};
+use super::{
+    DocumentId, LineNumbers, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor,
+};
 use crate::document::Document;
 
 /// Lo que la ventana tiene que hacer tras un comando.
@@ -95,6 +98,7 @@ impl Workspace {
                 self.focus(next).map(|()| Effect::Stay)
             }
             Command::Only => self.only().map(|()| Effect::Stay),
+            Command::Set => self.set_options(invocation.argument.as_deref()),
         }
     }
 
@@ -154,10 +158,11 @@ impl Workspace {
             self.message = Some(Message::unsaved("usa :e! para descartarlos"));
             return Ok(());
         }
+        let numbers = self.pane(pane)?.numbers;
         let shown = match self.documents.find(target) {
-            Some(id) => self.pane_on(id),
+            Some(id) => self.pane_on(id, numbers),
             None => match Document::open(target) {
-                Ok(document) => Pane::at_start(self.documents.insert(document)),
+                Ok(document) => Pane::at_start(self.documents.insert(document), numbers),
                 Err(error) => {
                     self.message = Some(Message::Error(error.to_string()));
                     return Ok(());
@@ -171,13 +176,19 @@ impl Workspace {
         Ok(())
     }
 
-    /// Un panel más sobre `id`, con el cursor de uno que ya lo muestra.
-    fn pane_on(&self, id: DocumentId) -> Pane {
+    /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
+    /// muestra.
+    fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
         self.panes
             .values()
             .find(|pane| pane.document == id)
-            .cloned()
-            .unwrap_or_else(|| Pane::at_start(id))
+            .map_or_else(
+                || Pane::at_start(id, numbers),
+                |pane| Pane {
+                    numbers,
+                    ..pane.clone()
+                },
+            )
     }
 
     /// `:e` y `:e!` sin ruta: vuelve a leer el archivo. Los cursores de
@@ -230,6 +241,19 @@ impl Workspace {
             Some(pane) => self.focus(pane),
             None => Ok(()),
         }
+    }
+
+    /// `:set`, sobre el panel enfocado.
+    fn set_options(&mut self, argument: Option<&str>) -> Result<Effect, WorkspaceError> {
+        let pane = self.focused();
+        let state = self
+            .panes
+            .get_mut(&pane)
+            .ok_or(WorkspaceError::NoPane(pane))?;
+        if let Err(error) = options::set(&mut state.numbers, argument) {
+            self.message = Some(Message::Error(error.to_string()));
+        }
+        Ok(Effect::Stay)
     }
 
     /// `ctrl-w o`: cierra los demás paneles, salvo los que se llevarían

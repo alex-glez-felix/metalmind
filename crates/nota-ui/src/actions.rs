@@ -80,6 +80,22 @@ impl CommandAction for ForceEdit {
     }
 }
 
+/// `:set`: cambia opciones del panel enfocado, como sus números de línea.
+#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
+#[action(namespace = editor, name = "set", no_json)]
+pub struct Set {
+    pub options: Option<String>,
+}
+
+impl CommandAction for Set {
+    fn invocation(&self) -> Invocation {
+        Invocation {
+            command: Command::Set,
+            argument: self.options.clone(),
+        }
+    }
+}
+
 /// Copia la selección del ratón, o la línea del cursor si no hay.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
 #[action(namespace = editor, name = "copy")]
@@ -92,14 +108,14 @@ pub struct Paste;
 /// La acción que invoca un comando de `:` o `ctrl-w`.
 #[must_use]
 pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
-    let path = invocation.argument;
+    let argument = invocation.argument;
     match invocation.command {
         Command::Save => Box::new(Save),
         Command::Quit => Box::new(Quit),
         Command::ForceQuit => Box::new(ForceQuit),
         Command::SaveAndQuit => Box::new(SaveAndQuit),
-        Command::Edit => Box::new(Edit { path }),
-        Command::ForceEdit => Box::new(ForceEdit { path }),
+        Command::Edit => Box::new(Edit { path: argument }),
+        Command::ForceEdit => Box::new(ForceEdit { path: argument }),
         Command::SplitRight => Box::new(SplitRight),
         Command::SplitDown => Box::new(SplitDown),
         Command::FocusLeft => Box::new(FocusLeft),
@@ -108,6 +124,7 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
         Command::FocusRight => Box::new(FocusRight),
         Command::FocusNext => Box::new(FocusNext),
         Command::Only => Box::new(Only),
+        Command::Set => Box::new(Set { options: argument }),
     }
 }
 

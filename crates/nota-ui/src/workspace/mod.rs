@@ -10,7 +10,9 @@
 mod commands;
 mod documents;
 mod editing;
+mod line_numbers;
 mod message;
+mod options;
 mod pane_tree;
 
 use std::collections::BTreeMap;
@@ -21,6 +23,7 @@ use nota_vim::{Action, Mode, Prompt, Vim, VimError};
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
+pub use self::line_numbers::LineNumbers;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Node, PaneId, PaneTree};
 use crate::document::Document;
@@ -42,13 +45,15 @@ pub enum WorkspaceError {
 struct Pane {
     document: DocumentId,
     selections: Selections,
+    numbers: LineNumbers,
 }
 
 impl Pane {
-    fn at_start(document: DocumentId) -> Self {
+    fn at_start(document: DocumentId, numbers: LineNumbers) -> Self {
         Self {
             document,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
+            numbers,
         }
     }
 }
@@ -73,6 +78,7 @@ pub struct PaneView<'a> {
     /// El registro de la macro que se graba, solo en el panel con el foco.
     pub recording: Option<char>,
     pub command_line: Option<CommandLine<'a>>,
+    pub numbers: LineNumbers,
 }
 
 /// Lo que se está escribiendo tras `:`, `/` o `?`.
@@ -95,16 +101,17 @@ impl PaneView<'_> {
 }
 
 impl Workspace {
-    /// Un panel con `document`, avisando como vim al abrirlo.
+    /// Un panel con `document` y los números `numbers`, avisando como vim
+    /// al abrirlo.
     #[must_use]
-    pub fn new(document: Document) -> Self {
+    pub fn new(document: Document, numbers: LineNumbers) -> Self {
         let message = Message::opened(&document);
         let mut documents = Documents::default();
         let id = documents.insert(document);
         let tree = PaneTree::new();
         Self {
             documents,
-            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id))]),
+            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers))]),
             tree,
             vim: Vim::new(),
             message: Some(message),
@@ -147,6 +154,7 @@ impl Workspace {
             },
             recording: self.vim.recording().filter(|_| focused),
             command_line: self.command_line().filter(|_| focused),
+            numbers: state.numbers,
         })
     }
 

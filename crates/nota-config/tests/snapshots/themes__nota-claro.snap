@@ -11,6 +11,7 @@ Theme {
         current_line: #eceef2,
         gutter: #f5f6f8,
         gutter_foreground: #a0a6b0,
+        gutter_current: #2b2f36,
         status_background: #e6e8ec,
         status_foreground: #5f6670,
         status_unfocused_foreground: #8a909a,

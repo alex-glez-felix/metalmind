@@ -6,7 +6,7 @@ use nota_buffer::ByteOffset;
 use nota_vault::FileError;
 use nota_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
 
-use super::{Effect, PaneId, PaneView, Workspace};
+use super::{Effect, LineNumbers, PaneId, PaneView, Workspace};
 use crate::document::{Document, FileStats};
 
 /// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
@@ -47,7 +47,7 @@ impl Session {
 
     fn with(document: Document) -> Self {
         Self {
-            workspace: Workspace::new(document),
+            workspace: Workspace::new(document, LineNumbers::HYBRID),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }

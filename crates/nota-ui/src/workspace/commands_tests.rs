@@ -335,3 +335,53 @@ fn cada_buffer_tiene_sus_marks() {
     assert_eq!(shown(&session), path(&dir, "a.md"));
     assert_eq!(session.cursor(), ByteOffset::new(2));
 }
+
+fn numbers(session: &Session, pane: PaneId) -> LineNumbers {
+    session.view(pane).numbers
+}
+
+#[test]
+fn set_cambia_los_numeros_solo_del_panel_enfocado() {
+    let mut session = Session::new("uno\n");
+    let left = session.pane();
+    assert_eq!(numbers(&session, left), LineNumbers::HYBRID);
+    session.keys("⌃wv:set nornu⏎");
+    let right = session.pane();
+    let absolute = LineNumbers {
+        absolute: true,
+        relative: false,
+    };
+    assert_eq!(numbers(&session, right), absolute);
+    assert_eq!(numbers(&session, left), LineNumbers::HYBRID);
+    session.keys("⌃ws");
+    assert_eq!(
+        numbers(&session, session.pane()),
+        absolute,
+        "el split hereda"
+    );
+    session.keys(":se nu!⏎");
+    assert!(!numbers(&session, session.pane()).shown());
+}
+
+#[test]
+fn e_no_cambia_los_numeros_del_panel() {
+    let (dir, mut session) = two_files();
+    session.keys(":set nonu⏎");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    let expected = LineNumbers {
+        absolute: false,
+        relative: true,
+    };
+    assert_eq!(numbers(&session, session.pane()), expected);
+}
+
+#[test]
+fn set_con_una_opcion_desconocida_avisa() {
+    let mut session = Session::new("uno\n");
+    session.keys(":set wrap⏎");
+    assert_eq!(
+        session.workspace.message(),
+        Some(&Message::Error("E518: opción desconocida: wrap".to_owned()))
+    );
+    assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
+}

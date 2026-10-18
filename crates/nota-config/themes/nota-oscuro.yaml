@@ -29,6 +29,7 @@ ui:
   current_line: bg_highlight
   gutter: bg
   gutter_foreground: fg_faint
+  gutter_current: fg
   status_background: bg_dark
   status_foreground: fg_dim
   status_unfocused_foreground: comment

@@ -118,6 +118,8 @@ color_group! {
         gutter,
         /// Números de línea.
         gutter_foreground,
+        /// El número de la línea del cursor.
+        gutter_current,
         status_background,
         status_foreground,
         /// La barra de estado de un panel sin foco.
