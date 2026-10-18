@@ -14,7 +14,7 @@
 )]
 mod support;
 
-use nota_vim::{Action, Command, CommandError, Invocation, KeyOutcome, Mode, Vim};
+use nota_vim::{Action, Command, CommandError, Invocation, KeyOutcome, Mode, Vim, VisualKind};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -73,12 +73,15 @@ fn e_lleva_la_ruta() {
     assert_eq!(text, "ab|c");
 }
 
+/// Como nvim: `d<C-w>` cancela el `d` y la `v` que sigue ya es Visual.
 #[test]
 fn ctrl_w_cancela_un_operador_pendiente() {
-    let (outcome, vim, text) = submit("d<C-w>v");
+    let (outcome, vim, text) = submit("d<C-w>");
     assert_eq!(outcome, KeyOutcome::Unbound);
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(text, "ab|c");
+    let (_, vim, _) = submit("d<C-w>v");
+    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
 }
 
 #[test]
