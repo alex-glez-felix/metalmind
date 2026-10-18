@@ -5,7 +5,7 @@ use nota_buffer::{Buffer, Selections};
 use super::Vim;
 use crate::dot::{Change, Dot};
 use crate::insert::{self, Session, Typed};
-use crate::{InsertAt, KeyOutcome, Mode, VimError};
+use crate::{InsertAt, Key, KeyOutcome, Mode, VimError};
 
 impl Vim {
     /// Texto que llega entero, como lo pegado: entra por el mismo camino que
@@ -15,6 +15,19 @@ impl Vim {
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
     pub fn insert_text(
+        &mut self,
+        text: &str,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<KeyOutcome, VimError> {
+        if self.mode.takes_text() {
+            self.record(text.chars().map(Key::Char));
+        }
+        self.write_text(text, buffer, selections)
+    }
+
+    /// Escribe en Insert o en la línea de comandos, sin grabarlo en la macro.
+    pub(super) fn write_text(
         &mut self,
         text: &str,
         buffer: &mut Buffer,

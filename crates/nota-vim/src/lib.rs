@@ -20,6 +20,7 @@ mod insert;
 mod key;
 mod keymap;
 mod lines;
+mod macros;
 mod mode;
 mod motion;
 mod object;

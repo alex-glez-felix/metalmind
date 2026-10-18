@@ -32,6 +32,7 @@ impl Vim {
         let register = self.selected.take();
         self.reset();
         let Some(object) = subject.object(self.last_find, self.search.query()) else {
+            self.fail();
             return Ok(());
         };
         let operands = selections.map_to(|selection| Operand {
@@ -65,11 +66,13 @@ impl Vim {
         } = operation;
         // Como en vim, `".dw` no borra nada: no hay dónde guardar lo borrado.
         if register.is_some_and(|name| !name.is_writable()) {
+            self.fail();
             return Ok(());
         }
         let (applied, written, spans_lines) = match operator.apply(buffer, operands)? {
             Outcome::Missed(moved) => {
                 *selections = moved;
+                self.fail();
                 return Ok(());
             }
             Outcome::Applied {
@@ -110,9 +113,12 @@ impl Vim {
         }
         // Como en vim, `.` repite un `p` aunque el registro estuviera vacío.
         self.last_change = Some(Dot::new(Change::Paste(side), count, register));
-        if let Some(content) = self.read_register(register, clipboard) {
-            let times = count.unwrap_or(1);
-            *selections = paste::paste(buffer, selections, &content, side, times)?;
+        match self.read_register(register, clipboard) {
+            Some(content) => {
+                let times = count.unwrap_or(1);
+                *selections = paste::paste(buffer, selections, &content, side, times)?;
+            }
+            None => self.fail(),
         }
         Ok(())
     }
@@ -144,6 +150,7 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         let Some(typed) = self.last_insert.clone() else {
+            self.fail();
             return Ok(());
         };
         let at = match side {
@@ -170,8 +177,9 @@ impl Vim {
     ) -> Result<(), VimError> {
         let times = self.count.take().unwrap_or(1);
         self.reset();
-        if let Some(restored) = travel.run(buffer, times)? {
-            *selections = restored;
+        match travel.run(buffer, times)? {
+            Some(restored) => *selections = restored,
+            None => self.fail(),
         }
         Ok(())
     }

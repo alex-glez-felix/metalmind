@@ -45,6 +45,12 @@ impl Destination {
 }
 
 impl Motion {
+    /// Como `nv_left` y `nv_right` de vim: en Normal, `h` y `l` fallan si no
+    /// pueden moverse.
+    pub(crate) fn fails_without_moving(self) -> bool {
+        matches!(self, Self::Left | Self::Right)
+    }
+
     /// `count` es el que escribió el usuario: `gg` y `G` distinguen su ausencia.
     /// `None` si la motion falla (p. ej. `j` en la última línea).
     pub(crate) fn resolve(

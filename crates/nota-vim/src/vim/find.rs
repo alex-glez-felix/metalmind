@@ -2,7 +2,8 @@
 
 use nota_buffer::{Buffer, Selections};
 
-use super::{Vim, move_cursors};
+use super::Vim;
+use super::dispatch::move_cursors;
 use crate::dot::Subject;
 use crate::find::Find;
 use crate::object::Object;
@@ -39,7 +40,7 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
         let Some(find) = self.last_find else {
-            self.reset();
+            self.fail();
             return Ok(());
         };
         let subject = Subject::RepeatFind { reversed };
@@ -66,7 +67,10 @@ impl Vim {
         }
         let times = self.take_count().unwrap_or(1);
         self.reset();
-        *selections = move_cursors(selections, |s| find.resolve(buffer, s.head, times));
+        match move_cursors(selections, |s| find.resolve(buffer, s.head, times)) {
+            Some(moved) => *selections = moved,
+            None => self.fail(),
+        }
         Ok(())
     }
 }

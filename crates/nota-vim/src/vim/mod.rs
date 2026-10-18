@@ -1,15 +1,18 @@
 mod awaiting;
 mod command_line;
+mod dispatch;
 mod find;
 mod insert;
+mod macros;
 mod operate;
 mod repeat;
 mod search;
 mod substitute;
 
-use nota_buffer::{Buffer, Selection, Selections};
+use nota_buffer::{Buffer, Selections};
 
 use self::awaiting::Awaiting;
+use self::macros::{Playback, Recording};
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
@@ -18,13 +21,10 @@ use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
-use crate::motion::Destination;
-use crate::object::Object;
 use crate::register::{Clipboard, Detached, RegisterName, Registers};
-use crate::travel::Travel;
 use crate::{
-    Action, Command, CommandError, Key, Keymap, Mode, Motion, Operator, Prompt, SearchError,
-    Substitution, VimError, Wrap,
+    Action, Command, CommandError, Key, Keymap, Mode, Prompt, SearchError, Substitution, VimError,
+    Wrap,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -83,6 +83,12 @@ pub struct Vim {
     /// Lo que espera la tecla siguiente como carácter, como el de `f`.
     awaiting: Option<Awaiting>,
     last_find: Option<Find>,
+    recording: Option<Recording>,
+    playback: Playback,
+    /// La letra de la última macro reproducida, para `@@`.
+    last_played: Option<u8>,
+    /// La última tecla falló como un `beep_flush` de vim: corta la macro.
+    failed: bool,
 }
 
 impl Default for Vim {
@@ -119,6 +125,10 @@ impl Vim {
             last_insert: None,
             awaiting: None,
             last_find: None,
+            recording: None,
+            playback: Playback::default(),
+            last_played: None,
+            failed: false,
         }
     }
 
@@ -144,11 +154,47 @@ impl Vim {
     }
 
     /// Pasa una tecla al motor; `clipboard` es lo que leen y escriben `"+`
-    /// y `"*`.
+    /// y `"*`. Si la tecla reproduce una macro, la reproduce entera.
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
     pub fn feed_with_clipboard(
+        &mut self,
+        key: Key,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        let recording = self.recording.is_some();
+        let outcome = self.process(key, buffer, selections, clipboard)?;
+        // Así no se graba la `q` que termina la grabación.
+        if recording {
+            self.record([key]);
+        }
+        self.play_queued(outcome, buffer, selections, clipboard)
+    }
+
+    /// Una tecla, tecleada o de una macro. Como en vim, una búsqueda o un
+    /// `:s` que no encuentran nada fallan.
+    fn process(
+        &mut self,
+        key: Key,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        self.failed = false;
+        let outcome = self.interpret(key, buffer, selections, clipboard)?;
+        if matches!(
+            outcome,
+            KeyOutcome::SearchFailed(_) | KeyOutcome::InvalidCommand(_)
+        ) {
+            self.failed = true;
+        }
+        Ok(outcome)
+    }
+
+    fn interpret(
         &mut self,
         key: Key,
         buffer: &mut Buffer,
@@ -212,101 +258,6 @@ impl Vim {
         result
     }
 
-    fn run(
-        &mut self,
-        action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
-        self.awaiting = None;
-        match (action, self.mode) {
-            (Action::Motion(motion), Mode::OperatorPending(operator)) => {
-                let object = Object::Motion(motion).into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
-            }
-            (Action::Motion(motion), Mode::Normal) => {
-                let count = self.take_count();
-                self.reset();
-                *selections = move_cursors(selections, |s| motion.resolve(buffer, s, count, None));
-            }
-            (Action::FindChar(search), Mode::Normal | Mode::OperatorPending(_)) => {
-                self.awaiting = Some(Awaiting::Find(search));
-            }
-            (Action::RepeatFind { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                self.repeat_find(reversed, buffer, selections, clipboard)?;
-            }
-            (Action::Search { backward }, Mode::Normal | Mode::OperatorPending(_)) => {
-                self.open_search(backward);
-            }
-            (Action::SearchNext { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                return self.search_next(reversed, buffer, selections, clipboard);
-            }
-            (
-                Action::SearchWord {
-                    backward,
-                    whole_word,
-                },
-                Mode::Normal | Mode::OperatorPending(_),
-            ) => return self.search_word(backward, whole_word, buffer, selections, clipboard),
-            (Action::ClearSearchHighlight, Mode::Normal) => {
-                self.reset();
-                self.search.highlight = false;
-            }
-            (Action::TextObject(object), Mode::OperatorPending(operator)) => {
-                let object = Object::TextObject(object).into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
-            }
-            (Action::CurrentLine, Mode::OperatorPending(operator)) => {
-                let object = Object::CurrentLine.into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
-            }
-            (Action::Operator(operator), Mode::Normal) => {
-                self.operator_count = self.take_count();
-                self.mode = Mode::OperatorPending(operator);
-            }
-            (Action::SelectRegister, Mode::Normal) => self.awaiting = Some(Awaiting::Register),
-            (Action::DeleteRight, Mode::Normal) => {
-                let object = Object::Motion(Motion::Right).into();
-                self.operate(Operator::Delete, object, buffer, selections, clipboard)?;
-            }
-            (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
-            (Action::Paste(side), Mode::Normal) => {
-                self.paste(side, buffer, selections, clipboard)?;
-            }
-            (Action::RepeatChange, Mode::Normal) => {
-                self.repeat_change(buffer, selections, clipboard)?;
-            }
-            (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, buffer, selections)?,
-            (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
-            (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
-            (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
-            (Action::NormalMode, Mode::Insert) => {
-                self.repeat_insert(buffer, selections)?;
-                self.leave_insert(buffer, selections)?;
-            }
-            (Action::Interrupt, Mode::Insert) => self.leave_insert(buffer, selections)?,
-            (Action::Backspace, Mode::Insert) => {
-                self.type_in_insert(&Typed::Backspace, buffer, selections)?;
-            }
-            (Action::Newline, Mode::Insert) => {
-                self.type_in_insert(&Typed::Text("\n".to_owned()), buffer, selections)?;
-            }
-            (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
-            (Action::NormalMode | Action::Interrupt, Mode::CommandLine) => {
-                self.close_command_line();
-            }
-            (Action::Backspace, Mode::CommandLine) => self.command_line_backspace(),
-            (Action::HistoryPrevious, Mode::CommandLine) => self.recall(true),
-            (Action::HistoryNext, Mode::CommandLine) => self.recall(false),
-            (Action::SubmitCommand, Mode::CommandLine) => {
-                return self.submit_command_line(buffer, selections, clipboard);
-            }
-            _ => self.reset(),
-        }
-        Ok(KeyOutcome::Executed(action))
-    }
-
     /// El cursor se movió por fuera del motor, como con un clic o un pegado
     /// en Normal: se cancela lo pendiente (count, operador, `f`) y, como en
     /// vim, lo tecleado en Insert ya no se repite con el count y lo que se
@@ -338,7 +289,7 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         let keys = std::mem::take(&mut self.pending);
         if !self.mode.takes_text() {
-            self.reset();
+            self.fail();
             return Ok(KeyOutcome::Unbound);
         }
         let text: String = keys
@@ -348,12 +299,19 @@ impl Vim {
         if text.is_empty() {
             return Ok(KeyOutcome::Unbound);
         }
-        self.insert_text(&text, buffer, selections)
+        self.write_text(&text, buffer, selections)
     }
 
     /// El count de lo que se va a ejecutar: `2"a3x` borra 6.
     fn take_count(&mut self) -> Option<usize> {
         combined(self.operator_count.take(), self.count.take())
+    }
+
+    /// Como el `clearopbeep` de vim: cancela lo pendiente y corta la macro
+    /// que se esté reproduciendo.
+    fn fail(&mut self) {
+        self.reset();
+        self.failed = true;
     }
 
     fn reset(&mut self) {
@@ -366,18 +324,6 @@ impl Vim {
             self.mode = Mode::Normal;
         }
     }
-}
-
-/// Cada cursor va a donde lo lleve `resolve`; si falla, se queda.
-pub(super) fn move_cursors(
-    selections: &Selections,
-    resolve: impl Fn(&Selection) -> Option<Destination>,
-) -> Selections {
-    selections.map(|selection| {
-        resolve(selection).map_or(*selection, |destination| {
-            Selection::cursor(destination.offset).with_goal(destination.goal)
-        })
-    })
 }
 
 /// `2d3w` opera sobre 6 palabras; sin ningún count, `None`.
