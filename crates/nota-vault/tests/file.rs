@@ -9,7 +9,7 @@ use std::io;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
 use std::path::Path;
 
-use nota_vault::{FileError, read, write_atomic};
+use nota_vault::{FileError, create_atomic, read, write_atomic};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
@@ -173,4 +173,54 @@ fn leer_algo_que_no_es_utf8_falla() {
 fn leer_una_carpeta_falla() {
     let dir = TempDir::new().unwrap();
     assert!(matches!(read(dir.path()), Err(FileError::Read { .. })));
+}
+
+fn create_text(path: &Path, text: &str) -> Result<(), FileError> {
+    create_atomic(path, |out| out.write_all(text.as_bytes()))
+}
+
+#[test]
+fn crear_escribe_un_archivo_nuevo() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nueva.md");
+    create_text(&path, "# Hola\n").unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "# Hola\n");
+    let new_file = dir.path().join("comparar");
+    fs::write(&new_file, "").unwrap();
+    assert_eq!(
+        mode(&path),
+        mode(&new_file),
+        "los permisos de un archivo nuevo"
+    );
+}
+
+#[test]
+fn crear_no_pisa_lo_que_ya_existe() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("ocupado.md");
+    fs::write(&path, "de otro\n").unwrap();
+    let error = create_text(&path, "nuevo\n").unwrap_err();
+    assert!(matches!(error, FileError::Exists { .. }), "{error:?}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "de otro\n");
+    assert_eq!(entries(dir.path()), ["ocupado.md"]);
+    symlink(dir.path().join("no-existe"), dir.path().join("enlace.md")).unwrap();
+    let error = create_text(&dir.path().join("enlace.md"), "x").unwrap_err();
+    assert!(matches!(error, FileError::Exists { .. }), "{error:?}");
+    assert!(!dir.path().join("no-existe").exists());
+}
+
+/// Otro proceso crea el archivo mientras se escribe: el rename final no lo
+/// pisa, aunque al empezar no existía.
+#[test]
+fn crear_no_pisa_lo_que_aparece_mientras_se_escribe() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("carrera.md");
+    let error = create_atomic(&path, |out| {
+        fs::write(&path, "llegó primero\n")?;
+        out.write_all(b"tarde\n")
+    })
+    .unwrap_err();
+    assert!(matches!(error, FileError::Exists { .. }), "{error:?}");
+    assert_eq!(fs::read_to_string(&path).unwrap(), "llegó primero\n");
+    assert_eq!(entries(dir.path()), ["carrera.md"]);
 }

@@ -16,6 +16,8 @@ pub enum FileError {
     NotUtf8 { path: PathBuf },
     #[error("no se pudo guardar {}: {source}", path.display())]
     Write { path: PathBuf, source: io::Error },
+    #[error("{} ya existe", path.display())]
+    Exists { path: PathBuf },
 }
 
 /// Contenido de la nota, o `None` si todavía no existe.
@@ -58,23 +60,41 @@ pub fn write_atomic(
     })
 }
 
-/// Crea `path` con `text`, sin dejarlo a medias y sin pisar nada: si ya
-/// existe, falla con [`io::ErrorKind::AlreadyExists`] y no lo toca.
-pub(crate) fn create_atomic(path: &Path, text: &str) -> Result<(), FileError> {
-    create(path, text).map_err(|source| FileError::Write {
-        path: path.to_owned(),
-        source,
+/// Como [`write_atomic`], para un archivo que no debe existir: si `path`
+/// existe al terminar, aunque otro proceso lo haya creado mientras se
+/// escribía, falla sin tocarlo. El paso final es un rename que no pisa
+/// (`renameat2` con `RENAME_NOREPLACE` en Linux), así que mirar y escribir
+/// son una sola operación.
+///
+/// # Errors
+/// [`FileError::Exists`] si `path` ya existe (también si es un enlace
+/// simbólico), o si falla `contents` o cualquier paso de la escritura.
+pub fn create_atomic(
+    path: &Path,
+    contents: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+) -> Result<(), FileError> {
+    create(path, contents).map_err(|source| {
+        if source.kind() == io::ErrorKind::AlreadyExists {
+            FileError::Exists {
+                path: path.to_owned(),
+            }
+        } else {
+            FileError::Write {
+                path: path.to_owned(),
+                source,
+            }
+        }
     })
 }
 
-fn create(path: &Path, text: &str) -> io::Result<()> {
+fn create(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>) -> io::Result<()> {
     let dir = parent_dir(path);
     let mut temp = Builder::new()
         .prefix(".nota-")
         .suffix(".tmp")
         .permissions(Permissions::from_mode(NEW_FILE_MODE))
         .tempfile_in(dir)?;
-    write_contents(&mut temp, |out| out.write_all(text.as_bytes()))?;
+    write_contents(&mut temp, contents)?;
     temp.as_file().sync_all()?;
     temp.persist_noclobber(path).map_err(|error| error.error)?;
     File::open(dir)?.sync_all()
@@ -183,10 +203,11 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("nota.md");
         fs::write(&path, "del usuario").unwrap();
-        let Err(FileError::Write { source, .. }) = create_atomic(&path, "nuevo") else {
-            panic!("se esperaba que fallara");
-        };
-        assert_eq!(source.kind(), io::ErrorKind::AlreadyExists);
+        let result = create_atomic(&path, |out| out.write_all(b"nuevo"));
+        assert!(
+            matches!(result, Err(FileError::Exists { .. })),
+            "{result:?}"
+        );
         assert_eq!(fs::read_to_string(&path).unwrap(), "del usuario");
     }
 }

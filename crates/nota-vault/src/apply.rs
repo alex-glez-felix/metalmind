@@ -3,7 +3,6 @@
 //! un fallo a medias dice qué quedó hecho para poder deshacerlo.
 
 use std::fs;
-use std::io;
 use std::path::Path;
 
 use crate::changes::{Changes, NewFile, Rename};
@@ -229,9 +228,11 @@ fn create(root: &Path, file: &NewFile) -> Result<Created, CreateFailed> {
         file: file.clone(),
         folders,
     };
-    match create_atomic(&file.path.to_fs(root), &file.text) {
+    match create_atomic(&file.path.to_fs(root), |out| {
+        out.write_all(file.text.as_bytes())
+    }) {
         Ok(()) => Ok(created),
-        Err(FileError::Write { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists => {
+        Err(FileError::Exists { .. }) => {
             ops::remove_empty(root, &created.folders);
             Err(failed(FileOpError::AlreadyExists(file.path.clone()).into()))
         }

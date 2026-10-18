@@ -46,7 +46,7 @@ impl Fixture {
             }
             entries.insert((file.clone(), EntryKind::of_file(file)));
         }
-        VaultIndex::from_entries(entries.into_iter().collect())
+        VaultIndex::from_entries(entries)
     }
 
     pub fn tags(&self) -> Tags {
