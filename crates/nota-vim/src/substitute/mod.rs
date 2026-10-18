@@ -130,7 +130,7 @@ pub(crate) fn apply(
     let mut first_changed = None;
     let mut last_changed = 0;
     let mut added_lines = 0;
-    for line in lines {
+    for line in pattern.matching_lines(buffer, *lines.start()..lines.end() + 1) {
         let start = buffer.line_start(line);
         let text = buffer.line_text(line);
         let taken = if global { usize::MAX } else { 1 };

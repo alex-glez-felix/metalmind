@@ -7,6 +7,9 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use nota_perf::{MISSING_WORD, Session, WORD, assert_flat, assert_linear, huge_line, note};
 
 fn session(lines: usize) -> Session {
@@ -34,10 +37,23 @@ fn typing_in_insert_does_not_depend_on_the_note_size() {
     );
 }
 
+/// Arma la nota de cada tamaño una sola vez: con las 80 k líneas que necesita
+/// `/` para tardar algo medible, armarla en cada ronda cuesta más que buscar.
+fn session_of_a_reused_note() -> impl Fn(usize) -> Session {
+    let notes = RefCell::new(HashMap::new());
+    move |lines| {
+        let mut notes = notes.borrow_mut();
+        let text = notes.entry(lines).or_insert_with(|| note(lines));
+        Session::new(text, lines / 2)
+    }
+}
+
 #[test]
 fn a_search_without_matches_is_linear() {
     let keys = format!("/{MISSING_WORD}\n");
-    assert_linear(1_000, session, |session| feed(session, &keys));
+    assert_linear(80_000, session_of_a_reused_note(), |session| {
+        feed(session, &keys)
+    });
 }
 
 #[test]

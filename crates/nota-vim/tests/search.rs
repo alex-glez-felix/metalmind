@@ -96,6 +96,15 @@ use rstest_reuse::{self, apply, template};
 #[case("abc\n|\ndef", "/^$<CR>", "abc\n|\ndef")]
 #[case("|baab", "/a*<CR>", "b|aab")]
 #[case("b|aab", "/a*<CR>", "baa|b")]
+// lo negado y [:space:] no cruzan el fin de línea
+#[case("|xa\nab", "/a[^a]<CR>", "xa\n|ab")]
+#[case("|xa\na b", "/a[[:space:]]<CR>", "xa\n|a b")]
+#[case("|xa\nab", r"/a\S<CR>", "xa\n|ab")]
+#[case("|xa\na b", r"/a\W<CR>", "xa\n|a b")]
+#[case("|xa\nab", r"/a\D<CR>", "xa\n|ab")]
+#[case("|xa\nb", "/a[^a]<CR>", "|xa\nb")]
+#[case("a b\nxa\n|c", "?a[^a]<CR>", "|a b\nxa\nc")]
+#[case("|xa\nab", ":%s/a[^a]/Y/<CR>", "xa\n|Y")]
 // * # g* g#
 #[case("|foo foobar foo", "*", "foo foobar |foo")]
 #[case("|foo foobar foo", "g*", "foo |foobar foo")]

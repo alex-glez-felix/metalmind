@@ -75,12 +75,12 @@ impl Pattern {
         if let Some(found) = after_cursor {
             return Some(hit(start + found.start, None));
         }
-        let below = (line + 1..buffer.line_count()).chain(0..=line);
-        below.enumerate().find_map(|(walked, other)| {
-            let found = self.line_matches(&buffer.line_text(other)).next()?;
-            let wrapped = (walked + line + 1 >= buffer.line_count()).then_some(Wrap::ToTop);
-            Some(hit(buffer.line_start(other) + found.start, wrapped))
-        })
+        let first_in = |lines| self.matching_lines(buffer, lines).next();
+        let (other, wrapped) = first_in(line + 1..buffer.line_count())
+            .map(|other| (other, None))
+            .or_else(|| Some((first_in(0..line + 1)?, Some(Wrap::ToTop))))?;
+        let found = self.line_matches(&buffer.line_text(other)).next()?;
+        Some(hit(buffer.line_start(other) + found.start, wrapped))
     }
 
     /// La última coincidencia antes del cursor. Desde la columna 0, vim
@@ -99,12 +99,15 @@ impl Pattern {
                 return Some(hit(start + found.start, None));
             }
         }
-        let above = (0..line).rev().chain((line..buffer.line_count()).rev());
-        above.enumerate().find_map(|(walked, other)| {
-            let found = self.line_matches(&buffer.line_text(other)).last()?;
-            let wrapped = (walked >= line).then_some(Wrap::ToBottom);
-            Some(hit(buffer.line_start(other) + found.start, wrapped))
-        })
+        let (other, wrapped) = self
+            .last_matching_line(buffer, 0..line)
+            .map(|other| (other, None))
+            .or_else(|| {
+                let other = self.last_matching_line(buffer, line..buffer.line_count())?;
+                Some((other, Some(Wrap::ToBottom)))
+            })?;
+        let found = self.line_matches(&buffer.line_text(other)).last()?;
+        Some(hit(buffer.line_start(other) + found.start, wrapped))
     }
 }
 
@@ -137,5 +140,88 @@ mod tests {
         assert_eq!(find("ab\nab", 1, "b", true), Some((4, true)));
         assert_eq!(find("ab", 1, "b", false), Some((1, true)));
         assert_eq!(find("ab", 0, "z", false), None);
+    }
+
+    /// La búsqueda de antes, línea por línea, como referencia.
+    fn line_by_line(
+        buffer: &Buffer,
+        pattern: &Pattern,
+        from: usize,
+        backward: bool,
+    ) -> Option<usize> {
+        let line = buffer.line_of(ByteOffset::new(from));
+        let start = buffer.line_start(line).get();
+        let column = from - start;
+        let text = buffer.line_text(line);
+        let mut in_line = pattern.line_matches(&text).map(|found| found.start);
+        let in_line = if backward {
+            in_line
+                .filter(|&at| column > 0 && at < column + usize::from(at == text.len()))
+                .last()
+        } else {
+            let under_cursor = text[column..].chars().next().map_or(1, char::len_utf8);
+            in_line.find(|&at| at >= column + under_cursor + usize::from(at == text.len()))
+        };
+        if let Some(at) = in_line {
+            return Some(start + at);
+        }
+        let count = buffer.line_count();
+        let others: Vec<usize> = if backward {
+            (0..line).rev().chain((line..count).rev()).collect()
+        } else {
+            (line + 1..count).chain(0..=line).collect()
+        };
+        others.into_iter().find_map(|other| {
+            let text = buffer.line_text(other);
+            let mut found = pattern.line_matches(&text);
+            let found = if backward { found.last() } else { found.next() }?;
+            Some(buffer.line_start(other).get() + found.start)
+        })
+    }
+
+    /// En una nota de varios bloques, buscar por bloques encuentra lo mismo
+    /// que buscar en cada línea, de ida y de vuelta.
+    #[test]
+    fn blocks_find_the_same_as_line_by_line() {
+        let text: String = (0..12_000)
+            .map(|line| match line % 7 {
+                0 => String::new(),
+                3 => format!("- [ ] tarea {line} ñandú\t"),
+                5 if line % 2_000 == 5 => format!("ver [[otra]]z {line}"),
+                _ => format!("nota {line} con [[enlace-{}]]", line % 97),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let buffer = Buffer::from(text.as_str());
+        let sources = [
+            "^$",
+            "$",
+            "ú[^a]",
+            "\\]\\][^x]",
+            "\\<tarea\\>",
+            "1\\d\\{3}$",
+            "^-",
+            "x*",
+            "11999",
+            "zzz",
+        ];
+        for source in sources {
+            let pattern = Pattern::compile(source, Case::Smart).unwrap();
+            for line in (0..buffer.line_count()).step_by(997) {
+                let start = buffer.line_start(line);
+                let middle = start + buffer.line_text(line).len().min(5);
+                for from in [start, middle] {
+                    for backward in [false, true] {
+                        let query = Query {
+                            pattern: pattern.clone(),
+                            backward,
+                        };
+                        let found = query.find(&buffer, from, 1).map(|hit| hit.offset.get());
+                        let expected = line_by_line(&buffer, &pattern, from.get(), backward);
+                        assert_eq!(found, expected, "{source:?} desde {from:?}, ?: {backward}");
+                    }
+                }
+            }
+        }
     }
 }
