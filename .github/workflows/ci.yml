@@ -81,6 +81,28 @@ jobs:
           tool: cargo-nextest
       - run: cargo nextest run --workspace --no-tests=fail
 
+  # La app real bajo Xvfb, con lavapipe (Vulkan por software) y XTest
+  # tecleando; ver docs/testing.md.
+  gui-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Las librerías de GPUI, más Xvfb, lavapipe y una fuente monoespaciada:
+      # sin ella GPUI entra en pánico al abrir la ventana.
+      - name: Xvfb, lavapipe y librerías de GPUI
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev xvfb mesa-vulkan-drivers fonts-dejavu-core
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Su propio caché: solo compila `nota` y sus tests, no el workspace.
+          # Subirlo junto con v1-rust cuando cambie un [profile].
+          prefix-key: v1-gui-smoke
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo nextest run -p nota --test gui_smoke --run-ignored only --no-tests=fail
+
   deny:
     runs-on: ubuntu-latest
     steps:
