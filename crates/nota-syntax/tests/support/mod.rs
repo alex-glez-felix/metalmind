@@ -42,7 +42,7 @@ fn link_line(text: &str, link: &Link) -> String {
     if let Some(alias) = &link.alias {
         write!(out, "\n    alias {}", part(text, alias)).unwrap();
     }
-    let decoded = link.text(text, link.target.clone());
+    let decoded = link.target_text(text);
     if decoded != text[link.target.clone()] {
         write!(out, "\n    decoded {decoded:?}").unwrap();
     }

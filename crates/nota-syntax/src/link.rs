@@ -36,12 +36,36 @@ pub struct Link {
 }
 
 impl Link {
-    /// El texto de una de las partes del link. En un link markdown se
-    /// quitan los escapes con `\\` y se decodifican los `%20`: un destino
-    /// markdown no puede llevar espacios.
+    /// El nombre o ruta de la nota. En un link markdown se quitan los
+    /// escapes con `\` y se decodifican los `%20`: un destino markdown no
+    /// puede llevar espacios.
     #[must_use]
-    pub fn text<'t>(&self, text: &'t str, part: Range<usize>) -> Cow<'t, str> {
-        let raw = &text[part];
+    pub fn target_text<'t>(&self, text: &'t str) -> Cow<'t, str> {
+        self.destination_text(&text[self.target.clone()])
+    }
+
+    /// El heading o bloque, decodificado como el destino.
+    #[must_use]
+    pub fn subpath_text<'t>(&self, text: &'t str) -> Option<Cow<'t, str>> {
+        self.subpath.as_ref().map(|subpath| match subpath {
+            Subpath::Heading(range) | Subpath::Block(range) => {
+                self.destination_text(&text[range.clone()])
+            }
+        })
+    }
+
+    /// El alias o el texto de un link markdown. Es texto y no una URL: en
+    /// markdown se quitan los escapes pero sus `%` quedan como están.
+    #[must_use]
+    pub fn alias_text<'t>(&self, text: &'t str) -> Option<Cow<'t, str>> {
+        let raw = &text[self.alias.clone()?];
+        Some(match self.syntax {
+            LinkSyntax::Wiki => Cow::Borrowed(raw),
+            LinkSyntax::Markdown => unescape(raw),
+        })
+    }
+
+    fn destination_text<'t>(&self, raw: &'t str) -> Cow<'t, str> {
         match self.syntax {
             LinkSyntax::Wiki => Cow::Borrowed(raw),
             LinkSyntax::Markdown => match unescape(raw) {
