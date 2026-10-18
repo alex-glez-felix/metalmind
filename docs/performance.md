@@ -50,6 +50,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Un nombre en cada carpeta (`index.md` en 8 000 carpetas): armar el índice / crear otra | lineal | 60 / 6.8 ms | ✅ | test `un_nombre_en_cada_carpeta_es_lineal` |
 | `gd` en una nota de 5 k líneas (escanea el buffer) | ≤ 16 ms | 0.93 ms | ✅ | `nota-vault` `seguir_un_link_en_5k_lineas` |
 | Autocompletado de `[[`: el destino de una página de 50 notas | ≤ 8 ms | 0.10 ms | ✅ | `nota-vault` `nombrar_50_notas_para_completar` |
+| Pegar una imagen de 200 KB (escribirla, `fsync`, comprobar que el vault la ve y armar su embed), vault de 5 k / 50 k notas, en SSD | ≤ 16 ms | 2.8 / 3.1 ms (el `fsync` llega a ~100 ms: va en el fondo, como guardar) | ✅ | `nota-vault` `pegar_una_imagen` |
+| Adjuntos huérfanos: 1 000 en la carpeta, 5 k / 50 k notas (del índice de links, sin leer notas) | ≤ 16 ms | 0.17 / 0.17 ms | ✅ | `nota-vault` `huerfanos` |
 | Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 7.6 µs / 13.4 ms | ⚠️ | `nota-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
 | Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 37 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
 | Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 40 / 465 ms | ✅ | `nota-vault` `abrir_con_tags` |
