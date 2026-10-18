@@ -45,7 +45,7 @@ jobs:
       # 03 §6: solo nota-ui y el binario dependen de la GUI.
       - name: El núcleo no depende de GPUI
         run: |
-          for crate in nota-buffer nota-config nota-syntax nota-vim nota-vault nota-search; do
+          for crate in nota-buffer nota-config nota-syntax nota-vim nota-vault nota-search nota-template; do
             if cargo tree -p "$crate" -e normal,build | grep -q gpui; then
               echo "$crate depende de GPUI" >&2
               exit 1
