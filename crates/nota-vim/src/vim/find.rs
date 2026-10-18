@@ -8,7 +8,8 @@ use crate::object::Object;
 use crate::{Action, CharSearch, Key, KeyOutcome, Mode, VimError};
 
 impl Vim {
-    /// Completa `f`, `F`, `t` o `T`; una tecla que no es carácter cancela.
+    /// Completa `f`, `F`, `t` o `T`; una tecla que no es carácter se usa
+    /// para cancelar, como `<Esc>`.
     pub(super) fn find_char(
         &mut self,
         search: CharSearch,
@@ -18,7 +19,7 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         let Some(target) = searched_char(key) else {
             self.reset();
-            return Ok(KeyOutcome::Unbound);
+            return Ok(KeyOutcome::Executed(Action::NormalMode));
         };
         let find = Find::new(search, target);
         self.last_find = Some(find);

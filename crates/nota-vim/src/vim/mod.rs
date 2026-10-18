@@ -195,9 +195,11 @@ impl Vim {
         Ok(KeyOutcome::Executed(action))
     }
 
-    /// El cursor se movió por fuera del motor, como con un clic. Igual que
-    /// en vim, lo tecleado hasta ahí ya no se repite con el count.
+    /// El cursor se movió por fuera del motor, como con un clic o un pegado
+    /// en Normal: se cancela lo pendiente (count, operador, `f`) y, como en
+    /// vim, lo tecleado en Insert ya no se repite con el count.
     pub fn cursor_moved(&mut self) {
+        self.reset();
         self.repeat = Repeat::default();
     }
 

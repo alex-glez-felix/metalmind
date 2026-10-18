@@ -214,6 +214,7 @@ impl Document {
                 .insert_text(text, &mut self.buffer, &mut self.selections)?;
             return Ok(());
         }
+        self.vim.cursor_moved();
         self.buffer.begin_transaction(self.selections.clone())?;
         let end = self.insert_at_cursor(text)?;
         self.selections = Selections::single(Selection::cursor(self.buffer.prev_boundary(end)));

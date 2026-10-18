@@ -58,6 +58,24 @@ fn pegar_en_normal_es_un_paso_de_undo() {
 }
 
 #[test]
+fn pegar_en_normal_cancela_un_f_pendiente() {
+    let mut document = document("ab\n");
+    keys(&mut document, "f");
+    document.paste("XY").unwrap();
+    keys(&mut document, "x");
+    assert_eq!(document.buffer().to_string(), "Xab\n");
+}
+
+#[test]
+fn un_clic_cancela_un_f_pendiente() {
+    let mut document = document("abc def\n");
+    keys(&mut document, "f");
+    document.select(ByteOffset::new(4), ByteOffset::new(4));
+    keys(&mut document, "x");
+    assert_eq!(document.buffer().to_string(), "abc ef\n");
+}
+
+#[test]
 fn pegar_en_insert_se_deshace_con_lo_escrito() {
     let mut document = document("ab\n");
     keys(&mut document, "iz");
