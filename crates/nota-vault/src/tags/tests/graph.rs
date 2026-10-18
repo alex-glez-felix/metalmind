@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use super::{key, tags};
-use crate::tags::{Scope, TagKey, TagProblem, TagTree, Tags};
+use crate::tags::{Scope, ScopeFilter, TagKey, TagProblem, TagTree, Tags};
 
 fn names<'k>(keys: impl IntoIterator<Item = &'k TagKey>) -> String {
     keys.into_iter()
@@ -14,38 +14,57 @@ fn names<'k>(keys: impl IntoIterator<Item = &'k TagKey>) -> String {
         .join(", ")
 }
 
-/// El panel como texto: raíces y, bajo cada tag, sus hijos. Un tag que ya
-/// está en el camino se marca y no se expande otra vez (05 §7).
-pub(super) fn panel(tree: &TagTree) -> String {
+/// El panel como texto: raíces y, bajo cada tag, sus hijos y sus notas. Un
+/// tag que ya está en el camino se marca y no se expande otra vez (05 §7).
+pub(super) fn panel(tags: &Tags, scope: &ScopeFilter<'_>) -> String {
+    let tree = tags.tree(scope);
     let mut out = String::new();
+    let mut walk = Walk {
+        tags,
+        scope,
+        tree: &tree,
+        path: Vec::new(),
+        out: &mut out,
+    };
     for root in tree.roots() {
-        branch(tree, root, 0, &mut Vec::new(), &mut out);
+        walk.branch(root, 0);
     }
     out
 }
 
-fn branch(tree: &TagTree, key: &TagKey, depth: usize, path: &mut Vec<TagKey>, out: &mut String) {
-    let node = tree.node(key).unwrap();
-    let mark = if path.contains(key) {
-        " ↻"
-    } else if node.only_parent {
-        " (solo como padre)"
-    } else {
-        ""
-    };
-    let indent = "  ".repeat(depth);
-    writeln!(out, "{indent}{} ({}){mark}", node.name, node.count).unwrap();
-    if path.contains(key) {
-        return;
+struct Walk<'a> {
+    tags: &'a Tags,
+    scope: &'a ScopeFilter<'a>,
+    tree: &'a TagTree,
+    path: Vec<TagKey>,
+    out: &'a mut String,
+}
+
+impl Walk<'_> {
+    fn branch(&mut self, key: &TagKey, depth: usize) {
+        let node = self.tree.node(key).unwrap();
+        let cycle = self.path.contains(key);
+        let mark = if cycle {
+            " ↻"
+        } else if node.only_parent {
+            " (solo como padre)"
+        } else {
+            ""
+        };
+        let indent = "  ".repeat(depth);
+        writeln!(self.out, "{indent}{} ({}){mark}", node.name, node.count).unwrap();
+        if cycle {
+            return;
+        }
+        self.path.push(key.clone());
+        for child in &node.children {
+            self.branch(child, depth + 1);
+        }
+        for note in self.tags.tagged_notes(key, self.scope) {
+            writeln!(self.out, "{indent}  · {note}").unwrap();
+        }
+        self.path.pop();
     }
-    path.push(key.clone());
-    for child in &node.children {
-        branch(tree, child, depth + 1, path, out);
-    }
-    for note in &node.notes {
-        writeln!(out, "{indent}  · {note}").unwrap();
-    }
-    path.pop();
 }
 
 fn problem(problem: &TagProblem) -> String {
@@ -77,7 +96,7 @@ fn problem(problem: &TagProblem) -> String {
 
 fn render(tags: &Tags) -> String {
     let mut out = String::from("panel:\n");
-    out.push_str(&panel(&tags.tree(&Scope::default().filter(tags))));
+    out.push_str(&panel(tags, &Scope::default().filter(tags)));
     let nodes: BTreeSet<&TagKey> = tags
         .index()
         .keys()

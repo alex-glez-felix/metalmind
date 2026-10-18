@@ -234,6 +234,22 @@ impl TagGraph {
         seen
     }
 
+    /// `key` y todos sus ancestros por `parents`, sin dar vueltas en un ciclo.
+    #[must_use]
+    pub fn ancestors<'k>(&'k self, key: &'k TagKey) -> Vec<&'k TagKey> {
+        let mut seen = vec![key];
+        let mut pending = VecDeque::from([key]);
+        while let Some(next) = pending.pop_front() {
+            for parent in self.parents(next) {
+                if !seen.contains(&parent) {
+                    seen.push(parent);
+                    pending.push_back(parent);
+                }
+            }
+        }
+        seen
+    }
+
     /// Todas las claves con las que se escribe `key` o un descendiente: ellos
     /// y sus alias. Es lo que trae `#key` en una consulta.
     #[must_use]

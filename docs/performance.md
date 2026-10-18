@@ -46,6 +46,12 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Autocompletado de `[[`: el destino de una página de 50 notas | ≤ 8 ms | 0.10 ms | ✅ | `nota-vault` `nombrar_50_notas_para_completar` |
 | Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 7.6 µs / 13.4 ms | ⚠️ | `nota-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
 | Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 37 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
+| Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 25 / 233 ms | ✅ | `nota-vault` `abrir_con_tags` |
+| Consulta de tags `#t1 -#t3`, un tag cuyos descendientes cubren el 99 % de las notas, 5 k / 50 k | ≤ 16 ms | 0.67 / 12 ms | ⚠️ | `nota-vault` `consulta_por_tag_con_descendientes` |
+| Panel de tags entero (conteos y orden), 5 k / 50 k | ≤ 16 / 160 ms | 1.06 / 23 ms | ✅ | `nota-vault` `panel_de_tags` |
+| Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.3 / 29 ms | ✅ | `nota-vault` `panel_en_focus` |
+| Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.87 / 19 ms | ✅ | `nota-vault` `candidatos_de_autocompletado` |
+| Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.1 ms | ✅ | `nota-vault` `plan_de_renombrar_un_tag_con_pagina` |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
@@ -59,6 +65,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Buffer: una edición por línea en un lote, 5 k / 50 k | ≤ 16 / 160 ms | 4.4 / 60 ms | ✅ | `nota-buffer` `una_edicion_por_linea` |
 | Buffer: undo de ese lote, 5 k / 50 k | ≤ 16 / 160 ms | 2.5 / 34 ms | ✅ | `nota-buffer` |
 | Ordenar un lote del watcher con muchos renames | lineal | lineal: 1.4 / 7.8 / 35 ms con 1 k / 5 k / 20 k | ✅ | test `ordenar_muchos_renames_es_lineal` |
+
+Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault ahora escanea los tags de cada nota: en la misma corrida, `main` sin tags abría 5 k y 50 k notas en 11.6 y 85 ms. El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 12 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
 
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
 
@@ -116,7 +124,7 @@ cargo bench -p nota-perf --bench instrucciones -- --baseline=antes
 
 ### 3. Pruebas de complejidad (`cargo nextest`, en cada PR)
 
-Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner, la búsqueda, `:s`, el índice del vault, el índice de links, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `nota-vault`) que corre la operación con tamaño N y **16N**:
+Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner, la búsqueda, `:s`, el índice del vault, el de links y el de tags, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `nota-vault`) que corre la operación con tamaño N y **16N**:
 
 - El paso es ×16 y no ×4 porque con ×4 un `N^1.5` da ×8, justo entre lineal (×4) y cuadrático (×16), y ningún umbral lo separa de lo lineal con margen. No es teórico: las rachas de backticks sin pareja de largos 1…k miden k² bytes y el código anterior al arreglo costaba k³, o sea `N^1.5` en bytes, y con ×4 pasaba.
 - `nota_perf::assert_linear` falla si 16N tarda más de **×40** lo que N. Lineal da ×16; lo peor que se vio en verde, con la suite completa en paralelo, fue ×22 (ordenar el borrado de una carpeta grande del vault, un `N log N` con la caché en contra). `N^1.5` da ×64 y cuadrático ×256: ×40 deja casi el doble de margen hacia los dos lados.

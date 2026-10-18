@@ -8,12 +8,14 @@
 mod growth;
 mod links;
 mod session;
+mod tags;
 mod text;
 mod vault;
 
 pub use growth::{FACTOR, MAX_FLAT_GROWTH, MAX_LINEAR_GROWTH, assert_flat, assert_linear, growth};
 pub use links::{NoteNames, linked_vault};
 pub use session::Session;
+pub use tags::{tagged_vault, write_files};
 pub use text::{
     MISSING_WORD, WORD, backtick_runs, hash_runs, huge_line, note, unclosed_link_titles,
     unclosed_wikilinks, vault_paths,
