@@ -528,3 +528,23 @@ fn dos_logs_danados_de_la_misma_nota_se_apartan_los_dos() {
     aside.sort();
     assert_eq!(aside, ["primer daño", "segundo daño"]);
 }
+
+#[test]
+fn una_borrada_vencida_se_olvida_aunque_su_log_ya_no_este() {
+    let dir = TempDir::new().unwrap();
+    let history = history(&dir);
+    let note = path("a.md");
+    history.record(&note, "uno", epoch()).unwrap();
+    history.mark_deleted(&note, epoch() + HOUR).unwrap();
+    // Como si se hubiera apartado por dañado y no se llegara a crear otro.
+    let log = logs(&dir).remove(0);
+    fs::rename(&log, log.with_extension("log.damaged")).unwrap();
+    assert_eq!(
+        history.prune(epoch() + 92 * DAY).unwrap(),
+        Pruned {
+            versions: 0,
+            notes: 1
+        }
+    );
+    assert_eq!(history.deleted_notes().unwrap(), Vec::<DeletedNote>::new());
+}

@@ -31,10 +31,14 @@ impl History {
         let expired =
             |deleted: Option<i64>| deleted.is_some_and(|at| now.saturating_sub(at) > deleted_for);
         let mut pruned = Pruned::default();
-        if self.store.log_ids()?.is_empty() {
+        let index = self.store.read_index()?;
+        // Sin historia en el índice ni logs sueltos no hay nada que podar.
+        // Un índice con entradas se poda aunque no queden logs: el de una
+        // nota pudo apartarse por dañado.
+        if index.notes.is_empty() && index.set_aside.is_empty() && self.store.log_ids()?.is_empty()
+        {
             return Ok(pruned);
         }
-        let index = self.store.read_index()?;
         let entries = index
             .notes
             .values()
