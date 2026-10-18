@@ -2,7 +2,7 @@
 
 El vault en disco, sin GUI.
 
-- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag. `Vault::load(raíz)` indexa sin vigilar, para la CLI.
+- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag. `VaultRoot::new(raíz)` solo comprueba la raíz, y `VaultRoot::files()` lista sus archivos sin leer notas ni vigilar, para la CLI.
 - `Vault::snapshot()`: el `VaultIndex` de este momento, sin bloquear (`ArcSwap`). `children(carpeta)` recorre el árbol ya ordenado (carpetas primero, nombre sin mayúsculas); `files()` da notas y adjuntos para el finder. `VaultIndex::from_entries` arma uno a mano, para tests y benchmarks.
 - `VaultChange`: `Created`, `Removed`, `Renamed` (cubre el contenido de una carpeta) y `Modified`. Un guardado atómico es `Modified`, no borrar y crear.
 - `VaultPath`: ruta relativa con `/`, nunca sale de la raíz ni apunta a algo oculto.
