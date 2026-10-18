@@ -66,6 +66,18 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   deshace la reproducción entera.
 - Marks `a`–`z` con `m`, `'` y `` ` ``, también como motions de operador, y
   `''` para volver del último salto. Siguen al texto cuando se edita arriba.
+  Una mark sin poner avisa `E20: Mark not set`.
+- Marks de archivo `A`–`Z`: `mA` guarda la nota y la posición, y `'A` o
+  `` `A `` vuelven a ella desde cualquier nota, en el panel activo. Siguen a
+  la nota si se renombra o se mueve, desde el árbol o desde fuera; si se
+  borra, dan `E20`.
+- Jumplist como la de vim, de cada panel y entre notas: `ctrl-o` vuelve y
+  `ctrl-i` (o Tab en Normal) avanza, con count. Agregan un salto `gg`, `G`,
+  `%`, `H`, `M`, `L`, `/`, `?`, `n`, `N`, `*`, `#`, las marks, `:g` y abrir
+  otra nota (`gd`, el finder, el árbol, `:e`). Hasta 100 entradas, sin
+  repetir línea; se saltan las de notas que ya no existen.
+- `%` va al paréntesis, corchete o llave que hace pareja, como en vim (ignora
+  lo que está entre comillas y lo escapado); `50%` va a la mitad de la nota.
 
 #### Comandos de `:`
 
@@ -121,6 +133,17 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - Como vim sin `hidden`, `:e` y `:q` se niegan si se perderían cambios, salvo
   que otro panel siga mostrando ese archivo; cerrar la ventana revisa todos
   los archivos abiertos.
+
+#### Links (M3)
+
+- `gd` o `enter` sobre un link abre su nota en el panel activo y pone el
+  cursor en el heading o el bloque que nombre (`[[Vin#Entrenamiento]]`,
+  `[[nota#^id]]`). También sobre un embed `![[…]]` y un link markdown
+  `[x](nota.md)`, y como `editor::follow_link` desde la paleta. Si el nombre
+  empata entre varias notas, se elige en el picker; si no lleva a ninguna,
+  un aviso en la barra.
+- La nota con cambios sin guardar queda abierta en segundo plano, como vim
+  con `hidden`.
 
 #### Vault y panel lateral (M2)
 
