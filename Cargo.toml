@@ -49,6 +49,8 @@ rstest = "0.27.0"
 rstest_reuse = "0.7.0"
 pretty_assertions = "1.4.1"
 tempfile = "3.27.0"
+# El harness de `crates/nota/tests` teclea con XTest; GPUI ya trae esta versión.
+x11rb = { version = "0.13.2", features = ["xtest"] }
 
 # Dependencias optimizadas en debug: GPUI sin optimizar no da los fps del spike.
 # Solo pesa en el build limpio; los crates propios siguen en opt-level 0.
