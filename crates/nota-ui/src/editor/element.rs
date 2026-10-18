@@ -6,12 +6,13 @@ use gpui_kit::{
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine, SharedString,
     Style, TextAlign, TextRun, UnderlineStyle, Window, fill, point, px, relative, size,
 };
-use nota_buffer::{Buffer, Selection};
 use nota_vim::Mode;
 
 use super::Editor;
 use super::gutter::{Gutter, PaintedGutter};
+use super::highlight::{self, Cells};
 use super::layout::{FrameLayout, LaidLine, Viewport};
+use super::spans::selection_spans;
 use crate::theme::Theme;
 use crate::workspace::PaneView;
 
@@ -122,13 +123,18 @@ impl gpui_kit::Element for EditorElement {
         let mut scroll = editor.scroll;
         let rows = Viewport::new(content, line_height, scroll).full_rows();
         scroll.settle(view.buffer().last_line(), moved, rows);
-        let gutter = Gutter::new(&view, rows, em_width(&typeface, window));
+        let cell = em_width(&typeface, window);
+        let gutter = Gutter::new(&view, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
         let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
         let layout = FrameLayout { viewport, lines };
         let painted_gutter = (gutter.columns > 0)
             .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
-        let selection = selection_quads(view.buffer(), view.selection, &layout, &self.theme);
+        let cells = Cells {
+            width: cell,
+            edge: bounds.right(),
+        };
+        let selection = selection_quads(&view, &layout, cells, &self.theme);
         let cursor = cursor_quad(&view, &layout, &typeface, &self.theme, window);
         let preedit = editor
             .marked
@@ -265,36 +271,14 @@ pub fn shape(
 }
 
 fn selection_quads(
-    buffer: &Buffer,
-    selection: Selection,
+    view: &PaneView<'_>,
     layout: &FrameLayout,
+    cells: Cells,
     theme: &Theme,
 ) -> Vec<PaintQuad> {
-    if selection.is_cursor() {
-        return Vec::new();
-    }
-    let range = selection.range();
-    let line_height = layout.viewport.line_height;
-    layout
-        .lines
-        .iter()
-        .filter_map(|laid| {
-            let line_start = buffer.line_start(laid.line);
-            let start = range.start.max(line_start);
-            let end = range.end.min(buffer.line_end(laid.line));
-            (start < end).then(|| {
-                let left = laid.shaped.x_for_index(start.get() - line_start.get());
-                let right = laid.shaped.x_for_index(end.get() - line_start.get());
-                fill(
-                    Bounds::new(
-                        point(laid.origin.x + left, laid.origin.y),
-                        size(right - left, line_height),
-                    ),
-                    theme.selection,
-                )
-            })
-        })
-        .collect()
+    let visible = layout.visible_lines();
+    let spans = selection_spans(view.buffer(), view.selection, view.mode, visible);
+    highlight::quads(spans, layout, cells, theme.selection)
 }
 
 /// Bloque en Normal y Visual, barra en Insert; en la línea de comandos el
@@ -311,10 +295,10 @@ fn cursor_quad(
         Mode::CommandLine => return None,
         Mode::Insert => (theme.caret_width, theme.caret),
         Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => {
-            let color = if view.focused {
-                theme.block_cursor
-            } else {
-                theme.unfocused_cursor
+            let color = match view.mode {
+                _ if !view.focused => theme.unfocused_cursor,
+                Mode::Visual(_) => theme.visual_cursor,
+                _ => theme.block_cursor,
             };
             (block_width(view, layout, typeface, window)?, color)
         }
