@@ -3790,6 +3790,7 @@ dependencies = [
  "jiff",
  "log",
  "metalmind-config",
+ "metalmind-perf",
  "metalmind-search",
  "metalmind-syntax",
  "metalmind-ui",
