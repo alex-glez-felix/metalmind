@@ -534,3 +534,36 @@ fn find_by_name_waits_for_the_char() {
         "ab|c"
     );
 }
+
+#[test]
+fn esc_cancels_a_pending_find() {
+    use nota_vim::{Action, Key, KeyOutcome, Vim};
+
+    let (mut buffer, mut selections) = support::parse("|abc");
+    let mut vim = Vim::new();
+    vim.feed(Key::Char('f'), &mut buffer, &mut selections)
+        .unwrap();
+    let outcome = vim.feed(Key::Escape, &mut buffer, &mut selections).unwrap();
+    assert_eq!(outcome, KeyOutcome::Executed(Action::NormalMode));
+}
+
+/// nvim no modela un movimiento del cursor por fuera del motor.
+#[rstest]
+#[case("f")]
+#[case("3")]
+#[case("d")]
+#[case("g")]
+fn moving_the_cursor_cancels_what_was_pending(#[case] pending: &str) {
+    use nota_buffer::{ByteOffset, Selection, Selections};
+    use nota_vim::{Mode, Vim};
+
+    let (mut buffer, mut selections) = support::parse("|abc def");
+    let mut vim = Vim::new();
+    support::feed(&mut vim, &mut buffer, &mut selections, pending);
+    selections = Selections::single(Selection::cursor(ByteOffset::new(4)));
+    vim.cursor_moved();
+    support::feed(&mut vim, &mut buffer, &mut selections, "x");
+    assert_eq!(vim.mode(), Mode::Normal);
+    let heads = selections.iter().map(|s| s.head);
+    assert_eq!(support::render(&buffer, heads), "abc |ef");
+}
