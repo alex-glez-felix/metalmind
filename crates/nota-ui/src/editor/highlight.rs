@@ -71,6 +71,12 @@ pub fn selection_quads(
     theme: &Theme,
 ) -> Vec<PaintQuad> {
     let visible = layout.visible_lines();
-    let spans = selection_spans(view.buffer(), view.selection, view.mode, visible);
+    let spans = selection_spans(
+        view.buffer(),
+        view.selection,
+        view.mode,
+        &view.viewport,
+        visible,
+    );
     quads(spans, layout, cells, theme.selection)
 }
