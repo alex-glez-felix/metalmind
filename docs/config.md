@@ -49,7 +49,7 @@ editor:
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
-Hoy la app usa el tema y la fuente; el resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+Hoy la app usa el tema, la fuente, los números de línea, `editor.padding` y `panes`; el resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
 ### En JSON
 
