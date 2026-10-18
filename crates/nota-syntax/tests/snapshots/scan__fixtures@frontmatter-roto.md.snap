@@ -4,9 +4,6 @@ expression: "support::render(&text, &scan(&text))"
 input_file: crates/nota-syntax/tests/fixtures/frontmatter-roto.md
 ---
 frontmatter 0..49 yaml 4..46
-    tags []
-    aliases []
-    cssclasses []
 problem el frontmatter no es YAML válido: illegal placement of ':' indicator
     at 30 (línea 3)
 wikilink 71..80 "[[sigue]]"

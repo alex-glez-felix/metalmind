@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 use std::ops::Range;
 
-use nota_syntax::{Link, LinkSyntax, Problem, Scan, Subpath};
+use nota_syntax::{Link, LinkSyntax, Problem, Scan, Subpath, Value};
 
 /// El texto de cada link y tag encontrado, en orden de aparición.
 pub fn found(text: &str, scan: &Scan) -> Vec<String> {
@@ -15,6 +15,26 @@ pub fn found(text: &str, scan: &Scan) -> Vec<String> {
         .into_iter()
         .map(|span| text[span.clone()].to_owned())
         .collect()
+}
+
+/// El texto de cada valor del frontmatter.
+pub fn texts(values: &[Value]) -> Vec<&str> {
+    values.iter().map(|value| value.text.as_str()).collect()
+}
+
+/// Un valor con lo que ocupa en la nota, lo que reescribe y lo que se borra
+/// para sacarlo de su lista.
+fn value_line(text: &str, value: &Value) -> String {
+    let literal = value.literal.as_ref().map_or_else(
+        || "no literal".to_owned(),
+        |range| format!("literal {range:?}"),
+    );
+    format!(
+        "{:?} en {} {literal} quita {:?}",
+        value.text,
+        part(text, &value.span),
+        &text[value.removal.clone()]
+    )
 }
 
 fn part(text: &str, range: &Range<usize>) -> String {
@@ -55,14 +75,28 @@ pub fn render(text: &str, scan: &Scan) -> String {
     if let Some(frontmatter) = &scan.frontmatter {
         writeln!(
             out,
-            "frontmatter {:?} yaml {:?}\n    tags {:?}\n    aliases {:?}\n    cssclasses {:?}",
-            frontmatter.span,
-            frontmatter.yaml,
-            frontmatter.tags,
-            frontmatter.aliases,
-            frontmatter.cssclasses,
+            "frontmatter {:?} yaml {:?}",
+            frontmatter.span, frontmatter.yaml
         )
         .unwrap();
+        let lists = [
+            ("tags", &frontmatter.tags),
+            ("aliases", &frontmatter.aliases),
+            ("parents", &frontmatter.parents),
+            ("cssclasses", &frontmatter.cssclasses),
+        ];
+        let singles = [("color", &frontmatter.color), ("icon", &frontmatter.icon)];
+        let fields = lists
+            .into_iter()
+            .flat_map(|(field, values)| values.iter().map(move |value| (field, value)))
+            .chain(
+                singles
+                    .into_iter()
+                    .filter_map(|(field, value)| Some((field, value.as_ref()?))),
+            );
+        for (field, value) in fields {
+            writeln!(out, "    {field} {}", value_line(text, value)).unwrap();
+        }
     }
     for problem in &scan.problems {
         writeln!(out, "problem {problem}").unwrap();
