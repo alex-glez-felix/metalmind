@@ -8,7 +8,7 @@ Los casos de `nota-vim` también corren en `nvim --headless` 0.12.6; sin ese `nv
 
 ## Smoke de la app real
 
-`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100`, así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local.
+`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100`, así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local o lanza el CI a mano sobre la rama: `gh workflow run CI --ref <rama>`.
 
 ### Correrlo en local
 
