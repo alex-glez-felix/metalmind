@@ -21,6 +21,7 @@ mod key;
 mod keymap;
 mod lines;
 mod macros;
+mod mark;
 mod mode;
 mod motion;
 mod object;

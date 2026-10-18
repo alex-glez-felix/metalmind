@@ -65,6 +65,13 @@ pub enum Action {
     /// `@`: reproduce el registro que nombre la tecla siguiente; `@@`, el
     /// último reproducido.
     PlayMacro,
+    /// `m`: pone en el cursor la mark que nombre la tecla siguiente.
+    SetMark,
+    /// `'`, o `` ` `` si `exact`: va a la mark que nombre la tecla
+    /// siguiente. Con un operador pendiente es su motion.
+    GoToMark {
+        exact: bool,
+    },
     Undo,
     Redo,
     /// Estado anterior en orden cronológico, cruzando ramas del historial.
@@ -180,6 +187,9 @@ impl Action {
         Self::RepeatChange,
         Self::RecordMacro,
         Self::PlayMacro,
+        Self::SetMark,
+        Self::GoToMark { exact: false },
+        Self::GoToMark { exact: true },
         Self::Undo,
         Self::Redo,
         Self::Earlier,
@@ -231,6 +241,9 @@ impl Action {
             Self::RepeatChange => "vim::repeat_change",
             Self::RecordMacro => "vim::record_macro",
             Self::PlayMacro => "vim::play_macro",
+            Self::SetMark => "vim::set_mark",
+            Self::GoToMark { exact: false } => "vim::go_to_mark_line",
+            Self::GoToMark { exact: true } => "vim::go_to_mark",
             Self::Undo => "vim::undo",
             Self::Redo => "vim::redo",
             Self::Earlier => "vim::earlier",

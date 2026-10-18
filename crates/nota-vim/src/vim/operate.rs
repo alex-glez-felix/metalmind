@@ -4,10 +4,12 @@
 use nota_buffer::{Buffer, PerSelection, Selections};
 
 use super::Vim;
-use crate::dot::{Change, Dot, Subject};
+use crate::dot::{Change, Dot, MarkJump, Subject};
 use crate::insert;
+use crate::object::Object;
 use crate::operator::{Operand, Outcome};
 use crate::register::{Clipboard, Register, RegisterName, Write};
+use crate::search::Query;
 use crate::travel::Travel;
 use crate::{InsertAt, Operator, PasteSide, VimError, paste};
 
@@ -28,10 +30,45 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), VimError> {
+        let object = self.object_of(&subject, buffer);
+        self.operate_on(operator, subject, object, buffer, selections, clipboard)
+    }
+
+    /// Sobre qué actúa un operador; `None` si no hay `;` o `n` que repetir o
+    /// la mark no existe.
+    pub(super) fn object_of(&self, subject: &Subject, buffer: &Buffer) -> Option<Object> {
+        match *subject {
+            Subject::Object(ref object) => Some(object.clone()),
+            Subject::RepeatFind { reversed } => self
+                .last_find
+                .map(|find| Object::Find(find.repeat(reversed))),
+            Subject::SearchNext { reversed } => self.search.query().map(|query| {
+                Object::Search(Query {
+                    backward: query.backward != reversed,
+                    ..query
+                })
+            }),
+            Subject::Mark(MarkJump { name, exact }) => {
+                let offset = self.marks.get(buffer, name)?;
+                Some(Object::Mark { offset, exact })
+            }
+        }
+    }
+
+    /// `object` es `subject` ya resuelto; `None` si no se pudo.
+    pub(super) fn operate_on(
+        &mut self,
+        operator: Operator,
+        subject: Subject,
+        object: Option<Object>,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), VimError> {
         let count = self.take_count();
         let register = self.selected.take();
         self.reset();
-        let Some(object) = subject.object(self.last_find, self.search.query()) else {
+        let Some(object) = object else {
             self.fail();
             return Ok(());
         };
@@ -64,6 +101,7 @@ impl Vim {
             count,
             register,
         } = operation;
+        let always_numbered = subject.always_numbered();
         // Como en vim, `".dw` no borra nada: no hay dónde guardar lo borrado.
         if register.is_some_and(|name| !name.is_writable()) {
             self.fail();
@@ -85,7 +123,10 @@ impl Vim {
         if let Some(written) = written {
             let write = match operator {
                 Operator::Yank => Write::Yank,
-                Operator::Delete | Operator::Change => Write::Delete { spans_lines },
+                Operator::Delete | Operator::Change => Write::Delete {
+                    spans_lines,
+                    always_numbered,
+                },
             };
             self.registers.write(register, written, write, clipboard);
         }

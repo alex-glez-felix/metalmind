@@ -4,6 +4,7 @@ mod dispatch;
 mod find;
 mod insert;
 mod macros;
+mod marks;
 mod operate;
 mod repeat;
 mod search;
@@ -21,6 +22,7 @@ use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
+use crate::mark::Marks;
 use crate::register::{Clipboard, Detached, RegisterName, Registers};
 use crate::{
     Action, Command, CommandError, Key, Keymap, Mode, Prompt, SearchError, Substitution, VimError,
@@ -85,6 +87,7 @@ pub struct Vim {
     last_find: Option<Find>,
     recording: Option<Recording>,
     playback: Playback,
+    marks: Marks,
     /// La letra de la última macro reproducida, para `@@`.
     last_played: Option<u8>,
     /// La última tecla falló como un `beep_flush` de vim: corta la macro.
@@ -127,6 +130,7 @@ impl Vim {
             last_find: None,
             recording: None,
             playback: Playback::default(),
+            marks: Marks::default(),
             last_played: None,
             failed: false,
         }

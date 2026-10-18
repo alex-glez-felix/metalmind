@@ -1,10 +1,9 @@
 //! Lo que `.` repite: el último cambio, como lo define vim.
 
-use crate::find::Find;
 use crate::insert::Typed;
+use crate::mark::MarkName;
 use crate::object::Object;
 use crate::register::RegisterName;
-use crate::search::Query;
 use crate::{InsertAt, Operator, PasteSide};
 
 /// Sobre qué actuó un operador, tal como se tecleó.
@@ -19,28 +18,33 @@ pub(crate) enum Subject {
     SearchNext {
         reversed: bool,
     },
+    /// `d'a`: al repetirse va a donde esté la mark en ese momento.
+    Mark(MarkJump),
 }
 
 impl Subject {
-    /// `None` si es `;`, `,`, `n` o `N` sin una búsqueda anterior.
-    /// `last_search` es la que repite `n`.
-    pub(crate) fn object(
-        &self,
-        last_find: Option<Find>,
-        last_search: Option<Query>,
-    ) -> Option<Object> {
-        match self {
-            Self::Object(object) => Some(object.clone()),
-            Self::RepeatFind { reversed } => {
-                last_find.map(|find| Object::Find(find.repeat(*reversed)))
-            }
-            Self::SearchNext { reversed } => last_search.map(|query| {
-                Object::Search(Query {
-                    backward: query.backward != *reversed,
-                    ..query
-                })
-            }),
-        }
+    /// Como el `use_reg_one` de vim: lo borrado con `` ` `` o una búsqueda
+    /// va a `"1` aunque no pase de una línea.
+    pub(crate) fn always_numbered(&self) -> bool {
+        matches!(
+            self,
+            Self::Mark(MarkJump { exact: true, .. })
+                | Self::SearchNext { .. }
+                | Self::Object(Object::Search(_) | Object::SearchWord(_))
+        )
+    }
+}
+
+/// `'x` o, si `exact`, `` `x ``.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MarkJump {
+    pub name: MarkName,
+    pub exact: bool,
+}
+
+impl From<MarkJump> for Subject {
+    fn from(jump: MarkJump) -> Self {
+        Self::Mark(jump)
     }
 }
 

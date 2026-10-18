@@ -1,8 +1,9 @@
-use nota_buffer::{Buffer, Selection};
+use nota_buffer::{Buffer, ByteOffset, Selection};
 
 use crate::find::Find;
+use crate::mark;
 use crate::search::{Query, WordSearch};
-use crate::span::{Missed, Region, Target};
+use crate::span::{Missed, Region, Span, SpanKind, Target};
 use crate::{Motion, Operator, TextObject};
 
 /// Sobre qué actúa un operador.
@@ -16,6 +17,11 @@ pub(crate) enum Object {
     SearchWord(WordSearch),
     TextObject(TextObject),
     CurrentLine,
+    /// `'x` o, si `exact`, `` `x ``, con la mark ya resuelta.
+    Mark {
+        offset: ByteOffset,
+        exact: bool,
+    },
 }
 
 impl Object {
@@ -49,6 +55,15 @@ impl Object {
                 .span_from(selection.head),
             Self::TextObject(object) => {
                 object.resolve(buffer, selection.head, count.unwrap_or(1))?
+            }
+            Self::Mark { offset, exact } => {
+                let kind = if exact {
+                    SpanKind::Exclusive
+                } else {
+                    SpanKind::Linewise
+                };
+                let destination = mark::destination(buffer, offset, exact);
+                Span::between(selection.head, destination, kind)
             }
             Self::CurrentLine => {
                 return current_lines(buffer, selection, count.unwrap_or(1)).ok_or(Missed::Stay);

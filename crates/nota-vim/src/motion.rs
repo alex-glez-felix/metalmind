@@ -51,6 +51,11 @@ impl Motion {
         matches!(self, Self::Left | Self::Right)
     }
 
+    /// Como en vim, `gg` y `G` dejan el cursor de antes como la mark de `''`.
+    pub(crate) fn is_jump(self) -> bool {
+        matches!(self, Self::DocumentStart | Self::DocumentEnd)
+    }
+
     /// `count` es el que escribió el usuario: `gg` y `G` distinguen su ausencia.
     /// `None` si la motion falla (p. ej. `j` en la última línea).
     pub(crate) fn resolve(
