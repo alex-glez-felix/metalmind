@@ -1,8 +1,9 @@
 //! Todo lo que se lee al arrancar.
 
 use std::io;
+use std::path::Path;
 
-use crate::diagnostic::{Diagnostic, Loaded};
+use crate::diagnostic::{Diagnostic, Loaded, Location};
 use crate::paths::Paths;
 use crate::settings::Settings;
 use crate::theme::{DEFAULT_THEME, LoadError, Theme, Themes};
@@ -33,28 +34,34 @@ impl Config {
     /// Solo si el tema embebido por defecto no carga, lo que es un bug.
     pub fn load(paths: &Paths) -> Result<Loaded<Self>, Diagnostic> {
         let file = paths.config_file();
+        let text = read(&file);
         let Loaded {
             value: settings,
             mut diagnostics,
-        } = match std::fs::read_to_string(&file) {
-            Ok(text) => Settings::parse(&text),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Loaded {
+        } = match &text {
+            Ok(Some(text)) => Settings::parse(text),
+            Ok(None) | Err(_) => Loaded {
                 value: Settings::default(),
                 diagnostics: Vec::new(),
             },
-            Err(error) => Loaded {
-                value: Settings::default(),
-                diagnostics: vec![Diagnostic::error(format!("no se pudo leer: {error}"))],
-            },
         };
+        if let Err(error) = &text {
+            diagnostics.push(error.clone());
+        }
         for diagnostic in &mut diagnostics {
             diagnostic.file = Some(file.clone());
         }
-        let theme = match Themes::new(paths.themes_dir()).load(&settings.theme) {
+        let theme = match Themes::new(paths.themes_dir()).load(settings.theme()) {
             Ok(loaded) => loaded,
             Err(LoadError { error, warnings }) => {
                 diagnostics.extend(warnings);
-                diagnostics.push(error);
+                diagnostics.push(match (&error.file, &text) {
+                    // El tema elegido no se encontró: el error está en `config.toml`.
+                    (None, Ok(Some(text))) => error
+                        .at(Some(Location::of(text, settings.theme_offset())))
+                        .in_file(&file),
+                    _ => error,
+                });
                 builtin_theme()?
             }
         };
@@ -66,6 +73,15 @@ impl Config {
             },
             diagnostics,
         })
+    }
+}
+
+/// El texto de `file`, `None` si no existe.
+fn read(file: &Path) -> Result<Option<String>, Diagnostic> {
+    match std::fs::read_to_string(file) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(Diagnostic::error(format!("no se pudo leer: {error}"))),
     }
 }
 

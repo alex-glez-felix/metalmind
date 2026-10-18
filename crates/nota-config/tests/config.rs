@@ -5,7 +5,7 @@
 
 use std::fs;
 
-use nota_config::{Config, DEFAULT_THEME, FontSize, Paths, Settings, Severity};
+use nota_config::{Config, DEFAULT_THEME, FontSize, Location, Paths, Settings, Severity};
 use pretty_assertions::assert_eq;
 
 fn paths() -> (tempfile::TempDir, Paths) {
@@ -72,8 +72,12 @@ fn un_tema_que_no_carga_cae_al_de_por_defecto() {
     let loaded = Config::load(&paths).unwrap();
     assert_eq!(loaded.value.settings.editor.scrolloff, 4);
     assert_eq!(loaded.value.theme.name, DEFAULT_THEME);
-    assert_eq!(loaded.diagnostics.len(), 1);
-    assert_eq!(loaded.diagnostics[0].message, "no existe el tema `nada`");
+    let [error] = loaded.diagnostics.as_slice() else {
+        panic!("{:?}", loaded.diagnostics)
+    };
+    assert_eq!(error.message, "no existe el tema `nada`");
+    assert_eq!(error.file, Some(paths.config_file()));
+    assert_eq!(error.location, Some(Location { line: 1, column: 9 }));
 }
 
 #[test]
