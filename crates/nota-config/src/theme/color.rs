@@ -4,6 +4,7 @@
 use std::fmt;
 
 use serde::Deserialize;
+use serde::de::value::MapAccessDeserializer;
 use serde::de::{self, MapAccess, Visitor};
 
 /// Un color sRGB con opacidad aparte, para que `alpha = 0.5` sea exactamente
@@ -96,18 +97,23 @@ impl<'de> Visitor<'de> for ColorRefVisitor {
         ColorRef::parse(text, 1.).map_err(E::custom)
     }
 
-    fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<ColorRef, M::Error> {
-        let (mut color, mut alpha) = (None::<String>, None::<f32>);
-        while let Some(key) = map.next_key::<String>()? {
-            match key.as_str() {
-                "color" => color = Some(map.next_value()?),
-                "alpha" => alpha = Some(map.next_value()?),
-                other => return Err(de::Error::unknown_field(other, &["color", "alpha"])),
-            }
-        }
-        let color = color.ok_or_else(|| de::Error::missing_field("color"))?;
-        ColorRef::parse(&color, alpha.unwrap_or(1.)).map_err(de::Error::custom)
+    fn visit_map<M: MapAccess<'de>>(self, map: M) -> Result<ColorRef, M::Error> {
+        let table = ColorTable::deserialize(MapAccessDeserializer::new(map))?;
+        ColorRef::parse(&table.color, table.alpha).map_err(de::Error::custom)
     }
+}
+
+/// La forma de tabla; derivada para que una clave de más sea un aviso de
+/// `serde_ignored` como en el resto del archivo.
+#[derive(Deserialize)]
+struct ColorTable {
+    color: String,
+    #[serde(default = "opaque")]
+    alpha: f32,
+}
+
+fn opaque() -> f32 {
+    1.
 }
 
 #[cfg(test)]
@@ -163,7 +169,6 @@ mod tests {
                 "alpha debe estar entre 0 y 1",
             ),
             ("{ alpha = 0.5 }", "missing field `color`"),
-            ("{ color = \"azul\", alfa = 0.5 }", "unknown field `alfa`"),
             ("3", "un color `#rrggbb`"),
         ] {
             let error = color_ref(text).unwrap_err();

@@ -218,6 +218,40 @@ fn clave_desconocida_en_un_tema_avisa_y_lo_aplica() {
 }
 
 #[test]
+fn clave_de_mas_en_un_color_con_alpha_avisa_y_lo_aplica() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "a",
+        "extends = \"nota-oscuro\"\n[ui]\nselection = { color = \"#010203\", alhpa = 0.5 }\n",
+    );
+    let loaded = Themes::new(dir.path().to_owned()).load("a").unwrap();
+    assert_eq!(
+        loaded.value.ui.selection,
+        Color {
+            rgb: 0x01_02_03,
+            alpha: 1.
+        }
+    );
+    let [warning] = loaded.diagnostics.as_slice() else {
+        panic!("{:?}", loaded.diagnostics)
+    };
+    assert_eq!(warning.severity, Severity::Warning);
+    assert!(
+        warning.message.contains("ui.selection.alhpa"),
+        "{}",
+        warning.message
+    );
+    assert_eq!(
+        warning.location,
+        Some(Location {
+            line: 3,
+            column: 34
+        })
+    );
+}
+
+#[test]
 fn nombres_que_no_son_un_archivo_del_directorio() {
     let dir = tempfile::tempdir().unwrap();
     for name in ["", "../fuera", "a/b", ".oculto"] {
