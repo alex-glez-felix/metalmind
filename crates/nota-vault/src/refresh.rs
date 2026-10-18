@@ -150,7 +150,14 @@ fn diff(
         }
     }
     let mut changes = arrange(before, after, &removed, &created, &touched.renames);
-    modified.extend(edited_while_moving(&changes, after, &touched.written));
+    // Un archivo que llega por rename y pisa otro también trae contenido nuevo.
+    let replaced = touched.renames.iter().map(|(_, to)| to).filter(|to| {
+        before
+            .get(*to)
+            .is_some_and(|kind| *kind != EntryKind::Folder)
+    });
+    let arrived: BTreeSet<VaultPath> = touched.written.iter().chain(replaced).cloned().collect();
+    modified.extend(edited_while_moving(&changes, after, &arrived));
     changes.extend(
         modified
             .into_iter()
@@ -159,8 +166,9 @@ fn diff(
     changes
 }
 
-/// Los archivos que un `Renamed` lleva a su destino y que además se
-/// escribieron en el lote, antes o después de moverse.
+/// Los archivos que un `Renamed` lleva a su destino y cuyo contenido cambió
+/// en el lote (se escribieron o les llegó otro por rename), antes o después
+/// de moverse.
 fn edited_while_moving(
     changes: &[VaultChange],
     after: &HashMap<VaultPath, EntryKind>,
@@ -421,6 +429,38 @@ mod tests {
             paths: [path("a/x.md"), path("a"), path("b")].into(),
             renames: vec![(path("a"), path("b"))],
             written: [path("a/x.md")].into(),
+            ..Touched::default()
+        };
+        assert_eq!(
+            refresh(&mut index, &root, &touched),
+            [
+                VaultChange::Renamed {
+                    from: path("a"),
+                    to: path("b"),
+                    kind: EntryKind::Folder
+                },
+                VaultChange::Modified {
+                    path: path("b/x.md")
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn pisar_con_un_rename_y_mover_la_carpeta_avisa_el_cambio() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::write(root.join("a/x.md"), "vieja").unwrap();
+        let mut index = scan(&root);
+        fs::write(root.join("nueva.md"), "nueva").unwrap();
+        fs::rename(root.join("nueva.md"), root.join("a/x.md")).unwrap();
+        fs::rename(root.join("a"), root.join("b")).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            paths: [path("nueva.md"), path("a/x.md"), path("a"), path("b")].into(),
+            renames: vec![(path("nueva.md"), path("a/x.md")), (path("a"), path("b"))],
+            written: [path("nueva.md")].into(),
             ..Touched::default()
         };
         assert_eq!(

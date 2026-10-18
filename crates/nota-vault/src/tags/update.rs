@@ -235,6 +235,43 @@ mod tests {
         touched
     }
 
+    /// Aplica cada lote en disco y en los tags, y compara con armarlos de cero.
+    fn check(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let folder = VaultPath::fixed(DEFAULT_TAGS_FOLDER);
+        let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
+        let mut index = scan(&root);
+        let mut tags = Tags::build(folder.clone(), &index, read);
+        for batch in batches {
+            let mut touched = Touched::default();
+            for op in batch {
+                touched.merge(apply(&root, op));
+            }
+            let changes = refresh(&mut index, &root, &touched);
+            tags.apply(&changes, &index, &read);
+            let full = Tags::build(folder.clone(), &scan(&root), read);
+            prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
+        }
+        Ok(())
+    }
+
+    /// Un rename pisa una nota ya indexada y después se mueve su carpeta, en
+    /// el mismo lote: la nota se relee. Lo encontró el proptest de abajo.
+    #[test]
+    fn pisar_con_un_rename_y_mover_la_carpeta() {
+        check(&[
+            vec![Op::Write("a/rust.md".into(), "#rust")],
+            vec![Op::CreateDir("a".into())],
+            vec![
+                Op::Write("tags".into(), "#Rust #gpui"),
+                Op::Rename("tags".into(), "a/rust.md".into()),
+                Op::Rename("a".into(), "rust.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
     proptest! {
         /// Índice y grafo incrementales tras cualquier secuencia de crear,
         /// editar, mover y borrar notas y páginas == construidos de cero
@@ -243,22 +280,7 @@ mod tests {
         fn incremental_igual_a_completo(
             batches in prop::collection::vec(prop::collection::vec(op(), 1..5), 1..12),
         ) {
-            let dir = TempDir::new().unwrap();
-            let root = dir.path().canonicalize().unwrap();
-            let folder = VaultPath::fixed(DEFAULT_TAGS_FOLDER);
-            let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
-            let mut index = scan(&root);
-            let mut tags = Tags::build(folder.clone(), &index, read);
-            for batch in &batches {
-                let mut touched = Touched::default();
-                for op in batch {
-                    touched.merge(apply(&root, op));
-                }
-                let changes = refresh(&mut index, &root, &touched);
-                tags.apply(&changes, &index, &read);
-                let full = Tags::build(folder.clone(), &scan(&root), read);
-                prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
-            }
+            check(&batches)?;
         }
     }
 }
