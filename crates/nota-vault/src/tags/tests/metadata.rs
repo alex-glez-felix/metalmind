@@ -250,6 +250,10 @@ fn invalid_requests() {
         PlanError::InvalidValue("../fuera".into())
     );
     assert_eq!(
+        error("rust", PageChange::Template(Some(" trabajo".into()))),
+        PlanError::InvalidValue(" trabajo".into())
+    );
+    assert_eq!(
         error("rust", PageChange::Parents(names(&["ui", "rs"]))),
         PlanError::OwnParent("rs".into())
     );
