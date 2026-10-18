@@ -255,3 +255,27 @@ fn only_con_un_solo_panel_no_hace_nada() {
     assert_eq!(session.workspace.tree().len(), 1);
     assert_eq!(error(&session), None);
 }
+
+#[cfg(unix)]
+#[test]
+fn e_no_abre_otro_buffer_del_archivo_al_que_ya_escribe_un_enlace() {
+    let dir = TempDir::new().unwrap();
+    let (a, b, link) = (
+        dir.path().join("a.md"),
+        dir.path().join("b.md"),
+        dir.path().join("enlace.md"),
+    );
+    fs::write(&a, "a\n").unwrap();
+    fs::write(&b, "b\n").unwrap();
+    std::os::unix::fs::symlink(&a, &link).unwrap();
+    let mut session = Session::open(&link);
+    session.keys("x⌃wv");
+    fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(&b, &link).unwrap();
+    edit(&mut session, "e", &b);
+    assert_eq!(
+        error(&session),
+        Some("E37: hay cambios sin guardar (usa :e! para descartarlos)")
+    );
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+}
