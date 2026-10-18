@@ -10,6 +10,7 @@ mod buffer;
 mod edit;
 mod error;
 mod history;
+mod marked;
 mod offset;
 mod selection;
 mod splice;

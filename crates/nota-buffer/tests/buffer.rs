@@ -305,6 +305,23 @@ fn transactions_in_a_group_are_one_undo_step() {
 }
 
 #[test]
+fn a_nested_group_is_part_of_the_outer_one() {
+    let mut buffer = Buffer::from("abcd");
+    buffer.begin_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.begin_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.end_undo_group();
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(1))]);
+    buffer.end_undo_group();
+    edit(&mut buffer, vec![Edit::insert(at(0), "x")]);
+    assert_eq!((buffer.to_string().as_str(), seq(&buffer)), ("xd", 2));
+    buffer.undo().unwrap();
+    buffer.undo().unwrap();
+    assert_eq!(buffer.to_string(), "abcd");
+}
+
+#[test]
 fn moving_through_history_cuts_the_group() {
     let mut buffer = Buffer::from("abc");
     buffer.begin_undo_group();
@@ -609,4 +626,17 @@ proptest! {
             }
         }
     }
+}
+
+#[test]
+fn marked_lines_follow_edits_and_undo() {
+    let mut buffer = Buffer::from("a\nb\nc\nd");
+    buffer.mark_lines([1, 2, 3]);
+    edit(&mut buffer, vec![Edit::delete(at(0)..at(2))]);
+    assert_eq!(buffer.pop_marked_line(), Some(0));
+    edit(&mut buffer, vec![Edit::delete(at(2)..at(4))]);
+    buffer.undo().unwrap();
+    assert_eq!(buffer.pop_marked_line(), Some(2));
+    buffer.clear_marked_lines();
+    assert_eq!(buffer.pop_marked_line(), None);
 }
