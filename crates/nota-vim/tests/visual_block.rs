@@ -269,6 +269,12 @@ use rstest_reuse::{self, apply, template};
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>j$djj.", "a\ne\n|\n")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jld3.", "|a\ne\nijkl\nmnop")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jldu.", "a|d\neh\nijkl\nmnop")]
+// p de varias líneas por caracteres o por líneas: el lado lo decide dónde
+// quedó el cursor al borrar el bloque
+#[case("|X\nYz\nabc\nabc", "vjyjjll<C-v>jp", "X\nYz\nab|X\nY\nab")]
+#[case("|X\nYz\nabc\nabc", "vjyjjl<C-v>jp", "X\nYz\na|X\nYc\nac")]
+#[case("|X\nYz\nabc\nabc", "Vyjjll<C-v>jP", "X\nYz\nab\n|X\nab")]
+#[case("|X\nYz\nabc\nabc", "Vyjjl<C-v>jP", "X\nYz\n|X\nac\nac")]
 // > y <
 #[case("ab|cd\nefgh", "<C-v>j>", "ab|\t  cd\nef\t  gh")]
 #[case("ab|cd\nefgh", "<C-v>j2>", "ab|\t\t  cd\nef\t\t  gh")]
@@ -422,6 +428,18 @@ fn nvim_selection(#[case] before: &str, #[case] keys: &str, #[case] after: &str)
 #[case("|abc\nabc\n|abc\nabc", "<C-v>jAX<Esc>", "|aXbc\naXbc\n|aXbc\naXbc")]
 #[case("|abc\nabc\n|abc\nabc", "<C-v>jcX<Esc>", "|Xbc\nXbc\n|Xbc\nXbc")]
 #[case("|abc\nabc\n|abc\nabc", "<C-v>jrx", "|xbc\nxbc\n|xbc\nxbc")]
+// cada bloque pega del lado que le toca: el primero llega al fin de línea
+// y el segundo tiene texto después
+#[case(
+    "|x\n-\nabc\nabc\n|y\n-\nabcd\nabcd",
+    "yljjll<C-v>jp",
+    "x\n-\nab|x\ny\nab\ny\n-\nab|x\nyd\nabd"
+)]
+#[case(
+    "|x\n-\nabc\nabc\n|y\n-\nabcd\nabcd",
+    "Vyjjll<C-v>jP",
+    "x\n-\nab\n|x\ny\nab\ny\n-\n|x\ny\nabd\nabd"
+)]
 // dos bloques en las mismas líneas se solapan en el texto y se funden
 #[case("|abc |abc\nabc abc", "<C-v>jd", "|bc\nbc")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {

@@ -22,17 +22,18 @@ pub(crate) fn paste(
         return Ok(selections.clone());
     }
     buffer.begin_transaction(selections.clone())?;
-    let after = put(buffer, selections, register, side, count)?;
+    let after = put(buffer, selections, register, |_| side, count)?;
     buffer.commit_transaction(after.clone())?;
     Ok(after)
 }
 
-/// Como [`paste`], dentro de una transacción ya abierta.
+/// Como [`paste`], dentro de una transacción ya abierta; `side_of` dice de
+/// qué lado del cursor pega cada selección.
 pub(crate) fn put(
     buffer: &mut Buffer,
     selections: &Selections,
     register: &Register,
-    side: PasteSide,
+    side_of: impl Fn(&Selection) -> PasteSide,
     count: usize,
 ) -> Result<Selections, VimError> {
     let linewise = register.is_linewise();
@@ -40,21 +41,27 @@ pub(crate) fn put(
     if text.is_empty() {
         return Ok(selections.clone());
     }
-    let insertions =
-        selections.map_to(|selection| insertion_point(buffer, selection.head, linewise, side));
-    let piece = match (linewise, side) {
+    let insertions = selections.map_to(|selection| {
+        let side = side_of(selection);
+        (
+            insertion_point(buffer, selection.head, linewise, side),
+            side,
+        )
+    });
+    let piece = |side| match (linewise, side) {
         (true, PasteSide::After) => format!("\n{text}"),
         (true, PasteSide::Before) => format!("{text}\n"),
-        (false, _) => text,
+        (false, _) => text.clone(),
     };
     let map = buffer.apply(
         insertions
             .iter()
-            .map(|&at| Edit::insert(at, piece.clone()))
+            .map(|&(at, side)| Edit::insert(at, piece(side)))
             .collect(),
     )?;
-    Ok(insertions
-        .to_selections(|&at| Selection::cursor(cursor_after(buffer, &map, at, register, side))))
+    Ok(insertions.to_selections(|&(at, side)| {
+        Selection::cursor(cursor_after(buffer, &map, at, register, side))
+    }))
 }
 
 fn repeated(register: &Register, count: usize, linewise: bool) -> String {

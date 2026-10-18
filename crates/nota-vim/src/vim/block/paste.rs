@@ -224,30 +224,33 @@ impl Vim {
 
 /// Lo que no se pega por bloque, como `p` normal desde el cursor; un
 /// registro por líneas con `p` va debajo de la línea del extremo que se
-/// movía (`PUT_LINE_FORWARD` de vim). Con varios bloques, el primero
-/// decide de qué lado.
+/// movía (`PUT_LINE_FORWARD` de vim). Si no, cada bloque pega del lado
+/// que le dejó su borrado, como `nv_put_opt` con el cursor de ese bloque.
 fn put_text(
     put: &Put<'_>,
     landings: &[Landing],
     buffer: &mut Buffer,
 ) -> Result<Option<Selections>, VimError> {
     let below_head = put.content.is_linewise() && put.side == PasteSide::After;
-    let (targets, side): (Vec<_>, _) = if below_head {
-        (
-            landings.iter().map(|landing| landing.head).collect(),
-            PasteSide::After,
-        )
-    } else {
-        let side = landings
-            .first()
-            .map_or(PasteSide::Before, |landing| landing.side);
-        (
-            landings.iter().map(|landing| landing.cursor).collect(),
-            side,
-        )
-    };
-    let Some(at) = Selections::new(targets.into_iter().map(Selection::cursor)) else {
+    let targets: Vec<(ByteOffset, PasteSide)> = landings
+        .iter()
+        .map(|landing| {
+            if below_head {
+                (landing.head, PasteSide::After)
+            } else {
+                (landing.cursor, landing.side)
+            }
+        })
+        .collect();
+    let Some(at) = Selections::new(targets.iter().map(|&(at, _)| Selection::cursor(at))) else {
         return Ok(None);
     };
-    paste::put(buffer, &at, put.content, side, put.times).map(Some)
+    // Dos bloques que quedan en el mismo cursor se funden en una selección.
+    let side_of = |selection: &Selection| {
+        targets
+            .iter()
+            .find(|&&(at, _)| at == selection.head)
+            .map_or(PasteSide::Before, |&(_, side)| side)
+    };
+    paste::put(buffer, &at, put.content, side_of, put.times).map(Some)
 }
