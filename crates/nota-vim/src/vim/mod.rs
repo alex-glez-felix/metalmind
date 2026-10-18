@@ -24,7 +24,7 @@ use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::mark::Marks;
-use crate::register::{Clipboard, Detached, RegisterName, Registers};
+use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, VisualSize};
 use crate::{
     Action, CommandError, Invocation, Key, Keymap, Mode, Prompt, SearchError, Substitution,
@@ -261,6 +261,26 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
+        self.run(action, buffer, selections, clipboard)
+    }
+
+    /// `action` con `"+` o `"*`, como si se tecleara el registro y luego la
+    /// acción, pero antes descarta lo pendiente (un count, `r`, `f`, otro
+    /// registro) para no completarlo. Así copia y pega la UI con su
+    /// portapapeles en Visual (`"+y`, `"+P`).
+    ///
+    /// # Errors
+    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
+    pub fn execute_with_system_register(
+        &mut self,
+        register: SystemRegister,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        self.reset();
+        self.selected = Some(RegisterName::System(register));
         self.run(action, buffer, selections, clipboard)
     }
 
