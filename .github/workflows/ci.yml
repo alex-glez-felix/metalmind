@@ -82,8 +82,10 @@ jobs:
       - run: cargo nextest run --workspace --no-tests=fail
 
   # La app real bajo Xvfb, con lavapipe (Vulkan por software) y XTest
-  # tecleando; ver docs/testing.md.
+  # tecleando; ver docs/testing.md. Solo en main: sin caché tardó 11 min
+  # (10,5 compilando y 6 s de tests), más de los 5 que se le dan a una PR.
   gui-smoke:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
