@@ -65,7 +65,10 @@ jobs:
           fi
           echo "medida=true" >> "$GITHUB_OUTPUT"
           cd ../base
-          CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" \
+          # Con el mismo target, cargo daría por fresco el binario de la base al
+          # medir la PR (mismas rutas relativas); la baseline sí va al de la PR.
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-base" \
+          GUNGRAUN_HOME="$GITHUB_WORKSPACE/target/gungraun" \
             cargo bench -p nota-perf --bench instrucciones -- --save-baseline=base
 
       - name: Comparar contra la base
