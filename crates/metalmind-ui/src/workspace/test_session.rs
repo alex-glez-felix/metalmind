@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use metalmind_buffer::ByteOffset;
-use metalmind_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
+use metalmind_vim::{Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
 use super::{Effect, LineNumbers, Message, Options, PaneId, PaneView, Workspace};
@@ -70,7 +70,9 @@ impl Session {
             Options {
                 scrolloff: 0,
                 tabstop: VIM_TABSTOP,
+                expandtab: false,
                 gutter_marks: false,
+                markdown: Markdown::default(),
             },
         )
     }
@@ -79,7 +81,9 @@ impl Session {
         let options = Options {
             scrolloff,
             tabstop,
+            expandtab: false,
             gutter_marks: true,
+            markdown: Markdown::default(),
         };
         Self::with_options(document, options)
     }

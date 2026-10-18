@@ -45,6 +45,10 @@ history:
   hourly_days: 7
   daily_days: 365
   deleted_days: 30
+
+markdown:
+  continue_lists: false
+  indent_list_children: false
 ";
 
 fn every_setting() -> Settings {
@@ -87,6 +91,10 @@ fn every_setting() -> Settings {
             folder: String::new(),
             format: "YYYY/MM/YYYY-MM-DD".to_owned(),
             template: Some("diario".to_owned()),
+        },
+        markdown: Markdown {
+            continue_lists: false,
+            indent_list_children: false,
         },
     }
 }
@@ -153,7 +161,8 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "format": "YYYY/MM/YYYY-MM-DD",
     "template": "diario"
   },
-  "history": { "keep_all_hours": 12, "hourly_days": 7, "daily_days": 365, "deleted_days": 30 }
+  "history": { "keep_all_hours": 12, "hourly_days": 7, "daily_days": 365, "deleted_days": 30 },
+  "markdown": { "continue_lists": false, "indent_list_children": false }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);
