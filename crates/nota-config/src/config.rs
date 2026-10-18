@@ -14,6 +14,17 @@ pub struct Config {
 }
 
 impl Config {
+    /// Todo por defecto, sin leer nada del disco.
+    ///
+    /// # Errors
+    /// Solo si el tema embebido por defecto no carga, lo que es un bug.
+    pub fn defaults() -> Result<Self, Diagnostic> {
+        Ok(Self {
+            settings: Settings::default(),
+            theme: builtin_theme()?.value,
+        })
+    }
+
     /// Lee `config.toml` y el tema que elige. Sin archivo valen los
     /// defaults; con uno inválido también, y el error vuelve en los
     /// diagnósticos. Un tema que no carga se cambia por [`DEFAULT_THEME`].
@@ -43,7 +54,7 @@ impl Config {
             Ok(loaded) => loaded,
             Err(error) => {
                 diagnostics.push(error);
-                Themes::builtin().load(DEFAULT_THEME)?
+                builtin_theme()?
             }
         };
         diagnostics.extend(theme.diagnostics);
@@ -55,4 +66,8 @@ impl Config {
             diagnostics,
         })
     }
+}
+
+fn builtin_theme() -> Result<Loaded<Theme>, Diagnostic> {
+    Themes::builtin().load(DEFAULT_THEME)
 }

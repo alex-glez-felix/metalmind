@@ -3521,6 +3521,7 @@ dependencies = [
  "env_logger",
  "gpui-kit",
  "log",
+ "nota-config",
  "nota-ui",
 ]
 
@@ -3557,6 +3558,7 @@ dependencies = [
  "gpui-kit",
  "log",
  "nota-buffer",
+ "nota-config",
  "nota-vault",
  "nota-vim",
  "pretty_assertions",

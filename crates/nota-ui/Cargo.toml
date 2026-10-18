@@ -12,6 +12,7 @@ anyhow.workspace = true
 gpui-kit.workspace = true
 log.workspace = true
 nota-buffer.workspace = true
+nota-config.workspace = true
 nota-vault.workspace = true
 nota-vim.workspace = true
 thiserror.workspace = true
