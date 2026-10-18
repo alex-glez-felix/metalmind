@@ -49,6 +49,12 @@ daily:                    # la nota del día
   folder: diario          # relativa al vault; "" es la raíz
   format: YYYY-MM-DD      # códigos de fecha de las plantillas; un / hace subcarpetas
   # template: diario      # una plantilla de templates_folder; sin ella, nace vacía
+
+history:                  # cuántas versiones viejas de cada nota se guardan
+  keep_all_hours: 24      # todas las de las últimas 24 horas
+  hourly_days: 30         # luego, la última de cada hora hasta los 30 días
+  daily_days: ~           # luego, la última de cada día; ~ es para siempre
+  deleted_days: 90        # la historia de una nota borrada
 ```
 
 Los números de línea siguen a vim: con solo `number`, el número de cada línea; con solo `relativenumber`, la distancia al cursor; con los dos (el default), el modo híbrido: el número de la línea del cursor y la distancia en las demás. El margen crece con el número de líneas y resalta la del cursor (`ui.gutter_current`). Cada panel tiene los suyos: `:set nu`, `:set rnu`, `:set nonu`, `:set nornu`, `:set nu!` (o `invnu`) cambian solo el panel enfocado, y un split hereda los del panel que se divide. Por ejemplo, solo números absolutos:
@@ -60,7 +66,9 @@ editor:
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
-Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; `templates_folder` y `daily` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+El historial guarda una versión de la nota cada vez que se guarda, fuera del vault, en la carpeta de datos (`~/.local/share/nota/` en Linux). La última versión de una nota se guarda siempre; las horas y los días se cuentan en UTC.
+
+Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
 Dentro de nota, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado nota desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `nota` sin argumentos elige el vault en este orden: la carpeta de la variable de entorno `NOTA_VAULT` (si está puesta tiene que ser una carpeta; si no, nota avisa y no abre), el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Un argumento gana a todo eso: `NOTA_VAULT=~/Notas nota` y `nota ~/Notas` abren lo mismo, pero `nota ~/otra/` abre `~/otra/` aunque la variable esté puesta. Lo que nota recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/nota/`, por defecto `~/.local/state/nota/`): no es configuración y se puede borrar sin perder nada.
 
