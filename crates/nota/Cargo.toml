@@ -17,3 +17,7 @@ nota-ui.workspace = true
 
 [lints]
 workspace = true
+
+# `publish = false` es por crates.io; el binario sí se distribuye en releases.
+[package.metadata.dist]
+dist = true
