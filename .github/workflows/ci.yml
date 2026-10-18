@@ -30,6 +30,15 @@ jobs:
       - name: Librerías de sistema de GPUI
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev
       - uses: Swatinem/rust-cache@v2
+        with:
+          # rust-cache no mete [profile] en la llave: tras el opt-level = 2 de
+          # las dependencias, main seguía restaurando el caché viejo (full match,
+          # sin guardar) y recompilaba ~500 crates en cada corrida. Subir este
+          # prefijo cada vez que cambie un [profile] del Cargo.toml raíz.
+          prefix-key: v1-rust
+          # Solo main escribe; las PRs restauran el de main. Así los cachés de
+          # PR (~2 GB cada uno) no se comen el tope de 10 GB del repo.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # 03 §6: solo nota-ui y el binario dependen de la GUI.
       - name: El núcleo no depende de GPUI
@@ -58,6 +67,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+        with:
+          # rust-cache no mete [profile] en la llave: tras el opt-level = 2 de
+          # las dependencias, main seguía restaurando el caché viejo (full match,
+          # sin guardar) y recompilaba ~500 crates en cada corrida. Subir este
+          # prefijo cada vez que cambie un [profile] del Cargo.toml raíz.
+          prefix-key: v1-rust
+          # Solo main escribe; las PRs restauran el de main. Así los cachés de
+          # PR (~2 GB cada uno) no se comen el tope de 10 GB del repo.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
