@@ -130,16 +130,17 @@ impl WorkspaceView {
                 window.remove_window();
             }
             Effect::Stay => {
-                self.sync_editors(window, cx);
+                self.sync_editors(cx);
+                self.focus(window, cx);
                 self.touch_focused(cx);
             }
             // Una macro pudo cambiar los paneles antes de abrir el picker.
             Effect::OpenFinder => {
-                self.sync_editors(window, cx);
+                self.sync_editors(cx);
                 self.open_finder(window, cx);
             }
             Effect::OpenCommandPalette => {
-                self.sync_editors(window, cx);
+                self.sync_editors(cx);
                 self.open_palette(window, cx);
             }
             Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
@@ -170,16 +171,18 @@ impl WorkspaceView {
     ) {
         match event {
             SidebarEvent::Opened => {
-                self.sync_editors(window, cx);
+                self.sync_editors(cx);
+                self.focus(window, cx);
                 self.touch_focused(cx);
             }
+            SidebarEvent::PanesChanged => self.sync_editors(cx),
             SidebarEvent::FocusEditor => self.focus(window, cx),
         }
         cx.notify();
     }
 
     /// Un editor por panel del árbol, ni uno más.
-    fn sync_editors(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn sync_editors(&mut self, cx: &mut Context<Self>) {
         let panes = self.workspace.read(cx).tree().panes();
         self.editors.retain(|pane, _| panes.contains(pane));
         for pane in panes {
@@ -188,7 +191,6 @@ impl WorkspaceView {
                 .entry(pane)
                 .or_insert_with(|| cx.new(|cx| Editor::new(workspace.clone(), pane, None, cx)));
         }
-        self.focus(window, cx);
         cx.notify();
     }
 

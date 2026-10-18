@@ -110,7 +110,8 @@ impl WorkspaceView {
             self.workspace
                 .update(cx, |workspace, _| workspace.report(&error));
         }
-        self.sync_editors(window, cx);
+        self.sync_editors(cx);
+        self.focus(window, cx);
         self.touch_focused(cx);
     }
 

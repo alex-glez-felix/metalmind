@@ -127,7 +127,10 @@ Los cambios que importan a quien usa nota. El formato sigue
 - Con el ratón: clic para seleccionar (y abrir o cerrar una carpeta), doble
   clic para abrir y clic derecho para un menú con lo mismo.
 - Renombrar o mover un archivo abierto lleva su buffer al nombre nuevo, con
-  sus cambios sin guardar. Borrar avisa si hay cambios sin guardar.
+  sus cambios sin guardar. Borrar avisa si hay cambios sin guardar, que se
+  pierden: los paneles de lo borrado se cierran.
+- `:w ruta` y `:wq ruta` le dan archivo a un buffer sin nombre, como en vim; en
+  uno con archivo, `:w ruta` escribe una copia. Nunca pisan un archivo.
 - El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
   con las claves `ui.panel_*` y `ui.menu_*` del tema.
 

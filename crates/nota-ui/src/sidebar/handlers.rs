@@ -225,7 +225,14 @@ impl Sidebar {
                 });
                 renamed.map(|()| self.panel.tree.reveal(to))
             }
-            Request::Trash(path) => self.vault.move_to_trash(&path).map(drop),
+            Request::Trash(path) => {
+                let workspace = self.workspace.clone();
+                let trashed = workspace.update(cx, |workspace, cx| {
+                    cx.notify();
+                    workspace.trash_file(&self.vault, &path)
+                });
+                trashed.map(|()| cx.emit(SidebarEvent::PanesChanged))
+            }
         };
         if let Err(error) = result {
             log::error!("{error}");

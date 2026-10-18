@@ -188,16 +188,8 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         self.focus(window, cx);
-        self.panel.tree.select_row(at);
-        if let Some(row) = self.panel.tree.selected_entry() {
-            let path = row.path.clone();
-            match row.kind {
-                EntryKind::Folder => self.panel.tree.toggle(&path),
-                _ if event.click_count() >= 2 => {
-                    self.open(&path, crate::workspace::Placement::Current, cx);
-                }
-                _ => {}
-            }
+        if let Some(file) = self.panel.click(at, event.click_count()) {
+            self.open(&file, crate::workspace::Placement::Current, cx);
         }
         cx.notify();
     }

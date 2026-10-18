@@ -31,12 +31,10 @@ macro_rules! bare_commands {
 }
 
 bare_commands! {
-    Save = editor::"save";
     /// Cierra el panel si no se pierden cambios; el último cierra la ventana.
     Quit = editor::"quit";
     /// Cierra el panel aunque se pierdan cambios.
     ForceQuit = editor::"force_quit";
-    SaveAndQuit = editor::"save_and_quit";
     SplitRight = pane::"split_right";
     SplitDown = pane::"split_down";
     FocusLeft = pane::"focus_left";
@@ -54,6 +52,38 @@ bare_commands! {
     ToggleFolders = panel::"toggle_folders";
     /// Muestra el panel lateral en tags, o lo esconde si ya los muestra.
     ToggleTags = panel::"toggle_tags";
+}
+
+/// Guarda el archivo del panel o, con `path`, lo escribe ahí (`:w ruta`).
+#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
+#[action(namespace = editor, name = "save", no_json)]
+pub struct Save {
+    pub path: Option<String>,
+}
+
+impl CommandAction for Save {
+    fn invocation(&self) -> Invocation {
+        Invocation {
+            command: Command::Save,
+            argument: self.path.clone(),
+        }
+    }
+}
+
+/// Como [`Save`], y después cierra el panel.
+#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
+#[action(namespace = editor, name = "save_and_quit", no_json)]
+pub struct SaveAndQuit {
+    pub path: Option<String>,
+}
+
+impl CommandAction for SaveAndQuit {
+    fn invocation(&self) -> Invocation {
+        Invocation {
+            command: Command::SaveAndQuit,
+            argument: self.path.clone(),
+        }
+    }
 }
 
 /// Abre `path` en el panel, o relee su archivo si no hay ruta.
@@ -120,10 +150,10 @@ pub struct Paste;
 pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
     let argument = invocation.argument;
     match invocation.command {
-        Command::Save => Box::new(Save),
+        Command::Save => Box::new(Save { path: argument }),
         Command::Quit => Box::new(Quit),
         Command::ForceQuit => Box::new(ForceQuit),
-        Command::SaveAndQuit => Box::new(SaveAndQuit),
+        Command::SaveAndQuit => Box::new(SaveAndQuit { path: argument }),
         Command::Edit => Box::new(Edit { path: argument }),
         Command::ForceEdit => Box::new(ForceEdit { path: argument }),
         Command::SplitRight => Box::new(SplitRight),
@@ -174,6 +204,19 @@ mod tests {
         let action = for_invocation(invocation.clone());
         assert_eq!(
             action.as_any().downcast_ref::<Edit>().map(Edit::invocation),
+            Some(invocation)
+        );
+    }
+
+    #[test]
+    fn la_ruta_de_w_viaja_en_la_accion() {
+        let invocation = Invocation {
+            command: Command::Save,
+            argument: Some("nueva.md".to_owned()),
+        };
+        let action = for_invocation(invocation.clone());
+        assert_eq!(
+            action.as_any().downcast_ref::<Save>().map(Save::invocation),
             Some(invocation)
         );
     }

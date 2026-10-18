@@ -45,6 +45,10 @@ impl Session {
         Self::with(Document::new(Path::new("prueba.md"), text), scrolloff)
     }
 
+    pub fn unnamed() -> Self {
+        Self::with(Document::unnamed(), 0)
+    }
+
     pub fn open(path: &Path) -> Self {
         Self::with(Document::open(path).unwrap(), 0)
     }

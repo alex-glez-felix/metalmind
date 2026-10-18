@@ -184,11 +184,14 @@ proptest! {
         if let Some(row) = tree.rows().len().checked_sub(1).map(|last| selected % (last + 1)) {
             tree.select_row(row);
         }
-        let selected_id = tree.selected().and_then(|path| disk.id_of(path));
+        let mut selected_id = tree.selected().and_then(|path| disk.id_of(path));
 
         for batch in &batches {
             let changes: Vec<VaultChange> = batch.iter().flat_map(|op| disk.apply(op)).collect();
             tree.apply(&changes, disk.index());
+            check_selection(&tree, &disk, selected_id)?;
+            // Si cayó en otra fila, desde aquí se sigue a la nueva.
+            selected_id = tree.selected().and_then(|path| disk.id_of(path));
         }
 
         let still_open: BTreeSet<VaultPath> = expanded_ids
@@ -198,16 +201,28 @@ proptest! {
         prop_assert_eq!(tree.expanded().cloned().collect::<BTreeSet<_>>(), still_open.clone());
         let fresh = FileTree::with_expanded(disk.index(), still_open);
         prop_assert_eq!(tree.rows(), fresh.rows());
-
-        let visible = |path: &VaultPath| tree.rows().iter().any(|row| &row.path == path);
-        match selected_id.and_then(|id| disk.path_of(id)).filter(|path| visible(path)) {
-            Some(path) => prop_assert_eq!(tree.selected(), Some(path)),
-            None if tree.rows().is_empty() => prop_assert_eq!(tree.selected(), None),
-            None => prop_assert!(tree.selected().is_some_and(visible)),
-        }
-        prop_assert_eq!(
-            tree.selected_row().map(|row| &tree.rows()[row].path),
-            tree.selected()
-        );
     }
+}
+
+/// Lo seleccionado sigue a su archivo mientras se vea; si no se ve, queda
+/// una fila que sí se ve, y nada solo con el árbol vacío.
+fn check_selection(
+    tree: &FileTree,
+    disk: &Disk,
+    selected_id: Option<u32>,
+) -> Result<(), TestCaseError> {
+    let visible = |path: &VaultPath| tree.rows().iter().any(|row| &row.path == path);
+    match selected_id
+        .and_then(|id| disk.path_of(id))
+        .filter(|path| visible(path))
+    {
+        Some(path) => prop_assert_eq!(tree.selected(), Some(path)),
+        None if tree.rows().is_empty() => prop_assert_eq!(tree.selected(), None),
+        None => prop_assert!(tree.selected().is_some_and(visible)),
+    }
+    prop_assert_eq!(
+        tree.selected_row().map(|row| &tree.rows()[row].path),
+        tree.selected()
+    );
+    Ok(())
 }

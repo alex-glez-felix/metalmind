@@ -175,3 +175,55 @@ fn sabe_si_hay_cambios_sin_guardar_dentro_de_una_ruta() {
             .has_unsaved_within(Path::new("/no/existe"))
     );
 }
+
+#[test]
+fn borrar_cierra_los_paneles_de_lo_borrado() {
+    let (_dir, vault, mut session) = vault();
+    session
+        .workspace
+        .open_file(&file(&vault, "notas/c.md"), Placement::Split(Axis::Row))
+        .unwrap();
+    session.keys("ix");
+    session
+        .workspace
+        .trash_file(&vault, &vault_path("notas"))
+        .unwrap();
+    assert_eq!(session.workspace.tree().len(), 1);
+    assert_eq!(shown(&session), file(&vault, "a.md"));
+    assert_eq!(session.view(session.pane()).mode, nota_vim::Mode::Normal);
+    assert!(
+        session
+            .workspace
+            .documents
+            .find(&file(&vault, "notas/c.md"))
+            .is_none()
+    );
+    assert!(!file(&vault, "notas").exists());
+    assert!(vault.root().join(".trash/notas/c.md").exists());
+}
+
+#[test]
+fn borrar_lo_del_ultimo_panel_lo_deja_sin_nombre() {
+    let (_dir, vault, mut session) = vault();
+    session.keys("x");
+    session
+        .workspace
+        .trash_file(&vault, &vault_path("a.md"))
+        .unwrap();
+    let view = session.view(session.pane());
+    assert_eq!(view.document.path(), None);
+    assert!(!view.document.is_modified());
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    session.keys(":w⏎");
+    assert!(!file(&vault, "a.md").exists(), "no vuelve a crearlo");
+}
+
+#[test]
+fn si_borrar_falla_los_buffers_no_cambian() {
+    let (_dir, vault, mut session) = vault();
+    let error = session
+        .workspace
+        .trash_file(&vault, &vault_path("no-existe.md"));
+    assert!(error.is_err());
+    assert_eq!(shown(&session), file(&vault, "a.md"));
+}
