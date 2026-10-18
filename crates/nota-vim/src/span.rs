@@ -1,8 +1,8 @@
 use std::ops::Range;
 
-use nota_buffer::{Buffer, ByteOffset};
+use nota_buffer::{Buffer, ByteOffset, Selection};
 
-use crate::lines::in_indent;
+use crate::lines::{clamp_normal, in_indent};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SpanKind {
@@ -79,6 +79,29 @@ pub(crate) struct Target {
     pub start: ByteOffset,
     /// Si la regla `:h exclusive-linewise` movió el final.
     pub adjusted: bool,
+}
+
+/// Un objetivo que falló y qué pasa con el cursor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Missed {
+    /// Una motion que falla no lo toca, ni su columna objetivo.
+    Stay,
+    /// Un text object lo deja donde llegó buscando.
+    MoveTo(ByteOffset),
+}
+
+impl Missed {
+    /// Ajustado como en `adjust_cursor_col` de vim: nunca sobre el fin de línea.
+    pub fn at(buffer: &Buffer, offset: ByteOffset) -> Self {
+        Self::MoveTo(clamp_normal(buffer, offset))
+    }
+
+    pub fn selection(self, selection: &Selection) -> Selection {
+        match self {
+            Self::Stay => *selection,
+            Self::MoveTo(head) => Selection::cursor(head),
+        }
+    }
 }
 
 /// El fin de línea no se incluye: equivale al NUL de vim.

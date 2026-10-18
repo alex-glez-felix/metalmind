@@ -363,6 +363,33 @@ use rstest_reuse::{self, apply, template};
 #[case("ab|c", "ciwX<Esc>", "|X")]
 #[case("|", "diw", "|")]
 #[case("a\n|\nb", "diw", "a\n|\nb")]
+// iw aw iW aW con un count que no alcanza: fallan y el cursor queda donde
+// llegó buscando
+#[case("foo |qux", "d2aw", "foo qu|x")]
+#[case("foo |qux bar", "d3aw", "foo qux ba|r")]
+#[case("foo |qux", "d3iw", "foo qu|x")]
+#[case("foo |qux bar", "d4iw", "foo qux ba|r")]
+#[case("foo |q.x", "d2aW", "foo q.|x")]
+#[case("foo |q.x b.r", "d3aW", "foo q.x b.|r")]
+#[case("foo |q.x", "d3iW", "foo q.|x")]
+#[case("foo |qux\nbar", "d2aw", "fo|o")]
+#[case("foo |qux\nbar", "d3aw", "foo qux\nba|r")]
+#[case("foo |qux\nbar", "d5iw", "foo qux\nba|r")]
+#[case("foo |qux\n\nbar", "d3aw", "foo qux\n\nba|r")]
+#[case("foo |qux\n", "d3aw", "foo qux\n|")]
+#[case("f|oo bar", "d9aw", "foo ba|r")]
+#[case("foo |qux  ", "d2aw", "foo qux | ")]
+#[case("foo |qux  ", "d4iw", "foo qux | ")]
+#[case("foo |qux  \nbar", "d4aw", "foo qux  \nba|r")]
+#[case("foo |qux", "c2aw", "foo qu|x")]
+#[case("foo |qux bar", "c3aw", "foo qux ba|r")]
+#[case("foo |qux", "c3iw", "foo qu|x")]
+#[case("foo |qux", "y2aw", "foo qu|x")]
+#[case("foo |qux bar", "y3aw", "foo qux ba|r")]
+#[case("foo |qux", "yiwy2awP", "foo ququ|xx")]
+#[case("foo b|ar baz qux", "2daw.", "foo qu|x")]
+#[case("abc fo|o\nx\nlonger text", "$d2a(jj", "abc foo\nx\nlonger| text")]
+#[case("a|bc\nxy\nlonger", "$dfzjj", "abc\nxy\nlonge|r")]
 // i( a(
 #[case("f(a|b) c", "di(", "f(|) c")]
 #[case("f(a|b) c", "da(", "f| c")]
@@ -625,6 +652,7 @@ fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
 #[case("|ab\n|cd", "x.", "|\n|")]
 #[case("|ab\n|cd", "A!<Esc>.", "ab!|!\ncd!|!")]
 #[case("f|oo b|ar", "ciwX<Esc>.", "|X |X")]
+#[case("foo |qux foo |qux", "d2aw", "foo |qu|x")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);
 }

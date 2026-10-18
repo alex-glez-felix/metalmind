@@ -5,7 +5,7 @@ use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selecti
 use crate::VimError;
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
-use crate::span::{Region, Target};
+use crate::span::{Missed, Region, Target};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operator {
@@ -14,34 +14,38 @@ pub enum Operator {
     Yank,
 }
 
-/// Una selección y lo que el operador abarca desde ella (`None` si la motion
-/// falló ahí).
+/// Una selección y lo que el operador abarca desde ella, o dónde queda el
+/// cursor si el objeto falló ahí.
 #[derive(Clone, Debug)]
 pub(crate) struct Operand {
     pub selection: Selection,
-    pub target: Option<Target>,
+    pub target: Result<Target, Missed>,
 }
 
-pub(crate) struct Outcome {
-    pub selections: Selections,
-    pub register: Option<Register>,
+pub(crate) enum Outcome {
+    /// Falló en todas las selecciones: no es un cambio, pero el cursor puede
+    /// haberse movido.
+    Missed(Selections),
+    Applied {
+        selections: Selections,
+        register: Option<Register>,
+    },
 }
 
 impl Operator {
-    /// `Change` deja la transacción abierta para el modo Insert. `None` si
-    /// falló en todas las selecciones.
+    /// `Change` deja la transacción abierta para el modo Insert.
     pub(crate) fn apply(
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
-    ) -> Result<Option<Outcome>, VimError> {
-        if operands.iter().all(|operand| operand.target.is_none()) {
-            return Ok(None);
-        }
+    ) -> Result<Outcome, VimError> {
         let steps = operands.map(|operand| Step {
             selection: operand.selection,
             plan: Plan::new(buffer, self, operand),
         });
+        if steps.iter().all(|step| step.plan.is_err()) {
+            return Ok(Outcome::Missed(at_starts(buffer, &steps)));
+        }
         let regions = || steps.iter().filter_map(Step::region);
         let has_text = regions().any(|region| !region.is_empty());
         let register = if has_text || self == Self::Yank {
@@ -60,22 +64,22 @@ impl Operator {
                 selections
             }
         };
-        Ok(Some(Outcome {
+        Ok(Outcome::Applied {
             selections,
             register,
-        }))
+        })
     }
 }
 
 /// Una selección y su plan, si el operador aplica ahí.
 struct Step {
     selection: Selection,
-    plan: Option<Plan>,
+    plan: Result<Plan, Missed>,
 }
 
 impl Step {
     fn region(&self) -> Option<&Region> {
-        self.plan.as_ref().map(|plan| &plan.region)
+        self.plan.as_ref().ok().map(|plan| &plan.region)
     }
 }
 
@@ -91,7 +95,7 @@ struct Plan {
 }
 
 impl Plan {
-    fn new(buffer: &Buffer, operator: Operator, operand: &Operand) -> Option<Self> {
+    fn new(buffer: &Buffer, operator: Operator, operand: &Operand) -> Result<Self, Missed> {
         let target = operand.target.clone()?;
         let region = match operator {
             Operator::Delete => whole_lines_if_delimited(buffer, target.region),
@@ -101,7 +105,7 @@ impl Plan {
             Operator::Delete => removal(buffer, &region),
             Operator::Change | Operator::Yank => content(buffer, &region),
         };
-        Some(Self {
+        Ok(Self {
             region,
             removal,
             start: target.start,
@@ -132,28 +136,30 @@ impl Plan {
 /// Vim mueve el cursor al inicio del objetivo aunque no edite nada.
 fn at_starts(buffer: &Buffer, steps: &PerSelection<Step>) -> Selections {
     steps.to_selections(|step| match &step.plan {
-        Some(plan) => Selection::cursor(clamp_normal(buffer, plan.start)),
-        None => step.selection,
+        Ok(plan) => Selection::cursor(clamp_normal(buffer, plan.start)),
+        Err(missed) => missed.selection(&step.selection),
     })
 }
 
 /// Abre la transacción, borra y devuelve los cursores resultantes.
 fn edit(buffer: &mut Buffer, steps: &PerSelection<Step>) -> Result<Selections, VimError> {
-    let before = steps.to_selections(|step| {
-        step.plan
-            .as_ref()
-            .map_or(step.selection, |plan| Selection::cursor(plan.start))
+    let before = steps.to_selections(|step| match &step.plan {
+        Ok(plan) => Selection::cursor(plan.start),
+        Err(_) => step.selection,
     });
     buffer.begin_transaction(before)?;
     let removals = steps
         .iter()
-        .filter_map(|step| step.plan.as_ref())
+        .filter_map(|step| step.plan.as_ref().ok())
         .map(|plan| plan.removal.clone());
     let map = buffer.apply(union(removals))?;
     let buffer = &*buffer;
     Ok(steps.to_selections(|step| match &step.plan {
-        Some(plan) => plan.cursor_after(buffer, &map),
-        None => Selection::cursor(map.map(step.selection.head, Bias::Before)),
+        Ok(plan) => plan.cursor_after(buffer, &map),
+        Err(missed) => {
+            let head = missed.selection(&step.selection).head;
+            Selection::cursor(map.map(head, Bias::Before))
+        }
     }))
 }
 

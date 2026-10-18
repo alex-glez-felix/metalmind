@@ -1,7 +1,7 @@
 use nota_buffer::{Buffer, Selection};
 
 use crate::find::Find;
-use crate::span::{Region, Target};
+use crate::span::{Missed, Region, Target};
 use crate::{Motion, Operator, TextObject};
 
 /// Sobre qué actúa un operador.
@@ -14,27 +14,32 @@ pub(crate) enum Object {
 }
 
 impl Object {
-    /// Lo que abarca `operator` desde `selection`; `None` si falla ahí.
+    /// Lo que abarca `operator` desde `selection`, o dónde queda el cursor si
+    /// falla ahí.
     pub(crate) fn target(
         self,
         buffer: &Buffer,
         selection: &Selection,
         operator: Operator,
         count: Option<usize>,
-    ) -> Option<Target> {
+    ) -> Result<Target, Missed> {
         let span = match self {
             Self::Motion(motion) => motion
-                .resolve(buffer, selection, count, Some(operator))?
+                .resolve(buffer, selection, count, Some(operator))
+                .ok_or(Missed::Stay)?
                 .span_from(selection.head),
             Self::Find(find) => find
-                .resolve(buffer, selection.head, count.unwrap_or(1))?
+                .resolve(buffer, selection.head, count.unwrap_or(1))
+                .ok_or(Missed::Stay)?
                 .span_from(selection.head),
             Self::TextObject(object) => {
                 object.resolve(buffer, selection.head, count.unwrap_or(1))?
             }
-            Self::CurrentLine => return current_lines(buffer, selection, count.unwrap_or(1)),
+            Self::CurrentLine => {
+                return current_lines(buffer, selection, count.unwrap_or(1)).ok_or(Missed::Stay);
+            }
         };
-        Some(span.into_target(buffer))
+        Ok(span.into_target(buffer))
     }
 }
 

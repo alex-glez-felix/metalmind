@@ -10,7 +10,7 @@ use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::motion::Destination;
 use crate::object::Object;
-use crate::operator::Operand;
+use crate::operator::{Operand, Outcome};
 use crate::register::Register;
 use crate::travel::Travel;
 use crate::{
@@ -287,12 +287,19 @@ impl Vim {
             selection: *selection,
             target: object.target(buffer, selection, operator, count),
         });
-        let Some(outcome) = operator.apply(buffer, &operands)? else {
-            return Ok(());
+        let (applied, register) = match operator.apply(buffer, &operands)? {
+            Outcome::Missed(moved) => {
+                *selections = moved;
+                return Ok(());
+            }
+            Outcome::Applied {
+                selections,
+                register,
+            } => (selections, register),
         };
-        *selections = outcome.selections;
-        if outcome.register.is_some() {
-            self.register = outcome.register;
+        *selections = applied;
+        if register.is_some() {
+            self.register = register;
         }
         let dot = Dot::new(Change::Operate(operator, subject), count);
         match operator {
