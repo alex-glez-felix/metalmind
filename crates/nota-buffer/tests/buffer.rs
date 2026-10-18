@@ -5,6 +5,7 @@
 
 use nota_buffer::{
     Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, LineAnchor, Selection, Selections,
+    Splice,
 };
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
@@ -369,6 +370,31 @@ fn anchors_belong_to_their_buffer() {
     ));
 }
 
+#[test]
+fn splices_follow_edits_and_history() {
+    let mut buffer = Buffer::from("uno dos tres");
+    edit(&mut buffer, vec![Edit::replace(at(4)..at(7), "cuatro")]);
+    buffer.undo().unwrap();
+    let splices = buffer.take_splices();
+    assert_eq!(
+        splices,
+        [
+            Splice {
+                start: at(4),
+                removed: 3,
+                inserted: 6
+            },
+            Splice {
+                start: at(4),
+                removed: 6,
+                inserted: 3
+            },
+        ]
+    );
+    assert_eq!(Splice::map_all(&splices, at(9)), at(9));
+    assert!(buffer.take_splices().is_empty());
+}
+
 fn char_boundaries(text: &str) -> Vec<usize> {
     text.char_indices()
         .map(|(i, _)| i)
@@ -521,6 +547,32 @@ proptest! {
         for expected in states.iter().skip(1) {
             buffer.redo().unwrap();
             prop_assert_eq!(&buffer.to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn splices_keep_offsets_on_char_boundaries(
+        text in "[a-zé\n ]{0,40}",
+        moves in prop::collection::vec(arbitrary_move(), 1..20),
+    ) {
+        let mut buffer = Buffer::from(text.as_str());
+        let mut offsets: Vec<ByteOffset> = char_boundaries(&text).into_iter().map(at).collect();
+        for step in &moves {
+            match step {
+                Move::Edit(picks) => {
+                    let edits = arbitrary_edits(&buffer.to_string(), picks);
+                    edit(&mut buffer, edits);
+                }
+                Move::Undo => { buffer.undo().unwrap(); }
+                Move::Redo => { buffer.redo().unwrap(); }
+                Move::Earlier(steps) => { buffer.earlier(*steps).unwrap(); }
+                Move::Later(steps) => { buffer.later(*steps).unwrap(); }
+            }
+            let splices = buffer.take_splices();
+            for offset in &mut offsets {
+                *offset = Splice::map_all(&splices, *offset);
+                prop_assert!(buffer.is_char_boundary(*offset), "{offset} en {:?}", buffer.to_string());
+            }
         }
     }
 }

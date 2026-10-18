@@ -12,6 +12,7 @@ mod error;
 mod history;
 mod offset;
 mod selection;
+mod splice;
 
 pub use anchor::LineAnchor;
 pub use buffer::Buffer;
@@ -20,3 +21,4 @@ pub use error::BufferError;
 pub use history::{HistorySeq, Transaction};
 pub use offset::ByteOffset;
 pub use selection::{Goal, PerSelection, Selection, Selections};
+pub use splice::Splice;
