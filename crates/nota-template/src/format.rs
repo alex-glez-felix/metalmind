@@ -1,5 +1,5 @@
 //! El formato de `{{date:…}}` y de los nombres de la nota del día: los
-//! códigos de moment.js que usan las plantillas de Obsidian, solo los comunes.
+//! códigos más comunes de moment.js.
 //! Una letra que no es código se copia tal cual, como en moment.
 
 use jiff::Zoned;
