@@ -17,11 +17,7 @@ fn write(dir: &Path, name: &str, text: &str) {
 fn los_temas_embebidos_cargan_sin_avisos() {
     for (name, _) in BUILTIN_THEMES {
         let loaded = Themes::builtin().load(name).unwrap();
-        assert!(
-            loaded.diagnostics.is_empty(),
-            "{name}: {:?}",
-            loaded.diagnostics
-        );
+        assert_eq!(loaded.diagnostics, [], "{name}");
         insta::assert_debug_snapshot!(*name, loaded.value);
     }
 }

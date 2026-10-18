@@ -167,7 +167,7 @@ mod tests {
     fn sin_archivo_todo_por_defecto() {
         let loaded = Settings::parse("");
         assert_eq!(loaded.value, Settings::default());
-        assert!(loaded.diagnostics.is_empty());
+        assert_eq!(loaded.diagnostics, []);
         assert_eq!(loaded.value.theme, "nota-oscuro");
         assert_eq!(loaded.value.font.size, FontSize(15.));
         assert_eq!(loaded.value.editor.tabstop.get(), 4);
@@ -193,7 +193,7 @@ ignorecase = true
 smartcase = true
 "#;
         let loaded = Settings::parse(text);
-        assert!(loaded.diagnostics.is_empty(), "{:?}", loaded.diagnostics);
+        assert_eq!(loaded.diagnostics, []);
         assert_eq!(
             loaded.value,
             Settings {
