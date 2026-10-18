@@ -13,8 +13,9 @@ use gpui_kit::{App, Global};
 /// Una línea por frame presentado, con los tiempos en µs:
 /// `frame=3 t=412000 cpu=850 present=4100 input=4300 keys=1`. `t` cuenta
 /// desde el arranque; `cpu` va del `render` de la raíz al último `paint` del
-/// editor, `present` hasta que GPUI entregó el frame, e `input` (si hubo
-/// teclas) desde la primera de las `keys` que el frame muestra hasta esa entrega.
+/// editor, `present` hasta que volvió `Window::present` (el frame va al
+/// renderer, no está aún en pantalla), e `input` (si hubo teclas) desde la
+/// primera de las `keys` que el frame muestra hasta ese momento.
 pub struct FrameClock {
     launched: Instant,
     frames: u64,
@@ -63,8 +64,8 @@ impl FrameClock {
     }
 
     /// Terminó el `paint` de un editor. Lo diferido corre al salir del
-    /// `update` que dibuja y presenta el frame, así que mide la entrega; el
-    /// primero lo dibuja `open_window`, que no lo presenta.
+    /// `update` de GPUI que llama a `draw` y `present`; el primer frame lo
+    /// dibuja `open_window`, que no lo presenta, así que ahí mide el dibujo.
     pub fn painted(cx: &mut App) {
         let Some(clock) = Self::get(cx) else {
             return;
