@@ -8,7 +8,7 @@ mod anchored;
 
 use crate::anchor::{Anchors, LineChange};
 use crate::history::{AppliedEdit, Direction, History, Step};
-use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Transaction};
+use crate::{BufferError, ByteOffset, Edit, EditMap, HistorySeq, Selections, Splice, Transaction};
 
 /// Texto editable. Las líneas se separan solo por `\n`.
 #[derive(Debug, Default)]
@@ -17,6 +17,8 @@ pub struct Buffer {
     history: History,
     anchors: Anchors,
     version: u64,
+    /// Lo reemplazado desde el último [`Buffer::take_splices`].
+    splices: Vec<Splice>,
 }
 
 impl Buffer {
@@ -30,6 +32,14 @@ impl Buffer {
     #[must_use]
     pub fn version(&self) -> u64 {
         self.version
+    }
+
+    /// Los reemplazos hechos desde la última llamada, en orden, incluidos
+    /// los de undo y redo. Quien guarde posiciones fuera del motor (el
+    /// cursor de otro panel) las mueve con [`Splice::map_all`] y lo llama
+    /// tras cada cambio para que la lista no crezca.
+    pub fn take_splices(&mut self) -> Vec<Splice> {
+        std::mem::take(&mut self.splices)
     }
 
     /// Estado del historial en el que está el texto.
@@ -217,6 +227,7 @@ impl Buffer {
             splice(
                 &mut self.rope,
                 &mut self.anchors,
+                &mut self.splices,
                 edit.range.start,
                 removed,
                 &edit.text,
@@ -283,6 +294,7 @@ impl Buffer {
                         splice(
                             &mut self.rope,
                             &mut self.anchors,
+                            &mut self.splices,
                             edit.start,
                             removed,
                             &edit.deleted,
@@ -295,6 +307,7 @@ impl Buffer {
                         splice(
                             &mut self.rope,
                             &mut self.anchors,
+                            &mut self.splices,
                             edit.start,
                             removed,
                             &edit.inserted,
@@ -352,6 +365,7 @@ impl Buffer {
 fn splice(
     rope: &mut Rope,
     anchors: &mut Anchors,
+    log: &mut Vec<Splice>,
     start: ByteOffset,
     removed: usize,
     text: &str,
@@ -369,6 +383,11 @@ fn splice(
     anchors.adjust(&LineChange::new(rope, start.get(), removed, text));
     rope.try_remove(first..last).map_err(out_of_bounds)?;
     rope.try_insert(first, text).map_err(out_of_bounds)?;
+    log.push(Splice {
+        start,
+        removed,
+        inserted: text.len(),
+    });
     Ok(())
 }
 
