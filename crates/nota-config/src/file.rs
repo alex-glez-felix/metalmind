@@ -22,33 +22,28 @@ pub(crate) fn read_yaml(
     warnings: &mut Vec<Diagnostic>,
 ) -> Result<Option<YamlFile>, Diagnostic> {
     let alternative = preferred.with_extension("yml");
-    let found = match read(preferred)? {
-        Some(text) => {
-            if alternative.exists() {
-                warnings.push(ignored(&alternative, preferred));
-            }
-            Some(YamlFile {
-                path: preferred.to_owned(),
-                text,
-            })
+    let chosen = if alternative.exists() && !preferred.exists() {
+        alternative
+    } else {
+        if alternative.exists() {
+            warnings.push(ignored(&alternative, preferred));
         }
-        None => read(&alternative)?.map(|text| YamlFile {
-            path: alternative,
-            text,
-        }),
+        preferred.to_owned()
     };
+    // Los avisos van antes de leer: un archivo ilegible no debe esconderlos.
     let old = preferred.with_extension("toml");
     if old.exists() {
-        warnings.push(match &found {
-            Some(found) => ignored(&old, &found.path),
-            None => Diagnostic::warning(format!(
+        warnings.push(if chosen.exists() {
+            ignored(&old, &chosen)
+        } else {
+            Diagnostic::warning(format!(
                 "el formato cambió a YAML y este archivo ya no se lee; pásalo a `{}`",
                 file_name(preferred)
             ))
-            .in_file(&old),
+            .in_file(&old)
         });
     }
-    Ok(found)
+    Ok(read(&chosen)?.map(|text| YamlFile { path: chosen, text }))
 }
 
 fn ignored(file: &Path, used: &Path) -> Diagnostic {
@@ -154,6 +149,35 @@ mod tests {
         assert_eq!(
             warning.message,
             "se ignora porque también existe `config.yml`"
+        );
+    }
+
+    #[test]
+    fn un_yaml_ilegible_no_esconde_los_avisos_de_los_demas() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join("config.yaml")).unwrap();
+        fs::write(dir.path().join("config.yml"), "a: 1\n").unwrap();
+        fs::write(dir.path().join("config.toml"), "a = 1\n").unwrap();
+        let (found, warnings) = read_in(dir.path());
+        assert_eq!(
+            found.unwrap_err().file,
+            Some(dir.path().join("config.yaml"))
+        );
+        let files: Vec<_> = warnings
+            .iter()
+            .map(|warning| warning.file.clone())
+            .collect();
+        assert_eq!(
+            files,
+            [
+                Some(dir.path().join("config.yml")),
+                Some(dir.path().join("config.toml"))
+            ]
+        );
+        assert!(
+            warnings
+                .iter()
+                .all(|warning| warning.message.contains("`config.yaml`"))
         );
     }
 
