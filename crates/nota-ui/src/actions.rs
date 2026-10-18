@@ -31,6 +31,8 @@ macro_rules! bare_commands {
 }
 
 bare_commands! {
+    Save = editor::"save";
+    SaveAndQuit = editor::"save_and_quit";
     /// Cierra el panel si no se pierden cambios; el último cierra la ventana.
     Quit = editor::"quit";
     /// Cierra el panel aunque se pierdan cambios.
@@ -54,34 +56,35 @@ bare_commands! {
     ToggleTags = panel::"toggle_tags";
 }
 
-/// Guarda el archivo del panel o, con `path`, lo escribe ahí (`:w ruta`).
+/// `:w ruta`: le da ese archivo a un buffer sin nombre o escribe una copia.
+/// Aparte de [`Save`], que no lleva datos y así la paleta la puede armar.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
-#[action(namespace = editor, name = "save", no_json)]
-pub struct Save {
-    pub path: Option<String>,
+#[action(namespace = editor, name = "save_as", no_json)]
+pub struct SaveAs {
+    pub path: String,
 }
 
-impl CommandAction for Save {
+impl CommandAction for SaveAs {
     fn invocation(&self) -> Invocation {
         Invocation {
             command: Command::Save,
-            argument: self.path.clone(),
+            argument: Some(self.path.clone()),
         }
     }
 }
 
-/// Como [`Save`], y después cierra el panel.
+/// `:wq ruta`: como [`SaveAs`], y después cierra el panel.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
-#[action(namespace = editor, name = "save_and_quit", no_json)]
-pub struct SaveAndQuit {
-    pub path: Option<String>,
+#[action(namespace = editor, name = "save_as_and_quit", no_json)]
+pub struct SaveAsAndQuit {
+    pub path: String,
 }
 
-impl CommandAction for SaveAndQuit {
+impl CommandAction for SaveAsAndQuit {
     fn invocation(&self) -> Invocation {
         Invocation {
             command: Command::SaveAndQuit,
-            argument: self.path.clone(),
+            argument: Some(self.path.clone()),
         }
     }
 }
@@ -150,10 +153,16 @@ pub struct Paste;
 pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
     let argument = invocation.argument;
     match invocation.command {
-        Command::Save => Box::new(Save { path: argument }),
+        Command::Save => match argument {
+            Some(path) => Box::new(SaveAs { path }),
+            None => Box::new(Save),
+        },
         Command::Quit => Box::new(Quit),
         Command::ForceQuit => Box::new(ForceQuit),
-        Command::SaveAndQuit => Box::new(SaveAndQuit { path: argument }),
+        Command::SaveAndQuit => match argument {
+            Some(path) => Box::new(SaveAsAndQuit { path }),
+            None => Box::new(SaveAndQuit),
+        },
         Command::Edit => Box::new(Edit { path: argument }),
         Command::ForceEdit => Box::new(ForceEdit { path: argument }),
         Command::SplitRight => Box::new(SplitRight),
@@ -208,16 +217,30 @@ mod tests {
         );
     }
 
+    /// `editor::save` no lleva datos, para que la paleta la arme; la ruta
+    /// de `:w ruta` y `:wq ruta` va en `editor::save_as…`.
     #[test]
-    fn la_ruta_de_w_viaja_en_la_accion() {
-        let invocation = Invocation {
-            command: Command::Save,
-            argument: Some("nueva.md".to_owned()),
-        };
-        let action = for_invocation(invocation.clone());
-        assert_eq!(
-            action.as_any().downcast_ref::<Save>().map(Save::invocation),
-            Some(invocation)
-        );
+    fn la_ruta_de_w_viaja_en_otra_accion() {
+        for (command, name) in [
+            (Command::Save, "editor::save_as"),
+            (Command::SaveAndQuit, "editor::save_as_and_quit"),
+        ] {
+            let invocation = Invocation {
+                command,
+                argument: Some("nueva.md".to_owned()),
+            };
+            let action = for_invocation(invocation.clone());
+            assert_eq!(action.name(), name);
+            let back = action
+                .as_any()
+                .downcast_ref::<SaveAs>()
+                .map(SaveAs::invocation)
+                .or_else(|| {
+                    let quit = action.as_any().downcast_ref::<SaveAsAndQuit>()?;
+                    Some(quit.invocation())
+                });
+            assert_eq!(back, Some(invocation));
+        }
+        assert_eq!(for_invocation(Command::Save.into()).name(), "editor::save");
     }
 }
