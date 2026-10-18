@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nota_vault::{EntryKind, VaultIndex, VaultPath};
+use nota_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -202,4 +202,91 @@ fn un_clic_abre_o_cierra_la_carpeta_y_el_doble_abre_el_archivo() {
     assert_eq!(panel.tree.selected(), Some(&path("a.md")));
     assert_eq!(panel.click(1, 2), Some(path("a.md")));
     assert_eq!(panel.click(1, 3), Some(path("a.md")));
+}
+
+fn renamed(from: &str, to: &str) -> VaultChange {
+    VaultChange::Renamed {
+        from: path(from),
+        to: path(to),
+        kind: EntryKind::Folder,
+    }
+}
+
+fn removed(at: &str) -> VaultChange {
+    VaultChange::Removed {
+        path: path(at),
+        kind: EntryKind::Note,
+    }
+}
+
+/// Si el watcher mueve la entrada de una pregunta abierta, la pregunta la
+/// sigue: confirmar actúa sobre la entrada, no sobre su ruta vieja.
+#[test]
+fn una_pregunta_abierta_sigue_a_su_entrada() {
+    let mut panel = panel();
+    panel.tree.select(&path("diario/hoy.md"));
+    panel.start_rename();
+    panel.follow(&[renamed("diario", "viejo"), removed("otra.md")]);
+    panel.input_mut().unwrap().clear_before();
+    panel.input_mut().unwrap().insert("ayer");
+    assert_eq!(
+        panel.confirm(),
+        Some(Request::Rename {
+            from: path("viejo/hoy.md"),
+            to: path("viejo/ayer.md"),
+        })
+    );
+
+    panel.start_delete(path("diario/hoy.md"), false);
+    panel.follow(&[renamed("diario", "viejo")]);
+    assert_eq!(panel.confirm(), Some(Request::Trash(path("viejo/hoy.md"))));
+
+    panel.tree.select(&path("diario"));
+    panel.start_create(NewEntry::Note);
+    panel.follow(&[renamed("diario", "viejo")]);
+    type_text(&mut panel, "idea");
+    assert_eq!(
+        panel.confirm(),
+        Some(Request::CreateNote(path("viejo/idea.md")))
+    );
+}
+
+/// Si la entrada desaparece, la pregunta se cierra con un aviso: otra que
+/// ocupe su ruta después no es la que se eligió.
+#[test]
+fn una_pregunta_abierta_se_cierra_si_su_entrada_desaparece() {
+    let cases: [fn(&mut Panel); 4] = [
+        |panel| {
+            panel.tree.select(&path("diario/hoy.md"));
+            panel.start_rename();
+        },
+        |panel| {
+            panel.tree.select(&path("diario/hoy.md"));
+            panel.start_move();
+        },
+        |panel| panel.start_delete(path("diario/hoy.md"), false),
+        |panel| {
+            panel.tree.select(&path("diario"));
+            panel.start_create(NewEntry::Folder);
+        },
+    ];
+    for start in cases {
+        let mut panel = panel();
+        start(&mut panel);
+        panel.follow(&[removed("diario")]);
+        assert_eq!(panel.prompt(), None);
+        assert!(
+            panel
+                .error()
+                .is_some_and(|error| error.contains("ya no existe"))
+        );
+        assert_eq!(panel.confirm(), None);
+    }
+    let mut panel = panel();
+    panel.start_filter();
+    panel.follow(&[removed("diario")]);
+    assert!(
+        matches!(panel.prompt(), Some(Prompt::Filter(_))),
+        "el filtro no tiene entrada"
+    );
 }
