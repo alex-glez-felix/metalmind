@@ -86,6 +86,16 @@ impl Keymap {
         )
     }
 
+    /// Las teclas del primer binding que invoca `action`, para mostrarlas
+    /// junto a su nombre en la paleta.
+    #[must_use]
+    pub fn keys_for(&self, action: Action) -> Option<&[Key]> {
+        self.bindings
+            .iter()
+            .find(|binding| binding.action == action)
+            .map(|binding| binding.keys.as_slice())
+    }
+
     pub(crate) fn lookup(&self, mode: Mode, keys: &[Key]) -> Lookup {
         let mut exact = None;
         for binding in self.bindings.iter().rev() {
@@ -364,6 +374,17 @@ const VIM: &[(Context, &[Key], Action)] = {
             &[ch('z'), ch('-')],
             reposition(Place::Bottom, true),
         ),
+        // Leader: lo que abre una vista de la UI (03 §3).
+        (
+            Normal,
+            &[ch(' '), ch('f')],
+            Action::Command(Command::OpenFinder),
+        ),
+        (
+            Normal,
+            &[ch(' '), ch('p')],
+            Action::Command(Command::OpenCommandPalette),
+        ),
     ]
 };
 
@@ -460,6 +481,39 @@ mod tests {
             keymap.lookup(pending(Operator::Yank), &[ch('d')]),
             Lookup::Unbound
         );
+    }
+
+    #[test]
+    fn space_opens_the_finder_and_the_palette_from_normal() {
+        let keymap = Keymap::vim();
+        let finder = Action::Command(Command::OpenFinder);
+        let palette = Action::Command(Command::OpenCommandPalette);
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch(' '), ch('f')]),
+            Lookup::Action(finder)
+        );
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch(' '), ch('p')]),
+            Lookup::Action(palette)
+        );
+        assert_eq!(
+            keymap.lookup(Mode::Visual(VisualKind::Char), &[ch(' ')]),
+            Lookup::Unbound
+        );
+    }
+
+    #[test]
+    fn keys_for_gives_the_first_binding() {
+        let keymap = Keymap::vim();
+        assert_eq!(
+            keymap.keys_for(Action::Command(Command::SplitRight)),
+            Some([CTRL_W, ch('v')].as_slice())
+        );
+        assert_eq!(
+            keymap.keys_for(motion(Motion::DocumentStart)),
+            Some([ch('g'), ch('g')].as_slice())
+        );
+        assert_eq!(keymap.keys_for(Action::Command(Command::Save)), None);
     }
 
     #[test]

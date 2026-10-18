@@ -385,3 +385,26 @@ fn set_con_una_opcion_desconocida_avisa() {
     );
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
 }
+
+#[test]
+fn space_f_y_space_p_piden_el_finder_y_la_paleta() {
+    let mut session = Session::new("uno\n");
+    session.keys(" f");
+    assert_eq!(session.effect, Effect::OpenFinder);
+    session.keys(" p");
+    assert_eq!(session.effect, Effect::OpenCommandPalette);
+    session.keys("ix⎋");
+    assert_eq!(session.text(), "xuno\n", "space no deja nada pendiente");
+}
+
+/// El picker se lleva las teclas: lo que quede de la macro no sigue.
+#[test]
+fn abrir_el_finder_corta_la_macro() {
+    let mut session = Session::new("uno\n");
+    session.keys("qa f");
+    session.keys("⎋q");
+    session.keys("ix⎋");
+    session.keys("@a");
+    assert_eq!(session.effect, Effect::OpenFinder);
+    assert_eq!(session.workspace.vim.recording(), None);
+}

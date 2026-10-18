@@ -1,0 +1,79 @@
+//! La paleta en la ventana: lista las acciones disponibles desde el editor
+//! enfocado y ejecuta la elegida como si fuera su atajo.
+
+use std::sync::Arc;
+
+use gpui_kit::{AppContext as _, Context, Entity, Window};
+use nota_vim::{Action as VimAction, KeyOutcome};
+
+use super::WorkspaceView;
+use super::overlay::Overlay;
+use crate::clipboard::SystemClipboard;
+use crate::palette::{self, Entry, Target};
+use crate::picker::{Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
+
+impl WorkspaceView {
+    /// Se llama con el foco en un editor: sus acciones son las que se listan.
+    pub(super) fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let keymap = self.workspace.read(cx).keymap().clone();
+        let entries: Arc<[Entry]> = palette::entries(window, &keymap, cx).into();
+        let options = PickerOptions {
+            haystack: Haystack::Text,
+            placeholder: "Ejecutar una acción…".into(),
+            empty: "No hay acciones".into(),
+            splits: false,
+        };
+        let picker = cx.new(|cx| PickerView::new(PickerState::new(entries), options, cx));
+        let events = cx.subscribe_in(&picker, window, Self::on_palette_event);
+        self.show(
+            Overlay::Palette {
+                picker,
+                _events: events,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn on_palette_event(
+        &mut self,
+        picker: &Entity<PickerView<Entry>>,
+        event: &PickerEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let target = match event {
+            PickerEvent::Dismissed => None,
+            PickerEvent::Chosen(chosen) => picker
+                .read(cx)
+                .items()
+                .get(chosen.item)
+                .map(|entry| entry.target),
+        };
+        self.close_overlay(window, cx);
+        match target {
+            Some(Target::Window(name)) => match cx.build_action(name, None) {
+                Ok(action) => window.dispatch_action(action, cx),
+                Err(error) => log::error!("la paleta no pudo construir {name}: {error:#}"),
+            },
+            Some(Target::Vim(action)) => self.execute_vim(action, window, cx),
+            None => {}
+        }
+    }
+
+    /// Como si se tecleara el atajo de `action` en el panel enfocado.
+    fn execute_vim(&mut self, action: VimAction, window: &mut Window, cx: &mut Context<Self>) {
+        let outcome = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            let pane = workspace.focused();
+            workspace.execute(pane, action, &mut SystemClipboard(cx))
+        });
+        match outcome {
+            Ok(KeyOutcome::Command(invocation)) => self.run(&invocation, window, cx),
+            Ok(_) => {}
+            Err(error) => self
+                .workspace
+                .update(cx, |workspace, _| workspace.report(&error)),
+        }
+    }
+}

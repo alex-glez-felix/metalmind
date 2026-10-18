@@ -40,6 +40,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Abrir el vault, 50 k notas | ≤ 2 s | 95 ms | ✅ | `nota-vault` `abrir_50k_notas` |
 | Finder, 5 k rutas, peor consulta (`tema nota`) | ≤ 8 ms | 0.63 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.2 ms | ⚠️ | `nota-search` |
+| Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
 | Texto completo en el vault, palabra en 1 de cada 1 000 notas (lee todo), 5 k / 50 k notas | ≤ 100 ms / ≤ 1 s | 6.0 / 33 ms | ✅ | `nota-search` `palabra_rara` |
 | Texto completo, palabra en casi todas las notas, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 11 / 116 ms | ✅ | `nota-search` `palabra_comun` |
 | Texto completo, regex sin literal que la acelere, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 12 / 49 ms | ✅ | `nota-search` `regex_de_fecha` |
@@ -52,6 +53,10 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Ordenar un lote del watcher con muchos renames | lineal | lineal: 1.4 / 7.8 / 35 ms con 1 k / 5 k / 20 k | ✅ | test `ordenar_muchos_renames_es_lineal` |
 
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
+
+## El finder y la paleta
+
+El picker (`nota-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla manda la búsqueda al executor de fondo de GPUI, de a una a la vez y con la consulta versionada. Lo que vuelve de una versión vieja se descarta, y si se teclea mientras corre una, al terminar se busca solo lo último. Así los 8 ms del prompt son un tope de latencia, no de bloqueo: con 50 k rutas la UI sigue respondiendo aunque la búsqueda tarde. Lo único que corre en el hilo de la UI es la búsqueda de un `enter` que llega antes que los resultados (la que se está esperando) y las posiciones de las letras que coinciden, solo para las filas visibles de la lista virtual (`FuzzyMatcher::positions`). Abrir el vault del finder y leer y guardar las notas recientes van en el fondo.
 
 ## Tres capas contra regresiones
 

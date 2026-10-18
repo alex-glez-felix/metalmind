@@ -7,15 +7,14 @@
 )]
 
 use nota_perf::{FACTOR, RARE_WORD, WORD, assert_linear, vault_paths};
-use nota_search::{PathMatcher, TextQuery, TextSearcher};
+use nota_search::{FuzzyMatcher, Query, TextQuery, TextSearcher};
 use tempfile::TempDir;
 
 #[test]
 fn fuzzy_search_is_linear_in_the_paths() {
-    let mut matcher = PathMatcher::new();
-    assert_linear(8_000, vault_paths, |paths| {
-        matcher.search("tema nota", &paths, 50).len()
-    });
+    let mut matcher = FuzzyMatcher::paths();
+    let query = Query::new("tema nota");
+    assert_linear(8_000, vault_paths, |paths| matcher.rank(&query, &paths).len());
 }
 
 fn query(pattern: &str) -> TextQuery {

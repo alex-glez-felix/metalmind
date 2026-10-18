@@ -3942,10 +3942,13 @@ name = "nota-ui"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-channel",
+ "divan",
  "gpui-kit",
  "log",
  "nota-buffer",
  "nota-config",
+ "nota-search",
  "nota-vault",
  "nota-vim",
  "pretty_assertions",
@@ -3953,6 +3956,7 @@ dependencies = [
  "rstest",
  "tempfile",
  "thiserror 2.0.21",
+ "unicode-segmentation",
 ]
 
 [[package]]

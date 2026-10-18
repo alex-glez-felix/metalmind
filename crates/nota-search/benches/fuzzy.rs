@@ -3,9 +3,9 @@
 //! Objetivos en `docs/performance.md`.
 
 use divan::Bencher;
-use nota_search::PathMatcher;
+use nota_search::{FuzzyMatcher, Query};
 
-/// Lo que cabe en la lista del finder.
+/// Las filas que pinta la lista del finder: solo ellas piden posiciones.
 const PAGE: usize = 50;
 
 fn main() {
@@ -24,6 +24,13 @@ fn buscar_en_50k_rutas(bencher: Bencher, query: &str) {
 
 fn search(bencher: Bencher, notes: usize, query: &str) {
     let paths = nota_perf::vault_paths(notes);
-    let mut matcher = PathMatcher::new();
-    bencher.bench_local(|| matcher.search(query, &paths, PAGE));
+    let mut matcher = FuzzyMatcher::paths();
+    bencher.bench_local(|| {
+        let query = Query::new(query);
+        let ranked = matcher.rank(&query, &paths);
+        for found in ranked.iter().take(PAGE) {
+            divan::black_box(matcher.positions(&query, &paths[found.index]));
+        }
+        ranked
+    });
 }

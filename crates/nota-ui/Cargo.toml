@@ -9,19 +9,27 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-channel.workspace = true
 gpui-kit.workspace = true
 log.workspace = true
 nota-buffer.workspace = true
 nota-config.workspace = true
+nota-search.workspace = true
 nota-vault.workspace = true
 nota-vim.workspace = true
 thiserror.workspace = true
+unicode-segmentation.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
+
+[[bench]]
+name = "picker"
+harness = false
 
 [lints]
 workspace = true

@@ -1,4 +1,4 @@
-use nota_search::{PathMatch, PathMatcher};
+use nota_search::{FuzzyMatcher, Query};
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 use rstest::rstest;
@@ -13,8 +13,8 @@ const VAULT: [&str; 6] = [
 ];
 
 fn ranked(query: &str) -> Vec<&'static str> {
-    PathMatcher::new()
-        .search(query, &VAULT, usize::MAX)
+    FuzzyMatcher::paths()
+        .rank(&Query::new(query), &VAULT)
         .into_iter()
         .map(|found| VAULT[found.index])
         .collect()
@@ -22,10 +22,10 @@ fn ranked(query: &str) -> Vec<&'static str> {
 
 /// Lo que coincide marcado entre corchetes, para leer las posiciones.
 fn highlighted(query: &str, candidate: &str) -> String {
-    let found = PathMatcher::new().search(query, &[candidate], 1);
-    let Some(PathMatch { positions, .. }) = found.first() else {
+    let positions = FuzzyMatcher::paths().positions(&Query::new(query), candidate);
+    if positions.is_empty() {
         return "(nada)".to_owned();
-    };
+    }
     let mut out = String::new();
     for (offset, c) in candidate.char_indices() {
         if positions.contains(&offset) {
@@ -56,29 +56,45 @@ fn el_query_vacio_devuelve_todo_en_orden() {
 }
 
 #[test]
-fn limit_corta_la_lista_ordenada() {
-    let matcher = &mut PathMatcher::new();
-    let all = matcher.search("a", &VAULT, usize::MAX);
-    for limit in 0..=all.len() + 1 {
-        let page = matcher.search("a", &VAULT, limit);
-        assert_eq!(page, all[..limit.min(all.len())]);
-    }
-    assert_eq!(matcher.search("", &VAULT, 2).len(), 2);
+fn solo_espacios_es_un_query_vacio() {
+    assert!(Query::new("   ").is_empty());
+    assert_eq!(ranked("  "), VAULT);
+}
+
+#[test]
+fn sin_coincidencia_no_hay_posiciones() {
+    assert_eq!(highlighted("zzz", "ideas.md"), "(nada)");
+}
+
+#[test]
+fn el_texto_suelto_no_da_bonus_de_ruta() {
+    let query = Query::new("ab");
+    let candidates = ["xa/b", "ab/x"];
+    let ranked = FuzzyMatcher::text().rank(&query, &candidates);
+    assert_eq!(ranked[0].index, 1);
 }
 
 #[test]
 fn mayusculas_solo_si_el_query_las_lleva() {
-    let matcher = &mut PathMatcher::new();
-    assert_eq!(matcher.search("readme", &["README.md"], 1).len(), 1);
-    assert_eq!(matcher.search("README", &["readme.md"], 1).len(), 0);
+    let count = |query: &str, candidate: &str| {
+        FuzzyMatcher::paths()
+            .rank(&Query::new(query), &[candidate])
+            .len()
+    };
+    assert_eq!(count("readme", "README.md"), 1);
+    assert_eq!(count("README", "readme.md"), 0);
 }
 
 #[test]
 fn acentos_solo_si_el_query_los_lleva() {
-    let matcher = &mut PathMatcher::new();
-    assert_eq!(matcher.search("cancion", &["canción.md"], 1).len(), 1);
-    assert_eq!(matcher.search("canción", &["canción.md"], 1).len(), 1);
-    assert_eq!(matcher.search("canción", &["cancion.md"], 1).len(), 0);
+    let count = |query: &str, candidate: &str| {
+        FuzzyMatcher::paths()
+            .rank(&Query::new(query), &[candidate])
+            .len()
+    };
+    assert_eq!(count("cancion", "canción.md"), 1);
+    assert_eq!(count("canción", "canción.md"), 1);
+    assert_eq!(count("canción", "cancion.md"), 0);
 }
 
 #[rstest]
@@ -99,8 +115,9 @@ fn las_posiciones_son_bytes(#[case] query: &str, #[case] candidate: &str, #[case
 #[test]
 fn las_posiciones_caen_en_fronteras_de_caracter() {
     let candidate = "señal/ñandú.md";
-    let found = PathMatcher::new().search("nandu", &[candidate], 1);
-    for &offset in &found[0].positions {
+    let positions = FuzzyMatcher::paths().positions(&Query::new("nandu"), candidate);
+    assert_ne!(positions, [0usize; 0]);
+    for &offset in &positions {
         assert!(candidate.is_char_boundary(offset), "{offset}");
     }
 }
@@ -119,11 +136,13 @@ proptest! {
             .filter(|(c, pick)| **pick && c.is_alphanumeric() && c.is_ascii())
             .map(|(c, _)| c)
             .collect();
-        let found = PathMatcher::new().search(&query, &[candidate.as_str()], 1);
-        prop_assert_eq!(found.len(), 1);
-        let positions = &found[0].positions;
+        let query_text = query;
+        let query = Query::new(&query_text);
+        let matcher = &mut FuzzyMatcher::paths();
+        prop_assert_eq!(matcher.rank(&query, &[candidate.as_str()]).len(), 1);
+        let positions = &matcher.positions(&query, &candidate);
         prop_assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
         prop_assert!(positions.iter().all(|&offset| candidate.is_char_boundary(offset)));
-        prop_assert_eq!(positions.len(), query.chars().count());
+        prop_assert_eq!(positions.len(), query_text.chars().count());
     }
 }

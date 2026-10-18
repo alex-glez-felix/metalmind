@@ -46,6 +46,10 @@ bare_commands! {
     FocusNext = pane::"focus_next";
     /// Cierra los demás paneles, salvo los que perderían cambios.
     Only = pane::"only";
+    /// Busca una nota del vault por su ruta.
+    OpenFinder = workspace::"open_finder";
+    /// Busca y ejecuta cualquier acción con nombre.
+    OpenCommandPalette = workspace::"open_command_palette";
 }
 
 /// Abre `path` en el panel, o relee su archivo si no hay ruta.
@@ -127,14 +131,18 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
         Command::FocusNext => Box::new(FocusNext),
         Command::Only => Box::new(Only),
         Command::Set => Box::new(Set { options: argument }),
+        Command::OpenFinder => Box::new(OpenFinder),
+        Command::OpenCommandPalette => Box::new(OpenCommandPalette),
     }
 }
 
-/// `ctrl-shift-*` no lo usa vim, así que queda para el portapapeles del sistema.
+/// `ctrl-shift-*` no lo usa vim, así que queda para el portapapeles del
+/// sistema y para la paleta, con el atajo de Zed.
 pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("ctrl-shift-c", Copy, Some(EDITOR_CONTEXT)),
         KeyBinding::new("ctrl-shift-v", Paste, Some(EDITOR_CONTEXT)),
+        KeyBinding::new("ctrl-shift-p", OpenCommandPalette, Some(EDITOR_CONTEXT)),
     ]);
 }
 

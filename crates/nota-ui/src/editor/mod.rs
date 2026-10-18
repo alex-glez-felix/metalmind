@@ -11,7 +11,6 @@ mod mouse;
 mod scroll;
 mod spans;
 mod status_bar;
-mod utf16;
 
 use std::ops::Range;
 use std::time::Instant;
@@ -24,13 +23,13 @@ use nota_buffer::ByteOffset;
 use nota_vim::{KeyOutcome, Mode};
 
 use self::element::EditorElement;
-use self::input::ImeLine;
 use self::keys::Route;
 use self::layout::FrameLayout;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
 use crate::actions::{self, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
+use crate::ime::ImeLine;
 use crate::theme::Theme;
 use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
 

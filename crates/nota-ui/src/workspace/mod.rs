@@ -19,7 +19,7 @@ mod scrolling;
 use std::collections::BTreeMap;
 
 use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
-use nota_vim::{Action, Mode, Pattern, Prompt, Viewport, Vim, VimError};
+use nota_vim::{Action, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError};
 
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
@@ -144,6 +144,16 @@ impl Workspace {
     #[must_use]
     pub fn message(&self) -> Option<&Message> {
         self.message.as_ref()
+    }
+
+    pub fn set_message(&mut self, message: Message) {
+        self.message = Some(message);
+    }
+
+    /// Las teclas de vim, para mostrar el atajo de cada acción.
+    #[must_use]
+    pub fn keymap(&self) -> &Keymap {
+        self.vim.keymap()
     }
 
     pub fn report(&mut self, error: &WorkspaceError) {

@@ -18,9 +18,9 @@ M0 hecho: `nota archivo.md` abre una ventana (GPUI) donde se edita con vim y se 
 
 - `crates/nota-buffer`: texto, selecciones, undo.
 - `crates/nota-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
-- `crates/nota-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico (M2, sin interfaz todavía).
-- `crates/nota-search`: búsqueda difusa de rutas para el finder y de texto completo en las notas (sin interfaz todavía).
-- `crates/nota-ui` y `crates/nota`: la vista de editor y el binario; los únicos que dependen de GPUI.
+- `crates/nota-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico.
+- `crates/nota-search`: búsqueda difusa para el finder y la paleta, y de texto completo en las notas (esta, sin interfaz todavía).
+- `crates/nota-ui` y `crates/nota`: el editor, el finder (`space f`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI.
 
 ```sh
 cargo run --release -p nota -- archivo.md
@@ -40,6 +40,7 @@ Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Prim
 - [06 — Decisiones de fondo](docs/research/06-decisiones-de-fondo.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
 - [Tests y smoke de la app](docs/testing.md)
+- [Presupuestos de rendimiento](docs/performance.md)
 - [Cómo se hace un release](docs/release.md) y [CHANGELOG](CHANGELOG.md)
 - [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
 

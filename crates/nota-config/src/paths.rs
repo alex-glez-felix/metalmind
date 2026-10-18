@@ -87,6 +87,48 @@ impl Paths {
     pub fn themes_dir(&self) -> PathBuf {
         self.config.join("themes")
     }
+
+    /// Dónde va el estado de UI del vault de raíz `root`, como sus notas
+    /// recientes: cada vault tiene el suyo (06 §8), por su ruta canónica.
+    #[must_use]
+    pub fn vault_state(&self, root: &Path) -> PathBuf {
+        self.state.join("vaults").join(vault_key(root))
+    }
+}
+
+/// Cuánto del nombre de la carpeta entra en la clave.
+const KEY_NAME_LEN: usize = 40;
+
+/// `<nombre>-<hash>`: el nombre para reconocerla a ojo y el hash de la ruta
+/// para que dos vaults con el mismo nombre no choquen.
+fn vault_key(root: &Path) -> String {
+    let name: String = root
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(KEY_NAME_LEN)
+        .collect();
+    let name = if name.is_empty() { "vault" } else { &name };
+    format!("{name}-{:016x}", fnv1a(root.as_os_str().as_encoded_bytes()))
+}
+
+/// FNV-1a de 64 bits: a diferencia de `DefaultHasher`, da lo mismo en
+/// cualquier versión de Rust, y la clave tiene que sobrevivir a una
+/// actualización.
+fn fnv1a(bytes: &[u8]) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    bytes.iter().fold(OFFSET, |hash, &byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(PRIME)
+    })
 }
 
 #[cfg(test)]
@@ -150,6 +192,35 @@ mod tests {
                 state: under("s/nota"),
             }
         );
+    }
+
+    #[test]
+    fn cada_vault_tiene_su_carpeta_de_estado() {
+        let paths = Paths::under(Path::new("/x"));
+        let notas = paths.vault_state(Path::new("/a/notas"));
+        assert_eq!(notas, Path::new("/x/state/vaults/notas-39ed27d9e0362a9f"));
+        assert_eq!(notas, paths.vault_state(Path::new("/a/notas")));
+        assert_ne!(notas, paths.vault_state(Path::new("/b/notas")));
+        let raro = paths.vault_state(Path::new("/a/mis notas: ñ"));
+        assert!(raro.ends_with(format!(
+            "mis_notas___-{:016x}",
+            fnv1a(b"/a/mis notas: \xc3\xb1")
+        )));
+        let raiz = paths.vault_state(Path::new("/"));
+        assert!(
+            raiz.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("vault-")
+        );
+    }
+
+    #[test]
+    fn fnv1a_da_los_valores_de_referencia() {
+        assert_eq!(fnv1a(b""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(fnv1a(b"a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(fnv1a(b"foobar"), 0x8594_4171_f739_67e8);
     }
 
     #[test]

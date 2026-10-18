@@ -39,6 +39,12 @@ ui:
   pane_border: comment
   modified: yellow
   error: red
+  picker_background: bg_dark
+  picker_border: border
+  picker_selected: { color: blue, alpha: 0.2 }
+  picker_hover: { color: fg, alpha: 0.06 }
+  picker_match: blue
+  picker_muted: fg_dim
 
 cursor:
   # El bloque deja ver el carácter que tapa.

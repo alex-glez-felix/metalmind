@@ -278,6 +278,8 @@ impl Action {
         Self::Command(Command::FocusNext),
         Self::Command(Command::Only),
         Self::Command(Command::Set),
+        Self::Command(Command::OpenFinder),
+        Self::Command(Command::OpenCommandPalette),
     ];
 
     #[must_use]
