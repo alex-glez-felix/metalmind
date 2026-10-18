@@ -67,7 +67,7 @@ fn un_tema_del_usuario_extiende_y_cambia_la_paleta_heredada() {
         }
     );
     assert_eq!(theme.ui.background, base.ui.background);
-    assert_eq!(theme.syntax.heading, theme.cursor.insert);
+    assert_eq!(theme.syntax.list_marker, theme.cursor.insert);
     assert_eq!(theme.syntax.bold, base.syntax.bold);
 }
 
@@ -210,11 +210,67 @@ fn sin_extends_le_faltan_colores() {
     assert!(
         error
             .message
-            .starts_with("al tema `a` le faltan colores: ui.foreground, ui.selection"),
+            .starts_with("al tema `a` le faltan claves: ui.foreground, ui.selection"),
         "{}",
         error.message
     );
     assert!(error.message.contains("cursor.normal") && error.message.contains("syntax.markup"));
+    assert!(error.message.ends_with("headings.h6"), "{}", error.message);
+}
+
+#[test]
+fn un_tema_cambia_un_nivel_de_heading_y_hereda_los_demas() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "mio",
+        "extends: metalmind-oscuro\nheadings:\n  h2: { size: 2.0, weight: 400 }\n",
+    );
+    let theme = Themes::new(dir.path().to_owned())
+        .load("mio")
+        .unwrap()
+        .value;
+    let base = Themes::builtin().load("metalmind-oscuro").unwrap().value;
+    assert_eq!(
+        theme.headings.0[1],
+        metalmind_config::Heading {
+            size: 2.0,
+            weight: 400
+        }
+    );
+    assert_eq!(theme.headings.0[0], base.headings.0[0]);
+}
+
+#[test]
+fn un_heading_fuera_de_rango_es_error_con_posicion() {
+    let dir = tempfile::tempdir().unwrap();
+    for (text, wanted) in [
+        (
+            "headings:\n  h1: { size: 9, weight: 700 }\n",
+            "tamaño de un heading",
+        ),
+        (
+            "headings:\n  h1: { size: 1.5, weight: 750 }\n",
+            "peso de un heading",
+        ),
+    ] {
+        write(
+            dir.path(),
+            "a",
+            &format!("extends: metalmind-oscuro\n{text}"),
+        );
+        let error = Themes::new(dir.path().to_owned())
+            .load("a")
+            .unwrap_err()
+            .error;
+        assert!(error.message.contains(wanted), "{}", error.message);
+        assert_eq!(
+            error.location.map(|at| at.line),
+            Some(3),
+            "{}",
+            error.message
+        );
+    }
 }
 
 #[test]

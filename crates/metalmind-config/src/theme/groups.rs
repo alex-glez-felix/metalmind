@@ -184,19 +184,43 @@ color_group! {
 }
 
 color_group! {
-    /// Markdown para el live preview (M4).
+    /// El markdown del editor: la sintaxis se ve atenuada y cada cosa con
+    /// su color.
     "syntax" => SyntaxColors, RawSyntax, PartialSyntax {
         heading,
         bold,
         italic,
+        /// Un wikilink o un link markdown a algo del vault, y uno externo.
         link,
+        /// Un link a una nota que no existe.
+        link_unresolved,
+        embed,
         tag,
         code,
+        /// El fondo del código inline.
+        code_background,
+        /// El fondo de un bloque de código cercado.
+        code_block_background,
         quote,
         list_marker,
+        /// `[ ]` y `[x]` de una tarea.
+        checkbox,
+        /// El texto de una tarea marcada.
+        task_done,
+        /// El fondo de `==resaltado==`.
         highlight,
         comment,
         frontmatter,
+        /// Las claves del frontmatter.
+        frontmatter_key,
+        /// Un `^bloque`.
+        block_id,
+        /// El lenguaje tras la cerca de un bloque de código.
+        fence_info,
+        code_keyword,
+        code_string,
+        code_number,
+        code_comment,
         /// Los marcadores (`**`, `#`, `[[`) cuando se ven.
         markup,
     }

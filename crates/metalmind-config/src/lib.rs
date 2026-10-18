@@ -21,6 +21,6 @@ pub use settings::{
     Daily, Editor, Font, FontSize, Padding, Panel, PanelWidth, Panes, Search, Settings, TabStop,
 };
 pub use theme::{
-    BUILTIN_THEMES, Color, CursorColors, DEFAULT_THEME, LoadError, SyntaxColors, Theme, Themes,
-    UiColors,
+    BUILTIN_THEMES, Color, CursorColors, DEFAULT_THEME, Heading, Headings, LoadError, SyntaxColors,
+    Theme, Themes, UiColors,
 };

@@ -4,6 +4,7 @@
 
 mod color;
 mod groups;
+mod headings;
 mod loader;
 
 use std::collections::BTreeMap;
@@ -12,10 +13,12 @@ use serde::Deserialize;
 
 pub use color::Color;
 pub use groups::{CursorColors, SyntaxColors, UiColors};
+pub use headings::{Heading, Headings};
 pub use loader::{LoadError, Themes};
 
 use color::Hex;
 use groups::{RawCursor, RawSyntax, RawUi};
+use headings::RawHeadings;
 
 use crate::parse::Spanned;
 
@@ -40,6 +43,7 @@ pub struct Theme {
     pub ui: UiColors,
     pub cursor: CursorColors,
     pub syntax: SyntaxColors,
+    pub headings: Headings,
 }
 
 /// Un archivo de tema tal como se escribe.
@@ -51,4 +55,5 @@ struct ThemeFile {
     ui: RawUi,
     cursor: RawCursor,
     syntax: RawSyntax,
+    headings: RawHeadings,
 }

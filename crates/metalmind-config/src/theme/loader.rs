@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use super::groups::{Palette, PartialCursor, PartialSyntax, PartialUi, UnknownColor};
+use super::headings::PartialHeadings;
 use super::{BUILTIN_THEMES, Theme, ThemeFile};
 use crate::diagnostic::{Diagnostic, Loaded, Location};
 use crate::file::{YamlFile, read_yaml};
@@ -89,7 +90,9 @@ impl Themes {
             );
         }
         let (mut ui, mut cursor, mut syntax) = Default::default();
+        let mut headings = PartialHeadings::default();
         for layer in chain.iter().rev() {
+            headings = layer.theme.headings.partial().over(headings);
             let resolve = |unknown| layer.unknown_color(unknown);
             ui = layer.theme.ui.resolve(&palette).map_err(resolve)?.over(ui);
             cursor = layer
@@ -105,9 +108,9 @@ impl Themes {
                 .map_err(resolve)?
                 .over(syntax);
         }
-        complete(name, ui, cursor, syntax).map_err(|missing| {
+        complete(name, ui, cursor, syntax, headings).map_err(|missing| {
             let error = Diagnostic::error(format!(
-                "al tema `{name}` le faltan colores: {}",
+                "al tema `{name}` le faltan claves: {}",
                 missing.join(", ")
             ));
             match chain.first() {
@@ -211,17 +214,20 @@ fn complete(
     ui: PartialUi,
     cursor: PartialCursor,
     syntax: PartialSyntax,
+    headings: PartialHeadings,
 ) -> Result<Theme, Vec<&'static str>> {
     let mut missing = Vec::new();
     let ui = ui.complete(&mut missing);
     let cursor = cursor.complete(&mut missing);
     let syntax = syntax.complete(&mut missing);
-    match (ui, cursor, syntax) {
-        (Some(ui), Some(cursor), Some(syntax)) => Ok(Theme {
+    let headings = headings.complete(&mut missing);
+    match (ui, cursor, syntax, headings) {
+        (Some(ui), Some(cursor), Some(syntax), Some(headings)) => Ok(Theme {
             name: name.to_owned(),
             ui,
             cursor,
             syntax,
+            headings,
         }),
         _ => Err(missing),
     }
