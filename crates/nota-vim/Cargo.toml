@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 nota-buffer.workspace = true
+regex.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 

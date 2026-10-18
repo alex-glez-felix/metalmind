@@ -3,26 +3,42 @@
 use crate::find::Find;
 use crate::insert::Typed;
 use crate::object::Object;
+use crate::search::Query;
 use crate::{InsertAt, Operator, PasteSide};
 
 /// Sobre qué actuó un operador, tal como se tecleó.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Subject {
     Object(Object),
     /// `d;` o `d,`: al repetirse usa la búsqueda de ese momento.
     RepeatFind {
         reversed: bool,
     },
+    /// `dn` o `dN`: al repetirse usa el patrón de ese momento.
+    SearchNext {
+        reversed: bool,
+    },
 }
 
 impl Subject {
-    /// `None` si es `;` o `,` sin una búsqueda anterior.
-    pub(crate) fn object(self, last_find: Option<Find>) -> Option<Object> {
+    /// `None` si es `;`, `,`, `n` o `N` sin una búsqueda anterior.
+    /// `last_search` es la que repite `n`.
+    pub(crate) fn object(
+        &self,
+        last_find: Option<Find>,
+        last_search: Option<Query>,
+    ) -> Option<Object> {
         match self {
-            Self::Object(object) => Some(object),
+            Self::Object(object) => Some(object.clone()),
             Self::RepeatFind { reversed } => {
-                last_find.map(|find| Object::Find(find.repeat(reversed)))
+                last_find.map(|find| Object::Find(find.repeat(*reversed)))
             }
+            Self::SearchNext { reversed } => last_search.map(|query| {
+                Object::Search(Query {
+                    backward: query.backward != *reversed,
+                    ..query
+                })
+            }),
         }
     }
 }
@@ -34,7 +50,7 @@ impl From<Object> for Subject {
 }
 
 /// La orden que empieza un cambio repetible.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) enum Change {
     /// `d` o `c` con su objeto; `x` es `dl`.
     Operate(Operator, Subject),

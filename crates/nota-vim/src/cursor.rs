@@ -33,7 +33,7 @@ pub(crate) enum Class {
 }
 
 impl Class {
-    fn of(c: Option<char>, big: bool) -> Self {
+    pub fn of(c: Option<char>, big: bool) -> Self {
         match c {
             None | Some('\n') => Self::Blank,
             Some(c) if is_blank(c) || c == '\u{a0}' => Self::Blank,

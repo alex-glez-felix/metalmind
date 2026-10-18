@@ -3,7 +3,8 @@
 use nota_buffer::{Buffer, Selections};
 
 use super::Vim;
-use crate::dot::Change;
+use crate::dot::{Change, Subject};
+use crate::object::Object;
 use crate::{Mode, VimError};
 
 impl Vim {
@@ -21,6 +22,11 @@ impl Vim {
             return Ok(());
         };
         self.count = count.or(dot.count);
+        // Como vim, repetir `d/foo<CR>` vuelve a teclear la búsqueda: `n`
+        // sigue buscando `foo`.
+        if let Change::Operate(_, Subject::Object(Object::Search(query))) = &dot.change {
+            self.search.remember(query);
+        }
         match dot.change {
             Change::Operate(operator, subject) => {
                 self.operate(operator, subject, buffer, selections)?;

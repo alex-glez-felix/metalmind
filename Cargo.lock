@@ -3515,6 +3515,7 @@ version = "0.0.0"
 dependencies = [
  "nota-buffer",
  "pretty_assertions",
+ "regex",
  "rstest",
  "rstest_reuse",
  "smallvec",
