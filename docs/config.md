@@ -54,7 +54,7 @@ La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nun
 
 Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; el resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
-`nota` sin argumentos abre el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Lo que nota recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/nota/`, por defecto `~/.local/state/nota/`): no es configuración y se puede borrar sin perder nada.
+Dentro de nota, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado nota desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `nota` sin argumentos abre el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Lo que nota recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/nota/`, por defecto `~/.local/state/nota/`): no es configuración y se puede borrar sin perder nada.
 
 ### En JSON
 

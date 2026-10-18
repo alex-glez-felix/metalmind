@@ -18,6 +18,7 @@ mod pane_tree;
 mod scrolling;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use nota_vim::{Action, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError};
@@ -71,6 +72,10 @@ pub struct Workspace {
     vim: Vim,
     /// Las líneas que se dejan visibles alrededor del cursor en cada panel.
     scrolloff: usize,
+    /// Contra qué se resuelve una ruta relativa de `:e` o `:w`: la raíz del
+    /// vault, no el directorio de trabajo del proceso, que depende de desde
+    /// dónde se lanzó nota.
+    dir: PathBuf,
     message: Option<Message>,
 }
 
@@ -114,9 +119,9 @@ impl PaneView<'_> {
 
 impl Workspace {
     /// Un panel con `document` y los números `numbers`, avisando como vim
-    /// al abrirlo.
+    /// al abrirlo. Las rutas relativas de `:e` y `:w` parten de `dir`.
     #[must_use]
-    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize) -> Self {
+    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize, dir: PathBuf) -> Self {
         let message = Message::opened(&document);
         let mut documents = Documents::default();
         let id = documents.insert(document);
@@ -129,8 +134,14 @@ impl Workspace {
             tree,
             vim,
             scrolloff,
+            dir,
             message: Some(message),
         }
+    }
+
+    /// `path` tal cual si es absoluta; si no, dentro de la raíz del vault.
+    fn resolve(&self, path: &str) -> PathBuf {
+        self.dir.join(path)
     }
 
     #[must_use]

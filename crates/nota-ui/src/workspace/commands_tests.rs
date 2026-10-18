@@ -643,3 +643,34 @@ fn w_desde_un_buffer_sin_nombre_a_una_nota_abierta_da_e139() {
     );
     assert_eq!(session.view(session.pane()).document.path(), None);
 }
+
+/// Tras `nota ~/notas/` lanzado desde otra carpeta, `:w idea.md` escribe en
+/// el vault, no en el directorio de trabajo del proceso, y `:e` lo encuentra
+/// igual.
+#[test]
+fn las_rutas_relativas_parten_de_la_raiz_del_vault() {
+    let vault = TempDir::new().unwrap();
+    let mut session = Session::unnamed_in(vault.path());
+    session.keys("ihola⎋:w idea.md⏎");
+    assert_eq!(error(&session), None);
+    assert_eq!(
+        fs::read_to_string(path(&vault, "idea.md")).unwrap(),
+        "hola\n"
+    );
+    assert_eq!(shown(&session), path(&vault, "idea.md"));
+    assert!(!std::env::current_dir().unwrap().join("idea.md").exists());
+    fs::create_dir(path(&vault, "sub")).unwrap();
+    fs::write(path(&vault, "sub/b.md"), "b\n").unwrap();
+    session.keys(":e sub/b.md⏎");
+    assert_eq!(shown(&session), path(&vault, "sub/b.md"));
+    session.keys(":w copia.md⏎");
+    assert_eq!(
+        fs::read_to_string(path(&vault, "copia.md")).unwrap(),
+        "b\n",
+        "parte de la raíz, no de la carpeta de la nota"
+    );
+    let elsewhere = TempDir::new().unwrap();
+    let absolute = path(&elsewhere, "fuera.md");
+    session.keys(&format!(":w {}⏎", absolute.display()));
+    assert!(absolute.exists(), "una ruta absoluta queda tal cual");
+}
