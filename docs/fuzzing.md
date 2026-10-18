@@ -15,11 +15,11 @@ las PRs. El resto del repo sigue en stable.
 | Target | Qué le llega | Qué se exige |
 |---|---|---|
 | `buffer_edits` | Lotes de ediciones (válidos o no), commits, undo/redo, `g-`/`g+`, grupos de undo y anclas sobre un texto arbitrario. | Nunca hay pánico. Un lote inválido da error y no toca el texto; uno válido deja lo mismo que aplicarlo sobre un `String`. Cada estado del historial muestra el texto que tenía al crearse, se llegue como se llegue. Deshacer todo da el texto inicial y rehacer todo, el del último estado. Las anclas caen en frontera de char. |
-| `vim_keys` | Teclas, pegados y clics al motor vim sobre un texto arbitrario, con uno a cuatro cursores. | Nunca hay pánico ni error de buffer. Las selecciones caen dentro del texto y en frontera de char. En Normal y con un operador pendiente solo hay cursores, nunca sobre el fin de una línea con texto. Fuera de Insert no queda una transacción abierta; en Insert sí hay una. La línea de comandos existe solo en su modo. |
+| `vim_keys` | Teclas, pegados y clics al motor vim sobre un texto arbitrario, con uno a cuatro cursores, más comandos de varias teclas que no saldrían tecla por tecla: `v`/`V`, `"{registro}`, `q{registro}`/`q`, `@{registro}`/`@@`, `m{mark}`, `'{mark}`/`` `{mark} ``, `/`/`?` con un patrón tecleado, `n`/`N`, y cambios del portapapeles hechos por otra aplicación. | Nunca hay pánico ni error de buffer. Las selecciones caen dentro del texto y en frontera de char. En Normal y con un operador pendiente solo hay cursores, nunca sobre el fin de una línea con texto. Fuera de Insert no queda una transacción abierta; en Insert sí hay una. La línea de comandos existe solo en su modo. |
 | `vim_search_subst` | Patrones para `/` y `?`, `:s` con delimitador, reemplazo y flags arbitrarios, líneas de `:` sueltas, y `n`, `N`, `*`, `#`, `&`, `u`, `ctrl-r`. | Lo mismo que `vim_keys`, y la línea de comandos siempre se cierra: un patrón inválido es un error, no un crash. |
 
-Las piezas comunes (teclas arbitrarias, cursores válidos e invariantes del
-motor) están en `fuzz/src/lib.rs`.
+Las piezas comunes (teclas y comandos arbitrarios, cursores válidos, el
+portapapeles e invariantes del motor) están en `fuzz/src/lib.rs`.
 
 Dos límites evitan que el fuzzer persiga lentitud esperada en vez de bugs:
 `vim_keys` descarta los dígitos de un count a partir del tercero seguido
@@ -36,8 +36,9 @@ cargo +nightly fuzz list
 cargo +nightly fuzz run vim_keys -- -max_total_time=600 -timeout=10 -rss_limit_mb=2048
 ```
 
-`+nightly` pasa por encima del `rust-toolchain.toml`. Con `-jobs=N -workers=N`
-corre en varios núcleos. El corpus queda en `fuzz/corpus/<target>/` y los
+`+nightly` pasa por encima del `rust-toolchain.toml`. Con `-fork=N` corre en
+N procesos; si se agrega `-ignore_crashes=1`, sigue tras un crash y junta
+varios en una sola corrida. El corpus queda en `fuzz/corpus/<target>/` y los
 crashes en `fuzz/artifacts/<target>/`; los dos están en el `.gitignore`.
 
 ## Cuando aparece un crash
