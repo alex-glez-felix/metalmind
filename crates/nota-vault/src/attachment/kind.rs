@@ -116,8 +116,9 @@ fn iso_media(bytes: &[u8]) -> Option<FileKind> {
     let size = usize::try_from(u32::from_be_bytes(bytes.get(0..4)?.try_into().ok()?)).ok()?;
     let major = bytes.get(8..12)?;
     let compatible = bytes.get(16..size.min(bytes.len())).unwrap_or_default();
+    let (compatible, _) = compatible.as_chunks::<4>();
     let brands: Vec<&[u8]> = std::iter::once(major)
-        .chain(compatible.chunks_exact(4))
+        .chain(compatible.iter().map(<[u8; 4]>::as_slice))
         .collect();
     let has = |wanted: &[&[u8]]| brands.iter().any(|brand| wanted.contains(brand));
     Some(if has(&[b"avif", b"avis"]) {
