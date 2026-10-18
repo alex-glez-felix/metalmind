@@ -13,7 +13,11 @@ use crate::path::VaultPath;
 /// Destinos para `target`, escrito desde `source`, en la forma de `original`
 /// y de más corto a más largo. El último, la ruta completa desde la raíz,
 /// es el que menos puede empatar.
-pub(super) fn candidates(original: &str, source: &VaultPath, target: &VaultPath) -> Vec<String> {
+pub(in crate::links) fn candidates(
+    original: &str,
+    source: &VaultPath,
+    target: &VaultPath,
+) -> Vec<String> {
     let original = original.trim();
     let full = target.as_str();
     let without_md = EntryKind::of_file(target) == EntryKind::Note

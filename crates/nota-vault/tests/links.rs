@@ -86,6 +86,19 @@ fn follow_the_link_under_the_cursor() {
     assert_eq!(index.follow(&source, text, 26), None);
 }
 
+#[test]
+fn locate_the_heading_or_block_in_the_destination() {
+    let destination = "# Plan\n\n## Fechas\n\nlunes ^b\n";
+    let heading = LinkSubpath::Heading("fechas".to_owned());
+    assert_eq!(heading.locate(destination), Some(8..17));
+    let block = LinkSubpath::Block("b".to_owned());
+    assert_eq!(block.locate(destination), Some(25..27));
+    assert_eq!(
+        LinkSubpath::Heading("Otra".to_owned()).locate(destination),
+        None
+    );
+}
+
 /// Una operación sobre el vault en memoria.
 #[derive(Debug, Clone)]
 enum Op {

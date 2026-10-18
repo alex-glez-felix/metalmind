@@ -1,5 +1,7 @@
 //! Seguir el link bajo el cursor (`gd`, `enter`).
 
+use std::ops::Range;
+
 use nota_syntax::link_at;
 
 use super::note::subpath;
@@ -29,5 +31,18 @@ impl LinkIndex {
             target_text,
             subpath: subpath(text, &link),
         })
+    }
+}
+
+impl LinkSubpath {
+    /// Dónde está el heading o el bloque en `text`, el contenido de la nota
+    /// destino: la línea del heading o el `^id`. `None` si no está.
+    #[must_use]
+    pub fn locate(&self, text: &str) -> Option<Range<usize>> {
+        let scan = nota_syntax::scan(text);
+        match self {
+            Self::Heading(path) => scan.heading(text, path).map(|heading| heading.span.clone()),
+            Self::Block(id) => scan.block(text, id).map(|block| block.span.clone()),
+        }
     }
 }

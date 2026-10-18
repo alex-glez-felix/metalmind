@@ -12,8 +12,10 @@ use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, ne
 use crate::file;
 use crate::index::VaultIndex;
 use crate::links::LinkIndex;
+use crate::links::RenamePlan;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
+use crate::refactor::{self, AppliedRename, ApplyRenameError, UndoReport};
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::scan::scan;
 use crate::watch::{touched, touched_by_errors};
@@ -148,6 +150,29 @@ impl Vault {
     /// `from`, o alguno pasa por un enlace simbólico.
     pub fn rename(&self, from: &VaultPath, to: &VaultPath) -> Result<(), FileOpError> {
         ops::rename(&self.root, from, to)
+    }
+
+    /// Aplica un plan de [`LinkIndex::rename_plan`]: comprueba que cada
+    /// archivo dice lo que el plan espera, reescribe sus links y renombra. Lo
+    /// que quien llama aplique por su cuenta, como los buffers abiertos con
+    /// cambios sin guardar, se quita de `plan.files` antes. El índice se
+    /// entera por el watcher.
+    ///
+    /// # Errors
+    /// Si algún archivo cambió, no se puede leer o el destino existe, sin
+    /// escribir nada; si falla a medias, [`ApplyRenameError::Interrupted`]
+    /// con lo que quedó hecho, para deshacerlo.
+    pub fn apply_rename(&self, plan: &RenamePlan) -> Result<AppliedRename, ApplyRenameError> {
+        refactor::apply(&self.root, plan)
+    }
+
+    /// Deshace un plan aplicado: devuelve cada archivo a su texto de antes,
+    /// salvo los que cambiaron desde entonces, y renombra de vuelta.
+    ///
+    /// # Errors
+    /// Si la ruta de antes del rename ya está ocupada; entonces no toca nada.
+    pub fn undo_rename(&self, applied: &AppliedRename) -> Result<UndoReport, FileOpError> {
+        refactor::undo(&self.root, applied)
     }
 
     /// Manda un archivo o carpeta a la papelera del vault (`.trash/`, como

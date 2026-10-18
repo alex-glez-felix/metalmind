@@ -122,7 +122,7 @@ fn trash_dir(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpError> {
 
 /// La ruta en disco de algo que ya existe y se puede mover: no es la raíz
 /// ni se llega a ello por un enlace.
-fn existing(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpError> {
+pub(crate) fn existing(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpError> {
     if path.is_root() {
         return Err(FileOpError::Root);
     }
