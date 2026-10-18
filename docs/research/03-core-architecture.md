@@ -78,9 +78,9 @@ Ningún rope trae historial. Patrón que usan Helix y Zed:
    - Más tarde: fork de la gramática inline con esos nodos (requiere C + `tree-sitter generate`; peor para vibe-coding).
 2. **Índice y export → pulldown-cmark** con `ENABLE_WIKILINKS | ENABLE_YAML_STYLE_METADATA_BLOCKS | ENABLE_GFM | ENABLE_MATH | ENABLE_TABLES | ENABLE_TASKLISTS | ENABLE_FOOTNOTES | ENABLE_HIGHLIGHT`. Para indexar un vault de 10 k notas en frío, un parser de streaming sin árbol es lo más barato.
 
-El **mismo** scanner de sintaxis Obsidian (crate `nota-syntax`) debe usarse en ambos caminos para que el editor y el índice nunca discrepen sobre qué es un link.
+El **mismo** scanner de la sintaxis de nota (crate `nota-syntax`) debe usarse en ambos caminos para que el editor y el índice nunca discrepen sobre qué es un link.
 
-### Sintaxis Obsidian a cubrir
+### Sintaxis a cubrir (adoptada de Obsidian donde conviene)
 
 | Sintaxis | Ejemplo | Fase |
 |---|---|---|
@@ -93,9 +93,13 @@ El **mismo** scanner de sintaxis Obsidian (crate `nota-syntax`) debe usarse en a
 | Math | `$x$`, `$$...$$` | post-MVP |
 | Block IDs | `^abc123` al final de párrafo | M3 (índice) |
 
-Resolución de wikilinks (como Obsidian): por nombre de archivo sin extensión, case-insensitive, desempate por ruta más corta / misma carpeta; también matchea `aliases` del frontmatter. Documentarlo como tabla de casos en un test `insta` — es la spec.
+Resolución de wikilinks: por nombre de archivo sin extensión, case-insensitive, desempate por ruta más corta / misma carpeta; también matchea `aliases` del frontmatter. Documentarlo como tabla de casos en un test `insta` — es la spec.
 
-Estado (2026-10-18): `nota-syntax` tiene el scanner a mano, todavía sin tree-sitter (entra en M4): wikilinks, embeds, tags, links markdown a archivos locales y frontmatter, ignorando bloques cercados, código inline y `%% %%`. Un tag empieza al inicio de línea o tras un espacio, así `texto#algo` y el fragmento de una URL no lo son. `resolve` es una función pura sobre las rutas del vault: nombre o final de ruta, sin mayúsculas, con o sin `.md`, gana la de menos carpetas y un empate se devuelve como `Ambiguous`; la misma carpeta y los `aliases` como desempate quedan para el índice. La tabla de casos está en `crates/nota-syntax/tests/resolve.rs`.
+Estado (2026-10-18): `nota-syntax` tiene el scanner a mano, todavía sin tree-sitter (entra en M4): wikilinks, embeds, tags, links markdown a archivos locales y frontmatter, ignorando bloques cercados, código inline y `%% %%`. La tabla de resolución está en `crates/nota-syntax/tests/resolve.rs`. La sintaxis es la de Obsidian salvo donde su regla es peor para nota (el README no pide compatibilidad):
+
+- **Resolución**: nombre o final de ruta, sin mayúsculas, con o sin `.md`; gana la de menos carpetas. Si empatan, desempata la única escrita con las mismas mayúsculas (en Linux `Casa.md` y `casa.md` conviven) y si no, es `Ambiguous`: Obsidian elige una sin avisar y un link puede cambiar de nota sin que nadie lo note. La misma carpeta y los `aliases` como desempate quedan para el índice, que tiene el contexto.
+- **Tags**: como en Obsidian no pueden ser solo números. Se pensó permitirlos (`#2024`), pero en notas son mucho más comunes `PR #15` o `el #1 de la lista` que un tag numérico, y llenarían el índice de basura; `#y2024` y `#2024/10` sí son tags. Un tag empieza al inicio de línea o tras un espacio, así `texto#algo` y el fragmento de una URL no lo son.
+- **Frontmatter**: solo los nombres en plural (`tags`, `aliases`, `cssclasses`); los singulares que Obsidian aún lee de antes de su 1.4 son claves cualquiera (un importador puede convertirlos, `docs/IDEAS.md`). Se lee como YAML 1.2 con `serde-saphyr` 2.0, el mismo crate que la config (sección siguiente), así que `tags: [no, on]` son los textos `no` y `on`. Un YAML roto o un campo de otro tipo es un problema recuperable y el resto de la nota se escanea igual.
 
 ### Frontmatter YAML
 
@@ -283,7 +287,7 @@ nota/
 ├── CLAUDE.md               # convenciones para agentes (ver §7)
 ├── crates/
 │   ├── nota-buffer/        # Buffer (ropey), Edit, Transaction, History (con grupos de undo), Selections, LineAnchor (marks), newtypes de offset
-│   ├── nota-syntax/        # tree-sitter-md + scanner Obsidian (wikilinks, tags, embeds, frontmatter)
+│   ├── nota-syntax/        # tree-sitter-md + scanner de la sintaxis de nota (wikilinks, tags, embeds, frontmatter)
 │   ├── nota-vim/           # Mode (Normal, Insert, Visual v/V, operador pendiente, `:` `/` `?`), Motion, Operator, TextObject, registros, macros, marks, VimState → Transaction; búsqueda `/ ? n N * #` y `:s` sobre `regex`. `"+`/`"*` vía el trait Clipboard que da la UI. Depende de nota-buffer y regex (+ nota-syntax para text objects md)
 │   ├── nota-keymap/        # KeyEvent, trie, contextos y predicados, parseo YAML, registro de Actions
 │   ├── nota-vault/         # leer y guardar notas (atómico); luego walk, watch, índice, links, backlinks, caché redb
@@ -295,7 +299,7 @@ nota/
 └── tests/fixtures/vaults/  # vaults de ejemplo (incluir uno exportado de Obsidian real)
 ```
 
-Estado (2026-10-18): existen `nota-buffer`, `nota-syntax` (scanner Obsidian y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault`, `nota-ui` y `nota`.
+Estado (2026-10-18): existen `nota-buffer`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault`, `nota-ui` y `nota`.
 
 Regla de dependencias (verificable con `cargo tree` en CI): **solo `nota-ui` y `nota` dependen del framework de GUI**. Todo lo demás compila y se testea sin ventana. Eso hace que cambiar GPUI ↔ iced cueste una sola capa.
 
@@ -323,7 +327,7 @@ dbg_macro = "deny"
 
 | Tipo | Herramienta | Para qué |
 |---|---|---|
-| Snapshot | `insta` 1.49 | Motor vim: `"hello |world" + "dw" → "hello |"` como snapshot legible. Parser Obsidian: AST de links/tags por fixture. Resolución de links por vault de prueba. |
+| Snapshot | `insta` 1.49 | Motor vim: `"hello |world" + "dw" → "hello |"` como snapshot legible. Scanner de sintaxis: links/tags por fixture. Resolución de links por vault de prueba. |
 | Propiedades | `proptest` 1.12 | Invariantes: undo∘redo = id; cada número de secuencia del historial muestra siempre el mismo texto, se llegue por undo, redo, `g-` o `g+`; aplicar `Transaction` y su inversa deja el rope igual; offsets siempre en frontera de char; `Selections` siempre ordenadas y sin solaparse; reindex incremental == reindex desde cero. |
 | Tabla | `rstest` 0.27 | Casos parametrizados de motions/text objects. |
 | Diff legible | `pretty_assertions` 1.4 | |
@@ -394,7 +398,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 | **M1 — Vim normal/insert** ✅ (2026-10-17) | `nota-keymap` (trie + contextos), `nota-vim`: normal, insert, motions básicos (`hjkl wbe 0^$ gg G f t`), operadores `d c y` + `p`, `x`, `u`/`ctrl-r`, `.`, counts, text objects `iw aw i" i( ip`. Cursor bloque/línea por modo. | ~150 casos de tabla verificados contra nvim headless. Cerrado con 488 casos, cada uno corrido también en nvim. El keymap (tabla tipada con contextos) sigue dentro de `nota-vim` hasta que haya un segundo consumidor (§3, "Estado"). |
 | **M2 — Vault + finder** | `nota-vault`: abrir carpeta, walk con `ignore`, watcher, árbol de archivos con navegación vim, fuzzy finder (`nucleo`) en `space f`, paleta de comandos, `:e`, `:w`, `:q`, splits `ctrl-w`. | Abre una carpeta real de notas markdown (≥ 5 k notas, por ejemplo un vault de Obsidian) en < 1 s **(objetivo)**; crear/renombrar/borrar desde el árbol. |
 | **M2.5 — Tags** | Los tags son el eje de organización ([05](05-tags.md)). `nota-syntax` saca los tags del texto (`#a/b`) y de `tags:` del frontmatter, sin contar los de código; `TagIndex` en `nota-vault`, incremental sobre el watcher; árbol de tags en el panel (jerárquico por `/`, con conteo) que alterna con el de carpetas; `space f` filtrable por tag (`#rust -#archivado`); modo focus por carpeta o tags (`:focus`, desde el panel, indicador en la barra de estado); autocompletado de `#`; renombrar y fusionar tags en todo el vault con vista previa y deshacer. | Con el vault sintético de 5 k notas de M2: índice de tags en < 200 ms al abrir y `space f` filtrado por tag en < 16 ms **(objetivos)**; reindex incremental == completo (proptest); casos borde del scanner y de las consultas en `insta`; renombrar `#a` → `#b` (con hijos y frontmatter) y deshacer deja cada archivo byte a byte igual. |
-| **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter) ✅ (2026-10-18), índice de links, resolución estilo Obsidian (la función pura ✅; falta el índice), `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
+| **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner de wikilinks y links + frontmatter) ✅ (2026-10-18), índice de links, resolución de nombres (la función pura ✅; falta el índice), `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
 | **M4 — Live preview** | tree-sitter-md incremental; ocultar marcadores fuera de la línea del cursor, headings con tamaño, negrita/cursiva, links como texto clicable, listas y checkboxes (`ctrl-enter`/`gx` alterna), código con resaltado, `==highlight==`, comentarios `%%`. Toggle source/live/lectura. | Escribir en una nota de 5 k líneas sin latencia perceptible (< 16 ms por tecla **objetivo**). |
 | **M5 — Embeds y callouts** | `![[img]]` imágenes, `![[nota]]` transclusión (solo lectura), callouts, tablas renderizadas. | El vault de prueba se ve "como en Obsidian" en lo común. |
 | **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo (✅ `v` y `V` en el motor, 2026-10-18; falta pintar la selección y `ctrl-v`), registros ✅, macros ✅, `:%s`, marks ✅ (falta `A`–`Z`), keymap y tema del usuario en YAML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. Listo para el tag (2026-10-17): dist, `nota --version`, `.desktop` + metainfo, PKGBUILD de `nota-bin` y `nota-git`, CHANGELOG y `docs/release.md`. Falta publicar. |
