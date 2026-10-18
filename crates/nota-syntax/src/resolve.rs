@@ -73,7 +73,14 @@ fn matches(path: &str, target: &str, from_root: bool) -> bool {
         name.strip_suffix(target)
             .is_some_and(|rest| rest.is_empty() || rest.ends_with('/'))
     };
-    ends_with(path) || path.strip_suffix(".md").is_some_and(ends_with)
+    ends_with(path) || strip_md(path).is_some_and(ends_with)
+}
+
+/// `path` sin su `.md`, que puede estar en mayúsculas (`Casa.MD`).
+fn strip_md(path: &str) -> Option<&str> {
+    let stem = path.len().checked_sub(3)?;
+    let extension = path.get(stem..)?;
+    extension.eq_ignore_ascii_case(".md").then(|| &path[..stem])
 }
 
 #[cfg(test)]
@@ -85,5 +92,18 @@ mod tests {
     fn a_partial_name_is_not_a_match() {
         assert_eq!(resolve("ota", ["nota.md"]), Resolution::Unresolved);
         assert_eq!(resolve("a/nota", ["la/nota.md"]), Resolution::Unresolved);
+    }
+
+    #[test]
+    fn the_case_tie_break_ignores_the_case_of_the_extension() {
+        let paths = ["Casa.MD", "casa.md"];
+        assert_eq!(resolve("Casa", paths), Resolution::Resolved("Casa.MD"));
+        assert_eq!(resolve("/casa", paths), Resolution::Resolved("casa.md"));
+    }
+
+    #[test]
+    fn a_multibyte_name_shorter_than_the_extension() {
+        assert_eq!(resolve("ñ", ["ñ"]), Resolution::Resolved("ñ"));
+        assert_eq!(resolve("x", ["é"]), Resolution::Unresolved);
     }
 }
