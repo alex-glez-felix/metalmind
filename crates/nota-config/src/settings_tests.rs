@@ -30,6 +30,14 @@ panel:
 search:
   ignorecase: true
   smartcase: true
+
+templates_folder: meta/plantillas
+
+daily:
+  enabled: true
+  folder: \"\"
+  format: YYYY/MM/YYYY-MM-DD
+  template: diario
 ";
 
 fn every_setting() -> Settings {
@@ -58,6 +66,13 @@ fn every_setting() -> Settings {
         search: Search {
             ignorecase: true,
             smartcase: true,
+        },
+        templates_folder: "meta/plantillas".to_owned(),
+        daily: Daily {
+            enabled: true,
+            folder: String::new(),
+            format: "YYYY/MM/YYYY-MM-DD".to_owned(),
+            template: Some("diario".to_owned()),
         },
     }
 }
@@ -100,7 +115,14 @@ fn la_misma_config_en_json_puro_carga_igual() {
   },
   "panes": { "border_width": 4 },
   "panel": { "width": 320 },
-  "search": { "ignorecase": true, "smartcase": true }
+  "search": { "ignorecase": true, "smartcase": true },
+  "templates_folder": "meta/plantillas",
+  "daily": {
+    "enabled": true,
+    "folder": "",
+    "format": "YYYY/MM/YYYY-MM-DD",
+    "template": "diario"
+  }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);
@@ -245,4 +267,15 @@ fn el_vault_expande_la_tilde() {
     assert_eq!(vault("vault: ~"), None);
     assert_eq!(vault("vault: ~/Notas"), Some("/home/usuario/Notas".into()));
     assert_eq!(vault("vault: /srv/notas"), Some("/srv/notas".into()));
+}
+
+#[test]
+fn las_notas_del_dia_vienen_apagadas() {
+    let daily = Settings::parse("daily:\n  folder: diario/2026\n")
+        .value
+        .daily;
+    assert!(!daily.enabled);
+    assert_eq!(daily.folder, "diario/2026");
+    assert_eq!(daily.format, "YYYY-MM-DD");
+    assert_eq!(daily.template, None);
 }

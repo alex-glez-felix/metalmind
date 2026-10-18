@@ -20,6 +20,23 @@ pub struct Settings {
     pub panes: Panes,
     pub panel: Panel,
     pub search: Search,
+    /// Carpeta de las plantillas, relativa al vault.
+    pub templates_folder: String,
+    pub daily: Daily,
+}
+
+/// La nota del día. Apagada por defecto: el flujo de captura es el buzón.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Daily {
+    pub enabled: bool,
+    /// Carpeta de las notas del día, relativa al vault; vacía es la raíz.
+    pub folder: String,
+    /// El nombre de la nota, con los códigos de fecha de `{{date:…}}`; un
+    /// `/` la mete en subcarpetas.
+    pub format: String,
+    /// Nombre de una plantilla de `templates_folder`; sin ella, la nota nace vacía.
+    pub template: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -136,6 +153,19 @@ impl Default for Settings {
             panes: Panes::default(),
             panel: Panel::default(),
             search: Search::default(),
+            templates_folder: "plantillas".to_owned(),
+            daily: Daily::default(),
+        }
+    }
+}
+
+impl Default for Daily {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            folder: "diario".to_owned(),
+            format: "YYYY-MM-DD".to_owned(),
+            template: None,
         }
     }
 }
