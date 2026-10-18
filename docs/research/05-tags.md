@@ -89,7 +89,7 @@ Dos vistas en el mismo panel, árbol de tags y árbol de carpetas (el de M2). Un
 - **Por defecto: árbol de tags (propuesta).** Es el eje de organización; abrir la app en la vista de carpetas diría lo contrario. La vista elegida se recuerda por vault **(propuesta)**.
 - Cambiar de vista: `T` dentro del panel (`panel::toggle_view`) **(propuesta)**; `space t` abre el panel en tags y `space e` en carpetas (`panel::show_tags`, `panel::show_folders`) **(propuesta)**. El encabezado del panel dice cuál es.
 - Cada nodo de tag muestra su segmento (`async`, no `rust/async`) y el conteo. Bajo un tag, primero sus tags hijos y luego sus notas, como una carpeta con subcarpetas y archivos **(propuesta)**. Una nota con tres tags aparece en tres lugares, y está bien: es justamente lo que una carpeta no permite.
-- Al final, un nodo **Sin tags** con las notas que no tienen ninguno **(propuesta)**. Sin él, una nota sin tags es invisible en la vista por defecto.
+- Al final, un nodo **Sin tags** con las notas que no tienen ninguno **(propuesta)**. Sin él, una nota sin tags es invisible en la vista por defecto. Es el buzón ([06](06-decisiones-de-fondo.md) §9).
 - Cada nodo muestra la forma establecida de su segmento (§6): "Rust (10)" aunque una nota diga `#rust`.
 - Orden: alfabético por la forma que se muestra, sin mayúsculas, como el de carpetas **(propuesta)**.
 - Vim, igual que `FileTree` (03 §3): `j/k`, `h/l` colapsar/expandir, `gg/G`, `/` filtrar, `enter` abre la nota o expande el tag, `r` renombra el tag (§5), `F` enfoca (§3, focus) **(propuesta para `r` y `F` aquí)**. El contexto es `TagTree`.
