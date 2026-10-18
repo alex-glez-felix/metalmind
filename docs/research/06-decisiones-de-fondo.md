@@ -146,7 +146,7 @@ Comandos tentativos **(propuesta)**:
 - El vault es un valor que se crea y se suelta, no un global: `:vault` tiene que poder cerrar uno y abrir otro en el mismo proceso sin que nada quede apuntando al anterior.
 - Config: la global y encima la del vault (`<vault>/.nota/`, 03 §5).
 - El último vault abierto se guarda en `state`. Prioridad al arrancar: el argumento, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
-- Cómo se identifica un vault para su directorio en `data`/`cache`/`state`: por su ruta canónica, escapada con `%XX` como nombre de carpeta (`Paths::vault_state_dir`, hecho en M2 para el estado de la UI). Si se mueve el vault, su historial queda en la ruta vieja; un comando lo reasigna **(propuesta)**. La alternativa, un identificador en `<vault>/.nota/`, sobrevive a mover la carpeta pero deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
+- Cómo se identifica un vault para su directorio en `data`/`cache`/`state`: por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral). Si se mueve el vault, su historial queda en la ruta vieja; un comando lo reasigna **(propuesta)**. La alternativa, un identificador en `<vault>/.nota/`, sobrevive a mover la carpeta pero deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
 
 ## 9. Buzón
 
