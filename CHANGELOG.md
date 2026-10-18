@@ -121,6 +121,21 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - La rueda del ratón lleva el cursor consigo para que siempre se vea, como en
   vim.
 
+#### Markdown con estilo
+
+- El editor muestra el markdown con estilo, como iA Writer: la sintaxis (`**`,
+  `#`, `[[ ]]`, `` ` ``) se ve atenuada; los headings son más grandes y en
+  negrita según el nivel; negrita, cursiva, código, tachado y `==resaltado==`
+  tienen su estilo; links, wikilinks, tags y embeds su color, y un link a una
+  nota que no existe, otro. Los bloques de código cercados llevan fondo y
+  resaltado de los lenguajes más comunes; listas, tareas, citas, reglas y el
+  frontmatter también se marcan.
+- Colores y tamaños salen del tema: `syntax.*` y `headings.h1`–`h6` (tamaño
+  relativo a la fuente y peso).
+- Con headings más altos, el scroll, `H`, `M`, `L`, `zt`, `zz`, `zb`,
+  `ctrl-d`, `ctrl-u`, el cursor, la selección, la rueda y los números de línea
+  cuentan lo que mide cada línea.
+
 #### Buffers y paneles (M2)
 
 - Varios archivos abiertos a la vez. `:e ruta` abre otro en el panel activo

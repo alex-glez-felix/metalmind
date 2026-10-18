@@ -20,6 +20,7 @@
 | 11 | Daily notes, plantillas, grafo, temas | Ninguna |
 | 12 | Publicar a la web: fuera de alcance | — |
 | 13 | Metalmind es una GUI con navegación estilo vim, no una TUI | Toda función se usa desde la UI además del teclado; nadie edita config ni metadata a mano por necesidad |
+| 14 | Nunca habrá un panel de vista previa aparte | El markdown se ve con estilo en el mismo editor (live preview, 03 §2); nada del estilo depende de una segunda vista |
 
 ---
 
@@ -220,6 +221,18 @@ Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR 
 - Los archivos son el **almacenamiento**, no la interfaz. Lo que se cambia desde la UI se escribe en el archivo de siempre (frontmatter de una página de tag, `config.yaml`), tocando solo el campo editado, y editarlo a mano da el mismo resultado. Ejemplo: las páginas de tag, que Metalmind crea solo en cuanto les pones metadata desde la UI (05 §3, §7).
 - La UI no crea archivos que nadie pidió: escribir un `#tag-nuevo` no crea su página.
 - La config (03 §5) también se edita desde una pantalla de ajustes que escribe el YAML; cuándo llega esa pantalla se decide con el roadmap.
+
+## 14. Sin panel de vista previa
+
+**Decisión** (2026-10-18). Metalmind nunca tendrá un panel de vista previa aparte, al lado o en otra pestaña, como el de muchos editores de markdown. Se descartó.
+
+**Por qué.** En Metalmind se escribe y se lee en el mismo lugar. Una vista duplicada parte la atención entre dos copias del mismo texto y parte el foco de vim: los movimientos, las búsquedas y las marcas valen en una y no en la otra. El caso que cubriría una vista previa (leer la nota ya formateada) lo cubre el live preview: en las líneas donde no está el cursor, la sintaxis se oculta y se ve el resultado, y la línea del cursor muestra la fuente.
+
+**Restricciones desde ya:**
+
+- El estilo del markdown vive en el editor: sale de `metalmind-syntax` y lo pinta la misma vista que edita (03 §2, "Estilo en el editor"). Nada se calcula pensando en un render aparte.
+- Lo que hoy se atenúa (`**`, `[[`, `#`) queda marcado en el modelo como ocultable, para que el live preview (paso 2) lo esconda en la misma vista.
+- Exportar a HTML o PDF (03 §8, post-MVP) es otra cosa: un archivo que sale de Metalmind, no una vista que acompaña a la nota.
 
 ## Dónde entra en el roadmap
 
