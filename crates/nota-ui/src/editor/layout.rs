@@ -71,8 +71,14 @@ impl FrameLayout {
         }
     }
 
+    /// Las líneas pintadas van en orden, así que se busca en log n: el
+    /// resaltado de la búsqueda la llama una vez por coincidencia.
     pub fn line(&self, line: usize) -> Option<&LaidLine> {
-        self.lines.iter().find(|laid| laid.line == line)
+        let index = self
+            .lines
+            .binary_search_by_key(&line, |laid| laid.line)
+            .ok()?;
+        self.lines.get(index)
     }
 
     /// Línea y byte dentro de ella más cercanos a `position`; arriba o abajo
@@ -86,5 +92,40 @@ impl FrameLayout {
             .or_else(|| self.lines.last())?;
         let index = laid.shaped.closest_index_for_x(position.x - laid.origin.x);
         Some((laid.line, index))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::size;
+
+    use super::*;
+
+    fn layout(lines: &[usize]) -> FrameLayout {
+        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(100.)));
+        FrameLayout {
+            viewport: Viewport::new(bounds, px(10.), Scroll::default()),
+            lines: lines
+                .iter()
+                .map(|&line| LaidLine {
+                    line,
+                    origin: point(px(0.), px(0.)),
+                    shaped: ShapedLine::default(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn encuentra_cada_linea_pintada_y_ninguna_mas() {
+        let painted = layout(&[40, 41, 43, 44]);
+        for line in [40, 41, 43, 44] {
+            assert_eq!(painted.line(line).map(|laid| laid.line), Some(line));
+        }
+        for line in [0, 39, 42, 45] {
+            assert!(painted.line(line).is_none(), "{line}");
+        }
+        assert_eq!(painted.visible_lines(), 40..45);
+        assert_eq!(layout(&[]).visible_lines(), 0..0);
     }
 }
