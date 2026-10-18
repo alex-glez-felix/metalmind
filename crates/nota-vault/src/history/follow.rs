@@ -276,7 +276,18 @@ fn rename_in(index: &mut Index, from: &VaultPath, to: &VaultPath, at: SystemTime
         }
         index.notes.insert(new.clone(), entry);
     }
-    !moved.is_empty()
+    // Las apartadas dentro de una carpeta movida van con ella; la apartada en
+    // la ruta de la nota misma era de otra nota y se queda.
+    let mut set_aside_moved = false;
+    for (path, _) in &mut index.set_aside {
+        if path != from
+            && let Some(new) = path.rebase(from, to)
+        {
+            *path = new;
+            set_aside_moved = true;
+        }
+    }
+    !moved.is_empty() || set_aside_moved
 }
 
 fn mark_deleted_in(index: &mut Index, path: &VaultPath, at: SystemTime) -> bool {
