@@ -247,8 +247,8 @@ fn selection_quads(
         .collect()
 }
 
-/// Bloque en Normal, barra en Insert; en la línea de comandos el cursor está
-/// abajo, en la barra de estado.
+/// Bloque en Normal y Visual, barra en Insert; en la línea de comandos el
+/// cursor está abajo, en la barra de estado.
 fn cursor_quad(
     document: &Document,
     layout: &FrameLayout,
@@ -259,7 +259,7 @@ fn cursor_quad(
     let (width, color) = match document.mode() {
         Mode::CommandLine => return None,
         Mode::Insert => (theme.caret_width, theme.caret),
-        Mode::Normal | Mode::OperatorPending(_) => (
+        Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => (
             block_width(document, layout, typeface, window)?,
             theme.block_cursor,
         ),

@@ -50,6 +50,16 @@ Los cambios que importan a quien usa nota. El formato sigue
 - Marks `a`–`z` con `m`, `'` y `` ` ``, también como motions de operador, y
   `''` para volver del último salto. Siguen al texto cuando se edita arriba.
 
+#### Visual
+
+- Visual por carácter (`v`) y por línea (`V`), con `o`, `gv` y `[count]v`.
+  Todas las motions, `/ ? n N` y las marks extienden la selección, y los text
+  objects la seleccionan o la hacen crecer.
+- Operadores `d x c y p P r ~ u U` sobre la selección, con registro, y `.`
+  repite sobre la misma cantidad de texto. En Normal, `gu gU g~`.
+- La ventana todavía no pinta bien la selección: le falta el último carácter
+  y, con `V`, las líneas completas.
+
 #### Configuración
 
 - `config.yaml` (o `config.yml`) en el directorio de configuración del usuario

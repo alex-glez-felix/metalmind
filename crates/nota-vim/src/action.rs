@@ -1,4 +1,4 @@
-use crate::{CharSearch, Motion, Operator, TextObject};
+use crate::{CharSearch, Motion, Operator, TextObject, VisualKind};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,6 +50,17 @@ pub enum Action {
     SelectRegister,
     /// El objeto de `dd`, `cc` y `yy`.
     CurrentLine,
+    /// `v` o `V`: entra a Visual, cambia de tipo o, si ya es de ese tipo,
+    /// sale.
+    Visual(VisualKind),
+    /// `o` en Visual: el cursor pasa al otro extremo de la selección.
+    OtherEnd,
+    /// `gv`: vuelve a la última selección; en Visual, la intercambia con la
+    /// actual.
+    RestoreVisual,
+    /// `r` en Visual: cada carácter seleccionado pasa a ser la tecla
+    /// siguiente.
+    Replace,
     Insert(InsertAt),
     NormalMode,
     /// Como `ctrl-c` en vim: sale a Normal igual que [`Action::NormalMode`],
@@ -171,8 +182,16 @@ impl Action {
         Self::Operator(Operator::Delete),
         Self::Operator(Operator::Change),
         Self::Operator(Operator::Yank),
+        Self::Operator(Operator::Lowercase),
+        Self::Operator(Operator::Uppercase),
+        Self::Operator(Operator::ToggleCase),
         Self::SelectRegister,
         Self::CurrentLine,
+        Self::Visual(VisualKind::Char),
+        Self::Visual(VisualKind::Line),
+        Self::OtherEnd,
+        Self::RestoreVisual,
+        Self::Replace,
         Self::Insert(InsertAt::Before),
         Self::Insert(InsertAt::After),
         Self::Insert(InsertAt::FirstNonBlank),
@@ -227,11 +246,14 @@ impl Action {
                 whole_word,
             } => search_word_name(backward, whole_word),
             Self::ClearSearchHighlight => "vim::clear_search_highlight",
-            Self::Operator(Operator::Delete) => "vim::delete",
-            Self::Operator(Operator::Change) => "vim::change",
-            Self::Operator(Operator::Yank) => "vim::yank",
+            Self::Operator(operator) => operator_name(operator),
             Self::SelectRegister => "vim::select_register",
             Self::CurrentLine => "vim::current_line",
+            Self::Visual(VisualKind::Char) => "vim::toggle_visual",
+            Self::Visual(VisualKind::Line) => "vim::toggle_visual_line",
+            Self::OtherEnd => "vim::other_end",
+            Self::RestoreVisual => "vim::restore_visual_selection",
+            Self::Replace => "vim::replace",
             Self::Insert(at) => insert_name(at),
             Self::NormalMode => "vim::normal_mode",
             Self::Interrupt => "vim::interrupt",
@@ -255,6 +277,17 @@ impl Action {
             Self::HistoryPrevious => "vim::history_previous",
             Self::HistoryNext => "vim::history_next",
         }
+    }
+}
+
+fn operator_name(operator: Operator) -> &'static str {
+    match operator {
+        Operator::Delete => "vim::delete",
+        Operator::Change => "vim::change",
+        Operator::Yank => "vim::yank",
+        Operator::Lowercase => "vim::lowercase",
+        Operator::Uppercase => "vim::uppercase",
+        Operator::ToggleCase => "vim::toggle_case",
     }
 }
 

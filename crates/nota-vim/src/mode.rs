@@ -1,10 +1,20 @@
 use crate::Operator;
 
+/// Cómo abarca una selección Visual: por caracteres (`v`) o por líneas (`V`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VisualKind {
+    Char,
+    Line,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Normal,
     Insert,
     OperatorPending(Operator),
+    /// Cada selección va de `anchor` a `head`, los dos incluidos (ver el
+    /// README del crate).
+    Visual(VisualKind),
     /// Escribiendo tras `:`, `/` o `?` (ver [`Prompt`]).
     CommandLine,
 }

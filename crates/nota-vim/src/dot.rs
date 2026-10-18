@@ -4,6 +4,7 @@ use crate::insert::Typed;
 use crate::mark::MarkName;
 use crate::object::Object;
 use crate::register::RegisterName;
+use crate::visual::VisualSize;
 use crate::{InsertAt, Operator, PasteSide};
 
 /// Sobre qué actuó un operador, tal como se tecleó.
@@ -61,6 +62,8 @@ pub(crate) enum Change {
     Operate(Operator, Subject),
     Paste(PasteSide),
     Insert(InsertAt),
+    /// `r` en Visual, sobre la misma cantidad de texto.
+    Replace(char, VisualSize),
 }
 
 /// Un cambio que `.` sabe repetir: la orden, su count, su registro y, si

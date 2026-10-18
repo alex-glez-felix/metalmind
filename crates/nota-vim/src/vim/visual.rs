@@ -1,0 +1,312 @@
+//! Visual por carácter (`v`) y por línea (`V`).
+
+use nota_buffer::{Buffer, Goal, PerSelection, Selection, Selections};
+
+use super::Vim;
+use super::awaiting::Awaiting;
+use super::dispatch::move_cursors;
+use super::operate::{Operation, run};
+use crate::dot::{Change, Dot, Subject};
+use crate::lines::clamp_normal;
+use crate::motion::Purpose;
+use crate::object::Object;
+use crate::operator::{Operand, Outcome};
+use crate::register::{Clipboard, Register, RegisterName, Write};
+use crate::transform::Transform;
+use crate::visual::{self, Area, LastVisual, VisualSize};
+use crate::{
+    Action, KeyOutcome, Mode, Motion, Operator, PasteSide, TextObject, VimError, VisualKind, paste,
+};
+
+impl Vim {
+    /// Lo que hace cada acción en Visual; las que no aplican solo cancelan
+    /// lo pendiente.
+    pub(super) fn run_in_visual(
+        &mut self,
+        action: Action,
+        kind: VisualKind,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        match action {
+            Action::Motion(motion) => self.move_by(motion, buffer, selections)?,
+            Action::FindChar(search) => self.awaiting = Some(Awaiting::Find(search)),
+            Action::RepeatFind { reversed } => {
+                self.repeat_find(reversed, buffer, selections, clipboard)?;
+            }
+            Action::Search { backward } => self.open_search(backward),
+            Action::SearchNext { reversed } => {
+                return self.search_next(reversed, buffer, selections, clipboard);
+            }
+            Action::GoToMark { exact } => self.awaiting = Some(Awaiting::Mark { exact }),
+            Action::TextObject(object) => self.select_object(object, kind, buffer, selections),
+            Action::SelectRegister => self.awaiting = Some(Awaiting::Register),
+            Action::Operator(operator) => {
+                self.operate_visual(operator, kind, buffer, selections, clipboard)?;
+            }
+            Action::Paste(side) => self.paste_visual(side, kind, buffer, selections, clipboard)?,
+            Action::Replace => self.awaiting = Some(Awaiting::Replace),
+            Action::Visual(new) => self.toggle_visual(new, kind, buffer, selections),
+            Action::OtherEnd => self.other_end(selections),
+            Action::RestoreVisual => self.restore_visual(buffer, selections),
+            Action::NormalMode | Action::Interrupt => self.leave_visual(kind, buffer, selections),
+            _ => self.reset(),
+        }
+        Ok(KeyOutcome::Executed(action))
+    }
+
+    pub(super) fn in_visual(&self) -> bool {
+        matches!(self.mode, Mode::Visual(_))
+    }
+
+    pub(super) fn motion_purpose(&self) -> Purpose {
+        if self.in_visual() {
+            Purpose::Select
+        } else {
+            Purpose::Move
+        }
+    }
+
+    /// `v` o `V` desde Normal. Con count toma la cantidad de texto de la
+    /// última vez que se operó en Visual, multiplicada, y su modo; si nunca
+    /// se operó, `count` caracteres o líneas.
+    pub(super) fn enter_visual(
+        &mut self,
+        kind: VisualKind,
+        buffer: &Buffer,
+        selections: &mut Selections,
+    ) {
+        let count = self.count.take();
+        self.reset();
+        let cursors = selections.map(|s| Selection::cursor(s.head).with_goal(s.goal));
+        self.mode = Mode::Visual(kind);
+        *selections = match (count, self.last_visual_size) {
+            (Some(times), Some(size)) => {
+                self.mode = Mode::Visual(size.kind());
+                cursors.map(|s| size.select_from(buffer, s.head, times))
+            }
+            (Some(times), None) if times > 1 => {
+                let motion = match kind {
+                    VisualKind::Char => Motion::Right,
+                    VisualKind::Line => Motion::Down,
+                };
+                move_cursors(&cursors, true, |s| {
+                    motion.resolve(buffer, s, Some(times - 1), Purpose::Select)
+                })
+                .unwrap_or(cursors)
+            }
+            _ => cursors,
+        };
+    }
+
+    /// `v` o `V` en Visual: cambia de tipo o, si ya es de ese tipo, sale.
+    pub(super) fn toggle_visual(
+        &mut self,
+        kind: VisualKind,
+        current: VisualKind,
+        buffer: &Buffer,
+        selections: &mut Selections,
+    ) {
+        if kind == current {
+            self.leave_visual(current, buffer, selections);
+        } else {
+            self.reset();
+            self.mode = Mode::Visual(kind);
+        }
+    }
+
+    /// Sale a Normal con el cursor en el extremo que se movía, fuera del fin
+    /// de línea; `gv` recuerda la selección tal como estaba.
+    pub(super) fn leave_visual(
+        &mut self,
+        kind: VisualKind,
+        buffer: &Buffer,
+        selections: &mut Selections,
+    ) {
+        self.reset();
+        self.last_visual = Some(LastVisual::save(buffer, selections, kind));
+        self.mode = Mode::Normal;
+        *selections = selections.map(|s| Selection::cursor(clamp_normal(buffer, s.head)));
+    }
+
+    pub(super) fn other_end(&mut self, selections: &mut Selections) {
+        self.reset();
+        *selections = selections.map(|s| Selection {
+            anchor: s.head,
+            head: s.anchor,
+            goal: Goal::None,
+        });
+    }
+
+    /// `gv`. Sin una selección anterior no hace nada.
+    pub(super) fn restore_visual(&mut self, buffer: &Buffer, selections: &mut Selections) {
+        self.reset();
+        let Some(marks) = self.last_visual.clone() else {
+            return;
+        };
+        let Some(restored) = marks.restore(buffer) else {
+            return;
+        };
+        if let Mode::Visual(kind) = self.mode {
+            self.last_visual = Some(LastVisual::save(buffer, selections, kind));
+        }
+        self.mode = Mode::Visual(marks.kind());
+        *selections = restored;
+    }
+
+    /// Con varias selecciones, la primera decide el modo.
+    pub(super) fn select_object(
+        &mut self,
+        object: TextObject,
+        kind: VisualKind,
+        buffer: &Buffer,
+        selections: &mut Selections,
+    ) {
+        let count = self.count.take().unwrap_or(1);
+        self.reset();
+        let selected = selections.map_to(|s| object.select(buffer, s, kind, count));
+        let kind = selected.iter().next().map_or(kind, |&(_, kind)| kind);
+        *selections = selected.to_selections(|&(selection, _)| selection);
+        self.mode = Mode::Visual(kind);
+    }
+
+    /// Como en vim, el count no cuenta y `.` repite el operador sobre la
+    /// misma cantidad de texto desde el cursor, con el mismo registro.
+    pub(super) fn operate_visual(
+        &mut self,
+        operator: Operator,
+        kind: VisualKind,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), VimError> {
+        let register = self.selected.take();
+        let size = self.finish_visual(kind, buffer, selections);
+        let operands = visual_operands(Area::Selection(kind), buffer, selections);
+        let operation = Operation {
+            operator,
+            subject: Subject::Object(Object::Visual(Area::Sized(size))),
+            count: None,
+            register,
+        };
+        self.finish_operator(operation, &operands, buffer, selections, clipboard)
+    }
+
+    /// `p` y `P`: lo pegado reemplaza la selección. Como en vim, con `p` lo
+    /// borrado va a los registros como un `d`, y con `P` a ninguno; `.`
+    /// repite ese borrado (`"_d` tras `P`), que es lo que vim guarda.
+    pub(super) fn paste_visual(
+        &mut self,
+        side: PasteSide,
+        kind: VisualKind,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), VimError> {
+        let times = self.take_count().unwrap_or(1);
+        let register = self.selected.take();
+        let extent = self.finish_visual(kind, buffer, selections);
+        let content = self.read_register(register, clipboard);
+        let targets = selections.map_to(|s| visual::target(buffer, s, kind));
+        let deleted = Register::from_regions(buffer, targets.iter().map(|t| &t.region))?;
+        let spans_lines = targets.iter().any(|t| t.region.spans_lines(buffer));
+        *selections = match &content {
+            Some(content) => paste::replace(buffer, &targets, content, times)?,
+            None => run(
+                Operator::Delete,
+                &Object::Visual(Area::Selection(kind)),
+                buffer,
+                selections,
+            )?,
+        };
+        let repeated_register = match side {
+            PasteSide::After => {
+                let write = Write::Delete {
+                    spans_lines,
+                    always_numbered: false,
+                };
+                self.registers.write(None, deleted, write, clipboard);
+                None
+            }
+            PasteSide::Before => Some(RegisterName::BlackHole),
+        };
+        let repeated = Subject::Object(Object::Visual(Area::Sized(extent)));
+        let change = Change::Operate(Operator::Delete, repeated);
+        self.last_change = Some(Dot::new(change, None, repeated_register));
+        Ok(())
+    }
+
+    /// Completa `r` en Visual.
+    pub(super) fn replace_char(
+        &mut self,
+        c: char,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        let Mode::Visual(kind) = self.mode else {
+            self.reset();
+            return Ok(());
+        };
+        let size = self.finish_visual(kind, buffer, selections);
+        transform(
+            Transform::Replace(c),
+            Area::Selection(kind),
+            buffer,
+            selections,
+        )?;
+        self.last_change = Some(Dot::new(Change::Replace(c, size), None, None));
+        Ok(())
+    }
+
+    pub(super) fn replace_sized(
+        &mut self,
+        c: char,
+        size: VisualSize,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        self.reset();
+        transform(Transform::Replace(c), Area::Sized(size), buffer, selections)?;
+        self.last_change = Some(Dot::new(Change::Replace(c, size), None, None));
+        Ok(())
+    }
+
+    /// Antes de operar: sale a Normal, `gv` recuerda la selección, y `.` y
+    /// `[count]v` su tamaño.
+    fn finish_visual(
+        &mut self,
+        kind: VisualKind,
+        buffer: &Buffer,
+        selections: &Selections,
+    ) -> VisualSize {
+        self.reset();
+        self.mode = Mode::Normal;
+        self.last_visual = Some(LastVisual::save(buffer, selections, kind));
+        let size = VisualSize::of(buffer, selections.primary(), kind);
+        self.last_visual_size = Some(size);
+        size
+    }
+}
+
+fn transform(
+    transform: Transform,
+    area: Area,
+    buffer: &mut Buffer,
+    selections: &mut Selections,
+) -> Result<(), VimError> {
+    let operands = visual_operands(area, buffer, selections);
+    let (Outcome::Missed(after)
+    | Outcome::Applied {
+        selections: after, ..
+    }) = transform.apply(buffer, &operands)?;
+    *selections = after;
+    Ok(())
+}
+
+fn visual_operands(area: Area, buffer: &Buffer, selections: &Selections) -> PerSelection<Operand> {
+    selections.map_to(|selection| Operand {
+        selection: *selection,
+        target: Ok(area.target(buffer, selection)),
+    })
+}

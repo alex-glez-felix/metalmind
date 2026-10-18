@@ -20,6 +20,8 @@ pub(super) enum Awaiting {
     SetMark,
     /// `'` o `` ` ``: la mark a la que ir.
     Mark { exact: bool },
+    /// `r` en Visual: el carácter que reemplaza a los seleccionados.
+    Replace,
 }
 
 impl Vim {
@@ -61,6 +63,10 @@ impl Vim {
             Awaiting::Mark { exact } => {
                 self.go_to_mark(c, exact, buffer, selections, clipboard)?;
                 Action::GoToMark { exact }
+            }
+            Awaiting::Replace => {
+                self.replace_char(c, buffer, selections)?;
+                Action::Replace
             }
         };
         Ok(KeyOutcome::Executed(action))

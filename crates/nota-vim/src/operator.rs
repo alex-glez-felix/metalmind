@@ -6,12 +6,19 @@ use crate::VimError;
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
 use crate::span::{Missed, Region, Target};
+use crate::transform::Transform;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operator {
     Delete,
     Change,
     Yank,
+    /// `gu`, o `u` en Visual.
+    Lowercase,
+    /// `gU`, o `U` en Visual.
+    Uppercase,
+    /// `g~`, o `~` en Visual.
+    ToggleCase,
 }
 
 /// Una selección y lo que el operador abarca desde ella, o dónde queda el
@@ -34,9 +41,54 @@ pub(crate) enum Outcome {
     },
 }
 
+/// Lo que hace un operador con el texto que abarca.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Effect {
+    /// Lo copia al registro y, salvo `y`, lo quita.
+    Cut(Cut),
+    /// Cambia cada carácter sin tocar el registro.
+    Transform(Transform),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Cut {
+    Delete,
+    Change,
+    Yank,
+}
+
 impl Operator {
+    fn effect(self) -> Effect {
+        match self {
+            Self::Delete => Effect::Cut(Cut::Delete),
+            Self::Change => Effect::Cut(Cut::Change),
+            Self::Yank => Effect::Cut(Cut::Yank),
+            Self::Lowercase => Effect::Transform(Transform::Lowercase),
+            Self::Uppercase => Effect::Transform(Transform::Uppercase),
+            Self::ToggleCase => Effect::Transform(Transform::ToggleCase),
+        }
+    }
+
+    /// Si cambia cada carácter sin tocar el registro, como `gu`.
+    pub(crate) fn transforms(self) -> bool {
+        matches!(self.effect(), Effect::Transform(_))
+    }
+
     /// `Change` deja la transacción abierta para el modo Insert.
     pub(crate) fn apply(
+        self,
+        buffer: &mut Buffer,
+        operands: &PerSelection<Operand>,
+    ) -> Result<Outcome, VimError> {
+        match self.effect() {
+            Effect::Cut(cut) => cut.apply(buffer, operands),
+            Effect::Transform(transform) => transform.apply(buffer, operands),
+        }
+    }
+}
+
+impl Cut {
+    fn apply(
         self,
         buffer: &mut Buffer,
         operands: &PerSelection<Operand>,
@@ -95,19 +147,19 @@ struct Plan {
     start: ByteOffset,
     want: Want,
     adjusted: bool,
-    operator: Operator,
+    cut: Cut,
 }
 
 impl Plan {
-    fn new(buffer: &Buffer, operator: Operator, operand: &Operand) -> Result<Self, Missed> {
+    fn new(buffer: &Buffer, cut: Cut, operand: &Operand) -> Result<Self, Missed> {
         let target = operand.target.clone()?;
-        let region = match operator {
-            Operator::Delete => whole_lines_if_delimited(buffer, target.region),
-            Operator::Change | Operator::Yank => target.region,
+        let region = match cut {
+            Cut::Delete if !target.visual => whole_lines_if_delimited(buffer, target.region),
+            Cut::Delete | Cut::Change | Cut::Yank => target.region,
         };
-        let removal = match operator {
-            Operator::Delete => removal(buffer, &region),
-            Operator::Change | Operator::Yank => content(buffer, &region),
+        let removal = match cut {
+            Cut::Delete => removal(buffer, &region),
+            Cut::Change | Cut::Yank => content(buffer, &region),
         };
         Ok(Self {
             region,
@@ -115,15 +167,15 @@ impl Plan {
             start: target.start,
             want: Want::of(buffer, &operand.selection),
             adjusted: target.adjusted,
-            operator,
+            cut,
         })
     }
 
     /// Cursor sobre el texto ya editado.
     fn cursor_after(&self, buffer: &Buffer, map: &EditMap) -> Selection {
         let start = map.map(self.removal.start, Bias::Before);
-        match (&self.region, self.operator) {
-            (Region::Lines { .. }, Operator::Delete) => {
+        match (&self.region, self.cut) {
+            (Region::Lines { .. }, Cut::Delete) => {
                 let line = buffer.line_of(start);
                 if self.adjusted {
                     Selection::cursor(first_non_blank(buffer, line).min(last_char(buffer, line)))
@@ -131,7 +183,7 @@ impl Plan {
                     Selection::cursor(self.want.offset_on(buffer, line)).with_goal(self.want.goal())
                 }
             }
-            (_, Operator::Delete) => Selection::cursor(clamp_normal(buffer, start)),
+            (_, Cut::Delete) => Selection::cursor(clamp_normal(buffer, start)),
             _ => Selection::cursor(start),
         }
     }
@@ -156,7 +208,7 @@ fn edit(buffer: &mut Buffer, steps: &PerSelection<Step>) -> Result<Selections, V
         .iter()
         .filter_map(|step| step.plan.as_ref().ok())
         .map(|plan| plan.removal.clone());
-    let map = buffer.apply(union(removals))?;
+    let map = buffer.apply(union(removals).into_iter().map(Edit::delete).collect())?;
     let buffer = &*buffer;
     Ok(steps.to_selections(|step| match &step.plan {
         Ok(plan) => plan.cursor_after(buffer, &map),
@@ -185,7 +237,7 @@ fn whole_lines_if_delimited(buffer: &Buffer, region: Region) -> Region {
     }
 }
 
-fn content(buffer: &Buffer, region: &Region) -> Range<ByteOffset> {
+pub(crate) fn content(buffer: &Buffer, region: &Region) -> Range<ByteOffset> {
     match *region {
         Region::Chars(ref range) => range.clone(),
         Region::Lines { first, last } => buffer.line_start(first)..buffer.line_end(last),
@@ -204,7 +256,7 @@ fn removal(buffer: &Buffer, region: &Region) -> Range<ByteOffset> {
 }
 
 /// Une rangos que se solapan para que varias selecciones no choquen.
-fn union(ranges: impl IntoIterator<Item = Range<ByteOffset>>) -> Vec<Edit> {
+pub(crate) fn union(ranges: impl IntoIterator<Item = Range<ByteOffset>>) -> Vec<Range<ByteOffset>> {
     let mut ranges: Vec<_> = ranges.into_iter().collect();
     ranges.sort_by_key(|range| range.start);
     let mut merged: Vec<Range<ByteOffset>> = Vec::with_capacity(ranges.len());
@@ -216,5 +268,5 @@ fn union(ranges: impl IntoIterator<Item = Range<ByteOffset>>) -> Vec<Edit> {
             _ => merged.push(range),
         }
     }
-    merged.into_iter().map(Edit::delete).collect()
+    merged
 }

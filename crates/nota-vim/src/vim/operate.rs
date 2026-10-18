@@ -121,9 +121,10 @@ impl Vim {
         };
         *selections = applied;
         if let Some(written) = written {
+            // Solo `y`, `d` y `c` copian lo que abarcan.
             let write = match operator {
                 Operator::Yank => Write::Yank,
-                Operator::Delete | Operator::Change => Write::Delete {
+                _ => Write::Delete {
                     spans_lines,
                     always_numbered,
                 },
@@ -132,9 +133,9 @@ impl Vim {
         }
         let dot = Dot::new(Change::Operate(operator, subject), count, register);
         match operator {
-            Operator::Delete => self.last_change = Some(dot),
             Operator::Change => self.start_insert(dot),
             Operator::Yank => {}
+            _ => self.last_change = Some(dot),
         }
         Ok(())
     }
@@ -165,7 +166,7 @@ impl Vim {
     }
 
     /// `"/` es el último patrón, de una búsqueda o de `:s`.
-    fn read_register(
+    pub(super) fn read_register(
         &self,
         name: Option<RegisterName>,
         clipboard: &mut dyn Clipboard,
@@ -224,4 +225,21 @@ impl Vim {
         }
         Ok(())
     }
+}
+
+/// Aplica el operador sin grabar nada para `.` ni tocar los registros, y
+/// devuelve dónde quedan las selecciones.
+pub(super) fn run(
+    operator: Operator,
+    object: &Object,
+    buffer: &mut Buffer,
+    selections: &Selections,
+) -> Result<Selections, VimError> {
+    let operands = selections.map_to(|selection| Operand {
+        selection: *selection,
+        target: object.target(buffer, selection, operator, None),
+    });
+    Ok(match operator.apply(buffer, &operands)? {
+        Outcome::Missed(selections) | Outcome::Applied { selections, .. } => selections,
+    })
 }

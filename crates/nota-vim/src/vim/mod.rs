@@ -9,6 +9,7 @@ mod operate;
 mod repeat;
 mod search;
 mod substitute;
+mod visual;
 
 use nota_buffer::{Buffer, Selections};
 
@@ -24,6 +25,7 @@ use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::mark::Marks;
 use crate::register::{Clipboard, Detached, RegisterName, Registers};
+use crate::visual::{LastVisual, VisualSize};
 use crate::{
     Action, Command, CommandError, Key, Keymap, Mode, Prompt, SearchError, Substitution, VimError,
     Wrap,
@@ -92,6 +94,11 @@ pub struct Vim {
     last_played: Option<u8>,
     /// La última tecla falló como un `beep_flush` de vim: corta la macro.
     failed: bool,
+    /// Lo que vuelve a seleccionar `gv`.
+    last_visual: Option<LastVisual>,
+    /// El tamaño de la última selección sobre la que se operó, para
+    /// `[count]v` y `[count]V`.
+    last_visual_size: Option<VisualSize>,
 }
 
 impl Default for Vim {
@@ -133,6 +140,8 @@ impl Vim {
             marks: Marks::default(),
             last_played: None,
             failed: false,
+            last_visual: None,
+            last_visual_size: None,
         }
     }
 
@@ -265,9 +274,13 @@ impl Vim {
     /// El cursor se movió por fuera del motor, como con un clic o un pegado
     /// en Normal: se cancela lo pendiente (count, operador, `f`) y, como en
     /// vim, lo tecleado en Insert ya no se repite con el count y lo que se
-    /// teclee después es otro cambio para `.`.
+    /// teclee después es otro cambio para `.`. Un clic en Visual termina la
+    /// selección; quien aloja el editor pone después el cursor.
     pub fn cursor_moved(&mut self) {
         self.reset();
+        if matches!(self.mode, Mode::Visual(_)) {
+            self.mode = Mode::Normal;
+        }
         if let Some(session) = &mut self.insert {
             session.cursor_moved();
         }

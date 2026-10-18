@@ -50,13 +50,15 @@ while rest ~= "" do
   rest = rest:sub(stop + 1)
 end
 
+-- En Visual, getpos("v") es el otro extremo de la selección.
 local state = exec([[
   local pos = vim.api.nvim_win_get_cursor(0)
-  return { pos[1], pos[2], vim.api.nvim_get_mode().mode, vim.api.nvim_buf_get_lines(0, 0, -1, true) }
+  local anchor = vim.fn.getpos("v")
+  return { pos[1], pos[2], vim.api.nvim_get_mode().mode, anchor[2], anchor[3] - 1, vim.api.nvim_buf_get_lines(0, 0, -1, true) }
 ]])
 local file = assert(io.open(out, "w"))
-file:write(string.format("%d %d %s\n", state[1], state[2], state[3]))
-file:write(table.concat(state[4], "\n"))
+file:write(string.format("%d %d %s %d %d\n", state[1], state[2], state[3], state[4], state[5]))
+file:write(table.concat(state[6], "\n"))
 file:close()
 
 vim.rpcnotify(child, "nvim_command", "qa!")

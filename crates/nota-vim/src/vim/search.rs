@@ -1,7 +1,7 @@
-//! `/`, `?`, `n`, `N`, `*`, `#`, `g*` y `g#`, solos o como objeto de un
-//! operador.
+//! `/`, `?`, `n`, `N`, `*`, `#`, `g*` y `g#`, solos, como objeto de un
+//! operador o, los cuatro primeros, extendiendo una selección Visual.
 
-use nota_buffer::{Buffer, Selection, Selections};
+use nota_buffer::{Buffer, Goal, Selection, Selections};
 
 use super::Vim;
 use super::operate::Operation;
@@ -13,7 +13,9 @@ use crate::operator::Operand;
 use crate::register::{Clipboard, RegisterName};
 use crate::search::{Case, Hit, Query, WordSearch, split_at_delimiter};
 use crate::span::Missed;
-use crate::{Action, KeyOutcome, Mode, Operator, Pattern, Prompt, SearchError, VimError};
+use crate::{
+    Action, KeyOutcome, Mode, Operator, Pattern, Prompt, SearchError, VimError, VisualKind,
+};
 
 /// Lo que recuerda el motor entre búsquedas.
 #[derive(Debug, Default)]
@@ -44,12 +46,13 @@ impl SearchMemory {
 }
 
 /// Un operador con su count y su registro, esperando a que se envíe `/` o
-/// `?`.
+/// `?`; o, en Visual, la selección que la búsqueda extiende.
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct AwaitingSearch {
     operator: Option<Operator>,
     count: Option<usize>,
     register: Option<RegisterName>,
+    pub visual: Option<VisualKind>,
 }
 
 /// Un salto a una coincidencia: qué se buscó, cómo lo repite `.` y qué
@@ -86,6 +89,9 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.awaiting_search.take().unwrap_or_default();
+        if let Some(kind) = awaiting.visual {
+            self.mode = Mode::Visual(kind);
+        }
         self.search.history.push(line);
         let query = match self.typed_query(line, backward) {
             Ok(query) => query,
@@ -186,9 +192,10 @@ impl Vim {
     /// El operador pendiente, si hay, el count total y el registro; deja el
     /// resto limpio.
     fn take_motion_context(&mut self) -> AwaitingSearch {
-        let operator = match self.mode {
-            Mode::OperatorPending(operator) => Some(operator),
-            _ => None,
+        let (operator, visual) = match self.mode {
+            Mode::OperatorPending(operator) => (Some(operator), None),
+            Mode::Visual(kind) => (None, Some(kind)),
+            _ => (None, None),
         };
         let count = self.take_count();
         let register = self.selected.take();
@@ -197,6 +204,7 @@ impl Vim {
             operator,
             count,
             register,
+            visual,
         }
     }
 
@@ -260,8 +268,13 @@ impl Vim {
             }
             None => {
                 *selections = hits.to_selections(|(selection, hit)| {
-                    hit.map_or(*selection, |hit| {
-                        Selection::cursor(clamp_normal(buffer, hit.offset))
+                    hit.map_or(*selection, |hit| match awaiting.visual {
+                        Some(_) => Selection {
+                            head: hit.offset,
+                            goal: Goal::None,
+                            ..*selection
+                        },
+                        None => Selection::cursor(clamp_normal(buffer, hit.offset)),
                     })
                 });
             }

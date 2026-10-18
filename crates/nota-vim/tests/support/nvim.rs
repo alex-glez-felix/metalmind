@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 
 use nota_buffer::{Buffer, ByteOffset};
 
-use super::{State, parse, render};
+use super::{State, parse, render, render_visual};
 
 const SCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/oracle.lua");
 
@@ -38,14 +38,19 @@ pub fn run(before: &str, keys: &str) -> State {
     assert!(status.success(), "nvim terminó con {status}");
     let dump = std::fs::read_to_string(output.path()).unwrap();
     let (header, text) = dump.split_once('\n').unwrap_or((&dump, ""));
-    let mut fields = header.split(' ');
-    let mut number = || fields.next().unwrap().parse::<usize>().unwrap();
-    let (row, col) = (number(), number());
-    let mode = fields.next().unwrap().to_owned();
+    let fields: Vec<&str> = header.split(' ').collect();
+    let number = |index: usize| fields[index].parse::<usize>().unwrap();
+    let (row, col) = (number(0), number(1));
+    let mode = fields[2].to_owned();
+    let (anchor_row, anchor_col) = (number(3), number(4));
     let result = Buffer::from(text);
-    let head = ByteOffset::new(result.line_start(row - 1).get() + col);
+    let at = |row: usize, col| ByteOffset::new(result.line_start(row - 1).get() + col);
+    let head = at(row, col);
+    let anchor = at(anchor_row, anchor_col);
+    let visual = matches!(mode.as_str(), "v" | "V");
     State {
         text: render(&result, [head]),
+        selection: render_visual(&result, visual.then_some(anchor), head),
         mode,
     }
 }

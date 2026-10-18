@@ -38,7 +38,9 @@ impl Vim {
                 self.type_in_insert(&Typed::Text(text.to_owned()), buffer, selections)?;
             }
             Mode::CommandLine => self.type_in_command_line(text),
-            Mode::Normal | Mode::OperatorPending(_) => return Ok(KeyOutcome::Unbound),
+            Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => {
+                return Ok(KeyOutcome::Unbound);
+            }
         }
         Ok(KeyOutcome::Inserted)
     }

@@ -22,6 +22,23 @@ pub enum Motion {
     DocumentEnd,
 }
 
+/// Para qué se resuelve una motion; cambia hasta dónde puede llegar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Purpose {
+    /// Mover el cursor en Normal.
+    Move,
+    /// Mover el extremo de una selección Visual, que puede quedar sobre el
+    /// fin de línea.
+    Select,
+    Operate(Operator),
+}
+
+impl Purpose {
+    fn reaches_line_end(self) -> bool {
+        matches!(self, Self::Select | Self::Operate(_))
+    }
+}
+
 /// A dónde lleva una motion y cómo la trata un operador.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Destination {
@@ -63,7 +80,7 @@ impl Motion {
         buffer: &Buffer,
         selection: &Selection,
         count: Option<usize>,
-        operator: Option<Operator>,
+        purpose: Purpose,
     ) -> Option<Destination> {
         let head = selection.head;
         let times = count.unwrap_or(1);
@@ -71,24 +88,24 @@ impl Motion {
         let destination = match self {
             Self::Left => Destination::new(step_left(buffer, head, times), SpanKind::Exclusive),
             Self::Right => {
-                let limit = if operator.is_some() {
+                let limit = if purpose.reaches_line_end() {
                     buffer.line_end(line)
                 } else {
                     last_char(buffer, line)
                 };
                 Destination::new(step_right(buffer, head, times, limit), SpanKind::Exclusive)
             }
-            Self::Up => vertical(buffer, selection, line_above(line, times)?),
-            Self::Down => vertical(buffer, selection, line_below(buffer, line, times)?),
-            Self::NextWordStart { big } => next_word_start(buffer, head, times, big, operator),
+            Self::Up => vertical(buffer, selection, line_above(line, times)?, purpose),
+            Self::Down => vertical(buffer, selection, line_below(buffer, line, times)?, purpose),
+            Self::NextWordStart { big } => next_word_start(buffer, head, times, big, purpose),
             Self::NextWordEnd { big } => {
                 let mut cursor = Cursor::new(buffer, head);
                 word::end(&mut cursor, times, big, false, false);
-                off_line_end(cursor, head, SpanKind::Inclusive)
+                off_line_end(cursor, head, SpanKind::Inclusive, purpose)
             }
             Self::PreviousWordStart { big } => {
                 let mut cursor = Cursor::new(buffer, head);
-                word::backward(&mut cursor, times, big);
+                word::backward(&mut cursor, times, big, false);
                 Destination::new(cursor.offset, SpanKind::Exclusive)
             }
             Self::LineStart => Destination::new(buffer.line_start(line), SpanKind::Exclusive),
@@ -96,12 +113,15 @@ impl Motion {
                 let offset = first_non_blank(buffer, line).min(last_char(buffer, line));
                 Destination::new(offset, SpanKind::Exclusive)
             }
-            Self::LineEnd => line_end(buffer, line, times)?,
-            Self::DocumentStart => vertical(buffer, selection, line_number(buffer, count, 0)),
+            Self::LineEnd => line_end(buffer, line, times, purpose)?,
+            Self::DocumentStart => {
+                vertical(buffer, selection, line_number(buffer, count, 0), purpose)
+            }
             Self::DocumentEnd => vertical(
                 buffer,
                 selection,
                 line_number(buffer, count, buffer.last_line()),
+                purpose,
             ),
         };
         Some(destination)
@@ -143,10 +163,15 @@ fn line_below(buffer: &Buffer, line: usize, times: usize) -> Option<usize> {
     (line < last).then(|| line.saturating_add(times).min(last))
 }
 
-fn vertical(buffer: &Buffer, selection: &Selection, line: usize) -> Destination {
+fn vertical(buffer: &Buffer, selection: &Selection, line: usize, purpose: Purpose) -> Destination {
     let want = Want::of(buffer, selection);
+    let offset = if purpose == Purpose::Select {
+        want.visual_offset_on(buffer, line)
+    } else {
+        want.offset_on(buffer, line)
+    };
     Destination {
-        offset: want.offset_on(buffer, line),
+        offset,
         goal: want.goal(),
         kind: SpanKind::Linewise,
     }
@@ -156,14 +181,20 @@ fn line_number(buffer: &Buffer, count: Option<usize>, default: usize) -> usize {
     count.map_or(default, |n| n.saturating_sub(1).min(buffer.last_line()))
 }
 
-fn line_end(buffer: &Buffer, line: usize, times: usize) -> Option<Destination> {
+/// En Visual `$` llega al fin de línea, que así entra en la selección.
+fn line_end(buffer: &Buffer, line: usize, times: usize, purpose: Purpose) -> Option<Destination> {
     let last = buffer.last_line();
     if times > 1 && line >= last {
         return None;
     }
     let target = line.saturating_add(times - 1).min(last);
+    let offset = if purpose == Purpose::Select {
+        buffer.line_end(target)
+    } else {
+        last_char(buffer, target)
+    };
     Some(Destination {
-        offset: last_char(buffer, target),
+        offset,
         goal: Goal::LineEnd,
         kind: SpanKind::Inclusive,
     })
@@ -175,22 +206,30 @@ fn next_word_start(
     head: ByteOffset,
     times: usize,
     big: bool,
-    operator: Option<Operator>,
+    purpose: Purpose,
 ) -> Destination {
     let mut cursor = Cursor::new(buffer, head);
     let on_word = cursor.current().is_some_and(|c| !is_blank(c));
-    if operator == Some(Operator::Change) && on_word {
+    if purpose == Purpose::Operate(Operator::Change) && on_word {
         word::end(&mut cursor, times, big, true, false);
-        return off_line_end(cursor, head, SpanKind::Inclusive);
+        return off_line_end(cursor, head, SpanKind::Inclusive, purpose);
     }
-    word::forward(&mut cursor, times, big, operator.is_some());
-    off_line_end(cursor, head, SpanKind::Exclusive)
+    let operating = matches!(purpose, Purpose::Operate(_));
+    word::forward(&mut cursor, times, big, operating);
+    off_line_end(cursor, head, SpanKind::Exclusive, purpose)
 }
 
 /// Como `adjust_cursor()` de vim: no dejar el cursor sobre el fin de una
-/// línea con texto; si retrocede, el rango pasa a incluir ese carácter.
-fn off_line_end(mut cursor: Cursor, head: ByteOffset, kind: SpanKind) -> Destination {
-    if cursor.offset > head && cursor.at_line_end() && cursor.one_left() {
+/// línea con texto; si retrocede, el rango pasa a incluir ese carácter. En
+/// Visual no se ajusta: el fin de línea es parte de la selección.
+fn off_line_end(
+    mut cursor: Cursor,
+    head: ByteOffset,
+    kind: SpanKind,
+    purpose: Purpose,
+) -> Destination {
+    let adjusts = purpose != Purpose::Select;
+    if adjusts && cursor.offset > head && cursor.at_line_end() && cursor.one_left() {
         return Destination::new(cursor.offset, SpanKind::Inclusive);
     }
     Destination::new(cursor.offset, kind)
