@@ -121,13 +121,21 @@ impl Worker {
     }
 
     /// Sigue los renombres y borrados del lote. Antes registra los guardados
-    /// que ya se escribieron, que son de antes del cambio: si no, la versión
-    /// de uno que se escribió justo antes de un renombre quedaría en la ruta
-    /// vieja.
+    /// ya escritos en una ruta que el lote renombra o borra: se escribieron
+    /// antes del cambio, y si no su versión quedaría en la ruta vieja. Los
+    /// demás, como uno en el destino de un renombre, van después y esperan.
     fn follow_disk_changes(&self, changes: &[VaultChange], inbox: &mut Inbox) {
+        let gone: Vec<&VaultPath> = changes
+            .iter()
+            .filter_map(|change| match change {
+                VaultChange::Renamed { from, .. } => Some(from),
+                VaultChange::Removed { path, .. } => Some(path),
+                _ => None,
+            })
+            .collect();
         let saves = {
             let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
-            inbox.pending_saves()
+            inbox.pending_saves(|save| gone.iter().any(|path| save.path.starts_with(path)))
         };
         for save in saves {
             self.record(&save);
@@ -162,7 +170,7 @@ impl Worker {
         // Solo mientras se lee: registrar puede tardar y un guardado esperaría.
         let (saves, texts) = {
             let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
-            (inbox.pending_saves(), self.read_notes(notes))
+            (inbox.pending_saves(|_| true), self.read_notes(notes))
         };
         for save in saves {
             self.record(&save);
@@ -295,13 +303,13 @@ impl<'a> Inbox<'a> {
     }
 
     /// Los guardados que ya llegaron, en orden; el resto sigue esperando.
-    fn pending_saves(&mut self) -> Vec<Save> {
+    fn pending_saves(&mut self, wanted: impl Fn(&Save) -> bool) -> Vec<Save> {
         self.queue.extend(self.receiver.try_iter());
         let mut saves = Vec::new();
         let mut rest = VecDeque::with_capacity(self.queue.len());
         for message in self.queue.drain(..) {
             match message {
-                Message::Save(save) => saves.push(save),
+                Message::Save(save) if wanted(&save) => saves.push(save),
                 other => rest.push_back(other),
             }
         }
@@ -375,6 +383,44 @@ mod tests {
         }];
         worker.follow_disk_changes(&changes, &mut Inbox::new(&received));
         assert_eq!(contents(&history, &b), ["uno", "dos"]);
+    }
+
+    #[test]
+    fn un_guardado_en_el_destino_de_un_renombre_espera_al_renombre() {
+        let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let worker = worker(root.path(), &history);
+        let (a, b) = (
+            VaultPath::new("a.md").unwrap(),
+            VaultPath::new("b.md").unwrap(),
+        );
+        history.record(&a, "uno", SystemTime::now()).unwrap();
+        // Renombrada a `b.md` y guardada ahí: el guardado es posterior.
+        let (messages, received) = mpsc::channel();
+        let (done, recorded) = mpsc::channel();
+        messages
+            .send(Message::Save(Save {
+                path: b.clone(),
+                text: "dos".to_owned(),
+                at: SystemTime::now(),
+                done,
+            }))
+            .unwrap();
+        let changes = [VaultChange::Renamed {
+            from: a,
+            to: b.clone(),
+            kind: EntryKind::Note,
+        }];
+        let mut inbox = Inbox::new(&received);
+        worker.follow_disk_changes(&changes, &mut inbox);
+        let Some(Message::Save(save)) = inbox.next() else {
+            panic!("el guardado tenía que seguir esperando");
+        };
+        worker.record(&save);
+        let id = recorded.try_recv().unwrap().unwrap().unwrap();
+        assert_eq!(history.content(&b, id).unwrap(), "dos");
+        assert_eq!(contents(&history, &b), ["uno", "dos"]);
+        assert_eq!(history.deleted_notes().unwrap(), []);
     }
 
     #[test]
