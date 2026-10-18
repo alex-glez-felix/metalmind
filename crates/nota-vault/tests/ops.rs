@@ -59,6 +59,20 @@ fn crear_no_pisa_lo_que_existe() {
 }
 
 #[test]
+fn crear_o_mover_bajo_un_archivo_nombra_el_archivo() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a.md", "b.md"]);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let blocked_by_a = |result: Result<(), FileOpError>| matches!(result, Err(FileOpError::NotAFolder(p)) if p == path("a.md"));
+    assert!(blocked_by_a(vault.create_note(&path("a.md/x.md"))));
+    assert!(blocked_by_a(vault.create_folder(&path("a.md/hondo/c"))));
+    assert!(blocked_by_a(
+        vault.rename(&path("b.md"), &path("a.md/b.md"))
+    ));
+    assert_eq!(entries(dir.path()), ["a.md", "b.md"]);
+}
+
+#[test]
 fn una_nota_tiene_que_ser_md() {
     let dir = TempDir::new().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();

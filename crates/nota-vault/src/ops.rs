@@ -25,6 +25,8 @@ pub enum FileOpError {
     TrashIsSymlink,
     #[error("{0} no se puede mover dentro de sí misma")]
     IntoItself(VaultPath),
+    #[error("{0} es un archivo, no una carpeta")]
+    NotAFolder(VaultPath),
     #[error("{0} ya existe")]
     AlreadyExists(VaultPath),
     #[error("{0} no existe")]
@@ -149,8 +151,8 @@ fn prepare_target(
     Ok(full)
 }
 
-/// Ninguna carpeta entre la raíz y `path` puede ser un enlace simbólico: por
-/// ahí una ruta válida del vault escribiría fuera de él.
+/// Ninguna carpeta entre la raíz y `path` puede ser un enlace simbólico (por
+/// ahí una ruta válida del vault escribiría fuera de él) ni un archivo.
 fn check_ancestors(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
     let mut ancestors: Vec<VaultPath> = path.ancestors().filter(|dir| !dir.is_root()).collect();
     ancestors.reverse();
@@ -159,6 +161,7 @@ fn check_ancestors(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 return Err(FileOpError::Symlink(path.clone()));
             }
+            Ok(metadata) if !metadata.is_dir() => return Err(FileOpError::NotAFolder(dir)),
             Ok(_) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
             Err(error) => return Err(io_error("leer", &dir, error)),
