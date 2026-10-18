@@ -20,24 +20,35 @@ impl Vim {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         self.awaiting = None;
+        match self.mode {
+            Mode::Insert => self.run_in_insert(action, buffer, selections)?,
+            Mode::CommandLine => {
+                return self.run_in_command_line(action, buffer, selections, clipboard);
+            }
+            Mode::Normal | Mode::OperatorPending(_) => {
+                return self.run_in_normal(action, buffer, selections, clipboard);
+            }
+        }
+        Ok(KeyOutcome::Executed(action))
+    }
+
+    /// Normal y operador pendiente.
+    fn run_in_normal(
+        &mut self,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
+                if motion.is_jump() {
+                    self.jumped(buffer, selections)?;
+                }
                 let object = Object::Motion(motion).into();
                 self.operate(operator, object, buffer, selections, clipboard)?;
             }
-            (Action::Motion(motion), Mode::Normal) => {
-                let count = self.take_count();
-                self.reset();
-                let moved = move_cursors(selections, |s| {
-                    let destination = motion.resolve(buffer, s, count, None)?;
-                    let stuck = motion.fails_without_moving() && destination.offset == s.head;
-                    (!stuck).then_some(destination)
-                });
-                match moved {
-                    Some(moved) => *selections = moved,
-                    None => self.fail(),
-                }
-            }
+            (Action::Motion(motion), Mode::Normal) => self.move_by(motion, buffer, selections)?,
             (Action::FindChar(search), Mode::Normal | Mode::OperatorPending(_)) => {
                 self.awaiting = Some(Awaiting::Find(search));
             }
@@ -79,6 +90,10 @@ impl Vim {
             }
             (Action::RecordMacro, Mode::Normal) => self.awaiting = Some(Awaiting::Record),
             (Action::PlayMacro, Mode::Normal) => self.awaiting = Some(Awaiting::Play),
+            (Action::SetMark, Mode::Normal) => self.awaiting = Some(Awaiting::SetMark),
+            (Action::GoToMark { exact }, Mode::Normal | Mode::OperatorPending(_)) => {
+                self.awaiting = Some(Awaiting::Mark { exact });
+            }
             (Action::DeleteRight, Mode::Normal) => {
                 let object = Object::Motion(Motion::Right).into();
                 self.operate(Operator::Delete, object, buffer, selections, clipboard)?;
@@ -94,30 +109,76 @@ impl Vim {
             (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
             (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
-            (Action::NormalMode, Mode::Insert) => {
+            (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
+            _ => self.reset(),
+        }
+        Ok(KeyOutcome::Executed(action))
+    }
+
+    fn run_in_insert(
+        &mut self,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        match action {
+            Action::NormalMode => {
                 self.repeat_insert(buffer, selections)?;
                 self.leave_insert(buffer, selections)?;
             }
-            (Action::Interrupt, Mode::Insert) => self.leave_insert(buffer, selections)?,
-            (Action::Backspace, Mode::Insert) => {
-                self.type_in_insert(&Typed::Backspace, buffer, selections)?;
-            }
-            (Action::Newline, Mode::Insert) => {
+            Action::Interrupt => self.leave_insert(buffer, selections)?,
+            Action::Backspace => self.type_in_insert(&Typed::Backspace, buffer, selections)?,
+            Action::Newline => {
                 self.type_in_insert(&Typed::Text("\n".to_owned()), buffer, selections)?;
             }
-            (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
-            (Action::NormalMode | Action::Interrupt, Mode::CommandLine) => {
-                self.close_command_line();
-            }
-            (Action::Backspace, Mode::CommandLine) => self.command_line_backspace(),
-            (Action::HistoryPrevious, Mode::CommandLine) => self.recall(true),
-            (Action::HistoryNext, Mode::CommandLine) => self.recall(false),
-            (Action::SubmitCommand, Mode::CommandLine) => {
+            _ => self.reset(),
+        }
+        Ok(())
+    }
+
+    fn run_in_command_line(
+        &mut self,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        match action {
+            Action::NormalMode | Action::Interrupt => self.close_command_line(),
+            Action::Backspace => self.command_line_backspace(),
+            Action::HistoryPrevious => self.recall(true),
+            Action::HistoryNext => self.recall(false),
+            Action::SubmitCommand => {
                 return self.submit_command_line(buffer, selections, clipboard);
             }
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))
+    }
+
+    /// Una motion en Normal. Como en vim, falla si falla en todos los
+    /// cursores, y `h` y `l` también si no se mueven.
+    fn move_by(
+        &mut self,
+        motion: Motion,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+    ) -> Result<(), VimError> {
+        let count = self.take_count();
+        self.reset();
+        if motion.is_jump() {
+            self.jumped(buffer, selections)?;
+        }
+        let moved = move_cursors(selections, |s| {
+            let destination = motion.resolve(buffer, s, count, None)?;
+            let stuck = motion.fails_without_moving() && destination.offset == s.head;
+            (!stuck).then_some(destination)
+        });
+        match moved {
+            Some(moved) => *selections = moved,
+            None => self.fail(),
+        }
+        Ok(())
     }
 }
 

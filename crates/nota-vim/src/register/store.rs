@@ -7,6 +7,8 @@ pub(crate) enum Write {
     Delete {
         /// Por líneas o de más de una línea.
         spans_lines: bool,
+        /// Va a `"1` aunque no pase de una línea.
+        always_numbered: bool,
     },
 }
 
@@ -26,7 +28,8 @@ impl Registers {
     /// Lo que copió o borró un operador, repartido como `op_yank` y
     /// `op_delete` de vim: un yank sin registro va a `"0`; un borrado de
     /// líneas recorre `"1`–`"9`, y uno dentro de una línea sin registro va a
-    /// `"-`. Lo último escrito queda en el registro sin nombre.
+    /// `"-` (y también a `"1` si se hizo con `` ` ``). Lo último escrito
+    /// queda en el registro sin nombre.
     pub fn write(
         &mut self,
         name: Option<RegisterName>,
@@ -44,8 +47,11 @@ impl Registers {
                 last = Some(register);
             }
             Write::Yank => {}
-            Write::Delete { spans_lines } => {
-                if spans_lines {
+            Write::Delete {
+                spans_lines,
+                always_numbered,
+            } => {
+                if spans_lines || always_numbered {
                     self.numbered.rotate_right(1);
                     self.numbered[0] = Some(register.clone());
                     if !name.is_some_and(RegisterName::appends) {

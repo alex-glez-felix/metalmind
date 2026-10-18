@@ -16,6 +16,10 @@ pub(super) enum Awaiting {
     Record,
     /// `@`: el registro que reproducir.
     Play,
+    /// `m`: la mark que poner.
+    SetMark,
+    /// `'` o `` ` ``: la mark a la que ir.
+    Mark { exact: bool },
 }
 
 impl Vim {
@@ -49,6 +53,14 @@ impl Vim {
             Awaiting::Play => {
                 self.play_macro(c, clipboard);
                 Action::PlayMacro
+            }
+            Awaiting::SetMark => {
+                self.set_mark(c, buffer, selections)?;
+                Action::SetMark
+            }
+            Awaiting::Mark { exact } => {
+                self.go_to_mark(c, exact, buffer, selections, clipboard)?;
+                Action::GoToMark { exact }
             }
         };
         Ok(KeyOutcome::Executed(action))
