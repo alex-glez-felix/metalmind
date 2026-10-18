@@ -7,7 +7,7 @@ use nota_vault::{FileOpError, Vault, VaultPath};
 
 use super::pane_tree::Axis;
 use super::{DocumentId, Pane, PaneId, Workspace, WorkspaceError};
-use crate::document::Document;
+use crate::document::{Document, entry_path};
 
 /// Dónde se abre un archivo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,13 +120,11 @@ impl Workspace {
     /// Los documentos de `path` o de lo que contiene, con su ruta relativa
     /// a `path` (vacía si es el mismo archivo).
     fn documents_within(&self, path: &Path) -> Vec<(DocumentId, PathBuf)> {
-        let Ok(root) = path.canonicalize() else {
-            return Vec::new();
-        };
+        let root = entry_path(path);
         self.documents
             .iter()
             .filter_map(|(id, document)| {
-                let own = document.resolved_path()?;
+                let own = document.entry_path()?;
                 let rest = own.strip_prefix(&root).ok()?.to_owned();
                 Some((id, rest))
             })
