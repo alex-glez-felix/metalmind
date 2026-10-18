@@ -56,6 +56,9 @@ pub struct Vim {
     last_command_line: Option<String>,
     /// Cuántos `:g` y `:normal` se están corriendo uno dentro de otro.
     ex_depth: usize,
+    /// Cuántas líneas de `:` corren una dentro de otra (`:normal @:`), como
+    /// `cmdline_call_depth` de vim.
+    command_depth: usize,
     /// El `:g` en curso.
     global: Option<GlobalRun>,
     /// Tras `d/` o `3/`, el operador y el count esperan al patrón.
@@ -116,6 +119,7 @@ impl Vim {
             command_history: History::default(),
             last_command_line: None,
             ex_depth: 0,
+            command_depth: 0,
             global: None,
             awaiting_search: None,
             search: SearchMemory::default(),

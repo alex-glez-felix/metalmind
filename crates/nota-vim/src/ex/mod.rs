@@ -112,7 +112,10 @@ impl ParsedLine {
         let command = match parse_command(rest)? {
             Some(command) => command,
             None if rest.trim_end().is_empty() => ExCommand::GoTo,
-            None => return Invocation::parse(line).map(|host| host.map(Self::Host)),
+            None if range.is_none() => {
+                return Invocation::parse(line).map(|host| host.map(Self::Host));
+            }
+            None => return Err(ranged_host_error(typed, rest)),
         };
         if range.is_some() && command == ExCommand::ClearSearchHighlight {
             return Err(CommandError::NoRangeAllowed);
@@ -172,6 +175,18 @@ fn parse_command(text: &str) -> Result<Option<ExCommand>, CommandError> {
         Name::Sort => ExCommand::Sort(SortOptions::parse(bang, args)?),
     };
     Ok(Some(command))
+}
+
+/// Un comando de quien aloja el editor con rango, como `:'<,'>w` tras `:` en
+/// Visual. Si no existe, el error lleva lo escrito con el rango, como vim.
+fn ranged_host_error(typed: &str, rest: &str) -> CommandError {
+    match Invocation::parse(rest) {
+        Ok(Some(host)) => host.command.range_error(rest.trim_end()),
+        Ok(None) | Err(CommandError::Unknown(_)) => {
+            CommandError::Unknown(typed.trim_end().to_owned())
+        }
+        Err(error) => error,
+    }
 }
 
 fn split_bang(text: &str) -> (bool, &str) {
@@ -296,7 +311,8 @@ mod tests {
         let cases = [
             ("sx/a/b/", CommandError::Unknown("sx/a/b/".to_owned())),
             ("no", CommandError::Unknown("no".to_owned())),
-            ("3w", CommandError::Unknown("3w".to_owned())),
+            ("3w", CommandError::PartialWrite),
+            ("3zz", CommandError::Unknown("3zz".to_owned())),
             ("dd", CommandError::Unknown("dd".to_owned())),
             ("m", CommandError::InvalidRange),
             ("m x", CommandError::InvalidRange),

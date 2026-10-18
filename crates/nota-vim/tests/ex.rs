@@ -170,6 +170,8 @@ use rstest_reuse::{self, apply, template};
 #[case("a1\nb\na|2\nc\na3", ":g/./d<CR>u", "a|1\nb\na2\nc\na3")]
 #[case("a1\nb\na|2\nc\na3", ":g/a/s/a/x/<CR>u", "|a1\nb\na2\nc\na3")]
 #[case("a1\nb\na|2\nc\na3", ":g/a/normal ddp<CR>", "b\na1\nc\na2\n|a3")]
+#[case("ab\n\n|cd", ":g/^/normal *<CR>", "ab\n|\ncd")]
+#[case("ab\n\n|cd", ":g/^/normal *<CR>u", "ab\n|\ncd")]
 // @: repite la última línea de `:`, y `@@` también
 #[case("a|a\nbb\ncc\ndd\nee", ":s/./X/<CR>j@:", "Xa\n|Xb\ncc\ndd\nee")]
 #[case("a|a\nbb\ncc\ndd\nee", ":s/./X/<CR>j@:j@@", "Xa\nXb\n|Xc\ndd\nee")]

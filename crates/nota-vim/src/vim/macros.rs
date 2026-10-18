@@ -7,7 +7,7 @@ use nota_buffer::{Buffer, Selections};
 
 use super::Vim;
 use crate::register::{Clipboard, RegisterName};
-use crate::{Key, KeyOutcome, VimError, macros};
+use crate::{CommandError, Key, KeyOutcome, VimError, macros};
 
 /// Lo que se va grabando con `q`.
 #[derive(Debug)]
@@ -126,8 +126,13 @@ impl Vim {
     }
 
     /// `{count}@{a-z}`, `@:` para repetir la última línea de `:`, o `@@`
-    /// para lo último que se reprodujo.
-    pub(super) fn play_macro(&mut self, c: char, clipboard: &mut dyn Clipboard) {
+    /// para lo último que se reprodujo. `@:` sin una línea anterior es
+    /// `E30`; un registro vacío falla sin mensaje, como en vim.
+    pub(super) fn play_macro(
+        &mut self,
+        c: char,
+        clipboard: &mut dyn Clipboard,
+    ) -> Option<CommandError> {
         let times = self.take_count().unwrap_or(1);
         self.reset();
         let replay = match c {
@@ -139,10 +144,13 @@ impl Vim {
         };
         let keys = replay.and_then(|replay| self.replayed_keys(replay, clipboard));
         let (Some(replay), Some(keys)) = (replay, keys) else {
-            return self.fail();
+            self.fail();
+            return (replay == Some(Replay::CommandLine))
+                .then_some(CommandError::NoPreviousCommandLine);
         };
         self.last_played = Some(replay);
         self.playback.push_front(keys, times);
+        None
     }
 
     /// Como vim, `@:` teclea otra vez `:`, la línea y `<CR>`.

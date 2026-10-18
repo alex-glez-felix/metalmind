@@ -72,7 +72,8 @@ impl Vim {
     }
 
     /// Cada línea marcada empieza en la columna 0 sin cambiar la columna
-    /// buscada; el primer error corta.
+    /// buscada; el primer error corta, también el de una búsqueda dentro de
+    /// un `:normal`.
     fn run_on_marked(
         &mut self,
         command: &str,
@@ -86,10 +87,10 @@ impl Vim {
                 goal,
                 ..Selection::cursor(buffer.line_start(line))
             });
-            if let KeyOutcome::InvalidCommand(error) =
-                self.run_global_command(command, buffer, selections, clipboard)?
-            {
-                return Err(error.into());
+            match self.run_global_command(command, buffer, selections, clipboard)? {
+                KeyOutcome::InvalidCommand(error) => return Err(error.into()),
+                KeyOutcome::SearchFailed(error) => return Err(error.into()),
+                _ => {}
             }
         }
         Ok(())
