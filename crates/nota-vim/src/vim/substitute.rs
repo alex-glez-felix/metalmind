@@ -27,69 +27,63 @@ impl Vim {
             None => Ok(current..=current),
         };
         let parts = lines.and_then(|lines| Ok((lines, self.substitution_parts(command)?)));
-        let (
-            lines,
-            LastSubstitute {
-                pattern,
-                replacement,
-            },
-        ) = match parts {
+        let (lines, (remembered, used)) = match parts {
             Ok(parts) => parts,
             Err(error) => return Ok(KeyOutcome::InvalidCommand(error)),
         };
-        self.search.pattern = Some(pattern.clone());
+        self.search.pattern = Some(remembered.pattern.clone());
         self.search.highlight = true;
-        let applied =
-            substitute::apply(buffer, &pattern, &replacement, lines, command.flags.global)?;
-        let source = pattern.source().to_owned();
-        self.last_substitute = Some(LastSubstitute {
-            pattern,
-            replacement,
-        });
+        let applied = substitute::apply(
+            buffer,
+            &used,
+            &remembered.replacement,
+            lines,
+            command.flags.global,
+        )?;
+        self.last_substitute = Some(remembered);
         Ok(match applied {
             Some(applied) => {
                 *selections = applied.selections;
                 KeyOutcome::Substituted(applied.summary)
             }
             None if command.flags.quiet => KeyOutcome::Executed(Action::SubmitCommand),
-            None => KeyOutcome::InvalidCommand(SearchError::NotFound(source).into()),
+            None => {
+                let source = used.source().to_owned();
+                KeyOutcome::InvalidCommand(SearchError::NotFound(source).into())
+            }
         })
     }
 
     /// Como vim, `:s//x/` usa el último patrón (de búsqueda o de `:s`) y `:s`
-    /// solo repite el último `:s`; `i` e `I` lo recompilan.
+    /// solo repite el último `:s`. Devuelve lo que se recuerda y el patrón que
+    /// se usa ahora: `i` e `I` valen solo para este `:s`.
     fn substitution_parts(
         &mut self,
         command: &SubstituteCommand,
-    ) -> Result<LastSubstitute, CommandError> {
-        let case = command.flags.case;
-        let Some(new) = &command.new else {
-            let last = self
+    ) -> Result<(LastSubstitute, Pattern), CommandError> {
+        let remembered = match &command.new {
+            None => self
                 .last_substitute
                 .clone()
-                .ok_or(SearchError::NoPrevious)?;
-            return Ok(LastSubstitute {
-                pattern: recompiled(last.pattern, case)?,
-                replacement: last.replacement,
-            });
+                .ok_or(SearchError::NoPrevious)?,
+            Some(new) => LastSubstitute {
+                pattern: self.typed_pattern(&new.pattern)?,
+                replacement: Replacement::parse(&new.replacement)?,
+            },
         };
-        let pattern = if new.pattern.is_empty() {
-            let last = self.search.pattern.clone().ok_or(SearchError::NoPrevious)?;
-            recompiled(last, case)?
-        } else {
-            self.search.history.push(&new.pattern);
-            Pattern::compile(&new.pattern, case.unwrap_or(Case::Smart))?
+        let used = match command.flags.case {
+            Some(case) => remembered.pattern.with_case(case)?,
+            None => remembered.pattern.clone(),
         };
-        Ok(LastSubstitute {
-            pattern,
-            replacement: Replacement::parse(&new.replacement)?,
-        })
+        Ok((remembered, used))
     }
-}
 
-fn recompiled(pattern: Pattern, case: Option<Case>) -> Result<Pattern, SearchError> {
-    match case {
-        Some(case) => pattern.with_case(case),
-        None => Ok(pattern),
+    /// Vacío es el último patrón usado.
+    fn typed_pattern(&mut self, source: &str) -> Result<Pattern, SearchError> {
+        if source.is_empty() {
+            return self.search.pattern.clone().ok_or(SearchError::NoPrevious);
+        }
+        self.search.history.push(source);
+        Pattern::compile(source, Case::Smart)
     }
 }
