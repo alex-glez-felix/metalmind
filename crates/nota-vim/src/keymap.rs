@@ -179,6 +179,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('d')], Action::Operator(Operator::Delete)),
         (Normal, &[ch('c')], Action::Operator(Operator::Change)),
         (Normal, &[ch('y')], Action::Operator(Operator::Yank)),
+        (Normal, &[ch('"')], Action::SelectRegister),
         (Normal, &[ch('x')], Action::DeleteRight),
         (Normal, &[ch('p')], Action::Paste(PasteSide::After)),
         (Normal, &[ch('P')], Action::Paste(PasteSide::Before)),

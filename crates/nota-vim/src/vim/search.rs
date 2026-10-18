@@ -3,12 +3,14 @@
 
 use nota_buffer::{Buffer, Selection, Selections};
 
-use super::{Vim, combined};
+use super::Vim;
+use super::operate::Operation;
 use crate::dot::Subject;
 use crate::history::History;
 use crate::lines::clamp_normal;
 use crate::object::Object;
 use crate::operator::Operand;
+use crate::register::{Clipboard, RegisterName};
 use crate::search::{Case, Hit, Query, WordSearch, split_at_delimiter};
 use crate::span::Missed;
 use crate::{Action, KeyOutcome, Mode, Operator, Pattern, Prompt, SearchError, VimError};
@@ -41,11 +43,21 @@ impl SearchMemory {
     }
 }
 
-/// Un operador y su count, esperando a que se envíe `/` o `?`.
+/// Un operador con su count y su registro, esperando a que se envíe `/` o
+/// `?`.
 #[derive(Clone, Copy, Debug, Default)]
 pub(super) struct AwaitingSearch {
     operator: Option<Operator>,
     count: Option<usize>,
+    register: Option<RegisterName>,
+}
+
+/// Un salto a una coincidencia: qué se buscó, cómo lo repite `.` y qué
+/// esperaba la búsqueda.
+struct Jump<'a> {
+    pattern: &'a str,
+    subject: Subject,
+    awaiting: AwaitingSearch,
 }
 
 impl Vim {
@@ -71,6 +83,7 @@ impl Vim {
         line: &str,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.awaiting_search.take().unwrap_or_default();
         self.search.history.push(line);
@@ -83,15 +96,13 @@ impl Vim {
         let find = |buffer: &Buffer, selection: &Selection, times| {
             query.find(buffer, selection.head, times)
         };
-        self.jump_to_match(
-            query.pattern.source(),
-            find,
+        let jump = Jump {
+            pattern: query.pattern.source(),
             subject,
             awaiting,
-            buffer,
-            selections,
-        )
-        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SubmitCommand)))
+        };
+        self.jump_to_match(jump, find, buffer, selections, clipboard)
+            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SubmitCommand)))
     }
 
     pub(super) fn search_next(
@@ -99,6 +110,7 @@ impl Vim {
         reversed: bool,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.take_motion_context();
         let Some(last) = self.search.query() else {
@@ -113,15 +125,13 @@ impl Vim {
         let find = |buffer: &Buffer, selection: &Selection, times| {
             query.find(buffer, selection.head, times)
         };
-        self.jump_to_match(
-            query.pattern.source(),
-            find,
+        let jump = Jump {
+            pattern: query.pattern.source(),
             subject,
             awaiting,
-            buffer,
-            selections,
-        )
-        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SearchNext { reversed })))
+        };
+        self.jump_to_match(jump, find, buffer, selections, clipboard)
+            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SearchNext { reversed })))
     }
 
     /// Cada cursor busca su palabra desde donde empieza, para saltarla; la
@@ -132,6 +142,7 @@ impl Vim {
         whole_word: bool,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.take_motion_context();
         let search = WordSearch {
@@ -150,15 +161,13 @@ impl Vim {
             backward,
             whole_word,
         };
-        self.jump_to_match(
-            query.pattern.source(),
-            find,
+        let jump = Jump {
+            pattern: query.pattern.source(),
             subject,
             awaiting,
-            buffer,
-            selections,
-        )
-        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(action)))
+        };
+        self.jump_to_match(jump, find, buffer, selections, clipboard)
+            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(action)))
     }
 
     /// Como vim, `*` (también al repetirlo con `.`) deja la palabra del
@@ -174,15 +183,21 @@ impl Vim {
         Some(query)
     }
 
-    /// El operador pendiente, si hay, y el count total; deja el resto limpio.
+    /// El operador pendiente, si hay, el count total y el registro; deja el
+    /// resto limpio.
     fn take_motion_context(&mut self) -> AwaitingSearch {
         let operator = match self.mode {
             Mode::OperatorPending(operator) => Some(operator),
             _ => None,
         };
-        let count = combined(self.operator_count.take(), self.count.take());
+        let count = self.take_count();
+        let register = self.selected.take();
         self.reset();
-        AwaitingSearch { operator, count }
+        AwaitingSearch {
+            operator,
+            count,
+            register,
+        }
     }
 
     fn typed_query(&self, line: &str, backward: bool) -> Result<Query, SearchError> {
@@ -203,13 +218,17 @@ impl Vim {
     /// salió bien sin dar la vuelta.
     fn jump_to_match(
         &mut self,
-        pattern: &str,
+        jump: Jump<'_>,
         find: impl Fn(&Buffer, &Selection, usize) -> Option<Hit>,
-        subject: Subject,
-        awaiting: AwaitingSearch,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<Option<KeyOutcome>, VimError> {
+        let Jump {
+            pattern,
+            subject,
+            awaiting,
+        } = jump;
         let times = awaiting.count.unwrap_or(1);
         let hits = selections.map_to(|selection| (*selection, find(buffer, selection, times)));
         if hits.iter().all(|(_, hit)| hit.is_none()) {
@@ -231,14 +250,13 @@ impl Vim {
                         })
                         .ok_or(Missed::Stay),
                 });
-                self.finish_operator(
+                let operation = Operation {
                     operator,
                     subject,
-                    awaiting.count,
-                    &operands,
-                    buffer,
-                    selections,
-                )?;
+                    count: awaiting.count,
+                    register: awaiting.register,
+                };
+                self.finish_operator(operation, &operands, buffer, selections, clipboard)?;
             }
             None => {
                 *selections = hits.to_selections(|(selection, hit)| {

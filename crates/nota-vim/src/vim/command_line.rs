@@ -6,6 +6,7 @@ use nota_buffer::{Buffer, Selections};
 use super::Vim;
 use crate::ex::ExCommand;
 use crate::history::History;
+use crate::register::Clipboard;
 use crate::{Action, KeyOutcome, Mode, Prompt, VimError};
 
 impl Vim {
@@ -63,11 +64,14 @@ impl Vim {
         &mut self,
         buffer: &mut Buffer,
         selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
         self.mode = Mode::Normal;
         let line = std::mem::take(&mut self.command_line);
         match self.prompt {
-            Prompt::Search { backward } => self.submit_search(backward, &line, buffer, selections),
+            Prompt::Search { backward } => {
+                self.submit_search(backward, &line, buffer, selections, clipboard)
+            }
             Prompt::Command => {
                 self.command_history.push(&line);
                 self.run_ex(&line, buffer, selections)

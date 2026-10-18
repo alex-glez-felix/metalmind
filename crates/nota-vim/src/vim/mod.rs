@@ -1,28 +1,30 @@
+mod awaiting;
 mod command_line;
 mod find;
 mod insert;
+mod operate;
 mod repeat;
 mod search;
 mod substitute;
 
-use nota_buffer::{Buffer, PerSelection, Selection, Selections};
+use nota_buffer::{Buffer, Selection, Selections};
 
+use self::awaiting::Awaiting;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
-use crate::dot::{Change, Dot, Subject};
+use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::keymap::Lookup;
 use crate::motion::Destination;
 use crate::object::Object;
-use crate::operator::{Operand, Outcome};
-use crate::register::Register;
+use crate::register::{Clipboard, Detached, RegisterName, Registers};
 use crate::travel::Travel;
 use crate::{
-    Action, CharSearch, Command, CommandError, Key, Keymap, Mode, Motion, Operator, PasteSide,
-    Prompt, SearchError, Substitution, VimError, Wrap, paste,
+    Action, Command, CommandError, Key, Keymap, Mode, Motion, Operator, Prompt, SearchError,
+    Substitution, VimError, Wrap,
 };
 
 /// Qué pasó con una tecla o una acción.
@@ -57,8 +59,14 @@ pub struct Vim {
     mode: Mode,
     pending: Vec<Key>,
     count: Option<usize>,
+    /// El count tecleado antes de `"x` o del operador; se multiplica con
+    /// el de después.
     operator_count: Option<usize>,
-    register: Option<Register>,
+    /// El registro elegido con `"x` para lo siguiente.
+    selected: Option<RegisterName>,
+    registers: Registers,
+    /// `"+` y `"*` cuando quien aloja el motor no da un portapapeles.
+    detached: Detached,
     command_line: String,
     prompt: Prompt,
     command_history: History,
@@ -70,8 +78,10 @@ pub struct Vim {
     insert: Option<Session>,
     /// Lo que repite `.`.
     last_change: Option<Dot>,
-    /// Tras `f`, `F`, `t` o `T`, la tecla siguiente es el carácter a buscar.
-    awaiting_char: Option<CharSearch>,
+    /// Lo tecleado en la última pasada por Insert: el registro `".`.
+    last_insert: Option<Vec<Typed>>,
+    /// Lo que espera la tecla siguiente como carácter, como el de `f`.
+    awaiting: Option<Awaiting>,
     last_find: Option<Find>,
 }
 
@@ -95,7 +105,9 @@ impl Vim {
             pending: Vec::new(),
             count: None,
             operator_count: None,
-            register: None,
+            selected: None,
+            registers: Registers::default(),
+            detached: Detached::default(),
             command_line: String::new(),
             prompt: Prompt::Command,
             command_history: History::default(),
@@ -104,7 +116,8 @@ impl Vim {
             last_substitute: None,
             insert: None,
             last_change: None,
-            awaiting_char: None,
+            last_insert: None,
+            awaiting: None,
             last_find: None,
         }
     }
@@ -114,6 +127,9 @@ impl Vim {
         self.mode
     }
 
+    /// Como [`Vim::feed_with_clipboard`], con `"+` y `"*` como registros
+    /// normales.
+    ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
     pub fn feed(
@@ -122,8 +138,25 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
-        if let Some(search) = self.awaiting_char.take() {
-            return self.find_char(search, key, buffer, selections);
+        self.with_detached(|vim, clipboard| {
+            vim.feed_with_clipboard(key, buffer, selections, clipboard)
+        })
+    }
+
+    /// Pasa una tecla al motor; `clipboard` es lo que leen y escriben `"+`
+    /// y `"*`.
+    ///
+    /// # Errors
+    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
+    pub fn feed_with_clipboard(
+        &mut self,
+        key: Key,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        if let Some(awaiting) = self.awaiting.take() {
+            return self.complete(awaiting, key, buffer, selections, clipboard);
         }
         if self.push_count_digit(key) {
             return Ok(KeyOutcome::Pending);
@@ -133,16 +166,14 @@ impl Vim {
             Lookup::Pending => Ok(KeyOutcome::Pending),
             Lookup::Action(action) => {
                 self.pending.clear();
-                self.execute(action, buffer, selections)
+                self.run(action, buffer, selections, clipboard)
             }
             Lookup::Unbound => self.unbound(buffer, selections),
         }
     }
 
-    /// Ejecuta una acción por nombre ya resuelto, como harán la paleta y `:`.
-    /// Las acciones que no aplican al modo actual solo cancelan lo pendiente.
-    /// Enviar la línea de comandos devuelve el comando para quien aloja el
-    /// editor.
+    /// Como [`Vim::execute_with_clipboard`], con `"+` y `"*` como registros
+    /// normales.
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
@@ -152,26 +183,64 @@ impl Vim {
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
-        self.awaiting_char = None;
+        self.with_detached(|vim, clipboard| {
+            vim.execute_with_clipboard(action, buffer, selections, clipboard)
+        })
+    }
+
+    /// Ejecuta una acción por nombre ya resuelto, como harán la paleta y `:`.
+    /// Las acciones que no aplican al modo actual solo cancelan lo pendiente.
+    /// Enviar la línea de comandos devuelve el comando para quien aloja el
+    /// editor.
+    ///
+    /// # Errors
+    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
+    pub fn execute_with_clipboard(
+        &mut self,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        self.run(action, buffer, selections, clipboard)
+    }
+
+    fn with_detached<T>(&mut self, run: impl FnOnce(&mut Self, &mut Detached) -> T) -> T {
+        let mut detached = std::mem::take(&mut self.detached);
+        let result = run(self, &mut detached);
+        self.detached = detached;
+        result
+    }
+
+    fn run(
+        &mut self,
+        action: Action,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        self.awaiting = None;
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
-                self.operate(operator, Object::Motion(motion).into(), buffer, selections)?;
+                let object = Object::Motion(motion).into();
+                self.operate(operator, object, buffer, selections, clipboard)?;
             }
             (Action::Motion(motion), Mode::Normal) => {
-                let count = self.count.take();
+                let count = self.take_count();
+                self.reset();
                 *selections = move_cursors(selections, |s| motion.resolve(buffer, s, count, None));
             }
             (Action::FindChar(search), Mode::Normal | Mode::OperatorPending(_)) => {
-                self.awaiting_char = Some(search);
+                self.awaiting = Some(Awaiting::Find(search));
             }
             (Action::RepeatFind { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                self.repeat_find(reversed, buffer, selections)?;
+                self.repeat_find(reversed, buffer, selections, clipboard)?;
             }
             (Action::Search { backward }, Mode::Normal | Mode::OperatorPending(_)) => {
                 self.open_search(backward);
             }
             (Action::SearchNext { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                return self.search_next(reversed, buffer, selections);
+                return self.search_next(reversed, buffer, selections, clipboard);
             }
             (
                 Action::SearchWord {
@@ -179,37 +248,35 @@ impl Vim {
                     whole_word,
                 },
                 Mode::Normal | Mode::OperatorPending(_),
-            ) => return self.search_word(backward, whole_word, buffer, selections),
+            ) => return self.search_word(backward, whole_word, buffer, selections, clipboard),
             (Action::ClearSearchHighlight, Mode::Normal) => {
                 self.reset();
                 self.search.highlight = false;
             }
             (Action::TextObject(object), Mode::OperatorPending(operator)) => {
-                self.operate(
-                    operator,
-                    Object::TextObject(object).into(),
-                    buffer,
-                    selections,
-                )?;
+                let object = Object::TextObject(object).into();
+                self.operate(operator, object, buffer, selections, clipboard)?;
             }
             (Action::CurrentLine, Mode::OperatorPending(operator)) => {
-                self.operate(operator, Object::CurrentLine.into(), buffer, selections)?;
+                let object = Object::CurrentLine.into();
+                self.operate(operator, object, buffer, selections, clipboard)?;
             }
             (Action::Operator(operator), Mode::Normal) => {
-                self.operator_count = self.count.take();
+                self.operator_count = self.take_count();
                 self.mode = Mode::OperatorPending(operator);
             }
+            (Action::SelectRegister, Mode::Normal) => self.awaiting = Some(Awaiting::Register),
             (Action::DeleteRight, Mode::Normal) => {
-                self.operate(
-                    Operator::Delete,
-                    Object::Motion(Motion::Right).into(),
-                    buffer,
-                    selections,
-                )?;
+                let object = Object::Motion(Motion::Right).into();
+                self.operate(Operator::Delete, object, buffer, selections, clipboard)?;
             }
             (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
-            (Action::Paste(side), Mode::Normal) => self.paste(side, buffer, selections)?,
-            (Action::RepeatChange, Mode::Normal) => self.repeat_change(buffer, selections)?,
+            (Action::Paste(side), Mode::Normal) => {
+                self.paste(side, buffer, selections, clipboard)?;
+            }
+            (Action::RepeatChange, Mode::Normal) => {
+                self.repeat_change(buffer, selections, clipboard)?;
+            }
             (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, buffer, selections)?,
             (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
             (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
@@ -233,7 +300,7 @@ impl Vim {
             (Action::HistoryPrevious, Mode::CommandLine) => self.recall(true),
             (Action::HistoryNext, Mode::CommandLine) => self.recall(false),
             (Action::SubmitCommand, Mode::CommandLine) => {
-                return self.submit_command_line(buffer, selections);
+                return self.submit_command_line(buffer, selections, clipboard);
             }
             _ => self.reset(),
         }
@@ -284,97 +351,20 @@ impl Vim {
         self.insert_text(&text, buffer, selections)
     }
 
+    /// El count de lo que se va a ejecutar: `2"a3x` borra 6.
+    fn take_count(&mut self) -> Option<usize> {
+        combined(self.operator_count.take(), self.count.take())
+    }
+
     fn reset(&mut self) {
         self.pending.clear();
         self.count = None;
         self.operator_count = None;
-        self.awaiting_char = None;
+        self.selected = None;
+        self.awaiting = None;
         if matches!(self.mode, Mode::OperatorPending(_)) {
             self.mode = Mode::Normal;
         }
-    }
-
-    fn operate(
-        &mut self,
-        operator: Operator,
-        subject: Subject,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let count = combined(self.operator_count.take(), self.count.take());
-        self.reset();
-        let Some(object) = subject.object(self.last_find, self.search.query()) else {
-            return Ok(());
-        };
-        let operands = selections.map_to(|selection| Operand {
-            selection: *selection,
-            target: object.target(buffer, selection, operator, count),
-        });
-        self.finish_operator(operator, subject, count, &operands, buffer, selections)
-    }
-
-    /// Aplica `operator` sobre lo ya resuelto y graba el cambio para `.`.
-    fn finish_operator(
-        &mut self,
-        operator: Operator,
-        subject: Subject,
-        count: Option<usize>,
-        operands: &PerSelection<Operand>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let (applied, register) = match operator.apply(buffer, operands)? {
-            Outcome::Missed(moved) => {
-                *selections = moved;
-                return Ok(());
-            }
-            Outcome::Applied {
-                selections,
-                register,
-            } => (selections, register),
-        };
-        *selections = applied;
-        if register.is_some() {
-            self.register = register;
-        }
-        let dot = Dot::new(Change::Operate(operator, subject), count);
-        match operator {
-            Operator::Delete => self.last_change = Some(dot),
-            Operator::Change => self.start_insert(dot),
-            Operator::Yank => {}
-        }
-        Ok(())
-    }
-
-    fn paste(
-        &mut self,
-        side: PasteSide,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let count = self.count.take();
-        self.reset();
-        // Como en vim, `.` repite un `p` aunque el registro estuviera vacío.
-        self.last_change = Some(Dot::new(Change::Paste(side), count));
-        if let Some(register) = &self.register {
-            let times = count.unwrap_or(1);
-            *selections = paste::paste(buffer, selections, register, side, times)?;
-        }
-        Ok(())
-    }
-
-    fn travel(
-        &mut self,
-        travel: Travel,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let times = self.count.take().unwrap_or(1);
-        self.reset();
-        if let Some(restored) = travel.run(buffer, times)? {
-            *selections = restored;
-        }
-        Ok(())
     }
 }
 

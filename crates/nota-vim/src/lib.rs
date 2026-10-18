@@ -44,6 +44,7 @@ pub use keymap::{Binding, Context, Keymap};
 pub use mode::{Mode, Prompt};
 pub use motion::Motion;
 pub use operator::Operator;
+pub use register::{Clipboard, SystemRegister};
 pub use search::{Pattern, SearchError, Wrap};
 pub use substitute::Substitution;
 pub use text_object::TextObject;

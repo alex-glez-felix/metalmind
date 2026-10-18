@@ -39,7 +39,7 @@ impl Vim {
         let count = self.count.take();
         self.reset();
         *selections = insert::enter(buffer, selections, at)?;
-        self.start_insert(Dot::new(Change::Insert(at), count));
+        self.start_insert(Dot::new(Change::Insert(at), count, None));
         Ok(())
     }
 
@@ -82,7 +82,9 @@ impl Vim {
     ) -> Result<(), VimError> {
         *selections = insert::leave(buffer, selections)?;
         if let Some(session) = self.insert.take() {
-            self.last_change = Some(session.into_dot());
+            let dot = session.into_dot();
+            self.last_insert = Some(dot.typed.clone());
+            self.last_change = Some(dot);
         }
         self.mode = Mode::Normal;
         Ok(())
