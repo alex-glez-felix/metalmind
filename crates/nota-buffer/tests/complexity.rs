@@ -31,9 +31,9 @@ fn one_insert_per_line(buffer: &Buffer) -> Vec<Edit> {
 
 #[test]
 fn typing_does_not_depend_on_the_buffer_size() {
-    assert_flat(5_000, buffer, |mut buffer| {
+    assert_flat(2_000, buffer, |mut buffer| {
         let at = buffer.line_start(buffer.line_count() / 2);
-        for _ in 0..2_000 {
+        for _ in 0..500 {
             edit(&mut buffer, vec![Edit::insert(at, "x")]);
         }
         buffer
@@ -59,7 +59,7 @@ fn a_batch_of_edits_is_linear() {
 #[test]
 fn undoing_a_batch_is_linear() {
     assert_linear(
-        500,
+        400,
         |lines| {
             let mut buffer = buffer(lines);
             let edits = one_insert_per_line(&buffer);

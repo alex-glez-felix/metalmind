@@ -1,17 +1,20 @@
-//! Pruebas de complejidad: correr con N y con 4N y comparar. Los umbrales
-//! quedan a medio camino, en escala logarítmica, entre lo esperado y lo
-//! siguiente peor, así que el ruido tiene que duplicar el tiempo para fallar.
+//! Pruebas de complejidad: correr con N y con 16N y comparar. El paso es ×16
+//! y no ×4 porque con ×4 un `N^1.5` da ×8, justo entre lineal (×4) y
+//! cuadrático (×16), y ningún umbral lo separa de lo lineal con margen.
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-/// Entre lineal (×4) y cuadrático (×16). Un `N log N` da ×4.5–5.
-pub const MAX_LINEAR_GROWTH: f64 = 8.0;
+/// Cuánto más grande es la entrada grande.
+pub const FACTOR: usize = 16;
 
-/// Para lo que no debería depender del tamaño del texto, como una tecla.
-/// Lineal da ×4; un `log N` da ×1, pero hasta ×2 con la caché compartida
-/// con el resto de la suite, porque el árbol más grande falla más en caché.
-pub const MAX_FLAT_GROWTH: f64 = 3.0;
+/// Lineal da ×16 y un `N log N`, con la caché en contra, hasta ×25; `N^1.5`
+/// da ×64 y cuadrático ×256. El umbral queda a la misma distancia de ×25 y de ×64.
+pub const MAX_LINEAR_GROWTH: f64 = 40.0;
+
+/// `16^0.5`, para lo que no debería depender del tamaño del texto, como una
+/// tecla: constante da ×1 y lineal ×16.
+pub const MAX_FLAT_GROWTH: f64 = 4.0;
 
 /// Corridas de cada tamaño. Se alternan y se toma la más rápida: el ruido de
 /// otros tests en paralelo solo suma tiempo, nunca lo resta.
@@ -20,7 +23,7 @@ const ROUNDS: usize = 11;
 /// Por debajo de esto el reloj y el ruido pesan más que el trabajo medido.
 const MIN_SMALL: Duration = Duration::from_millis(1);
 
-/// Cuánto más tarda `run` con la entrada de tamaño `4 * n` que con la de `n`.
+/// Cuánto más tarda `run` con la entrada de tamaño `FACTOR * n` que con la de `n`.
 /// `setup` arma una entrada nueva para cada corrida, fuera de la medición.
 ///
 /// # Panics
@@ -31,7 +34,7 @@ pub fn growth<T, R>(n: usize, setup: impl Fn(usize) -> T, mut run: impl FnMut(T)
     // La primera vuelta calienta cachés y asignador; también cuenta, es un mínimo.
     for _ in 0..ROUNDS {
         small = small.min(time(&mut run, setup(n)));
-        large = large.min(time(&mut run, setup(4 * n)));
+        large = large.min(time(&mut run, setup(FACTOR * n)));
     }
     assert!(
         small >= MIN_SMALL,
@@ -40,7 +43,7 @@ pub fn growth<T, R>(n: usize, setup: impl Fn(usize) -> T, mut run: impl FnMut(T)
     large.as_secs_f64() / small.as_secs_f64()
 }
 
-/// Falla si `run` crece bastante más que linealmente entre `n` y `4 * n`.
+/// Falla si `run` crece bastante más que linealmente entre `n` y `FACTOR * n`.
 ///
 /// # Panics
 /// Si el crecimiento pasa de [`MAX_LINEAR_GROWTH`].
@@ -48,8 +51,9 @@ pub fn assert_linear<T, R>(n: usize, setup: impl Fn(usize) -> T, run: impl FnMut
     let ratio = growth(n, setup, run);
     assert!(
         ratio <= MAX_LINEAR_GROWTH,
-        "de n = {n} a 4n tardó ×{ratio:.1} (lineal: ×4, cuadrático: ×16, \
-         máximo: ×{MAX_LINEAR_GROWTH})"
+        "de n = {n} a {FACTOR}n tardó ×{ratio:.1} (lineal: ×{FACTOR}, \
+         cuadrático: ×{}, máximo: ×{MAX_LINEAR_GROWTH})",
+        FACTOR * FACTOR
     );
 }
 
@@ -61,8 +65,8 @@ pub fn assert_flat<T, R>(n: usize, setup: impl Fn(usize) -> T, run: impl FnMut(T
     let ratio = growth(n, setup, run);
     assert!(
         ratio <= MAX_FLAT_GROWTH,
-        "de n = {n} a 4n tardó ×{ratio:.1} (constante: ×1, lineal: ×4, \
-         máximo: ×{MAX_FLAT_GROWTH})"
+        "de n = {n} a {FACTOR}n tardó ×{ratio:.1} (constante: ×1, \
+         lineal: ×{FACTOR}, máximo: ×{MAX_FLAT_GROWTH})"
     );
 }
 
@@ -79,17 +83,19 @@ mod tests {
     use super::*;
 
     fn numbers(n: usize) -> Vec<u64> {
-        (0..n as u64).rev().collect()
+        vec![1; n]
     }
 
     fn sum(values: &[u64]) -> u64 {
         values.iter().sum()
     }
 
-    fn pairs(values: &[u64]) -> usize {
+    /// Una pasada completa por cada bloque de `√n` elementos: `n^1.5`. Lo
+    /// cuadrático falla con más razón.
+    fn pass_per_block(values: &[u64]) -> u64 {
         values
-            .iter()
-            .map(|a| values.iter().filter(|&b| a < b).count())
+            .chunks(values.len().isqrt())
+            .map(|block| block[0] + values.iter().sum::<u64>())
             .sum()
     }
 
@@ -103,13 +109,13 @@ mod tests {
 
     #[test]
     fn a_linear_pass_is_linear() {
-        assert_linear(400_000, numbers, |values| sum(&values));
+        assert_linear(1_000_000, numbers, |values| sum(&values));
     }
 
     #[test]
     #[should_panic(expected = "cuadrático")]
-    fn a_quadratic_pass_is_not_linear() {
-        assert_linear(700, numbers, |values| pairs(&values));
+    fn an_n_to_the_one_and_a_half_pass_is_not_linear() {
+        assert_linear(8_000, numbers, |values| pass_per_block(&values));
     }
 
     #[test]
@@ -120,7 +126,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "constante")]
     fn a_linear_pass_is_not_flat() {
-        assert_flat(400_000, numbers, |values| sum(&values));
+        assert_flat(1_000_000, numbers, |values| sum(&values));
     }
 
     #[test]

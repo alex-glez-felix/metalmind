@@ -240,13 +240,13 @@ mod tests {
 
     #[test]
     fn indexar_es_lineal() {
-        nota_perf::assert_linear(2_000, vault_entries, VaultIndex::from_entries);
+        nota_perf::assert_linear(1_000, vault_entries, VaultIndex::from_entries);
     }
 
     #[test]
     fn quitar_todo_el_contenido_es_lineal() {
         nota_perf::assert_linear(
-            3_000,
+            2_000,
             |notes| VaultIndex::from_entries(vault_entries(notes)),
             |mut index| {
                 for top in 0..10 {
