@@ -1,16 +1,22 @@
-//! La ventana de nota: el árbol de paneles como raíz, sin el `Root` de
-//! gpui-kit, que se queda con `tab`, `shift-tab` y `ctrl-c` (04 §riesgo 1).
+//! La ventana de nota: la barra de botones, el panel lateral y el árbol de
+//! paneles como raíz, sin el `Root` de gpui-kit, que se queda con `tab`,
+//! `shift-tab` y `ctrl-c` (04 §riesgo 1).
 
+use std::io;
+use std::sync::mpsc;
 use std::time::Instant;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
 use nota_config::{Config, Paths};
+use nota_vault::{Vault, VaultUpdate};
 
 use crate::actions;
 use crate::document::Document;
 use crate::picker;
+use crate::session::{self, VaultState};
+use crate::sidebar::{self, Sidebar};
 use crate::theme::{NoMonoFont, Theme};
-use crate::workspace::LineNumbers;
+use crate::workspace::{LineNumbers, Workspace};
 use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
@@ -22,6 +28,8 @@ pub enum OpenError {
     NoDisplay,
     #[error(transparent)]
     NoMonoFont(#[from] NoMonoFont),
+    #[error("no se pudo arrancar el hilo del vault: {0}")]
+    Watch(#[source] io::Error),
     #[error(
         "no se pudo abrir la ventana: {0:#}\nnota dibuja con Vulkan u OpenGL: instala el driver \
          de la GPU (o mesa, que trae ambos por software) y compruébalo con `vulkaninfo --summary`"
@@ -29,16 +37,26 @@ pub enum OpenError {
     Window(#[source] anyhow::Error),
 }
 
-/// Abre `document` en una ventana nueva, con el tema y la fuente de
-/// `config`; el estado de cada vault va bajo `paths`. La aplicación termina
-/// cuando se cierra la última ventana.
+/// Lo que se abre: un vault con su watcher y el documento del primer panel.
+pub struct Startup {
+    pub vault: Vault,
+    pub updates: mpsc::Receiver<VaultUpdate>,
+    /// Un archivo del vault (o de fuera), o un buffer sin nombre.
+    pub document: Document,
+    /// Dónde va el estado de la UI; sin directorio del usuario no se guarda.
+    pub paths: Option<Paths>,
+}
+
+/// Abre `startup` en una ventana nueva, con el tema y la fuente de
+/// `config`, y lo anota como el último vault. La aplicación termina cuando
+/// se cierra la última ventana.
 ///
 /// # Errors
-/// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede abrir la ventana.
+/// Si no hay sesión gráfica ni fuente monoespaciada, no arranca el hilo
+/// del watcher o la plataforma no puede abrir la ventana.
 pub fn open(
-    document: Document,
+    startup: Startup,
     config: &Config,
-    paths: Option<Paths>,
     launched: Instant,
     cx: &mut App,
 ) -> Result<(), OpenError> {
@@ -55,6 +73,14 @@ pub fn open(
         }
     })
     .detach();
+    let Startup {
+        vault,
+        updates,
+        document,
+        paths,
+    } = startup;
+    let updates = sidebar::bridge(updates).map_err(OpenError::Watch)?;
+    let state = remember(paths.as_ref(), &vault);
     let options = window_options(&document);
     let editor = config.settings.editor;
     let numbers = LineNumbers {
@@ -62,10 +88,23 @@ pub fn open(
         relative: editor.relativenumber,
     };
     let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
+    let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {
-        let view =
-            cx.new(|cx| WorkspaceView::new(document, numbers, scrolloff, paths, launched, cx));
-        view.update(cx, |view, cx| view.focus(window, cx));
+        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
+        let sidebar =
+            cx.new(|cx| Sidebar::new(vault, updates, &state.panel, workspace.clone(), cx));
+        if let Some(file) = &file {
+            sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
+        }
+        let view = cx
+            .new(|cx| WorkspaceView::new(workspace, sidebar.clone(), paths, launched, window, cx));
+        view.update(cx, |view, cx| {
+            if file.is_none() && sidebar.read(cx).is_visible() {
+                view.focus_sidebar(window, cx);
+            } else {
+                view.focus(window, cx);
+            }
+        });
         let closing = view.downgrade();
         window.on_window_should_close(cx, move |_window, cx| {
             closing.update(cx, WorkspaceView::may_close).unwrap_or(true)
@@ -76,10 +115,21 @@ pub fn open(
     Ok(())
 }
 
+/// El estado guardado de `vault`, que además queda como el último abierto.
+fn remember(paths: Option<&Paths>, vault: &Vault) -> VaultState {
+    let Some(paths) = paths else {
+        return VaultState::default();
+    };
+    if let Err(error) = session::remember_vault(paths, vault.root()) {
+        log::warn!("no se anotó el último vault: {error}");
+    }
+    VaultState::load(paths, vault.root())
+}
+
 fn window_options(document: &Document) -> WindowOptions {
     WindowOptions {
         titlebar: Some(TitlebarOptions {
-            title: Some(format!("{} — nota", document.path().display()).into()),
+            title: Some(format!("{} — nota", document.display_name()).into()),
             ..TitlebarOptions::default()
         }),
         app_id: Some("nota".to_owned()),

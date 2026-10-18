@@ -3,7 +3,7 @@
 El vault en disco, sin GUI.
 
 - `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag.
-- `Vault::snapshot()`: el `VaultIndex` de este momento, sin bloquear (`ArcSwap`). `children(carpeta)` recorre el árbol ya ordenado (carpetas primero, nombre sin mayúsculas); `files()` da notas y adjuntos para el finder.
+- `Vault::snapshot()`: el `VaultIndex` de este momento, sin bloquear (`ArcSwap`). `children(carpeta)` recorre el árbol ya ordenado (carpetas primero, nombre sin mayúsculas); `files()` da notas y adjuntos para el finder. `VaultIndex::from_entries` arma uno a mano, para tests y benchmarks.
 - `VaultChange`: `Created`, `Removed`, `Renamed` (cubre el contenido de una carpeta) y `Modified`. Un guardado atómico es `Modified`, no borrar y crear.
 - `VaultPath`: ruta relativa con `/`, nunca sale de la raíz ni apunta a algo oculto.
 - Operaciones: `create_note`, `create_folder`, `rename` (nunca pisa el destino), `move_to_trash` (a `.trash/` del vault, como Obsidian) y `apply`/`undo` (abajo). No pasan por enlaces simbólicos; el índice se entera por el watcher.

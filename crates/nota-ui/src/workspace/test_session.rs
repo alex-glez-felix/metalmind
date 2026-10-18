@@ -3,12 +3,11 @@
 use std::path::Path;
 
 use nota_buffer::ByteOffset;
-use nota_vault::FileError;
 use nota_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
 use super::{Effect, LineNumbers, PaneId, PaneView, Workspace};
-use crate::document::{Document, FileStats};
+use crate::document::{Document, FileStats, SaveError};
 
 /// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
 #[derive(Default)]
@@ -154,6 +153,7 @@ impl Session {
                     file: view
                         .document
                         .path()
+                        .unwrap()
                         .file_name()
                         .unwrap()
                         .to_string_lossy()
@@ -196,7 +196,7 @@ impl Session {
     }
 
     /// Guarda directo, sin pasar por `:w`, para probar a mitad de un Insert.
-    pub fn save(&mut self) -> Result<FileStats, FileError> {
+    pub fn save(&mut self) -> Result<FileStats, SaveError> {
         let id = self.workspace.panes[&self.pane()].document;
         self.workspace.documents.get_mut(id).unwrap().save()
     }

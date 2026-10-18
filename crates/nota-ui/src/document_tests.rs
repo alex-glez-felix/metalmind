@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 
 use pretty_assertions::assert_eq;
 use rstest::rstest;
@@ -12,7 +13,7 @@ fn abrir_un_archivo_que_no_existe_da_un_buffer_vacio() {
     let path = dir.path().join("nueva.md");
     let document = Document::open(&path).unwrap();
     assert_eq!(document.buffer().to_string(), "");
-    assert_eq!(document.path(), path);
+    assert_eq!(document.path(), Some(path.as_path()));
     assert!(!document.exists_on_disk());
     assert!(!document.is_modified());
     assert!(!path.exists());
@@ -106,4 +107,14 @@ fn al_abrir_avisa_lo_que_hay_en_disco(
     assert_eq!(document.opened_stats(), stats);
     document.save().unwrap();
     assert!(!document.noeol(), "guardar pone el \\n que faltaba");
+}
+
+#[test]
+fn un_buffer_sin_nombre_no_se_guarda() {
+    let mut document = Document::unnamed();
+    assert_eq!(document.path(), None);
+    assert_eq!(document.display_name(), "[No Name]");
+    assert!(!document.is_file(Path::new("a.md")));
+    assert!(matches!(document.save(), Err(SaveError::NoFileName)));
+    assert_eq!(SaveError::NoFileName.to_string(), "E32: No file name");
 }

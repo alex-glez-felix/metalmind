@@ -64,8 +64,8 @@ Las teclas van en la notación de vim: `<Esc>`, `<CR>`, `<BS>`, `<Tab>`, `<Space
 
 Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]` y la API de `support/`:
 
-- `Smoke::new()`: un Xvfb y una carpeta de notas vacía. `write`, `read`, `set_mode`, `mode`, `files` (para ver que no quedan temporales) y `wait_contents` trabajan sobre esa carpeta.
-- `smoke.launch(&["a.md", …])`: lanza `nota` con esos argumentos desde la carpeta de notas. Devuelve un `Nota`.
+- `Smoke::new()`: un Xvfb y una carpeta de notas vacía. `write`, `read`, `set_mode`, `mode`, `files` (para ver que no quedan temporales), `wait_files` (que la carpeta tenga justo esos archivos, por ejemplo tras renombrar desde el árbol) y `wait_contents` trabajan sobre esa carpeta.
+- `smoke.launch(&["a.md", …])`: lanza `nota` con esos argumentos desde la carpeta de notas, que es también el vault (con `&["."]`, sin archivo y con el foco en el árbol). Devuelve un `Nota`.
 - `smoke.launch_without_gpu(&["a.md"])`: igual, pero sin ningún driver de Vulkan ni EGL a la vista, para probar que `nota` sale con error cuando no puede dibujar.
 - `nota.window()` espera la primera ventana; `nota.windows()` da todas las que tiene abiertas ahora, sin asumir una sola. `nota.wait_exit()` espera la salida y devuelve el `ExitStatus`; `nota.is_running()` no espera.
 - `window.type_keys("…")`, `window.title()`, `window.wait_title(…)` y `window.request_close()`, que manda `WM_DELETE_WINDOW` como la "x" de un gestor de ventanas.

@@ -72,10 +72,13 @@ impl Default for VaultIndex {
 }
 
 impl VaultIndex {
-    /// Arma el índice en cualquier orden: cada carpeta entra antes que su contenido.
-    pub(crate) fn from_entries(entries: Vec<(VaultPath, EntryKind)>) -> Self {
+    /// Arma el índice con estas rutas, en cualquier orden. Lo que llega sin
+    /// su carpeta se descarta con un aviso: un walk nunca lo produce, y quien
+    /// arme un índice a mano (tests, benchmarks) tiene que incluirla.
+    #[must_use]
+    pub fn from_entries(entries: impl IntoIterator<Item = (VaultPath, EntryKind)>) -> Self {
         let mut index = Self::default();
-        index.insert_all(entries);
+        index.insert_all(entries.into_iter().collect());
         index
     }
 
@@ -207,7 +210,7 @@ mod tests {
     }
 
     fn index(entries: &[(&str, EntryKind)]) -> VaultIndex {
-        VaultIndex::from_entries(entries.iter().map(|&(p, kind)| (path(p), kind)).collect())
+        VaultIndex::from_entries(entries.iter().map(|&(p, kind)| (path(p), kind)))
     }
 
     fn names(index: &VaultIndex, dir: &str) -> Vec<String> {

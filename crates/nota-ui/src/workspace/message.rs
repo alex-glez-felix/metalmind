@@ -32,7 +32,7 @@ impl Message {
     /// falta el `\n` final, o `[Nuevo]` si todavía no existe.
     #[must_use]
     pub fn opened(document: &Document) -> Self {
-        let path = document.path().display();
+        let path = document.display_name();
         if document.exists_on_disk() {
             let noeol = if document.noeol() { "[noeol] " } else { "" };
             Self::Info(format!("\"{path}\" {noeol}{}", document.opened_stats()))
@@ -43,7 +43,7 @@ impl Message {
 
     #[must_use]
     pub fn written(document: &Document, stats: FileStats) -> Self {
-        let path = document.path().display();
+        let path = document.display_name();
         Self::Info(format!("\"{path}\" {stats} escritos"))
     }
 
@@ -54,7 +54,7 @@ impl Message {
 
     #[must_use]
     pub fn unsaved_in(document: &Document) -> Self {
-        let path = document.path().display();
+        let path = document.display_name();
         Self::Error(format!("E162: hay cambios sin guardar en \"{path}\""))
     }
 

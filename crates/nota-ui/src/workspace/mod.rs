@@ -10,6 +10,7 @@
 mod commands;
 mod documents;
 mod editing;
+mod files;
 mod line_numbers;
 mod message;
 mod options;
@@ -24,9 +25,10 @@ use nota_vim::{Action, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError};
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
+pub use self::files::Placement;
 pub use self::line_numbers::LineNumbers;
 pub use self::message::Message;
-pub use self::pane_tree::{Axis, Node, PaneId, PaneTree};
+pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 use crate::document::Document;
 
 #[derive(Debug, thiserror::Error)]

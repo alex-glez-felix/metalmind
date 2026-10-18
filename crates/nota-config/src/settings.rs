@@ -18,6 +18,7 @@ pub struct Settings {
     pub font: Font,
     pub editor: Editor,
     pub panes: Panes,
+    pub panel: Panel,
     pub search: Search,
 }
 
@@ -27,6 +28,18 @@ pub struct Panes {
     /// Ancho de la línea entre dos paneles, en píxeles lógicos.
     pub border_width: u8,
 }
+
+/// El panel lateral con el árbol de carpetas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Panel {
+    pub width: PanelWidth,
+}
+
+/// Ancho del panel lateral, en píxeles lógicos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u16")]
+pub struct PanelWidth(u16);
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(default)]
@@ -121,6 +134,7 @@ impl Default for Settings {
             font: Font::default(),
             editor: Editor::default(),
             panes: Panes::default(),
+            panel: Panel::default(),
             search: Search::default(),
         }
     }
@@ -154,6 +168,14 @@ impl Default for Panes {
     }
 }
 
+impl Default for Panel {
+    fn default() -> Self {
+        Self {
+            width: PanelWidth(260),
+        }
+    }
+}
+
 impl Default for Padding {
     fn default() -> Self {
         Self {
@@ -182,6 +204,32 @@ impl TryFrom<f32> for FontSize {
         } else {
             Err(format!(
                 "el tamaño de fuente debe estar entre {} y {}, no {size}",
+                Self::MIN,
+                Self::MAX
+            ))
+        }
+    }
+}
+
+impl PanelWidth {
+    const MIN: u16 = 120;
+    const MAX: u16 = 1200;
+
+    #[must_use]
+    pub fn get(self) -> u16 {
+        self.0
+    }
+}
+
+impl TryFrom<u16> for PanelWidth {
+    type Error = String;
+
+    fn try_from(width: u16) -> Result<Self, String> {
+        if (Self::MIN..=Self::MAX).contains(&width) {
+            Ok(Self(width))
+        } else {
+            Err(format!(
+                "el ancho del panel debe estar entre {} y {}, no {width}",
                 Self::MIN,
                 Self::MAX
             ))

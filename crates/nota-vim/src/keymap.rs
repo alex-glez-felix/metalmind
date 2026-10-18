@@ -386,6 +386,16 @@ const VIM: &[(Context, &[Key], Action)] = {
             &[ch(' '), ch('p')],
             Action::Command(Command::OpenCommandPalette),
         ),
+        (
+            Normal,
+            &[ch(' '), ch('e')],
+            Action::Command(Command::ToggleFolders),
+        ),
+        (
+            Normal,
+            &[ch(' '), ch('t')],
+            Action::Command(Command::ToggleTags),
+        ),
     ]
 };
 
@@ -466,6 +476,24 @@ mod tests {
         }
         assert_eq!(
             keymap.lookup(Mode::Insert, &[Key::Ctrl('w')]),
+            Lookup::Unbound
+        );
+    }
+
+    #[test]
+    fn space_opens_the_side_panel() {
+        let keymap = Keymap::vim();
+        assert_eq!(keymap.lookup(Mode::Normal, &[ch(' ')]), Lookup::Pending);
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch(' '), ch('e')]),
+            Lookup::Action(Action::Command(Command::ToggleFolders))
+        );
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch(' '), ch('t')]),
+            Lookup::Action(Action::Command(Command::ToggleTags))
+        );
+        assert_eq!(
+            keymap.lookup(Mode::Visual(VisualKind::Char), &[ch(' ')]),
             Lookup::Unbound
         );
     }

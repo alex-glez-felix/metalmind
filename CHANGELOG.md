@@ -110,6 +110,27 @@ Los cambios que importan a quien usa nota. El formato sigue
   que otro panel siga mostrando ese archivo; cerrar la ventana revisa todos
   los archivos abiertos.
 
+#### Vault y panel lateral (M2)
+
+- `nota carpeta/` abre la carpeta como vault; `nota archivo.md` abre el
+  archivo en el vault de la carpeta que lo contiene, y `nota` sin argumentos,
+  el último vault abierto (o el `vault:` de la config).
+- Panel lateral con el árbol de carpetas del vault, que se actualiza solo
+  cuando algo cambia en disco. Se muestra y se esconde con `space e` o con el
+  botón de la barra de la izquierda, y recuerda por vault si estaba visible y
+  qué carpetas estaban abiertas.
+- En el árbol: `j k`, `gg G`, `h l`, `o` o `Enter` para abrir, `ctrl-v` y
+  `ctrl-s` para abrir en un split, `/` para filtrar, `a` y `A` para crear una
+  nota o una carpeta, `r` para renombrar, `m` para mover y `d` para mandar a
+  la papelera del vault (`.trash/`), con confirmación. `ctrl-w h` y `ctrl-w l`
+  pasan del árbol a los editores y de vuelta.
+- Con el ratón: clic para seleccionar (y abrir o cerrar una carpeta), doble
+  clic para abrir y clic derecho para un menú con lo mismo.
+- Renombrar o mover un archivo abierto lleva su buffer al nombre nuevo, con
+  sus cambios sin guardar. Borrar avisa si hay cambios sin guardar.
+- El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
+  con las claves `ui.panel_*` y `ui.menu_*` del tema.
+
 #### Configuración
 
 - `config.yaml` en el directorio de configuración del usuario

@@ -1,8 +1,9 @@
-//! La raíz de la ventana: pinta el árbol de paneles, un [`Editor`] por
-//! hoja, y ejecuta los comandos de `:` y `ctrl-w` sobre el [`Workspace`].
-//! La lógica vive en el workspace; aquí solo se crean y sueltan editores y
-//! se mueve el foco de GPUI adonde diga. Encima de los paneles flota, si
-//! está abierto, el finder o la paleta.
+//! La raíz de la ventana: la barra de botones, el panel lateral y el árbol
+//! de paneles, un [`Editor`] por hoja. Ejecuta los comandos de `:`,
+//! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
+//! workspace y en el panel; aquí solo se crean y sueltan editores y se
+//! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
+//! abierto, el finder o la paleta.
 
 mod finder;
 mod overlay;
@@ -22,49 +23,55 @@ use nota_vim::Invocation;
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
     ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, Set, SplitDown,
-    SplitRight,
+    SplitRight, ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
-use crate::document::Document;
 use crate::editor::Editor;
+use crate::panel::PanelView;
+use crate::session::VaultState;
+use crate::sidebar::{self, Sidebar, SidebarEvent};
 use crate::theme::Theme;
-use crate::workspace::{Axis, Effect, LineNumbers, Node, PaneId, Workspace};
+use crate::workspace::{Axis, Direction, Effect, Node, PaneId, Workspace};
 
 use self::finder::FinderVault;
 use self::overlay::Overlay;
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
+    sidebar: Entity<Sidebar>,
     editors: HashMap<PaneId, Entity<Editor>>,
     title: String,
     /// Dónde guardar el estado de cada vault; `None` si no hay `HOME`.
     paths: Option<Paths>,
     vault: FinderVault,
     overlay: Option<Overlay>,
-    _repaint: Subscription,
+    _subscriptions: [Subscription; 2],
 }
 
 impl WorkspaceView {
     pub fn new(
-        document: Document,
-        numbers: LineNumbers,
-        scrolloff: usize,
+        workspace: Entity<Workspace>,
+        sidebar: Entity<Sidebar>,
         paths: Option<Paths>,
         launched: Instant,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
+        let events = cx.subscribe_in(&sidebar, window, |view, _, event, window, cx| {
+            view.on_sidebar_event(*event, window, cx);
+        });
         let pane = workspace.read(cx).focused();
         let first = cx.new(|cx| Editor::new(workspace.clone(), pane, Some(launched), cx));
         Self {
             workspace,
+            sidebar,
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
             paths,
             vault: FinderVault::default(),
             overlay: None,
-            _repaint: repaint,
+            _subscriptions: [repaint, events],
         }
     }
 
@@ -82,12 +89,34 @@ impl WorkspaceView {
         }
     }
 
+    pub fn focus_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let handle = self.sidebar.read(cx).focus_handle().clone();
+        window.focus(&handle, cx);
+    }
+
     /// Lo consulta la ventana cuando el compositor pide cerrarla.
     pub fn may_close(&mut self, cx: &mut Context<Self>) -> bool {
-        self.workspace.update(cx, |workspace, cx| {
+        let closes = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             workspace.may_close_window()
-        })
+        });
+        if closes {
+            self.save_state(cx);
+        }
+        closes
+    }
+
+    fn save_state(&self, cx: &Context<Self>) {
+        let Some(paths) = &self.paths else {
+            return;
+        };
+        let sidebar = self.sidebar.read(cx);
+        let state = VaultState {
+            panel: sidebar.state(),
+        };
+        if let Err(error) = state.save(paths, sidebar.root()) {
+            log::warn!("no se guardó el estado del vault: {error}");
+        }
     }
 
     fn run(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
@@ -96,7 +125,10 @@ impl WorkspaceView {
             workspace.run(invocation, &mut SystemClipboard(cx))
         });
         match effect {
-            Effect::CloseWindow => window.remove_window(),
+            Effect::CloseWindow => {
+                self.save_state(cx);
+                window.remove_window();
+            }
             Effect::Stay => {
                 self.sync_editors(window, cx);
                 self.touch_focused(cx);
@@ -110,7 +142,40 @@ impl WorkspaceView {
                 self.sync_editors(window, cx);
                 self.open_palette(window, cx);
             }
+            Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
+            Effect::FocusPastEdge(Direction::Left) if self.sidebar.read(cx).is_visible() => {
+                self.focus_sidebar(window, cx);
+            }
+            Effect::FocusPastEdge(_) => {}
         }
+    }
+
+    fn toggle_panel(&mut self, view: PanelView, window: &mut Window, cx: &mut Context<Self>) {
+        let visible = self
+            .sidebar
+            .update(cx, |sidebar, cx| sidebar.toggle(view, cx));
+        if visible {
+            self.focus_sidebar(window, cx);
+        } else {
+            self.focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn on_sidebar_event(
+        &mut self,
+        event: SidebarEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match event {
+            SidebarEvent::Opened => {
+                self.sync_editors(window, cx);
+                self.touch_focused(cx);
+            }
+            SidebarEvent::FocusEditor => self.focus(window, cx),
+        }
+        cx.notify();
     }
 
     /// Un editor por panel del árbol, ni uno más.
@@ -144,7 +209,7 @@ impl WorkspaceView {
             return;
         };
         let modified = if document.is_modified() { " [+]" } else { "" };
-        let title = format!("{}{modified} — nota", document.path().display());
+        let title = format!("{}{modified} — nota", document.display_name());
         if title != self.title {
             window.set_window_title(&title);
             self.title = title;
@@ -220,9 +285,25 @@ impl Render for WorkspaceView {
         element = on_command::<Set>(element, cx);
         element = on_command::<OpenFinder>(element, cx);
         element = on_command::<OpenCommandPalette>(element, cx);
+        element = on_command::<ToggleFolders>(element, cx);
+        element = on_command::<ToggleTags>(element, cx);
+        let sidebar = self.sidebar.read(cx);
+        let shown = sidebar.shown();
         element
             .relative()
-            .child(self.render_node(&root, &theme))
+            .flex()
+            .flex_row()
+            .child(sidebar::rail(shown, &theme))
+            .when(shown.is_some(), |element| {
+                element.child(self.sidebar.clone())
+            })
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(self.render_node(&root, &theme)),
+            )
             .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }
 }

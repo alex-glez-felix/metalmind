@@ -3842,6 +3842,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nohash-hasher"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
+
+[[package]]
 name = "nom"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3861,13 +3867,16 @@ name = "nota"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "dirs 7.0.0",
  "env_logger",
  "gpui-kit",
  "log",
  "nota-config",
  "nota-ui",
+ "nota-vault",
  "rstest",
  "tempfile",
+ "thiserror 2.0.21",
  "x11rb",
 ]
 
@@ -3963,6 +3972,8 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "rstest",
+ "serde",
+ "serde-saphyr",
  "tempfile",
  "thiserror 2.0.21",
  "unicode-segmentation",
@@ -5715,11 +5726,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a253edfdea34032da21af84e16fcc94f4c7a6ba237f9f3bc2dbf43cea8535c44"
 dependencies = [
  "annotate-snippets",
+ "base64",
  "encoding_rs_io",
  "granit-parser",
+ "nohash-hasher",
  "num-traits",
  "serde_core",
  "smallvec",
+ "zmij",
 ]
 
 [[package]]

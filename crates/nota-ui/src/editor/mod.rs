@@ -217,7 +217,7 @@ impl Editor {
         Some(Status {
             mode: view.focused.then_some(view.mode),
             recording: view.recording,
-            file: view.document.path().display().to_string().into(),
+            file: view.document.display_name().into(),
             modified: view.document.is_modified(),
             command_line,
             message,

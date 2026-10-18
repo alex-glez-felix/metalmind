@@ -1,6 +1,6 @@
-//! Comandos de `:` y de `ctrl-w` que el motor reconoce pero no ejecuta:
-//! guardar, abrir y cerrar hacen I/O y los paneles son de quien aloja el
-//! editor.
+//! Comandos de `:`, de `ctrl-w` y de `space` que el motor reconoce pero no
+//! ejecuta: guardar, abrir y cerrar hacen I/O, y los paneles y el panel
+//! lateral son de quien aloja el editor.
 
 use crate::SearchError;
 
@@ -43,6 +43,11 @@ pub enum Command {
     OpenFinder,
     /// `space p`: la paleta de comandos.
     OpenCommandPalette,
+    /// `space e`: muestra el panel lateral en la vista de carpetas, o lo
+    /// esconde si ya la muestra.
+    ToggleFolders,
+    /// `space t`: lo mismo con la vista de tags.
+    ToggleTags,
 }
 
 /// Un comando con el argumento que se le escribió, como `:e notas/a.md`.
@@ -158,6 +163,8 @@ impl Command {
         Self::Set,
         Self::OpenFinder,
         Self::OpenCommandPalette,
+        Self::ToggleFolders,
+        Self::ToggleTags,
     ];
 
     #[must_use]
@@ -180,6 +187,8 @@ impl Command {
             Self::Set => "editor::set",
             Self::OpenFinder => "workspace::open_finder",
             Self::OpenCommandPalette => "workspace::open_command_palette",
+            Self::ToggleFolders => "panel::toggle_folders",
+            Self::ToggleTags => "panel::toggle_tags",
         }
     }
 

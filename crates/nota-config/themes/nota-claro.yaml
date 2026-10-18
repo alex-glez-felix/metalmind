@@ -40,6 +40,19 @@ ui:
   picker_hover: { color: fg, alpha: 0.05 }
   picker_match: blue
   picker_muted: fg_dim
+  panel_background: bg_dark
+  panel_foreground: fg
+  panel_muted: fg_dim
+  panel_selection: { color: blue, alpha: 0.2 }
+  panel_selection_unfocused: { color: fg_faint, alpha: 0.35 }
+  panel_hover: bg_highlight
+  panel_border: border
+  panel_folder: blue
+  panel_note: fg_dim
+  panel_match: orange
+  menu_background: bg
+  menu_border: border
+  menu_hover: { color: blue, alpha: 0.15 }
 
 cursor:
   normal: { color: blue, alpha: 0.4 }

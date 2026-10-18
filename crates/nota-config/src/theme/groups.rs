@@ -108,7 +108,7 @@ macro_rules! color_group {
 }
 
 color_group! {
-    /// La interfaz: editor, gutter y barra de estado.
+    /// La interfaz: editor, gutter, barra de estado, panel lateral y menús.
     "ui" => UiColors, RawUi, PartialUi {
         background,
         foreground,
@@ -146,6 +146,28 @@ color_group! {
         /// Lo secundario: carpeta de una nota, atajo de una acción, el
         /// texto de ayuda del input vacío.
         picker_muted,
+        /// El panel lateral y la barra de botones que lo abre.
+        panel_background,
+        panel_foreground,
+        /// Adjuntos, encabezado y botones inactivos del panel.
+        panel_muted,
+        /// La fila seleccionada con el panel enfocado.
+        panel_selection,
+        /// La fila seleccionada con el foco en otro lado.
+        panel_selection_unfocused,
+        panel_hover,
+        /// La línea entre el panel y los editores.
+        panel_border,
+        /// El ícono de una carpeta.
+        panel_folder,
+        /// El ícono de una nota.
+        panel_note,
+        /// Las letras que coinciden con el filtro del panel.
+        panel_match,
+        /// Los menús contextuales.
+        menu_background,
+        menu_border,
+        menu_hover,
     }
 }
 

@@ -88,6 +88,12 @@ impl Paths {
         self.config.join("themes")
     }
 
+    /// Dónde se anota el último vault abierto.
+    #[must_use]
+    pub fn last_vault_file(&self) -> PathBuf {
+        self.state.join("last-vault")
+    }
+
     /// Dónde va el estado de UI del vault de raíz `root`, como sus notas
     /// recientes: cada vault tiene el suyo (06 §8), por su ruta canónica.
     #[must_use]
@@ -197,6 +203,7 @@ mod tests {
     #[test]
     fn cada_vault_tiene_su_carpeta_de_estado() {
         let paths = Paths::under(Path::new("/x"));
+        assert_eq!(paths.last_vault_file(), Path::new("/x/state/last-vault"));
         let notas = paths.vault_state(Path::new("/a/notas"));
         assert_eq!(notas, Path::new("/x/state/vaults/notas-39ed27d9e0362a9f"));
         assert_eq!(notas, paths.vault_state(Path::new("/a/notas")));

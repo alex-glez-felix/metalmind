@@ -74,6 +74,19 @@ impl Smoke {
         names
     }
 
+    /// Espera a que la carpeta de notas tenga justo `expected`, como lo da
+    /// [`Smoke::files`]: así se ve un archivo que el árbol creó o renombró.
+    pub fn wait_files(&self, expected: &[&str]) {
+        wait::until(&format!("las notas {expected:?}"), TIMEOUT, || {
+            let files = self.files();
+            if files == expected {
+                Ok(())
+            } else {
+                Err(format!("{files:?}"))
+            }
+        });
+    }
+
     pub fn wait_contents(&self, name: &str, expected: &str) {
         let path = self.notes().join(name);
         wait::until(

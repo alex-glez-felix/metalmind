@@ -50,6 +50,10 @@ bare_commands! {
     OpenFinder = workspace::"open_finder";
     /// Busca y ejecuta cualquier acción con nombre.
     OpenCommandPalette = workspace::"open_command_palette";
+    /// Muestra el panel lateral en carpetas, o lo esconde si ya las muestra.
+    ToggleFolders = panel::"toggle_folders";
+    /// Muestra el panel lateral en tags, o lo esconde si ya los muestra.
+    ToggleTags = panel::"toggle_tags";
 }
 
 /// Abre `path` en el panel, o relee su archivo si no hay ruta.
@@ -133,6 +137,8 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
         Command::Set => Box::new(Set { options: argument }),
         Command::OpenFinder => Box::new(OpenFinder),
         Command::OpenCommandPalette => Box::new(OpenCommandPalette),
+        Command::ToggleFolders => Box::new(ToggleFolders),
+        Command::ToggleTags => Box::new(ToggleTags),
     }
 }
 
@@ -144,6 +150,7 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-shift-v", Paste, Some(EDITOR_CONTEXT)),
         KeyBinding::new("ctrl-shift-p", OpenCommandPalette, Some(EDITOR_CONTEXT)),
     ]);
+    crate::sidebar::bind_keys(cx);
 }
 
 #[cfg(test)]

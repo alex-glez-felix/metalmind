@@ -138,8 +138,8 @@ nota es una GUI con navegación estilo vim ([06](06-decisiones-de-fondo.md) §13
 
 Dos vistas en el mismo panel, tags y árbol de carpetas (el de M2). Una sola está visible a la vez.
 
-- **Por defecto: tags.** Es el eje de organización; abrir la app en la vista de carpetas diría lo contrario. La vista elegida se recuerda por vault.
-- Cambiar de vista: `T` dentro del panel (`panel::toggle_view`); `space t` abre el panel en tags y `space e` en carpetas (`panel::show_tags`, `panel::show_folders`). El encabezado del panel dice cuál es.
+- **Por defecto: tags.** Es el eje de organización; abrir la app en la vista de carpetas diría lo contrario. La vista elegida se recuerda por vault. Hasta que llegue el índice de tags (M2.5), el panel abre en carpetas.
+- Cambiar de vista: `T` dentro del panel (`panel::toggle_view`); `space t` abre el panel en tags y `space e` en carpetas, y si el panel ya muestra esa vista, lo esconden (`panel::toggle_tags`, `panel::toggle_folders`); lo mismo con los dos botones de la barra a la izquierda del panel. El encabezado del panel dice cuál es.
 - **Raíces**: los tags sin `parents`. Bajo un tag, primero los tags que lo tienen como padre y luego sus notas, como una carpeta con subcarpetas y archivos. Un tag con tres padres aparece bajo los tres, y una nota con tres tags en tres lugares: es justamente lo que una carpeta no permite.
 - Cada nodo muestra el nombre del tag, su ícono y su color si los tiene, y el conteo.
 - Al final, el **buzón**: las notas que no tienen ningún tag ([06](06-decisiones-de-fondo.md) §9). Sin él, una nota sin tags es invisible en la vista por defecto. Las páginas de tag nunca están en el buzón (§7).
