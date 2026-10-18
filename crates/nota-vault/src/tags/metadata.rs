@@ -1,5 +1,5 @@
 //! Cambiar la metadata de un tag desde una acción (05 §3): color, ícono,
-//! alias y padres. Se escribe en el frontmatter de su página tocando solo
+//! alias, padres y plantilla. Se escribe en el frontmatter de su página tocando solo
 //! ese campo, y si el tag no tiene página, nota la crea.
 
 use unicode_normalization::UnicodeNormalization as _;
@@ -10,7 +10,7 @@ use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::layout::{PageEntry, PageLayout};
-use crate::tags::page::{PageField, TagColor, TagIcon, TagPage};
+use crate::tags::page::{PageField, TagColor, TagIcon, TagPage, parse_template};
 use crate::tags::refactor::{PlanError, PlanNotice, TagPlan};
 
 /// El valor nuevo de un campo de la página. `None` o una lista vacía quitan
@@ -22,6 +22,8 @@ pub enum PageChange {
     /// Nombres de tag, con o sin `#`.
     Aliases(Vec<String>),
     Parents(Vec<String>),
+    /// El nombre de una plantilla (06 §11).
+    Template(Option<String>),
 }
 
 /// Nombres que Windows reserva: un archivo así no se sincroniza allá (05 §1).
@@ -58,7 +60,8 @@ impl Tags {
     }
 
     /// Cambiar un campo de la página de `tag` (`tags::set_color`,
-    /// `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`). Un
+    /// `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`,
+    /// `tags::set_template`). Un
     /// alias cambia la página de su tag.
     ///
     /// # Errors
@@ -142,6 +145,10 @@ impl Tags {
                 }
                 (PageField::Parents, list_yaml(&names))
             }
+            PageChange::Template(template) => (
+                PageField::Template,
+                template.as_deref().map(template_yaml).transpose()?,
+            ),
         })
     }
 
@@ -171,6 +178,7 @@ impl PageField {
             Self::Icon => "icon",
             Self::Aliases => "aliases",
             Self::Parents => "parents",
+            Self::Template => "template",
         }
     }
 }
@@ -281,6 +289,12 @@ fn color_yaml(color: &TagColor) -> Result<String, PlanError> {
     })
 }
 
+fn template_yaml(name: &str) -> Result<String, PlanError> {
+    parse_template(name)
+        .map(|name| yaml_scalar(&name))
+        .ok_or_else(|| PlanError::InvalidValue(name.to_owned()))
+}
+
 fn icon_yaml(icon: &TagIcon) -> Result<String, PlanError> {
     let text = match icon {
         TagIcon::Emoji(emoji) => emoji.clone(),
@@ -292,10 +306,11 @@ fn icon_yaml(icon: &TagIcon) -> Result<String, PlanError> {
     Ok(yaml_scalar(&text))
 }
 
-/// `text` como escalar de YAML que se lee como el mismo texto: entre
-/// comillas si sin ellas sería un número, un booleano, un nulo o un
-/// comentario. Nada de lo que se escribe aquí lleva `"` ni `\`.
-pub(crate) fn yaml_scalar(text: &str) -> String {
+/// `text` como escalar de YAML que se lee como el mismo texto, también
+/// dentro de una lista de flujo: entre comillas si sin ellas sería un
+/// número, un booleano, un nulo, un comentario o cortaría la lista.
+#[must_use]
+pub fn yaml_scalar(text: &str) -> String {
     let starts_like_other = text
         .chars()
         .next()
@@ -303,8 +318,12 @@ pub(crate) fn yaml_scalar(text: &str) -> String {
     let keyword = ["null", "true", "false"]
         .iter()
         .any(|word| text.eq_ignore_ascii_case(word));
-    if starts_like_other || keyword {
-        format!("\"{text}\"")
+    let breaks_plain = text.contains([',', '[', ']', '{', '}', '"', '\\'])
+        || text.contains(": ")
+        || text.contains(" #")
+        || text.ends_with([':', ' ']);
+    if starts_like_other || keyword || breaks_plain {
+        format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
     } else {
         text.to_owned()
     }
@@ -334,6 +353,12 @@ mod tests {
     #[case("#️⃣", "\"#️⃣\"")]
     #[case("tabler:book", "tabler:book")]
     #[case("canción", "canción")]
+    #[case("trabajo/semanal", "trabajo/semanal")]
+    #[case("a: b", "\"a: b\"")]
+    #[case("a #b", "\"a #b\"")]
+    #[case("a,b", "\"a,b\"")]
+    #[case("di\"ce", "\"di\\\"ce\"")]
+    #[case("c:\\x", "\"c:\\\\x\"")]
     fn scalars_read_back_as_written(#[case] text: &str, #[case] yaml: &str) {
         assert_eq!(yaml_scalar(text), yaml);
         assert_eq!(read_back(text).as_deref(), Some(text));
