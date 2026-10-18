@@ -204,7 +204,7 @@ impl Sidebar {
         self.focus(window, cx);
         self.panel.tree.select_row(at);
         if let Some(row) = self.panel.tree.selected_entry() {
-            self.menu = Some(ContextMenu::new(position, row.kind));
+            self.menu = Some(ContextMenu::new(position, row.path.clone(), row.kind));
         }
         cx.notify();
     }

@@ -140,6 +140,12 @@ impl Sidebar {
         self.panel
             .tree
             .apply(&update.changes, Arc::clone(&update.snapshot));
+        let selected = self.panel.tree.selected();
+        if let Some(menu) = &mut self.menu
+            && !menu.still_on(&update.changes, selected)
+        {
+            self.menu = None;
+        }
         self.scroll_to_selection();
         cx.notify();
     }
