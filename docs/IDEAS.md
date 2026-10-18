@@ -39,6 +39,10 @@ Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **u
 - Idea: vista del árbol en un panel, navegable con `j`/`k`, con vista previa del diff de cada estado.
 - Idea: historial persistente entre sesiones (como `undofile`).
 
+## Importador de Obsidian (y quizá de otros)
+
+nota no busca ser compatible con Obsidian: tiene su propio formato y puede diferir donde haya algo más eficiente o mejor. Si algún día hace falta, un importador convierte el vault (links, frontmatter, adjuntos) al formato de nota.
+
 ## Pendientes de recoger
 
 El autor ha usado varias apps de notas y tiene ideas de qué le gusta de cada una. Anotarlas aquí conforme salgan.
