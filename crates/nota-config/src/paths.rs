@@ -6,7 +6,6 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 
 const APP: &str = "nota";
 
@@ -24,16 +23,6 @@ pub struct Paths {
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error("no se encontró el directorio del usuario para ubicar la configuración")]
 pub struct NoHomeDir;
-
-#[derive(Debug, thiserror::Error)]
-pub enum MoveVaultDataError {
-    #[error("no hay datos guardados del vault {}", .0.display())]
-    NothingToMove(PathBuf),
-    #[error("el vault {} ya tiene datos propios", .0.display())]
-    DestinationInUse(PathBuf),
-    #[error("no se pudieron mover los datos del vault: {0}")]
-    Io(#[from] io::Error),
-}
 
 impl Paths {
     /// Las rutas de la plataforma actual.
@@ -97,33 +86,6 @@ impl Paths {
     #[must_use]
     pub fn vault_data(&self, root: &Path) -> PathBuf {
         self.data.join("vaults").join(vault_key(root))
-    }
-
-    /// Pasa los datos de un vault que se movió de `from` a `to` (las dos
-    /// canonicalizadas) a la carpeta que le toca en su ruta nueva. Si en
-    /// `to` ya hay una carpeta, solo la reemplaza si está vacía.
-    ///
-    /// # Errors
-    /// Si `from` no tiene datos, `to` ya tiene los suyos o falla el rename.
-    pub fn move_vault_data(&self, from: &Path, to: &Path) -> Result<(), MoveVaultDataError> {
-        let source = self.vault_data(from);
-        let target = self.vault_data(to);
-        if !source.is_dir() {
-            return Err(MoveVaultDataError::NothingToMove(from.to_owned()));
-        }
-        match fs::remove_dir(&target) {
-            Ok(()) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                if let Some(parent) = target.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::DirectoryNotEmpty => {
-                return Err(MoveVaultDataError::DestinationInUse(to.to_owned()));
-            }
-            Err(error) => return Err(error.into()),
-        }
-        Ok(fs::rename(source, target)?)
     }
 
     #[must_use]
@@ -298,27 +260,5 @@ mod tests {
         assert!(name.starts_with("Mis_notas-"), "{name}");
         assert_eq!(notas, paths.vault_data(Path::new("/a/Mis notas")));
         assert_ne!(notas, paths.vault_data(Path::new("/b/Mis notas")));
-    }
-
-    #[test]
-    fn mover_los_datos_de_un_vault() {
-        let root = tempfile::tempdir().unwrap();
-        let paths = Paths::under(root.path());
-        let (old, new) = (Path::new("/viejo/notas"), Path::new("/nuevo/notas"));
-        assert!(matches!(
-            paths.move_vault_data(old, new),
-            Err(MoveVaultDataError::NothingToMove(_))
-        ));
-        fs::create_dir_all(paths.vault_data(old).join("history")).unwrap();
-        fs::create_dir_all(paths.vault_data(new)).unwrap();
-        paths.move_vault_data(old, new).unwrap();
-        assert!(paths.vault_data(new).join("history").is_dir());
-        assert!(!paths.vault_data(old).exists());
-
-        fs::create_dir_all(paths.vault_data(old)).unwrap();
-        assert!(matches!(
-            paths.move_vault_data(old, new),
-            Err(MoveVaultDataError::DestinationInUse(_))
-        ));
     }
 }
