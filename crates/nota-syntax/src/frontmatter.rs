@@ -22,6 +22,16 @@ pub struct Frontmatter {
     pub cssclasses: Vec<String>,
 }
 
+/// El BOM no es parte de la primera línea: sin saltarlo, ni una cerca ni un
+/// tag al principio de la nota se reconocerían.
+fn bom_len(text: &str) -> usize {
+    if text.starts_with('\u{FEFF}') {
+        '\u{FEFF}'.len_utf8()
+    } else {
+        0
+    }
+}
+
 fn is_delimiter(line: &str) -> bool {
     line.trim_end() == "---"
 }
@@ -29,7 +39,7 @@ fn is_delimiter(line: &str) -> bool {
 /// El rango del bloque y el de su YAML. Sin `---` de cierre no hay
 /// frontmatter: el `---` del principio es una regla horizontal.
 fn delimit(text: &str) -> Option<(Range<usize>, Range<usize>)> {
-    let start = if text.starts_with('\u{FEFF}') { 3 } else { 0 };
+    let start = bom_len(text);
     let first_end = line_end(text, start);
     if !is_delimiter(&text[start..first_end]) || first_end == text.len() {
         return None;
@@ -52,7 +62,7 @@ fn delimit(text: &str) -> Option<(Range<usize>, Range<usize>)> {
 /// salido mal al leerlo.
 pub(crate) fn parse(text: &str, problems: &mut Vec<Problem>) -> (Option<Frontmatter>, usize) {
     let Some((span, yaml)) = delimit(text) else {
-        return (None, 0);
+        return (None, bom_len(text));
     };
     let body = (span.end + 1).min(text.len());
     let mut frontmatter = Frontmatter {

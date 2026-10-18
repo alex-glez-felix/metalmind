@@ -202,6 +202,13 @@ fn frontmatter_must_start_the_note() {
     assert_eq!(scan("\n---\ntags: a\n---\n").frontmatter, None);
 }
 
+#[rstest]
+#[case::fence("\u{FEFF}```\n[[a]]\n```\n[[b]]", &["[[b]]"])]
+#[case::tag("\u{FEFF}#tag", &["#tag"])]
+fn bom_without_frontmatter(#[case] text: &str, #[case] expected: &[&str]) {
+    assert_eq!(found(text), expected);
+}
+
 #[test]
 fn empty_frontmatter() {
     let frontmatter = scan("---\n---\n#a").frontmatter.unwrap();
