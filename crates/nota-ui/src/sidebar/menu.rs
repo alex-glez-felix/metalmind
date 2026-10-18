@@ -6,7 +6,7 @@ use gpui_kit::{
     ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored,
     deferred, div, prelude::FluentBuilder as _,
 };
-use nota_vault::EntryKind;
+use nota_vault::{EntryKind, VaultChange, VaultPath};
 
 use super::Sidebar;
 use super::actions::{Delete, Move, NewFolder, NewNote, OpenSplitDown, OpenSplitRight, Rename};
@@ -75,17 +75,41 @@ impl MenuItem {
 
 pub struct ContextMenu {
     position: Point<Pixels>,
+    /// La entrada sobre la que se abrió: las acciones del menú van sobre
+    /// la selección del árbol, que tiene que seguir siendo ella.
+    target: VaultPath,
     groups: Vec<&'static [MenuItem]>,
     selected: usize,
 }
 
 impl ContextMenu {
-    pub fn new(position: Point<Pixels>, kind: EntryKind) -> Self {
+    pub fn new(position: Point<Pixels>, target: VaultPath, kind: EntryKind) -> Self {
         Self {
             position,
+            target,
             groups: MenuItem::groups(kind),
             selected: 0,
         }
+    }
+
+    /// Tras un lote del watcher: sigue a su entrada en los renombres y dice
+    /// si el menú todavía vale, es decir, si su entrada existe y sigue
+    /// seleccionada. Si no, una acción caería sobre otra entrada.
+    pub fn still_on(&mut self, changes: &[VaultChange], selected: Option<&VaultPath>) -> bool {
+        for change in changes {
+            match change {
+                VaultChange::Renamed { from, to, .. } => {
+                    if let Some(moved) = self.target.rebase(from, to) {
+                        self.target = moved;
+                    }
+                }
+                VaultChange::Removed { path, .. } if self.target.starts_with(path) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+        selected == Some(&self.target)
     }
 
     fn items(&self) -> impl Iterator<Item = MenuItem> + '_ {
@@ -182,19 +206,70 @@ impl ContextMenu {
 mod tests {
     use super::*;
 
+    fn path(path: &str) -> VaultPath {
+        VaultPath::new(path).unwrap()
+    }
+
+    fn menu_on(target: &str) -> ContextMenu {
+        ContextMenu::new(Point::default(), path(target), EntryKind::Note)
+    }
+
+    /// Si la entrada del menú se borra fuera de la app, la selección pasa a
+    /// otra fila: el menú no puede seguir abierto sobre ella.
+    #[test]
+    fn el_menu_se_cierra_si_su_entrada_desaparece() {
+        let mut menu = menu_on("notas/a.md");
+        let removed = VaultChange::Removed {
+            path: path("notas"),
+            kind: EntryKind::Folder,
+        };
+        assert!(!menu.still_on(&[removed], Some(&path("b.md"))));
+    }
+
+    #[test]
+    fn el_menu_sigue_a_su_entrada_renombrada() {
+        let mut menu = menu_on("notas/a.md");
+        let renamed = VaultChange::Renamed {
+            from: path("notas"),
+            to: path("archivo"),
+            kind: EntryKind::Folder,
+        };
+        assert!(menu.still_on(&[renamed], Some(&path("archivo/a.md"))));
+        assert!(
+            !menu.still_on(&[], Some(&path("notas/a.md"))),
+            "ya no es esa"
+        );
+    }
+
+    #[test]
+    fn el_menu_se_cierra_si_la_seleccion_ya_no_es_su_entrada() {
+        let mut menu = menu_on("a.md");
+        let other = VaultChange::Created {
+            path: path("c.md"),
+            kind: EntryKind::Note,
+        };
+        assert!(menu.still_on(std::slice::from_ref(&other), Some(&path("a.md"))));
+        assert!(!menu.still_on(std::slice::from_ref(&other), Some(&path("b.md"))));
+        assert!(!menu.still_on(&[other], None));
+    }
+
     #[test]
     fn una_carpeta_no_ofrece_abrir_en_split() {
         let point = Point::default();
-        let file: Vec<MenuItem> = ContextMenu::new(point, EntryKind::Note).items().collect();
+        let file: Vec<MenuItem> = ContextMenu::new(point, path("a.md"), EntryKind::Note)
+            .items()
+            .collect();
         assert!(file.contains(&MenuItem::OpenSplitRight));
-        let folder: Vec<MenuItem> = ContextMenu::new(point, EntryKind::Folder).items().collect();
+        let folder: Vec<MenuItem> = ContextMenu::new(point, path("d"), EntryKind::Folder)
+            .items()
+            .collect();
         assert!(!folder.contains(&MenuItem::OpenSplitRight));
         assert_eq!(folder.last(), Some(&MenuItem::Delete));
     }
 
     #[test]
     fn el_teclado_no_sale_del_menu() {
-        let mut menu = ContextMenu::new(Point::default(), EntryKind::Folder);
+        let mut menu = ContextMenu::new(Point::default(), path("d"), EntryKind::Folder);
         menu.select_previous();
         assert_eq!(menu.selected_item(), Some(MenuItem::NewNote));
         for _ in 0..10 {
@@ -205,7 +280,7 @@ mod tests {
 
     #[test]
     fn cada_entrada_invoca_la_accion_de_su_tecla() {
-        let names: Vec<&str> = ContextMenu::new(Point::default(), EntryKind::Note)
+        let names: Vec<&str> = ContextMenu::new(Point::default(), path("a.md"), EntryKind::Note)
             .items()
             .map(|item| item.action().name())
             .collect();
