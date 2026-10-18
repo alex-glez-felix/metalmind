@@ -32,6 +32,8 @@ fn found(text: &str) -> Vec<String> {
 #[case::tilde_fence("~~~\n#a\n~~~\n#b", &["#b"])]
 #[case::fence_with_info("```rust\n#a\n```\n#b", &["#b"])]
 #[case::unclosed_fence("```\n[[a]]\n#b", &[])]
+#[case::fence_in_list_item("- ```\n  [[a]]\n  ```\n[[b]]", &["[[b]]"])]
+#[case::fence_in_ordered_item("1. ~~~\n   #a\n   ~~~\n#b", &["#b"])]
 #[case::inline_comment("%%[[a]]%% [[b]]", &["[[b]]"])]
 #[case::block_comment("%%\n[[a]]\n%%\n#b", &["#b"])]
 #[case::unclosed_comment("[[a]] %% [[b]]", &["[[a]]"])]
