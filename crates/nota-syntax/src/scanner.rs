@@ -65,7 +65,13 @@ impl Scanner<'_> {
             self.scan.links.push(link);
             return Some(end);
         }
-        let markdown = markdown_link::markdown_link_at(self.text, &mut self.brackets, start, open)?;
+        let markdown = markdown_link::markdown_link_at(
+            self.text,
+            &mut self.brackets,
+            &mut self.code_spans,
+            start,
+            open,
+        )?;
         self.scan.links.extend(markdown.link);
         Some(markdown.end)
     }
