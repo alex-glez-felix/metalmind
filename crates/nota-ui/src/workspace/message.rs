@@ -44,12 +44,14 @@ impl Message {
         })
     }
 
-    /// Como vim al abrir: `"a.md" 3L, 20B`, o `[Nuevo]` si todavía no existe.
+    /// Como vim al abrir: `"a.md" 3L, 20B`, `"a.md" [noeol] 1L, 3B` si le
+    /// falta el `\n` final, o `[Nuevo]` si todavía no existe.
     #[must_use]
     pub fn opened(document: &Document) -> Self {
         let path = document.path().display();
         if document.exists_on_disk() {
-            Self::Info(format!("\"{path}\" {}", document.stats()))
+            let noeol = if document.noeol() { "[noeol] " } else { "" };
+            Self::Info(format!("\"{path}\" {noeol}{}", document.opened_stats()))
         } else {
             Self::Info(format!("\"{path}\" [Nuevo]"))
         }

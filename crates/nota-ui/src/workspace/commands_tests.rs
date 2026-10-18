@@ -49,6 +49,15 @@ fn e_abre_otro_archivo_en_el_panel() {
 }
 
 #[test]
+fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
+    let (dir, mut session) = two_files();
+    fs::write(path(&dir, "c.md"), "c1\nc2").unwrap();
+    edit(&mut session, "e", &path(&dir, "c.md"));
+    let opened = format!("\"{}\" [noeol] 2L, 5B", path(&dir, "c.md").display());
+    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+}
+
+#[test]
 fn e_de_un_archivo_que_no_existe_lo_empieza_vacio() {
     let (dir, mut session) = two_files();
     edit(&mut session, "e", &path(&dir, "nueva.md"));
