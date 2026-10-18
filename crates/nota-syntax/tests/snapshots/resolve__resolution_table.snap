@@ -22,6 +22,10 @@ expression: table
 "notas.md" → adjuntos/notas.md.md
 "árbol" → Mayúsculas/Árbol.md
 "mayúsculas/ÁRBOL" → Mayúsculas/Árbol.md
+"Casa" → Casa.md
+"casa.md" → casa.md
+"CASA" → ambiguo: Casa.md, casa.md
+"Duplicada" → ambiguo: a/Duplicada.md, b/Duplicada.md
 "  nota  " → nota.md
 "no existe" → sin resolver
 "" → sin resolver

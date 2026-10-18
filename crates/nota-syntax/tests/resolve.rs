@@ -20,6 +20,8 @@ const VAULT: &[&str] = &[
     "adjuntos/diagrama.png",
     "adjuntos/notas.md.md",
     "Mayúsculas/Árbol.md",
+    "Casa.md",
+    "casa.md",
 ];
 
 const TARGETS: &[&str] = &[
@@ -43,6 +45,10 @@ const TARGETS: &[&str] = &[
     "notas.md",
     "árbol",
     "mayúsculas/ÁRBOL",
+    "Casa",
+    "casa.md",
+    "CASA",
+    "Duplicada",
     "  nota  ",
     "no existe",
     "",
