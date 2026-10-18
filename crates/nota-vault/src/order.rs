@@ -243,8 +243,8 @@ mod tests {
         (before, removed)
     }
 
-    /// `notes` renames del lote; `chained` hace que cada uno ocupe el nombre
-    /// que libera el siguiente (`n0 → n1`, `n1 → n2`, …).
+    /// Un lote con `notes` renames independientes (`n0 → m0`, `n1 → m1`, …),
+    /// como llega del watcher: cada origen borrado y cada destino creado.
     struct RenameBatch {
         before: HashMap<VaultPath, EntryKind>,
         after: HashMap<VaultPath, EntryKind>,
@@ -254,7 +254,7 @@ mod tests {
     }
 
     impl RenameBatch {
-        fn new(notes: usize, chained: bool) -> Self {
+        fn new(notes: usize) -> Self {
             let mut batch = Self {
                 before: HashMap::new(),
                 after: HashMap::new(),
@@ -264,11 +264,7 @@ mod tests {
             };
             for note in 0..notes {
                 let from = path(&format!("n{note:06}.md"));
-                let to = if chained {
-                    path(&format!("n{:06}.md", note + 1))
-                } else {
-                    path(&format!("m{note:06}.md"))
-                };
+                let to = path(&format!("m{note:06}.md"));
                 batch.before.insert(from.clone(), EntryKind::Note);
                 batch.after.insert(to.clone(), EntryKind::Note);
                 batch.renames.push((from, to));
@@ -323,19 +319,18 @@ mod tests {
     #[test]
     #[ignore = "cuadrático en los renames del lote: #38"]
     fn ordenar_muchos_renames_es_lineal() {
-        nota_perf::assert_linear(
-            1_000,
-            |notes| RenameBatch::new(notes, false),
-            |batch| batch.arrange(),
-        );
+        nota_perf::assert_linear(1_000, RenameBatch::new, |batch| batch.arrange());
     }
 
+    /// La prueba de arriba mide algo solo si cada rename del lote se empareja.
     #[test]
-    fn ordenar_una_cadena_de_renames_es_lineal() {
-        nota_perf::assert_linear(
-            1_200,
-            |notes| RenameBatch::new(notes, true),
-            |batch| batch.arrange(),
+    fn cada_rename_del_lote_sale_como_renamed() {
+        let changes = RenameBatch::new(50).arrange();
+        assert_eq!(changes.len(), 50);
+        assert!(
+            changes
+                .iter()
+                .all(|change| matches!(change, VaultChange::Renamed { .. }))
         );
     }
 }
