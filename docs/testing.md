@@ -42,7 +42,7 @@ El smoke teclea con XTest, que manda teclas al servidor X entero: corrido sobre 
 
 GPUI (`gpui-pre-wgpu`) junta los adaptadores de Vulkan y de GL, los ordena (GPU discreta, integrada, …, CPU; a igual tipo, Vulkan antes que GL) y usa el primero que puede configurar la superficie de la ventana. Sin GPU hay dos por software, ambos de mesa y `type=Cpu` en el log: lavapipe (Vulkan) y llvmpipe por EGL (GL). Gana lavapipe si está; si no, GL basta para el smoke. Con lavapipe, cada caso tarda menos de 1 s en un build de debug.
 
-- **Sin ningún adaptador, no abre**: `nota` dice `no se pudo abrir la ventana: Failed to create surface…` pero el proceso no termina ([#31](https://github.com/alex-glez-felix/nota/issues/31)); el test falla al minuto esperando la ventana, con ese mensaje en el log.
+- **Sin ningún adaptador, no abre**: `nota` dice `no se pudo abrir la ventana: Failed to create surface…`, sugiere instalar el driver y sale con código 1; el test que espera la ventana falla en cuanto sale, con ese mensaje en el log. `sin_adaptador_termina_con_error` lo comprueba con `smoke.launch_without_gpu`, que apunta los loaders de Vulkan y EGL a un archivo que no existe.
 - **En una máquina con GPU**, el driver de la GPU va primero. El Vulkan de NVIDIA presenta en Xvfb y el smoke pasa igual; con otros drivers no se verificó. Para forzar lavapipe, apunta el loader a su ICD; el harness le pasa el entorno a `nota`:
 
   ```sh
@@ -66,6 +66,7 @@ Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/t
 
 - `Smoke::new()`: un Xvfb y una carpeta de notas vacía. `write`, `read`, `set_mode`, `mode`, `files` (para ver que no quedan temporales) y `wait_contents` trabajan sobre esa carpeta.
 - `smoke.launch(&["a.md", …])`: lanza `nota` con esos argumentos desde la carpeta de notas. Devuelve un `Nota`.
+- `smoke.launch_without_gpu(&["a.md"])`: igual, pero sin ningún driver de Vulkan ni EGL a la vista, para probar que `nota` sale con error cuando no puede dibujar.
 - `nota.window()` espera la primera ventana; `nota.windows()` da todas las que tiene abiertas ahora, sin asumir una sola. `nota.wait_exit()` espera la salida y devuelve el `ExitStatus`; `nota.is_running()` no espera.
 - `window.type_keys("…")`, `window.title()`, `window.wait_title(…)` y `window.request_close()`, que manda `WM_DELETE_WINDOW` como la "x" de un gestor de ventanas.
 

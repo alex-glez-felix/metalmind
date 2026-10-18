@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use clap::Parser as _;
+use gpui_kit::App;
 use nota_config::{Config, Diagnostic, Paths, Severity};
 use nota_ui::Document;
 
@@ -41,7 +42,7 @@ fn open(path: &Path, launched: Instant) -> ExitCode {
         if let Err(error) = nota_ui::open(document, &config, launched, cx) {
             eprintln!("nota: {error}");
             failed_in_app.set(true);
-            cx.quit();
+            quit_from_event_loop(cx);
         }
     });
     if failed.get() {
@@ -49,6 +50,12 @@ fn open(path: &Path, launched: Instant) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// En Linux, el bucle de eventos olvida un `quit()` pedido antes de arrancar (#31); una tarea
+/// del executor de primer plano solo corre ya dentro del bucle.
+fn quit_from_event_loop(cx: &mut App) {
+    cx.spawn(async |cx| cx.update(|cx| cx.quit())).detach();
 }
 
 /// La config del usuario; lo que esté mal se reporta y se usa el default.
