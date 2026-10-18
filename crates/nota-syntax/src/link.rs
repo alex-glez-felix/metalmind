@@ -58,7 +58,7 @@ fn percent_decode(raw: &str) -> Cow<'_, str> {
     while i < bytes.len() {
         let escaped = bytes
             .get(i + 1..i + 3)
-            .filter(|_| bytes[i] == b'%')
+            .filter(|hex| bytes[i] == b'%' && hex.iter().all(u8::is_ascii_hexdigit))
             .and_then(|hex| std::str::from_utf8(hex).ok())
             .and_then(|hex| u8::from_str_radix(hex, 16).ok());
         if let Some(byte) = escaped {
@@ -155,6 +155,7 @@ mod tests {
     #[case("canci%C3%B3n", "canción")]
     #[case("roto%2", "roto%2")]
     #[case("%FF", "%FF")]
+    #[case("50%+5.md", "50%+5.md")]
     fn percent_decoding(#[case] raw: &str, #[case] decoded: &str) {
         assert_eq!(percent_decode(raw), decoded);
     }
