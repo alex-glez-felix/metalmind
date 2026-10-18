@@ -92,7 +92,7 @@ fn sin_resultados_no_hay_nada_que_elegir() {
     assert!(picker.is_empty());
     picker.select_next();
     picker.select_previous();
-    assert_eq!(picker.choose(Open::Here), None);
+    assert_eq!(picker.choose(Open::Here, &mut FuzzyMatcher::paths()), None);
 }
 
 #[test]
@@ -101,7 +101,9 @@ fn elige_por_la_posicion_en_los_items() {
     type_and_run(&mut picker, "recetas");
     assert_eq!(rows(&picker), ["recetas/pan.md", "recetas/arroz.md"]);
     picker.select_next();
-    let chosen = picker.choose(Open::SplitRight).unwrap();
+    let chosen = picker
+        .choose(Open::SplitRight, &mut FuzzyMatcher::paths())
+        .unwrap();
     assert_eq!(NOTES[chosen.item], "recetas/arroz.md");
     assert_eq!(chosen.open, Open::SplitRight);
 }
@@ -143,30 +145,35 @@ fn una_busqueda_vieja_se_descarta() {
     assert_eq!(rows(&picker), NOTES);
 }
 
-/// `enter` antes de que vuelva la búsqueda de lo escrito elige cuando
-/// vuelve, sobre los resultados nuevos.
+/// `enter` antes de que vuelva la búsqueda de lo escrito busca en el
+/// momento y elige sobre eso; lo que vuelve después es viejo.
 #[test]
-fn elegir_antes_de_los_resultados_espera_a_que_lleguen() {
+fn elegir_antes_de_los_resultados_busca_en_el_momento() {
     let mut picker = picker();
     let job = picker.edit(LineEdit::Insert("arroz")).job.unwrap();
-    assert_eq!(picker.choose(Open::Here), None);
-    let step = picker.finish(job.run(&mut FuzzyMatcher::paths()));
-    let chosen = step.chosen.unwrap();
+    let chosen = picker
+        .choose(Open::Here, &mut FuzzyMatcher::paths())
+        .unwrap();
     assert_eq!(NOTES[chosen.item], "recetas/arroz.md");
     assert_eq!(chosen.open, Open::Here);
+    let step = picker.finish(job.run(&mut FuzzyMatcher::paths()));
+    assert!(step.job.is_none());
+    assert_eq!(step.chosen, None, "no elige dos veces");
 }
 
+/// Lo que se teclea después del `enter` no cambia lo elegido.
 #[test]
-fn la_eleccion_pendiente_espera_tambien_a_la_ultima_busqueda() {
+fn elige_con_lo_escrito_al_dar_enter_aunque_corra_otra_busqueda() {
     let mut picker = picker();
     let first = picker.edit(LineEdit::Insert("rec")).job.unwrap();
     assert!(picker.edit(LineEdit::Insert("etas/p")).job.is_none());
-    assert_eq!(picker.choose(Open::SplitDown), None);
+    let chosen = picker
+        .choose(Open::SplitDown, &mut FuzzyMatcher::paths())
+        .unwrap();
+    assert_eq!(NOTES[chosen.item], "recetas/pan.md");
+    assert!(picker.edit(LineEdit::Insert("zzz")).job.is_none());
     let step = picker.finish(first.run(&mut FuzzyMatcher::paths()));
     assert_eq!(step.chosen, None);
-    let step = picker.finish(step.job.unwrap().run(&mut FuzzyMatcher::paths()));
-    let chosen = step.chosen.unwrap();
-    assert_eq!(NOTES[chosen.item], "recetas/pan.md");
 }
 
 #[test]
@@ -199,7 +206,7 @@ fn mientras_carga_la_eleccion_espera_a_los_items() {
     assert!(!picker.is_current());
     let step = picker.edit(LineEdit::Insert("pan"));
     assert!(step.job.is_none(), "sin ítems no se busca");
-    assert_eq!(picker.choose(Open::Here), None);
+    assert_eq!(picker.choose(Open::Here, &mut FuzzyMatcher::paths()), None);
     let step = picker.set_items(Arc::from(NOTES));
     let step = picker.finish(step.job.unwrap().run(&mut FuzzyMatcher::paths()));
     let chosen = step.chosen.unwrap();
@@ -211,7 +218,10 @@ fn mientras_carga_la_eleccion_espera_a_los_items() {
 #[test]
 fn mientras_carga_sin_query_elige_la_primera_al_llegar() {
     let mut picker = PickerState::loading();
-    assert_eq!(picker.choose(Open::SplitRight), None);
+    assert_eq!(
+        picker.choose(Open::SplitRight, &mut FuzzyMatcher::paths()),
+        None
+    );
     let step = picker.set_items(Arc::from(NOTES));
     assert!(step.job.is_none());
     let chosen = step.chosen.unwrap();

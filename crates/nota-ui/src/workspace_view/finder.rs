@@ -96,7 +96,7 @@ impl WorkspaceView {
         let Some(session) = self.vault.session() else {
             return;
         };
-        let path = session.read(cx).root().join(note.0.as_str());
+        let path = shown_path(&session.read(cx).root().join(note.0.as_str()));
         let axis = match open {
             Open::Here => return self.edit_note(&path, window, cx),
             Open::SplitRight => Axis::Row,
@@ -115,7 +115,7 @@ impl WorkspaceView {
     }
 
     fn edit_note(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(argument) = argument(path) else {
+        let Some(argument) = path.to_str().map(str::to_owned) else {
             let error = format!("{} no es una ruta UTF-8", path.display());
             self.workspace.update(cx, |workspace, _| {
                 workspace.set_message(Message::Error(error));
@@ -233,15 +233,11 @@ impl WorkspaceView {
     }
 }
 
-/// La ruta para `:e`: relativa al directorio de trabajo si está dentro,
-/// como la escribiría quien usa vim.
-fn argument(path: &Path) -> Option<String> {
-    let relative = std::env::current_dir()
+/// La ruta como la escribiría quien usa vim, y como la muestran el título
+/// y la barra: relativa al directorio de trabajo si está dentro.
+fn shown_path(path: &Path) -> PathBuf {
+    std::env::current_dir()
         .ok()
-        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_owned));
-    relative
-        .as_deref()
-        .unwrap_or(path)
-        .to_str()
-        .map(str::to_owned)
+        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_owned))
+        .unwrap_or_else(|| path.to_owned())
 }
