@@ -227,3 +227,14 @@ fn si_borrar_falla_los_buffers_no_cambian() {
     assert!(error.is_err());
     assert_eq!(shown(&session), file(&vault, "a.md"));
 }
+
+#[test]
+fn la_ruta_se_muestra_desde_el_directorio_de_trabajo() {
+    let cwd = std::env::current_dir().unwrap();
+    assert_eq!(shown_path(&cwd.join("sub/a.md")), Path::new("sub/a.md"));
+    assert_eq!(
+        shown_path(Path::new("/fuera/a.md")),
+        Path::new("/fuera/a.md")
+    );
+    assert_eq!(shown_path(&cwd), cwd, "el directorio mismo no queda vacío");
+}

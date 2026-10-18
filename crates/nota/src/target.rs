@@ -5,7 +5,11 @@
 //!   (exista o no el archivo, la carpeta tiene que existir).
 //! - `nota`: el último vault abierto y, si no hay, el `vault:` de
 //!   `config.yaml` (06 §8).
+//!
+//! Después nota trabaja dentro del vault, como tras un `:cd` de vim: las
+//! rutas relativas de `:e`, `:w` y el finder parten de su raíz.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,6 +58,24 @@ pub fn resolve(
         vault: folder,
         file: Some(path.to_owned()),
     })
+}
+
+/// `file` (relativa al directorio de trabajo de ahora) como se escribiría
+/// desde la raíz `root` del vault: relativa si está dentro, absoluta si no.
+/// Se calcula antes de entrar al vault, cuando `file` todavía significa lo
+/// que se escribió en la línea de comandos.
+pub fn in_vault(root: &Path, file: &Path) -> PathBuf {
+    let absolute = std::path::absolute(file).unwrap_or_else(|_| file.to_owned());
+    let resolved = match (absolute.parent(), absolute.file_name()) {
+        (Some(folder), Some(name)) => {
+            fs::canonicalize(folder).map_or_else(|_| absolute.clone(), |folder| folder.join(name))
+        }
+        _ => absolute.clone(),
+    };
+    match resolved.strip_prefix(root) {
+        Ok(relative) if !relative.as_os_str().is_empty() => relative.to_owned(),
+        _ => absolute,
+    }
 }
 
 #[cfg(test)]
@@ -137,5 +159,18 @@ mod tests {
         );
         assert_eq!(resolve(None, None, Some(gone)), Err(TargetError::NoVault));
         assert_eq!(resolve(None, None, None), Err(TargetError::NoVault));
+    }
+
+    #[test]
+    fn el_archivo_se_ve_desde_la_raiz_del_vault() {
+        let dir = vault();
+        let root = fs::canonicalize(dir.path().join("notas")).unwrap();
+        fs::create_dir(root.join("sub")).unwrap();
+        let roundabout = dir.path().join("notas/sub/../a.md");
+        assert_eq!(in_vault(&root, &roundabout), PathBuf::from("a.md"));
+        let new = dir.path().join("notas/sub/nueva.md");
+        assert_eq!(in_vault(&root, &new), PathBuf::from("sub/nueva.md"));
+        let outside = dir.path().join("fuera.md");
+        assert_eq!(in_vault(&root, &outside), outside);
     }
 }

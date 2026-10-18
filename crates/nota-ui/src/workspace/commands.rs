@@ -83,11 +83,7 @@ impl Workspace {
     }
 
     fn try_run(&mut self, invocation: &Invocation) -> Result<Effect, WorkspaceError> {
-        let path = invocation
-            .argument
-            .as_deref()
-            .map(|path| self.resolve(path));
-        let path = path.as_deref();
+        let path = invocation.argument.as_deref().map(Path::new);
         match invocation.command {
             Command::Save => self.save(path).map(|_| Effect::Stay),
             Command::Quit => self.quit(false),

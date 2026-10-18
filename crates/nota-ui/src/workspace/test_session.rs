@@ -49,27 +49,13 @@ impl Session {
         Self::with(Document::unnamed(), 0)
     }
 
-    /// Un `[No Name]` en un vault con raíz `dir`.
-    pub fn unnamed_in(dir: &Path) -> Self {
-        Self {
-            workspace: Workspace::new(Document::unnamed(), LineNumbers::HYBRID, 0, dir.to_owned()),
-            effect: Effect::Stay,
-            clipboard: TestClipboard::default(),
-        }
-    }
-
     pub fn open(path: &Path) -> Self {
         Self::with(Document::open(path).unwrap(), 0)
     }
 
     fn with(document: Document, scrolloff: usize) -> Self {
         Self {
-            workspace: Workspace::new(
-                document,
-                LineNumbers::HYBRID,
-                scrolloff,
-                std::env::current_dir().unwrap(),
-            ),
+            workspace: Workspace::new(document, LineNumbers::HYBRID, scrolloff),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }

@@ -6,6 +6,7 @@ mod cli;
 mod target;
 
 use std::cell::Cell;
+use std::io;
 use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Instant;
@@ -40,6 +41,8 @@ enum StartError {
     Vault(#[from] VaultError),
     #[error(transparent)]
     File(#[from] FileError),
+    #[error("no se pudo entrar en el vault: {0}")]
+    EnterVault(io::Error),
 }
 
 fn prepare(cli: &cli::Cli) -> Result<(Startup, Config), StartError> {
@@ -51,7 +54,12 @@ fn prepare(cli: &cli::Cli) -> Result<(Startup, Config), StartError> {
     let configured = dirs::home_dir().and_then(|home| config.settings.vault(&home));
     let target = target::resolve(cli.path.as_deref(), remembered, configured)?;
     let (vault, updates) = Vault::open(&target.vault)?;
-    let document = match &target.file {
+    let file = target
+        .file
+        .as_deref()
+        .map(|file| target::in_vault(vault.root(), file));
+    std::env::set_current_dir(vault.root()).map_err(StartError::EnterVault)?;
+    let document = match &file {
         Some(file) => Document::open(file)?,
         None => Document::unnamed(),
     };

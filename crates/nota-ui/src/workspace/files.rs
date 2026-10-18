@@ -86,7 +86,7 @@ impl Workspace {
                 } else {
                     new.join(rest)
                 };
-                document.set_path(path);
+                document.set_path(shown_path(&path));
             }
         }
         Ok(())
@@ -155,6 +155,18 @@ impl Workspace {
             })
             .collect()
     }
+}
+
+/// La ruta como la escribiría quien usa vim, y como la muestran el título
+/// y la barra: relativa al directorio de trabajo (la raíz del vault, donde
+/// trabaja nota) si está dentro.
+#[must_use]
+pub fn shown_path(path: &Path) -> PathBuf {
+    std::env::current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_owned))
+        .filter(|relative| !relative.as_os_str().is_empty())
+        .unwrap_or_else(|| path.to_owned())
 }
 
 #[cfg(test)]
