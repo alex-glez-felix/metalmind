@@ -4,6 +4,7 @@ use nota_buffer::{Buffer, ByteOffset};
 use regex::{Captures, Regex, RegexBuilder};
 
 use super::SearchError;
+use super::blocks::{blocks, blocks_rev};
 use super::translate::{has_uppercase, translate};
 
 /// Cómo trata las mayúsculas un patrón sin `\c` ni `\C`.
@@ -18,7 +19,9 @@ pub(crate) enum Case {
 }
 
 /// Un patrón de búsqueda ya compilado, con el texto tal como se escribió.
-/// Busca línea por línea, como vim: `^` y `$` son inicio y fin de línea.
+/// Como en vim, `^` y `$` son inicio y fin de línea y ninguna coincidencia
+/// cruza un `\n`: buscar en varias líneas seguidas encuentra lo mismo que
+/// buscar en cada una.
 #[derive(Clone, Debug)]
 pub struct Pattern {
     source: String,
@@ -35,6 +38,7 @@ impl Pattern {
         });
         let regex = RegexBuilder::new(&translation.regex)
             .case_insensitive(ignore_case)
+            .multi_line(true)
             .build()
             .map_err(|_| SearchError::Invalid(source.to_owned()))?;
         Ok(Self {
@@ -67,6 +71,46 @@ impl Pattern {
             );
         }
         found
+    }
+
+    /// Las líneas de `lines` con alguna coincidencia, de arriba abajo.
+    pub(crate) fn matching_lines<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+        lines: Range<usize>,
+    ) -> impl Iterator<Item = usize> + 'a {
+        blocks(buffer, lines).flat_map(move |block| self.matching_lines_in(buffer, block))
+    }
+
+    /// La última línea de `lines` con alguna coincidencia.
+    pub(crate) fn last_matching_line(&self, buffer: &Buffer, lines: Range<usize>) -> Option<usize> {
+        blocks_rev(buffer, lines).find_map(|block| self.matching_lines_in(buffer, block).last())
+    }
+
+    /// Un solo regex por bloque; tras cada coincidencia salta a la línea
+    /// siguiente, porque basta con saber que la línea tiene una. Las líneas
+    /// se cuentan en el texto del bloque, sin volver a preguntarle al rope.
+    fn matching_lines_in<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+        block: Range<usize>,
+    ) -> impl Iterator<Item = usize> + 'a {
+        let mut line = block.start;
+        let text = buffer.lines_text(block);
+        let mut next = Some(0);
+        std::iter::from_fn(move || {
+            let from = next?;
+            let found = self.regex.find_at(&text, from)?;
+            let skipped = text.as_bytes()[from..found.start()]
+                .iter()
+                .filter(|&&b| b == b'\n');
+            let matched = line + skipped.count();
+            next = text[found.end()..]
+                .find('\n')
+                .map(|at| found.end() + at + 1);
+            line = matched + 1;
+            Some(matched)
+        })
     }
 
     /// Las coincidencias de una línea en el orden en que las recorre la

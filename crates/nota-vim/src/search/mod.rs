@@ -1,6 +1,7 @@
 //! Búsqueda en el buffer: el dialecto de vim, el recorrido con wrap y la
 //! palabra de `*`.
 
+mod blocks;
 mod pattern;
 mod scan;
 mod translate;

@@ -45,6 +45,15 @@ fn line_text_leaves_out_the_line_feed() {
 }
 
 #[test]
+fn lines_text_joins_whole_lines_without_the_last_line_feed() {
+    let buffer = Buffer::from("uno\nañb\n");
+    assert_eq!(buffer.lines_text(0..2), "uno\nañb");
+    assert_eq!(buffer.lines_text(1..3), "añb\n");
+    assert_eq!(buffer.lines_text(2..3), "");
+    assert_eq!(buffer.lines_text(1..1), "");
+}
+
+#[test]
 fn columns_count_characters_not_bytes() {
     let buffer = Buffer::from("añb\ncd");
     assert_eq!(buffer.column_of(at(3)), 2);

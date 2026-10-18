@@ -79,6 +79,21 @@ fn buscar_sin_resultado(bencher: Bencher, lines: usize) {
     keys(bencher, lines, "", &format!("/{MISSING_WORD}\n"));
 }
 
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 50)]
+fn buscar_hacia_atras_sin_resultado(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", &format!("?{MISSING_WORD}\n"));
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 50)]
+fn buscar_palabra_sin_resultado(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", &format!("/\\<{MISSING_WORD}\\>\n"));
+}
+
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 50)]
+fn sustituir_sin_resultado(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", &format!(":%s/{MISSING_WORD}/x/g\n"));
+}
+
 #[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 200)]
 fn buscar_la_siguiente(bencher: Bencher, lines: usize) {
     keys(bencher, lines, "", &format!("/{WORD}\n"));

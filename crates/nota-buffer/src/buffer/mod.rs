@@ -148,9 +148,19 @@ impl Buffer {
     /// Texto de la línea sin su `\n`; sin copiar si está en un solo trozo del rope.
     #[must_use]
     pub fn line_text(&self, line: usize) -> Cow<'_, str> {
-        let slice = self
-            .rope
-            .byte_slice(self.line_start(line).get()..self.line_end(line).get());
+        self.lines_text(line..line + 1)
+    }
+
+    /// Texto seguido de las líneas `lines`, sin el `\n` de la última; vacío
+    /// si el rango lo está. Sin copiar si está en un solo trozo del rope.
+    #[must_use]
+    pub fn lines_text(&self, lines: Range<usize>) -> Cow<'_, str> {
+        if lines.is_empty() {
+            return Cow::Borrowed("");
+        }
+        let start = self.line_start(lines.start).get();
+        let end = self.line_end(lines.end - 1).get();
+        let slice = self.rope.byte_slice(start..end);
         slice
             .as_str()
             .map_or_else(|| Cow::Owned(slice.to_string()), Cow::Borrowed)

@@ -110,11 +110,11 @@ impl Translator {
                 self.ignore_case.get_or_insert(false);
             }
             's' => self.atom("[ \\t]"),
-            'S' => self.atom("[^ \\t]"),
+            'S' => self.atom("[^ \\t\\n]"),
             'd' => self.atom("[0-9]"),
-            'D' => self.atom("[^0-9]"),
+            'D' => self.atom("[^0-9\\n]"),
             'w' => self.atom("[0-9A-Za-z_]"),
-            'W' => self.atom("[^0-9A-Za-z_]"),
+            'W' => self.atom("[^0-9A-Za-z_\\n]"),
             't' => self.atom("\\t"),
             'e' => self.atom("\\x1b"),
             'r' => self.atom("\\r"),
@@ -199,7 +199,8 @@ impl Translator {
         Ok(())
     }
 
-    /// `[…]`; sin `]` que la cierre, vim busca el `[` como texto.
+    /// `[…]`; sin `]` que la cierre, vim busca el `[` como texto. Como en
+    /// vim sin `\_`, nunca incluye el `\n`, ni negada ni con `[:space:]`.
     fn collection(&mut self) -> Result<(), SearchError> {
         let Some(end) = collection_end(&self.chars, self.next) else {
             self.literal('[');
@@ -220,7 +221,7 @@ impl Translator {
         }
         regex.push(']');
         self.next = end + 1;
-        self.atom(&regex);
+        self.atom(&format!("[{regex}&&[^\\n]]"));
         Ok(())
     }
 
@@ -336,14 +337,15 @@ mod tests {
             ("\\/\\.\\*\\~", "/\\.\\*\\~"),
             ("~", "\\~"),
             ("\\s\\d\\w", "[ \\t][0-9][0-9A-Za-z_]"),
-            ("[abc]", "[abc]"),
-            ("[^a-z]", "[^a-z]"),
-            ("[]a]", "[\\]a]"),
-            ("[^]a]", "[^\\]a]"),
-            ("[[:alpha:]_]", "[[:alpha:]_]"),
-            ("[a\\]b]", "[a\\]b]"),
-            ("[\\zy]", "[\\\\zy]"),
-            ("[a&&b~~c]", "[a\\&\\&b\\~\\~c]"),
+            ("\\S\\D\\W", "[^ \\t\\n][^0-9\\n][^0-9A-Za-z_\\n]"),
+            ("[abc]", "[[abc]&&[^\\n]]"),
+            ("[^a-z]", "[[^a-z]&&[^\\n]]"),
+            ("[]a]", "[[\\]a]&&[^\\n]]"),
+            ("[^]a]", "[[^\\]a]&&[^\\n]]"),
+            ("[[:alpha:]_]", "[[[:alpha:]_]&&[^\\n]]"),
+            ("[a\\]b]", "[[a\\]b]&&[^\\n]]"),
+            ("[\\zy]", "[[\\\\zy]&&[^\\n]]"),
+            ("[a&&b~~c]", "[[a\\&\\&b\\~\\~c]&&[^\\n]]"),
             ("[ab", "\\[ab"),
             ("a[", "a\\["),
             ("ñ.é", "ñ.é"),
