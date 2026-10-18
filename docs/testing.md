@@ -8,11 +8,11 @@ Los casos de `nota-vim` también corren en `nvim --headless` 0.12.6; sin ese `nv
 
 ## Smoke de la app real
 
-`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb (`-displayfd` elige un display libre), así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y Vulkan; el job `gui-smoke` del CI los corre.
+`crates/nota/tests/gui_smoke.rs` lanza el binario `nota` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100` según el lock de X, así que corren en paralelo sin pisarse el foco y nunca tocan el display de un escritorio. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre.
 
 ### Correrlo en local
 
-Hace falta Xvfb, un driver Vulkan que funcione sin GPU (lavapipe, de mesa) y una fuente monoespaciada, además de las librerías de GPUI de [Primeros pasos](GETTING-STARTED.md#correr-nota):
+Hace falta Xvfb, un driver que dibuje sin GPU (lavapipe, el Vulkan por software de mesa, es el del CI; ver abajo) y una fuente monoespaciada, además de las librerías de GPUI de [Primeros pasos](GETTING-STARTED.md#correr-nota):
 
 ```sh
 sudo pacman -S --needed xorg-server-xvfb vulkan-swrast ttf-dejavu                       # Arch
@@ -21,14 +21,14 @@ sudo apt-get install -y xvfb mesa-vulkan-drivers fonts-dejavu-core              
 cargo nextest run -p nota --test gui_smoke --run-ignored only
 ```
 
-No hace falta `xvfb-run` ni un `DISPLAY`: el harness abre su servidor. `nota` corre con `HOME` y `XDG_*` apuntando a una carpeta vacía (config por defecto) y sin `WAYLAND_DISPLAY`, para que GPUI use X11. Si un test falla, la salida trae el log de `nota` con `RUST_LOG=info`, que dice qué adaptador eligió GPUI. Los logs de `nota` y de Xvfb quedan en la carpeta temporal del test mientras corre.
+No hace falta `xvfb-run` ni un `DISPLAY`: el harness abre su servidor. `nota` corre con `HOME` y `XDG_*` apuntando a una carpeta vacía (config por defecto) y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET`, para que GPUI use X11 y no abra nada en tu escritorio. Si un test falla, la salida trae el log de `nota` con `RUST_LOG=info`, que dice qué adaptador eligió GPUI. Los logs de `nota` y de Xvfb quedan en la carpeta temporal del test mientras corre.
 
-### Vulkan sin GPU
+### Dibujar sin GPU
 
-GPUI (`gpui-pre-wgpu`) prueba los adaptadores en orden (GPU discreta, integrada, luego CPU) y usa el primero que puede configurar la superficie de la ventana. En el CI solo existe lavapipe (`llvmpipe … type=Cpu` en el log) y el primer frame de un build de debug tarda ~0,5 s.
+GPUI (`gpui-pre-wgpu`) junta los adaptadores de Vulkan y de GL, los ordena (GPU discreta, integrada, …, CPU; a igual tipo, Vulkan antes que GL) y usa el primero que puede configurar la superficie de la ventana. Sin GPU hay dos por software, ambos de mesa y `type=Cpu` en el log: lavapipe (Vulkan) y llvmpipe por EGL (GL). Gana lavapipe si está; si no, GL basta para el smoke. Con lavapipe, cada caso tarda menos de 1 s en un build de debug.
 
-- **Sin ningún driver Vulkan, no abre**: no hay fallback a GL, así que `LIBGL_ALWAYS_SOFTWARE` no sirve de nada. `nota` dice `no se pudo abrir la ventana: Failed to create surface…`; el test falla al minuto esperando la ventana, con ese mensaje en el log.
-- **En una máquina con GPU**, el driver de la GPU se prueba primero, y presentar en Xvfb puede fallar o funcionar según el driver (no verificado). Para forzar lavapipe, apunta el loader a su ICD; el harness le pasa el entorno a `nota`:
+- **Sin ningún adaptador, no abre**: `nota` dice `no se pudo abrir la ventana: Failed to create surface…` pero el proceso no termina ([#31](https://github.com/alex-glez-felix/nota/issues/31)); el test falla al minuto esperando la ventana, con ese mensaje en el log.
+- **En una máquina con GPU**, el driver de la GPU va primero. El Vulkan de NVIDIA presenta en Xvfb y el smoke pasa igual; con otros drivers no se verificó. Para forzar lavapipe, apunta el loader a su ICD; el harness le pasa el entorno a `nota`:
 
   ```sh
   VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json \
@@ -61,4 +61,5 @@ Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s 
 ### Lo que encontró
 
 - nota no tiene el `fixeol` de vim. Un archivo nuevo se guarda sin el `\n` final (`ihola<Esc>:wq` escribe `hola`; vim escribe `hola\n`), y un archivo que termina en `\n` tiene una línea vacía de más al final: en `uno\ndos\n`, `"ayyjdd"ap` deja `uno\n\nuno` y vim, `uno\nuno\n`. Arreglarlo es de `nota-ui`/`nota-vault` (quitar el `\n` final al abrir y ponerlo al guardar); el caso de archivo nuevo fija el comportamiento de hoy.
-- Si GPUI no puede crear la superficie (sin driver Vulkan), `nota` imprime el error pero el proceso no termina. Falta ver por qué el `cx.quit()` de `main.rs` no basta ahí.
+- Si GPUI no puede crear la superficie, `nota` imprime el error pero el proceso no termina: el `cx.quit()` de `main.rs` se pide antes de que arranque el bucle de eventos y se pierde ([#31](https://github.com/alex-glez-felix/nota/issues/31)).
+- `Xvfb -displayfd` elige el primer display donde puede abrir el socket sin mirar el lock, y en un escritorio con XWayland eso puede ser el `:0` de la sesión. Por eso el harness pide un display explícito desde `:100`.
