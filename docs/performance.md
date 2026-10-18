@@ -89,7 +89,7 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | Scan 5 k / 50 k | 18.0 M / 179.6 M |
 | Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 9.1 M / 4.4 M / 5.8 M / 29.1 M / 57.3 M |
 | Finder 5 k / 50 k | 17.3 M / 169.3 M |
-| Texto completo en una nota de 5 k: palabra frecuente / sin resultado | — / — |
+| Texto completo en una nota de 5 k: palabra frecuente / sin resultado | 12.4 M / 459 k |
 
 Para correrlo en local hacen falta `valgrind` y `gungraun-runner` de la misma versión que `gungraun` (`cargo binstall gungraun-runner@0.20.0`, o el binario de su release):
 
