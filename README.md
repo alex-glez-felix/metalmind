@@ -36,6 +36,7 @@ Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Prim
 - [03 — Arquitectura del núcleo](docs/research/03-core-architecture.md)
 - [04 — Spike de GPUI: resultados](docs/research/04-spike-gpui.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
+- [Cómo se hace un release](docs/release.md) y [CHANGELOG](CHANGELOG.md)
 - [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
 
 ## Licencia

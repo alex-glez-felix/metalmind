@@ -327,12 +327,12 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 
 ### Empaquetado Linux
 
-- **`cargo-dist`** 0.32.0 (may-2026): planea y construye releases en CI, tarballs, installer shell, Homebrew, MSI. **No genera AppImage ni Flatpak.**
+- **`cargo-dist`** (hoy `dist`, 0.33.0 en sep-2026): planea y construye releases en CI, tarballs, installer shell, Homebrew, MSI. **No genera AppImage ni Flatpak.** En uso desde 2026-10-17: Linux x86_64 y aarch64, tags `v*`, sin installer shell (ver `docs/release.md`).
 - **AppImage**: `cargo-appimage` 2.4 (poco uso) o `linuxdeploy` en un job aparte. Las apps GPU (Vulkan/wgpu) dentro de AppImage dan guerra con drivers **(sin verificar para GPUI)**.
 - **Flatpak**: manifest propio + `flatpak-cargo-generator` para vendorear deps; es el camino para Flathub. Permiso `--filesystem=home` o portal de documentos para abrir vaults.
-- **AUR**: PKGBUILD a mano (`nota` desde fuente y `nota-bin` desde el tarball de cargo-dist). `cargo-aur` 1.7 existe pero está casi muerto (885 descargas recientes).
+- **AUR**: PKGBUILD a mano en `packaging/aur/`: `nota-git` desde la rama main y `nota-bin` desde el tarball de dist. El nombre `nota` queda para un paquete desde el tarball de fuente de un release. `cargo-aur` 1.7 existe pero está casi muerto (885 descargas recientes).
 - `.deb`/`.rpm`: `cargo-deb` 3.8, `cargo-generate-rpm` 0.21.
-- Archivo `.desktop`, icono y metainfo AppStream en `packaging/linux/` desde el primer release.
+- Archivo `.desktop`, icono y metainfo AppStream en `packaging/linux/`; van en cada tarball y el CI los valida.
 
 ---
 
@@ -375,7 +375,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 | **M3 — Wikilinks + backlinks** | `nota-syntax` (scanner Obsidian + frontmatter), índice de links, resolución estilo Obsidian, `gd`/`enter` sigue link, autocompletado de `[[`, panel de backlinks (con vim), tags, links no resueltos, renombrar nota actualiza links. | Fixture de resolución en `insta`; reindex incremental == completo (proptest). |
 | **M4 — Live preview** | tree-sitter-md incremental; ocultar marcadores fuera de la línea del cursor, headings con tamaño, negrita/cursiva, links como texto clicable, listas y checkboxes (`ctrl-enter`/`gx` alterna), código con resaltado, `==highlight==`, comentarios `%%`. Toggle source/live/lectura. | Escribir en una nota de 5 k líneas sin latencia perceptible (< 16 ms por tecla **objetivo**). |
 | **M5 — Embeds y callouts** | `![[img]]` imágenes, `![[nota]]` transclusión (solo lectura), callouts, tablas renderizadas. | El vault de prueba se ve "como en Obsidian" en lo común. |
-| **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo, registros, macros, `:%s`, marks, keymap y tema del usuario en TOML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. |
+| **M6 — Búsqueda y pulido** | Búsqueda full-text (grep paralelo → `tantivy` si hace falta), visual mode completo, registros, macros, `:%s`, marks, keymap y tema del usuario en TOML, autosave + journal de recuperación, caché `redb` para arranque en caliente. | Primer release con cargo-dist + AUR. Listo para el tag (2026-10-17): dist, `nota --version`, `.desktop` + metainfo, PKGBUILD de `nota-bin` y `nota-git`, CHANGELOG y `docs/release.md`. Falta publicar. |
 | Post-MVP | Multi-cursor, vista de grafo, daily notes/plantillas, math, export HTML/PDF, plugins WASM. | — |
 
 ---
