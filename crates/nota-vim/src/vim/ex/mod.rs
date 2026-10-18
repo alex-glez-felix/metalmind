@@ -47,10 +47,29 @@ impl From<BufferError> for Failure {
     }
 }
 
+/// Desde cuántas líneas de `:` una dentro de otra vim da `E169`.
+const MAX_COMMAND_DEPTH: usize = 200;
+
 impl Vim {
     /// Corre una línea de `:`; los comandos del host se devuelven para que
     /// los corra quien aloja el editor, salvo dentro de `:g` o `:normal`.
     pub(super) fn run_ex(
+        &mut self,
+        line: &str,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<KeyOutcome, VimError> {
+        if self.command_depth >= MAX_COMMAND_DEPTH {
+            return Ok(KeyOutcome::InvalidCommand(CommandError::TooRecursive));
+        }
+        self.command_depth += 1;
+        let outcome = self.run_line(line, buffer, selections, clipboard);
+        self.command_depth -= 1;
+        outcome
+    }
+
+    fn run_line(
         &mut self,
         line: &str,
         buffer: &mut Buffer,

@@ -57,6 +57,10 @@ const TEXT: &str = "a|b\ncd\nab";
 #[case(":g/a/2,3g/b/d<CR>", CommandError::RecursiveGlobal)]
 #[case(":g/a/.,+1m1<CR>", CommandError::MoveIntoItself)]
 #[case(":g/a/w<CR>", CommandError::HostCommandInside("w".to_owned()))]
+#[case(":1,2w<CR>", CommandError::PartialWrite)]
+#[case("Vj:wq<CR>", CommandError::PartialWrite)]
+#[case(":2q<CR>", CommandError::UnsupportedRange("q".to_owned()))]
+#[case(":'<lt>,'>vs<CR>", CommandError::UnsupportedRange("vs".to_owned()))]
 #[case(":norm x p<CR>", CommandError::HostCommandInside("workspace::open_command_palette".to_owned()))]
 fn reports_why_a_command_failed(#[case] keys: &str, #[case] error: CommandError) {
     let (outcome, _, _) = run(TEXT, keys);
@@ -112,6 +116,13 @@ fn message(outcome: &KeyOutcome) -> String {
 #[case(":g/zz/d<CR>", "Pattern not found: zz")]
 #[case(":v/./d<CR>", "Pattern found in every line: .")]
 #[case(":2d<CR>", "")]
+#[case(":1,2zz<CR>", "E492: Not an editor command: 1,2zz")]
+#[case(":1,2e x<CR>", "E481: No range allowed")]
+#[case(":2set nu<CR>", "E481: No range allowed")]
+#[case("@:", "E30: No previous command line")]
+#[case(":norm @:<CR>", "E30: No previous command line")]
+#[case(":norm @:<CR>:norm @:<CR>", "E169: Command too recursive")]
+#[case("o<Esc>:g/^/normal *<CR>", "E348: No string under cursor")]
 #[case(":%s/./x/g<CR>", "6 substitutions on 3 lines")]
 #[case(":g/./s/^/x/<CR>", "3 substitutions on 3 lines")]
 #[case(":%j<CR>:s/[ab]/x/g<CR>", "4 substitutions on 1 line")]
@@ -194,4 +205,22 @@ fn repeating_without_a_previous_line_fails() {
 fn ex_commands_leave_a_single_cursor() {
     let (_, _, text) = run("|ab\n|cd\nef", ":3d<CR>");
     assert_eq!(text, "ab\n|cd");
+}
+
+/// Como vim, una línea de `:` que se repite a sí misma corta a los 200
+/// niveles con `E169`, y lo que alcanzó a hacer queda.
+const RECURSIVE: &str = "300ix<Esc>0:norm x@:<CR>:norm x@:<CR>";
+
+#[test]
+fn a_command_line_that_repeats_itself_stops() {
+    let (outcome, _, text) = run("|", RECURSIVE);
+    assert_eq!(message(&outcome), "E169: Command too recursive");
+    assert_eq!(text.len(), 300 - 201 + 1, "{text}");
+}
+
+#[test]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn a_command_line_that_repeats_itself_stops_like_nvim() {
+    let (_, _, text) = run("|", RECURSIVE);
+    assert_eq!(support::nvim::run("|", RECURSIVE).text, text);
 }

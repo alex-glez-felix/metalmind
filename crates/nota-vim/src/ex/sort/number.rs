@@ -225,6 +225,8 @@ mod tests {
             ("ab", Radix::Decimal, None),
             ("a99999999999999999999", Radix::Decimal, Some(i64::MAX)),
             ("-99999999999999999999", Radix::Decimal, Some(i64::MIN)),
+            ("-9223372036854775808", Radix::Decimal, Some(i64::MIN)),
+            ("-9223372036854775807", Radix::Decimal, Some(-i64::MAX)),
             ("x10", Radix::Hex, Some(0x10)),
             ("zzabc", Radix::Hex, Some(0xabc)),
             ("-0x1F", Radix::Hex, Some(-0x1f)),

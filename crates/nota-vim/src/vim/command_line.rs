@@ -75,12 +75,14 @@ impl Vim {
             Prompt::Search { backward } => {
                 self.submit_search(backward, &line, buffer, selections, clipboard)
             }
+            // Como vim, `@:` dentro de la línea repite la anterior, no esta.
             Prompt::Command => {
                 self.command_history.push(&line);
+                let outcome = self.run_ex(&line, buffer, selections, clipboard);
                 if !line.is_empty() {
-                    self.last_command_line = Some(line.clone());
+                    self.last_command_line = Some(line);
                 }
-                self.run_ex(&line, buffer, selections, clipboard)
+                outcome
             }
         }
     }

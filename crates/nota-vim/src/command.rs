@@ -78,8 +78,14 @@ pub enum CommandError {
     TrailingCharacters(String),
     #[error("E20: Mark not set")]
     MarkNotSet,
+    #[error("E30: No previous command line")]
+    NoPreviousCommandLine,
     #[error("E134: Cannot move a range of lines into itself")]
     MoveIntoItself,
+    #[error("E140: Use ! to write partial buffer")]
+    PartialWrite,
+    #[error("E169: Command too recursive")]
+    TooRecursive,
     #[error("E471: Argument required")]
     ArgumentRequired,
     #[error("E474: Invalid argument")]
@@ -107,6 +113,10 @@ pub enum CommandError {
     UnsupportedReplacement(String),
     #[error("nota no soporta el flag {0} de :sort")]
     UnsupportedSortFlag(char),
+    /// En vim, el rango de `:q`, `:sp`, `:vs` y `:on` es un número de
+    /// ventana o un alto, que nota no tiene.
+    #[error("nota no admite un rango en :{0}")]
+    UnsupportedRange(String),
     /// `:g` y `:normal` corren dentro del motor; un comando que tiene que
     /// correr quien aloja el editor no puede ir dentro.
     #[error("nota no corre :{0} dentro de :g ni de :normal")]
@@ -184,6 +194,15 @@ impl Command {
     #[must_use]
     pub fn takes_argument(self) -> bool {
         matches!(self, Self::Edit | Self::ForceEdit | Self::Set)
+    }
+
+    /// Por qué no corre con un rango, que ningún comando del host admite.
+    pub(crate) fn range_error(self, typed: &str) -> CommandError {
+        match self {
+            Self::Save | Self::SaveAndQuit => CommandError::PartialWrite,
+            Self::Edit | Self::ForceEdit | Self::Set => CommandError::NoRangeAllowed,
+            _ => CommandError::UnsupportedRange(typed.to_owned()),
+        }
     }
 }
 

@@ -53,7 +53,9 @@ impl Vim {
                 Action::RecordMacro
             }
             Awaiting::Play => {
-                self.play_macro(c, clipboard);
+                if let Some(error) = self.play_macro(c, clipboard) {
+                    return Ok(KeyOutcome::InvalidCommand(error));
+                }
                 Action::PlayMacro
             }
             Awaiting::SetMark => {
