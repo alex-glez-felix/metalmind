@@ -54,6 +54,14 @@ use rstest_reuse::{self, apply, template};
 #[case("a|日本\nxyzw", "j", "a日本\nx|yzw")]
 #[case("a\tb|c\nxyzwvutsrqp", "jx", "a\tbc\nxyzwvutsr|p")]
 #[case("\t|ab\n\tcd\nxyzwvutsrqp", "jjx", "\tab\n\tcd\nxyzwvuts|qp")]
+// zt, zz y zb con count van a la línea en el mismo byte, como nvim, y
+// buscan después la columna de pantalla de antes
+#[case("añb|cd\nxyzwvutsrq", "2zt", "añbcd\nxyzw|vutsrq")]
+#[case("a\tb|c\nxyzwvutsrqp", "2zz", "a\tbc\nxyz|wvutsrqp")]
+#[case("abc|d\nññññ", "2zb", "abcd\nñ|ñññ")]
+#[case("abcdefg|h\nab", "2zt", "abcdefgh\na|b")]
+#[case("añb|cd\nxyzwvutsrq", "2ztk", "añb|cd\nxyzwvutsrq")]
+#[case("añb|cd\nxyzwvutsrq", "l2ztk", "añbc|d\nxyzwvutsrq")]
 // w W
 #[case("|foo bar baz", "w", "foo |bar baz")]
 #[case("|foo bar baz", "2w", "foo bar |baz")]

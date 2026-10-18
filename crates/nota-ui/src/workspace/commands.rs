@@ -211,7 +211,9 @@ impl Workspace {
         let shown = match self.documents.find(target) {
             Some(id) => self.pane_on(id, numbers),
             None => match Document::open(target) {
-                Ok(document) => Pane::at_start(self.documents.insert(document), numbers),
+                Ok(document) => {
+                    Pane::at_start(self.documents.insert(document), numbers, self.tabstop)
+                }
                 Err(error) => {
                     self.message = Some(Message::Error(error.to_string()));
                     return Ok(());
@@ -232,7 +234,7 @@ impl Workspace {
             .values()
             .find(|pane| pane.document == id)
             .map_or_else(
-                || Pane::at_start(id, numbers),
+                || Pane::at_start(id, numbers, self.tabstop),
                 |pane| Pane {
                     numbers,
                     ..pane.clone()
@@ -296,7 +298,9 @@ impl Workspace {
         let shown = match self.documents.find(path) {
             Some(id) => self.pane_on(id, numbers),
             None => match Document::open(path) {
-                Ok(document) => Pane::at_start(self.documents.insert(document), numbers),
+                Ok(document) => {
+                    Pane::at_start(self.documents.insert(document), numbers, self.tabstop)
+                }
                 Err(error) => {
                     self.message = Some(Message::Error(error.to_string()));
                     return Ok(());

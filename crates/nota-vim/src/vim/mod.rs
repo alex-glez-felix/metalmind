@@ -322,6 +322,7 @@ impl Vim {
         self.reset();
         if matches!(self.mode, Mode::Visual(_)) {
             self.mode = Mode::Normal;
+            self.stale_line_end = false;
         }
         self.block_insert = None;
         if let Some(session) = &mut self.insert {

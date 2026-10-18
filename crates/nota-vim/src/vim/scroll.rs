@@ -5,7 +5,7 @@ use nota_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
 
 use super::Vim;
 use super::dispatch::move_cursors;
-use crate::lines::{self, clamp_normal, last_char};
+use crate::lines::{self, Want, at_byte_column, clamp_normal, last_char, tab_end};
 use crate::motion::vertical;
 use crate::scroll::Shift;
 use crate::{Place, Scroll, Viewport, VimError};
@@ -83,7 +83,8 @@ impl Vim {
     }
 
     /// `zt`, `zz`, `zb` y, al primer no blanco, `z<CR>`, `z.` y `z-`. Con
-    /// count van antes a esa línea, como un salto.
+    /// count van antes a esa línea, como un salto, en el mismo byte de la
+    /// línea (`nv_zet` de vim) y buscando la misma columna de pantalla.
     pub(super) fn reposition(
         &mut self,
         place: Place,
@@ -98,14 +99,21 @@ impl Vim {
             self.jumped(buffer, selections)?;
             let line = line.min(buffer.last_line());
             let visual = self.in_visual();
+            let columns = self.viewport.columns();
+            let mode = self.mode;
             *selections = selections.map(|s| {
-                let offset = buffer.offset_at_column(line, buffer.column_of(s.head));
+                let column = s.head.get() - buffer.line_start(buffer.line_of(s.head)).get();
+                let offset = at_byte_column(buffer, line, column);
                 let head = if visual {
                     offset
                 } else {
                     clamp_normal(buffer, offset)
                 };
-                moved_head(s, head, visual)
+                let want = Want::of(buffer, s, tab_end(mode, s), columns);
+                Selection {
+                    goal: want.goal(),
+                    ..moved_head(s, head, visual)
+                }
             });
         }
         if first_non_blank {

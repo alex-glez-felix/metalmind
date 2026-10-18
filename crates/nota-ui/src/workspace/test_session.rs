@@ -27,6 +27,9 @@ impl Clipboard for TestClipboard {
     }
 }
 
+/// El de `nvim --clean`, para comparar con el oráculo.
+const VIM_TABSTOP: usize = 8;
+
 /// Un workspace manejado como lo hace la ventana: las teclas van al panel
 /// enfocado y los comandos que devuelve el motor se ejecutan.
 pub(crate) struct Session {
@@ -42,20 +45,28 @@ impl Session {
     }
 
     pub fn with_scrolloff(text: &str, scrolloff: usize) -> Self {
-        Self::with(Document::new(Path::new("prueba.md"), text), scrolloff)
+        Self::with(
+            Document::new(Path::new("prueba.md"), text),
+            scrolloff,
+            VIM_TABSTOP,
+        )
+    }
+
+    pub fn with_tabstop(text: &str, tabstop: usize) -> Self {
+        Self::with(Document::new(Path::new("prueba.md"), text), 0, tabstop)
     }
 
     pub fn unnamed() -> Self {
-        Self::with(Document::unnamed(), 0)
+        Self::with(Document::unnamed(), 0, VIM_TABSTOP)
     }
 
     pub fn open(path: &Path) -> Self {
-        Self::with(Document::open(path).unwrap(), 0)
+        Self::with(Document::open(path).unwrap(), 0, VIM_TABSTOP)
     }
 
-    fn with(document: Document, scrolloff: usize) -> Self {
+    fn with(document: Document, scrolloff: usize, tabstop: usize) -> Self {
         Self {
-            workspace: Workspace::new(document, LineNumbers::HYBRID, scrolloff),
+            workspace: Workspace::new(document, LineNumbers::HYBRID, scrolloff, tabstop),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }

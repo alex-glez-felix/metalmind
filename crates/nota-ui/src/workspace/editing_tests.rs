@@ -183,3 +183,14 @@ fn execute_corre_una_accion_del_motor_como_su_atajo() {
         .unwrap();
     assert!(matches!(outcome, KeyOutcome::Command(_)));
 }
+
+#[test]
+fn el_tabstop_de_la_config_mide_la_columna_de_j() {
+    let text = "a\tbc\nxyzwvutsrqp";
+    let mut cuatro = Session::with_tabstop(text, 4);
+    cuatro.keys("fcj");
+    let mut ocho = Session::with_tabstop(text, 8);
+    ocho.keys("fcj");
+    let column = |session: &Session| session.cursor().get() - "a\tbc\n".len();
+    assert_eq!((column(&cuatro), column(&ocho)), (5, 9));
+}

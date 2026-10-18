@@ -99,7 +99,7 @@ impl Workspace {
                 self.close(pane);
             } else if let Some(state) = self.panes.get_mut(&pane) {
                 let id = self.documents.insert(Document::unnamed());
-                *state = Pane::at_start(id, state.numbers);
+                *state = Pane::at_start(id, state.numbers, self.tabstop);
                 self.drop_unshown();
             }
         }
