@@ -18,9 +18,9 @@ tag-namespace = "v"
 pr-run-mode = "skip"
 # Junto al binario en la raíz del tarball; README, LICENSE y CHANGELOG entran solos.
 include = [
-    "packaging/linux/nota.desktop",
-    "packaging/linux/nota.svg",
-    "packaging/linux/io.github.alex_glez_felix.nota.metainfo.xml",
+    "packaging/linux/metalmind.desktop",
+    "packaging/linux/metalmind.svg",
+    "packaging/linux/io.github.alex_glez_felix.metalmind.metainfo.xml",
 ]
 
 # Las mismas librerías que pide GPUI en ci.yml.

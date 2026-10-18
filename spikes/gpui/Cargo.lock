@@ -3825,6 +3825,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "metalmind-buffer"
+version = "0.0.0"
+dependencies = [
+ "ropey 1.6.1",
+ "smallvec",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "metalmind-spike-gpui"
+version = "0.0.0"
+dependencies = [
+ "env_logger",
+ "gpui-kit",
+ "log",
+ "metalmind-buffer",
+ "metalmind-vim",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "metalmind-vim"
+version = "0.0.0"
+dependencies = [
+ "metalmind-buffer",
+ "regex",
+ "smallvec",
+ "thiserror 2.0.21",
+ "unicode-width",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3966,36 +3998,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b11ce00d2594068e8a27c9146fdc5cf9f3ac38eb42c7cd34d05fea618873ac9f"
 dependencies = [
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "nota-buffer"
-version = "0.0.0"
-dependencies = [
- "ropey 1.6.1",
- "smallvec",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "nota-spike-gpui"
-version = "0.0.0"
-dependencies = [
- "env_logger",
- "gpui-kit",
- "log",
- "nota-buffer",
- "nota-vim",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "nota-vim"
-version = "0.0.0"
-dependencies = [
- "nota-buffer",
- "smallvec",
- "thiserror 2.0.21",
 ]
 
 [[package]]

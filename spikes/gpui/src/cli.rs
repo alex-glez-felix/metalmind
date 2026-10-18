@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 pub const USAGE: &str = "\
 uso:
-  nota-spike-gpui gen [--mb N] [--out RUTA]   genera el markdown de prueba (50 MB por defecto)
-  nota-spike-gpui vim RUTA [--bench]          vista propia: nota-buffer + nota-vim
-  nota-spike-gpui kit RUTA [--bench]          editor de gpui-component, para comparar
+  metalmind-spike-gpui gen [--mb N] [--out RUTA]   genera el markdown de prueba (50 MB por defecto)
+  metalmind-spike-gpui vim RUTA [--bench]          vista propia: metalmind-buffer + metalmind-vim
+  metalmind-spike-gpui kit RUTA [--bench]          editor de gpui-component, para comparar
 
 --bench hace scroll automático durante unos segundos, imprime el reporte y sale.";
 

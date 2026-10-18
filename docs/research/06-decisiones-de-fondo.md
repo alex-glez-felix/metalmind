@@ -13,19 +13,19 @@
 | 4 | Cifrado de notas: deseable, sin fecha | Nada derivado guarda en claro el contenido de una nota cifrada |
 | 5 | Sin sistema de tareas | No indexar tareas "por si acaso" |
 | 6 | Una carpeta de adjuntos por vault, `ctrl-v` pega imágenes | Renombrar o borrar una nota no toca sus adjuntos |
-| 7 | CLI de primera clase (`nota add`, `search`, `tags`, `--json`) | Todo lo del vault funciona sin ventana, desde el núcleo |
+| 7 | CLI de primera clase (`metalmind add`, `search`, `tags`, `--json`) | Todo lo del vault funciona sin ventana, desde el núcleo |
 | 8 | Un vault abierto a la vez | Caché, historial y estado de UI van por vault |
 | 9 | Buzón = las notas sin tags | La captura deja la nota sin tags; `TagQuery` sabe decir "sin tags" |
 | 10 | Vistas guardadas: consultas de tags con nombre, en el panel | Se guardan con el vault, no en la config global |
 | 11 | Daily notes, plantillas, grafo, temas | Ninguna |
 | 12 | Publicar a la web: fuera de alcance | — |
-| 13 | nota es una GUI con navegación estilo vim, no una TUI | Toda función se usa desde la UI además del teclado; nadie edita config ni metadata a mano por necesidad |
+| 13 | Metalmind es una GUI con navegación estilo vim, no una TUI | Toda función se usa desde la UI además del teclado; nadie edita config ni metadata a mano por necesidad |
 
 ---
 
 ## 1. La identidad de una nota es su ruta
 
-**Decisión.** Una nota es su ruta relativa al vault. No hay ID en el frontmatter ni en ningún otro lado. Renombrar o mover una nota desde nota actualiza los `[[links]]` y los tags que apuntan a ella (el motor de refactorización de 03 §4 y 05 §5).
+**Decisión.** Una nota es su ruta relativa al vault. No hay ID en el frontmatter ni en ningún otro lado. Renombrar o mover una nota desde Metalmind actualiza los `[[links]]` y los tags que apuntan a ella (el motor de refactorización de 03 §4 y 05 §5).
 
 **Por qué.** Un ID en cada archivo ensucia notas que deben leerse con cualquier herramienta, y la ruta ya es única. Es reversible: si algún día hace falta un ID, un comando lo escribe a todas las notas de una vez.
 
@@ -33,9 +33,9 @@
 
 - `NoteId` (03 §4) sigue siendo un entero interno de la sesión, nunca algo que se guarde en un archivo del usuario ni que aparezca en un link.
 - Todo lo que se guarda fuera de la memoria (caché, historial §3, estado de UI §8) se indexa por **ruta relativa al vault**, y tiene que poder **seguir un renombre**: mover la entrada, no perderla ni duplicarla.
-- El watcher entrega `Renamed` cuando inotify da el par rename-from/rename-to, pero `git checkout`, Syncthing y muchos editores renombran como **borrar + crear**. `nota-vault` trata un `Removed` y un `Created` con el mismo contenido (hash igual, dentro de la misma ventana del debouncer) como un `Renamed`. El `TagIndex` (05 §2), el índice de links y el historial reciben un solo evento de rename, no un borrado y una nota nueva.
-- Lo mismo al abrir el vault después de cambios hechos con nota cerrada: si falta una ruta que estaba en la caché y aparece una nueva con el mismo hash, es un rename **(propuesta)**. Así el historial de una nota renombrada desde fuera no queda huérfano.
-- Ningún formato propio de nota (caché, historial, vistas guardadas) puede suponer que la ruta es inmutable.
+- El watcher entrega `Renamed` cuando inotify da el par rename-from/rename-to, pero `git checkout`, Syncthing y muchos editores renombran como **borrar + crear**. `metalmind-vault` trata un `Removed` y un `Created` con el mismo contenido (hash igual, dentro de la misma ventana del debouncer) como un `Renamed`. El `TagIndex` (05 §2), el índice de links y el historial reciben un solo evento de rename, no un borrado y una nota nueva.
+- Lo mismo al abrir el vault después de cambios hechos con Metalmind cerrado: si falta una ruta que estaba en la caché y aparece una nueva con el mismo hash, es un rename **(propuesta)**. Así el historial de una nota renombrada desde fuera no queda huérfano.
+- Ningún formato propio de Metalmind (caché, historial, vistas guardadas) puede suponer que la ruta es inmutable.
 
 ## 2. Celular
 
@@ -45,16 +45,16 @@
 
 **Restricciones desde ya:**
 
-- El núcleo (03 §6) sigue sin GPUI **ni supuestos de escritorio**: nada de rutas fijas de Linux fuera de `nota-config`, nada que necesite un proceso de fondo o un servidor para funcionar.
+- El núcleo (03 §6) sigue sin GPUI **ni supuestos de escritorio**: nada de rutas fijas de Linux fuera de `metalmind-config`, nada que necesite un proceso de fondo o un servidor para funcionar.
 - Las notas siguen siendo archivos markdown planos en carpetas, sincronizables con herramientas externas (Syncthing, git). Nada que dé sentido al vault vive fuera de él salvo lo regenerable (caché) y lo que es de esta máquina (historial §3, estado de UI §8).
-- nota tolera **cambios externos en cualquier momento**: archivos que aparecen, cambian o desaparecen con la app abierta o cerrada. Sin locks de archivo. El conflicto con un buffer sin guardar se resuelve como dice 03 §5 (mostrar diff y elegir), nunca sobrescribiendo.
-- Los archivos de conflicto de las herramientas de sync (`*.sync-conflict-*.md`, por ejemplo) son notas normales: nota no los esconde ni los fusiona por su cuenta **(propuesta)**.
+- Metalmind tolera **cambios externos en cualquier momento**: archivos que aparecen, cambian o desaparecen con la app abierta o cerrada. Sin locks de archivo. El conflicto con un buffer sin guardar se resuelve como dice 03 §5 (mostrar diff y elegir), nunca sobrescribiendo.
+- Los archivos de conflicto de las herramientas de sync (`*.sync-conflict-*.md`, por ejemplo) son notas normales: Metalmind no los esconde ni los fusiona por su cuenta **(propuesta)**.
 
 ## 3. Historial de versiones por nota
 
-**Decisión.** nota guarda versiones de cada nota y permite verlas, compararlas y restaurarlas. Está **escondido**: no hay panel ni indicador a la vista; se llega con algo como `:history`, que muestra las versiones de la nota actual con su diff y deja restaurar una.
+**Decisión.** Metalmind guarda versiones de cada nota y permite verlas, compararlas y restaurarlas. Está **escondido**: no hay panel ni indicador a la vista; se llega con algo como `:history`, que muestra las versiones de la nota actual con su diff y deja restaurar una.
 
-Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/nota/`, `Paths::data` en `nota-config`), **por vault**. No va en el vault (no es contenido del usuario ni debe sincronizarse) ni en la caché (si se borra la caché, el historial se pierde de verdad, y la caché tiene que poder borrarse sin miedo). Funciona aunque el vault no sea un repo de git.
+Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/metalmind/`, `Paths::data` en `metalmind-config`), **por vault**. No va en el vault (no es contenido del usuario ni debe sincronizarse) ni en la caché (si se borra la caché, el historial se pierde de verdad, y la caché tiene que poder borrarse sin miedo). Funciona aunque el vault no sea un repo de git.
 
 **Por qué.** Deshacer un cambio de hace tres días no puede depender de que el usuario use git ni de que se acuerde de hacer commit. Y no debe estorbar: casi nunca se usa, pero cuando se usa salva el día.
 
@@ -62,8 +62,8 @@ Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/nota/`, `Paths::data` e
 
 - El historial de versiones va en `data`, no en `state` ni en `cache`.
 - Se indexa por ruta relativa al vault y sigue los renombres (§1). La historia de una nota borrada se conserva un tiempo, para poder restaurarla.
-- Toda escritura de una nota pasa por un solo punto en `nota-vault` (hoy `write_atomic`), que es donde se registra la versión. Ninguna escritura del vault, tampoco la de la CLI (§7) ni la de un renombre de tags, se salta ese punto.
-- Los cambios externos que ve el watcher también son versiones (decidido el 2026-10-18, en la PR #53): si Syncthing trae una versión mala, se puede volver a la anterior. Hecho así en el núcleo (03 §4): cada nota creada, modificada o renombrada desde fuera se registra en el hilo del vault; lo que cambió con nota cerrada todavía no ([#55](https://github.com/alex-glez-felix/nota/issues/55)).
+- Toda escritura de una nota pasa por un solo punto en `metalmind-vault` (hoy `write_atomic`), que es donde se registra la versión. Ninguna escritura del vault, tampoco la de la CLI (§7) ni la de un renombre de tags, se salta ese punto.
+- Los cambios externos que ve el watcher también son versiones (decidido el 2026-10-18, en la PR #53): si Syncthing trae una versión mala, se puede volver a la anterior. Hecho así en el núcleo (03 §4): cada nota creada, modificada o renombrada desde fuera se registra en el hilo del vault; lo que cambió con Metalmind cerrado todavía no ([#55](https://github.com/alex-glez-felix/metalmind/issues/55)).
 - Notas cifradas: ver §4.
 - Retención (decidido el 2026-10-18, en la PR #53): guardar una versión por cada guardado, pero juntar las del autosave (03 §5): todas las de las últimas 24 h, una por hora durante 30 días y una por día después. La historia de una nota borrada se guarda 90 días. Las versiones se guardan comprimidas y deduplicadas por contenido. La retención se puede cambiar en la config.
 - Detalles de la retención (decidido el 2026-10-18, en la PR #53): de cada hora o día se queda la **última** versión guardada en él, el estado con que se cerró ese periodo; horas y días son los de la **zona horaria local del sistema**, no de UTC ni de una zona fija: "un día" es el día del usuario, y la hora que se repite al volver del horario de verano cuenta como una sola; la última versión de una nota se guarda siempre, por vieja que sea; "una por día después" es **para siempre** (`daily_days: ~`), porque el texto pesa poco; si hace falta un tope, se configura. Defaults en `history:` de `config.yaml`: `keep_all_hours: 24`, `hourly_days: 30`, `daily_days: ~`, `deleted_days: 90`.
@@ -82,17 +82,17 @@ Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/nota/`, `Paths::data` e
 - Cada componente que persiste algo derivado del contenido de una nota (texto, títulos, headings, tags, links, fragmentos de búsqueda) lo hace a través de un punto que pueda decir "esta nota no se persiste en claro". Hoy no hay cifrado, pero no puede haber caminos que se lo salten.
 - Los logs llevan rutas, tamaños y errores, **nunca contenido** de notas, cifradas o no. Es la única forma de que la regla se cumpla sin acordarse caso por caso.
 - Lo que solo vive en memoria mientras la nota está abierta y descifrada no tiene esta restricción.
-- El historial (§3) ya tiene ese punto: todo contenido pasa a disco por un códec (`nota-vault`, `history/codec.rs`) y cada registro guarda cuál usó. Una nota cifrada será un códec que cifra después de comprimir, así que ni snapshots ni deltas quedan en claro; los deltas se calculan en memoria. El hash que identifica cada versión tendrá que ser con clave (`blake3::keyed_hash`) para no delatar un contenido conocido.
+- El historial (§3) ya tiene ese punto: todo contenido pasa a disco por un códec (`metalmind-vault`, `history/codec.rs`) y cada registro guarda cuál usó. Una nota cifrada será un códec que cifra después de comprimir, así que ni snapshots ni deltas quedan en claro; los deltas se calculan en memoria. El hash que identifica cada versión tendrá que ser con clave (`blake3::keyed_hash`) para no delatar un contenido conocido.
 
 Abierto **(propuesta)**:
 
-- Formato: [`age`](https://age-encryption.org/) (archivo `nota.md.age`, legible con la herramienta estándar fuera de nota), frente a algo propio. `age` mantiene la regla de que cualquier herramienta puede leer el vault.
+- Formato: [`age`](https://age-encryption.org/) (archivo `nota.md.age`, legible con la herramienta estándar fuera de Metalmind), frente a algo propio. `age` mantiene la regla de que cualquier herramienta puede leer el vault.
 - Unidad: la nota o la carpeta. Por carpeta es más simple de usar (todo lo de `privado/` va cifrado) pero cambia qué pasa al mover una nota dentro o fuera.
 - Qué ve el índice de una nota cifrada cerrada: solo la ruta, sin tags ni links, es lo más simple y lo único que cumple la regla sin una caché cifrada.
 
 ## 5. Sin sistema de tareas
 
-**Decisión.** nota no junta los `- [ ]` del vault ni tiene una vista de tareas. Notas y tareas son cosas distintas, y las tareas viven en otra herramienta. Los checkboxes siguen siendo markdown normal que se pinta y se puede marcar (M4, 03 §8).
+**Decisión.** Metalmind no junta los `- [ ]` del vault ni tiene una vista de tareas. Notas y tareas son cosas distintas, y las tareas viven en otra herramienta. Los checkboxes siguen siendo markdown normal que se pinta y se puede marcar (M4, 03 §8).
 
 **Por qué.** Un gestor de tareas a medias dentro de una app de notas compite mal con uno de verdad y empuja el formato de las notas hacia el de una base de datos.
 
@@ -113,9 +113,9 @@ Abierto **(propuesta)**:
 
 ## 7. CLI de primera clase
 
-**Decisión.** nota tiene una CLI para capturar e ingerir notas desde la terminal, desde el celular (vía SSH o un atajo) o desde agentes, y extensible. Todo lo que hace el vault (crear notas, leer tags, buscar, listar) funciona **sin la ventana abierta**, desde los crates del núcleo.
+**Decisión.** Metalmind tiene una CLI para capturar e ingerir notas desde la terminal, desde el celular (vía SSH o un atajo) o desde agentes, y extensible. Todo lo que hace el vault (crear notas, leer tags, buscar, listar) funciona **sin la ventana abierta**, desde los crates del núcleo.
 
-`nota <archivo>` sigue abriendo un archivo y `nota <carpeta>` un vault. Los subcomandos son palabras reservadas: `nota -- add` abre un archivo llamado `add`.
+`metalmind <archivo>` sigue abriendo un archivo y `metalmind <carpeta>` un vault. Los subcomandos son palabras reservadas: `metalmind -- add` abre un archivo llamado `add`.
 
 **Por qué.** Capturar tiene que costar un comando, desde donde sea. Y un agente que puede consultar el vault en JSON lo usa mejor que uno que tiene que leer los archivos a mano.
 
@@ -123,24 +123,24 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 | Comando | Qué hace |
 |---|---|
-| `nota add "texto" -t tag` | Crea una nota. Sin `-t`, cae en el buzón (§9). Sin texto, lee de stdin (`wl-paste \| nota add`). |
-| `nota search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. Hoy solo rutas: un término `#…` es error de uso hasta que la CLI use el `TagIndex` ([#47](https://github.com/alex-glez-felix/nota/issues/47)). |
-| `nota tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). Pendiente en [#47](https://github.com/alex-glez-felix/nota/issues/47), sobre el `TagIndex`. |
-| `nota open <ruta>` | Abre la app en esa nota. La ruta es relativa al vault. |
+| `metalmind add "texto" -t tag` | Crea una nota. Sin `-t`, cae en el buzón (§9). Sin texto, lee de stdin (`wl-paste \| metalmind add`). |
+| `metalmind search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. Hoy solo rutas: un término `#…` es error de uso hasta que la CLI use el `TagIndex` ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)). |
+| `metalmind tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). Pendiente en [#47](https://github.com/alex-glez-felix/metalmind/issues/47), sobre el `TagIndex`. |
+| `metalmind open <ruta>` | Abre la app en esa nota. La ruta es relativa al vault. |
 | `--json` en todos | Salida estable para que la consuman agentes y scripts: un objeto por línea, errores con `kind` y código de salida fijos. |
 
 **Restricciones desde ya:**
 
-- La lógica de cada comando vive en el núcleo (`nota-vault`, `nota-search`); el binario solo parsea argumentos y elige. Un subcomando **no inicializa GPUI** ni abre ventana, y arranca en lo que tarda leer el vault, no en lo que tarda Vulkan.
+- La lógica de cada comando vive en el núcleo (`metalmind-vault`, `metalmind-search`); el binario solo parsea argumentos y elige. Un subcomando **no inicializa GPUI** ni abre ventana, y arranca en lo que tarda leer el vault, no en lo que tarda Vulkan.
 - Las escrituras de la CLI son atómicas y pasan por el mismo punto que las de la app (§3). La app abierta se entera por el watcher, como de cualquier otro cambio externo (§2). Nada de IPC obligatorio entre la CLI y la app.
 - Los tipos que devuelven las consultas del núcleo (notas, tags, resultados de búsqueda) se pueden serializar, con rutas relativas al vault: eso es el `--json`.
-- Qué vault usa la CLI (decidido el 2026-10-18, PRs #44 y #48): la misma regla que `nota` sin argumentos (§8), con `--vault` en el lugar del argumento: `--vault`, luego `NOTA_VAULT`, luego el último que se abrió, luego `vault:` de `config.yaml`. `--vault` y `NOTA_VAULT` se eligieron a propósito: si no sirven, es error; del último abierto y la config se usa el primero que siga siendo una carpeta. Es una sola función del binario, `target::default_vault`, para la app y la CLI.
-- Dónde y con qué nombre crea `nota add` la nota (decidido el 2026-10-18, PR #48): en la raíz del vault, como `slug.md`, con el slug del título o de la primera línea; si no hay ninguno (solo emoji o puntuación), `AAAA-MM-DD-HHMMSS.md`. Sin fecha delante: la nota se nombra para enlazarla (`[[idea-nueva]]`), y la fecha ya va en los metadatos del archivo y en el historial. Si el nombre está tomado, `-2`, `-3`, … sin pisar nunca (`create_atomic`, el mismo módulo de `write_atomic`).
-- `nota open` con la app ya abierta: si reutiliza la ventana o abre otra queda abierto **(propuesta)**; reutilizarla sí necesita IPC, pero solo para eso.
+- Qué vault usa la CLI (decidido el 2026-10-18, PRs #44 y #48): la misma regla que `metalmind` sin argumentos (§8), con `--vault` en el lugar del argumento: `--vault`, luego `METALMIND_VAULT`, luego el último que se abrió, luego `vault:` de `config.yaml`. `--vault` y `METALMIND_VAULT` se eligieron a propósito: si no sirven, es error; del último abierto y la config se usa el primero que siga siendo una carpeta. Es una sola función del binario, `target::default_vault`, para la app y la CLI.
+- Dónde y con qué nombre crea `metalmind add` la nota (decidido el 2026-10-18, PR #48): en la raíz del vault, como `slug.md`, con el slug del título o de la primera línea; si no hay ninguno (solo emoji o puntuación), `AAAA-MM-DD-HHMMSS.md`. Sin fecha delante: la nota se nombra para enlazarla (`[[idea-nueva]]`), y la fecha ya va en los metadatos del archivo y en el historial. Si el nombre está tomado, `-2`, `-3`, … sin pisar nunca (`create_atomic`, el mismo módulo de `write_atomic`).
+- `metalmind open` con la app ya abierta: si reutiliza la ventana o abre otra queda abierto **(propuesta)**; reutilizarla sí necesita IPC, pero solo para eso.
 
 ## 8. Un vault a la vez
 
-**Decisión.** Puede haber varios vaults, pero se abre uno. nota recuerda el último y se cambia con `nota <carpeta>` o con `:vault`.
+**Decisión.** Puede haber varios vaults, pero se abre uno. Metalmind recuerda el último y se cambia con `metalmind <carpeta>` o con `:vault`.
 
 **Por qué.** Varios vaults abiertos a la vez multiplican estado y casos raros para un caso de uso que nadie pidió.
 
@@ -148,15 +148,15 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 - Caché, historial (§3) y estado de UI (vista del panel, último focus, notas abiertas) van **por vault**, en su directorio de `cache`, `data` o `state` según corresponda, nunca mezclados.
 - El vault es un valor que se crea y se suelta, no un global: `:vault` tiene que poder cerrar uno y abrir otro en el mismo proceso sin que nada quede apuntando al anterior.
-- Config: la global y encima la del vault (`<vault>/.nota/`, 03 §5).
-- El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault` en los subcomandos de la CLI, §7), luego la variable de entorno `NOTA_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
-- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral; `Paths::vault_data`, con la misma clave, para el historial de §3). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.nota/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
+- Config: la global y encima la del vault (`<vault>/.metalmind/`, 03 §5).
+- El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault` en los subcomandos de la CLI, §7), luego la variable de entorno `METALMIND_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
+- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral; `Paths::vault_data`, con la misma clave, para el historial de §3). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.metalmind/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
 
 ## 9. Buzón
 
 **Decisión.** El flujo de trabajo del autor es: capturar rápido a un buzón y después categorizar. El buzón es una **vista: las notas sin tags**. No hay carpeta especial. Se vacía etiquetando: en cuanto una nota tiene un tag, sale del buzón. La CLI (§7) y la captura rápida dejan la nota ahí, sin tags.
 
-**Por qué.** Encaja con que los tags son el eje (05): categorizar *es* poner tags, así que una nota sin tags es, por definición, una nota sin categorizar. Una carpeta de buzón obligaría a mover archivos al categorizar, y mover no es lo que organiza en nota.
+**Por qué.** Encaja con que los tags son el eje (05): categorizar *es* poner tags, así que una nota sin tags es, por definición, una nota sin categorizar. Una carpeta de buzón obligaría a mover archivos al categorizar, y mover no es lo que organiza en Metalmind.
 
 **Restricciones desde ya:**
 
@@ -176,7 +176,7 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 - Se guardan con el vault, no en la config global: una consulta de tags solo tiene sentido en el vault donde existen esos tags, y así viaja con él.
 - Una vista apunta a una consulta en texto, que se parsea con el mismo `TagQuery` de 05. Agregarle "o" o comodines después no cambia el formato de la vista.
-- Dónde exactamente **(propuesta)**: en `<vault>/.nota/config.yaml`, bajo una clave `views` con nombre → consulta. Es la config del vault de 03 §5 y ya está dentro del vault, así que se sincroniza con él.
+- Dónde exactamente **(propuesta)**: en `<vault>/.metalmind/config.yaml`, bajo una clave `views` con nombre → consulta. Es la config del vault de 03 §5 y ya está dentro del vault, así que se sincroniza con él.
 - `buzón` viene predefinida **(propuesta)**: no hace falta escribirla, pero se le puede cambiar el nombre.
 
 ## 11. Baratas, sin restricción de arquitectura
@@ -190,17 +190,17 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 
 ### Plantillas y nota del día, en el núcleo
 
-Hecho en `nota-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: la carpeta, las variables, las fechas en español, la plantilla por tag con su regla de choque y la nota del día apagada en `diario/YYYY-MM-DD`.
+Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: la carpeta, las variables, las fechas en español, la plantilla por tag con su regla de choque y la nota del día apagada en `diario/YYYY-MM-DD`.
 
 - **Plantillas**: notas markdown en `plantillas/` (clave `templates_folder` de `config.yaml`), con subcarpetas. El nombre de una plantilla es su ruta dentro de la carpeta sin `.md`: `trabajo/semanal`, exacto, con mayúsculas.
 - **Variables**: solo las básicas, `{{title}}`, `{{date}}` (`YYYY-MM-DD`) y `{{time}}` (`HH:mm`), más `{{date:FORMATO}}` y `{{time:FORMATO}}` para otra forma de la fecha. Se quedan **porque son simples**: cubren lo que una nota nueva necesita y se aprenden de un vistazo. No es por compatibilidad con Obsidian, que no es requisito; que se escriban igual que allá es una coincidencia que no obliga a seguirlo. Se aceptan espacios dentro de las llaves. Sin condicionales, bucles ni escapes.
 - **Formato de fecha**: los códigos más comunes de moment.js, una notación conocida y corta: `YYYY YY MMMM MMM MM M DD D dddd ddd HH H hh h mm m ss s A a Z ZZ` y `[texto]` literal. Otra letra se copia tal cual, como en moment. Los nombres de meses y días van en español y en minúsculas (`domingo 18 de octubre`); cuando la app tenga idioma, salen de él.
 - **Lo mal escrito se deja tal cual y se reporta**, con su rango en bytes de la plantilla: una variable desconocida (`{{autor}}`, `{{Date}}`), un `{{` sin `}}` en su línea y un formato inválido (`{{date:}}`, un `[` sin cerrar). La nota se crea igual.
 - **La fecha es la local**: la API recibe un `jiff::Zoned` y todo sale en su zona horaria. Pasada la medianoche local ya es la nota del día siguiente.
-- **Plantilla por tag**: `template: nombre` en la página del tag (05 §7), que lee el `TagGraph` de `nota-vault` como los demás campos y la UI cambia con `PageChange::Template`. Una nota nueva con ese tag, o con uno de sus alias, o creada en focus de él, la usa. Si sus tags piden plantillas **distintas**, no se usa ninguna y se reporta, como con los alias que chocan (05 §7): elegir una adivinaría. Una plantilla elegida a mano gana sobre la del tag, y se puede pedir "sin plantilla". Un tag no hereda la plantilla de sus `parents`.
+- **Plantilla por tag**: `template: nombre` en la página del tag (05 §7), que lee el `TagGraph` de `metalmind-vault` como los demás campos y la UI cambia con `PageChange::Template`. Una nota nueva con ese tag, o con uno de sus alias, o creada en focus de él, la usa. Si sus tags piden plantillas **distintas**, no se usa ninguna y se reporta, como con los alias que chocan (05 §7): elegir una adivinaría. Una plantilla elegida a mano gana sobre la del tag, y se puede pedir "sin plantilla". Un tag no hereda la plantilla de sus `parents`.
 - **Tags de la nota nueva**: van al `tags:` del frontmatter de la plantilla ya llena, después de los suyos y sin repetir. Una lista de flujo de una línea o una lista en bloque se alarga en su estilo, con sus comentarios; otro valor (un texto, una lista de flujo en varias líneas) se reescribe como `tags: [a, b]`. Un tag que YAML leería como otra cosa (`null`, `007`) va entre comillas, con el mismo `yaml_scalar` que la metadata de las páginas. Sin frontmatter se le agrega uno. Si el frontmatter de la plantilla tiene errores o el `tags:` no está escrito en bloque, la nota sale con la plantilla tal cual y se reporta.
 - **Nota del día**: apagada por defecto. Con `daily.enabled: true`, una función pura da su ruta (`daily.folder`, por defecto `diario/`, más el nombre en `daily.format`, por defecto `YYYY-MM-DD`; un `/` en el formato hace subcarpetas) y su texto con `daily.template`, si tiene. Sin plantilla nace vacía. Si ya existe, quien llama la abre en vez de crearla.
-- **Pendiente**: que el finder, el buzón y los conteos no traten las plantillas como notas normales (lo mismo que las páginas de tag, 05 §7), la acción de nota nueva desde plantilla en la UI y `nota add --template`.
+- **Pendiente**: que el finder, el buzón y los conteos no traten las plantillas como notas normales (lo mismo que las páginas de tag, 05 §7), la acción de nota nueva desde plantilla en la UI y `metalmind add --template`.
 
 ## 12. Fuera de alcance
 
@@ -208,16 +208,16 @@ Hecho en `nota-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: 
 
 ## 13. Una GUI, no una TUI
 
-**Decisión.** nota es una GUI con navegación estilo vim, no una TUI. El vim es para moverse y editar rápido con el teclado, pero no todo tiene que hacerse editando archivos a mano: toda función se puede usar desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
+**Decisión.** Metalmind es una GUI con navegación estilo vim, no una TUI. El vim es para moverse y editar rápido con el teclado, pero no todo tiene que hacerse editando archivos a mano: toda función se puede usar desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
 
 **Referencia de estilo: Zed.** La experiencia buscada se parece a la de Zed: navegar con la facilidad de vim en una UI de escritorio bonita, no en una TUI. Zed es también de donde sale GPUI (02, 04).
 
-**Por qué.** Una ventana puede mostrar y ofrecer cosas que una terminal no; si la única forma de darle color a un tag es escribir YAML, nota desperdicia lo que la hace distinta de un editor en la terminal.
+**Por qué.** Una ventana puede mostrar y ofrecer cosas que una terminal no; si la única forma de darle color a un tag es escribir YAML, Metalmind desperdicia lo que lo hace distinto de un editor en la terminal.
 
 **Restricciones desde ya:**
 
 - Cada acción con nombre (`CLAUDE.md`) es alcanzable por teclado (atajo, paleta o `:`) **y** por la UI (menú contextual, botón o selector). Una función que solo existe como comando, o solo como clic, está a medias.
-- Los archivos son el **almacenamiento**, no la interfaz. Lo que se cambia desde la UI se escribe en el archivo de siempre (frontmatter de una página de tag, `config.yaml`), tocando solo el campo editado, y editarlo a mano da el mismo resultado. Ejemplo: las páginas de tag, que nota crea sola en cuanto les pones metadata desde la UI (05 §3, §7).
+- Los archivos son el **almacenamiento**, no la interfaz. Lo que se cambia desde la UI se escribe en el archivo de siempre (frontmatter de una página de tag, `config.yaml`), tocando solo el campo editado, y editarlo a mano da el mismo resultado. Ejemplo: las páginas de tag, que Metalmind crea solo en cuanto les pones metadata desde la UI (05 §3, §7).
 - La UI no crea archivos que nadie pidió: escribir un `#tag-nuevo` no crea su página.
 - La config (03 §5) también se edita desde una pantalla de ajustes que escribe el YAML; cuándo llega esa pantalla se decide con el roadmap.
 
@@ -225,6 +225,6 @@ Hecho en `nota-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: 
 
 Sin hitos nuevos (03 §8) **(propuesta)**:
 
-- La CLI (`nota add`, `search`, `tags`, con `--json`) y el buzón, junto con M2.5 o justo después: necesitan el walk de M2 y el `TagIndex` de M2.5, y nada más.
+- La CLI (`metalmind add`, `search`, `tags`, con `--json`) y el buzón, junto con M2.5 o justo después: necesitan el walk de M2 y el `TagIndex` de M2.5, y nada más.
 - El historial de versiones (§3), en M6, junto con el autosave, que es lo que decide su retención.
 - Daily notes, plantillas y grafo siguen en post-MVP. Celular y cifrado no tienen lugar en el roadmap ([`IDEAS.md`](../IDEAS.md)).

@@ -2,8 +2,8 @@
 //! invariantes del motor vim.
 
 use arbitrary::{Arbitrary, Unstructured};
-use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_vim::{Clipboard, Key, Mode, SystemRegister, Vim};
+use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
+use metalmind_vim::{Clipboard, Key, Mode, SystemRegister, Vim};
 
 /// Más que esto y una sola tecla con count tarda segundos: el fuzzer
 /// buscaría lentitud esperada en vez de bugs.
@@ -193,7 +193,7 @@ impl Clipboard for FuzzClipboard {
 }
 
 /// Corta los counts de más de dos dígitos: `999999999i` es tan lento en
-/// nota como en vim y no es un bug.
+/// Metalmind como en vim y no es un bug.
 #[derive(Default)]
 pub struct CountLimit {
     digits: usize,

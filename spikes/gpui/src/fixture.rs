@@ -77,7 +77,7 @@ const LINKS: &[&str] = &[
     "Diario 2026-10-15",
     "Ideas sueltas",
     "Lecturas pendientes",
-    "Proyecto nota",
+    "Proyecto metalmind",
     "Recetas de la abuela",
 ];
 const TAGS: &[&str] = &[
@@ -120,7 +120,7 @@ pub struct Stats {
 pub fn generate(out: &mut impl Write, target_bytes: u64) -> io::Result<Stats> {
     let mut writer = Writer::new(out);
     writer.push(
-        "---\ntitle: Archivo de prueba de nota\ntags: [spike, rendimiento]\n---\n\n# Archivo de prueba\n\n",
+        "---\ntitle: Archivo de prueba de Metalmind\ntags: [spike, rendimiento]\n---\n\n# Archivo de prueba\n\n",
     )?;
     let mut rng = Rng(0x6e6f_7461);
     let mut block = 0_u64;

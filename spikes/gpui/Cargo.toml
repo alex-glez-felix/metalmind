@@ -1,6 +1,6 @@
 [package]
-name = "nota-spike-gpui"
-description = "Spike de GPUI: archivo grande, teclado real con nota-vim, portapapeles y medición de frames."
+name = "metalmind-spike-gpui"
+description = "Spike de GPUI: archivo grande, teclado real con metalmind-vim, portapapeles y medición de frames."
 version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
@@ -10,8 +10,8 @@ publish = false
 env_logger = "=0.11.11"
 gpui-kit = "=0.7.3"
 log = "=0.4.34"
-nota-buffer = { path = "../../crates/nota-buffer" }
-nota-vim = { path = "../../crates/nota-vim" }
+metalmind-buffer = { path = "../../crates/metalmind-buffer" }
+metalmind-vim = { path = "../../crates/metalmind-vim" }
 thiserror = "=2.0.21"
 
 [lints.rust]

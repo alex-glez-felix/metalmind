@@ -1,0 +1,30 @@
+[package]
+name = "metalmind-vim"
+description = "Motor vim puro: teclas a acciones con nombre, y acciones a ediciones sobre metalmind-buffer."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+metalmind-buffer.workspace = true
+regex.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+divan.workspace = true
+metalmind-perf.workspace = true
+pretty_assertions.workspace = true
+rstest.workspace = true
+rstest_reuse.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "vim"
+harness = false
+
+[lints]
+workspace = true

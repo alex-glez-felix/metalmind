@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Smoke sin GPU: corre `nota` bajo Xvfb con lavapipe y teclea con XTest
+# Smoke sin GPU: corre `metalmind` bajo Xvfb con lavapipe y teclea con XTest
 # (xdotool). Comprueba lo que se ve en disco y si el proceso sigue vivo.
 #   scripts/smoke-x11.sh [ruta/al/binario]
 # Necesita xvfb-run, xdotool y el driver Vulkan lavapipe (mesa-vulkan-drivers).
 set -euo pipefail
 
-if [[ -z "${NOTA_SMOKE_INNER:-}" ]]; then
-  exec env NOTA_SMOKE_INNER=1 xvfb-run -a -s "-screen 0 1280x800x24" "$0" "$@"
+if [[ -z "${METALMIND_SMOKE_INNER:-}" ]]; then
+  exec env METALMIND_SMOKE_INNER=1 xvfb-run -a -s "-screen 0 1280x800x24" "$0" "$@"
 fi
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-bin="$(realpath "${1:-$root/target/debug/nota}")"
+bin="$(realpath "${1:-$root/target/debug/metalmind}")"
 lavapipe=/usr/share/vulkan/icd.d/lvp_icd.json
 [[ -f "$lavapipe" ]] && export VK_ICD_FILENAMES="$lavapipe"
 # Con render por CPU un frame tarda; esto da tiempo a que cada tecla se pinte.
-pause="${NOTA_SMOKE_PAUSE:-0.4}"
+pause="${METALMIND_SMOKE_PAUSE:-0.4}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -25,13 +25,13 @@ fail() {
   failures=$((failures + 1))
 }
 
-# Abre nota en una carpeta propia del caso y espera su ventana.
+# Abre Metalmind en una carpeta propia del caso y espera su ventana.
 launch() {
   local case_dir="$1" file="$2"
   cd "$case_dir"
-  "$bin" "$file" 2>>"$case_dir/nota.log" &
+  "$bin" "$file" 2>>"$case_dir/metalmind.log" &
   pid=$!
-  window="$(xdotool search --sync --onlyvisible --name 'nota$' | head -1)"
+  window="$(xdotool search --sync --onlyvisible --name 'Metalmind$' | head -1)"
   xdotool windowfocus --sync "$window"
   sleep "$pause"
 }
@@ -50,7 +50,7 @@ alive() {
   kill -0 "$pid" 2>/dev/null
 }
 
-# Espera a que nota salga; falla si sigue vivo.
+# Espera a que Metalmind salga; falla si sigue vivo.
 expect_exit() {
   for _ in $(seq 50); do
     alive || { wait "$pid" || fail "salió con error"; return; }
@@ -78,7 +78,7 @@ expect_only() {
   local case_dir="$1"
   shift
   local found wanted=""
-  found="$(cd "$case_dir" && ls -A | { grep -v '^nota.log$' || true; } | sort | tr '\n' ' ')"
+  found="$(cd "$case_dir" && ls -A | { grep -v '^metalmind.log$' || true; } | sort | tr '\n' ' ')"
   if (($# > 0)); then
     wanted="$(printf '%s\n' "$@" | sort | tr '\n' ' ')"
   fi
@@ -185,7 +185,7 @@ expect_exit ":q! no cerró"
 expect_file "$case_dir/b.md" "b"
 
 if ((failures > 0)); then
-  echo "$failures fallas; logs en los nota.log de cada caso" >&2
+  echo "$failures fallas; logs en los metalmind.log de cada caso" >&2
   trap - EXIT
   echo "carpeta de trabajo: $work" >&2
   exit 1

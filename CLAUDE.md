@@ -2,11 +2,11 @@
 
 Reglas para agentes que trabajen en este repo.
 
-- nota es una GUI con navegación estilo vim, no una TUI: toda función tiene que poder usarse desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
+- Metalmind es una GUI con navegación estilo vim, no una TUI: toda función tiene que poder usarse desde la UI (ratón, menús, paleta) además del teclado, y el usuario nunca debería necesitar editar archivos de config o de metadata a mano.
 - Antes de proponer arquitectura, leer `docs/GETTING-STARTED.md` y el documento de `docs/research/` relevante. Las decisiones viven ahí; si cambias una, actualiza el documento en el mismo commit.
 - Los documentos de `docs/research/` que digan "pendiente de revisión" no son decisiones: no implementes nada de ellos.
 - Antes de agregar un crate, verificar que existe y su última versión: `curl -s https://crates.io/api/v1/crates/<nombre> | jq .crate.max_version`. No inventar crates.
-- El núcleo (`nota-buffer`, `nota-syntax`, `nota-vim`, `nota-keymap`, `nota-vault`, `nota-search`, `nota-config`, `nota-template`; ver `docs/research/03-core-architecture.md` §6) **no depende de la GUI**. Solo `nota-ui` y el binario importan GPUI.
+- El núcleo (`metalmind-buffer`, `metalmind-syntax`, `metalmind-vim`, `metalmind-keymap`, `metalmind-vault`, `metalmind-search`, `metalmind-config`, `metalmind-template`; ver `docs/research/03-core-architecture.md` §6) **no depende de la GUI**. Solo `metalmind-ui` y el binario importan GPUI.
 - Offsets de texto siempre en bytes; conversión a chars/columnas solo en el borde de la UI.
 - Comportamiento vim: cada motion/operator nuevo lleva test de tabla. En caso de duda, el oráculo es `nvim --headless`.
 - Nunca reescribir el YAML del frontmatter del usuario salvo el campo editado. Guardado siempre atómico.
@@ -14,7 +14,7 @@ Reglas para agentes que trabajen en este repo.
 - Commits en español, estilo conventional commits.
 - Toda acción del usuario es una acción con nombre, en snake_case con espacio de nombres (`vim::next_word_start`, `editor::delete_line`); atajos, paleta y `:` solo las invocan (base para plugins, ver `docs/IDEAS.md`).
 - Ningún color ni tamaño hardcodeado en la UI: todo sale de tokens del tema.
-- nota no tiene usuarios todavía: los cambios de formato, API o nombres de archivo son directos. Nada de compatibilidad hacia atrás, migraciones, avisos de formatos viejos ni alias "por si acaso". Esto se revisa cuando haya un release público.
+- Metalmind no tiene usuarios todavía: los cambios de formato, API o nombres de archivo son directos. Nada de compatibilidad hacia atrás, migraciones, avisos de formatos viejos ni alias "por si acaso". Esto se revisa cuando haya un release público.
 
 ## Calidad de código
 

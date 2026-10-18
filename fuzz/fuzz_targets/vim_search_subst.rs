@@ -6,9 +6,9 @@
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_fuzz::{FuzzChar, MAX_BUFFER_LEN, check_engine};
-use nota_vim::{Key, KeyOutcome, Mode, Vim};
+use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
+use metalmind_fuzz::{FuzzChar, MAX_BUFFER_LEN, check_engine};
+use metalmind_vim::{Key, KeyOutcome, Mode, Vim};
 
 #[derive(Debug, Arbitrary)]
 enum Op {

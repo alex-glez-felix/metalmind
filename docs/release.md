@@ -10,16 +10,16 @@ Release solo. El AUR se actualiza a mano después.
 |---|---|---|
 | Config de dist | `dist-workspace.toml`, `[profile.dist]` en `Cargo.toml` | Objetivos, archivos incluidos, paquetes de apt para compilar. |
 | Workflow | `.github/workflows/v-release.yml` | Generado por `dist generate`; no se edita a mano. Corre solo con tags `v*`. |
-| Escritorio | `packaging/linux/` | `nota.desktop`, ícono SVG y metainfo de AppStream. Van en cada tarball. |
-| AUR | `packaging/aur/nota-bin/`, `packaging/aur/nota-git/` | PKGBUILD y `.SRCINFO` de cada paquete. |
+| Escritorio | `packaging/linux/` | `metalmind.desktop`, ícono SVG y metainfo de AppStream. Van en cada tarball. |
+| AUR | `packaging/aur/metalmind-bin/`, `packaging/aur/metalmind-git/` | PKGBUILD y `.SRCINFO` de cada paquete. |
 | Notas | `CHANGELOG.md` | dist usa la sección de la versión como texto del release. |
 
 [dist](https://github.com/axodotdev/cargo-dist) es el nombre actual de cargo-dist: el
 binario se llama `dist` y el crate sigue siendo `cargo-dist`.
 
-Cada release sube, por arquitectura, `nota-<objetivo>.tar.xz` con su `.sha256`.
+Cada release sube, por arquitectura, `metalmind-<objetivo>.tar.xz` con su `.sha256`.
 También sube `source.tar.gz` y `sha256.sum`. Cada tarball trae el binario
-`nota`, `nota.desktop`, `nota.svg`, la metainfo, `README.md`, `LICENSE` y
+`metalmind`, `metalmind.desktop`, `metalmind.svg`, la metainfo, `README.md`, `LICENSE` y
 `CHANGELOG.md`.
 
 ## Plataformas
@@ -28,7 +28,7 @@ Se publican `x86_64-unknown-linux-gnu` y `aarch64-unknown-linux-gnu`, cada una
 compilada en un runner nativo de su arquitectura. Los runners son Ubuntu 22.04,
 así que el binario pide glibc 2.35 o más nueva.
 
-macOS y Windows no se declaran. GPUI tiene backend para los dos, pero nota no
+macOS y Windows no se declaran. GPUI tiene backend para los dos, pero Metalmind no
 funcionaría ahí sin trabajo extra:
 
 - **Nunca se compiló ni se probó fuera de Linux.** El CI corre solo en Ubuntu.
@@ -60,8 +60,8 @@ Desde una rama, con `main` en verde:
    una `[Unreleased]` vacía arriba y actualizar los enlaces del final:
 
    ```md
-   [Unreleased]: https://github.com/alex-glez-felix/nota/compare/vX.Y.Z...HEAD
-   [X.Y.Z]: https://github.com/alex-glez-felix/nota/releases/tag/vX.Y.Z
+   [Unreleased]: https://github.com/alex-glez-felix/metalmind/compare/vX.Y.Z...HEAD
+   [X.Y.Z]: https://github.com/alex-glez-felix/metalmind/releases/tag/vX.Y.Z
    ```
 
 3. Agregar la versión al principio de `<releases>` en la metainfo. Si no existe,
@@ -78,7 +78,7 @@ Desde una rama, con `main` en verde:
    ```sh
    dist plan --tag vX.Y.Z
    dist manifest --tag vX.Y.Z --output-format=json | jq -r .announcement_changelog
-   appstreamcli validate --no-net packaging/linux/io.github.alex_glez_felix.nota.metainfo.xml
+   appstreamcli validate --no-net packaging/linux/io.github.alex_glez_felix.metalmind.metainfo.xml
    ```
 
 5. PR con `chore(release): vX.Y.Z` y merge a `main`.
@@ -100,9 +100,9 @@ como prerelease.
 
 ```sh
 gh release view vX.Y.Z
-gh release download vX.Y.Z -p 'nota-x86_64-unknown-linux-gnu.tar.xz*' -D /tmp/nota-release
-cd /tmp/nota-release && sha256sum -c nota-x86_64-unknown-linux-gnu.tar.xz.sha256
-tar -xJf nota-x86_64-unknown-linux-gnu.tar.xz && ./nota-x86_64-unknown-linux-gnu/nota --version
+gh release download vX.Y.Z -p 'metalmind-x86_64-unknown-linux-gnu.tar.xz*' -D /tmp/metalmind-release
+cd /tmp/metalmind-release && sha256sum -c metalmind-x86_64-unknown-linux-gnu.tar.xz.sha256
+tar -xJf metalmind-x86_64-unknown-linux-gnu.tar.xz && ./metalmind-x86_64-unknown-linux-gnu/metalmind --version
 ```
 
 ### Si algo sale mal
@@ -122,14 +122,14 @@ Los dos paquetes viven en `packaging/aur/` y se publican copiando el
 `PKGBUILD` y el `.SRCINFO` a su repo del AUR. Hace falta una cuenta en
 aur.archlinux.org con una llave SSH.
 
-### nota-bin, en cada release
+### metalmind-bin, en cada release
 
 ```sh
-cd packaging/aur/nota-bin
+cd packaging/aur/metalmind-bin
 sed -i 's/^pkgver=.*/pkgver=X.Y.Z/; s/^pkgrel=.*/pkgrel=1/' PKGBUILD
 updpkgsums                         # baja los tarballs de las dos arquitecturas
 makepkg --printsrcinfo > .SRCINFO
-makepkg -f && namcap PKGBUILD nota-bin-*.pkg.tar.zst
+makepkg -f && namcap PKGBUILD metalmind-bin-*.pkg.tar.zst
 ```
 
 `updpkgsums` reemplaza los `SKIP` por las sumas reales. Cuando la versión no
@@ -137,19 +137,19 @@ cambia y solo cambia el PKGBUILD, se sube `pkgrel`. Luego se hace el commit en
 este repo y se sube al AUR:
 
 ```sh
-git clone ssh://aur@aur.archlinux.org/nota-bin.git /tmp/aur-nota-bin   # la primera vez crea el paquete
-cp PKGBUILD .SRCINFO /tmp/aur-nota-bin/
-cd /tmp/aur-nota-bin && git add PKGBUILD .SRCINFO && git commit -m "X.Y.Z-1" && git push
+git clone ssh://aur@aur.archlinux.org/metalmind-bin.git /tmp/aur-metalmind-bin   # la primera vez crea el paquete
+cp PKGBUILD .SRCINFO /tmp/aur-metalmind-bin/
+cd /tmp/aur-metalmind-bin && git add PKGBUILD .SRCINFO && git commit -m "X.Y.Z-1" && git push
 ```
 
-### nota-git, una sola vez
+### metalmind-git, una sola vez
 
-`nota-git` compila `main` y calcula su versión con `pkgver()`, así que no se
-actualiza con cada release. Se sube la primera vez igual que `nota-bin`, con
-`ssh://aur@aur.archlinux.org/nota-git.git`. Después, solo cuando cambia su
+`metalmind-git` compila `main` y calcula su versión con `pkgver()`, así que no se
+actualiza con cada release. Se sube la primera vez igual que `metalmind-bin`, con
+`ssh://aur@aur.archlinux.org/metalmind-git.git`. Después, solo cuando cambia su
 `PKGBUILD`, regenerando antes el `.SRCINFO`.
 
-`namcap` avisa `Reference to x86_64 should be changed to $CARCH` en `nota-bin`.
+`namcap` avisa `Reference to x86_64 should be changed to $CARCH` en `metalmind-bin`.
 Es un falso positivo: lo provocan `source_x86_64` y `sha256sums_x86_64`, que
 son la forma documentada de dar fuentes por arquitectura.
 

@@ -17,7 +17,7 @@ esac
 case "$bench" in "" | --bench) ;; *) echo "opción desconocida: $bench (--bench)" >&2; exit 2 ;; esac
 
 cargo build --release
-bin=target/release/nota-spike-gpui
+bin=target/release/metalmind-spike-gpui
 fixture="fixtures/$size.md"
 [[ -f "$fixture" ]] || "$bin" gen --mb "$megabytes" --out "$fixture"
 

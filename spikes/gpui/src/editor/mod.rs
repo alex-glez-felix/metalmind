@@ -1,4 +1,4 @@
-//! Vista propia: `nota-buffer` + `nota-vim` con un render básico.
+//! Vista propia: `metalmind-buffer` + `metalmind-vim` con un render básico.
 
 mod element;
 mod input;
@@ -11,8 +11,8 @@ use gpui_kit::{
     KeyBinding, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
     ParentElement as _, Pixels, Point, Render, ScrollWheelEvent, Styled as _, Window, div,
 };
-use nota_buffer::ByteOffset;
-use nota_vim::{Key, KeyOutcome, Mode};
+use metalmind_buffer::ByteOffset;
+use metalmind_vim::{Key, KeyOutcome, Mode};
 
 use self::element::EditorElement;
 use self::input::ImeLine;
@@ -100,7 +100,7 @@ impl VimEditor {
                 format!("{raw} → {key:?} → {}", self.feed(key))
             }
             Route::TextInput => format!("{raw} → texto, va por el input handler"),
-            Route::Ignored => format!("{raw} → sin equivalente en nota-vim"),
+            Route::Ignored => format!("{raw} → sin equivalente en metalmind-vim"),
         };
         self.events.push(entry);
         self.after_change(cx);

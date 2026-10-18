@@ -7,19 +7,19 @@ exclude = ["spikes", "fuzz"]
 version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/alex-glez-felix/nota"
+repository = "https://github.com/alex-glez-felix/metalmind"
 publish = false
 
 [workspace.dependencies]
-nota-buffer = { path = "crates/nota-buffer" }
-nota-config = { path = "crates/nota-config" }
-nota-perf = { path = "crates/nota-perf" }
-nota-search = { path = "crates/nota-search" }
-nota-syntax = { path = "crates/nota-syntax" }
-nota-template = { path = "crates/nota-template" }
-nota-ui = { path = "crates/nota-ui" }
-nota-vault = { path = "crates/nota-vault" }
-nota-vim = { path = "crates/nota-vim" }
+metalmind-buffer = { path = "crates/metalmind-buffer" }
+metalmind-config = { path = "crates/metalmind-config" }
+metalmind-perf = { path = "crates/metalmind-perf" }
+metalmind-search = { path = "crates/metalmind-search" }
+metalmind-syntax = { path = "crates/metalmind-syntax" }
+metalmind-template = { path = "crates/metalmind-template" }
+metalmind-ui = { path = "crates/metalmind-ui" }
+metalmind-vault = { path = "crates/metalmind-vault" }
+metalmind-vim = { path = "crates/metalmind-vim" }
 anyhow = "1.0.104"
 arc-swap = "1.9.2"
 async-channel = "2.5.0"
@@ -66,7 +66,7 @@ rstest = "0.27.0"
 rstest_reuse = "0.7.0"
 pretty_assertions = "1.4.1"
 tempfile = "3.27.0"
-# El harness de `crates/nota/tests` teclea con XTest; GPUI ya trae esta versión.
+# El harness de `crates/metalmind/tests` teclea con XTest; GPUI ya trae esta versión.
 x11rb = { version = "0.13.2", features = ["xtest"] }
 
 # Dependencias optimizadas en debug: GPUI sin optimizar no da los fps del spike.

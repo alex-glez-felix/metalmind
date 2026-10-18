@@ -1,0 +1,14 @@
+---
+source: crates/metalmind-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+rs (1)
+  · a.md
+rust (1)
+  · b.md
+tags:
+  rs: padres [] alias [] trae [rs]
+  rust: padres [] alias [] trae [rust]
+avisos:
+  tags/rust.md: el alias rs es la página tags/rs.md

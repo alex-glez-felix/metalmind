@@ -1,0 +1,42 @@
+[package]
+name = "metalmind-ui"
+description = "Vistas de Metalmind sobre GPUI: el editor de texto con metalmind-buffer y metalmind-vim."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-channel.workspace = true
+gpui-kit.workspace = true
+log.workspace = true
+metalmind-buffer.workspace = true
+metalmind-config.workspace = true
+metalmind-search.workspace = true
+metalmind-vault.workspace = true
+metalmind-vim.workspace = true
+serde.workspace = true
+serde-saphyr = { workspace = true, features = ["serialize"] }
+thiserror.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+divan.workspace = true
+metalmind-perf.workspace = true
+pretty_assertions.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "picker"
+harness = false
+
+[[bench]]
+name = "file_tree"
+harness = false
+
+[lints]
+workspace = true

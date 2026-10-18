@@ -1,12 +1,12 @@
 # Spike de GPUI
 
-Responde una pregunta: **¿GPUI aguanta lo que nota necesita en Linux/Wayland?** Archivo de 50 MB con scroll fluido, teclado real (teclas muertas, IME, atajos) traducido a `nota-vim`, portapapeles con selección primaria, y números medidos en vez de impresiones.
+Responde una pregunta: **¿GPUI aguanta lo que Metalmind necesita en Linux/Wayland?** Archivo de 50 MB con scroll fluido, teclado real (teclas muertas, IME, atajos) traducido a `metalmind-vim`, portapapeles con selección primaria, y números medidos en vez de impresiones.
 
 Es un proyecto aparte, fuera del workspace: no entra al CI ni a las dependencias del núcleo. Usa `gpui-kit =0.7.3` (gpui-component sobre `gpui-pre =0.3.9`), la variante que recomienda `docs/research/02-gui-stack.md`; el porqué está en `docs/research/04-spike-gpui.md`.
 
 Tiene dos vistas:
 
-- **vim**: la que importa. Nuestro `nota-buffer` + `nota-vim` con un render básico hecho a mano: pinta solo las líneas visibles.
+- **vim**: la que importa. Nuestro `metalmind-buffer` + `metalmind-vim` con un render básico hecho a mano: pinta solo las líneas visibles.
 - **kit**: el editor de gpui-component, para comparar.
 
 ## Preparar la máquina de pruebas (una sola vez)
@@ -51,10 +51,10 @@ Arriba, el texto. Abajo, una franja gris (el overlay) con:
 1. **Línea 1**: modo de vim (`NORMAL`, `INSERT`, `OPERADOR`), línea y columna del cursor, cuánto tardó en cargar el archivo y cuánto en aparecer el primer frame.
 2. **Línea 2**: frames dibujados, **intervalo entre frames** (p50 y p99 de los últimos 240, con los fps que implica), **CPU por frame** (p50, p99 y el último).
 3. **`preedit`**: el texto provisional mientras escribes con una tecla muerta o el IME.
-4. **Eventos**: las últimas 8 teclas, del más nuevo al más viejo. Cada una dice qué entregó GPUI y qué hizo nota-vim con ella:
-   - `a Some("a") → Char('a') → vim::insert_after`: GPUI dio `a`, nota-vim ejecutó esa acción.
+4. **Eventos**: las últimas 8 teclas, del más nuevo al más viejo. Cada una dice qué entregó GPUI y qué hizo metalmind-vim con ella:
+   - `a Some("a") → Char('a') → vim::insert_after`: GPUI dio `a`, metalmind-vim ejecutó esa acción.
    - `a Some("a") → texto, va por el input handler` y luego `texto "a" (input handler) → insertado`: en Insert el texto entra por el camino del IME, que es el mismo que usan las teclas muertas.
-   - `... → sin equivalente en nota-vim`: tecla que el motor no conoce (flechas, F1…). No es error.
+   - `... → sin equivalente en metalmind-vim`: tecla que el motor no conoce (flechas, F1…). No es error.
    - Las líneas en rojo empiezan con `ERROR` y son bugs: anótalas.
 
 Cómo leer los números:
@@ -65,7 +65,7 @@ Cómo leer los números:
 
 ## Teclas de la vista vim
 
-Es nota-vim tal cual está en `main`: `h j k l`, `w W e E b B`, `0 ^ $`, `gg G`, `x`, `d c y` con motions y `dd cc yy`, `iw aw i( a( i" a"`, `p P`, `u`, `ctrl-r`, `i a I A o O`, `Esc`. No hay modo visual ni `:`.
+Es metalmind-vim tal cual está en `main`: `h j k l`, `w W e E b B`, `0 ^ $`, `gg G`, `x`, `d c y` con motions y `dd cc yy`, `iw aw i( a( i" a"`, `p P`, `u`, `ctrl-r`, `i a I A o O`, `Esc`. No hay modo visual ni `:`.
 
 Además, propias del spike:
 
@@ -108,7 +108,7 @@ Hazla en orden; anota cada resultado en `docs/research/04-spike-gpui.md` (mismos
    - Pasa: el cursor baja parejo, sin trabarse, y al soltar se detiene en el acto.
    - Falla: se traba, acelera a saltos o sigue moviéndose después de soltar.
 
-### C. Teclado con nota-vim
+### C. Teclado con metalmind-vim
 
 Esta es la parte central: que lo que escribes llegue bien traducido al motor vim. Usa `./spikes/gpui/run.sh vim chico`.
 
@@ -123,9 +123,9 @@ Esta es la parte central: que lo que escribes llegue bien traducido al motor vim
     - Falla: queda en `OPERADOR` o hace otra cosa. Si tu layout no tiene `"` muerta, anota "no aplica".
 11. **AltGr.** En Insert, escribe los caracteres que en tu layout van con AltGr (en latam: `@` `{` `}` `[` `]` `\` `|`).
     - Pasa: todos aparecen tal cual.
-    - Falla: alguno no sale o el overlay dice `sin equivalente en nota-vim`.
+    - Falla: alguno no sale o el overlay dice `sin equivalente en metalmind-vim`.
 12. **Atajos con modificadores.** En Normal: `u` y luego `ctrl-r`. En Insert: `tab` y `ctrl-c`.
-    - Pasa: `ctrl-r` rehace; `tab` inserta un tabulador; `ctrl-c` aparece en el overlay como `Ctrl('c') → sin binding` (nota-vim aún no lo usa, pero llegó al motor).
+    - Pasa: `ctrl-r` rehace; `tab` inserta un tabulador; `ctrl-c` aparece en el overlay como `Ctrl('c') → sin binding` (metalmind-vim aún no lo usa, pero llegó al motor).
     - Falla: `tab` mueve el foco o no hace nada, o `ctrl-c` no aparece en el overlay.
 13. **IME (si tienes Fcitx5).** Actívalo (normalmente `ctrl-space`), entra a Insert y escribe algo que pase por el IME (pinyin, mozc, o el selector de emoji de Fcitx5).
     - Pasa: el texto provisional se ve subrayado en el cursor, la ventana de candidatos aparece junto al cursor y al confirmar queda en el texto.
@@ -135,13 +135,13 @@ Esta es la parte central: que lo que escribes llegue bien traducido al motor vim
 
 Con `./spikes/gpui/run.sh vim chico` y un navegador o terminal al lado.
 
-14. **De nota hacia afuera.** Selecciona una frase con acentos arrastrando el ratón y `ctrl-shift-c`. Pega en el navegador con `ctrl-v`.
+14. **De Metalmind hacia afuera.** Selecciona una frase con acentos arrastrando el ratón y `ctrl-shift-c`. Pega en el navegador con `ctrl-v`.
     - Pasa: llega igual, con acentos. Falla: no llega o llega con caracteres raros.
-15. **De afuera hacia nota.** Copia texto en el navegador (`ctrl-c`) y pégalo en nota con `ctrl-shift-v`, una vez en Normal y otra en Insert.
+15. **De afuera hacia Metalmind.** Copia texto en el navegador (`ctrl-c`) y pégalo en Metalmind con `ctrl-shift-v`, una vez en Normal y otra en Insert.
     - Pasa: aparece en el cursor; con `u` (después de `Esc` si estabas en Insert) se deshace. Falla: no aparece, o el overlay dice `portapapeles vacío`.
-16. **Primaria hacia afuera.** Selecciona con el ratón en nota (sin copiar) y haz clic medio en la terminal.
+16. **Primaria hacia afuera.** Selecciona con el ratón en Metalmind (sin copiar) y haz clic medio en la terminal.
     - Pasa: se pega lo seleccionado. Falla: no se pega nada o se pega otra cosa.
-17. **Primaria hacia adentro.** Selecciona texto en la terminal o el navegador y haz clic medio en una línea de nota.
+17. **Primaria hacia adentro.** Selecciona texto en la terminal o el navegador y haz clic medio en una línea de Metalmind.
     - Pasa: se pega donde hiciste clic. Falla: no pasa nada o el overlay dice `primaria vacío`.
 
 ### E. Editor de gpui-component (para comparar)
@@ -172,9 +172,9 @@ En `spikes/gpui/resultados/` queda un `.md` (reporte) y un `.log` por corrida. L
 
 | Archivo | Qué hace |
 |---|---|
-| `src/keys.rs` | traduce teclas de GPUI a `nota_vim::Key` y decide si van al motor o al input handler |
+| `src/keys.rs` | traduce teclas de GPUI a `metalmind_vim::Key` y decide si van al motor o al input handler |
 | `src/editor/` | la vista vim: elemento que pinta las líneas visibles, input handler del IME, ratón y portapapeles |
-| `src/document.rs` | `nota-buffer` + `nota-vim` sin GUI: teclas, texto compuesto, pegar, selección |
+| `src/document.rs` | `metalmind-buffer` + `metalmind-vim` sin GUI: teclas, texto compuesto, pegar, selección |
 | `src/metrics.rs`, `src/report.rs` | tiempos de frame y el reporte final |
 | `src/shell.rs`, `src/hud.rs` | raíz de la ventana, medición por frame, overlay y benchmark |
 | `src/kit.rs` | la vista con el editor de gpui-component |

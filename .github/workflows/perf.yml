@@ -10,11 +10,11 @@ on:
   push:
     branches: [main]
     paths: &nucleo
-      - "crates/nota-buffer/**"
-      - "crates/nota-vim/**"
-      - "crates/nota-syntax/**"
-      - "crates/nota-search/**"
-      - "crates/nota-perf/**"
+      - "crates/metalmind-buffer/**"
+      - "crates/metalmind-vim/**"
+      - "crates/metalmind-syntax/**"
+      - "crates/metalmind-search/**"
+      - "crates/metalmind-perf/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - "rust-toolchain.toml"
@@ -48,7 +48,7 @@ jobs:
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v1-perf
+          prefix-key: v2-perf
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
@@ -59,7 +59,7 @@ jobs:
         id: base
         run: |
           git worktree add ../base HEAD^1
-          if [ ! -f ../base/crates/nota-perf/benches/instrucciones.rs ]; then
+          if [ ! -f ../base/crates/metalmind-perf/benches/instrucciones.rs ]; then
             echo "::notice::La base no tiene los benchmarks de instrucciones; no hay contra qué comparar."
             exit 0
           fi
@@ -69,7 +69,7 @@ jobs:
           # medir la PR (mismas rutas relativas); la baseline sí va al de la PR.
           CARGO_TARGET_DIR="$RUNNER_TEMP/target-base" \
           GUNGRAUN_HOME="$GITHUB_WORKSPACE/target/gungraun" \
-            cargo bench -p nota-perf --bench instrucciones -- --save-baseline=base
+            cargo bench -p metalmind-perf --bench instrucciones -- --save-baseline=base
 
       - name: Comparar contra la base
         if: steps.base.outputs.medida == 'true'
@@ -82,9 +82,9 @@ jobs:
           else
             limite=(--callgrind-limits="$LIMITE")
           fi
-          cargo bench -p nota-perf --bench instrucciones -- --baseline=base "${limite[@]}"
+          cargo bench -p metalmind-perf --bench instrucciones -- --baseline=base "${limite[@]}"
 
       # En main y en una PR sin base medible: que los benchmarks corran.
       - name: Medir
         if: steps.base.outputs.medida != 'true'
-        run: cargo bench -p nota-perf --bench instrucciones
+        run: cargo bench -p metalmind-perf --bench instrucciones

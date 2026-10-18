@@ -1,7 +1,7 @@
 # 05 — Tags
 
-> Diseño del 2026-10-18. Decisión de producto: **los tags son el eje principal de organización de nota, por encima de las carpetas.** También están decididos cómo se escribe un tag (mayúsculas, acentos, cómo se muestra, §6), que **los tags son planos** y la jerarquía sale solo de los `parents` de las páginas de tag (§1, §7), y que todo se puede hacer desde la UI sin editar archivos a mano ([06](06-decisiones-de-fondo.md) §13). Los detalles que quedaban abiertos se cerraron con las respuestas del autor en la PR #33 y, en lo menor (nombres de comandos, teclas, casos borde), con la recomendación de este documento: todo lo de aquí es decisión.
-> Construye sobre [03](03-core-architecture.md): el scanner de `nota-syntax` (§2), el índice y el watcher de `nota-vault` (§4) y el modelo de acciones con nombre (§3). Entra en el roadmap como **M2.5** (03 §8).
+> Diseño del 2026-10-18. Decisión de producto: **los tags son el eje principal de organización de Metalmind, por encima de las carpetas.** También están decididos cómo se escribe un tag (mayúsculas, acentos, cómo se muestra, §6), que **los tags son planos** y la jerarquía sale solo de los `parents` de las páginas de tag (§1, §7), y que todo se puede hacer desde la UI sin editar archivos a mano ([06](06-decisiones-de-fondo.md) §13). Los detalles que quedaban abiertos se cerraron con las respuestas del autor en la PR #33 y, en lo menor (nombres de comandos, teclas, casos borde), con la recomendación de este documento: todo lo de aquí es decisión.
+> Construye sobre [03](03-core-architecture.md): el scanner de `metalmind-syntax` (§2), el índice y el watcher de `metalmind-vault` (§4) y el modelo de acciones con nombre (§3). Entra en el roadmap como **M2.5** (03 §8).
 
 ## TL;DR
 
@@ -10,7 +10,7 @@
 - **Los tags son planos.** Un tag es solo un nombre: `#gpui`. Un nombre solo usa caracteres que valen en un nombre de archivo, así que todo tag puede tener página. La `/` no forma parte del tag: `#2024/10` es `#2024` seguido de texto.
 - **Página de tag opcional**: `tags/<nombre>.md`, en una carpeta plana y configurable. Su frontmatter lleva `color`, `icon` (emoji o `set:nombre`, con Tabler incluido), `aliases` y `parents`; su cuerpo dice de qué trata el tag. Un tag sin página funciona igual (§7).
 - **La jerarquía sale solo de `parents`**, y es un grafo: `gpui` puede estar bajo `rust`, `graficos` y `ui` a la vez. `#rust` trae también las notas de `#gpui`, de forma transitiva. Los ciclos se avisan y no rompen nada.
-- **Se usa desde la UI**: clic derecho sobre un tag (en el panel o en el texto) cambia color, ícono, alias y padres, renombra, fusiona y abre su página. nota crea la página sola; el archivo es el almacenamiento, no la interfaz (§3).
+- **Se usa desde la UI**: clic derecho sobre un tag (en el panel o en el texto) cambia color, ícono, alias y padres, renombra, fusiona y abre su página. Metalmind crea la página sola; el archivo es el almacenamiento, no la interfaz (§3).
 - **Panel lateral** con dos vistas, tags (en grafo por `parents`, con conteo) y carpetas, y una tecla para cambiar. Abre en tags; `T` cambia a carpetas.
 - **Modo focus**: enfocar toda la app (finder, búsqueda, panel, backlinks) en una carpeta, un tag o una consulta de tags. `:focus #rust`, `:focus proyectos/`, o desde el panel.
 - **Consultas**: `#rust #nota -#archivado`. Espacio es "y", `-` es "no", un tag incluye a sus alias y a sus descendientes por `parents`. Nada más.
@@ -31,11 +31,11 @@ Dos fuentes, un solo tag:
 
 Al escribir se pone solo el tag (`#gpui`), sin ruta: que `gpui` esté bajo `rust` lo dice la página de `gpui` (§7), no cada nota.
 
-Reglas del texto (las del scanner de `nota-syntax`, 03 §2):
+Reglas del texto (las del scanner de `metalmind-syntax`, 03 §2):
 
 - Empieza al inicio de línea o tras un espacio: `texto#algo` y el fragmento de una URL no son tags.
 - Letras, números, `_` y `-`; fuera de ASCII, letras, marcas, números y símbolos (emoji incluidos). La puntuación lo corta: `#rust.` es `#rust`.
-- **Decisión: puede ser solo números.** `#2024`, `#1` y `#2024-10` son tags, porque en nota los tags son el eje de organización y `#2024` sirve para agrupar un año; la regla contraria venía de Obsidian. Costo aceptado: en texto como "PR #12", `#12` se vuelve tag.
+- **Decisión: puede ser solo números.** `#2024`, `#1` y `#2024-10` son tags, porque en Metalmind los tags son el eje de organización y `#2024` sirve para agrupar un año; la regla contraria venía de Obsidian. Costo aceptado: en texto como "PR #12", `#12` se vuelve tag.
 - `# Título` es un heading, no un tag: el espacio lo decide.
 
 Reglas del frontmatter:
@@ -48,7 +48,7 @@ Reglas del frontmatter:
 - **La `/` no forma parte del tag**: lo corta, como la puntuación. `#2024/10` es el tag `#2024` seguido del texto `/10`; `#proyecto/` es `#proyecto`; `#/a` no es tag. Para un mes, `#2024-10`. Tampoco hay jerarquía por `/`: que un tag esté bajo otro lo dicen los `parents` de su página (§7).
 - **También cortan el tag** `\ : * ? " < > |`. En Linux solo la `/` (y el NUL) no caben en un nombre de archivo, pero un vault se sincroniza (Syncthing, git, una nube) con Windows, macOS y Android, y ahí esos caracteres fallan o se reemplazan sin avisar. Un tag cuyo archivo no puede existir en otra máquina del mismo vault es un tag a medias. En la práctica ya estaban fuera, porque en ASCII un tag solo admite letras, números, `_` y `-`; el único cambio frente a la PR #30 es la `/`.
 - **Longitud**: un nombre de más de 250 bytes en UTF-8 no es tag, porque `<nombre>.md` tiene que caber en los 255 bytes de ext4 y APFS (NTFS cuenta 255 unidades UTF-16, que nunca son más que los bytes UTF-8). No es un límite que alguien vaya a tocar escribiendo; existe para que la regla "todo tag puede tener página" sea verdad siempre.
-- **Nombres reservados de Windows** (`con`, `nul`, `aux`, `prn`, `com1`…`com9`, `lpt1`…`lpt9`): son tags normales. Si el usuario crea su página desde la UI, nota avisa que ese archivo no se sincroniza con Windows y la crea igual. Prohibirlos quitaría tags reales (`#con`) por una máquina que quizá no existe.
+- **Nombres reservados de Windows** (`con`, `nul`, `aux`, `prn`, `com1`…`com9`, `lpt1`…`lpt9`): son tags normales. Si el usuario crea su página desde la UI, Metalmind avisa que ese archivo no se sincroniza con Windows y la crea igual. Prohibirlos quitaría tags reales (`#con`) por una máquina que quizá no existe.
 - En `tags:` del frontmatter un valor no se corta: `tags: [2024/10]` no es un tag válido y queda como problema recuperable, igual que `"rust, nota"`.
 - Los nombres de las páginas se escriben en NFC (`#canción` → `tags/canción.md`). macOS puede devolverlos en NFD, pero la clave del tag es la misma (§6).
 
@@ -58,10 +58,10 @@ Reglas del frontmatter:
 
 | Crate | Qué pone |
 |---|---|
-| `nota-syntax` | El scanner: de un `&str` saca las ocurrencias de tags (texto y frontmatter) con su rango en bytes, y de una página de tag sus campos (`color`, `icon`, `aliases`, `parents`) con sus rangos. Funciones puras, sin estado. |
-| `nota-vault` | El `TagIndex`, el `TagGraph` de las páginas, la clave normalizada (`TagKey`), las consultas (`TagQuery`), el alcance de focus (`Scope`), la refactorización de renombrar/fusionar y la escritura de metadata desde la UI. Nada de esto toca la GUI. |
-| `nota-search` | Sin cambios: el finder recibe la lista de candidatos ya filtrada por el `Scope` y no sabe de `nota-vault`. La búsqueda de texto completo sí depende de `nota-vault` para recorrer el disco con sus reglas, y recibe el alcance como un conjunto de rutas (03 §4). |
-| `nota-ui` | El panel de tags, el menú contextual y los selectores (§3), el indicador de focus y el autocompletado. Solo pinta y llama acciones. |
+| `metalmind-syntax` | El scanner: de un `&str` saca las ocurrencias de tags (texto y frontmatter) con su rango en bytes, y de una página de tag sus campos (`color`, `icon`, `aliases`, `parents`) con sus rangos. Funciones puras, sin estado. |
+| `metalmind-vault` | El `TagIndex`, el `TagGraph` de las páginas, la clave normalizada (`TagKey`), las consultas (`TagQuery`), el alcance de focus (`Scope`), la refactorización de renombrar/fusionar y la escritura de metadata desde la UI. Nada de esto toca la GUI. |
+| `metalmind-search` | Sin cambios: el finder recibe la lista de candidatos ya filtrada por el `Scope` y no sabe de `metalmind-vault`. La búsqueda de texto completo sí depende de `metalmind-vault` para recorrer el disco con sus reglas, y recibe el alcance como un conjunto de rutas (03 §4). |
+| `metalmind-ui` | El panel de tags, el menú contextual y los selectores (§3), el indicador de focus y el autocompletado. Solo pinta y llama acciones. |
 
 ### Tipos
 
@@ -103,14 +103,14 @@ struct TagGraph {                                              // sale solo de l
 
 ### Estado (M2.5, 2026-10-18): núcleo, sin UI
 
-En `nota-vault`, módulo `tags`. Lo que se implementó distinto de lo de arriba, y por qué:
+En `metalmind-vault`, módulo `tags`. Lo que se implementó distinto de lo de arriba, y por qué:
 
 - **La nota se identifica por su `VaultPath`**, no por un `NoteId`: el vault todavía no interna rutas, y la ruta ya es la identidad ([06](06-decisiones-de-fondo.md) §1). Cuando llegue el `NoteId` de M3, el cambio queda dentro del módulo.
 - **En frío**: `Vault::open` escanea los tags en hilos propios (`std::thread::scope`, uno por núcleo, sin crate de pool) y devuelve el vault con el índice ya armado. La UI no espera porque abre el vault fuera del hilo de la ventana, como ya hace falta para el walk. Medido en el [presupuesto de rendimiento](../performance.md).
 - **Publicación**: no hay `IndexEvent` aparte; cada `VaultUpdate` del watcher trae el `Tags` nuevo (índice y grafo juntos, en el mismo `ArcSwap` que `Vault::tags()`) y `tag_changes`, las claves cuyas notas, formas o página pueden haber cambiado. Así cambios de archivos y de tags nunca se desfasan.
 - **Incremental**: `Created`/`Modified` reescanean la nota; `Removed` la quita; `Renamed` mueve sus ocurrencias sin releerla, salvo que entre o salga de la carpeta de tags. Si cambió alguna página, el grafo se rehace entero. El proptest de arriba corre sobre el mismo `refresh` del watcher.
 - **Una nota que no se puede leer** (permisos, no es UTF-8) cuenta como nota sin tags, con un aviso en el log, hasta que vuelva a cambiar.
-- **La carpeta de tags** llega por `VaultOptions::tags_folder` (`tags` por defecto); leerla de `tags_folder` en `<vault>/.nota/config.yaml` queda para cuando exista la config del vault.
+- **La carpeta de tags** llega por `VaultOptions::tags_folder` (`tags` por defecto); leerla de `tags_folder` en `<vault>/.metalmind/config.yaml` queda para cuando exista la config del vault.
 - **Ícono y color**: un `icon` es un emoji (símbolos con sus modificadores) o `set:nombre`; un `color` es un nombre (letras, números, `-`, `_`) o un hex de 3 o 6 dígitos. Si el nombre está en la paleta del tema lo decide la UI. Un valor que no es ninguno es un `TagProblem::InvalidValue` y el resto de la página vale.
 - **Planes**: `plan_rename`, `plan_merge`, `plan_use_main_name` y `plan_page_change` devuelven un `TagPlan`: sus `Changes` (por archivo, las ediciones en orden, cada una con su línea y el texto que espera encontrar, que `FileEdits::apply` comprueba; los archivos nuevos; el renombre de la página) y los avisos (`Merges`, `RenamesAlias`, `AliasAbsorbs`, `NotPortable`, y los bloqueos `BothHavePages` y `AliasTaken`). Fusionar escribe la forma establecida del destino. Un padre que tras fusionar sería la página misma se quita, igual que un valor repetido en `tags:` o en `parents`. El renombre de un alias también reescribe los `parents` que lo nombran, para que sigan apuntando al mismo tag. La vista previa es de la UI: lista los `Changes` y, con `x`, quita una edición antes de aplicar.
 - **Aplicar y deshacer** van en el núcleo, y el motor es el de M3 para renombrar notas (`RenamePlan::changes()`): `Vault::apply(&Changes)` lee cada archivo y comprueba que cada edición encuentre su texto antes de escribir nada, comprueba que los destinos estén libres, y luego edita (cada archivo de forma atómica y sin seguir enlaces, comparando otra vez justo antes), crea sin pisar y renombra con `RENAME_NOREPLACE`. Devuelve un `Applied` con el texto de antes y el de después de cada archivo; `Vault::undo` devuelve cada uno a su texto de antes, borra lo creado (y las carpetas que se crearon para eso, si quedaron vacías) y deshace los renombres, salvo lo que cambió después de aplicar, que queda en el reporte. Si algo falla a medias, el error trae el `Applied` de lo hecho, para deshacerlo. No compara `mtime`, tamaño ni hash: cada edición lleva el texto que reemplaza, así un cambio en otra parte del archivo no la invalida y un `touch` tampoco. Para eso el índice guarda la línea de cada ocurrencia y el texto de lo que se borra al quitarla de una lista.
@@ -118,17 +118,17 @@ En `nota-vault`, módulo `tags`. Lo que se implementó distinto de lo de arriba,
 - **Metadata desde una acción** (`tags::set_color`, `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`, `tags::set_template`): `plan_page_change` reemplaza el campo entero, `clave: valor` con las líneas de su valor, y deja el resto del frontmatter byte a byte; un campo nuevo va antes del `---` de cierre, y una página sin frontmatter recibe uno antes de su cuerpo, tras el BOM y con sus finales de línea. Las listas se escriben entre corchetes y los valores van entre comillas solo si YAML los leería distinto (`"2024"`, `"#d97706"`). Si el YAML está roto o no es un mapa en bloque (`{color: rojo}`), el plan se niega y la página hay que arreglarla a mano: reescribirla perdería lo del usuario. Si el tag no tiene página, crea `tags/<forma establecida>.md` con solo ese campo; un alias cambia la página de su tag. `plan_create_page` crea la página vacía ("Agregar descripción") y `page_path` dice dónde está o dónde estaría.
 - **Focus**: `Scope::parse` lee el argumento de `:focus` (una carpeta y una consulta) y `Scope::filter` da un `ScopeFilter` con `contains(ruta)`, que el finder, la búsqueda, el panel de carpetas y los backlinks usan para filtrar. Una página de tag solo está en el alcance con `:focus tags/`. `new_note_tags` da los tags de una nota nueva en ese focus.
 - **Panel**: `Tags::tree(&filtro)` arma la vista de tags dentro del alcance: raíces, hijos en el orden del panel, conteo, forma establecida, color, ícono y las marcas de página y de solo padre; en focus quedan solo los tags con notas del alcance. El conteo es una pasada por las notas: cada una suma a sus tags y a sus ancestros, así cuenta notas distintas. No se recalcula solo en los tags afectados, como decía arriba: armarlo entero cuesta 1.2 ms con 5 k notas y 28 ms con 50 k ([presupuesto](../performance.md)), menos que llevar la cuenta de qué afecta a qué. Las notas de un tag las da `tagged_notes` al expandirlo, no el árbol, porque ordenarlas todas costaba más que el resto. El ciclo se marca en la UI, que conoce el camino desde la raíz. El buzón es `TagTree::inbox`.
-- **Autocompletado**: `Scan::tag_at(byte)` de `nota-syntax` dice si el cursor está sobre un tag (en el cuerpo, en `tags:` o en `aliases`/`parents`) y qué rango reemplazar; sirve también para el menú del tag sobre el texto y para `ctrl`+clic. `Tags::completions()` da los candidatos, de más notas a menos, con su forma establecida, sus alias, color e ícono, y `TagCompletion::text(lugar)` el texto a insertar (en el YAML, entre comillas si hace falta). El filtrado difuso con `nucleo-matcher` es de `nota-search`.
+- **Autocompletado**: `Scan::tag_at(byte)` de `metalmind-syntax` dice si el cursor está sobre un tag (en el cuerpo, en `tags:` o en `aliases`/`parents`) y qué rango reemplazar; sirve también para el menú del tag sobre el texto y para `ctrl`+clic. `Tags::completions()` da los candidatos, de más notas a menos, con su forma establecida, sus alias, color e ícono, y `TagCompletion::text(lugar)` el texto a insertar (en el YAML, entre comillas si hace falta). El filtrado difuso con `nucleo-matcher` es de `metalmind-search`.
 - Falta: la UI (panel, menú contextual, vista previa, selectores de color e ícono, vista del tag, indicador de focus) y leer `tags_folder` de la config del vault.
 
 ## 3. UI
 
 ### Una GUI, no una TUI
 
-nota es una GUI con navegación estilo vim ([06](06-decisiones-de-fondo.md) §13). Para los tags, eso quiere decir:
+Metalmind es una GUI con navegación estilo vim ([06](06-decisiones-de-fondo.md) §13). Para los tags, eso quiere decir:
 
 - **Clic derecho sobre un tag**, en el panel o en el texto (un `#tag` del cuerpo o un valor de `tags:`), abre un menú con: color (selector de color), ícono (selector de emoji e íconos), alias, padres, renombrar (§5), fusionar (§5) y abrir su página (§7). Cada entrada es una acción con nombre (`tags::set_color`, `tags::set_icon`, `tags::edit_aliases`, `tags::edit_parents`, `tags::rename`, `tags::merge`, `tags::open_page`), y por eso también se llega desde la paleta, desde `:` y con atajos. Con el cursor sobre un tag, la misma lista sale con `space T`.
-- **nota crea la página sola** en cuanto le pones metadata desde la UI: elegir un color para `#rust` escribe `tags/rust.md` con `color:` en el frontmatter. El usuario nunca necesita crear la página a mano, aunque puede.
+- **Metalmind crea la página sola** en cuanto le pones metadata desde la UI: elegir un color para `#rust` escribe `tags/rust.md` con `color:` en el frontmatter. El usuario nunca necesita crear la página a mano, aunque puede.
 - **Escribir un `#tag-nuevo` no crea página.** `tags/` se llena solo con los tags que de verdad tienen algo que decir.
 - **El archivo es el almacenamiento, no la interfaz.** Lo que se cambia desde la UI se escribe en el frontmatter de la página, tocando solo el campo editado (regla de `CLAUDE.md`), y editar ese frontmatter a mano da el mismo resultado.
 - Quitar toda la metadata desde la UI no borra la página: puede tener cuerpo, y borrar un archivo del usuario es una decisión suya.
@@ -224,7 +224,7 @@ Detalles:
 - **Hijos**: los tags con `a` en `parents` siguen bajo `b`, porque esos `parents` se actualizan en el mismo cambio.
 - **Alias**: las ocurrencias escritas con un alias (`#rs`) no se reescriben y el alias se queda en la página renombrada: renombrar cambia el nombre del tag, no sus alias. Para eso están las dos operaciones de abajo.
 - **Frontmatter**: se reemplaza solo el texto del valor en su rango, sin re-serializar el YAML; el resto del bloque queda byte a byte igual (regla de `CLAUDE.md`: nunca reescribir el YAML del usuario salvo el campo editado). Vale para `tags:` en notas y para `parents`/`aliases` en páginas.
-- **Mayúsculas**: renombrar reescribe **todas las variantes** del tag (`#Rust`, `#rust`, `#RUST`) a la forma nueva. Renombrar `#Rust` a `#rust` es válido aunque la clave sea la misma: es la manera de unificar cómo se escribe un tag. Es la única vez que nota toca la forma escrita; mostrar la forma establecida nunca reescribe archivos.
+- **Mayúsculas**: renombrar reescribe **todas las variantes** del tag (`#Rust`, `#rust`, `#RUST`) a la forma nueva. Renombrar `#Rust` a `#rust` es válido aunque la clave sea la misma: es la manera de unificar cómo se escribe un tag. Es la única vez que Metalmind toca la forma escrita; mostrar la forma establecida nunca reescribe archivos.
 - **Nombre nuevo inválido**: el nombre nuevo pasa por la misma validación del scanner (§1); con `/` o con cualquier carácter que corta un tag, la vista previa no se abre y se dice por qué.
 - **Buffers abiertos con cambios sin guardar**: el cambio se aplica al buffer como una transacción (entra en su undo) y el archivo queda modificado sin guardar; no se escribe el disco por debajo del buffer. Buffers abiertos sin cambios: se escribe el disco y el buffer se recarga.
 - **Deshacer**: la operación entera, renombre de la página incluido, es una sola transacción de vault, con el contenido previo de cada archivo tocado guardado en memoria durante la sesión. `:tagundo` (`tags::undo_rename`) o el botón "Deshacer" del aviso que queda al aplicar la revierte. Si un archivo cambió después del renombre, ese archivo no se revierte y se lista; los demás sí. Es el mismo motor que necesita M3 para "renombrar nota actualiza links" (03 §4), y se diseña una vez para los dos.
@@ -261,7 +261,7 @@ Filtrar, enfocar o consultar por `#a` incluye a los tags que tienen `a` entre su
 | `#tag` en un bloque cercado, en código indentado o en `` `código inline` `` | **No cuenta** | Es código, no una nota sobre el tema: `#include`, `#[derive]` y comentarios de shell llenarían el índice. Lo resuelve el scanner (03 §2), que ya ignora código. |
 | `#tag` dentro de `%% comentario %%` | **No cuenta** | El scanner ya los ignora (03 §2); un comentario no es contenido. |
 | `#tag` en una URL o en `[[Nota#Sección]]` | No es tag | No va tras espacio o inicio de línea. |
-| `#2024` | **Sí es tag** | Agrupa un año, y en nota los tags son el eje de organización (§1). Costo aceptado: `PR #12` deja un tag `#12`. |
+| `#2024` | **Sí es tag** | Agrupa un año, y en Metalmind los tags son el eje de organización (§1). Costo aceptado: `PR #12` deja un tag `#12`. |
 | Mismo tag en el texto y en `tags:` | La nota cuenta una vez | El índice es por nota; las dos ocurrencias se guardan para renombrar. |
 | Frontmatter roto | Los tags del cuerpo cuentan igual | El scanner trata el YAML roto como problema recuperable (03 §2). |
 | Tag de más de 250 bytes | No es tag | Su página no cabría en un nombre de archivo (§1). |
@@ -275,10 +275,10 @@ Inspirado en TagStudio, donde los tags tienen metadata y "tags de tags". Un tag 
 
 ### Dónde y cómo se llama
 
-- `tags/<nombre>.md`, en una carpeta **plana**: sin subcarpetas. La carpeta es un ajuste del vault, como la de adjuntos ([06](06-decisiones-de-fondo.md) §6), con `tags/` por defecto, en la clave `tags_folder` de `<vault>/.nota/config.yaml`.
+- `tags/<nombre>.md`, en una carpeta **plana**: sin subcarpetas. La carpeta es un ajuste del vault, como la de adjuntos ([06](06-decisiones-de-fondo.md) §6), con `tags/` por defecto, en la clave `tags_folder` de `<vault>/.metalmind/config.yaml`.
 - La página se identifica por el **nombre del archivo** sin `.md`, con las mismas reglas de identidad de §6: sin distinguir mayúsculas, con acentos y en NFC. `tags/Rust.md` es la página de `#rust`.
 - Los archivos en subcarpetas de `tags/` (`tags/viejo/x.md`) no son páginas: son notas normales.
-- Normalmente no se crea a mano: nota la crea en cuanto le pones metadata desde la UI (§3). Crearla a mano da lo mismo.
+- Normalmente no se crea a mano: Metalmind la crea en cuanto le pones metadata desde la UI (§3). Crearla a mano da lo mismo.
 
 ### Formato
 
@@ -308,16 +308,16 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 - **Ícono: emoji o ícono con prefijo de set.** `icon` acepta:
   - Un **emoji** (`icon: 🦀`): trae sus propios colores y se pinta con la fuente de emoji del sistema.
   - Un **ícono con prefijo de set**, `<set>:<nombre>` al estilo de [Iconify](https://iconify.design) (`icon: tabler:book`, `icon: tabler:book-filled`, `icon: ph:books`). El prefijo deja lugar a varios sets sin que un nombre de ícono se confunda con un emoji.
-  - **Set incluido por defecto: [Tabler](https://tabler.io/icons)**, que viene con nota. Lucide, del que salen los íconos de Zed, se descartó como set por defecto por limitado: tiene 2159 íconos, contra los más de 6000 de Tabler.
-  - **Sets extra del usuario**: SVGs en `<config>/icons/<set>/*.svg` (`Paths::config` de `nota-config`), con el nombre del archivo como nombre del ícono: `~/.config/nota/icons/ph/books.svg` es `ph:books`. Así se agregan Phosphor (MIT), Material Symbols (Apache-2.0) o Lucide (ISC), todos compatibles con GPL-3. nota no los descarga ni los trae; la carpeta es del usuario. Un set del usuario no puede llamarse `tabler`: esa carpeta se ignora y se avisa.
+  - **Set incluido por defecto: [Tabler](https://tabler.io/icons)**, que viene con Metalmind. Lucide, del que salen los íconos de Zed, se descartó como set por defecto por limitado: tiene 2159 íconos, contra los más de 6000 de Tabler.
+  - **Sets extra del usuario**: SVGs en `<config>/icons/<set>/*.svg` (`Paths::config` de `metalmind-config`), con el nombre del archivo como nombre del ícono: `~/.config/metalmind/icons/ph/books.svg` es `ph:books`. Así se agregan Phosphor (MIT), Material Symbols (Apache-2.0) o Lucide (ISC), todos compatibles con GPL-3. Metalmind no los descarga ni los trae; la carpeta es del usuario. Un set del usuario no puede llamarse `tabler`: esa carpeta se ignora y se avisa.
   - **Color**: los íconos de línea y los rellenos se pintan en el `color` del tag (sin color, en el color de texto del tema) y quedan parejos con la UI. Un SVG multicolor de un set del usuario se pinta en un solo color (ver GPUI, abajo).
   - El **selector de ícono** de la UI (§3) busca a la vez en los emoji y en todos los sets cargados, con `nucleo-matcher`, y muestra el set de cada resultado.
   - Un `icon` que no es ni un emoji ni un `<set>:<nombre>` válido es un problema y el tag se muestra sin ícono. Un set que no está en esta máquina (la página dice `ph:books` y nadie dejó Phosphor en la config) no es un problema de la página: el tag se muestra sin ícono, con un aviso en el selector, y el campo no se toca. La config es por máquina y el vault se sincroniza; la página no puede quedar mal por eso.
 - **Lo que implica Tabler (datos de 2026-10-18):**
   - **Licencia**: MIT (`@tabler/icons` en npm y el repo `tabler/tabler-icons`). Es compatible con GPL-3; basta con incluir el aviso de copyright en el binario y en los paquetes (`packaging/`). `cargo-deny` no lo ve porque no es un crate.
   - **Cuánto**: `@tabler/icons` 3.49.0 trae 5184 íconos de línea y 1054 rellenos. El paquete de npm ocupa 11,3 MB sin comprimir, pero solo 3,65 MB son SVG (2,90 MB de línea y 0,75 MB rellenos); el resto son otros formatos.
-  - **Peso comprimido**: los 6238 SVG concatenados quedan en ~365 KB con gzip -9 y ~290 KB con zstd -19. Para nota, ~300–400 KB más en el binario, frente a unos 3,7 MB embebidos sin comprimir.
-  - **Embebido o como recurso**: recomendación, embebido y comprimido con gzip. `flate2` (1.1.10) ya está en el `Cargo.lock` como dependencia transitiva, así que no agrega un crate al árbol, y un solo binario sigue funcionando sin instalar nada (CLI, AppImage, tarball). Como recurso aparte (`/usr/share/nota/icons/tabler.tar.gz`), el binario no crece, pero cada paquete tiene que instalarlo y nota tiene que buscarlo. El set se descomprime la primera vez que hace falta (abrir el selector o pintar un ícono) y queda en memoria; solo se rasteriza lo que se ve en pantalla.
+  - **Peso comprimido**: los 6238 SVG concatenados quedan en ~365 KB con gzip -9 y ~290 KB con zstd -19. Para Metalmind, ~300–400 KB más en el binario, frente a unos 3,7 MB embebidos sin comprimir.
+  - **Embebido o como recurso**: recomendación, embebido y comprimido con gzip. `flate2` (1.1.10) ya está en el `Cargo.lock` como dependencia transitiva, así que no agrega un crate al árbol, y un solo binario sigue funcionando sin instalar nada (CLI, AppImage, tarball). Como recurso aparte (`/usr/share/metalmind/icons/tabler.tar.gz`), el binario no crece, pero cada paquete tiene que instalarlo y Metalmind tiene que buscarlo. El set se descomprime la primera vez que hace falta (abrir el selector o pintar un ícono) y queda en memoria; solo se rasteriza lo que se ve en pantalla.
   - **GPUI ya pinta SVG**: `svg()` de `gpui-pre` (0.3.9, con `resvg`/`usvg` 0.46 en el `Cargo.lock`) lee el SVG desde un `AssetSource` o desde bytes, y lo pinta como **máscara de un color** con el `text_color` del elemento. Eso encaja con Tabler, cuyos íconos de línea usan `stroke="currentColor"` y los rellenos `fill="currentColor"`, y es justamente lo que pinta un ícono en el color del tag. No hace falta ningún crate nuevo. Un SVG multicolor de un set del usuario pierde sus colores; eso se documenta, no se arregla con un segundo camino de pintado.
 
 ### Padres: un grafo, no un árbol
@@ -352,7 +352,7 @@ Abrir `#rust` (desde el panel, con `tags::open` o `ctrl`+clic sobre un `#rust` d
 | Ciclo de padres | Se detecta, se avisa y no rompe nada | Ver "Padres: un grafo, no un árbol". |
 | Archivo cuyo nombre no es un tag válido (`tags/mi tag.md`, `tags/a.b.md`, un nombre de más de 250 bytes) | No es página; es una nota normal y se lista como problema | No existe un `#tag` que lo nombre. |
 | Dos archivos con la misma clave (`tags/Rust.md` y `tags/rust.md`, o `ó` compuesta y descompuesta) | Vale el primero en orden de bytes y se avisa en los dos | Mismo desempate que la forma escrita (§6): estable, sin depender del orden del walk. |
-| Mover o renombrar `tags/rust.md` fuera de nota | El watcher lo ve como cambio de página: `rust` se queda sin página y aparece la del nombre nuevo. Las notas no se reescriben | Inferir un renombre de tag desde un cambio de archivo reescribiría notas sin vista previa. El renombre de verdad es `tags::rename`. |
+| Mover o renombrar `tags/rust.md` fuera de Metalmind | El watcher lo ve como cambio de página: `rust` se queda sin página y aparece la del nombre nuevo. Las notas no se reescriben | Inferir un renombre de tag desde un cambio de archivo reescribiría notas sin vista previa. El renombre de verdad es `tags::rename`. |
 | **Renombrar un tag con página** | Se renombra la página y se actualizan los `parents` y `aliases` de las otras páginas que lo nombran, en la misma vista previa y el mismo deshacer que las notas | Ver §5. |
 
 ## 8. Fuera de M2.5
