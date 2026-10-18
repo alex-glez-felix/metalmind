@@ -4,9 +4,8 @@ expression: "support::render(&text, &scan(&text))"
 input_file: crates/nota-syntax/tests/fixtures/frontmatter-texto.md
 ---
 frontmatter 0..74 yaml 4..71
-    tags []
-    aliases ["Viejo, Otro alias"]
-    cssclasses ["ancho"]
+    aliases "Viejo, Otro alias" en 33..50 "Viejo, Otro alias" literal 33..50 quita "Viejo, Otro alias"
+    cssclasses "ancho" en 64..69 "ancho" literal 64..69 quita "ancho"
 problem `uno, dos tres` en `tags` del frontmatter no es un tag válido
 wikilink 82..90 "[[link]]"
     target 84..88 "link"

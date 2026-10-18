@@ -212,8 +212,8 @@ fn link_syntax_is_reported() {
 fn frontmatter_with_crlf() {
     let text = "---\r\ntags: [a, b]\r\naliases: x\r\n---\r\ncuerpo";
     let frontmatter = scan(text).frontmatter.unwrap();
-    assert_eq!(frontmatter.tags, ["a", "b"]);
-    assert_eq!(frontmatter.aliases, ["x"]);
+    assert_eq!(support::texts(&frontmatter.tags), ["a", "b"]);
+    assert_eq!(support::texts(&frontmatter.aliases), ["x"]);
     assert_eq!(
         &text[frontmatter.span],
         "---\r\ntags: [a, b]\r\naliases: x\r\n---\r"
@@ -224,7 +224,7 @@ fn frontmatter_with_crlf() {
 fn frontmatter_after_bom() {
     let text = "\u{FEFF}---\ntags: a\n---\n#b";
     let scan = scan(text);
-    assert_eq!(scan.frontmatter.unwrap().tags, ["a"]);
+    assert_eq!(support::texts(&scan.frontmatter.unwrap().tags), ["a"]);
     assert_eq!(found(text), ["#b"]);
 }
 
@@ -285,15 +285,15 @@ fn a_text_field_is_one_value() {
     let frontmatter = scan("---\ntags: \"#rust\"\naliases: Uno, dos\ncssclasses: ancho\n---\n")
         .frontmatter
         .unwrap();
-    assert_eq!(frontmatter.tags, ["rust"]);
-    assert_eq!(frontmatter.aliases, ["Uno, dos"]);
-    assert_eq!(frontmatter.cssclasses, ["ancho"]);
+    assert_eq!(support::texts(&frontmatter.tags), ["rust"]);
+    assert_eq!(support::texts(&frontmatter.aliases), ["Uno, dos"]);
+    assert_eq!(support::texts(&frontmatter.cssclasses), ["ancho"]);
 }
 
 #[test]
 fn a_number_in_frontmatter_tags_is_a_tag() {
     let frontmatter = scan("---\ntags: [a, 2024]\n---\n").frontmatter.unwrap();
-    assert_eq!(frontmatter.tags, ["a", "2024"]);
+    assert_eq!(support::texts(&frontmatter.tags), ["a", "2024"]);
 }
 
 #[test]
@@ -397,5 +397,71 @@ fn a_tag_longer_than_a_file_name_is_not_a_tag() {
     assert_eq!(
         found(&format!("#{} fin", "a".repeat(251))),
         Vec::<String>::new()
+    );
+}
+
+/// Lo que se borra para sacar un valor de su lista deja el YAML válido y
+/// sin el valor, se quite el primero, uno del medio o el último.
+#[rstest]
+#[case::flow_first("---\ntags: [a, b, c]\n---\n", 0, "tags: [b, c]\n")]
+#[case::flow_middle("---\ntags: [a, b, c]\n---\n", 1, "tags: [a, c]\n")]
+#[case::flow_last("---\ntags: [a, b, c]\n---\n", 2, "tags: [a, b]\n")]
+#[case::flow_alone("---\ntags: [a]\n---\n", 0, "tags: []\n")]
+#[case::block("---\ntags:\n  - a\n  - b\n---\n", 1, "tags:\n  - a\n")]
+#[case::block_crlf("---\r\ntags:\r\n  - a\r\n  - b\r\n---\r\n", 0, "tags:\r\n  - b\r\n")]
+fn removing_a_frontmatter_value(#[case] text: &str, #[case] which: usize, #[case] yaml: &str) {
+    let frontmatter = scan(text).frontmatter.unwrap();
+    let removal = frontmatter.tags[which].removal.clone();
+    let rest = format!("{}{}", &text[..removal.start], &text[removal.end..]);
+    let after = scan(&rest).frontmatter.unwrap();
+    assert_eq!(&rest[after.yaml], yaml);
+}
+
+#[rstest]
+#[case::plain("---\ntags: rust\n---\n", "rust")]
+#[case::hash("---\ntags: \"#rust\"\n---\n", "rust")]
+#[case::single_quotes("---\ntags: ['rust']\n---\n", "rust")]
+#[case::spaces("---\ntags: [\" rust \"]\n---\n", "rust")]
+fn the_literal_range_is_the_tag_name(#[case] text: &str, #[case] name: &str) {
+    let frontmatter = scan(text).frontmatter.unwrap();
+    let literal = frontmatter.tags[0].literal.clone().unwrap();
+    assert_eq!(&text[literal], name);
+}
+
+#[rstest]
+#[case::escape("---\ntags: [\"r\\u0075st\"]\n---\n")]
+#[case::doubled_quote("---\ntags: ['it''s']\n---\n")]
+#[case::folded("---\ntags:\n  - a\n    b\n---\n")]
+fn a_value_written_differently_is_not_literal(#[case] text: &str) {
+    let scan = scan(text);
+    let values = scan
+        .frontmatter
+        .map(|f| f.aliases.into_iter().chain(f.tags).collect::<Vec<_>>());
+    assert!(
+        values.iter().flatten().all(|value| value.literal.is_none()),
+        "{values:?}"
+    );
+}
+
+#[rstest]
+#[case::list(
+    "---\ncolor: [rojo]\n---\n",
+    "el campo `color` del frontmatter no es un texto"
+)]
+#[case::mapping(
+    "---\nicon: {a: b}\n---\n",
+    "el campo `icon` del frontmatter no es un texto"
+)]
+fn single_fields_are_text(#[case] text: &str, #[case] message: &str) {
+    let problems: Vec<String> = scan(text).problems.iter().map(Problem::to_string).collect();
+    assert_eq!(problems, [message]);
+}
+
+#[test]
+fn a_color_written_as_a_comment_is_no_color() {
+    let scan = scan("---\ncolor: #d97706\n---\n");
+    assert_eq!(
+        (scan.frontmatter.unwrap().color, scan.problems),
+        (None, Vec::new())
     );
 }

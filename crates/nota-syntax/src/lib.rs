@@ -18,7 +18,7 @@ mod tag;
 use std::ops::Range;
 
 pub use anchor::{BlockId, Heading};
-pub use frontmatter::Frontmatter;
+pub use frontmatter::{Frontmatter, Value};
 pub use link::{Link, LinkSyntax, Subpath};
 pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
@@ -51,6 +51,11 @@ pub enum Problem {
     FrontmatterNotMapping { span: Range<usize> },
     #[error("el campo `{field}` del frontmatter no es ni lista ni texto")]
     InvalidField {
+        field: &'static str,
+        span: Range<usize>,
+    },
+    #[error("el campo `{field}` del frontmatter no es un texto")]
+    NotText {
         field: &'static str,
         span: Range<usize>,
     },

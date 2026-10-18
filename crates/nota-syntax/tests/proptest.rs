@@ -74,7 +74,72 @@ fn assert_link(text: &str, link: &Link) -> Result<(), TestCaseError> {
     Ok(())
 }
 
+/// Un valor de `tags:` escrito de alguna de las formas que permite YAML.
+fn written_tag() -> impl Strategy<Value = (String, String)> {
+    let name = prop::sample::select(vec!["rust", "Ñandú", "2024", "a-b", "🦀"]);
+    (name, 0..4_usize).prop_map(|(name, style)| {
+        let written = match style {
+            0 => name.to_owned(),
+            1 => format!("\"{name}\""),
+            2 => format!("'#{name}'"),
+            _ => format!("\" {name} \""),
+        };
+        (name.to_owned(), written)
+    })
+}
+
+/// Un frontmatter con `tags:` en una lista entre corchetes o en bloque.
+fn tags_frontmatter() -> impl Strategy<Value = (Vec<String>, String)> {
+    (
+        prop::collection::vec(written_tag(), 1..6),
+        any::<bool>(),
+        any::<bool>(),
+    )
+        .prop_map(|(tags, block, crlf)| {
+            let eol = if crlf { "\r\n" } else { "\n" };
+            let written: Vec<&str> = tags.iter().map(|(_, written)| written.as_str()).collect();
+            let list = if block {
+                written.iter().fold(String::new(), |mut list, tag| {
+                    list.push_str(eol);
+                    list.push_str("  - ");
+                    list.push_str(tag);
+                    list
+                })
+            } else {
+                format!(" [{}]", written.join(", "))
+            };
+            let text = format!("---{eol}title: x{eol}tags:{list}{eol}otro: 1{eol}---{eol}#cuerpo");
+            (tags.into_iter().map(|(name, _)| name).collect(), text)
+        })
+}
+
+fn tag_names(text: &str) -> Vec<String> {
+    scan(text)
+        .frontmatter
+        .map(|frontmatter| frontmatter.tags.into_iter().map(|tag| tag.text).collect())
+        .unwrap_or_default()
+}
+
 proptest! {
+    /// Lo que dice `literal` es el nombre, y quitar un valor por su
+    /// `removal` deja el YAML válido con los demás, en orden.
+    #[test]
+    fn frontmatter_values_can_be_rewritten_and_removed((names, text) in tags_frontmatter()) {
+        let scan = scan(&text);
+        prop_assert_eq!(&scan.problems, &[]);
+        let tags = scan.frontmatter.map(|frontmatter| frontmatter.tags).unwrap_or_default();
+        prop_assert_eq!(tag_names(&text), names.clone());
+        for (which, tag) in tags.iter().enumerate() {
+            if let Some(literal) = &tag.literal {
+                prop_assert_eq!(&text[literal.clone()], tag.text.as_str());
+            }
+            let rest = format!("{}{}", &text[..tag.removal.start], &text[tag.removal.end..]);
+            let mut expected = names.clone();
+            expected.remove(which);
+            prop_assert_eq!(tag_names(&rest), expected, "{:?}", rest);
+        }
+    }
+
     #[test]
     fn spans_stay_on_char_boundaries(text in note()) {
         let scan = scan(&text);
