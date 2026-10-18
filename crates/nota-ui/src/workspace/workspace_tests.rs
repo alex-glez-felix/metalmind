@@ -384,6 +384,18 @@ fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa_en_la_barra() {
 }
 
 #[test]
+fn un_global_sin_lineas_avisa_sin_error() {
+    let mut session = Session::new("uno\ndos\n");
+    session.keys(":g/tres/d⏎");
+    assert_eq!(
+        session.workspace.message(),
+        Some(&Message::Info("Pattern not found: tres".to_owned()))
+    );
+    session.keys(":g/o/d⏎");
+    assert_eq!(session.text(), "");
+}
+
+#[test]
 fn una_macro_que_cambia_de_panel_edita_en_el_nuevo() {
     let mut session = Session::new("abc\n");
     let left = session.pane();
