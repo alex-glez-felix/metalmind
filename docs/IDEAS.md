@@ -61,8 +61,7 @@ Ver [06 — Decisiones de fondo](research/06-decisiones-de-fondo.md), que dice q
 - **Celular**: quizá una app simple de captura rápida; la principal es la de escritorio ([06 §2](research/06-decisiones-de-fondo.md#2-celular)).
 - **Cifrado de notas**: deseable, sin fecha; nada derivado guarda en claro una nota cifrada ([06 §4](research/06-decisiones-de-fondo.md#4-cifrado-de-notas)).
 - **Grafo**: deseable, prioridad baja ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
-- **Plantillas de notas**: deseables ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
-- **Daily notes**: opcionales y apagadas por defecto; el flujo principal es el buzón ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
+- **Plantillas de notas** y **daily notes** (apagadas por defecto): el núcleo está en `nota-template`; faltan la UI y la CLI ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
 
 ## Importador de Obsidian (y quizá de otros)
 
