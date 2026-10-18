@@ -299,7 +299,7 @@ Lo de GPUI vive en su propio tag, #gpui, que tiene a #rust como padre.
 | `icon` | Un emoji (`🦀`) o un ícono con prefijo de set (`tabler:book`). Se muestra delante del nombre en el panel, en el autocompletado y en la vista del tag. |
 | `aliases` | Otros nombres del mismo tag: con `aliases: [rs]`, `#rs` cuenta como `#rust` para filtrar, consultar, contar y en el panel. El texto no se toca: la nota sigue diciendo `#rs`. |
 | `parents` | Los padres del tag, **varios**. De aquí y solo de aquí sale la jerarquía. |
-| `template` | **(propuesta)** El nombre de una plantilla ([06](06-decisiones-de-fondo.md) §11): una nota nueva con este tag (o con uno de sus alias), o creada en focus de él, nace con ella. Un texto que es una ruta del vault sin `.md`; una lista es un problema del frontmatter y un nombre como `../x`, un valor inválido de la página. No se hereda de los `parents`. |
+| `template` | El nombre de una plantilla ([06](06-decisiones-de-fondo.md) §11): una nota nueva con este tag (o con uno de sus alias), o creada en focus de él, nace con ella. Un texto que es una ruta del vault sin `.md`; una lista es un problema del frontmatter y un nombre como `../x`, un valor inválido de la página. No se hereda de los `parents`. |
 
 - `aliases` y `parents` aceptan una lista o un solo texto, y un `#` delante se ignora, igual que `tags:` (§1).
 - Un `parents` puede nombrar un alias: `parents: [rs]` es `parents: [rust]`.

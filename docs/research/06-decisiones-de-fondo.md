@@ -179,18 +179,18 @@ Comandos tentativos **(propuesta)**:
 
 Se quieren y no condicionan nada de lo que se escriba hoy:
 
-- **Daily notes**: opcional y **apagado por defecto**, porque el flujo del autor es el buzón (§9).
-- **Plantillas de notas**: deseables.
+- **Daily notes**: opcional y **apagado por defecto**, porque el flujo del autor es el buzón (§9). Hecho en el núcleo (abajo).
+- **Plantillas de notas**: hechas en el núcleo (abajo).
 - **Grafo**: deseable, prioridad baja. Sale del índice de links de M3 (03 §4).
 - **Temas**: ya existen (03 §5).
 
 ### Plantillas y nota del día, en el núcleo
 
-Hecho en `nota-template`, sin UI todavía. Lo que no venía de la decisión es **(propuesta)**:
+Hecho en `nota-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: la carpeta, las variables, las fechas en español, la plantilla por tag con su regla de choque y la nota del día apagada en `diario/YYYY-MM-DD`.
 
 - **Plantillas**: notas markdown en `plantillas/` (clave `templates_folder` de `config.yaml`), con subcarpetas. El nombre de una plantilla es su ruta dentro de la carpeta sin `.md`: `trabajo/semanal`, exacto, con mayúsculas.
-- **Variables**: las de Obsidian y nada más, para que sus plantillas sirvan sin tocarlas: `{{title}}`, `{{date}}` (`YYYY-MM-DD`), `{{time}}` (`HH:mm`), `{{date:FORMATO}}` y `{{time:FORMATO}}`. Se aceptan espacios dentro de las llaves. Sin condicionales, bucles ni escapes.
-- **Formato de fecha**: los códigos de moment.js que usa Obsidian, solo los comunes: `YYYY YY MMMM MMM MM M DD D dddd ddd HH H hh h mm m ss s A a Z ZZ` y `[texto]` literal. Otra letra se copia tal cual, como en moment. Los nombres de meses y días van en español y en minúsculas (`domingo 18 de octubre`) **(propuesta)**; cuando la app tenga idioma, salen de él.
+- **Variables**: solo las básicas, `{{title}}`, `{{date}}` (`YYYY-MM-DD`) y `{{time}}` (`HH:mm`), más `{{date:FORMATO}}` y `{{time:FORMATO}}` para otra forma de la fecha. Se quedan **porque son simples**: cubren lo que una nota nueva necesita y se aprenden de un vistazo. No es por compatibilidad con Obsidian, que no es requisito; que se escriban igual que allá es una coincidencia que no obliga a seguirlo. Se aceptan espacios dentro de las llaves. Sin condicionales, bucles ni escapes.
+- **Formato de fecha**: los códigos más comunes de moment.js, una notación conocida y corta: `YYYY YY MMMM MMM MM M DD D dddd ddd HH H hh h mm m ss s A a Z ZZ` y `[texto]` literal. Otra letra se copia tal cual, como en moment. Los nombres de meses y días van en español y en minúsculas (`domingo 18 de octubre`); cuando la app tenga idioma, salen de él.
 - **Lo mal escrito se deja tal cual y se reporta**, con su rango en bytes de la plantilla: una variable desconocida (`{{autor}}`, `{{Date}}`), un `{{` sin `}}` en su línea y un formato inválido (`{{date:}}`, un `[` sin cerrar). La nota se crea igual.
 - **La fecha es la local**: la API recibe un `jiff::Zoned` y todo sale en su zona horaria. Pasada la medianoche local ya es la nota del día siguiente.
 - **Plantilla por tag**: `template: nombre` en la página del tag (05 §7), que lee el `TagGraph` de `nota-vault` como los demás campos y la UI cambia con `PageChange::Template`. Una nota nueva con ese tag, o con uno de sus alias, o creada en focus de él, la usa. Si sus tags piden plantillas **distintas**, no se usa ninguna y se reporta, como con los alias que chocan (05 §7): elegir una adivinaría. Una plantilla elegida a mano gana sobre la del tag, y se puede pedir "sin plantilla". Un tag no hereda la plantilla de sus `parents`.

@@ -1,6 +1,6 @@
 //! Las variables de una plantilla: `{{date}}`, `{{time}}`, `{{title}}` y
-//! `{{date:FORMATO}}` o `{{time:FORMATO}}`, las mismas de Obsidian. No hay
-//! más lenguaje que eso: lo que no es una variable se copia tal cual.
+//! `{{date:FORMATO}}` o `{{time:FORMATO}}`. No hay más lenguaje que eso, a
+//! propósito (06 §11): lo que no es una variable se copia tal cual.
 
 use std::ops::Range;
 
