@@ -134,6 +134,20 @@ pub(crate) fn existing(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpE
     }
 }
 
+/// Que `path` se pueda crear o recibir un rename: no existe y ninguna de sus
+/// carpetas es un archivo ni un enlace simbólico.
+pub(crate) fn check_free(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
+    if path.is_root() {
+        return Err(FileOpError::AlreadyExists(path.clone()));
+    }
+    check_ancestors(root, path)?;
+    match fs::symlink_metadata(path.to_fs(root)) {
+        Ok(_) => Err(FileOpError::AlreadyExists(path.clone())),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(io_error("leer", path, error)),
+    }
+}
+
 /// La ruta en disco donde crear `path`, con sus carpetas ya creadas.
 fn prepare_target(
     root: &Path,

@@ -5,7 +5,8 @@
 
 mod support;
 
-use std::fs;
+use std::fs::{self, Permissions};
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
@@ -177,7 +178,7 @@ fn un_archivo_que_cambio_no_deja_escribir_nada() {
     assert!(!root.join("meta.md").exists());
 
     write(&root, "b.md", "[[plan]]");
-    write(&root, "meta.md", "");
+    fs::create_dir(root.join("meta.md")).unwrap();
     let error = vault.apply_rename(&plan).unwrap_err();
     assert!(
         matches!(
@@ -187,4 +188,29 @@ fn un_archivo_que_cambio_no_deja_escribir_nada() {
         "{error}"
     );
     assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
+}
+
+#[test]
+fn un_chmod_que_vuelve_legible_una_nota_trae_sus_links() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(&root, "a.md", "[[b]]");
+    write(&root, "b.md", "");
+    let a = root.join("a.md");
+    fs::set_permissions(&a, Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&a).is_ok() {
+        // Con permisos de root el chmod no impide leer: no hay nada que probar.
+        return;
+    }
+    let (vault, updates) = Vault::open(&root).unwrap();
+    assert_eq!(backlinks(&vault.links(), "b.md"), Vec::<String>::new());
+
+    fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
+    settle(&vault, &updates);
+    assert_eq!(backlinks(&vault.links(), "b.md"), ["a.md:0"]);
+
+    fs::set_permissions(&a, Permissions::from_mode(0o000)).unwrap();
+    settle(&vault, &updates);
+    assert_eq!(backlinks(&vault.links(), "b.md"), Vec::<String>::new());
+    fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
 }

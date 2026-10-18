@@ -77,6 +77,26 @@ impl LinkIndex {
         }
     }
 
+    /// Vuelve a leer las notas en `path` (y dentro, si es una carpeta) sin
+    /// que el vault haya cambiado: un chmod puede volver legible o ilegible
+    /// una nota. Devuelve si cambió algún link.
+    pub(crate) fn reread(
+        &mut self,
+        path: &VaultPath,
+        mut read: impl FnMut(&VaultPath) -> Option<String>,
+    ) -> bool {
+        let mut changed = false;
+        for note in self.names.within(path) {
+            let Some(before) = self.notes.get(&note).cloned() else {
+                continue;
+            };
+            let text = read(&note);
+            self.replace_links(&note, text.as_deref().map(scan_links).unwrap_or_default());
+            changed |= self.notes.get(&note) != Some(&before);
+        }
+        changed
+    }
+
     fn add_file(&mut self, path: &VaultPath, read: &mut impl FnMut(&VaultPath) -> Option<String>) {
         self.remove_note(path);
         let mut keys: HashSet<String> = self.names.remove(path).into_iter().collect();

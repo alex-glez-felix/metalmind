@@ -89,7 +89,8 @@ pub(super) fn write(link: &IndexedLink, candidate: &str) -> Option<String> {
     same.then_some(written)
 }
 
-/// Dentro de `<…>` valen los espacios; `%` se escapa porque el destino se
+/// Dentro de `<…>` valen los espacios, no los saltos de línea ni otros
+/// controles, que van como `%0A`; `%` se escapa porque el destino se
 /// decodifica igual.
 fn escape_bracketed(path: &str) -> String {
     let mut out = String::with_capacity(path.len());
@@ -100,6 +101,7 @@ fn escape_bracketed(path: &str) -> String {
                 out.push('\\');
                 out.push(c);
             }
+            _ if c.is_control() => percent_encode(&mut out, c),
             _ => out.push(c),
         }
     }
@@ -117,16 +119,18 @@ fn escape_plain(path: &str) -> String {
                 out.push('\\');
                 out.push(c);
             }
-            _ if c.is_whitespace() || c.is_control() => {
-                let mut bytes = [0; 4];
-                for byte in c.encode_utf8(&mut bytes).bytes() {
-                    let _ = write!(out, "%{byte:02X}");
-                }
-            }
+            _ if c.is_whitespace() || c.is_control() => percent_encode(&mut out, c),
             _ => out.push(c),
         }
     }
     out
+}
+
+fn percent_encode(out: &mut String, c: char) {
+    let mut bytes = [0; 4];
+    for byte in c.encode_utf8(&mut bytes).bytes() {
+        let _ = write!(out, "%{byte:02X}");
+    }
 }
 
 #[cfg(test)]
@@ -169,5 +173,10 @@ mod tests {
     #[case("canción#1.md", "canción\\#1.md")]
     fn plain_markdown_escapes(#[case] path: &str, #[case] written: &str) {
         assert_eq!(escape_plain(path), written);
+    }
+
+    #[test]
+    fn bracketed_destinations_encode_line_breaks() {
+        assert_eq!(escape_bracketed("Mi nota\nnueva.md"), "Mi nota%0Anueva.md");
     }
 }
