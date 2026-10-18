@@ -120,6 +120,12 @@ impl Document {
         self.vim.mode()
     }
 
+    /// La letra del registro en que se graba una macro, si se está grabando.
+    #[must_use]
+    pub fn recording(&self) -> Option<char> {
+        self.vim.recording()
+    }
+
     #[must_use]
     pub fn command_line(&self) -> Option<&str> {
         self.vim.command_line()

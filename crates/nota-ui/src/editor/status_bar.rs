@@ -1,4 +1,4 @@
-//! Barra de estado: modo, archivo, `[+]` si hay cambios sin guardar, el
+//! Barra de estado: modo, si se graba una macro, archivo, `[+]` si hay cambios sin guardar, el
 //! último mensaje o la línea de comandos, y la posición del cursor.
 
 use gpui_kit::{
@@ -18,6 +18,8 @@ pub enum Message {
 #[derive(Clone, Debug)]
 pub struct Status {
     pub mode: Mode,
+    /// El registro de la macro que se está grabando.
+    pub recording: Option<char>,
     pub file: SharedString,
     pub modified: bool,
     /// Lo escrito tras `:` y el preedit del IME, si se está escribiendo un comando.
@@ -45,6 +47,9 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .border_t(theme.border_width)
         .border_color(theme.status_border)
         .child(mode_label(status.mode))
+        .when_some(status.recording, |bar, register| {
+            bar.child(format!("grabando @{register}"))
+        })
         .child(
             div()
                 .flex()

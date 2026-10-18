@@ -332,3 +332,12 @@ fn los_registros_del_portapapeles_usan_el_que_le_pasan() {
     keys_with(&mut document, "\"+P", &mut clipboard);
     assert_eq!(document.buffer().to_string(), "uno\ntresdos");
 }
+
+#[test]
+fn dice_en_qué_registro_se_graba_una_macro() {
+    let mut document = document("uno");
+    keys(&mut document, "qb");
+    assert_eq!(document.recording(), Some('b'));
+    keys(&mut document, "q");
+    assert_eq!(document.recording(), None);
+}
