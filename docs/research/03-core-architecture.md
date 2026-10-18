@@ -253,6 +253,12 @@ Los tags tienen su propio `TagIndex`, alimentado del mismo scan y del mismo watc
 - Abrir, leer o cambiar permisos no cuenta. Tocar un `.gitignore` o `.ignore` relee su carpeta. Si `notify` avisa que pudo perder eventos (`Flag::Rescan`, desborde de la cola de inotify) o da un error sin ruta, se relee todo el vault.
 - Al soltar el `Vault`, se para el debouncer y se espera al hilo: no queda nada escribiendo en segundo plano.
 
+### Estado (M2, 2026-10-17): búsqueda difusa
+
+- Vive en `nota-search`, como dice §6, y no depende de `nota-vault`: recibe las rutas como `&str` y devuelve índices. Usa **`nucleo-matcher`** y no `nucleo`: el finder necesita una función pura (query → resultados ordenados con posiciones), y la inyección incremental y el hilo de fondo de `nucleo` solo hacen falta si buscar en todo el vault deja de caber en un frame. Con 5 k rutas, no.
+- Config de rutas de `nucleo` (`match_paths`), mayúsculas y acentos "smart" (cuentan solo si el query los lleva). Orden: puntaje, luego ruta más corta, luego orden de entrada; el query vacío devuelve todo tal cual, para que la UI ponga primero las recientes.
+- Las posiciones salen en bytes: `nucleo` cuenta en grafemas (o en bytes si cada grafema empieza con ASCII) y se convierten en el borde, con `unicode-segmentation`, igual que el resto del núcleo.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins
