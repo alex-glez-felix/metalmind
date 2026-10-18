@@ -19,7 +19,7 @@ M0 hecho: `nota archivo.md` abre una ventana (GPUI) donde se edita con vim y se 
 - `crates/nota-buffer`: texto, selecciones, undo.
 - `crates/nota-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
 - `crates/nota-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico (M2, sin interfaz todavía).
-- `crates/nota-search`: búsqueda difusa de rutas para el finder.
+- `crates/nota-search`: búsqueda difusa de rutas para el finder y de texto completo en las notas (sin interfaz todavía).
 - `crates/nota-ui` y `crates/nota`: la vista de editor y el binario; los únicos que dependen de GPUI.
 
 ```sh

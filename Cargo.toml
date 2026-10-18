@@ -27,6 +27,9 @@ env_logger = "0.11.11"
 # Fijado con `=`: gpui-pre cambia cada semana (04 §riesgo 9). Sin gpui-component
 # ni sus assets: el editor es propio y no usa el `Root` de gpui-kit (04 §riesgo 1).
 gpui-kit = { version = "=0.7.3", default-features = false }
+grep-matcher = "0.1.9"
+grep-regex = "0.1.14"
+grep-searcher = "0.1.17"
 ignore = "0.4.33"
 log = "0.4.34"
 notify = "8.2.0"

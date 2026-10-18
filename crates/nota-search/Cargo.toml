@@ -1,6 +1,6 @@
 [package]
 name = "nota-search"
-description = "Búsqueda del vault: por ahora, búsqueda difusa de rutas con nucleo-matcher."
+description = "Búsqueda del vault: difusa de rutas con nucleo-matcher y de texto completo con las librerías de ripgrep."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,14 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+grep-matcher.workspace = true
+grep-regex.workspace = true
+grep-searcher.workspace = true
+ignore.workspace = true
+log.workspace = true
+nota-vault.workspace = true
 nucleo-matcher.workspace = true
+thiserror.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]
@@ -17,9 +24,10 @@ nota-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
 rstest.workspace = true
+tempfile.workspace = true
 
 [[bench]]
-name = "search"
+name = "fuzzy"
 harness = false
 
 [lints]
