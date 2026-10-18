@@ -38,15 +38,26 @@ impl Buffer {
     /// más corta que la columna guardada, el final de la línea.
     #[must_use]
     pub fn anchor_offset(&self, anchor: LineAnchor) -> Option<ByteOffset> {
-        let Point { line, column } = self.anchors.get(anchor)?;
-        let line = line.min(self.last_line());
-        let offset = (self.line_start(line) + column).min(self.line_end(line));
-        let char_start = self.rope.char_to_byte(self.rope.byte_to_char(offset.get()));
-        Some(ByteOffset::new(char_start))
+        Some(self.offset_at_point(self.anchors.get(anchor)?))
     }
 
-    fn point_at(&self, offset: ByteOffset) -> Result<Point, BufferError> {
+    /// La línea de `offset` y los bytes desde su inicio.
+    ///
+    /// # Errors
+    /// Si `offset` no cae en un límite de carácter del texto.
+    pub fn point_at(&self, offset: ByteOffset) -> Result<Point, BufferError> {
         self.check_range(&(offset..offset))?;
         Ok(Point::of(&self.rope, offset.get()))
+    }
+
+    /// El offset de `point`, dentro del texto: una línea de más es la
+    /// última y una columna de más, el fin de su línea; si cae a mitad de
+    /// un carácter, su inicio.
+    #[must_use]
+    pub fn offset_at_point(&self, point: Point) -> ByteOffset {
+        let line = point.line.min(self.last_line());
+        let offset = (self.line_start(line) + point.column).min(self.line_end(line));
+        let char_start = self.rope.char_to_byte(self.rope.byte_to_char(offset.get()));
+        ByteOffset::new(char_start)
     }
 }

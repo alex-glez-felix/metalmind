@@ -45,6 +45,14 @@ impl Buffer {
         std::mem::take(&mut self.splices)
     }
 
+    /// Los reemplazos hechos desde el último [`Buffer::take_splices`], sin
+    /// sacarlos: para quien los sigue a medias, como el motor vim con las
+    /// posiciones que guarda mientras edita.
+    #[must_use]
+    pub fn splices(&self) -> &[Splice] {
+        &self.splices
+    }
+
     /// Estado del historial en el que está el texto.
     #[must_use]
     pub fn history_seq(&self) -> HistorySeq {
@@ -407,6 +415,7 @@ fn splice(
         start,
         removed,
         inserted: text.len(),
+        lines: change,
     });
     Ok(())
 }

@@ -1,13 +1,15 @@
-use crate::ByteOffset;
+use crate::{ByteOffset, LineChange};
 
 /// Un reemplazo ya hecho en el texto: los `removed` bytes desde `start`
 /// pasaron a ser `inserted` bytes. Sirve para mover posiciones guardadas
-/// fuera del motor, como el cursor de otro panel sobre el mismo buffer.
+/// fuera del motor, como el cursor de otro panel sobre el mismo buffer, o
+/// por línea con `lines`, como la jumplist de vim.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Splice {
     pub start: ByteOffset,
     pub removed: usize,
     pub inserted: usize,
+    pub lines: LineChange,
 }
 
 impl Splice {
@@ -38,13 +40,17 @@ impl Splice {
 
 #[cfg(test)]
 mod tests {
+    use ropey::Rope;
+
     use super::*;
 
     fn splice(start: usize, removed: usize, inserted: usize) -> Splice {
+        let text = Rope::from_str(&"x".repeat(start + removed));
         Splice {
             start: ByteOffset::new(start),
             removed,
             inserted,
+            lines: LineChange::new(&text, start, removed, &"y".repeat(inserted)),
         }
     }
 
