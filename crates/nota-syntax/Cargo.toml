@@ -1,6 +1,6 @@
 [package]
 name = "nota-syntax"
-description = "Scanner de la sintaxis de Obsidian: wikilinks, embeds, tags, links markdown y frontmatter."
+description = "Scanner de la sintaxis de Obsidian: wikilinks, embeds, tags, links markdown, frontmatter y resolución de nombres."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
