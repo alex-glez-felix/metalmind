@@ -20,17 +20,24 @@ pub struct Status {
     pub recording: Option<char>,
     pub file: SharedString,
     pub modified: bool,
-    /// Lo escrito tras `:` y el preedit del IME, si se está escribiendo un comando.
-    pub command_line: Option<(String, String)>,
+    pub command_line: Option<CommandLine>,
     pub message: Option<Message>,
     /// Línea y columna en caracteres, desde 1.
     pub position: (usize, usize),
 }
 
+/// Lo escrito tras `:`, `/` o `?` y el preedit del IME.
+#[derive(Clone, Debug)]
+pub struct CommandLine {
+    pub symbol: char,
+    pub typed: String,
+    pub preedit: String,
+}
+
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let center = match (status.command_line, status.message) {
-        (Some((typed, preedit)), _) => command_line(&typed, preedit, theme),
+        (Some(line), _) => command_line(line, theme),
         (None, Some(message)) => message_line(message, theme),
         (None, None) => div(),
     };
@@ -77,12 +84,17 @@ fn mode_label(mode: Mode) -> &'static str {
     }
 }
 
-fn command_line(typed: &str, preedit: String, theme: &Theme) -> Div {
+fn command_line(line: CommandLine, theme: &Theme) -> Div {
+    let CommandLine {
+        symbol,
+        typed,
+        preedit,
+    } = line;
     div()
         .flex()
         .flex_row()
         .text_color(theme.foreground)
-        .child(format!(":{typed}"))
+        .child(format!("{symbol}{typed}"))
         .when(!preedit.is_empty(), |line| {
             line.child(div().underline().child(preedit))
         })

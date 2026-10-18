@@ -349,3 +349,27 @@ fn solo_el_panel_con_el_foco_dice_que_se_graba_una_macro() {
     session.keys("q");
     assert_eq!(session.view(right).recording, None);
 }
+
+#[test]
+fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa_en_la_barra() {
+    let mut session = Session::new("uno\ndos\nuno\n");
+    session.keys("?un");
+    let line = session.view(session.pane()).command_line.unwrap();
+    assert_eq!((line.prompt.symbol(), line.typed), ('?', "un"));
+    session.keys("⎋/nada⏎");
+    assert_eq!(
+        session.workspace.message(),
+        Some(&Message::Error(
+            "E486: no se encontró el patrón: nada".to_owned()
+        ))
+    );
+    session.keys("G/uno⏎");
+    assert!(matches!(
+        session.workspace.message(),
+        Some(Message::Info(_))
+    ));
+    assert_eq!(session.cursor(), ByteOffset::ZERO);
+    session.keys("n");
+    assert_eq!(session.workspace.message(), None);
+    assert_eq!(session.cursor(), ByteOffset::new(8));
+}

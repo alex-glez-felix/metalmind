@@ -122,7 +122,7 @@ impl Session {
     }
 
     pub fn command_line(&self) -> Option<&str> {
-        self.view(self.pane()).command_line
+        self.view(self.pane()).command_line.map(|line| line.typed)
     }
 
     pub fn is_modified(&self) -> bool {
