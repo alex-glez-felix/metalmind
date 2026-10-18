@@ -9,7 +9,7 @@
 
 use std::fs::{self, Permissions};
 use std::io::Write as _;
-use std::os::unix::fs::PermissionsExt as _;
+use std::os::unix::fs::{PermissionsExt as _, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -439,11 +439,18 @@ fn open_solo_acepta_notas_del_vault() {
     fs::write(sandbox.vault.join("img.png"), "x").unwrap();
     let outside = sandbox.home.path().join("fuera.md");
     fs::write(&outside, "x").unwrap();
+    let elsewhere = sandbox.home.path().join("afuera");
+    fs::create_dir(&elsewhere).unwrap();
+    fs::write(elsewhere.join("nota.md"), "x").unwrap();
+    symlink(&elsewhere, sandbox.vault.join("enlace")).unwrap();
+    symlink(&outside, sandbox.vault.join("enlazada.md")).unwrap();
     for path in [
         "no-existe.md",
         "img.png",
         "../fuera.md",
         outside.to_str().unwrap(),
+        "enlace/nota.md",
+        "enlazada.md",
     ] {
         let output = run(&mut sandbox.nota(), &["open", "--json", path]);
         assert_json_error(&output, "usage", 2);

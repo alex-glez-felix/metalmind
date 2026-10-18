@@ -52,7 +52,7 @@ pub fn open(args: &OpenArgs) -> Result<Note, CliError> {
 }
 
 /// `path` como nota de `root`: relativa a la raíz o absoluta dentro de ella,
-/// un `.md` que existe y no es un enlace.
+/// un `.md` que existe y al que no se llega por un enlace.
 fn note_in(root: &VaultRoot, path: &Path) -> Result<VaultPath, CliError> {
     let not_a_note = || CliError::NotANote(path.to_owned());
     let relative = if path.is_absolute() {
@@ -68,7 +68,9 @@ fn note_in(root: &VaultRoot, path: &Path) -> Result<VaultPath, CliError> {
         .and_then(|text| VaultPath::new(text).ok())
         .filter(|note| EntryKind::of_file(note) == EntryKind::Note)
         .ok_or_else(not_a_note)?;
-    let is_file = fs::symlink_metadata(root.path().join(note.as_str()))
-        .is_ok_and(|metadata| metadata.file_type().is_file());
-    if is_file { Ok(note) } else { Err(not_a_note()) }
+    // Canonicalizar resuelve los enlaces de toda la ruta: si cambia, alguno
+    // (la nota o una carpeta de por medio) lleva fuera de lo escrito.
+    let full = root.path().join(note.as_str());
+    let inside = fs::canonicalize(&full).is_ok_and(|real| real == full) && full.is_file();
+    if inside { Ok(note) } else { Err(not_a_note()) }
 }
