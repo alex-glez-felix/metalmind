@@ -8,6 +8,7 @@ use std::process::ExitCode;
 use std::rc::Rc;
 use std::time::Instant;
 
+use nota_config::{Config, Diagnostic, Paths, Severity};
 use nota_ui::Document;
 
 const USAGE: &str = "uso: nota <archivo.md>";
@@ -49,6 +50,13 @@ fn main() -> ExitCode {
 }
 
 fn open(path: &std::path::Path, launched: Instant) -> ExitCode {
+    let config = match load_config() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("nota: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let document = match Document::open(path) {
         Ok(document) => document,
         Err(error) => {
@@ -59,7 +67,7 @@ fn open(path: &std::path::Path, launched: Instant) -> ExitCode {
     let failed = Rc::new(Cell::new(false));
     let failed_in_app = Rc::clone(&failed);
     gpui_kit::application().run(move |cx| {
-        if let Err(error) = nota_ui::open(document, launched, cx) {
+        if let Err(error) = nota_ui::open(document, &config, launched, cx) {
             eprintln!("nota: {error}");
             failed_in_app.set(true);
             cx.quit();
@@ -70,6 +78,24 @@ fn open(path: &std::path::Path, launched: Instant) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+/// La config del usuario; lo que esté mal se reporta y se usa el default.
+fn load_config() -> Result<Config, Diagnostic> {
+    let loaded = match Paths::detect() {
+        Ok(paths) => Config::load(&paths)?,
+        Err(error) => {
+            log::error!("{error}; se usa la configuración por defecto");
+            return Config::defaults();
+        }
+    };
+    for diagnostic in &loaded.diagnostics {
+        match diagnostic.severity {
+            Severity::Warning => log::warn!("{diagnostic}"),
+            Severity::Error => log::error!("{diagnostic}"),
+        }
+    }
+    Ok(loaded.value)
 }
 
 #[cfg(test)]

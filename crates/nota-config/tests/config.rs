@@ -5,7 +5,7 @@
 
 use std::fs;
 
-use nota_config::{Config, DEFAULT_THEME, FontSize, Paths, Settings, Severity, Themes};
+use nota_config::{Config, DEFAULT_THEME, FontSize, Paths, Settings, Severity};
 use pretty_assertions::assert_eq;
 
 fn paths() -> (tempfile::TempDir, Paths) {
@@ -20,11 +20,9 @@ fn sin_archivo_arranca_con_los_defaults() {
     let root = tempfile::tempdir().unwrap();
     let loaded = Config::load(&Paths::under(root.path())).unwrap();
     assert!(loaded.diagnostics.is_empty());
+    assert_eq!(loaded.value, Config::defaults().unwrap());
     assert_eq!(loaded.value.settings, Settings::default());
-    assert_eq!(
-        loaded.value.theme,
-        Themes::builtin().load(DEFAULT_THEME).unwrap().value
-    );
+    assert_eq!(loaded.value.theme.name, DEFAULT_THEME);
 }
 
 #[test]

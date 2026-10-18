@@ -4,6 +4,7 @@
 use std::time::Instant;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
+use nota_config::Config;
 
 use crate::actions;
 use crate::document::Document;
@@ -18,13 +19,18 @@ pub enum OpenError {
     Window(#[source] anyhow::Error),
 }
 
-/// Abre `document` en una ventana nueva. La aplicación termina cuando se
+/// Abre `document` en una ventana nueva, con el tema y la fuente de `config`. La aplicación termina cuando se
 /// cierra la última ventana.
 ///
 /// # Errors
 /// Si no hay fuente monoespaciada o la plataforma no puede abrir la ventana.
-pub fn open(document: Document, launched: Instant, cx: &mut App) -> Result<(), OpenError> {
-    cx.set_global(Theme::dark(cx)?);
+pub fn open(
+    document: Document,
+    config: &Config,
+    launched: Instant,
+    cx: &mut App,
+) -> Result<(), OpenError> {
+    cx.set_global(Theme::new(&config.theme, &config.settings.font, cx)?);
     actions::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {

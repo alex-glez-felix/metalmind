@@ -1,6 +1,7 @@
 //! Tokens de tema: todo color y tamaño de la UI sale de aquí.
 
 use gpui_kit::{App, Global, Hsla, Pixels, SharedString, px, rgb};
+use nota_config as config;
 
 /// Familias monoespaciadas, en orden de preferencia. GPUI no resuelve alias
 /// de fontconfig como `monospace` y entra en pánico con una familia que no
@@ -47,27 +48,32 @@ pub struct Theme {
 impl Global for Theme {}
 
 impl Theme {
-    /// El tema oscuro por defecto, con la primera fuente de [`MONO_FONTS`]
-    /// que esté instalada.
+    /// Los colores de `theme` con la fuente de `font`; si esa familia no está
+    /// instalada, la primera de [`MONO_FONTS`] que sí.
     ///
     /// # Errors
     /// [`NoMonoFont`] si no hay ninguna.
-    pub fn dark(cx: &App) -> Result<Self, NoMonoFont> {
+    pub fn new(theme: &config::Theme, font: &config::Font, cx: &App) -> Result<Self, NoMonoFont> {
         let installed = cx.text_system().all_font_names();
-        let font_family = first_installed(MONO_FONTS, &installed).ok_or(NoMonoFont)?;
-        Ok(Self {
-            background: rgb(0x1c_1f_24).into(),
-            foreground: rgb(0xd7_da_e0).into(),
-            caret: rgb(0x7a_a2_f7).into(),
-            block_cursor: Hsla::from(rgb(0x7a_a2_f7)).opacity(0.5),
-            selection: Hsla::from(rgb(0x7a_a2_f7)).opacity(0.3),
-            status_background: rgb(0x16_18_1d).into(),
-            status_foreground: rgb(0x9a_a0_a6).into(),
-            status_border: rgb(0x2a_2e_36).into(),
-            modified: rgb(0xe0_af_68).into(),
-            error: rgb(0xf7_76_8e).into(),
+        let font_family = pick_font(font.family.as_deref(), &installed)?;
+        Ok(Self::with_font(theme, font_family, px(font.size.get())))
+    }
+
+    fn with_font(theme: &config::Theme, font_family: SharedString, font_size: Pixels) -> Self {
+        let config::Theme { ui, cursor, .. } = theme;
+        Self {
+            background: hsla(ui.background),
+            foreground: hsla(ui.foreground),
+            caret: hsla(cursor.insert),
+            block_cursor: hsla(cursor.normal),
+            selection: hsla(ui.selection),
+            status_background: hsla(ui.status_background),
+            status_foreground: hsla(ui.status_foreground),
+            status_border: hsla(ui.status_border),
+            modified: hsla(ui.modified),
+            error: hsla(ui.error),
             font_family,
-            font_size: px(15.),
+            font_size,
             line_height: 1.4,
             caret_width: px(2.),
             underline_thickness: px(1.),
@@ -75,13 +81,27 @@ impl Theme {
             status_padding_x: px(10.),
             status_padding_y: px(3.),
             status_gap: px(16.),
-        })
+        }
     }
 
     #[must_use]
     pub fn get(cx: &App) -> &Self {
         cx.global::<Self>()
     }
+}
+
+fn hsla(color: config::Color) -> Hsla {
+    Hsla::from(rgb(color.rgb)).opacity(color.alpha)
+}
+
+fn pick_font(configured: Option<&str>, installed: &[String]) -> Result<SharedString, NoMonoFont> {
+    if let Some(family) = configured {
+        if installed.iter().any(|name| name == family) {
+            return Ok(SharedString::from(family.to_owned()));
+        }
+        log::warn!("la fuente `{family}` no está instalada; se usa otra monoespaciada");
+    }
+    first_installed(MONO_FONTS, installed).ok_or(NoMonoFont)
 }
 
 fn first_installed(candidates: &[&str], installed: &[String]) -> Option<SharedString> {
@@ -106,6 +126,50 @@ mod tests {
             first_installed(MONO_FONTS, &fonts).as_deref(),
             Some("DejaVu Sans Mono")
         );
+    }
+
+    #[test]
+    fn la_fuente_de_la_config_si_esta_instalada() {
+        let fonts = installed(&["Iosevka", "DejaVu Sans Mono"]);
+        assert_eq!(pick_font(Some("Iosevka"), &fonts).unwrap(), "Iosevka");
+        assert_eq!(
+            pick_font(Some("No Existe"), &fonts).unwrap(),
+            "DejaVu Sans Mono"
+        );
+        assert_eq!(pick_font(None, &fonts).unwrap(), "DejaVu Sans Mono");
+    }
+
+    /// Los valores que `nota-ui` tenía fijos antes de leer temas.
+    #[test]
+    fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
+        let dark = config::Themes::builtin().load("nota-oscuro").unwrap().value;
+        let font = config::Font::default();
+        let theme = Theme::with_font(&dark, "Mono".into(), px(font.size.get()));
+        let blue = Hsla::from(rgb(0x7a_a2_f7));
+        let expected: [(&str, Hsla, Hsla); 10] = [
+            ("background", theme.background, rgb(0x1c_1f_24).into()),
+            ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
+            ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
+            ("block_cursor", theme.block_cursor, blue.opacity(0.5)),
+            ("selection", theme.selection, blue.opacity(0.3)),
+            (
+                "status_background",
+                theme.status_background,
+                rgb(0x16_18_1d).into(),
+            ),
+            (
+                "status_foreground",
+                theme.status_foreground,
+                rgb(0x9a_a0_a6).into(),
+            ),
+            ("status_border", theme.status_border, rgb(0x2a_2e_36).into()),
+            ("modified", theme.modified, rgb(0xe0_af_68).into()),
+            ("error", theme.error, rgb(0xf7_76_8e).into()),
+        ];
+        for (name, actual, before) in expected {
+            assert_eq!(actual, before, "{name}");
+        }
+        assert_eq!(theme.font_size, px(15.));
     }
 
     #[test]
