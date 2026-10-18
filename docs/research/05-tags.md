@@ -1,6 +1,6 @@
 # 05 — Tags
 
-> Diseño del 2026-10-18. Decisión de producto: **los tags son el eje principal de organización de nota, por encima de las carpetas.** Lo que no venía de esa decisión va marcado **(propuesta)** y queda pendiente de confirmar.
+> Diseño del 2026-10-18. Decisión de producto: **los tags son el eje principal de organización de nota, por encima de las carpetas.** Cómo se escribe un tag (mayúsculas, acentos, cómo se muestra) también está decidido (§6). Lo que no venía de esas decisiones va marcado **(propuesta)** y queda pendiente de confirmar.
 > Construye sobre [03](03-core-architecture.md): el scanner de `nota-syntax` (§2), el índice y el watcher de `nota-vault` (§4) y el modelo de acciones con nombre (§3). Entra en el roadmap como **M2.5** (03 §8).
 
 ## TL;DR
@@ -11,7 +11,7 @@
 - **Modo focus**: enfocar toda la app (finder, búsqueda, panel, backlinks) en una carpeta, un tag o una consulta de tags. `:focus #rust`, `:focus proyectos/`, o desde el panel.
 - **Consultas**: `#rust #nota -#archivado`. Espacio es "y", `-` es "no", un tag padre incluye a sus hijos. Nada más.
 - **Operaciones**: autocompletado de `#`, renombrar un tag en todo el vault (con vista previa y deshacer), fusionar dos tags.
-- `#Rust` y `#rust` son el mismo tag; `#café` y `#cafe`, no **(propuesta, ver §6)**.
+- `#Rust`, `#rust` y `#RUST` son el mismo tag, y se muestra como lo escribe la mayoría; `#canción` y `#cancion` son distintos (§6).
 
 ---
 
@@ -52,7 +52,7 @@ Reglas del frontmatter:
 ### Tipos
 
 ```rust
-struct TagKey(SmolStr);              // normalizada (§6): NFC + minúsculas, sin el '#'
+struct TagKey(SmolStr);              // normalizada (§6): NFC + case folding, sin el '#'
 enum TagSource { Inline, Frontmatter }
 struct TagOccurrence { key: TagKey, spelling: SmolStr, range: Range<usize>, source: TagSource }
 
@@ -65,6 +65,8 @@ struct TagEntry {
     spellings: SmallVec<[(SmolStr, u32); 1]>,                  // cómo se escribe y cuántas veces
 }
 ```
+
+- `TagKey` es la identidad: agrupar, filtrar, consultar, focus y el árbol usan solo la clave. `spelling` es lo que el usuario escribió y solo sirve para mostrar (§6).
 
 - Este índice reemplaza al `tags: BTreeMap<SmolStr, Vec<NoteId>>` que 03 §4 dejó dentro de `LinkIndex`: tags y links se indexan del mismo scan pero se consultan por separado **(propuesta)**.
 - `by_note` guarda los rangos para que renombrar no tenga que reescanear el vault (§5), igual que `Link` guarda `range` para renombrar notas (03 §4).
@@ -88,7 +90,8 @@ Dos vistas en el mismo panel, árbol de tags y árbol de carpetas (el de M2). Un
 - Cambiar de vista: `T` dentro del panel (`panel::toggle_view`) **(propuesta)**; `space t` abre el panel en tags y `space e` en carpetas (`panel::show_tags`, `panel::show_folders`) **(propuesta)**. El encabezado del panel dice cuál es.
 - Cada nodo de tag muestra su segmento (`async`, no `rust/async`) y el conteo. Bajo un tag, primero sus tags hijos y luego sus notas, como una carpeta con subcarpetas y archivos **(propuesta)**. Una nota con tres tags aparece en tres lugares, y está bien: es justamente lo que una carpeta no permite.
 - Al final, un nodo **Sin tags** con las notas que no tienen ninguno **(propuesta)**. Sin él, una nota sin tags es invisible en la vista por defecto.
-- Orden: alfabético por la forma que se muestra (§6), sin mayúsculas, como el de carpetas **(propuesta)**.
+- Cada nodo muestra la forma establecida de su segmento (§6): "Rust (10)" aunque una nota diga `#rust`.
+- Orden: alfabético por la forma que se muestra, sin mayúsculas, como el de carpetas **(propuesta)**.
 - Vim, igual que `FileTree` (03 §3): `j/k`, `h/l` colapsar/expandir, `gg/G`, `/` filtrar, `enter` abre la nota o expande el tag, `r` renombra el tag (§5), `F` enfoca (§3, focus) **(propuesta para `r` y `F` aquí)**. El contexto es `TagTree`.
 
 ### Modo focus
@@ -150,7 +153,7 @@ Sintaxis mínima, la misma en `space f`, en `:focus` y en el filtro del panel:
 - En Insert, al escribir `#` donde puede empezar un tag (inicio de línea o tras espacio) seguido de un carácter de tag, se abre la lista de tags del vault, filtrada con `nucleo-matcher` y ordenada por número de notas **(propuesta)**. Con `/` sigue en el subárbol: `#rust/` ofrece los hijos de `rust`.
 - También dentro de la lista `tags:` del frontmatter.
 - No aparece en bloques de código ni en código inline. `# ` con espacio cierra la lista: es un heading.
-- Lo que se inserta es la forma que se muestra (§6), no la que escribiste a medias. `ctrl-n`/`ctrl-p` y `tab` como en el resto de pickers **(propuesta)**.
+- La lista ofrece e inserta la **forma establecida** (§6), no la que escribiste a medias: escribir `#ru` y aceptar deja `#Rust` si así lo escribe el vault. Así no nacen variantes nuevas. `ctrl-n`/`ctrl-p` y `tab` como en el resto de pickers **(propuesta para las teclas)**.
 
 ### Renombrar un tag en todo el vault
 
@@ -164,7 +167,7 @@ Detalles:
 
 - **Descendientes**: renombrar `#a` a `#b` renombra también `#a/x` a `#b/x` **(propuesta)**. Mover una rama del árbol es justamente para lo que sirve la jerarquía.
 - **Frontmatter**: se reemplaza solo el texto del valor en su rango, sin re-serializar el YAML; el resto del bloque queda byte a byte igual (regla de `CLAUDE.md`: nunca reescribir el YAML del usuario salvo el campo editado).
-- **Mayúsculas**: renombrar `#Rust` a `#rust` es válido aunque sea la misma clave: reescribe todas las formas al nuevo spelling. Es la manera de unificar cómo se escribe un tag.
+- **Mayúsculas**: renombrar reescribe **todas las variantes** del tag (`#Rust`, `#rust`, `#RUST`) a la forma nueva. Renombrar `#Rust` a `#rust` es válido aunque la clave sea la misma: es la manera de unificar cómo se escribe un tag. Es la única vez que nota toca la forma escrita; mostrar la forma establecida nunca reescribe archivos.
 - **Buffers abiertos con cambios sin guardar**: el cambio se aplica al buffer como una transacción (entra en su undo) y el archivo queda modificado sin guardar; no se escribe el disco por debajo del buffer **(propuesta)**. Buffers abiertos sin cambios: se escribe el disco y el buffer se recarga.
 - **Deshacer**: la operación entera es una sola transacción de vault, con el contenido previo de cada archivo tocado guardado en memoria durante la sesión. `:tagundo` (`tags::undo_rename`) la revierte **(propuesta para el nombre)**. Si un archivo cambió después del renombre, ese archivo no se revierte y se lista; los demás sí. Es el mismo motor que necesita M3 para "renombrar nota actualiza links" (03 §4), y se diseña una vez para los dos **(propuesta)**.
 - **Fallo a medias**: cada archivo es atómico, el conjunto no. Si una escritura falla, se para, se informa qué quedó escrito y se ofrece deshacer lo aplicado.
@@ -183,9 +186,11 @@ Filtrar, enfocar o consultar por `#a` incluye `#a/…` (§4). En el panel, el no
 
 | Caso | Decisión | Por qué |
 |---|---|---|
-| `#Rust` y `#rust` | **El mismo tag** **(propuesta)** | Nadie quiere dos tags que solo se distinguen por la mayúscula inicial de una frase; Obsidian los trata igual. La clave es `str::to_lowercase` (Unicode, no solo ASCII). Se muestra la forma más usada en el vault; en empate, la primera en orden de bytes, para que sea determinista. |
-| `#café` y `#cafe` | **Distintos** **(propuesta)** | En español el acento cambia la palabra (`#año` y `#ano`). Quitar acentos uniría cosas distintas sin que nadie se entere. |
-| `#café` con `é` compuesta o descompuesta (U+00E9 vs `e` + U+0301) | **El mismo tag** **(propuesta)** | Se ven idénticos y llegan distintos según el teclado o el sistema de origen del archivo. La clave se normaliza a NFC con `unicode-normalization` 0.1.26 (crates.io, 2026-10-18) antes de bajar a minúsculas. El archivo no se toca: solo la clave. |
+| `#Rust`, `#rust` y `#RUST` | **El mismo tag** para agrupar, filtrar, consultar, focus y el árbol | Nadie quiere dos tags que solo se distinguen por la mayúscula inicial de una frase. La clave usa el *case folding* por defecto de Unicode (`CaseFolding.txt`, no solo ASCII y no `str::to_lowercase`), con `caseless` 0.2.2 (crates.io, 2026-10-18): así `#STRASSE` y `#straße` también son el mismo. Es el folding sin locale, el mismo en cualquier máquina; la `ı` turca sin punto no se une a `i`. |
+| Cómo se muestra | **La forma más usada** | El panel, el finder y los chips enseñan la variante que más ocurrencias tiene en el vault: con 9 `#Rust` y 1 `#rust`, "Rust (10)". Empate: la primera en orden de bytes (`Rust` antes que `rust`), así no cambia según el orden del walk. Se recalcula con el índice. **Nunca se reescribe un archivo por esto**; solo renombrar (§5) cambia lo escrito. |
+| Jerarquía con mayúsculas | `#Rust/GPUI` y `#rust/gpui` son **el mismo nodo** | La clave se normaliza entera, segmentos incluidos. La forma de cada segmento se elige por separado y cuenta también las ocurrencias de los descendientes: si nadie escribe `#rust` solo pero 5 notas dicen `#Rust/GPUI`, el nodo padre se muestra "Rust". |
+| `#canción` y `#cancion` | **Distintos** | Los acentos sí importan: en español cambian la palabra (`#año` y `#ano`). Quitarlos uniría cosas distintas sin que nadie se entere. |
+| `#canción` con `ó` compuesta o descompuesta (U+00F3 vs `o` + U+0301) | **El mismo tag** | Solo se normaliza lo invisible: se ven idénticos y llegan distintos según el teclado o el sistema de origen del archivo. La clave es NFC (`unicode-normalization` 0.1.26, crates.io, 2026-10-18), luego folding, luego NFC otra vez, porque el folding puede dejar una cadena que ya no está en NFC. El archivo no se toca: solo la clave. |
 | `#tag` en un bloque cercado, en código indentado o en `` `código inline` `` | **No cuenta** | Es código, no una nota sobre el tema: `#include`, `#[derive]` y comentarios de shell llenarían el índice. Lo resuelve el scanner (03 §2), que ya ignora código. |
 | `#tag` dentro de `%% comentario %%` | **No cuenta** | El scanner ya los ignora (03 §2); un comentario no es contenido. |
 | `#tag` en una URL o en `[[Nota#Sección]]` | No es tag | No va tras espacio o inicio de línea. |
