@@ -8,7 +8,11 @@ on:
     inputs:
       seconds:
         description: Segundos por target
-        default: "300"
+        type: number
+        default: 300
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -30,21 +34,31 @@ jobs:
         with:
           workspaces: fuzz
           key: ${{ matrix.target }}
-      # El corpus crece con cada corrida: se guarda con una llave nueva y se
-      # restaura el más reciente.
-      - uses: actions/cache@v6
+      # El corpus crece con cada corrida: se restaura el más reciente y se
+      # guarda con una llave nueva, también si hubo un crash.
+      - uses: actions/cache/restore@v6
         with:
           path: fuzz/corpus/${{ matrix.target }}
-          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: fuzz-corpus-${{ matrix.target }}-
       - name: Fuzz
+        env:
+          TARGET: ${{ matrix.target }}
+          SECONDS_PER_TARGET: ${{ inputs.seconds || 300 }}
         run: >
-          cargo +nightly fuzz run ${{ matrix.target }} --
-          -max_total_time=${{ inputs.seconds || '300' }}
+          cargo +nightly fuzz run "$TARGET" --
+          -max_total_time="$SECONDS_PER_TARGET"
           -timeout=10 -rss_limit_mb=2048
       - name: Minimizar el corpus
         if: success()
-        run: cargo +nightly fuzz cmin ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo +nightly fuzz cmin "$TARGET"
+      - uses: actions/cache/save@v6
+        if: always()
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
