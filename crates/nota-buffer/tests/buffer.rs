@@ -31,6 +31,17 @@ fn lines_split_only_on_line_feed() {
 }
 
 #[test]
+fn line_text_leaves_out_the_line_feed() {
+    let buffer = Buffer::from("uno\nañb\n");
+    assert_eq!(buffer.line_text(0), "uno");
+    assert_eq!(buffer.line_text(1), "añb");
+    assert_eq!(buffer.line_text(2), "");
+    let long = "x".repeat(10_000);
+    let buffer = Buffer::from(format!("{long}\n{long}").as_str());
+    assert_eq!(buffer.line_text(1), long);
+}
+
+#[test]
 fn columns_count_characters_not_bytes() {
     let buffer = Buffer::from("añb\ncd");
     assert_eq!(buffer.column_of(at(3)), 2);
