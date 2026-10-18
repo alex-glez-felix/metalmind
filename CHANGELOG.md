@@ -62,7 +62,7 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 #### Configuración
 
-- `config.yaml` (o `config.yml`) en el directorio de configuración del usuario
+- `config.yaml` en el directorio de configuración del usuario
   (XDG), con tema y fuente. Es YAML 1.2, así que también se puede escribir en
   JSON, y `yes`, `on` o `NO` nunca se leen como booleanos. Un archivo roto o
   con tipos equivocados se reemplaza por los defaults y el error dice la línea

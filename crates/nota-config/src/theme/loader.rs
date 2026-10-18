@@ -136,9 +136,7 @@ impl Themes {
             if !extends_builtin && chain.iter().any(|layer| layer.name == next) {
                 return Err(referrer(circular(&chain, &next)));
             }
-            let (file, text, builtin) = self
-                .read(&next, !extends_builtin, warnings)
-                .map_err(referrer)?;
+            let (file, text, builtin) = self.read(&next, !extends_builtin).map_err(referrer)?;
             let (theme, layer_warnings) =
                 parse::<ThemeFile>(&text).map_err(|error| error.in_file(&file))?;
             warnings.extend(
@@ -167,7 +165,6 @@ impl Themes {
         &self,
         name: &str,
         user: bool,
-        warnings: &mut Vec<Diagnostic>,
     ) -> Result<(PathBuf, Cow<'static, str>, bool), Diagnostic> {
         if name.is_empty()
             || !name
@@ -179,8 +176,7 @@ impl Themes {
             )));
         }
         if let Some(dir) = self.user_dir.as_ref().filter(|_| user)
-            && let Some(YamlFile { path, text }) =
-                read_yaml(&dir.join(format!("{name}.yaml")), warnings)?
+            && let Some(YamlFile { path, text }) = read_yaml(&dir.join(format!("{name}.yaml")))?
         {
             return Ok((path, Cow::Owned(text), false));
         }

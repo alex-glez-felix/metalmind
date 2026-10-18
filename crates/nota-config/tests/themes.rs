@@ -354,39 +354,6 @@ fn nombres_que_no_son_un_archivo_del_directorio() {
 }
 
 #[test]
-fn un_tema_en_yml_tambien_carga() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(dir.path().join("mio.yml"), "extends: nota-claro\n").unwrap();
-    let loaded = Themes::new(dir.path().to_owned()).load("mio").unwrap();
-    assert_eq!(loaded.diagnostics, []);
-    let base = Themes::builtin().load("nota-claro").unwrap().value;
-    assert_eq!(loaded.value.ui, base.ui);
-}
-
-#[test]
-fn un_tema_en_toml_ya_no_se_lee_y_se_avisa() {
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(
-        dir.path().join("nota-oscuro.toml"),
-        "[ui]\nerror = \"#000009\"\n",
-    )
-    .unwrap();
-    let loaded = Themes::new(dir.path().to_owned())
-        .load("nota-oscuro")
-        .unwrap();
-    assert_eq!(
-        loaded.value,
-        Themes::builtin().load("nota-oscuro").unwrap().value
-    );
-    let [warning] = loaded.diagnostics.as_slice() else {
-        panic!("{:?}", loaded.diagnostics)
-    };
-    assert_eq!(warning.severity, Severity::Warning);
-    assert_eq!(warning.file, Some(dir.path().join("nota-oscuro.toml")));
-    assert!(warning.message.contains("`nota-oscuro.yaml`"));
-}
-
-#[test]
 fn un_color_nulo_es_error_y_no_hereda() {
     let dir = tempfile::tempdir().unwrap();
     for (name, text) in [

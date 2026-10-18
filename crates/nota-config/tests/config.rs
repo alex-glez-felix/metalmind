@@ -60,41 +60,6 @@ fn un_config_en_json_puro_carga_igual_que_en_yaml() {
 }
 
 #[test]
-fn config_yml_tambien_vale_y_con_los_dos_gana_yaml() {
-    let (_root, paths) = paths();
-    let yml = paths.config.join("config.yml");
-    fs::write(&yml, "theme: nota-claro\n").unwrap();
-    let loaded = Config::load(&paths).unwrap();
-    assert_eq!(loaded.diagnostics, []);
-    assert_eq!(loaded.value.theme.name, "nota-claro");
-
-    fs::write(paths.config_file(), "editor:\n  scrolloff: 2\n").unwrap();
-    let loaded = Config::load(&paths).unwrap();
-    assert_eq!(loaded.value.theme.name, DEFAULT_THEME);
-    assert_eq!(loaded.value.settings.editor.scrolloff, 2);
-    let [warning] = loaded.diagnostics.as_slice() else {
-        panic!("{:?}", loaded.diagnostics)
-    };
-    assert_eq!(warning.severity, Severity::Warning);
-    assert_eq!(warning.file, Some(yml));
-}
-
-#[test]
-fn un_config_toml_ya_no_se_lee_y_se_avisa() {
-    let (_root, paths) = paths();
-    let toml = paths.config.join("config.toml");
-    fs::write(&toml, "theme = \"nota-claro\"\n").unwrap();
-    let loaded = Config::load(&paths).unwrap();
-    assert_eq!(loaded.value, Config::defaults().unwrap());
-    let [warning] = loaded.diagnostics.as_slice() else {
-        panic!("{:?}", loaded.diagnostics)
-    };
-    assert_eq!(warning.severity, Severity::Warning);
-    assert_eq!(warning.file, Some(toml));
-    assert!(warning.message.contains("`config.yaml`"));
-}
-
-#[test]
 fn config_rota_arranca_con_defaults_y_dice_donde() {
     let (_root, paths) = paths();
     fs::write(paths.config_file(), "theme: nota-claro\n  font: 3\n").unwrap();
