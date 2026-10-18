@@ -1,19 +1,21 @@
-//! El modelo del árbol del panel con un vault sintético de 5 000 notas,
-//! el mismo de `nota-vault/benches/open.rs`. Correr con
-//! `cargo bench -p nota-ui --bench file_tree`.
+//! El modelo del árbol del panel con el vault sintético de `nota-perf`
+//! (`vault_paths`): 5 k y 50 k notas en 110 carpetas, todas abiertas.
+//! Correr con `cargo bench -p nota-ui --bench file_tree`; los números van en
+//! `docs/performance.md`.
 
 #![allow(
     clippy::unwrap_used,
     reason = "en un benchmark, un unwrap que falla es un benchmark roto"
 )]
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use divan::Bencher;
 use nota_ui::FileTree;
 use nota_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 
-const NOTES: usize = 5_000;
+const SIZES: &[usize] = &[5_000, 50_000];
 
 fn main() {
     divan::main();
@@ -23,27 +25,30 @@ fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
 }
 
-/// 10 carpetas × 10 subcarpetas × 50 notas, más un adjunto por subcarpeta;
-/// `top` cambia el nombre de las carpetas de arriba, para simular un rename.
-fn entries(top: &str) -> Vec<(VaultPath, EntryKind)> {
-    let mut entries = Vec::new();
-    for area in 0..10 {
-        let area_dir = format!("{top}-{area}");
-        entries.push((path(&area_dir), EntryKind::Folder));
-        for topic in 0..10 {
-            let dir = format!("{area_dir}/tema-{topic}");
-            entries.push((path(&dir), EntryKind::Folder));
-            for note in 0..NOTES / 100 {
-                entries.push((path(&format!("{dir}/nota-{note}.md")), EntryKind::Note));
-            }
-            entries.push((path(&format!("{dir}/imagen.png")), EntryKind::Attachment));
-        }
-    }
-    entries
-}
-
-fn index() -> Arc<VaultIndex> {
-    Arc::new(VaultIndex::from_entries(entries("area")))
+/// El índice de `nota_perf::vault_paths(notes)`, con sus carpetas;
+/// `top` cambia el prefijo de las de arriba, para simular un rename.
+fn index(notes: usize, top: &str) -> Arc<VaultIndex> {
+    let files: Vec<VaultPath> = nota_perf::vault_paths(notes)
+        .iter()
+        .map(|file| path(&file.replacen("area", top, 1)))
+        .collect();
+    let folders: BTreeSet<VaultPath> = files
+        .iter()
+        .flat_map(VaultPath::ancestors)
+        .filter(|folder| !folder.is_root())
+        .collect();
+    let entries = folders
+        .into_iter()
+        .map(|folder| (folder, EntryKind::Folder))
+        .chain(files.into_iter().map(|file| {
+            let kind = if file.name() == "imagen.png" {
+                EntryKind::Attachment
+            } else {
+                EntryKind::Note
+            };
+            (file, kind)
+        }));
+    Arc::new(VaultIndex::from_entries(entries))
 }
 
 fn folders(index: &VaultIndex) -> Vec<VaultPath> {
@@ -54,32 +59,23 @@ fn folders(index: &VaultIndex) -> Vec<VaultPath> {
         .collect()
 }
 
-/// Todas las carpetas abiertas: 5 210 filas visibles.
-fn expanded() -> FileTree {
-    let index = index();
+fn expanded(notes: usize) -> FileTree {
+    let index = index(notes, "area");
     let all = folders(&index);
-    let tree = FileTree::with_expanded(index, all);
-    assert_eq!(tree.rows().len(), NOTES + 210);
-    tree
+    FileTree::with_expanded(index, all)
 }
 
-#[divan::bench]
-fn construir_cerrado(bencher: Bencher) {
-    let index = index();
-    bencher.bench(|| FileTree::new(Arc::clone(&index)));
-}
-
-#[divan::bench]
-fn construir_todo_abierto(bencher: Bencher) {
-    let index = index();
+#[divan::bench(args = SIZES)]
+fn construir_todo_abierto(bencher: Bencher, notes: usize) {
+    let index = index(notes, "area");
     let all = folders(&index);
     bencher.bench(|| FileTree::with_expanded(Arc::clone(&index), all.iter().cloned()));
 }
 
-/// Abrir y cerrar una carpeta con todo lo demás abierto: rehace las filas.
-#[divan::bench]
-fn expandir_y_colapsar_todo_abierto(bencher: Bencher) {
-    let mut tree = expanded();
+/// Cerrar y volver a abrir una carpeta con todo lo demás abierto.
+#[divan::bench(args = SIZES)]
+fn expandir_y_colapsar(bencher: Bencher, notes: usize) {
+    let mut tree = expanded(notes);
     let folder = path("area-5/tema-5");
     bencher.bench_local(|| {
         tree.collapse(&folder);
@@ -87,47 +83,42 @@ fn expandir_y_colapsar_todo_abierto(bencher: Bencher) {
     });
 }
 
-#[divan::bench]
-fn bajar_una_fila(bencher: Bencher) {
-    let mut tree = expanded();
-    tree.select_row(NOTES / 2);
+#[divan::bench(args = SIZES)]
+fn bajar_una_fila(bencher: Bencher, notes: usize) {
+    let mut tree = expanded(notes);
+    tree.select_row(notes / 2);
     bencher.bench_local(|| {
         tree.select_next();
         tree.select_previous();
     });
 }
 
-#[divan::bench(args = ["n", "tema nota", "a3t7n42"])]
-fn filtrar(bencher: Bencher, query: &str) {
-    let mut tree = expanded();
+/// Poner el filtro y quitarlo: lo que cuesta una tecla en `/`.
+#[divan::bench(args = SIZES, consts = [0, 1])]
+fn filtrar<const PEOR: usize>(bencher: Bencher, notes: usize) {
+    let query = if PEOR == 1 { "tema nota" } else { "a3t7n42" };
+    let mut tree = expanded(notes);
     bencher.bench_local(|| {
         tree.set_filter(query);
         tree.set_filter("");
     });
 }
 
-/// Un lote del watcher con el rename de una carpeta de arriba (510 rutas).
-#[divan::bench]
-fn aplicar_un_rename(bencher: Bencher) {
-    let before = index();
-    let mut renamed = entries("area");
-    for (entry, _) in &mut renamed {
-        *entry = entry
-            .rebase(&path("area-0"), &path("zona-0"))
-            .unwrap_or_else(|| entry.clone());
-    }
-    let after = Arc::new(VaultIndex::from_entries(renamed));
-    let there = [VaultChange::Renamed {
-        from: path("area-0"),
-        to: path("zona-0"),
-        kind: EntryKind::Folder,
-    }];
-    let back = [VaultChange::Renamed {
-        from: path("zona-0"),
-        to: path("area-0"),
-        kind: EntryKind::Folder,
-    }];
-    let mut tree = expanded();
+/// Un lote del watcher con el rename de una carpeta de arriba, ida y vuelta.
+#[divan::bench(args = SIZES)]
+fn aplicar_un_rename(bencher: Bencher, notes: usize) {
+    let (before, after) = (index(notes, "area"), index(notes, "zona"));
+    let rename = |from: &str, to: &str| {
+        (0..10)
+            .map(|top| VaultChange::Renamed {
+                from: path(&format!("{from}-{top}")),
+                to: path(&format!("{to}-{top}")),
+                kind: EntryKind::Folder,
+            })
+            .collect::<Vec<_>>()
+    };
+    let (there, back) = (rename("area", "zona"), rename("zona", "area"));
+    let mut tree = expanded(notes);
     bencher.bench_local(|| {
         tree.apply(&there, Arc::clone(&after));
         tree.apply(&back, Arc::clone(&before));
