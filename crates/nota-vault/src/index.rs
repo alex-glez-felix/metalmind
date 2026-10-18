@@ -129,7 +129,23 @@ impl VaultIndex {
             })
     }
 
-    fn insert_all(&mut self, mut entries: Vec<(VaultPath, EntryKind)>) {
+    /// `path` y todo lo que contiene, si está en el índice.
+    pub(crate) fn subtree(&self, path: &VaultPath) -> HashMap<VaultPath, EntryKind> {
+        let mut found = HashMap::new();
+        self.collect_subtree(path, &mut found);
+        found
+    }
+
+    fn collect_subtree(&self, path: &VaultPath, found: &mut HashMap<VaultPath, EntryKind>) {
+        if let Some(kind) = self.entries.get(path) {
+            found.insert(path.clone(), *kind);
+        }
+        for child in self.children.get(path).into_iter().flatten() {
+            self.collect_subtree(&child.path, found);
+        }
+    }
+
+    pub(crate) fn insert_all(&mut self, mut entries: Vec<(VaultPath, EntryKind)>) {
         entries.sort_by_cached_key(|(path, _)| path.depth());
         for (path, kind) in entries {
             self.insert(path, kind);

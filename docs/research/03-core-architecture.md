@@ -244,6 +244,15 @@ Los tags tienen su propio `TagIndex`, alimentado del mismo scan y del mismo watc
 - Los ocultos (nombre con punto) no se muestran nunca, y eso cubre `.obsidian/`, `.git/` y `.trash/`. Va como filtro propio y no con `hidden(true)` a secas, porque en `ignore` un `!.obsidian/` en `.gitignore` le gana a `hidden`. `VaultPath` tampoco admite componentes ocultos, `..` ni `.`: una ruta del vault nunca sale de la raíz.
 - Los enlaces simbólicos no se siguen ni se listan (la raíz sí puede serlo): seguirlos podría sacar al vault de su raíz o duplicar carpetas. Los nombres que no son UTF-8 se saltan con un aviso en el log.
 
+### Estado (M2, 2026-10-17): watcher
+
+- `Vault::open` empieza a vigilar **antes** del walk (`notify-debouncer-full`, 100 ms, recursivo): lo que cambie mientras se indexa llega después como evento y no se pierde nada entre el walk y el watcher.
+- Un hilo propio recibe los lotes del debouncer y no interpreta cada evento: junta las rutas que tocó el lote, las relee del disco con el **mismo** walk de `ignore` (desde la raíz, para que apliquen los `.gitignore` de por medio, pero entrando solo en los ancestros de esas rutas) y saca los cambios de comparar antes y después. Así el índice incremental es por construcción el de un walk completo, lleguen los eventos como lleguen; un proptest lo comprueba con secuencias al azar de crear, borrar y mover, y otro con el watcher de verdad.
+- Los cambios se publican como `VaultUpdate { changes, snapshot }` por un `mpsc` y el índice queda en un `ArcSwap<VaultIndex>`: la UI lee `Vault::snapshot()` sin bloquear nunca, y quien quiera reaccionar a cada cambio lee el canal. `snapshot` va dentro de cada update para que cambios e índice nunca se desfasen. Cada lote clona el índice entero; con 5 k entradas es barato, y si con vaults grandes deja de serlo, el paso es un árbol persistente.
+- `VaultChange` es `Created`, `Removed`, `Renamed` (si es carpeta, cubre todo su contenido) o `Modified`. Un rename sale como `Renamed` cuando el debouncer empareja origen y destino (en Linux, por el cookie de inotify). Un **guardado atómico** (temporal + rename encima) sale como `Modified` del destino y nunca como borrar y crear, sea el temporal oculto (`write_atomic`) o visible al lado (`nota.md.tmp`). Una ráfaga llega en pocos lotes: en el test, 330 operaciones en menos de 33.
+- Abrir, leer o cambiar permisos no cuenta. Tocar un `.gitignore` o `.ignore` relee su carpeta. Si `notify` avisa que pudo perder eventos (`Flag::Rescan`, desborde de la cola de inotify) o da un error sin ruta, se relee todo el vault.
+- Al soltar el `Vault`, se para el debouncer y se espera al hilo: no queda nada escribiendo en segundo plano.
+
 ---
 
 ## 5. Hilos, seguridad ante caídas, config, plugins
