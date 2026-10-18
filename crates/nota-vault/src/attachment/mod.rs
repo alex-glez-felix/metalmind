@@ -5,7 +5,9 @@
 mod kind;
 mod name;
 
+use std::fs;
 use std::io::Write;
+use std::os::unix::fs::MetadataExt as _;
 use std::path::Path;
 
 use jiff::Zoned;
@@ -107,54 +109,47 @@ pub(crate) fn save(
         return Err(AttachmentError::Note(first.name().to_owned()));
     }
     let created = ops::create_parents(root, &first)?;
-    let saved = create_unique(root, folder, &base, &extension, attachment).and_then(|path| {
-        let saved = usable(root, links, attachment.note, &path);
-        // Es el archivo que se acaba de crear: nadie más lo conoce todavía.
-        if saved.is_err()
-            && let Err(error) = std::fs::remove_file(path.to_fs(root))
-        {
-            log::warn!("no se pudo quitar el adjunto {path}: {error}");
-        }
-        saved
-    });
+    let saved = create_unique(root, links, folder, &base, &extension, attachment)
+        .and_then(|created| visible(root, created));
     if saved.is_err() {
         ops::remove_empty(root, &created);
     }
     saved
 }
 
-/// El adjunto ya en disco, si el índice lo va a ver y la nota puede
-/// nombrarlo; si no, no serviría.
-fn usable(
-    root: &Path,
-    links: &LinkIndex,
-    note: &VaultPath,
-    path: &VaultPath,
-) -> Result<SavedAttachment, AttachmentError> {
-    if !is_visible(root, path) {
-        return Err(AttachmentError::Ignored(path.clone()));
-    }
-    let embed = links
-        .embed_for_new(note, path)
-        .ok_or_else(|| AttachmentError::Unnameable(path.clone()))?;
-    Ok(SavedAttachment {
-        path: path.clone(),
-        embed,
-    })
+/// Un adjunto recién creado y qué archivo es, para no borrar otro en su lugar.
+struct Created {
+    saved: SavedAttachment,
+    identity: Option<(u64, u64)>,
 }
 
+/// Crea el adjunto con el primer nombre libre. Que un wikilink pueda
+/// nombrarlo se sabe antes de escribir: los nombres del índice no cambian.
 fn create_unique(
     root: &Path,
+    links: &LinkIndex,
     folder: &VaultPath,
     base: &str,
     extension: &str,
     attachment: &NewAttachment<'_>,
-) -> Result<VaultPath, AttachmentError> {
+) -> Result<Created, AttachmentError> {
     for attempt in 0..=MAX_ATTEMPT {
         let path = folder.join(&name::file_name(base, attachment.at, extension, attempt))?;
+        let embed = links
+            .embed_for_new(attachment.note, &path)
+            .ok_or_else(|| AttachmentError::Unnameable(path.clone()))?;
+        let full = path.to_fs(root);
         let write = |out: &mut dyn Write| out.write_all(attachment.bytes);
-        match create_atomic(&path.to_fs(root), write) {
-            Ok(()) => return Ok(path),
+        match create_atomic(&full, write) {
+            Ok(()) => {
+                let identity = fs::symlink_metadata(&full)
+                    .ok()
+                    .map(|metadata| (metadata.dev(), metadata.ino()));
+                return Ok(Created {
+                    saved: SavedAttachment { path, embed },
+                    identity,
+                });
+            }
             Err(FileError::Exists { .. }) => {}
             Err(error) => return Err(AttachmentError::Write(error)),
         }
@@ -165,6 +160,28 @@ fn create_unique(
         extension,
         0,
     )))
+}
+
+/// Si el índice no lo va a ver, no sirve: se borra, pero solo si la ruta
+/// sigue siendo el archivo que se creó. Las reglas de ignorados solo se
+/// aplican a lo que existe, así que no se puede saber antes de crearlo.
+fn visible(root: &Path, created: Created) -> Result<SavedAttachment, AttachmentError> {
+    let path = &created.saved.path;
+    if is_visible(root, path) {
+        return Ok(created.saved);
+    }
+    let full = path.to_fs(root);
+    let same = fs::symlink_metadata(&full)
+        .ok()
+        .map(|metadata| (metadata.dev(), metadata.ino()));
+    if same.is_some() && same == created.identity {
+        if let Err(error) = fs::remove_file(&full) {
+            log::warn!("no se pudo quitar el adjunto ignorado {path}: {error}");
+        }
+    } else {
+        log::warn!("{path} cambió antes de quitarlo por ignorado: se deja");
+    }
+    Err(AttachmentError::Ignored(path.clone()))
 }
 
 /// Si el walk del vault ve `path`: el mismo que arma el índice.
@@ -195,5 +212,46 @@ fn stem(file_name: &str) -> &str {
     match file_name.rsplit_once('.') {
         Some((stem, _)) if !stem.is_empty() => stem,
         _ => file_name,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ignored(identity: impl Fn(&Path) -> Option<(u64, u64)>) -> (tempfile::TempDir, bool) {
+        let dir = tempfile::TempDir::new().unwrap();
+        fs::write(dir.path().join(".gitignore"), "*.png\n").unwrap();
+        let full = dir.path().join("x.png");
+        fs::write(&full, "otro").unwrap();
+        let created = Created {
+            saved: SavedAttachment {
+                path: VaultPath::new("x.png").unwrap(),
+                embed: "![[x.png]]".to_owned(),
+            },
+            identity: identity(&full),
+        };
+        let result = visible(dir.path(), created);
+        assert!(
+            matches!(result, Err(AttachmentError::Ignored(_))),
+            "{result:?}"
+        );
+        let kept = full.exists();
+        (dir, kept)
+    }
+
+    #[test]
+    fn un_adjunto_ignorado_se_quita_si_sigue_siendo_el_mismo() {
+        let same = |full: &Path| {
+            let metadata = fs::symlink_metadata(full).unwrap();
+            Some((metadata.dev(), metadata.ino()))
+        };
+        assert!(!ignored(same).1);
+    }
+
+    #[test]
+    fn un_archivo_que_ocupo_su_lugar_no_se_borra() {
+        assert!(ignored(|_| Some((0, 0))).1);
+        assert!(ignored(|_| None).1);
     }
 }
