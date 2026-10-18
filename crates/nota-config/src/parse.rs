@@ -146,6 +146,19 @@ mod tests {
     }
 
     #[test]
+    fn una_clave_compleja_ignorada_no_borra_las_posiciones() {
+        let (_, warnings) = parse::<Sample>("extra: { [a]: 1 }\ninner:\n  typo: 1\n").unwrap();
+        let locations: Vec<_> = warnings.iter().map(|warning| warning.location).collect();
+        assert_eq!(
+            locations,
+            [
+                Some(Location { line: 1, column: 1 }),
+                Some(Location { line: 3, column: 3 })
+            ]
+        );
+    }
+
+    #[test]
     fn un_valor_con_posicion_no_es_una_clave_desconocida() {
         let (value, warnings) = parse::<Sample>("inner:\n  label: ñandú\n").unwrap();
         assert_eq!(warnings, []);

@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use super::color::{Base, Color, ColorRef};
 use crate::diagnostic::Location;
 use crate::parse::Spanned;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 /// Un nombre de la paleta que no existe, con dónde se escribió.
 pub(crate) struct UnknownColor {
@@ -17,6 +17,14 @@ pub(crate) struct UnknownColor {
 }
 
 pub(crate) type Palette = BTreeMap<String, Color>;
+
+/// Un color escrito. Sin la clave se hereda; con `null` (o la clave vacía)
+/// es un error, no una herencia silenciosa.
+fn present<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Spanned<ColorRef>>, D::Error> {
+    Spanned::deserialize(deserializer).map(Some)
+}
 
 fn resolve(
     field: Option<&Spanned<ColorRef>>,
@@ -57,7 +65,10 @@ macro_rules! color_group {
         #[derive(Debug, Default, Deserialize)]
         #[serde(default)]
         pub(crate) struct $raw {
-            $($field: Option<Spanned<ColorRef>>,)*
+            $(
+                #[serde(deserialize_with = "present")]
+                $field: Option<Spanned<ColorRef>>,
+            )*
         }
 
         #[derive(Debug, Default)]
