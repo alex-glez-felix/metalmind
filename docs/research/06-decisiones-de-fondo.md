@@ -156,7 +156,7 @@ Comandos tentativos **(propuesta)**:
 **Restricciones desde ya:**
 
 - `TagQuery` (05 §4) tiene que poder expresar "sin tags". Hoy no puede: `-#a` excluye un tag concreto, no "cualquiera".
-- El nodo **Sin tags** del panel (05 §3) es el buzón; se llama así en la UI.
+- El nodo **Sin tags** que 05 §3 proponía al final del panel es el buzón, y se llama así en la UI.
 - La captura nunca pone tags por su cuenta (ni `#inbox` ni similares): eso rompería la definición.
 - En focus del buzón, una nota nueva nace sin tags, que es justo lo que ya dice 05 §3 para el focus de tags.
 
