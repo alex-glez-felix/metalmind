@@ -38,6 +38,7 @@ Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Prim
 - [05 — Tags: el eje de organización](docs/research/05-tags.md)
 - [06 — Decisiones de fondo](docs/research/06-decisiones-de-fondo.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
+- [Tests y smoke de la app](docs/testing.md)
 - [Cómo se hace un release](docs/release.md) y [CHANGELOG](CHANGELOG.md)
 - [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
 
