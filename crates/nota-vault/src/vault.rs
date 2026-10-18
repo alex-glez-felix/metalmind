@@ -1,5 +1,6 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -49,12 +50,14 @@ pub struct Vault {
 struct Watch {
     debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
     worker: JoinHandle<()>,
+    stop: Arc<AtomicBool>,
 }
 
 impl Vault {
     /// Abre la carpeta `root`, la indexa y empieza a vigilarla. Cada cambio en
-    /// disco llega por el receptor como un [`VaultUpdate`]; si nadie lo lee,
-    /// [`Vault::snapshot`] sigue al día igual.
+    /// disco llega por el receptor como un [`VaultUpdate`]. Quien no quiera
+    /// los cambios suelta el receptor y usa [`Vault::snapshot`], que sigue al
+    /// día igual; guardarlo sin leerlo acumula un snapshot por lote.
     ///
     /// # Errors
     /// Si `root` no existe, no es una carpeta o no se puede vigilar.
@@ -66,10 +69,12 @@ impl Vault {
         debouncer.watch(&root, RecursiveMode::Recursive)?;
         let index = Arc::new(ArcSwap::from_pointee(scan(&root)));
         let (updates, receiver) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
         let worker = Worker {
             root: root.clone(),
             index: Arc::clone(&index),
             updates,
+            stop: Arc::clone(&stop),
         };
         let worker = thread::Builder::new()
             .name("nota-vault watcher".to_owned())
@@ -78,7 +83,11 @@ impl Vault {
         let vault = Self {
             root,
             index,
-            watch: Some(Watch { debouncer, worker }),
+            watch: Some(Watch {
+                debouncer,
+                worker,
+                stop,
+            }),
         };
         Ok((vault, receiver))
     }
@@ -134,10 +143,17 @@ impl Vault {
 
 impl Drop for Vault {
     fn drop(&mut self) {
-        let Some(Watch { debouncer, worker }) = self.watch.take() else {
+        let Some(Watch {
+            debouncer,
+            worker,
+            stop,
+        }) = self.watch.take()
+        else {
             return;
         };
-        // Al parar, el debouncer suelta su emisor y el hilo sale del bucle.
+        // El hilo deja de releer lo pendiente; al parar, el debouncer suelta su
+        // emisor y el hilo sale del bucle.
+        stop.store(true, Ordering::Release);
         debouncer.stop();
         if worker.join().is_err() {
             log::error!("el watcher de {} terminó en pánico", self.root.display());
@@ -149,16 +165,21 @@ struct Worker {
     root: PathBuf,
     index: Arc<ArcSwap<VaultIndex>>,
     updates: mpsc::Sender<VaultUpdate>,
+    stop: Arc<AtomicBool>,
 }
 
 impl Worker {
     fn run(self, events: &mpsc::Receiver<DebounceEventResult>) {
         let mut current = VaultIndex::clone(&self.index.load());
-        for result in events {
-            let touched = match result {
-                Ok(events) => touched(&self.root, &events),
-                Err(errors) => self.touched_by_errors(errors),
-            };
+        for first in events {
+            // Si el refresh se atrasó, todo lo que espera se relee en una sola pasada.
+            let mut touched = self.touched(first);
+            for more in events.try_iter() {
+                touched.merge(self.touched(more));
+            }
+            if self.stop.load(Ordering::Acquire) {
+                return;
+            }
             let changes = refresh(&mut current, &self.root, &touched);
             if changes.is_empty() {
                 continue;
@@ -167,6 +188,13 @@ impl Worker {
             self.index.store(Arc::clone(&snapshot));
             // Si el receptor ya no existe, quien abrió el vault solo usa `snapshot`.
             let _ = self.updates.send(VaultUpdate { changes, snapshot });
+        }
+    }
+
+    fn touched(&self, result: DebounceEventResult) -> Touched {
+        match result {
+            Ok(events) => touched(&self.root, &events),
+            Err(errors) => self.touched_by_errors(errors),
         }
     }
 
