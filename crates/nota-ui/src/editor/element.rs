@@ -10,9 +10,8 @@ use nota_vim::Mode;
 
 use super::Editor;
 use super::gutter::{Gutter, PaintedGutter};
-use super::highlight::{self, Cells};
+use super::highlight::{Cells, search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
-use super::spans::{Match, search_spans, selection_spans};
 use crate::theme::Theme;
 use crate::workspace::PaneView;
 
@@ -276,44 +275,6 @@ pub fn shape(
     window
         .text_system()
         .shape_line(text, typeface.size, &[run], None)
-}
-
-fn search_quads(
-    view: &PaneView<'_>,
-    layout: &FrameLayout,
-    cells: Cells,
-    theme: &Theme,
-) -> Vec<PaintQuad> {
-    let Some(pattern) = view.search else {
-        return Vec::new();
-    };
-    let found = search_spans(
-        pattern,
-        view.buffer(),
-        layout.visible_lines(),
-        view.cursor(),
-    );
-    let (current, others): (Vec<_>, Vec<_>) = found.into_iter().partition(|found| found.current);
-    let spans = |matches: Vec<Match>| matches.into_iter().map(|found| found.span);
-    let mut quads = highlight::quads(spans(others), layout, cells, theme.search);
-    quads.extend(highlight::quads(
-        spans(current),
-        layout,
-        cells,
-        theme.search_current,
-    ));
-    quads
-}
-
-fn selection_quads(
-    view: &PaneView<'_>,
-    layout: &FrameLayout,
-    cells: Cells,
-    theme: &Theme,
-) -> Vec<PaintQuad> {
-    let visible = layout.visible_lines();
-    let spans = selection_spans(view.buffer(), view.selection, view.mode, visible);
-    highlight::quads(spans, layout, cells, theme.selection)
 }
 
 /// Bloque en Normal y Visual, barra en Insert; en la línea de comandos el
