@@ -94,6 +94,15 @@ struct OpenTransaction {
     anchors: Anchors,
 }
 
+/// Transacciones que se guardan como un solo paso de undo.
+#[derive(Debug, Default)]
+struct Group {
+    /// El estado que creó el grupo, al que se suman las siguientes.
+    joined: Option<HistorySeq>,
+    /// Se pidió cerrar con una transacción abierta: termina al guardarla.
+    ends_at_commit: bool,
+}
+
 /// Árbol de transacciones. Los nodos viven en un arena en orden de creación
 /// y nunca se borran, así que el índice de cada uno es su [`HistorySeq`] y
 /// un padre siempre tiene un número menor que sus hijos.
@@ -102,6 +111,7 @@ pub(crate) struct History {
     nodes: Vec<Node>,
     current: HistorySeq,
     open: Option<OpenTransaction>,
+    group: Option<Group>,
 }
 
 impl Default for History {
@@ -113,6 +123,7 @@ impl Default for History {
             }],
             current: HistorySeq::INITIAL,
             open: None,
+            group: None,
         }
     }
 }
@@ -144,6 +155,17 @@ impl History {
         Ok(())
     }
 
+    pub fn begin_group(&mut self) {
+        self.group = Some(Group::default());
+    }
+
+    pub fn end_group(&mut self) {
+        match &mut self.group {
+            Some(group) if self.open.is_some() => group.ends_at_commit = true,
+            _ => self.group = None,
+        }
+    }
+
     pub fn ensure_open(&self) -> Result<(), BufferError> {
         if self.is_open() {
             Ok(())
@@ -161,14 +183,39 @@ impl History {
         Ok(())
     }
 
-    /// Cuelga la transacción del estado actual como su hijo más reciente.
-    /// Una transacción sin ediciones no deja rastro en el historial.
+    /// Cuelga la transacción del estado actual como su hijo más reciente, o
+    /// la suma al estado que creó el grupo abierto. Una transacción sin
+    /// ediciones no deja rastro en el historial.
     pub fn commit(&mut self, after: Selections) -> Result<(), BufferError> {
         let open = self.open.take().ok_or(BufferError::NoOpenTransaction)?;
         if !open.edits.is_empty() {
-            self.push(open, after);
+            match self.joined_transaction() {
+                Some(joined) => {
+                    joined.edits.extend(open.edits);
+                    joined.selections_after = after;
+                }
+                None => self.push(open, after),
+            }
+        }
+        if self
+            .group
+            .as_ref()
+            .is_some_and(|group| group.ends_at_commit)
+        {
+            self.group = None;
         }
         Ok(())
+    }
+
+    fn joined_transaction(&mut self) -> Option<&mut Transaction> {
+        let joined = self.group.as_ref()?.joined?;
+        if joined != self.current {
+            return None;
+        }
+        self.node_mut(joined)
+            .edge
+            .as_mut()
+            .map(|edge| &mut edge.transaction)
     }
 
     fn push(&mut self, open: OpenTransaction, after: Selections) {
@@ -187,6 +234,9 @@ impl History {
         });
         self.node_mut(self.current).children.push(seq);
         self.current = seq;
+        if let Some(group) = &mut self.group {
+            group.joined = Some(seq);
+        }
     }
 
     pub fn transaction(&self, seq: HistorySeq) -> Option<&Transaction> {
@@ -234,6 +284,9 @@ impl History {
     /// Sube desde el estado actual hasta el ancestro común con `target` y
     /// baja hasta él. Cada hijo por el que baja pasa a ser el destino de redo.
     fn travel_to(&mut self, target: HistorySeq) -> Vec<Step> {
+        if let Some(group) = &mut self.group {
+            group.joined = None;
+        }
         let (undone, mut redone) = self.path(self.current, target);
         redone.reverse();
         for &child in &redone {
