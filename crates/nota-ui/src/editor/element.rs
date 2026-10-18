@@ -92,8 +92,9 @@ impl gpui_kit::Element for EditorElement {
             size: text_style.font_size.to_pixels(window.rem_size()),
         };
         let editor = self.editor.read(cx);
-        let viewport = Viewport::new(bounds, window.line_height(), editor.scroll);
+        let line_height = window.line_height();
         let Some(view) = editor.view(cx) else {
+            let viewport = Viewport::new(bounds, line_height, editor.scroll);
             return Prepainted {
                 layout: FrameLayout {
                     viewport,
@@ -104,6 +105,12 @@ impl gpui_kit::Element for EditorElement {
                 preedit: None,
             };
         };
+        let head = view.cursor();
+        let moved = (editor.revealed != Some(head)).then(|| view.buffer().line_of(head));
+        let mut scroll = editor.scroll;
+        let rows = Viewport::new(bounds, line_height, scroll).full_rows();
+        scroll.settle(view.buffer().last_line(), moved, rows);
+        let viewport = Viewport::new(bounds, line_height, scroll);
         let lines = shape_visible_lines(&view, &viewport, &typeface, &self.theme, window);
         let layout = FrameLayout { viewport, lines };
         let selection = selection_quads(view.buffer(), view.selection, &layout, &self.theme);
@@ -113,8 +120,11 @@ impl gpui_kit::Element for EditorElement {
             .clone()
             .filter(|_| view.mode == Mode::Insert)
             .and_then(|text| preedit(&view, &layout, text, &typeface, &self.theme, window));
-        self.editor
-            .update(cx, |editor, _| editor.layout = Some(layout.clone()));
+        self.editor.update(cx, |editor, _| {
+            editor.layout = Some(layout.clone());
+            editor.scroll = scroll;
+            editor.revealed = Some(head);
+        });
         Prepainted {
             layout,
             selection,

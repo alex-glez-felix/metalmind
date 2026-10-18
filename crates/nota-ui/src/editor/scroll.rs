@@ -21,9 +21,14 @@ impl Scroll {
         self.top = (self.top + lines).clamp(0.0, to_f64(last_line));
     }
 
-    /// Que no quede pasado el final si el texto se acortó.
-    pub fn clamp(&mut self, last_line: usize) {
+    /// Antes de pintar: no queda pasado el final aunque otro panel haya
+    /// acortado el texto y, si el cursor se movió desde que se mostró por
+    /// última vez (`moved` es su línea), se ve.
+    pub fn settle(&mut self, last_line: usize, moved: Option<usize>, rows: usize) {
         self.top = self.top.min(to_f64(last_line));
+        if let Some(line) = moved {
+            self.reveal(line, rows);
+        }
     }
 
     /// Lo mínimo para que `line` entre en las `rows` filas completas visibles.
@@ -71,12 +76,23 @@ mod tests {
     }
 
     #[test]
-    fn clamp_no_deja_el_scroll_pasado_el_final() {
-        let mut scroll = at(80.5);
-        scroll.clamp(100);
-        assert_eq!(scroll, at(80.5));
-        scroll.clamp(10);
-        assert_eq!(scroll, at(10.0));
+    fn settle_acota_al_final_y_muestra_el_cursor_movido() {
+        let cases = [
+            (80.5, 100, None, 80.5),
+            (80.5, 10, None, 10.0),
+            (80.0, 10, Some(2), 2.0),
+            (0.0, 100, Some(50), 31.0),
+            (40.0, 100, Some(45), 40.0),
+        ];
+        for (top, last_line, moved, expected) in cases {
+            let mut scroll = at(top);
+            scroll.settle(last_line, moved, 20);
+            assert_eq!(
+                scroll,
+                at(expected),
+                "top={top} last={last_line} moved={moved:?}"
+            );
+        }
     }
 
     #[test]
