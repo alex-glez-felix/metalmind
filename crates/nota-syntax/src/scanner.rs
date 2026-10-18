@@ -6,6 +6,8 @@ use crate::{Scan, frontmatter, link, tag};
 /// avanzar de a un byte nunca deja un rango en medio de un carácter.
 struct Scanner<'t> {
     text: &'t str,
+    /// Dónde empieza el cuerpo: tras el frontmatter o el BOM.
+    body: usize,
     scan: Scan,
     code_spans: CodeSpans,
     brackets: Brackets,
@@ -17,19 +19,20 @@ pub(crate) fn scan(text: &str) -> Scan {
     scan.frontmatter = frontmatter;
     let mut scanner = Scanner {
         text,
+        body,
         scan,
         code_spans: CodeSpans::default(),
         brackets: Brackets::default(),
     };
-    scanner.run(body);
+    scanner.run();
     scanner.scan
 }
 
 impl Scanner<'_> {
-    fn run(&mut self, body: usize) {
-        let mut at = body;
+    fn run(&mut self) {
+        let mut at = self.body;
         while at < self.text.len() {
-            let line_start = at == body || self.text.as_bytes()[at - 1] == b'\n';
+            let line_start = at == self.body || self.text.as_bytes()[at - 1] == b'\n';
             let fence_end = if line_start {
                 code::fenced_block_end(self.text, at)
             } else {
@@ -70,10 +73,11 @@ impl Scanner<'_> {
     /// Un `#` solo abre un tag al inicio de línea o tras un espacio: así no
     /// son tags el fragmento de una URL ni `texto#algo`.
     fn after_space(&self, at: usize) -> bool {
-        self.text[..at]
-            .chars()
-            .next_back()
-            .is_none_or(char::is_whitespace)
+        at == self.body
+            || self.text[..at]
+                .chars()
+                .next_back()
+                .is_none_or(char::is_whitespace)
     }
 
     fn tag(&mut self, at: usize) -> usize {
