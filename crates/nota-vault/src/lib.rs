@@ -16,4 +16,5 @@ pub use index::{Entry, EntryKind, VaultIndex};
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
+pub use scan::{classify, walker};
 pub use vault::{Vault, VaultError, VaultUpdate};

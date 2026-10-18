@@ -11,12 +11,21 @@ use ignore::{DirEntry, WalkBuilder, WalkState};
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::{VaultPath, is_hidden_name};
 
+/// Un walk de `root` con las reglas del vault, el mismo que arma su índice,
+/// para quien recorra el disco por su cuenta (la búsqueda de texto).
+#[must_use]
+pub fn walker(root: &Path) -> WalkBuilder {
+    let mut builder = rules(root);
+    builder.filter_entry(is_visible);
+    builder
+}
+
 /// Las reglas del vault, iguales en cualquier máquina: `.gitignore` e
 /// `.ignore` del vault aunque no sea un repo git, pero no los de carpetas
 /// superiores ni el `excludesFile` global del usuario. Los ocultos van fuera
 /// por un filtro propio, porque un `!.obsidian/` en `.gitignore` le gana a
 /// `hidden(true)`.
-fn walker(root: &Path) -> WalkBuilder {
+fn rules(root: &Path) -> WalkBuilder {
     let mut builder = WalkBuilder::new(root);
     builder
         .hidden(true)
@@ -34,9 +43,11 @@ fn is_visible(entry: &DirEntry) -> bool {
     entry.depth() == 0 || !entry.file_name().to_str().is_some_and(is_hidden_name)
 }
 
-/// Lo que el índice guarda de una entrada del walk. Los enlaces simbólicos no
-/// se siguen ni se listan: podrían sacar al vault de su raíz.
-fn classify(root: &Path, entry: &DirEntry) -> Option<(VaultPath, EntryKind)> {
+/// La ruta y el tipo de una entrada del walk, como los guarda el índice: nada
+/// para la raíz, los enlaces simbólicos (podrían sacar al vault de su raíz) y
+/// lo que no es una ruta válida del vault.
+#[must_use]
+pub fn classify(root: &Path, entry: &DirEntry) -> Option<(VaultPath, EntryKind)> {
     if entry.depth() == 0 {
         return None;
     }
@@ -68,20 +79,17 @@ fn accept(root: &Path, result: Result<DirEntry, ignore::Error>) -> Option<(Vault
 /// El índice de todo `root`, recorrido en paralelo.
 pub(crate) fn scan(root: &Path) -> VaultIndex {
     let (sender, receiver) = mpsc::channel();
-    walker(root)
-        .filter_entry(is_visible)
-        .build_parallel()
-        .run(|| {
-            let sender = sender.clone();
-            let root = root.to_owned();
-            Box::new(move |result| {
-                if let Some(found) = accept(&root, result) {
-                    // Solo falla si el receptor ya no existe, y vive hasta el final del walk.
-                    let _ = sender.send(found);
-                }
-                WalkState::Continue
-            })
-        });
+    walker(root).build_parallel().run(|| {
+        let sender = sender.clone();
+        let root = root.to_owned();
+        Box::new(move |result| {
+            if let Some(found) = accept(&root, result) {
+                // Solo falla si el receptor ya no existe, y vive hasta el final del walk.
+                let _ = sender.send(found);
+            }
+            WalkState::Continue
+        })
+    });
     drop(sender);
     VaultIndex::from_entries(receiver.into_iter().collect())
 }
@@ -102,7 +110,7 @@ pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Partial {
     let root_owned: PathBuf = root.to_owned();
     let filter_scope = Arc::clone(&scope);
     let mut found = Partial::default();
-    let walk = walker(root)
+    let walk = rules(root)
         .filter_entry(move |entry| {
             is_visible(entry)
                 && VaultPath::from_fs(&root_owned, entry.path())
