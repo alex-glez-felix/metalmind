@@ -20,10 +20,12 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 
 | Operación | Objetivo | Hoy | | Bench |
 |---|---|---|---|---|
-| Arranque al primer frame, archivo chico | ≤ 300 ms | 244–297 ms (spike, máquina de pruebas) | ⏳ | sin automatizar ([#39](https://github.com/alex-glez-felix/metalmind/issues/39)) |
+| Arranque al primer frame, archivo chico / 50 k líneas / en un vault de 5 k notas (abre el vault antes de la ventana) | ≤ 300 ms | p50 109–166 / 162–233 / 187–192 ms (lavapipe); 244–297 ms el spike en la máquina de pruebas | ⚠️ | `metalmind` `ui` ([abajo](#benchmark-de-la-ui)) |
 | `metalmind add` / `metalmind search` de punta a punta (proceso entero, vault de 500 notas, build de debug) | ≤ 500 ms | 4 / 6 ms | ✅ | test `add_y_search_terminan_rapido` (`crates/metalmind/tests/commands.rs`) |
-| Tecla en Insert, de la tecla al frame | < 16 ms | — | ⏳ | sin benchmark de la UI ([#39](https://github.com/alex-glez-felix/metalmind/issues/39)) |
-| Render: CPU por frame | ≤ 4 ms (240 Hz) | p99 1.05 ms (spike) | ⏳ | sin benchmark en la app ([#39](https://github.com/alex-glez-felix/metalmind/issues/39)) |
+| Primer `space f` en un vault de 5 k notas, hasta abrir la nota elegida | ≤ 300 ms (el vault, antes del primer frame) | p50 31–41 ms, p95 ≤ 42 ms (lavapipe) | ✅ | `metalmind` `ui` |
+| Tecla en Insert / Normal / `ctrl-d`, 50 k líneas, de la tecla al frame | < 16 ms | p50 0.95–1.02 / 0.86–0.89 / 1.49–1.57 ms; p95 ≤ 1.8 ms (lavapipe) | ✅ | `metalmind` `ui` |
+| Render: CPU por frame (`render` de la raíz → último `paint`), mismas teclas y ráfaga de `ctrl-d` | ≤ 4 ms (240 Hz) | p50 0.72–1.42 ms, p95 ≤ 1.7 ms (lavapipe); p99 1.05 ms el spike | ✅ | `metalmind` `ui` |
+| Ráfaga de 200 `ctrl-d` sin esperar cada frame, 50 k líneas | un frame por tecla | 200 frames, 1.15–1.19 ms por tecla (lavapipe) | ✅ | `metalmind` `ui` |
 | Tecla en Insert, núcleo, 5 k / 50 k líneas | ≤ 1 ms | 1.7 / 3.8 µs | ✅ | `metalmind-vim` `tecla_en_insert` |
 | Backspace en Insert, 5 k / 50 k | ≤ 1 ms | 1.1 / 2.6 µs | ✅ | `metalmind-vim` `backspace_en_insert` |
 | `dd` / `ciw` / `.` / `u` en 5 k | ≤ 1 ms | 3.1 / 12.7 / 6.2 / 2.9 µs | ✅ | `metalmind-vim` |
@@ -94,7 +96,53 @@ Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `meta
 
 El estilo de las líneas del editor (03 §2, "Estilo en el editor"), medido el 2026-10-18 en la misma máquina: tras cada tecla se repinta el tramo editado (hasta la línea en blanco o la cerca que lo cierran) y lo que falta de la ventana, y lo de abajo se reusa en cuanto el estado coincide. Pintar de cero solo pasa la primera vez que se va al final de una nota larga: al abrirla se pinta la ventana. Abrir una cerca que no cierra cambia el estado de todo lo de abajo, pero se pinta solo la ventana; lo que cuesta con 50 k líneas es correr un lugar las 50 k entradas del estilo. La tecla del motor en Insert subió un 2 % en instrucciones (22.3 k a 22.8 k con 5 k líneas): mover la ventana ahora mide lo que mide cada línea.
 
-⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
+Las filas de la UI se miden con lavapipe (abajo), que no es la máquina de pruebas: el arranque queda en ⚠️ hasta medir la app ahí. Bajo lavapipe entra en el objetivo, pero no se puede trasladar: con GPU, el spike midió 244–297 ms, más que lo que da lavapipe en una máquina de escritorio.
+
+## Benchmark de la UI
+
+`cargo bench -p metalmind --bench ui` (`crates/metalmind/benches/ui/`) mide la app real como la usa alguien: lanza el binario `metalmind` de release con el harness del smoke (`crates/metalmind/tests/support`, ver [testing](testing.md)), en un Xvfb propio y nunca en el display del entorno, le teclea con XTest e imprime una tabla en markdown. Necesita lo mismo que el smoke: Xvfb, un driver Vulkan (lavapipe sin GPU) y una fuente monoespaciada. Tarda unos 10 s más la compilación de release y no corre en CI: en la máquina de un runner con lavapipe sus números no se pueden comparar con nada, y compilar la app en release le cuesta más de 10 min sin caché.
+
+**De dónde salen los tiempos.** `metalmind --frame-log ARCHIVO` (oculto en `--help`) escribe una línea por frame presentado (`FrameClock`, `metalmind-ui/src/frames.rs`): `t` desde el arranque del proceso, `cpu` del `render` de la raíz al último `paint` del editor, `present` hasta que GPUI entregó el frame al driver, `input` desde la primera tecla que el frame muestra y `keys`, cuántas teclas muestra. El benchmark cuenta las teclas que manda y espera el frame que las muestra todas, así que cada muestra es una tecla y su frame, sin adivinar con pausas. El primer frame es la excepción: GPUI lo dibuja dentro de `open_window` y lo presenta en la siguiente petición de frame del sistema, sin volver a pintar, así que el arranque se mide hasta el primer frame **dibujado** (layout y paint de toda la ventana). Ese primer frame va siempre al log con `RUST_LOG=info` (`primer frame a … ms del arranque`); sin `--frame-log`, medir cuesta tres `Instant::now()` por frame.
+
+**Qué mide.**
+
+- Arranque al primer frame con una nota chica, una de 50 k líneas y una nota dentro de un vault de 5 k notas: 7 arranques por caso en el mismo Xvfb, tras uno que se descarta (el primero de cada Xvfb sale a veces varias veces más lento y a veces no). Antes de medir se hace `sync`, para que la escritura diferida de las notas generadas no caiga encima.
+- El primer `space f` en ese vault: se teclea la ruta de una nota y `enter`, y se mide hasta que el título la muestra, desde el benchmark (sondeo de 10 ms).
+- Sobre la nota de 50 k líneas, desde la mitad: 60 teclas en Insert, 60 motions en Normal (`j w b k e`) y 60 `ctrl-d`, de a una, cada una con su frame; y una ráfaga de 200 `ctrl-d` mandadas de golpe, como una tecla sostenida.
+
+**Lavapipe no es una GPU.** Sin GPU, el Vulkan de mesa raspa en la CPU, en los mismos núcleos que la app: `present` y el arranque incluyen trabajo que una GPU hace aparte, y el tiempo de fondo (abrir el vault) compite con el render. Los números de esta sección sirven como **referencia relativa** para ver una regresión entre dos corridas en la misma máquina, no como el número contra el presupuesto, que sigue siendo el de la máquina de pruebas con GPU. `cpu` es lo que menos cambia con el driver: es trabajo de la app en el hilo de la UI.
+
+Medido el 2026-10-19, con el markdown con estilo, tres corridas seguidas en una máquina de escritorio x86_64 con Linux, sin usar su GPU (lavapipe en un Xvfb). La máquina no estaba quieta (carga de 12 a 14 por otros procesos): la primera corrida sacó el arranque con archivo chico y con 50 k líneas 55–65 ms más arriba que las otras dos, y las teclas casi no se movieron (0.1 ms de p50). Rango de las tres:
+
+| Medición | p50 | p95 |
+|---|---|---|
+| Arranque, archivo chico | 109–166 ms | 115–251 ms |
+| Arranque, 50 k líneas | 162–233 ms | 168–251 ms |
+| Arranque, en un vault de 5 k notas | 187–192 ms | 190–209 ms |
+| Primer `space f`, ruta y `enter`, vault de 5 k notas | 31–41 ms | 42 ms |
+| Tecla en Insert, de la tecla al frame / CPU | 0.95–1.02 / 0.75–0.79 ms | 1.10–1.24 / 0.86–0.97 ms |
+| Tecla en Normal, de la tecla al frame / CPU | 0.86–0.89 / 0.72–0.74 ms | 0.97–0.99 / 0.80–0.83 ms |
+| `ctrl-d`, de la tecla al frame / CPU | 1.49–1.57 / 1.34–1.42 ms | 1.69–1.78 / 1.54–1.64 ms |
+| Ráfaga de 200 `ctrl-d`: CPU por frame | 1.05–1.07 ms | 1.15–1.22 ms |
+
+Lo que encontró:
+
+- El vault se abre antes de la ventana (`gui::prepare`), así que el arranque en un vault de 5 k notas paga `Vault::open`: ~80 ms más que con una nota sola (en las dos corridas sin el pico), y la fila "Abrir el vault" da 39 ms con `divan`. Lo demás de esa diferencia (el árbol del panel con 5 k notas en el primer frame, lavapipe en los mismos núcleos) no está separado. A cambio, el primer `space f` ya no espera nada: 31–41 ms con la ruta tecleada entera.
+- Una nota de 50 k líneas suma ~55 ms al arranque (en las dos corridas sin el pico).
+- El markdown con estilo (headings con su tamaño, código, links, tags) no movió el CPU por frame: la misma nota, que tiene de todo eso, daba 0.77 ms por tecla en Insert y 1.38 ms por `ctrl-d` justo antes, en la misma máquina, y ahora da 0.75–0.79 y 1.34–1.42 ms.
+- Cada tecla se pinta en su propio frame también en ráfaga: 200 `ctrl-d` dan 200 frames, ~1.2 ms cada uno, sin acumular teclas pendientes.
+- `ctrl-d` cuesta casi el doble que una tecla en Insert (~1.4 contra ~0.77 ms de CPU): entra media pantalla de líneas que GPUI no tenía en caché y les da forma, cuando una tecla en Insert solo cambia una. Sigue lejos de los 4 ms.
+- Ninguna fila de la ventana necesita hoy una guarda en CI: la p50 de las teclas y del CPU por frame queda a menos de la mitad de su objetivo aun con el render en la CPU, y el arranque solo vale en la máquina de pruebas. Una guarda determinista del render, contando instrucciones de layout y paint sin ventana, queda en [#72](https://github.com/alex-glez-felix/metalmind/issues/72).
+
+Para comparar un cambio en la UI, la misma máquina antes y después:
+
+```sh
+cargo bench -p metalmind --bench ui > antes.md
+# cambios…
+cargo bench -p metalmind --bench ui > despues.md
+```
+
+`cargo bench --workspace` lo incluye; sin Xvfb o sin driver, `--exclude metalmind`.
 
 ❌ no cumple y tiene su issue. `:g` y `:normal` corren su comando en cada línea como una edición aparte, igual que vim, y lo que cuesta es la transacción del buffer: unos 3 µs por línea.
 
@@ -110,7 +158,7 @@ El picker (`metalmind-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla
 
 ### 1. Benchmarks de tiempo (`divan`, local)
 
-`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo los modelos, sin ventana: `--bench file_tree`, `--bench picker` y `--bench text_search`). Son los números de la tabla. Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
+`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo los modelos, sin ventana: `--bench file_tree`, `--bench picker` y `--bench text_search`). Son los números de la tabla, salvo las filas de la ventana, que salen del [benchmark de la UI](#benchmark-de-la-ui). Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
 
 No sirven para CI: en los runners de GitHub el tiempo de pared varía más que las regresiones que se quieren atrapar.
 
@@ -169,4 +217,5 @@ Comprobado revirtiendo los dos arreglos cuadráticos que encontró la revisión 
 ## Al cambiar algo
 
 - Operación nueva en el núcleo que corra en cada tecla o sobre todo el buffer: su fila en la tabla, su benchmark `divan`, y si recorre algo que crece, su prueba de complejidad. Si está en el camino de cada tecla, también en `instrucciones.rs`.
+- Cambio en cómo se pinta el editor (`metalmind-ui/src/editor`) o en lo que corre al arrancar: el benchmark de la UI antes y después, en la misma máquina.
 - Al tocar un número de la tabla, se actualiza con la fecha y el tipo de máquina en términos genéricos.

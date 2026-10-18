@@ -10,6 +10,8 @@ Los casos de `metalmind-vim` también corren en `nvim --headless` 0.12.6; sin es
 
 `crates/metalmind/tests/gui_smoke.rs` lanza el binario `metalmind` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**, no los píxeles. Cada test levanta su propio Xvfb, en el primer display libre desde `:100`, así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local o lanza el CI a mano sobre la rama: `gh workflow run CI --ref <rama>`.
 
+El benchmark de la UI (`cargo bench -p metalmind --bench ui`) usa el mismo harness para medir el arranque y el tiempo de cada tecla al frame; ver [rendimiento](performance.md#benchmark-de-la-ui).
+
 ### Correrlo en local
 
 Hace falta Xvfb, un driver que dibuje sin GPU (lavapipe, el Vulkan por software de mesa, es el del CI; ver abajo) y una fuente monoespaciada, además de las librerías de GPUI de [Primeros pasos](GETTING-STARTED.md#correr-metalmind):
