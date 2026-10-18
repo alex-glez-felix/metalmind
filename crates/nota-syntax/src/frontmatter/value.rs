@@ -15,8 +15,13 @@ pub struct Value {
     /// escribe distinto (escapes, varias líneas, un alias `*a`).
     pub literal: Option<Range<usize>>,
     /// Lo que se borra para sacar el valor de su lista sin romperla: la línea
-    /// del `- valor` o el valor con su coma.
+    /// del `- valor`, o el valor con la coma que lo separa del anterior (del
+    /// siguiente si es el primero).
     pub removal: Range<usize>,
+    /// Lo que se borra si también se borran todos los de antes en su lista:
+    /// el valor con la coma que lo sigue. Así quitar los primeros de
+    /// `[a, b, c]` nunca toca dos veces la misma coma.
+    pub removal_first: Range<usize>,
 }
 
 /// Cómo estaba escrito el campo del valor.
@@ -37,15 +42,16 @@ impl Value {
             let start = inner.start + (raw.len() - raw.trim_start().len());
             start..start + trimmed.len()
         });
-        let removal = match place {
-            Place::List => list_removal(text, &span),
-            Place::Text => span.clone(),
+        let (removal, removal_first) = match place {
+            Place::List => list_removals(text, &span),
+            Place::Text => (span.clone(), span.clone()),
         };
         Some(Self {
             text: trimmed.to_owned(),
             span,
             literal,
             removal,
+            removal_first,
         })
     }
 
@@ -84,24 +90,28 @@ fn literal(text: &str, raw: &str, span: &Range<usize>) -> Option<Range<usize>> {
     (text[inner.clone()] == *raw).then_some(inner)
 }
 
-/// En una lista en bloque, la línea entera; en una lista entre corchetes,
-/// el valor con la coma que lo separa del anterior o, si es el primero, del
-/// siguiente. Así quitar dos valores seguidos nunca toca la misma coma.
-fn list_removal(text: &str, span: &Range<usize>) -> Range<usize> {
+/// [`Value::removal`] y [`Value::removal_first`]. En una lista en bloque,
+/// las dos son la línea entera. Entre corchetes, la coma puede estar en otra
+/// línea (`[a,\n b]`).
+fn list_removals(text: &str, span: &Range<usize>) -> (Range<usize>, Range<usize>) {
     let start = line_start(text, span.start);
     if text[start..span.start].trim() == "-" {
-        let end = line_end(text, span.end);
-        return start..(end + 1).min(text.len());
+        let line = start..(line_end(text, span.end) + 1).min(text.len());
+        return (line.clone(), line);
     }
-    let before = text[..span.start].trim_end_matches([' ', '\t']);
-    if before.ends_with(',') {
-        return before.len() - 1..span.end;
-    }
-    let after = skip_blanks(text, span.end);
-    if text[after..].starts_with(',') {
-        return span.start..skip_blanks(text, after + 1);
-    }
-    span.clone()
+    let after = span.end + (text[span.end..].len() - text[span.end..].trim_start().len());
+    let first = if text[after..].starts_with(',') {
+        span.start..skip_blanks(text, after + 1)
+    } else {
+        span.clone()
+    };
+    let before = text[..span.start].trim_end();
+    let removal = if before.ends_with(',') {
+        before.len() - 1..span.end
+    } else {
+        first.clone()
+    };
+    (removal, first)
 }
 
 fn skip_blanks(text: &str, at: usize) -> usize {

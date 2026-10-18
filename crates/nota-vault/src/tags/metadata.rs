@@ -2,6 +2,7 @@
 //! alias y padres. Se escribe en el frontmatter de su página tocando solo
 //! ese campo, y si el tag no tiene página, nota la crea.
 
+use nota_syntax::Entry;
 use unicode_normalization::UnicodeNormalization as _;
 
 use crate::changes::{Changes, FileEdit, NewFile, TextEdit};
@@ -144,30 +145,11 @@ impl Tags {
 
     /// Lo que la vista previa avisa de los alias nuevos de `key`.
     fn alias_notices(&self, key: &TagKey, aliases: &[String]) -> Vec<PlanNotice> {
-        let mut notices = Vec::new();
-        for alias in aliases.iter().filter_map(|alias| TagKey::parse(alias)) {
-            if &alias == key {
-                continue;
-            }
-            let taken = match self.graph.alias_of(&alias) {
-                Some(owner) if owner != key => Some(owner.clone()),
-                Some(_) => None,
-                None => self.graph.page(&alias).map(|page| page.key.clone()),
-            };
-            match taken {
-                Some(by) => notices.push(PlanNotice::AliasTaken { alias, by }),
-                None if self.index.tag(&alias).is_some()
-                    && self.graph.alias_of(&alias).is_none() =>
-                {
-                    notices.push(PlanNotice::AliasAbsorbs {
-                        tag: alias,
-                        of: key.clone(),
-                    });
-                }
-                None => {}
-            }
-        }
-        notices
+        aliases
+            .iter()
+            .filter_map(|alias| TagKey::parse(alias))
+            .filter_map(|alias| self.alias_notice(&alias, key))
+            .collect()
     }
 }
 
@@ -195,40 +177,47 @@ fn edit_page(
         return Ok(TagPlan::default());
     };
     let key = field.key();
-    let edit = match (&page.layout, value) {
+    let edits = match (&page.layout, value) {
         (PageLayout::Unreadable, _) => return Err(PlanError::UneditablePage(page.path.clone())),
-        (PageLayout::Bare { .. }, None) => None,
+        (PageLayout::Bare { .. }, None) => Vec::new(),
         (&PageLayout::Bare { at, crlf }, Some(value)) => {
             let eol = eol(crlf);
-            Some(TextEdit {
+            vec![TextEdit {
                 range: at..at,
                 text: format!("---{eol}{key}: {value}{eol}---{eol}"),
-            })
+            }]
         }
         (PageLayout::Block { entries, end, crlf }, value) => {
             let line = value.map(|value| format!("{key}: {value}{}", eol(*crlf)));
-            match (entries.iter().find(|entry| entry.key == key), line) {
-                (Some(entry), line) => Some(TextEdit {
-                    range: entry.span.clone(),
-                    text: line.unwrap_or_default(),
-                }),
-                (None, Some(line)) => Some(TextEdit {
-                    range: *end..*end,
-                    text: line,
-                }),
-                (None, None) => None,
-            }
+            block_edits(entries, key, *end, line)
         }
     };
     let mut plan = TagPlan::default();
-    if let Some(edit) = edit {
+    if !edits.is_empty() {
         plan.changes.edits.push(FileEdit {
             path: page.path.clone(),
             hash,
-            edits: vec![edit],
+            edits,
         });
     }
     Ok(plan)
+}
+
+/// En un mapa en bloque, `line` reemplaza el campo o va antes del `---` de
+/// cierre; `None` lo quita. Una clave repetida es YAML inválido, así que hay
+/// a lo sumo una.
+fn block_edits(entries: &[Entry], key: &str, end: usize, line: Option<String>) -> Vec<TextEdit> {
+    match (entries.iter().find(|entry| entry.key == key), line) {
+        (Some(entry), line) => vec![TextEdit {
+            range: entry.span.clone(),
+            text: line.unwrap_or_default(),
+        }],
+        (None, Some(text)) => vec![TextEdit {
+            range: end..end,
+            text,
+        }],
+        (None, None) => Vec::new(),
+    }
 }
 
 fn eol(crlf: bool) -> &'static str {

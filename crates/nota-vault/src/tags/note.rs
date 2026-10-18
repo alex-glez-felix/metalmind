@@ -27,6 +27,8 @@ pub struct FrontmatterSpot {
     pub literal: bool,
     /// Lo que se borra para sacar el valor de su lista.
     pub removal: Range<usize>,
+    /// Lo que se borra si también se quitan todos los de antes en su lista.
+    pub removal_first: Range<usize>,
 }
 
 /// Un tag escrito en una nota.
@@ -50,6 +52,7 @@ impl TagOccurrence {
             source: TagSource::Frontmatter(FrontmatterSpot {
                 literal: value.literal.is_some(),
                 removal: value.removal.clone(),
+                removal_first: value.removal_first.clone(),
             }),
         }
     }

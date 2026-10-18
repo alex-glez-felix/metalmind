@@ -17,6 +17,10 @@ fn fixture() -> Fixture {
         ("tags/crlf.md", "---\r\ncolor: azul\r\n---\r\n"),
         ("tags/roto.md", "---\ncolor: [rojo\n---\n"),
         ("tags/flujo.md", "---\n{color: rojo}\n---\n"),
+        (
+            "tags/doble.md",
+            "---\ncolor: rojo\nicon: 🦀\ncolor: azul\n---\n",
+        ),
         ("a.md", "#Gpui y #gpui y #GPUI, #nota, #con, #rs"),
         ("b.md", "#Gpui"),
     ])
@@ -235,7 +239,7 @@ fn invalid_requests() {
         error("rust", PageChange::Aliases(names(&["x y"]))),
         PlanError::InvalidName("x y".into())
     );
-    for page in ["roto", "flujo"] {
+    for page in ["roto", "flujo", "doble"] {
         assert_eq!(
             error(page, named("rojo")),
             PlanError::UneditablePage(path(&format!("tags/{page}.md")))

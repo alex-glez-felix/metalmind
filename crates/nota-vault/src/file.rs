@@ -80,10 +80,26 @@ fn create(path: &Path, text: &str) -> io::Result<()> {
     File::open(dir)?.sync_all()
 }
 
+/// Como [`write_atomic`], pero sin seguir un enlace: si en `path` apareció
+/// uno después de comprobarlo, se reemplaza el enlace y no se escribe fuera
+/// del vault. Para lo que ya comprobó que `path` es un archivo.
+pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), FileError> {
+    replace_at(path, |out| out.write_all(text.as_bytes())).map_err(|source| FileError::Write {
+        path: path.to_owned(),
+        source,
+    })
+}
+
 fn replace(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>) -> io::Result<()> {
-    let target = resolve_symlink(path)?;
-    let dir = parent_dir(&target);
-    let permissions = existing_permissions(&target)?;
+    replace_at(&resolve_symlink(path)?, contents)
+}
+
+fn replace_at(
+    target: &Path,
+    contents: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+) -> io::Result<()> {
+    let dir = parent_dir(target);
+    let permissions = existing_permissions(target)?;
     let mut temp = Builder::new()
         .prefix(".nota-")
         .suffix(".tmp")
@@ -99,7 +115,7 @@ fn replace(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>)
         temp.as_file().set_permissions(permissions)?;
     }
     temp.as_file().sync_all()?;
-    temp.persist(&target).map_err(|error| error.error)?;
+    temp.persist(target).map_err(|error| error.error)?;
     // Sin esto, un corte de luz puede perder el rename aunque el contenido esté en disco.
     File::open(dir)?.sync_all()
 }
@@ -133,5 +149,44 @@ fn existing_permissions(path: &Path) -> io::Result<Option<Permissions>> {
         Ok(metadata) => Ok(Some(metadata.permissions())),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::symlink;
+
+    use super::*;
+
+    #[test]
+    fn replace_file_replaces_a_link_instead_of_following_it() {
+        let vault = tempfile::TempDir::new().unwrap();
+        let outside = tempfile::TempDir::new().unwrap();
+        let target = outside.path().join("ajeno.md");
+        fs::write(&target, "de afuera").unwrap();
+        let link = vault.path().join("nota.md");
+        symlink(&target, &link).unwrap();
+
+        replace_file(&link, "nuevo").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "de afuera");
+        assert!(
+            !fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read_to_string(&link).unwrap(), "nuevo");
+    }
+
+    #[test]
+    fn create_atomic_never_replaces() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("nota.md");
+        fs::write(&path, "del usuario").unwrap();
+        let Err(FileError::Write { source, .. }) = create_atomic(&path, "nuevo") else {
+            panic!("se esperaba que fallara");
+        };
+        assert_eq!(source.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "del usuario");
     }
 }
