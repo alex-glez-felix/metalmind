@@ -6,6 +6,7 @@ use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 use super::*;
+use crate::workspace::Message;
 use crate::workspace::test_session::Session;
 
 /// Un vault con `a.md`, `b.md` y `notas/c.md`, y una sesión abierta en `a.md`.

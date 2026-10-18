@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use nota_vault::{FileOpError, Vault, VaultPath};
 
 use super::pane_tree::Axis;
-use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError};
+use super::{DocumentId, Pane, PaneId, Workspace, WorkspaceError};
 use crate::document::Document;
 
 /// Dónde se abre un archivo.
@@ -35,32 +35,9 @@ impl Workspace {
                     self.edit(Some(path), false)?;
                 }
             }
-            Placement::Split(axis) => {
-                let Some(id) = self.find_or_open(path) else {
-                    return Ok(false);
-                };
-                let numbers = self.pane(self.focused())?.numbers;
-                self.split(axis)?;
-                let shown = self.pane_on(id, numbers);
-                self.panes.insert(self.focused(), shown);
-                self.message = Some(Message::opened(self.document(id)?));
-                self.vim.cursor_moved();
-            }
+            Placement::Split(axis) => self.open_in_split(axis, path)?,
         }
         Ok(self.focused_document()?.is_file(path))
-    }
-
-    fn find_or_open(&mut self, path: &Path) -> Option<DocumentId> {
-        if let Some(id) = self.documents.find(path) {
-            return Some(id);
-        }
-        match Document::open(path) {
-            Ok(document) => Some(self.documents.insert(document)),
-            Err(error) => {
-                self.message = Some(Message::Error(error.to_string()));
-                None
-            }
-        }
     }
 
     /// Renombra o mueve `from` a `to` en `vault`; los documentos abiertos de

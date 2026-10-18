@@ -1,17 +1,18 @@
-//! El vault del finder mientras la ventana lo usa: el índice que mantiene el
+//! El vault de la ventana mientras está abierta: el índice que mantiene el
 //! watcher y las notas recientes, guardadas en el directorio de estado del
-//! vault. Abrirlo pasa en el executor de fondo y guardar en un hilo propio
-//! ([`RecentsWriter`]); los cambios del watcher llegan al hilo de la UI por
-//! un canal.
+//! vault. Lo usan el finder y el panel lateral: cada lote del watcher llega
+//! al hilo de la UI por un canal y sale como [`VaultChanged`]. Guardar los
+//! recientes pasa en un hilo propio ([`RecentsWriter`]).
 
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::rc::Rc;
 use std::sync::{Arc, mpsc};
 use std::{fs, thread};
 
-use gpui_kit::{App, AppContext as _, Context, Entity, Subscription, Task};
+use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use nota_config::Paths;
-use nota_vault::{Vault, VaultError, VaultPath, VaultUpdate};
+use nota_vault::{Vault, VaultPath, VaultUpdate};
 
 use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
@@ -21,14 +22,16 @@ const RECENTS_FILE: &str = "recientes";
 
 #[derive(Debug, thiserror::Error)]
 pub enum SessionError {
-    #[error(transparent)]
-    Vault(#[from] VaultError),
     #[error("no se pudo arrancar el hilo que sigue al vault: {0}")]
     Thread(io::Error),
 }
 
+/// Un lote del watcher, ya aplicado al índice.
+pub struct VaultChanged(pub VaultUpdate);
+
 pub struct VaultSession {
-    vault: Vault,
+    /// Compartido con el panel lateral, que hace las operaciones de archivo.
+    vault: Rc<Vault>,
     recents: Recents,
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
@@ -37,26 +40,36 @@ pub struct VaultSession {
     _quit: Subscription,
 }
 
-/// Lo que se lee del disco al abrir, fuera del hilo de la UI.
-struct Opened {
+impl EventEmitter<VaultChanged> for VaultSession {}
+
+/// Lo que se prepara antes de abrir la ventana: los hilos que siguen al
+/// vault y guardan los recientes, y los recientes guardados.
+pub struct Prepared {
     vault: Vault,
-    updates: mpsc::Receiver<VaultUpdate>,
+    updates: async_channel::Receiver<VaultUpdate>,
     recents: Recents,
     writer: Option<RecentsWriter>,
 }
 
-impl Opened {
-    fn load(root: &Path, paths: Option<&Paths>) -> Result<Self, SessionError> {
-        let (vault, updates) = Vault::open(root)?;
+impl Prepared {
+    /// # Errors
+    /// Si no se puede arrancar alguno de los dos hilos.
+    pub fn new(
+        vault: Vault,
+        updates: mpsc::Receiver<VaultUpdate>,
+        paths: Option<&Paths>,
+    ) -> Result<Self, SessionError> {
         let file = paths.map(|paths| paths.vault_state(vault.root()).join(RECENTS_FILE));
         let recents = file.as_deref().map(read_recents).unwrap_or_default();
         let writer = file
             .map(RecentsWriter::spawn)
             .transpose()
             .map_err(SessionError::Thread)?;
+        let (sender, receiver) = async_channel::unbounded();
+        forward(updates, sender).map_err(SessionError::Thread)?;
         Ok(Self {
             vault,
-            updates,
+            updates: receiver,
             recents,
             writer,
         })
@@ -64,43 +77,41 @@ impl Opened {
 }
 
 impl VaultSession {
-    /// Abre `root` como vault, con los recientes guardados en `paths`.
-    pub fn open(
-        root: PathBuf,
-        paths: Option<Paths>,
-        cx: &App,
-    ) -> Task<Result<Entity<Self>, SessionError>> {
-        let opening = cx.background_spawn(async move { Opened::load(&root, paths.as_ref()) });
-        cx.spawn(async move |cx| {
-            let opened = opening.await?;
-            let (sender, receiver) = async_channel::unbounded();
-            forward(opened.updates, sender).map_err(SessionError::Thread)?;
-            Ok(cx.new(|cx| {
-                let updates = cx.spawn(async move |this, cx| {
-                    while let Ok(update) = receiver.recv().await {
-                        let applied =
-                            this.update(cx, |this: &mut Self, cx| this.apply(&update, cx));
-                        if applied.is_err() {
-                            return;
-                        }
-                    }
-                });
-                // Al salir de la app se espera a la última escritura.
-                let quit = cx.on_app_quit(|this: &mut Self, _| {
-                    this.writer.take();
-                    async {}
-                });
-                let notes = notes(&opened.vault.snapshot(), &opened.recents);
-                Self {
-                    vault: opened.vault,
-                    recents: opened.recents,
-                    writer: opened.writer,
-                    notes,
-                    _updates: updates,
-                    _quit: quit,
+    pub fn new(prepared: Prepared, cx: &mut Context<Self>) -> Self {
+        let Prepared {
+            vault,
+            updates,
+            recents,
+            writer,
+        } = prepared;
+        let updates = cx.spawn(async move |this, cx| {
+            while let Ok(update) = updates.recv().await {
+                let applied = this.update(cx, |this: &mut Self, cx| this.apply(update, cx));
+                if applied.is_err() {
+                    return;
                 }
-            }))
-        })
+            }
+        });
+        // Al salir de la app se espera a la última escritura.
+        let quit = cx.on_app_quit(|this: &mut Self, _| {
+            this.writer.take();
+            async {}
+        });
+        let notes = notes(&vault.snapshot(), &recents);
+        Self {
+            vault: Rc::new(vault),
+            recents,
+            writer,
+            notes,
+            _updates: updates,
+            _quit: quit,
+        }
+    }
+
+    /// El vault, para quien hace operaciones de archivo sobre él.
+    #[must_use]
+    pub fn vault(&self) -> Rc<Vault> {
+        Rc::clone(&self.vault)
     }
 
     /// La raíz, sin enlaces simbólicos.
@@ -128,7 +139,7 @@ impl VaultSession {
         }
     }
 
-    fn apply(&mut self, update: &VaultUpdate, cx: &mut Context<Self>) {
+    fn apply(&mut self, update: VaultUpdate, cx: &mut Context<Self>) {
         let mut moved = false;
         for change in &update.changes {
             moved |= self.recents.apply(change);
@@ -137,6 +148,7 @@ impl VaultSession {
             self.save();
         }
         self.notes = notes(&update.snapshot, &self.recents);
+        cx.emit(VaultChanged(update));
         cx.notify();
     }
 

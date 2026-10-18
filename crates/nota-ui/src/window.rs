@@ -2,7 +2,6 @@
 //! paneles como raíz, sin el `Root` de gpui-kit, que se queda con `tab`,
 //! `shift-tab` y `ctrl-c` (04 §riesgo 1).
 
-use std::io;
 use std::sync::mpsc;
 use std::time::Instant;
 
@@ -12,9 +11,10 @@ use nota_vault::{Vault, VaultUpdate};
 
 use crate::actions;
 use crate::document::Document;
+use crate::finder::{Prepared, SessionError, VaultSession};
 use crate::picker;
 use crate::session::{self, VaultState};
-use crate::sidebar::{self, Sidebar};
+use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
 use crate::workspace::{LineNumbers, Workspace};
 use crate::workspace_view::WorkspaceView;
@@ -28,8 +28,8 @@ pub enum OpenError {
     NoDisplay,
     #[error(transparent)]
     NoMonoFont(#[from] NoMonoFont),
-    #[error("no se pudo arrancar el hilo del vault: {0}")]
-    Watch(#[source] io::Error),
+    #[error(transparent)]
+    Session(#[from] SessionError),
     #[error(
         "no se pudo abrir la ventana: {0:#}\nnota dibuja con Vulkan u OpenGL: instala el driver \
          de la GPU (o mesa, que trae ambos por software) y compruébalo con `vulkaninfo --summary`"
@@ -79,8 +79,8 @@ pub fn open(
         document,
         paths,
     } = startup;
-    let updates = sidebar::bridge(updates).map_err(OpenError::Watch)?;
     let state = remember(paths.as_ref(), &vault);
+    let prepared = Prepared::new(vault, updates, paths.as_ref())?;
     let options = window_options(&document);
     let editor = config.settings.editor;
     let numbers = LineNumbers {
@@ -91,13 +91,22 @@ pub fn open(
     let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {
         let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff));
-        let sidebar =
-            cx.new(|cx| Sidebar::new(vault, updates, &state.panel, workspace.clone(), cx));
+        let session = cx.new(|cx| VaultSession::new(prepared, cx));
+        let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
         if let Some(file) = &file {
             sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
         }
-        let view = cx
-            .new(|cx| WorkspaceView::new(workspace, sidebar.clone(), paths, launched, window, cx));
+        let view = cx.new(|cx| {
+            WorkspaceView::new(
+                workspace,
+                sidebar.clone(),
+                session,
+                paths,
+                launched,
+                window,
+                cx,
+            )
+        });
         view.update(cx, |view, cx| {
             if file.is_none() && sidebar.read(cx).is_visible() {
                 view.focus_sidebar(window, cx);
