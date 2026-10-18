@@ -111,7 +111,8 @@ impl Document {
     #[must_use]
     pub fn opened_stats(&self) -> FileStats {
         let stats = self.stats();
-        if self.noeol {
+        if self.noeol() {
+            // Sin cambios, el buffer es el texto del archivo, que no está vacío.
             FileStats {
                 bytes: stats.bytes - EOL.len(),
                 ..stats
@@ -121,9 +122,10 @@ impl Document {
         }
     }
 
+    /// Al archivo le falta el `\n` final y el buffer sigue como en disco.
     #[must_use]
     pub fn noeol(&self) -> bool {
-        self.noeol
+        self.noeol && !self.is_modified()
     }
 
     /// Un buffer vacío no lleva `\n`, salvo que se abriera de una línea vacía.

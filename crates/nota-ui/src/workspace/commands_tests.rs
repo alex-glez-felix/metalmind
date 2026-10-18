@@ -57,6 +57,20 @@ fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
     assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
 }
 
+/// Vaciado en otro panel, ya no es lo que hay en disco: el aviso cuenta el buffer.
+#[test]
+fn e_de_un_archivo_sin_salto_final_vaciado_en_otro_panel() {
+    let (dir, mut session) = two_files();
+    fs::write(path(&dir, "c.md"), "c").unwrap();
+    session.keys("⌃wv");
+    edit(&mut session, "e", &path(&dir, "c.md"));
+    session.keys("dd⌃wh");
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+    edit(&mut session, "e", &path(&dir, "c.md"));
+    let opened = format!("\"{}\" 0L, 0B", path(&dir, "c.md").display());
+    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+}
+
 #[test]
 fn e_de_un_archivo_que_no_existe_lo_empieza_vacio() {
     let (dir, mut session) = two_files();
