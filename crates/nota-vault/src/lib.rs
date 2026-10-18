@@ -20,7 +20,7 @@ mod watch;
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
 pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};
-pub use file::{FileError, read, write_atomic};
+pub use file::{FileError, create_atomic, read, write_atomic};
 pub use index::{Entry, EntryKind, VaultIndex};
 pub use links::{
     Destination, IndexedLink, LinkContext, LinkIndex, LinkSubpath, LinkTarget, NoteLink,

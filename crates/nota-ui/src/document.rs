@@ -195,11 +195,17 @@ impl Document {
     /// como estaba.
     pub fn save(&mut self) -> Result<FileStats, SaveError> {
         let path = self.path.as_deref().ok_or(SaveError::NoFileName)?;
-        self.write(path)?;
+        let eol = self.final_eol();
+        nota_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))?;
+        Ok(self.mark_saved())
+    }
+
+    /// El disco ya tiene lo que tiene el buffer.
+    fn mark_saved(&mut self) -> FileStats {
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
         self.noeol = false;
-        Ok(self.stats())
+        self.stats()
     }
 
     /// `:w ruta`, como en vim: si es su archivo, lo guarda; un documento
@@ -207,25 +213,24 @@ impl Document {
     /// copia y sigue en el suyo. Nunca pisa un archivo que ya existe.
     ///
     /// # Errors
-    /// Si `path` ya existe o no se pudo escribir.
+    /// Si `path` ya existe, aunque aparezca mientras se escribe, o no se
+    /// pudo escribir.
     pub fn save_to(&mut self, path: &Path) -> Result<FileStats, SaveError> {
         if self.is_file(path) {
             return self.save();
         }
-        if path.symlink_metadata().is_ok() {
-            return Err(SaveError::Exists);
-        }
+        let eol = self.final_eol();
+        nota_vault::create_atomic(path, |out| write!(out, "{}{eol}", self.buffer)).map_err(
+            |error| match error {
+                FileError::Exists { .. } => SaveError::Exists,
+                error => SaveError::File(error),
+            },
+        )?;
         if self.path.is_none() {
             self.path = Some(path.to_owned());
-            return self.save().inspect_err(|_| self.path = None);
+            return Ok(self.mark_saved());
         }
-        self.write(path)?;
         Ok(self.stats())
-    }
-
-    fn write(&self, path: &Path) -> Result<(), FileError> {
-        let eol = self.final_eol();
-        nota_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))
     }
 
     #[must_use]
