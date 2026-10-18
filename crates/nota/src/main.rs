@@ -1,113 +1,61 @@
 //! `nota [carpeta|archivo]`: abre el vault en una ventana, con el archivo
 //! si se pasó uno; si el archivo no existe, empieza vacío y se crea al
-//! guardar con `:w`. Qué vault se abre: [`target`].
+//! guardar con `:w`. Qué vault se abre: [`target`]. Los subcomandos
+//! (`nota add`, …) son la CLI del vault y, salvo `open`, nunca abren ventana.
 
 mod cli;
+mod commands;
+mod gui;
 mod target;
 
-use std::cell::Cell;
-use std::io;
+use std::path::Path;
 use std::process::ExitCode;
-use std::rc::Rc;
 use std::time::Instant;
 
-use clap::Parser as _;
-use gpui_kit::App;
-use nota_config::{Config, Diagnostic, Paths, Severity};
-use nota_ui::{Document, Startup};
-use nota_vault::{FileError, Vault, VaultError};
+use crate::cli::Command;
+use crate::commands::CliError;
+use crate::gui::{Session, StartError};
 
 fn main() -> ExitCode {
     let launched = Instant::now();
-    let cli = cli::Cli::parse();
+    let cli = cli::Cli::parse_spanish();
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
-    match prepare(&cli) {
-        Ok((startup, config)) => run(startup, config, launched),
+    let Some(command) = cli.command else {
+        return match open(cli.path.as_deref(), launched) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("nota: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    };
+    let json = command.common().json;
+    match run(command, launched) {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("nota: {error}");
-            ExitCode::FAILURE
+            error.report(json);
+            ExitCode::from(error.kind().exit_code())
         }
     }
 }
 
-/// Lo que impide abrir la ventana.
-#[derive(Debug, thiserror::Error)]
-enum StartError {
-    #[error("{0}")]
-    Config(Diagnostic),
-    #[error(transparent)]
-    Target(#[from] target::TargetError),
-    #[error(transparent)]
-    Vault(#[from] VaultError),
-    #[error(transparent)]
-    File(#[from] FileError),
-    #[error("no se pudo entrar en el vault: {0}")]
-    EnterVault(io::Error),
+fn open(path: Option<&Path>, launched: Instant) -> Result<(), StartError> {
+    let session = Session::load()?;
+    let target = target::resolve(path, session.sources())?;
+    let prepared = gui::prepare(session, &target)?;
+    gui::run(prepared, launched)
 }
 
-fn prepare(cli: &cli::Cli) -> Result<(Startup, Config), StartError> {
-    let paths = Paths::detect()
-        .inspect_err(|error| log::error!("{error}; se usa la configuración por defecto"))
-        .ok();
-    let config = load_config(paths.as_ref()).map_err(StartError::Config)?;
-    let remembered = paths.as_ref().and_then(nota_ui::last_vault);
-    let configured = dirs::home_dir().and_then(|home| config.settings.vault(&home));
-    let variable = target::from_variable(std::env::var_os(target::VAULT_VARIABLE));
-    let target = target::resolve(cli.path.as_deref(), variable, remembered, configured)?;
-    let (vault, updates) = Vault::open(&target.vault)?;
-    let file = target
-        .file
-        .as_deref()
-        .map(|file| target::in_vault(vault.root(), file));
-    std::env::set_current_dir(vault.root()).map_err(StartError::EnterVault)?;
-    let document = match &file {
-        Some(file) => Document::open(file)?,
-        None => Document::unnamed(),
-    };
-    let startup = Startup {
-        vault,
-        updates,
-        document,
-        paths,
-    };
-    Ok((startup, config))
-}
-
-fn run(startup: Startup, config: Config, launched: Instant) -> ExitCode {
-    let failed = Rc::new(Cell::new(false));
-    let failed_in_app = Rc::clone(&failed);
-    gpui_kit::application().run(move |cx| {
-        if let Err(error) = nota_ui::open(startup, &config, launched, cx) {
-            eprintln!("nota: {error}");
-            failed_in_app.set(true);
-            quit_from_event_loop(cx);
-        }
-    });
-    if failed.get() {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
-}
-
-/// En Linux, el bucle de eventos olvida un `quit()` pedido antes de arrancar (#31); una tarea
-/// del executor de primer plano solo corre ya dentro del bucle.
-fn quit_from_event_loop(cx: &mut App) {
-    cx.spawn(async |cx| cx.update(|cx| cx.quit())).detach();
-}
-
-/// La config del usuario; lo que esté mal se reporta y se usa el default.
-/// Sin `paths` no hay de dónde leerla.
-fn load_config(paths: Option<&Paths>) -> Result<Config, Diagnostic> {
-    let Some(paths) = paths else {
-        return Config::defaults();
-    };
-    let loaded = Config::load(paths)?;
-    for diagnostic in &loaded.diagnostics {
-        match diagnostic.severity {
-            Severity::Warning => log::warn!("{diagnostic}"),
-            Severity::Error => log::error!("{diagnostic}"),
+fn run(command: Command, launched: Instant) -> Result<(), CliError> {
+    match command {
+        Command::Add(args) => commands::add(args),
+        Command::Search(args) => commands::search(&args),
+        Command::Open(args) => {
+            let note = commands::open(&args)?;
+            let session = Session::load()?;
+            let prepared = gui::prepare(session, &note.target())?;
+            note.announce(args.common.json)?;
+            Ok(gui::run(prepared, launched)?)
         }
     }
-    Ok(loaded.value)
 }

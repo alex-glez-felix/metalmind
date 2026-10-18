@@ -64,7 +64,7 @@ pub fn write_atomic(
 /// existe al terminar, aunque otro proceso lo haya creado mientras se
 /// escribía, falla sin tocarlo. El paso final es un rename que no pisa
 /// (`renameat2` con `RENAME_NOREPLACE` en Linux), así que mirar y escribir
-/// son una sola operación.
+/// son una sola operación. Un error siempre quiere decir que `path` no se creó.
 ///
 /// # Errors
 /// [`FileError::Exists`] si `path` ya existe (también si es un enlace
@@ -97,7 +97,15 @@ fn create(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>) 
     write_contents(&mut temp, contents)?;
     temp.as_file().sync_all()?;
     temp.persist_noclobber(path).map_err(|error| error.error)?;
-    File::open(dir)?.sync_all()
+    // El archivo ya existe con su contenido en disco: fallar aquí haría que
+    // reintentar cree una copia, que es peor que un rename menos durable.
+    if let Err(error) = File::open(dir).and_then(|dir| dir.sync_all()) {
+        log::warn!(
+            "{} quedó creado, pero no se pudo bajar su carpeta a disco: {error}",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// Como [`write_atomic`], pero sin seguir un enlace: si en `path` apareció

@@ -9,6 +9,18 @@ Los cambios que importan a quien usa nota. El formato sigue
 
 ### Agregado
 
+#### CLI
+
+- `nota add`: crea una nota en el vault con el texto del argumento o de stdin,
+  como `slug.md` (`idea-2.md` si ya existe) y sin pisar nunca otra. Sin `-t`, la nota queda
+  en el buzón; con `-t`, los tags van al frontmatter.
+- `nota search`: búsqueda difusa sobre las rutas del vault.
+- `nota open`: abre la app en una nota del vault.
+- `--json` en todos, con una forma estable, y códigos de salida fijos. El
+  vault sale de `--vault`, `NOTA_VAULT`, el último abierto o `vault:` de la
+  config, la misma regla que `nota` sin argumentos. Ninguno abre ventana
+  salvo `open`. Ver [docs/cli.md](docs/cli.md).
+
 #### Editor (M0)
 
 - `nota archivo.md` abre el archivo en una ventana nativa (GPUI). Si no existe,

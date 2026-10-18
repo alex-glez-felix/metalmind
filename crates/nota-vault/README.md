@@ -2,12 +2,13 @@
 
 El vault en disco, sin GUI.
 
-- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag.
+- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag. `Vault::load(raíz)` indexa sin vigilar, para la CLI.
 - `Vault::snapshot()`: el `VaultIndex` de este momento, sin bloquear (`ArcSwap`). `children(carpeta)` recorre el árbol ya ordenado (carpetas primero, nombre sin mayúsculas); `files()` da notas y adjuntos para el finder. `VaultIndex::from_entries` arma uno a mano, para tests y benchmarks.
 - `VaultChange`: `Created`, `Removed`, `Renamed` (cubre el contenido de una carpeta) y `Modified`. Un guardado atómico es `Modified`, no borrar y crear.
 - `VaultPath`: ruta relativa con `/`, nunca sale de la raíz ni apunta a algo oculto.
 - Operaciones: `create_note`, `create_folder`, `rename` (nunca pisa el destino), `move_to_trash` (a `.trash/` del vault, como Obsidian) y `apply`/`undo` (abajo). No pasan por enlaces simbólicos; el índice se entera por el watcher.
 - `read` / `write_atomic`: leer una nota y guardarla sin dejarla nunca a medias. `create_atomic` es lo mismo para un archivo que no debe existir: el rename final no pisa (`RENAME_NOREPLACE`), así que falla aunque el archivo aparezca mientras se escribe.
+- `VaultRoot::capture`: lo que hace `nota add`, sin indexar el vault: una nota nueva en la raíz como `slug.md`, con los tags en el frontmatter o, sin tags, en el buzón.
 - `walk_notes(raíz, visitante)`: recorre en paralelo las notas con las reglas del índice, para quien lea el disco por su cuenta (la búsqueda de texto de `nota-search`).
 - `LinkIndex` (`Vault::links()`, y en cada `VaultUpdate`): los links de cada nota ya resueltos (`outgoing`), quién enlaza a cada archivo con la línea y su contexto (`backlinks`), y los links sin resolver o ambiguos. Se arma al abrir y el watcher lo mantiene al día; aplicar cambios da lo mismo que armarlo de cero.
 - `LinkIndex::follow(nota, texto, offset)`: a dónde lleva el link bajo el cursor (archivo, heading o bloque), para `gd`; `LinkSubpath::locate(texto)` ubica el heading o el bloque en la nota destino.

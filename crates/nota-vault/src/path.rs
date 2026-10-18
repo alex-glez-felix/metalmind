@@ -200,6 +200,13 @@ impl Borrow<str> for VaultPath {
     }
 }
 
+/// Como texto: así sale en el `--json` de la CLI.
+impl serde::Serialize for VaultPath {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0)
+    }
+}
+
 impl fmt::Debug for VaultPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.0)

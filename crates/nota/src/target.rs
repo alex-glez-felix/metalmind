@@ -14,6 +14,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use nota_config::{Paths, Settings};
+
 /// La variable de entorno con el vault que abre `nota` sin argumentos.
 pub const VAULT_VARIABLE: &str = "NOTA_VAULT";
 
@@ -40,30 +42,55 @@ pub fn from_variable(value: Option<OsString>) -> Option<PathBuf> {
     value.filter(|value| !value.is_empty()).map(PathBuf::from)
 }
 
-/// En orden: el argumento, `variable` (el vault de [`VAULT_VARIABLE`]),
-/// `remembered` (el último vault abierto) y `configured` (el de la
-/// config). El argumento y la variable se eligieron a propósito: si no
-/// sirven, es un error. De los otros dos se usa el primero que todavía sea
-/// una carpeta.
-pub fn resolve(
-    argument: Option<&Path>,
-    variable: Option<PathBuf>,
-    remembered: Option<PathBuf>,
-    configured: Option<PathBuf>,
-) -> Result<Target, TargetError> {
-    let Some(path) = argument else {
-        if let Some(vault) = variable {
-            if !vault.is_dir() {
-                return Err(TargetError::VariableNotAFolder(vault));
-            }
-            return Ok(Target { vault, file: None });
+/// De dónde puede salir el vault cuando no se nombra uno.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Sources {
+    /// El de [`VAULT_VARIABLE`].
+    pub variable: Option<PathBuf>,
+    /// El último vault abierto.
+    pub remembered: Option<PathBuf>,
+    /// El `vault:` de la config.
+    pub configured: Option<PathBuf>,
+}
+
+impl Sources {
+    /// Las del entorno de este proceso; sin `paths` no hay último vault.
+    pub fn detect(paths: Option<&Paths>, settings: &Settings) -> Self {
+        Self {
+            variable: from_variable(std::env::var_os(VAULT_VARIABLE)),
+            remembered: paths.and_then(nota_ui::last_vault),
+            configured: dirs::home_dir().and_then(|home| settings.vault(&home)),
         }
-        return remembered
-            .into_iter()
-            .chain(configured)
-            .find(|vault| vault.is_dir())
-            .map(|vault| Target { vault, file: None })
-            .ok_or(TargetError::NoVault);
+    }
+}
+
+/// El vault cuando no se nombra uno: `variable`, `remembered` y
+/// `configured`, en ese orden. La variable se eligió a propósito: si no
+/// sirve, es un error. De los otros dos se usa el primero que todavía sea
+/// una carpeta.
+pub fn default_vault(sources: Sources) -> Result<PathBuf, TargetError> {
+    let Sources {
+        variable,
+        remembered,
+        configured,
+    } = sources;
+    if let Some(vault) = variable {
+        if !vault.is_dir() {
+            return Err(TargetError::VariableNotAFolder(vault));
+        }
+        return Ok(vault);
+    }
+    remembered
+        .into_iter()
+        .chain(configured)
+        .find(|vault| vault.is_dir())
+        .ok_or(TargetError::NoVault)
+}
+
+/// El argumento, si lo hay, y si no [`default_vault`].
+pub fn resolve(argument: Option<&Path>, sources: Sources) -> Result<Target, TargetError> {
+    let Some(path) = argument else {
+        return default_vault(sources).map(|vault| Target { vault, file: None });
     };
     if path.is_dir() {
         return Ok(Target {
@@ -109,6 +136,22 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    fn resolve(
+        argument: Option<&Path>,
+        variable: Option<PathBuf>,
+        remembered: Option<PathBuf>,
+        configured: Option<PathBuf>,
+    ) -> Result<Target, TargetError> {
+        super::resolve(
+            argument,
+            Sources {
+                variable,
+                remembered,
+                configured,
+            },
+        )
+    }
 
     fn vault() -> TempDir {
         let dir = TempDir::new().unwrap();

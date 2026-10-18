@@ -115,23 +115,23 @@ Abierto **(propuesta)**:
 
 **Por qué.** Capturar tiene que costar un comando, desde donde sea. Y un agente que puede consultar el vault en JSON lo usa mejor que uno que tiene que leer los archivos a mano.
 
-Comandos tentativos **(propuesta)**:
+Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; la referencia es [`cli.md`](../cli.md)):
 
 | Comando | Qué hace |
 |---|---|
 | `nota add "texto" -t tag` | Crea una nota. Sin `-t`, cae en el buzón (§9). Sin texto, lee de stdin (`wl-paste \| nota add`). |
-| `nota search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. |
-| `nota tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). |
-| `nota open <ruta>` | Abre la app en esa nota. |
-| `--json` en todos | Salida estable para que la consuman agentes y scripts. |
+| `nota search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. Hoy solo rutas: un término `#…` es error de uso hasta que la CLI use el `TagIndex` ([#47](https://github.com/alex-glez-felix/nota/issues/47)). |
+| `nota tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). Pendiente en [#47](https://github.com/alex-glez-felix/nota/issues/47), sobre el `TagIndex`. |
+| `nota open <ruta>` | Abre la app en esa nota. La ruta es relativa al vault. |
+| `--json` en todos | Salida estable para que la consuman agentes y scripts: un objeto por línea, errores con `kind` y código de salida fijos. |
 
 **Restricciones desde ya:**
 
 - La lógica de cada comando vive en el núcleo (`nota-vault`, `nota-search`); el binario solo parsea argumentos y elige. Un subcomando **no inicializa GPUI** ni abre ventana, y arranca en lo que tarda leer el vault, no en lo que tarda Vulkan.
 - Las escrituras de la CLI son atómicas y pasan por el mismo punto que las de la app (§3). La app abierta se entera por el watcher, como de cualquier otro cambio externo (§2). Nada de IPC obligatorio entre la CLI y la app.
 - Los tipos que devuelven las consultas del núcleo (notas, tags, resultados de búsqueda) se pueden serializar, con rutas relativas al vault: eso es el `--json`.
-- Qué vault usa la CLI sin `--vault`: el último que se abrió (§8) **(propuesta)**.
-- Dónde y con qué nombre crea `nota add` la nota **(propuesta)**: en la raíz del vault, con nombre a partir de la primera línea y, si no hay, de la fecha y hora.
+- Qué vault usa la CLI (decidido el 2026-10-18, PRs #44 y #48): la misma regla que `nota` sin argumentos (§8), con `--vault` en el lugar del argumento: `--vault`, luego `NOTA_VAULT`, luego el último que se abrió, luego `vault:` de `config.yaml`. `--vault` y `NOTA_VAULT` se eligieron a propósito: si no sirven, es error; del último abierto y la config se usa el primero que siga siendo una carpeta. Es una sola función del binario, `target::default_vault`, para la app y la CLI.
+- Dónde y con qué nombre crea `nota add` la nota (decidido el 2026-10-18, PR #48): en la raíz del vault, como `slug.md`, con el slug del título o de la primera línea; si no hay ninguno (solo emoji o puntuación), `AAAA-MM-DD-HHMMSS.md`. Sin fecha delante: la nota se nombra para enlazarla (`[[idea-nueva]]`), y la fecha ya va en los metadatos del archivo y en el historial. Si el nombre está tomado, `-2`, `-3`, … sin pisar nunca (`create_atomic`, el mismo módulo de `write_atomic`).
 - `nota open` con la app ya abierta: si reutiliza la ventana o abre otra queda abierto **(propuesta)**; reutilizarla sí necesita IPC, pero solo para eso.
 
 ## 8. Un vault a la vez
@@ -145,7 +145,7 @@ Comandos tentativos **(propuesta)**:
 - Caché, historial (§3) y estado de UI (vista del panel, último focus, notas abiertas) van **por vault**, en su directorio de `cache`, `data` o `state` según corresponda, nunca mezclados.
 - El vault es un valor que se crea y se suelta, no un global: `:vault` tiene que poder cerrar uno y abrir otro en el mismo proceso sin que nada quede apuntando al anterior.
 - Config: la global y encima la del vault (`<vault>/.nota/`, 03 §5).
-- El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault`, cuando la CLI tenga subcomandos, §7), luego la variable de entorno `NOTA_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
+- El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault` en los subcomandos de la CLI, §7), luego la variable de entorno `NOTA_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
 - Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.nota/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
 
 ## 9. Buzón
