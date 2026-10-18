@@ -135,6 +135,22 @@ fn un_ciclo_que_pasa_por_el_reemplazo_de_un_embebido_es_circular() {
 }
 
 #[test]
+fn volver_al_reemplazo_de_un_embebido_por_otro_tema_es_circular() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "nota-oscuro", "extends = \"x\"\n");
+    write(dir.path(), "x", "extends = \"nota-oscuro\"\n");
+    let error = Themes::new(dir.path().to_owned())
+        .load("nota-oscuro")
+        .unwrap_err()
+        .error;
+    assert_eq!(
+        error.message,
+        "`extends` circular: nota-oscuro → x → nota-oscuro"
+    );
+    assert_eq!(error.file, Some(dir.path().join("x.toml")));
+}
+
+#[test]
 fn extends_circular_es_error_con_la_cadena() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "extends = \"b\"\n");
