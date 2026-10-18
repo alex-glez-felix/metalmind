@@ -99,7 +99,7 @@ fn e_se_niega_si_se_perderian_cambios() {
     assert_eq!(session.text(), "");
     assert_eq!(
         error(&session),
-        Some("E37: hay cambios sin guardar (usa :e! para descartarlos)")
+        Some("E37: No write since last change (add ! to override)")
     );
 }
 
@@ -201,7 +201,7 @@ fn q_cierra_un_panel_con_cambios_si_otro_muestra_el_buffer() {
     assert_eq!(session.effect, Effect::Stay);
     assert_eq!(
         error(&session),
-        Some("E37: hay cambios sin guardar (usa :q! para cerrar igual)")
+        Some("E37: No write since last change (add ! to override)")
     );
     session.keys(":q!⏎");
     assert_eq!(session.effect, Effect::CloseWindow);
@@ -309,7 +309,7 @@ fn e_no_abre_otro_buffer_del_archivo_al_que_ya_escribe_un_enlace() {
     edit(&mut session, "e", &b);
     assert_eq!(
         error(&session),
-        Some("E37: hay cambios sin guardar (usa :e! para descartarlos)")
+        Some("E37: No write since last change (add ! to override)")
     );
     assert_eq!(session.workspace.documents.iter().count(), 1);
 }
@@ -571,4 +571,32 @@ fn w_con_otra_ruta_no_pisa_un_archivo() {
     edit(&mut session, "w", &path(&dir, "copia.md"));
     assert_eq!(fs::read_to_string(path(&dir, "copia.md")).unwrap(), "a\n");
     assert_eq!(shown(&session), path(&dir, "a.md"));
+}
+
+/// nvim 0.12.6 con `nohidden`: `:wq otro.md` con cambios escribe la copia y
+/// da E37 sin sugerir el `!`; sin cambios, escribe y cierra.
+#[test]
+fn wq_con_otra_ruta_y_cambios_escribe_la_copia_y_no_cierra() {
+    let (dir, mut session) = two_files();
+    session.keys("x");
+    edit(&mut session, "wq", &path(&dir, "copia.md"));
+    assert_eq!(fs::read_to_string(path(&dir, "copia.md")).unwrap(), "");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(error(&session), Some("E37: No write since last change"));
+    session.keys(":e!⏎");
+    edit(&mut session, "wq", &path(&dir, "otra.md"));
+    assert_eq!(session.effect, Effect::CloseWindow);
+}
+
+/// En un split, vim cierra la ventana y pierde los cambios; nota se niega.
+#[test]
+fn wq_con_otra_ruta_en_un_split_no_pierde_los_cambios() {
+    let (dir, mut session) = two_files();
+    session.keys("x⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("⌃wh");
+    edit(&mut session, "wq", &path(&dir, "copia.md"));
+    assert_eq!(error(&session), Some("E37: No write since last change"));
+    assert_eq!(session.workspace.tree().len(), 2);
+    assert!(session.is_modified());
 }
