@@ -94,6 +94,7 @@ impl Selections {
         &self.0[0]
     }
 
+    #[must_use]
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Selection> {
         self.0.iter()
     }
