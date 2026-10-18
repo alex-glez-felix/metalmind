@@ -38,8 +38,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 4.4 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `nota-syntax` |
 | Abrir el vault, 5 k notas | ≤ 200 ms | 12.8 ms | ✅ | `nota-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 95 ms | ✅ | `nota-vault` `abrir_50k_notas` |
-| Finder, 5 k rutas, peor consulta (`tema nota`) | ≤ 8 ms | 0.63 ms | ✅ | `nota-search` |
-| Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.2 ms | ⚠️ | `nota-search` |
+| Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
+| Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |
 | Texto completo en el vault, palabra en 1 de cada 1 000 notas (lee todo), 5 k / 50 k notas | ≤ 100 ms / ≤ 1 s | 6.0 / 33 ms | ✅ | `nota-search` `palabra_rara` |
 | Texto completo, palabra en casi todas las notas, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 11 / 116 ms | ✅ | `nota-search` `palabra_comun` |
@@ -93,7 +93,7 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | `/` sin resultado en 50 k | 6.0 M |
 | Scan 5 k / 50 k | 18.0 M / 179.6 M |
 | Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 9.1 M / 4.4 M / 5.8 M / 29.1 M / 57.3 M |
-| Finder 5 k / 50 k | 17.3 M / 169.3 M |
+| Finder 5 k / 50 k (ordenar todas las coincidencias, para la lista virtual) | 18.9 M / 187.8 M |
 | Texto completo en una nota de 5 k: palabra frecuente / sin resultado | 12.4 M / 459 k |
 
 Para correrlo en local hacen falta `valgrind` y `gungraun-runner` de la misma versión que `gungraun` (`cargo binstall gungraun-runner@0.20.0`, o el binario de su release):
