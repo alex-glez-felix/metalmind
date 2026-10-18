@@ -93,6 +93,20 @@ impl Session {
         self.workspace.paste(self.pane(), text).unwrap();
     }
 
+    /// `ctrl-shift-c`.
+    pub fn copy(&mut self) {
+        self.workspace
+            .copy(self.pane(), &mut self.clipboard)
+            .unwrap();
+    }
+
+    /// `ctrl-shift-v`.
+    pub fn paste_clipboard(&mut self) {
+        self.workspace
+            .paste_clipboard(self.pane(), &mut self.clipboard)
+            .unwrap();
+    }
+
     pub fn select(&mut self, anchor: ByteOffset, head: ByteOffset) {
         self.workspace.select(self.pane(), anchor, head).unwrap();
     }
