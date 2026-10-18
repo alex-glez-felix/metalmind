@@ -76,8 +76,8 @@ impl Session {
         self.workspace.focused()
     }
 
-    /// Teclea en el panel enfocado; `⎋`, `⏎`, `⌫` y `⌃w` son Escape, Enter,
-    /// Backspace y `ctrl-w`. Devuelve lo que pasó con la última tecla y
+    /// Teclea en el panel enfocado; `⎋`, `⏎`, `⌫`, `⇥` y `⌃w` son Escape,
+    /// Enter, Backspace, Tab y `ctrl-w`. Devuelve lo que pasó con la última tecla y
     /// ejecuta cada comando que llega.
     pub fn keys(&mut self, text: &str) -> Option<KeyOutcome> {
         let mut last = None;
@@ -87,6 +87,7 @@ impl Session {
                 '⎋' => Key::Escape,
                 '⏎' => Key::Enter,
                 '⌫' => Key::Backspace,
+                '⇥' => Key::Tab,
                 '⌃' => Key::Ctrl(chars.next().unwrap()),
                 _ => Key::Char(c),
             };
@@ -200,6 +201,16 @@ impl Session {
 
     pub fn command_line(&self) -> Option<&str> {
         self.view(self.pane()).command_line.map(|line| line.typed)
+    }
+
+    /// El nombre del archivo del panel enfocado.
+    pub fn file(&self) -> String {
+        self.view(self.pane())
+            .document
+            .path()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default()
     }
 
     pub fn is_modified(&self) -> bool {

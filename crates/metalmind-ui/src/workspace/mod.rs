@@ -10,23 +10,32 @@
 mod commands;
 mod documents;
 mod editing;
+mod file_ids;
 mod files;
+mod jumps;
 mod line_numbers;
+mod links;
 mod message;
 mod options;
 mod pane_tree;
 mod scrolling;
+mod show;
 
 use std::collections::BTreeMap;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
-use metalmind_vim::{Action, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError};
+use metalmind_vim::{
+    Action, FileId, JumpList, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError,
+};
 
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
+use self::file_ids::FileIds;
 pub use self::files::{Placement, shown_path};
 pub use self::line_numbers::LineNumbers;
+pub use self::links::LinkChoice;
+use self::links::VaultLinks;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 use crate::document::Document;
@@ -50,6 +59,8 @@ struct Pane {
     selections: Selections,
     numbers: LineNumbers,
     viewport: Viewport,
+    /// Como en vim, la jumplist es de cada panel; un split copia la suya.
+    jumps: JumpList,
 }
 
 impl Pane {
@@ -61,6 +72,7 @@ impl Pane {
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
             numbers,
             viewport,
+            jumps: JumpList::default(),
         }
     }
 }
@@ -68,6 +80,7 @@ impl Pane {
 #[derive(Debug)]
 pub struct Workspace {
     documents: Documents,
+    files: FileIds,
     panes: BTreeMap<PaneId, Pane>,
     tree: PaneTree,
     vim: Vim,
@@ -76,6 +89,8 @@ pub struct Workspace {
     /// Las columnas hasta la siguiente parada de un tab, en cada panel.
     tabstop: usize,
     message: Option<Message>,
+    links: Option<VaultLinks>,
+    link_choice: Option<LinkChoice>,
 }
 
 /// Un panel visto desde la UI.
@@ -123,18 +138,23 @@ impl Workspace {
     pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize, tabstop: usize) -> Self {
         let message = Message::opened(&document);
         let mut documents = Documents::default();
-        let id = documents.insert(document);
+        let mut files = FileIds::default();
+        let file = files.of_document(&document);
+        let id = documents.insert(document, file);
         let tree = PaneTree::new();
         let mut vim = Vim::new();
         vim.set_scrolloff(scrolloff);
         Self {
             documents,
+            files,
             panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers, tabstop))]),
             tree,
             vim,
             scrolloff,
             tabstop,
             message: Some(message),
+            links: None,
+            link_choice: None,
         }
     }
 
@@ -241,6 +261,11 @@ impl Workspace {
         self.documents.get(id).ok_or(WorkspaceError::NoDocument(id))
     }
 
+    fn insert_document(&mut self, document: Document) -> DocumentId {
+        let file = self.files.of_document(&document);
+        self.documents.insert(document, file)
+    }
+
     fn document_mut(&mut self, id: DocumentId) -> Result<&mut Document, WorkspaceError> {
         self.documents
             .get_mut(id)
@@ -271,6 +296,10 @@ impl Workspace {
             .get_mut(&pane)
             .ok_or(WorkspaceError::NoPane(pane))?;
         let id = state.document;
+        let file = self
+            .documents
+            .file(id)
+            .ok_or(WorkspaceError::NoDocument(id))?;
         let document = self
             .documents
             .get_mut(id)
@@ -278,20 +307,27 @@ impl Workspace {
         let (buffer, marks) = document.editable();
         self.vim.swap_marks(marks);
         self.vim.swap_viewport(&mut state.viewport);
+        self.vim.swap_jumps(&mut state.jumps);
+        self.vim.set_file(file);
         let result = edit(&mut self.vim, buffer, &mut state.selections);
+        self.vim.catch_up(buffer);
+        self.vim.swap_jumps(&mut state.jumps);
         self.vim.swap_viewport(&mut state.viewport);
         self.vim.swap_marks(marks);
         let head = state.selections.primary().head;
         state.viewport.reveal(buffer, head, scrolloff);
         let splices = buffer.take_splices();
-        self.follow(pane, id, &splices)?;
+        self.follow(pane, id, file, &splices)?;
         result
     }
 
+    /// Los cursores de los otros paneles de `id` y lo que guardan sus
+    /// jumplists de `file` siguen a lo editado.
     fn follow(
         &mut self,
         edited: PaneId,
         id: DocumentId,
+        file: FileId,
         splices: &[Splice],
     ) -> Result<(), WorkspaceError> {
         if splices.is_empty() {
@@ -303,6 +339,9 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))?
             .buffer();
         let scrolloff = self.scrolloff;
+        for (_, other) in self.panes.iter_mut().filter(|(pane, _)| **pane != edited) {
+            other.jumps.adjust(file, splices);
+        }
         for (_, other) in self
             .panes
             .iter_mut()
@@ -335,11 +374,15 @@ impl Workspace {
         Ok(!shown_elsewhere && self.document(id)?.is_modified())
     }
 
-    /// Suelta los documentos que ya no muestra ningún panel.
+    /// Suelta los documentos que ya no muestra ningún panel y no tienen
+    /// nada que guardar: los `[No Name]` sin cambios. Los demás quedan
+    /// ocultos, como los buffers de vim con `hidden`, con sus cambios, sus
+    /// marks y su historial.
     fn drop_unshown(&mut self) {
         let unshown: Vec<DocumentId> = self
             .documents
             .iter()
+            .filter(|(_, document)| document.path().is_none() && !document.is_modified())
             .map(|(id, _)| id)
             .filter(|&id| self.panes_showing(id).next().is_none())
             .collect();

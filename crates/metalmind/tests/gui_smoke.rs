@@ -141,6 +141,84 @@ fn e_edita_otro_archivo_en_la_misma_ventana() {
     assert_eq!(smoke.files(), ["a.md", "b.md"]);
 }
 
+/// `gd` sobre `[[b]]` abre b.md en el panel; `ctrl-o` vuelve a a.md con el
+/// cursor sobre el link (la `x` borra su `[`) y `ctrl-i` vuelve a b.md.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn gd_sigue_el_link_y_la_jumplist_vuelve_y_avanza() {
+    let smoke = Smoke::new();
+    smoke.write(
+        "a.md",
+        "uno
+ver [[b]]
+",
+    );
+    smoke.write(
+        "b.md", "dos
+",
+    );
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("jwgd");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("<C-o>");
+    window.wait_title("de a.md", |title| title.starts_with("a.md"));
+    window.type_keys("x:w<CR>");
+    smoke.wait_contents(
+        "a.md",
+        "uno
+ver [b]]
+",
+    );
+    window.type_keys("<C-i>");
+    window.wait_title("de b.md otra vez", |title| title.starts_with("b.md"));
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(
+        smoke.read("b.md"),
+        "xdos
+"
+    );
+    assert_eq!(smoke.files(), ["a.md", "b.md"]);
+}
+
+/// `mA` en a.md, abrir b.md y `'A` desde ahí: de vuelta en a.md, en la
+/// línea de la mark.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn una_mark_de_archivo_vuelve_a_su_nota() {
+    let smoke = Smoke::new();
+    smoke.write(
+        "a.md",
+        "uno
+  dos
+",
+    );
+    smoke.write(
+        "b.md", "tres
+",
+    );
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("jmA:e b.md<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("'A");
+    window.wait_title("de a.md", |title| title.starts_with("a.md"));
+    window.type_keys("x:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(
+        smoke.read("a.md"),
+        "uno
+  os
+"
+    );
+    assert_eq!(
+        smoke.read("b.md"),
+        "tres
+"
+    );
+}
+
 /// `space f`, parte del nombre y `enter`: el finder abre la nota en el panel.
 /// La lista viene del vault de la carpeta de la nota, que se indexa al abrir
 /// el finder; el `enter` espera a que llegue.

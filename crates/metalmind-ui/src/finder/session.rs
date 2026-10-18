@@ -185,7 +185,7 @@ fn forward(
 }
 
 /// `path`, absoluta y canónica, como ruta del vault de raíz `root`.
-fn relative_to(root: &Path, path: &Path) -> Option<VaultPath> {
+pub(crate) fn relative_to(root: &Path, path: &Path) -> Option<VaultPath> {
     let parts: Option<Vec<&str>> = path
         .strip_prefix(root)
         .ok()?

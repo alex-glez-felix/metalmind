@@ -54,6 +54,9 @@ bare_commands! {
     ToggleFolders = panel::"toggle_folders";
     /// Muestra el panel lateral en tags, o lo esconde si ya los muestra.
     ToggleTags = panel::"toggle_tags";
+    /// Abre la nota del link bajo el cursor, en el heading o el bloque que
+    /// nombre.
+    FollowLink = editor::"follow_link";
 }
 
 /// `:w ruta`: le da ese archivo a un buffer sin nombre o escribe una copia.
@@ -178,6 +181,7 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
         Command::OpenCommandPalette => Box::new(OpenCommandPalette),
         Command::ToggleFolders => Box::new(ToggleFolders),
         Command::ToggleTags => Box::new(ToggleTags),
+        Command::FollowLink => Box::new(FollowLink),
     }
 }
 
