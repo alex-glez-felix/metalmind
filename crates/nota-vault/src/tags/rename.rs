@@ -1,7 +1,8 @@
 //! Armar los planes de 05 §5: renombrar un tag o un alias, fusionar y pasar
 //! un alias al nombre principal.
 
-use crate::changes::{Rename, TextEdit};
+use crate::changes::Rename;
+use crate::edit::TextEdit;
 use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
@@ -164,7 +165,7 @@ impl Tags {
             let mut list = List::new(false);
             for occurrence in &tags.occurrences {
                 if let Some(edit) = rewrite.edit(occurrence, &mut list) {
-                    edits.push(path, tags.hash, edit);
+                    edits.push(path, edit);
                 }
             }
         }
@@ -175,15 +176,12 @@ impl Tags {
     /// nuevo, si es la que se renombra) se quita.
     fn rewrite_pages(&self, rewrite: &Rewrite<'_>, edits: &mut Edits) {
         for page in self.graph.pages() {
-            let Some(hash) = self.index.note(&page.path).map(|note| note.hash) else {
-                continue;
-            };
             for alias in page
                 .aliases
                 .iter()
                 .filter(|alias| &alias.key == rewrite.from)
             {
-                edits.push(&page.path, hash, rewrite.replace(alias));
+                edits.push(&page.path, rewrite.replace(alias));
             }
             let renamed = if &page.key == rewrite.from {
                 &rewrite.key
@@ -193,7 +191,7 @@ impl Tags {
             let mut list = List::new(renamed == &rewrite.key);
             for parent in &page.parents {
                 if let Some(edit) = rewrite.edit(parent, &mut list) {
-                    edits.push(&page.path, hash, edit);
+                    edits.push(&page.path, edit);
                 }
             }
         }
@@ -229,14 +227,19 @@ impl<'n> Rewrite<'n> {
         let renamed = &occurrence.key == self.from;
         let lands = renamed || occurrence.key == self.key;
         match &occurrence.source {
-            TagSource::Frontmatter(spot) if lands && list.seen => Some(TextEdit {
-                range: if list.prefix {
-                    spot.removal_first.clone()
+            TagSource::Frontmatter(spot) if lands && list.seen => {
+                let removal = if list.prefix {
+                    &spot.removal_first
                 } else {
-                    spot.removal.clone()
-                },
-                text: String::new(),
-            }),
+                    &spot.removal
+                };
+                Some(TextEdit {
+                    range: removal.range.clone(),
+                    old: removal.text.clone(),
+                    new: String::new(),
+                    line: occurrence.line,
+                })
+            }
             TagSource::Frontmatter(_) => {
                 list.seen |= lands;
                 list.prefix = false;
@@ -247,19 +250,21 @@ impl<'n> Rewrite<'n> {
     }
 
     fn replace(&self, occurrence: &TagOccurrence) -> TextEdit {
-        let literal = match &occurrence.source {
-            TagSource::Inline => true,
-            TagSource::Frontmatter(spot) => spot.literal,
-        };
+        let escaped = matches!(
+            &occurrence.source,
+            TagSource::Frontmatter(spot) if spot.escaped.is_some()
+        );
         // Un nombre de tag nunca lleva `"` ni `\`: entre comillas siempre es él mismo.
-        let text = if literal {
-            self.name.to_owned()
-        } else {
+        let new = if escaped {
             format!("\"{}\"", self.name)
+        } else {
+            self.name.to_owned()
         };
         TextEdit {
             range: occurrence.range.clone(),
-            text,
+            old: occurrence.written().to_owned(),
+            new,
+            line: occurrence.line,
         }
     }
 }

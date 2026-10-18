@@ -6,11 +6,11 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use crate::changes::{Changes, NewFile, Rename, StaleFile};
+use crate::changes::{Changes, NewFile, Rename};
+use crate::edit::StaleEdit;
 use crate::file::{self, FileError, create_atomic, replace_file};
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
-use crate::refactor::AccessError;
 
 /// Unos cambios ya aplicados, con lo que hace falta para deshacerlos.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,9 +61,10 @@ impl Applied {
 /// Por qué no se aplicaron unos cambios.
 #[derive(Debug, thiserror::Error)]
 pub enum ApplyError {
-    /// Un archivo cambió desde que se escaneó. No se escribió nada.
+    /// Un archivo ya no dice lo que una edición espera: cambió desde que se
+    /// indexó. No se escribió nada.
     #[error(transparent)]
-    Stale(#[from] StaleFile),
+    Stale(#[from] StaleEdit),
     /// No se pudo leer un archivo, ya no existe o un destino está ocupado.
     /// No se escribió nada.
     #[error(transparent)]
@@ -72,12 +73,20 @@ pub enum ApplyError {
     #[error("se paró a medias: {cause}")]
     Interrupted {
         applied: Box<Applied>,
-        cause: ChangesInterruption,
+        cause: Interruption,
     },
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ChangesInterruption {
+pub enum AccessError {
+    #[error(transparent)]
+    Path(#[from] FileOpError),
+    #[error(transparent)]
+    File(#[from] FileError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Interruption {
     /// Otro programa lo guardó después de comprobar los cambios; no se tocó.
     #[error("{0} cambió mientras se aplicaban los cambios")]
     Changed(VaultPath),
@@ -95,7 +104,7 @@ pub enum ChangesInterruption {
 /// lo que cambió después no se toca, y lo que no se pudo leer, escribir o
 /// borrar queda listado.
 #[derive(Debug, Default)]
-pub struct ChangesUndoReport {
+pub struct UndoReport {
     pub restored: Vec<VaultPath>,
     /// Archivos reescritos o creados que cambiaron después de aplicar.
     pub changed: Vec<VaultPath>,
@@ -110,7 +119,7 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
     let mut files = Vec::with_capacity(changes.edits.len());
     for edit in &changes.edits {
         let before = read(root, &edit.path)?;
-        let after = edit.apply(&before)?;
+        let (after, _) = edit.apply(&before)?;
         files.push(Rewritten {
             path: edit.path.clone(),
             before,
@@ -133,7 +142,7 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
     };
     for file in files {
         if let Err(cause) = rewrite(root, &file) {
-            // `write_atomic` puede fallar ya reemplazado el archivo, al bajar la carpeta a disco.
+            // Escribir puede fallar ya reemplazado el archivo, al bajar la carpeta a disco.
             if read(root, &file.path).is_ok_and(|text| text == file.after) {
                 applied.files.push(file);
             }
@@ -146,13 +155,13 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
             Ok(created) => applied.created.push(created),
             Err(failed) => {
                 applied.created.extend(failed.created);
-                return interrupted(applied, ChangesInterruption::Create(failed.cause));
+                return interrupted(applied, Interruption::Create(failed.cause));
             }
         }
     }
     for rename in &changes.renames {
         if let Err(error) = ops::rename(root, &rename.from, &rename.to) {
-            return interrupted(applied, ChangesInterruption::Rename(error));
+            return interrupted(applied, Interruption::Rename(error));
         }
         applied.renamed.push(rename.clone());
     }
@@ -161,13 +170,13 @@ pub(crate) fn apply(root: &Path, changes: &Changes) -> Result<Applied, ApplyErro
 
 /// Sin locks de archivo (06 §2), comprobar justo antes de escribir es lo que
 /// deja más chica la ventana para un guardado de otro programa.
-fn rewrite(root: &Path, file: &Rewritten) -> Result<(), ChangesInterruption> {
+fn rewrite(root: &Path, file: &Rewritten) -> Result<(), Interruption> {
     match read(root, &file.path) {
         Ok(text) if text == file.before => {}
-        Ok(_) => return Err(ChangesInterruption::Changed(file.path.clone())),
-        Err(error) => return Err(ChangesInterruption::Access(error)),
+        Ok(_) => return Err(Interruption::Changed(file.path.clone())),
+        Err(error) => return Err(Interruption::Access(error)),
     }
-    write(root, &file.path, &file.after).map_err(ChangesInterruption::Write)
+    write(root, &file.path, &file.after).map_err(Interruption::Write)
 }
 
 /// Crear falló; `created` está si el archivo igual quedó en disco (falló al
@@ -207,7 +216,7 @@ fn create(root: &Path, file: &NewFile) -> Result<Created, CreateFailed> {
     }
 }
 
-fn interrupted(applied: Applied, cause: ChangesInterruption) -> Result<Applied, ApplyError> {
+fn interrupted(applied: Applied, cause: Interruption) -> Result<Applied, ApplyError> {
     Err(ApplyError::Interrupted {
         applied: Box::new(applied),
         cause,
@@ -219,11 +228,11 @@ fn interrupted(applied: Applied, cause: ChangesInterruption) -> Result<Applied, 
 /// textos van antes que los renombres: guardar encima del destino de un
 /// rename en el mismo lote del watcher le hace perder el origen a
 /// `notify-debouncer-full` 0.7 (#54).
-pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<ChangesUndoReport, FileOpError> {
+pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpError> {
     for rename in &applied.renamed {
         ops::check_free(root, &rename.from)?;
     }
-    let mut report = ChangesUndoReport::default();
+    let mut report = UndoReport::default();
     for file in &applied.files {
         let path = file.path.clone();
         match read(root, &applied.now(&file.path)) {

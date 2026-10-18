@@ -4,7 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::changes::{Changes, FileEdit, TextEdit};
+use crate::changes::Changes;
+use crate::edit::{FileEdits, TextEdit};
 use crate::path::VaultPath;
 use crate::tags::key::TagKey;
 
@@ -69,24 +70,20 @@ pub enum PlanError {
 /// Junta las ediciones por archivo mientras se arma un plan.
 #[derive(Debug, Default)]
 pub(crate) struct Edits {
-    files: BTreeMap<VaultPath, (u64, Vec<TextEdit>)>,
+    files: BTreeMap<VaultPath, Vec<TextEdit>>,
 }
 
 impl Edits {
-    pub fn push(&mut self, path: &VaultPath, hash: u64, edit: TextEdit) {
-        self.files
-            .entry(path.clone())
-            .or_insert_with(|| (hash, Vec::new()))
-            .1
-            .push(edit);
+    pub fn push(&mut self, path: &VaultPath, edit: TextEdit) {
+        self.files.entry(path.clone()).or_default().push(edit);
     }
 
-    pub fn into_files(self) -> Vec<FileEdit> {
+    pub fn into_files(self) -> Vec<FileEdits> {
         self.files
             .into_iter()
-            .map(|(path, (hash, mut edits))| {
+            .map(|(path, mut edits)| {
                 edits.sort_by_key(|edit| edit.range.start);
-                FileEdit { path, hash, edits }
+                FileEdits { path, edits }
             })
             .collect()
     }

@@ -12,8 +12,8 @@ use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use nota_vault::{
-    AccessError, ApplyRenameError, FileOpError, LinkIndex, LinkTarget, Vault, VaultPath,
-    VaultUpdate, write_atomic,
+    AccessError, ApplyError, FileOpError, LinkIndex, LinkTarget, Vault, VaultPath, VaultUpdate,
+    write_atomic,
 };
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
@@ -105,7 +105,7 @@ fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
         .links()
         .rename_plan(&path("viejo/plan.md"), &path("nuevo/Plan del año.md"))
         .unwrap();
-    let applied = vault.apply_rename(&plan).unwrap();
+    let applied = vault.apply(&plan.changes()).unwrap();
     settle(&vault, &updates);
     assert_eq!(
         fs::read_to_string(root.join("inicio.md")).unwrap(),
@@ -121,7 +121,7 @@ fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
     );
     assert_eq!(vault.links().unresolved(), []);
 
-    let report = vault.undo_rename(&applied).unwrap();
+    let report = vault.undo(&applied).unwrap();
     assert_eq!(report.restored, [path("inicio.md"), path("viejo/plan.md")]);
     assert_eq!(report.changed, []);
     settle(&vault, &updates);
@@ -145,9 +145,9 @@ fn deshacer_no_pisa_lo_que_cambio_despues() {
         .links()
         .rename_plan(&path("plan.md"), &path("meta.md"))
         .unwrap();
-    let applied = vault.apply_rename(&plan).unwrap();
+    let applied = vault.apply(&plan.changes()).unwrap();
     write(&root, "b.md", "[[meta]] y algo más");
-    let report = vault.undo_rename(&applied).unwrap();
+    let report = vault.undo(&applied).unwrap();
     assert_eq!(report.restored, [path("a.md")]);
     assert_eq!(report.changed, [path("b.md")]);
     assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
@@ -171,19 +171,19 @@ fn un_archivo_que_cambio_no_deja_escribir_nada() {
         .rename_plan(&path("plan.md"), &path("meta.md"))
         .unwrap();
     write(&root, "b.md", "otro texto");
-    let error = vault.apply_rename(&plan).unwrap_err();
-    assert!(matches!(error, ApplyRenameError::Stale(_)), "{error}");
+    let error = vault.apply(&plan.changes()).unwrap_err();
+    assert!(matches!(error, ApplyError::Stale(_)), "{error}");
     assert_eq!(fs::read_to_string(root.join("a.md")).unwrap(), "[[plan]]");
     assert!(root.join("plan.md").is_file());
     assert!(!root.join("meta.md").exists());
 
     write(&root, "b.md", "[[plan]]");
     fs::create_dir(root.join("meta.md")).unwrap();
-    let error = vault.apply_rename(&plan).unwrap_err();
+    let error = vault.apply(&plan.changes()).unwrap_err();
     assert!(
         matches!(
             error,
-            ApplyRenameError::Access(AccessError::Path(FileOpError::AlreadyExists(_)))
+            ApplyError::Access(AccessError::Path(FileOpError::AlreadyExists(_)))
         ),
         "{error}"
     );

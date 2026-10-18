@@ -9,7 +9,8 @@
 
 mod support;
 
-use std::fs;
+use std::fs::{self, Permissions};
+use std::os::unix::fs::PermissionsExt as _;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
@@ -97,4 +98,26 @@ fn la_carpeta_de_tags_se_configura() {
     assert!(tags.graph().page(&TagKey::new("rust")).is_some());
     assert!(tags.graph().page(&TagKey::new("gpui")).is_none());
     assert_eq!(notes(&tags, "-#"), ["tags/gpui.md"]);
+}
+
+#[test]
+fn un_chmod_que_vuelve_legible_una_nota_trae_sus_tags() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a.md"]);
+    let a = dir.path().join("a.md");
+    fs::write(&a, "#rust").unwrap();
+    fs::set_permissions(&a, Permissions::from_mode(0o000)).unwrap();
+    if fs::read(&a).is_ok() {
+        // Con permisos de root el chmod no impide leer: no hay nada que probar.
+        return;
+    }
+    let (vault, updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(notes(&vault.tags(), "-#"), ["a.md"]);
+
+    fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
+    wait_for_tags(&vault, &updates, |tags| notes(tags, "#rust") == ["a.md"]);
+
+    fs::set_permissions(&a, Permissions::from_mode(0o000)).unwrap();
+    wait_for_tags(&vault, &updates, |tags| notes(tags, "-#") == ["a.md"]);
+    fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
 }
