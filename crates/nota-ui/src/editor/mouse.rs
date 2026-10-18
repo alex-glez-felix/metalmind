@@ -10,6 +10,7 @@ use nota_buffer::ByteOffset;
 
 use super::Editor;
 use crate::actions::{Copy, Paste};
+use crate::clipboard::SystemClipboard;
 
 impl Editor {
     fn offset_at(&self, position: Point<Pixels>, cx: &App) -> Option<ByteOffset> {
@@ -96,20 +97,23 @@ impl Editor {
     }
 
     pub(super) fn copy(&mut self, _: &Copy, _window: &mut Window, cx: &mut Context<Self>) {
-        let workspace = self.workspace.read(cx);
-        let text = workspace
-            .selected_text(self.pane)
-            .transpose()
-            .unwrap_or_else(|| workspace.current_line(self.pane));
-        match text {
-            Ok(text) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
-            Err(error) => self.report(&error, cx),
+        let copied = self.update_workspace(cx, |workspace, pane, cx| {
+            workspace.copy(pane, &mut SystemClipboard(cx))
+        });
+        if let Err(error) = copied {
+            self.report(&error, cx);
         }
+        self.reveal_cursor(cx);
     }
 
     pub(super) fn paste(&mut self, _: &Paste, _window: &mut Window, cx: &mut Context<Self>) {
-        let text = cx.read_from_clipboard().and_then(|item| item.text());
-        self.paste_text(text, cx);
+        let pasted = self.update_workspace(cx, |workspace, pane, cx| {
+            workspace.paste_clipboard(pane, &mut SystemClipboard(cx))
+        });
+        if let Err(error) = pasted {
+            self.report(&error, cx);
+        }
+        self.reveal_cursor(cx);
     }
 
     fn take_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {

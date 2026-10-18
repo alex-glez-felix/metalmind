@@ -96,11 +96,13 @@ impl CommandAction for Set {
     }
 }
 
-/// Copia la selección del ratón, o la línea del cursor si no hay.
+/// Copia la selección de Visual o del ratón, o la línea del cursor si no
+/// hay ninguna.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
 #[action(namespace = editor, name = "copy")]
 pub struct Copy;
 
+/// Pega en el cursor; en Visual, reemplaza la selección.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
 #[action(namespace = editor, name = "paste")]
 pub struct Paste;

@@ -1,7 +1,7 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
 use nota_buffer::{Bias, ByteOffset, Edit, Goal, Selection, Selections};
-use nota_vim::{Action, Clipboard, Invocation, Key, KeyOutcome};
+use nota_vim::{Action, Clipboard, Invocation, Key, KeyOutcome, Mode, SystemRegister};
 
 use super::{Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 
@@ -136,6 +136,64 @@ impl Workspace {
             .line_text(view.buffer().line_of(view.cursor()))?;
         line.push('\n');
         Ok(line)
+    }
+
+    /// `ctrl-shift-c`. En Visual es `"+y`, así que copia lo seleccionado
+    /// con sus dos extremos, por líneas con `V`, y sale a Normal como vim.
+    /// Si no, copia la selección del ratón o la línea del cursor.
+    ///
+    /// # Errors
+    /// Si `pane` no existe o una edición resulta inválida, lo que sería un bug.
+    pub fn copy(
+        &mut self,
+        pane: PaneId,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        if self.in_visual(pane)? {
+            return self.feed_keys(pane, "\"+y", clipboard);
+        }
+        let text = match self.selected_text(pane)? {
+            Some(text) => text,
+            None => self.current_line(pane)?,
+        };
+        clipboard.write(SystemRegister::Clipboard, text);
+        Ok(())
+    }
+
+    /// `ctrl-shift-v`. En Visual es `"+P`: lo pegado reemplaza la selección
+    /// sin tocar los registros. Si no, pega en el cursor con
+    /// [`Workspace::paste`].
+    ///
+    /// # Errors
+    /// Si `pane` no existe o una edición resulta inválida, lo que sería un bug.
+    pub fn paste_clipboard(
+        &mut self,
+        pane: PaneId,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        if self.in_visual(pane)? {
+            return self.feed_keys(pane, "\"+P", clipboard);
+        }
+        match clipboard.read(SystemRegister::Clipboard) {
+            Some(text) => self.paste(pane, &text),
+            None => Ok(()),
+        }
+    }
+
+    fn in_visual(&self, pane: PaneId) -> Result<bool, WorkspaceError> {
+        Ok(matches!(self.view(pane)?.mode, Mode::Visual(_)))
+    }
+
+    fn feed_keys(
+        &mut self,
+        pane: PaneId,
+        keys: &str,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        for c in keys.chars() {
+            self.feed(pane, Key::Char(c), clipboard)?;
+        }
+        Ok(())
     }
 
     /// Pega en el cursor, o en la línea de comandos si está abierta. En
