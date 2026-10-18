@@ -255,6 +255,10 @@ fn empty_frontmatter() {
     "---\ntags: [a, 2024]\n---\n",
     "`2024` en `tags` del frontmatter no es un tag válido"
 )]
+#[case::double_hash(
+    "---\ntags: \"##project\"\n---\n",
+    "`##project` en `tags` del frontmatter no es un tag válido"
+)]
 fn recoverable_frontmatter_problems(#[case] text: &str, #[case] message: &str) {
     let problems: Vec<String> = scan(text).problems.iter().map(Problem::to_string).collect();
     assert_eq!(problems, [message]);
