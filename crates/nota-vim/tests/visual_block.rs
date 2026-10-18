@@ -317,6 +317,8 @@ use rstest_reuse::{self, apply, template};
 )]
 // tras o, un $ no sigue valiendo para la selección siguiente
 #[case("a|bc\ndefgh\nijklmn", "<C-v>j$o<Esc>$<C-v>jjd", "a|b\nde\nij")]
+#[case("abcd|ef\na\tb", "<C-v>j$oOj<Esc>", "abcdef\na\t|b")]
+#[case("abcd|ef\na\tb", "<C-v>j$oOjd", "abcdef\n|a")]
 // clic en Insert, tabs escritos y r<Tab>
 #[case(
     "a|bc\ndef\nghi",
