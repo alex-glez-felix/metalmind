@@ -279,3 +279,29 @@ fn e_no_abre_otro_buffer_del_archivo_al_que_ya_escribe_un_enlace() {
     );
     assert_eq!(session.workspace.documents.iter().count(), 1);
 }
+
+#[test]
+fn saltar_tras_e_no_usa_las_marks_del_otro_buffer() {
+    let (dir, mut session) = two_files();
+    session.keys("G");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("G");
+    assert_eq!(error(&session), None);
+    assert_eq!(session.cursor(), ByteOffset::new(6));
+    session.keys("x:e!⏎gg");
+    assert_eq!(error(&session), None);
+    assert_eq!(session.cursor(), ByteOffset::ZERO);
+}
+
+#[test]
+fn cada_buffer_tiene_sus_marks() {
+    let (dir, mut session) = two_files();
+    session.keys("jma⌃wv");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("jmbgg'a");
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.cursor(), ByteOffset::ZERO);
+    session.keys("'b⌃whgg'a");
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+    assert_eq!(session.cursor(), ByteOffset::new(2));
+}

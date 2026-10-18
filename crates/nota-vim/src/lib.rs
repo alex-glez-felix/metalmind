@@ -46,6 +46,7 @@ pub use error::VimError;
 pub use find::CharSearch;
 pub use key::Key;
 pub use keymap::{Binding, Context, Keymap};
+pub use mark::Marks;
 pub use mode::{Mode, Prompt, VisualKind};
 pub use motion::Motion;
 pub use operator::Operator;
