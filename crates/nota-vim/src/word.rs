@@ -34,27 +34,67 @@ pub(crate) fn forward(cursor: &mut Cursor, count: usize, big: bool, stop_at_eol:
     true
 }
 
-/// `b`/`B`. `false` si ya estaba al inicio del texto.
-pub(crate) fn backward(cursor: &mut Cursor, count: usize, big: bool) -> bool {
+/// `b`/`B`. Con `stop`, si ya está al inicio de una palabra no salta a la
+/// anterior. `false` si ya estaba al inicio del texto.
+pub(crate) fn backward(cursor: &mut Cursor, count: usize, big: bool, mut stop: bool) -> bool {
     for _ in 0..count {
+        let start_class = cursor.class(big);
         if cursor.dec() == Step::Edge {
             return false;
         }
-        while cursor.class(big) == Class::Blank {
-            if cursor.on_empty_line() {
-                break;
+        let at_word_start = stop && cursor.class(big) != start_class && start_class != Class::Blank;
+        stop = false;
+        if !at_word_start {
+            while cursor.class(big) == Class::Blank && !cursor.on_empty_line() {
+                if cursor.dec() == Step::Edge {
+                    return true;
+                }
             }
-            if cursor.dec() == Step::Edge {
+            if cursor.on_empty_line() {
+                continue;
+            }
+            if cursor.skip_class(cursor.class(big), big, false) {
                 return true;
             }
         }
-        if cursor.on_empty_line() {
-            continue;
+        cursor.inc();
+    }
+    true
+}
+
+/// Retrocede `count` veces al final de la palabra anterior, como
+/// `bckend_word` de vim. Con `stop_at_eol` no cruza de línea. `false` si ya
+/// estaba al inicio del texto.
+pub(crate) fn backward_end(
+    cursor: &mut Cursor,
+    count: usize,
+    big: bool,
+    stop_at_eol: bool,
+) -> bool {
+    let crossed = |step: Step| stop_at_eol && step == Step::OtherLine;
+    for _ in 0..count {
+        let start_class = cursor.class(big);
+        let step = cursor.dec();
+        if step == Step::Edge {
+            return false;
         }
-        if cursor.skip_class(cursor.class(big), big, false) {
+        if crossed(step) {
             return true;
         }
-        cursor.inc();
+        if start_class != Class::Blank {
+            while cursor.class(big) == start_class {
+                let step = cursor.dec();
+                if step == Step::Edge || crossed(step) {
+                    return true;
+                }
+            }
+        }
+        while cursor.class(big) == Class::Blank && !cursor.on_empty_line() {
+            let step = cursor.dec();
+            if step == Step::Edge || crossed(step) {
+                return true;
+            }
+        }
     }
     true
 }

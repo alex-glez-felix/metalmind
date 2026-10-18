@@ -1,14 +1,19 @@
-use crate::{Action, CharSearch, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject};
+use crate::{
+    Action, CharSearch, InsertAt, Key, Mode, Motion, Operator, PasteSide, TextObject, VisualKind,
+};
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Context {
-    /// Normal u operador pendiente: donde valen las motions.
+    /// Normal, operador pendiente o Visual: donde valen las motions.
     VimControl,
     Normal,
     OperatorPending,
     /// Con este operador pendiente, p. ej. la segunda `d` de `dd`.
     Operator(Operator),
+    /// Operador pendiente o Visual: donde valen los text objects.
+    Object,
+    Visual,
     Insert,
     CommandLine,
 }
@@ -17,9 +22,11 @@ impl Context {
     #[must_use]
     pub fn matches(self, mode: Mode) -> bool {
         match (self, mode) {
-            (Self::VimControl, Mode::Normal | Mode::OperatorPending(_))
+            (Self::VimControl, Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_))
             | (Self::Normal, Mode::Normal)
             | (Self::OperatorPending, Mode::OperatorPending(_))
+            | (Self::Object, Mode::OperatorPending(_) | Mode::Visual(_))
+            | (Self::Visual, Mode::Visual(_))
             | (Self::Insert, Mode::Insert)
             | (Self::CommandLine, Mode::CommandLine) => true,
             (Self::Operator(wanted), Mode::OperatorPending(pending)) => wanted == pending,
@@ -123,12 +130,19 @@ const fn search_word(backward: bool, whole_word: bool) -> Action {
     }
 }
 
+const fn operator(operator: Operator) -> Action {
+    Action::Operator(operator)
+}
+
 const DELETE: Context = Context::Operator(Operator::Delete);
 const CHANGE: Context = Context::Operator(Operator::Change);
 const YANK: Context = Context::Operator(Operator::Yank);
+const LOWERCASE: Context = Context::Operator(Operator::Lowercase);
+const UPPERCASE: Context = Context::Operator(Operator::Uppercase);
+const TOGGLE_CASE: Context = Context::Operator(Operator::ToggleCase);
 
 const VIM: &[(Context, &[Key], Action)] = {
-    use Context::{CommandLine, Insert, Normal, OperatorPending as Pending, VimControl as Control};
+    use Context::{CommandLine, Insert, Normal, Object, VimControl as Control, Visual};
     &[
         (Control, &[ch('h')], motion(Motion::Left)),
         (Control, &[ch('j')], motion(Motion::Down)),
@@ -179,9 +193,12 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[ch('\'')], Action::GoToMark { exact: false }),
         (Control, &[ch('`')], Action::GoToMark { exact: true }),
         (Control, &[Key::Escape], Action::NormalMode),
-        (Normal, &[ch('d')], Action::Operator(Operator::Delete)),
-        (Normal, &[ch('c')], Action::Operator(Operator::Change)),
-        (Normal, &[ch('y')], Action::Operator(Operator::Yank)),
+        (Normal, &[ch('d')], operator(Operator::Delete)),
+        (Normal, &[ch('c')], operator(Operator::Change)),
+        (Normal, &[ch('y')], operator(Operator::Yank)),
+        (Normal, &[ch('g'), ch('u')], operator(Operator::Lowercase)),
+        (Normal, &[ch('g'), ch('U')], operator(Operator::Uppercase)),
+        (Normal, &[ch('g'), ch('~')], operator(Operator::ToggleCase)),
         (Normal, &[ch('"')], Action::SelectRegister),
         (Normal, &[ch('x')], Action::DeleteRight),
         (Normal, &[ch('p')], Action::Paste(PasteSide::After)),
@@ -201,23 +218,45 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[ch('o')], Action::Insert(InsertAt::LineBelow)),
         (Normal, &[ch('O')], Action::Insert(InsertAt::LineAbove)),
         (Normal, &[ch(':')], Action::CommandLine),
+        (Normal, &[ch('v')], Action::Visual(VisualKind::Char)),
+        (Normal, &[ch('V')], Action::Visual(VisualKind::Line)),
+        (Normal, &[ch('g'), ch('v')], Action::RestoreVisual),
         (DELETE, &[ch('d')], Action::CurrentLine),
         (CHANGE, &[ch('c')], Action::CurrentLine),
         (YANK, &[ch('y')], Action::CurrentLine),
-        (Pending, &[ch('i'), ch('w')], word(false, false)),
-        (Pending, &[ch('a'), ch('w')], word(false, true)),
-        (Pending, &[ch('i'), ch('W')], word(true, false)),
-        (Pending, &[ch('a'), ch('W')], word(true, true)),
-        (Pending, &[ch('i'), ch('(')], parentheses(false)),
-        (Pending, &[ch('i'), ch(')')], parentheses(false)),
-        (Pending, &[ch('i'), ch('b')], parentheses(false)),
-        (Pending, &[ch('a'), ch('(')], parentheses(true)),
-        (Pending, &[ch('a'), ch(')')], parentheses(true)),
-        (Pending, &[ch('a'), ch('b')], parentheses(true)),
-        (Pending, &[ch('i'), ch('"')], quotes(false)),
-        (Pending, &[ch('a'), ch('"')], quotes(true)),
-        (Pending, &[ch('i'), ch('p')], paragraph(false)),
-        (Pending, &[ch('a'), ch('p')], paragraph(true)),
+        (LOWERCASE, &[ch('u')], Action::CurrentLine),
+        (UPPERCASE, &[ch('U')], Action::CurrentLine),
+        (TOGGLE_CASE, &[ch('~')], Action::CurrentLine),
+        (Visual, &[ch('v')], Action::Visual(VisualKind::Char)),
+        (Visual, &[ch('V')], Action::Visual(VisualKind::Line)),
+        (Visual, &[ch('o')], Action::OtherEnd),
+        (Visual, &[ch('g'), ch('v')], Action::RestoreVisual),
+        (Visual, &[Key::Ctrl('c')], Action::Interrupt),
+        (Visual, &[ch('d')], operator(Operator::Delete)),
+        (Visual, &[ch('x')], operator(Operator::Delete)),
+        (Visual, &[ch('c')], operator(Operator::Change)),
+        (Visual, &[ch('y')], operator(Operator::Yank)),
+        (Visual, &[ch('u')], operator(Operator::Lowercase)),
+        (Visual, &[ch('U')], operator(Operator::Uppercase)),
+        (Visual, &[ch('~')], operator(Operator::ToggleCase)),
+        (Visual, &[ch('p')], Action::Paste(PasteSide::After)),
+        (Visual, &[ch('P')], Action::Paste(PasteSide::Before)),
+        (Visual, &[ch('r')], Action::Replace),
+        (Visual, &[ch('"')], Action::SelectRegister),
+        (Object, &[ch('i'), ch('w')], word(false, false)),
+        (Object, &[ch('a'), ch('w')], word(false, true)),
+        (Object, &[ch('i'), ch('W')], word(true, false)),
+        (Object, &[ch('a'), ch('W')], word(true, true)),
+        (Object, &[ch('i'), ch('(')], parentheses(false)),
+        (Object, &[ch('i'), ch(')')], parentheses(false)),
+        (Object, &[ch('i'), ch('b')], parentheses(false)),
+        (Object, &[ch('a'), ch('(')], parentheses(true)),
+        (Object, &[ch('a'), ch(')')], parentheses(true)),
+        (Object, &[ch('a'), ch('b')], parentheses(true)),
+        (Object, &[ch('i'), ch('"')], quotes(false)),
+        (Object, &[ch('a'), ch('"')], quotes(true)),
+        (Object, &[ch('i'), ch('p')], paragraph(false)),
+        (Object, &[ch('a'), ch('p')], paragraph(true)),
         (Insert, &[Key::Escape], Action::NormalMode),
         (Insert, &[Key::Ctrl('c')], Action::Interrupt),
         (Insert, &[Key::Backspace], Action::Backspace),
@@ -246,13 +285,18 @@ const VIM: &[(Context, &[Key], Action)] = {
 mod tests {
     use super::*;
 
-    const MODES: [Mode; 6] = [
+    const MODES: [Mode; 11] = [
         Mode::Normal,
         Mode::Insert,
         Mode::CommandLine,
         Mode::OperatorPending(Operator::Delete),
         Mode::OperatorPending(Operator::Change),
         Mode::OperatorPending(Operator::Yank),
+        Mode::OperatorPending(Operator::Lowercase),
+        Mode::OperatorPending(Operator::Uppercase),
+        Mode::OperatorPending(Operator::ToggleCase),
+        Mode::Visual(VisualKind::Char),
+        Mode::Visual(VisualKind::Line),
     ];
 
     fn overlap(a: Context, b: Context) -> bool {

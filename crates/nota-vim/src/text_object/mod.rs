@@ -1,13 +1,15 @@
 //! Text objects con la lógica de `current_word`, `current_block`,
-//! `current_quote` y `current_par` de vim (`textobject.c`).
+//! `current_quote` y `current_par` de vim (`textobject.c`), incluida la de
+//! Visual, donde extienden la selección.
 
 mod block;
 mod paragraph;
 mod quote;
 mod word;
 
-use nota_buffer::{Buffer, ByteOffset};
+use nota_buffer::{Buffer, ByteOffset, Goal, Selection};
 
+use crate::VisualKind;
 use crate::span::{Missed, Span};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,8 +20,23 @@ pub enum TextObject {
     Paragraph { around: bool },
 }
 
+/// Los extremos que mueve un text object, como `VIsual` y el cursor de vim.
+/// Con un operador pendiente, `anchor` hace de inicio del objeto.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Ends {
+    anchor: ByteOffset,
+    head: ByteOffset,
+}
+
+impl Ends {
+    fn at(head: ByteOffset) -> Self {
+        Self { anchor: head, head }
+    }
+}
+
 impl TextObject {
-    /// Falla si no hay objeto alrededor del cursor.
+    /// Lo que abarca con un operador pendiente; falla si no hay objeto
+    /// alrededor del cursor.
     pub(crate) fn resolve(
         self,
         buffer: &Buffer,
@@ -28,16 +45,52 @@ impl TextObject {
     ) -> Result<Span, Missed> {
         let missed = || Missed::at(buffer, head);
         match self {
-            Self::Word { big, around } => word::select(buffer, head, count, big, around),
+            Self::Word { big, around } => word::resolve(buffer, head, count, big, around),
             Self::Parentheses { around } => {
-                block::select(buffer, head, count, around, ('(', ')')).ok_or_else(missed)
+                block::resolve(buffer, head, count, around, ('(', ')')).ok_or_else(missed)
             }
             Self::DoubleQuotes { around } => {
-                quote::select(buffer, head, count, around, '"').ok_or_else(missed)
+                quote::resolve(buffer, head, count, around, '"').ok_or_else(missed)
             }
             Self::Paragraph { around } => {
-                paragraph::select(buffer, head, count, around).ok_or_else(missed)
+                paragraph::resolve(buffer, head, count, around).ok_or_else(missed)
             }
         }
+    }
+
+    /// En Visual, selecciona el objeto o extiende la selección con él. Como
+    /// en vim, si falla la selección puede quedar a medio mover; el modo
+    /// pasa a ser por caracteres, o por líneas con `ip` y `ap`.
+    pub(crate) fn select(
+        self,
+        buffer: &Buffer,
+        selection: &Selection,
+        kind: VisualKind,
+        count: usize,
+    ) -> (Selection, VisualKind) {
+        let mut ends = Ends {
+            anchor: selection.anchor,
+            head: selection.head,
+        };
+        let by_chars = |found: bool| if found { VisualKind::Char } else { kind };
+        let kind = match self {
+            Self::Word { big, around } => {
+                by_chars(word::select(buffer, &mut ends, count, big, around))
+            }
+            Self::Parentheses { around } => {
+                by_chars(block::select(buffer, &mut ends, count, around, ('(', ')')))
+            }
+            Self::DoubleQuotes { around } => {
+                by_chars(quote::select(buffer, &mut ends, count, around, '"'))
+            }
+            Self::Paragraph { around } => paragraph::select(buffer, &mut ends, kind, count, around),
+        };
+        let moved = ends.anchor != selection.anchor || ends.head != selection.head;
+        let selection = Selection {
+            anchor: ends.anchor,
+            head: ends.head,
+            goal: if moved { Goal::None } else { selection.goal },
+        };
+        (selection, kind)
     }
 }

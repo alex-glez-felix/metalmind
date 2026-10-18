@@ -28,6 +28,9 @@ impl Vim {
             Mode::Normal | Mode::OperatorPending(_) => {
                 return self.run_in_normal(action, buffer, selections, clipboard);
             }
+            Mode::Visual(kind) => {
+                return self.run_in_visual(action, kind, buffer, selections, clipboard);
+            }
         }
         Ok(KeyOutcome::Executed(action))
     }
@@ -98,6 +101,8 @@ impl Vim {
                 let object = Object::Motion(Motion::Right).into();
                 self.operate(Operator::Delete, object, buffer, selections, clipboard)?;
             }
+            (Action::Visual(kind), Mode::Normal) => self.enter_visual(kind, buffer, selections),
+            (Action::RestoreVisual, Mode::Normal) => self.restore_visual(buffer, selections),
             (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
             (Action::Paste(side), Mode::Normal) => {
                 self.paste(side, buffer, selections, clipboard)?;
@@ -156,9 +161,10 @@ impl Vim {
         Ok(KeyOutcome::Executed(action))
     }
 
-    /// Una motion en Normal. Como en vim, falla si falla en todos los
-    /// cursores, y `h` y `l` también si no se mueven.
-    fn move_by(
+    /// Una motion en Normal o, extendiendo la selección, en Visual. Como en
+    /// vim, falla si falla en todos los cursores, y `h` y `l` también si no
+    /// se mueven.
+    pub(super) fn move_by(
         &mut self,
         motion: Motion,
         buffer: &mut Buffer,
@@ -169,8 +175,9 @@ impl Vim {
         if motion.is_jump() {
             self.jumped(buffer, selections)?;
         }
-        let moved = move_cursors(selections, |s| {
-            let destination = motion.resolve(buffer, s, count, None)?;
+        let purpose = self.motion_purpose();
+        let moved = move_cursors(selections, self.in_visual(), |s| {
+            let destination = motion.resolve(buffer, s, count, purpose)?;
             let stuck = motion.fails_without_moving() && destination.offset == s.head;
             (!stuck).then_some(destination)
         });
@@ -182,10 +189,11 @@ impl Vim {
     }
 }
 
-/// Cada cursor va a donde lo lleve `resolve`; si falla, se queda. `None` si
-/// falla en todos.
+/// Cada cursor va a donde lo lleve `resolve`; si falla, se queda. En Visual
+/// el otro extremo de la selección no se mueve. `None` si falla en todos.
 pub(super) fn move_cursors(
     selections: &Selections,
+    visual: bool,
     resolve: impl Fn(&Selection) -> Option<Destination>,
 ) -> Option<Selections> {
     let moves = selections.map_to(|selection| (*selection, resolve(selection)));
@@ -193,8 +201,14 @@ pub(super) fn move_cursors(
         return None;
     }
     Some(moves.to_selections(|(selection, destination)| {
-        destination.map_or(*selection, |destination| {
-            Selection::cursor(destination.offset).with_goal(destination.goal)
+        destination.map_or(*selection, |destination| Selection {
+            anchor: if visual {
+                selection.anchor
+            } else {
+                destination.offset
+            },
+            head: destination.offset,
+            goal: destination.goal,
         })
     }))
 }

@@ -65,6 +65,16 @@ impl Want {
         }
     }
 
+    /// Como [`Self::offset_on`], pero en Visual: puede quedar sobre el fin
+    /// de línea, que así entra en la selección (`coladvance` de vim con
+    /// `selection=inclusive`).
+    pub fn visual_offset_on(self, buffer: &Buffer, line: usize) -> ByteOffset {
+        match self {
+            Self::Column(column) => buffer.offset_at_column(line, column),
+            Self::LineEnd => buffer.line_end(line),
+        }
+    }
+
     pub fn goal(self) -> Goal {
         match self {
             Self::Column(column) => Goal::Column(column),

@@ -1,7 +1,11 @@
-use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, Selection, Selections};
+use std::ops::Range;
+
+use nota_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, PerSelection, Selection, Selections};
 
 use crate::lines::first_non_blank;
+use crate::operator::content;
 use crate::register::Register;
+use crate::span::{Region, Target};
 use crate::{PasteSide, VimError};
 
 /// `p`/`P`. El cursor queda donde lo deja vim: en el primer no blanco de la
@@ -13,7 +17,7 @@ pub(crate) fn paste(
     side: PasteSide,
     count: usize,
 ) -> Result<Selections, VimError> {
-    let text = repeated(register, count);
+    let text = repeated(register, count, register.linewise);
     if text.is_empty() {
         return Ok(selections.clone());
     }
@@ -37,8 +41,8 @@ pub(crate) fn paste(
     Ok(after)
 }
 
-fn repeated(register: &Register, count: usize) -> String {
-    let separator = if register.linewise { "\n" } else { "" };
+fn repeated(register: &Register, count: usize, linewise: bool) -> String {
+    let separator = if linewise { "\n" } else { "" };
     vec![register.text.as_str(); count].join(separator)
 }
 
@@ -77,4 +81,87 @@ fn cursor_after(
     } else {
         buffer.prev_boundary(map.map(at, Bias::After))
     }
+}
+
+/// `p`/`P` en Visual: lo pegado reemplaza lo seleccionado, como
+/// `nv_put_opt` de vim. Sobre líneas se pega por líneas; sobre caracteres,
+/// un registro por líneas parte la línea y va en medio.
+pub(crate) fn replace(
+    buffer: &mut Buffer,
+    targets: &PerSelection<Target>,
+    register: &Register,
+    count: usize,
+) -> Result<Selections, VimError> {
+    let replacements = targets.map(|target| Replacement::new(buffer, target, register, count));
+    buffer.begin_transaction(targets.to_selections(|target| Selection::cursor(target.start)))?;
+    let map = buffer.apply(without_overlaps(&replacements))?;
+    let after = replacements.to_selections(|replacement| replacement.cursor_after(buffer, &map));
+    buffer.commit_transaction(after.clone())?;
+    Ok(after)
+}
+
+/// Lo que va en lugar de una selección.
+struct Replacement {
+    range: Range<ByteOffset>,
+    text: String,
+    /// Se pega por líneas: el cursor va al primer no blanco de la primera.
+    lines: bool,
+    /// Un registro por líneas partió la línea: lo pegado empieza en la de
+    /// abajo.
+    split: bool,
+}
+
+impl Replacement {
+    fn new(buffer: &Buffer, target: &Target, register: &Register, count: usize) -> Self {
+        let range = content(buffer, &target.region);
+        match target.region {
+            Region::Lines { .. } => Self {
+                range,
+                text: repeated(register, count, true),
+                lines: true,
+                split: false,
+            },
+            Region::Chars(_) if register.linewise => Self {
+                range,
+                text: format!("\n{}\n", repeated(register, count, true)),
+                lines: true,
+                split: true,
+            },
+            Region::Chars(_) => Self {
+                range,
+                text: repeated(register, count, false),
+                lines: false,
+                split: false,
+            },
+        }
+    }
+
+    fn cursor_after(&self, buffer: &Buffer, map: &EditMap) -> Selection {
+        let start = map.map(self.range.start, Bias::Before);
+        let offset = if self.lines {
+            first_non_blank(buffer, buffer.line_of(start) + usize::from(self.split))
+        } else if self.text.contains('\n') {
+            start
+        } else {
+            buffer.prev_boundary(map.map(self.range.start, Bias::After))
+        };
+        Selection::cursor(offset)
+    }
+}
+
+/// Dos selecciones por líneas pueden tocar la misma línea; vale la primera.
+fn without_overlaps(replacements: &PerSelection<Replacement>) -> Vec<Edit> {
+    let mut edits: Vec<Edit> = Vec::with_capacity(replacements.iter().len());
+    for replacement in replacements.iter() {
+        let overlaps = edits.last().is_some_and(|last| {
+            replacement.range.start < last.range.end || replacement.range == last.range
+        });
+        if !overlaps {
+            edits.push(Edit::replace(
+                replacement.range.clone(),
+                replacement.text.clone(),
+            ));
+        }
+    }
+    edits
 }

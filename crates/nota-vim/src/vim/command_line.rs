@@ -30,10 +30,14 @@ impl Vim {
         self.mode = Mode::CommandLine;
     }
 
-    /// Salir sin enviar también cancela el operador que esperaba a `/`.
+    /// Salir sin enviar también cancela el operador que esperaba a `/`; si
+    /// se buscaba desde Visual, se vuelve a la selección.
     pub(super) fn close_command_line(&mut self) {
-        self.awaiting_search = None;
-        self.mode = Mode::Normal;
+        let visual = self
+            .awaiting_search
+            .take()
+            .and_then(|awaiting| awaiting.visual);
+        self.mode = visual.map_or(Mode::Normal, Mode::Visual);
     }
 
     pub(super) fn type_in_command_line(&mut self, text: &str) {

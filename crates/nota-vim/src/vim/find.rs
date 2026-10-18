@@ -67,7 +67,8 @@ impl Vim {
         }
         let times = self.take_count().unwrap_or(1);
         self.reset();
-        match move_cursors(selections, |s| find.resolve(buffer, s.head, times)) {
+        let visual = self.in_visual();
+        match move_cursors(selections, visual, |s| find.resolve(buffer, s.head, times)) {
             Some(moved) => *selections = moved,
             None => self.fail(),
         }

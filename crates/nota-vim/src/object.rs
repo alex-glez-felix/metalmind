@@ -1,9 +1,12 @@
 use nota_buffer::{Buffer, ByteOffset, Selection};
 
 use crate::find::Find;
+use crate::lines::{first_non_blank, last_char};
 use crate::mark;
+use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
 use crate::span::{Missed, Region, Span, SpanKind, Target};
+use crate::visual::Area;
 use crate::{Motion, Operator, TextObject};
 
 /// Sobre qué actúa un operador.
@@ -22,6 +25,7 @@ pub(crate) enum Object {
         offset: ByteOffset,
         exact: bool,
     },
+    Visual(Area),
 }
 
 impl Object {
@@ -36,7 +40,7 @@ impl Object {
     ) -> Result<Target, Missed> {
         let span = match *self {
             Self::Motion(motion) => motion
-                .resolve(buffer, selection, count, Some(operator))
+                .resolve(buffer, selection, count, Purpose::Operate(operator))
                 .ok_or(Missed::Stay)?
                 .span_from(selection.head),
             Self::Find(find) => find
@@ -66,26 +70,47 @@ impl Object {
                 Span::between(selection.head, destination, kind)
             }
             Self::CurrentLine => {
-                return current_lines(buffer, selection, count.unwrap_or(1)).ok_or(Missed::Stay);
+                return current_lines(buffer, selection, operator, count.unwrap_or(1))
+                    .ok_or(Missed::Stay);
             }
+            Self::Visual(area) => return Ok(area.target(buffer, selection)),
         };
         Ok(span.into_target(buffer))
     }
 }
 
 /// `3dd` falla en la última línea, pero si hay menos de 3 toma las que haya.
-fn current_lines(buffer: &Buffer, selection: &Selection, count: usize) -> Option<Target> {
+fn current_lines(
+    buffer: &Buffer,
+    selection: &Selection,
+    operator: Operator,
+    count: usize,
+) -> Option<Target> {
     let first = buffer.line_of(selection.head);
     let last_line = buffer.last_line();
     if count > 1 && first >= last_line {
         return None;
     }
+    let last = first.saturating_add(count - 1).min(last_line);
     Some(Target {
-        region: Region::Lines {
-            first,
-            last: first.saturating_add(count - 1).min(last_line),
-        },
-        start: selection.head,
+        region: Region::Lines { first, last },
+        start: line_start_for(buffer, selection, operator, last),
         adjusted: false,
+        visual: false,
     })
+}
+
+/// Como `nv_lineop` de vim: `g~~`, `guu` y `gUU` llevan antes el cursor al
+/// primer no blanco de la última línea; `dd`, `cc` e `yy` no lo mueven.
+fn line_start_for(
+    buffer: &Buffer,
+    selection: &Selection,
+    operator: Operator,
+    last: usize,
+) -> ByteOffset {
+    if !operator.transforms() {
+        return selection.head;
+    }
+    let destination = first_non_blank(buffer, last).min(last_char(buffer, last));
+    selection.head.min(destination)
 }

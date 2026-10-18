@@ -1,16 +1,21 @@
 //! Notación de los tests: `|` marca cada cursor. En Normal va antes del
-//! carácter bajo el cursor; en Insert, entre caracteres.
+//! carácter bajo el cursor; en Insert, entre caracteres. En Visual, `¦`
+//! marca el otro extremo de la selección si no coincide con el cursor.
 
 pub mod nvim;
 
 use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
-use nota_vim::{Key, KeyOutcome, Mode, Vim};
+use nota_vim::{Key, KeyOutcome, Mode, Vim, VisualKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     pub text: String,
     pub mode: String,
+    /// Como `text`, pero en Visual también con el otro extremo (`¦`).
+    pub selection: String,
 }
+
+const ANCHOR: char = '¦';
 
 pub fn parse(marked: &str) -> (Buffer, Selections) {
     let mut text = String::new();
@@ -32,6 +37,20 @@ pub fn render(buffer: &Buffer, heads: impl IntoIterator<Item = ByteOffset>) -> S
     heads.sort_unstable();
     for head in heads.into_iter().rev() {
         text.insert(head, '|');
+    }
+    text
+}
+
+/// El cursor y, si hay selección Visual, su otro extremo.
+pub fn render_visual(buffer: &Buffer, anchor: Option<ByteOffset>, head: ByteOffset) -> String {
+    let mut text = buffer.to_string();
+    let mut marks = vec![(head.get(), '|')];
+    if let Some(anchor) = anchor.filter(|&anchor| anchor != head) {
+        marks.push((anchor.get(), ANCHOR));
+    }
+    marks.sort_unstable();
+    for (at, mark) in marks.into_iter().rev() {
+        text.insert(at, mark);
     }
     text
 }
@@ -144,6 +163,8 @@ pub fn mode_name(mode: Mode) -> &'static str {
         Mode::Normal => "n",
         Mode::Insert => "i",
         Mode::OperatorPending(_) => "no",
+        Mode::Visual(VisualKind::Char) => "v",
+        Mode::Visual(VisualKind::Line) => "V",
         Mode::CommandLine => "c",
     }
 }
@@ -152,8 +173,11 @@ pub fn run_engine(before: &str, keys: &str) -> State {
     let (mut buffer, mut selections) = parse(before);
     let mut vim = Vim::new();
     feed(&mut vim, &mut buffer, &mut selections, keys);
+    let visual = matches!(vim.mode(), Mode::Visual(_));
+    let primary = selections.primary();
     State {
         text: render(&buffer, selections.iter().map(|s| s.head)),
         mode: mode_name(vim.mode()).to_owned(),
+        selection: render_visual(&buffer, visual.then_some(primary.anchor), primary.head),
     }
 }

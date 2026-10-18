@@ -52,7 +52,7 @@ RUST_LOG=nota_ui=info,gpui_wgpu=info ./target/release/nota /tmp/prueba.md   # GP
 cargo install --path crates/nota               # opcional: deja `nota` en ~/.cargo/bin
 ```
 
-Dentro: vim normal/insert (lo de `nota-vim`), `:w` guarda, `:q` cierra (se niega si hay cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/nota-ui/src/theme.rs` (por ejemplo, JetBrainsMono Nerd Font).
+Dentro: vim normal/insert (lo de `nota-vim`; Visual con `v`/`V` ya opera, pero la selección se pinta como una del ratón, sin el último carácter ni las líneas completas de `V`), `:w` guarda, `:q` cierra (se niega si hay cambios: `[+]` en la barra y en el título), `:wq`, `:q!`. `ctrl-shift-c`/`ctrl-shift-v` copian y pegan con el portapapeles; seleccionar con el ratón copia a la primaria y el clic medio la pega. La fuente es la primera instalada de la lista en `crates/nota-ui/src/theme.rs` (por ejemplo, JetBrainsMono Nerd Font).
 
 ### Compilar rápido
 

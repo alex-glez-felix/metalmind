@@ -1,6 +1,6 @@
 //! `m{a-z}`, `'{a-z}` y `` `{a-z} ``, y `''` y ` `` ` para volver.
 
-use nota_buffer::{Buffer, Selection, Selections};
+use nota_buffer::{Buffer, Goal, Selection, Selections};
 
 use super::Vim;
 use crate::dot::{MarkJump, Subject};
@@ -26,8 +26,9 @@ impl Vim {
     }
 
     /// `'x` va al primer no blanco de la línea de la mark y `` `x `` a su
-    /// posición; con un operador pendiente son su motion. Como en vim,
-    /// ambos dejan el cursor de antes como la mark de `''`.
+    /// posición; con un operador pendiente son su motion y en Visual
+    /// extienden la selección principal. Como en vim, ambos dejan el cursor
+    /// de antes como la mark de `''`.
     pub(super) fn go_to_mark(
         &mut self,
         c: char,
@@ -52,7 +53,15 @@ impl Vim {
         match object {
             Some(Object::Mark { offset, exact }) => {
                 let head = mark::destination(buffer, offset, exact);
-                *selections = Selections::single(Selection::cursor(head));
+                let anchor = match self.mode {
+                    Mode::Visual(_) => selections.primary().anchor,
+                    _ => head,
+                };
+                *selections = Selections::single(Selection {
+                    anchor,
+                    head,
+                    goal: Goal::None,
+                });
             }
             _ => self.fail(),
         }

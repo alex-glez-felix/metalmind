@@ -4,7 +4,7 @@
 use gpui_kit::{
     Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _,
 };
-use nota_vim::Mode;
+use nota_vim::{Mode, VisualKind};
 
 use crate::theme::Theme;
 
@@ -68,6 +68,8 @@ fn mode_label(mode: Mode) -> &'static str {
         Mode::Normal => "NORMAL",
         Mode::Insert => "INSERTAR",
         Mode::OperatorPending(_) => "OPERADOR",
+        Mode::Visual(VisualKind::Char) => "VISUAL",
+        Mode::Visual(VisualKind::Line) => "VISUAL LÍNEA",
         Mode::CommandLine => "COMANDO",
     }
 }

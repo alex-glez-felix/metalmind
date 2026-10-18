@@ -44,6 +44,7 @@ impl Vim {
             }
             Change::Paste(side) => self.paste(side, buffer, selections, clipboard)?,
             Change::Insert(at) => self.enter_insert(at, buffer, selections)?,
+            Change::Replace(c, size) => self.replace_sized(c, size, buffer, selections)?,
         }
         if self.mode != Mode::Insert {
             return Ok(());
