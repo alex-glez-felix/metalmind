@@ -102,6 +102,9 @@ fn crlf(#[case] text: &str, #[case] expected: &[&str]) {
 #[case::markdown_title_unclosed("[x](a.md \"t)", &[])]
 #[case::markdown_paren_title("[x](a.md (un título)) #b", &["[x](a.md (un título))", "#b"])]
 #[case::markdown_escaped_quote_in_title("[x](a.md \"un \\\" t\")", &["[x](a.md \"un \\\" t\")"])]
+#[case::markdown_code_in_label("[a `[b` #c](nota.md)", &["[a `[b` #c](nota.md)"])]
+#[case::markdown_code_with_bracket_in_label("[a `]` b](nota.md)", &["[a `]` b](nota.md)"])]
+#[case::markdown_comment_in_label("[a %%]%% b](nota.md)", &["[a %%]%% b](nota.md)"])]
 #[case::markdown_nested_label("[a [b] c](nota.md)", &["[a [b] c](nota.md)"])]
 fn links(#[case] text: &str, #[case] expected: &[&str]) {
     assert_eq!(found(text), expected);
@@ -199,16 +202,16 @@ fn frontmatter_after_bom() {
     assert_eq!(found(text), ["#b"]);
 }
 
-#[test]
-fn frontmatter_must_start_the_note() {
-    assert_eq!(scan("\n---\ntags: a\n---\n").frontmatter, None);
-}
-
 #[rstest]
 #[case::fence("\u{FEFF}```\n[[a]]\n```\n[[b]]", &["[[b]]"])]
 #[case::tag("\u{FEFF}#tag", &["#tag"])]
 fn bom_without_frontmatter(#[case] text: &str, #[case] expected: &[&str]) {
     assert_eq!(found(text), expected);
+}
+
+#[test]
+fn frontmatter_must_start_the_note() {
+    assert_eq!(scan("\n---\ntags: a\n---\n").frontmatter, None);
 }
 
 #[test]
@@ -251,5 +254,21 @@ fn singular_field_names_are_not_read() {
             frontmatter.cssclasses
         ),
         (Vec::new(), Vec::new(), Vec::new())
+    );
+}
+
+/// Rachas sin pareja de largos 1, 2, …, k en un párrafo: buscar el cierre de
+/// cada una recorriendo el resto sería cuadrático (millones de bytes por
+/// racha); con el índice por largo son milisegundos.
+#[test]
+fn unclosed_backtick_runs_of_many_lengths_stay_linear() {
+    let text: String = (1..=2000).map(|len| "`".repeat(len) + " ").collect();
+    let start = std::time::Instant::now();
+    let scan = scan(&format!("{text}[[a]]"));
+    assert_eq!(scan.links.len(), 1);
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(5),
+        "{:?}",
+        start.elapsed()
     );
 }

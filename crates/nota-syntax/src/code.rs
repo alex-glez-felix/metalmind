@@ -2,6 +2,9 @@
 //! inline y comentarios `%% %%`. Cada función recibe dónde empieza la
 //! construcción y devuelve dónde termina.
 
+use std::collections::HashMap;
+use std::ops::Range;
+
 /// Fin de la línea que empieza en `start`, sin contar el salto.
 pub(crate) fn line_end(text: &str, start: usize) -> usize {
     text[start..].find('\n').map_or(text.len(), |i| start + i)
@@ -67,35 +70,27 @@ fn backtick_run(text: &str, at: usize) -> usize {
     text[at..].bytes().take_while(|&b| b == b'`').count()
 }
 
-/// El cierre de la racha de `len` backticks que termina en `from`: otra del
-/// mismo largo dentro del mismo párrafo. Si no hay, el fin del párrafo.
-fn code_span_close(text: &str, from: usize, len: usize) -> Result<usize, usize> {
+/// Inicio de la primera línea en blanco o de cerca tras `from`: el código
+/// inline no la cruza.
+fn paragraph_end(text: &str, from: usize) -> usize {
     let mut at = from;
-    while let Some(i) = text[at..].find(['`', '\n']) {
-        let found = at + i;
-        if text.as_bytes()[found] == b'`' {
-            let run = backtick_run(text, found);
-            if run == len {
-                return Ok(found + run);
-            }
-            at = found + run;
-            continue;
-        }
-        at = found + 1;
+    while let Some(i) = text[at..].find('\n') {
+        at += i + 1;
         let line = &text[at..line_end(text, at)];
         if is_blank(line) || opening_fence(line).is_some() {
-            return Err(at);
+            return at;
         }
     }
-    Err(text.len())
+    text.len()
 }
 
-/// Código inline. Recuerda los largos de racha que no cierran en el párrafo:
-/// ninguna racha posterior de ese largo cierra tampoco, y sin esto un párrafo
-/// lleno de backticks sueltos se recorrería una vez por racha.
+/// Código inline: una racha de backticks cierra con la siguiente del mismo
+/// largo en el mismo párrafo. Las rachas del párrafo se indexan por largo una
+/// sola vez, así un párrafo lleno de rachas sin pareja sigue siendo lineal.
 #[derive(Default)]
 pub(crate) struct CodeSpans {
-    unclosed: Vec<(usize, usize)>,
+    paragraph: Range<usize>,
+    starts_by_len: HashMap<usize, Vec<usize>>,
 }
 
 impl CodeSpans {
@@ -104,15 +99,25 @@ impl CodeSpans {
     pub(crate) fn end(&mut self, text: &str, at: usize) -> usize {
         let len = backtick_run(text, at);
         let run_end = at + len;
-        self.unclosed
-            .retain(|&(_, paragraph_end)| at < paragraph_end);
-        if self.unclosed.iter().any(|&(unclosed, _)| unclosed == len) {
-            return run_end;
+        if !self.paragraph.contains(&at) {
+            self.index(text, at);
         }
-        code_span_close(text, run_end, len).unwrap_or_else(|paragraph_end| {
-            self.unclosed.push((len, paragraph_end));
-            run_end
-        })
+        self.starts_by_len
+            .get(&len)
+            .and_then(|starts| starts.get(starts.partition_point(|&start| start < run_end)))
+            .map_or(run_end, |&close| close + len)
+    }
+
+    fn index(&mut self, text: &str, from: usize) {
+        self.paragraph = from..paragraph_end(text, from);
+        self.starts_by_len.clear();
+        let mut at = from;
+        while let Some(i) = text[at..self.paragraph.end].find('`') {
+            let start = at + i;
+            let len = backtick_run(&text[..self.paragraph.end], start);
+            self.starts_by_len.entry(len).or_default().push(start);
+            at = start + len;
+        }
     }
 }
 

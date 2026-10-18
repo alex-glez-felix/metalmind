@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use crate::code::line_end;
+use crate::code::{CodeSpans, comment_end, line_end};
 use crate::link::{Link, LinkSyntax, split_subpath, trim};
 
 /// Cuántos paréntesis anidados admite un destino, como cmark: acota lo que
@@ -12,9 +12,11 @@ fn is_escape(bytes: &[u8], i: usize) -> bool {
     bytes[i] == b'\\' && bytes.get(i + 1).is_some_and(u8::is_ascii_punctuation)
 }
 
-/// Los pares `[` `]` balanceados de la línea en curso, calculados una vez por
-/// línea: buscar el cierre desde cada `[` sería cuadrático en una línea llena
-/// de corchetes sin cerrar.
+/// Los pares `[` `]` balanceados desde el primer `[` que se pregunta hasta
+/// el fin de su línea, calculados una vez: buscar el cierre desde cada `[`
+/// sería cuadrático en una línea llena de corchetes sin cerrar. Salta el
+/// código inline y los comentarios igual que el scanner, para que un `]`
+/// dentro de ellos no cierre la etiqueta.
 #[derive(Default)]
 pub(crate) struct Brackets {
     line: Range<usize>,
@@ -22,32 +24,36 @@ pub(crate) struct Brackets {
 }
 
 impl Brackets {
-    fn close(&mut self, text: &str, open: usize) -> Option<usize> {
+    fn close(&mut self, text: &str, code_spans: &mut CodeSpans, open: usize) -> Option<usize> {
         if !self.line.contains(&open) {
-            self.match_line(text, open);
+            self.match_line(text, code_spans, open);
         }
         self.closes.get(&open).copied()
     }
 
-    fn match_line(&mut self, text: &str, at: usize) {
-        let start = text[..at].rfind('\n').map_or(0, |i| i + 1);
-        self.line = start..line_end(text, at);
+    fn match_line(&mut self, text: &str, code_spans: &mut CodeSpans, from: usize) {
+        self.line = from..line_end(text, from);
         self.closes.clear();
         let bytes = text.as_bytes();
         let mut opens = Vec::new();
-        let mut i = start;
+        let mut i = from;
         while i < self.line.end {
             match bytes[i] {
-                _ if is_escape(bytes, i) => i += 1,
-                b'[' => opens.push(i),
+                _ if is_escape(bytes, i) => i += 2,
+                b'`' => i = code_spans.end(text, i),
+                b'%' if bytes.get(i + 1) == Some(&b'%') => i = comment_end(text, i),
+                b'[' => {
+                    opens.push(i);
+                    i += 1;
+                }
                 b']' => {
                     if let Some(open) = opens.pop() {
                         self.closes.insert(open, i);
                     }
+                    i += 1;
                 }
-                _ => {}
+                _ => i += 1,
             }
-            i += 1;
         }
     }
 }
@@ -104,12 +110,6 @@ fn closing_paren(text: &str, from: usize) -> Option<usize> {
     (bytes.get(at) == Some(&b')')).then_some(at + 1)
 }
 
-fn skip_spaces(bytes: &[u8], from: usize) -> usize {
-    from + bytes[from..]
-        .iter()
-        .take_while(|&&b| b == b' ' || b == b'\t')
-        .count()
-}
 /// Tras el `close` que cierra el título que empieza en `from`, en la misma
 /// línea y sin contar los escapados.
 fn title_end(bytes: &[u8], from: usize, close: u8) -> Option<usize> {
@@ -124,6 +124,13 @@ fn title_end(bytes: &[u8], from: usize, close: u8) -> Option<usize> {
         i += 1;
     }
     None
+}
+
+fn skip_spaces(bytes: &[u8], from: usize) -> usize {
+    from + bytes[from..]
+        .iter()
+        .take_while(|&&b| b == b' ' || b == b'\t')
+        .count()
 }
 
 /// `scheme:` o `//host`: apunta fuera del vault.
@@ -142,10 +149,11 @@ fn is_external(destination: &str) -> bool {
 pub(crate) fn markdown_link_at(
     text: &str,
     brackets: &mut Brackets,
+    code_spans: &mut CodeSpans,
     start: usize,
     open: usize,
 ) -> Option<MarkdownLink> {
-    let label_close = brackets.close(text, open)?;
+    let label_close = brackets.close(text, code_spans, open)?;
     let paren = label_close + 1;
     if text.as_bytes().get(paren) != Some(&b'(') {
         return None;
