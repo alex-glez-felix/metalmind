@@ -50,6 +50,7 @@ pub struct Theme {
     pub caret_width: Pixels,
     pub underline_thickness: Pixels,
     pub border_width: Pixels,
+    pub pane_border_width: Pixels,
     /// Entre el borde del panel y el texto, con los números de línea.
     pub text_padding_x: Pixels,
     pub text_padding_y: Pixels,
@@ -99,6 +100,7 @@ impl Theme {
             caret_width: px(2.),
             underline_thickness: px(1.),
             border_width: px(1.),
+            pane_border_width: px(f32::from(settings.panes.border_width)),
             text_padding_x: px(f32::from(padding.horizontal)),
             text_padding_y: px(f32::from(padding.vertical)),
             status_padding_x: px(10.),
@@ -163,6 +165,7 @@ mod tests {
     }
 
     /// Los valores que `nota-ui` tenía fijos antes de leer temas, y los de paneles.
+    /// El borde entre paneles es `comment`, con contraste 3:1: con `border` no se veía.
     #[test]
     fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
         let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
@@ -194,7 +197,7 @@ mod tests {
                 rgb(0x5c_63_70).into(),
             ),
             ("status_border", theme.status_border, rgb(0x2a_2e_36).into()),
-            ("pane_border", theme.pane_border, rgb(0x2a_2e_36).into()),
+            ("pane_border", theme.pane_border, rgb(0x5c_63_70).into()),
             ("modified", theme.modified, rgb(0xe0_af_68).into()),
             ("error", theme.error, rgb(0xf7_76_8e).into()),
         ];
@@ -216,6 +219,16 @@ mod tests {
             (theme.text_padding_x, theme.text_padding_y),
             (px(20.), px(0.))
         );
+    }
+
+    #[test]
+    fn el_ancho_del_borde_entre_paneles_sale_de_la_config() {
+        let mut config = config::Config::defaults().unwrap();
+        let width =
+            |config: &config::Config| Theme::with_font(config, "Mono".into()).pane_border_width;
+        assert_eq!(width(&config), px(2.));
+        config.settings.panes.border_width = 5;
+        assert_eq!(width(&config), px(5.));
     }
 
     #[test]

@@ -16,7 +16,7 @@ Theme {
         status_foreground: #9aa0a6,
         status_unfocused_foreground: #5c6370,
         status_border: #2a2e36,
-        pane_border: #2a2e36,
+        pane_border: #5c6370,
         modified: #e0af68,
         error: #f7768e,
     },

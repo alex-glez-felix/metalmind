@@ -29,7 +29,7 @@ ui:
   status_foreground: fg_dim
   status_unfocused_foreground: comment
   status_border: border
-  pane_border: border
+  pane_border: comment
   modified: yellow
   error: red
 

@@ -118,8 +118,8 @@ impl WorkspaceView {
                         .min_h_0()
                         .border_color(theme.pane_border)
                         .when(index > 0, |cell| match axis {
-                            Axis::Row => cell.border_l(theme.border_width),
-                            Axis::Column => cell.border_t(theme.border_width),
+                            Axis::Row => cell.border_l(theme.pane_border_width),
+                            Axis::Column => cell.border_t(theme.pane_border_width),
                         })
                         .child(self.render_node(child, theme))
                 });
