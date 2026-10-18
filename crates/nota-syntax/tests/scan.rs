@@ -100,6 +100,8 @@ fn crlf(#[case] text: &str, #[case] expected: &[&str]) {
 #[case::markdown_empty("[x]()", &[])]
 #[case::markdown_only_hash("[x](#) #a", &["#a"])]
 #[case::markdown_title_unclosed("[x](a.md \"t)", &[])]
+#[case::markdown_paren_title("[x](a.md (un título)) #b", &["[x](a.md (un título))", "#b"])]
+#[case::markdown_escaped_quote_in_title("[x](a.md \"un \\\" t\")", &["[x](a.md \"un \\\" t\")"])]
 #[case::markdown_nested_label("[a [b] c](nota.md)", &["[a [b] c](nota.md)"])]
 fn links(#[case] text: &str, #[case] expected: &[&str]) {
     assert_eq!(found(text), expected);
