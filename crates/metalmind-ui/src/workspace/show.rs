@@ -11,12 +11,16 @@ impl Workspace {
     /// `pane` pasa a mostrar `path`, abriéndolo si no está abierto. Como
     /// vim con `hidden`, no se niega por cambios sin guardar: el documento
     /// de antes queda oculto, con sus cambios. Lo que estuviera a medias en
-    /// el panel termina como con `ctrl-c`. Devuelve si lo muestra; si no se
-    /// pudo leer, el error queda en [`Workspace::message`].
+    /// el panel termina como con `ctrl-c`. Devuelve el documento que muestra;
+    /// `None` si no se pudo leer, con el error en [`Workspace::message`].
     ///
     /// # Errors
     /// Solo si el estado está inconsistente, lo que sería un bug.
-    pub fn show_file(&mut self, pane: PaneId, path: &Path) -> Result<bool, WorkspaceError> {
+    pub fn show_file(
+        &mut self,
+        pane: PaneId,
+        path: &Path,
+    ) -> Result<Option<DocumentId>, WorkspaceError> {
         let id = match self.documents.find(path) {
             Some(id) => id,
             None => match Document::open(path) {
@@ -24,12 +28,12 @@ impl Workspace {
                 Err(error) => {
                     self.interrupt(pane)?;
                     self.message = Some(Message::Error(error.to_string()));
-                    return Ok(false);
+                    return Ok(None);
                 }
             },
         };
         self.show_document(pane, id)?;
-        Ok(true)
+        Ok(Some(id))
     }
 
     /// `pane` pasa a mostrar `id`, con el cursor de un panel que ya lo

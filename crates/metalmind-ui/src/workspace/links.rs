@@ -119,7 +119,7 @@ impl Workspace {
     ) -> Result<(), WorkspaceError> {
         let pane = self.focused();
         self.push_jump(pane)?;
-        if self.show_file(pane, &shown_path(path))?
+        if self.show_file(pane, &shown_path(path))?.is_some()
             && let Some(subpath) = subpath
         {
             self.go_to_subpath(subpath)?;
