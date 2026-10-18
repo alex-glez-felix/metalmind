@@ -26,17 +26,33 @@ struct Fence {
     len: usize,
 }
 
-/// Una línea de cerca: tres o más `` ` `` o `~`. Se acepta cualquier sangría y
-/// los `>` de una cita porque las cercas dentro de listas y citas son comunes
-/// en notas y aquí no se parsean bloques.
+/// Una línea de cerca: tres o más `` ` `` o `~`. Se acepta cualquier sangría,
+/// los `>` de una cita y los marcadores de lista (`-`, `*`, `+`, `1.`) porque las
+/// cercas dentro de listas y citas son comunes en notas y aquí no se parsean
+/// bloques.
 fn fence(line: &str) -> Option<(Fence, &str)> {
-    let rest = line.trim_start_matches([' ', '\t', '>']);
+    let mut rest = line.trim_start_matches([' ', '\t', '>']);
+    while let Some(item) = strip_list_marker(rest) {
+        rest = item.trim_start_matches([' ', '\t', '>']);
+    }
     let marker = *rest.as_bytes().first()?;
     if marker != b'`' && marker != b'~' {
         return None;
     }
     let len = rest.bytes().take_while(|&b| b == marker).count();
     (len >= 3).then(|| (Fence { marker, len }, &rest[len..]))
+}
+
+/// Lo que sigue a `- `, `* `, `+ `, `1. ` o `1) ` al principio de `line`.
+fn strip_list_marker(line: &str) -> Option<&str> {
+    let digits = line.bytes().take_while(u8::is_ascii_digit).count();
+    let marker = match line.as_bytes().get(digits) {
+        Some(b'.' | b')') if (1..=9).contains(&digits) => digits + 1,
+        Some(b'-' | b'*' | b'+') if digits == 0 => 1,
+        _ => return None,
+    };
+    let after = &line[marker..];
+    after.starts_with([' ', '\t']).then_some(after)
 }
 
 fn opening_fence(line: &str) -> Option<Fence> {
@@ -143,6 +159,19 @@ mod tests {
     fn a_shorter_fence_does_not_close() {
         let text = "````\n```\n````\nfuera";
         assert_eq!(fenced_block_end(text, 0), Some(14));
+    }
+
+    #[test]
+    fn a_fence_can_open_a_list_item() {
+        let text = "- ```\n  [[a]]\n  ```\nfuera";
+        assert_eq!(fenced_block_end(text, 0), Some(text.len() - "fuera".len()));
+        assert_eq!(fenced_block_end("12. ~~~\n~~~\n", 0), Some(12));
+    }
+
+    #[test]
+    fn a_rule_or_a_marker_without_space_is_not_a_fence() {
+        assert_eq!(fenced_block_end("-```\n", 0), None);
+        assert_eq!(fenced_block_end("- - -\n", 0), None);
     }
 
     #[test]
