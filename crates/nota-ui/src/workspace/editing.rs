@@ -1,7 +1,9 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
 use nota_buffer::{Bias, ByteOffset, Edit, Goal, Selection, Selections};
-use nota_vim::{Action, Clipboard, Invocation, Key, KeyOutcome, Mode, SystemRegister};
+use nota_vim::{
+    Action, Clipboard, Invocation, Key, KeyOutcome, Mode, Operator, PasteSide, SystemRegister,
+};
 
 use super::{Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 
@@ -150,7 +152,7 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
         if self.in_visual(pane)? {
-            return self.feed_keys(pane, "\"+y", clipboard);
+            return self.with_clipboard_register(pane, Action::Operator(Operator::Yank), clipboard);
         }
         let text = match self.selected_text(pane)? {
             Some(text) => text,
@@ -172,7 +174,7 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
         if self.in_visual(pane)? {
-            return self.feed_keys(pane, "\"+P", clipboard);
+            return self.with_clipboard_register(pane, Action::Paste(PasteSide::Before), clipboard);
         }
         match clipboard.read(SystemRegister::Clipboard) {
             Some(text) => self.paste(pane, &text),
@@ -184,15 +186,24 @@ impl Workspace {
         Ok(matches!(self.view(pane)?.mode, Mode::Visual(_)))
     }
 
-    fn feed_keys(
+    /// `action` con `"+`, descartando lo que el motor tuviera pendiente.
+    fn with_clipboard_register(
         &mut self,
         pane: PaneId,
-        keys: &str,
+        action: Action,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
-        for c in keys.chars() {
-            self.feed(pane, Key::Char(c), clipboard)?;
-        }
+        self.focus(pane)?;
+        let outcome = self.edit_pane(pane, |vim, buffer, selections| {
+            Ok(vim.execute_with_system_register(
+                SystemRegister::Clipboard,
+                action,
+                buffer,
+                selections,
+                clipboard,
+            )?)
+        })?;
+        self.note(&outcome);
         Ok(())
     }
 

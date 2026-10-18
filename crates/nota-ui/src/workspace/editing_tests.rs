@@ -126,3 +126,29 @@ fn las_flechas_recorren_el_historial_de_la_busqueda() {
     let line = session.view(pane).command_line.unwrap();
     assert_eq!(line.prompt.symbol(), '/');
 }
+
+#[test]
+fn copiar_y_pegar_en_visual_no_completan_lo_pendiente() {
+    let mut session = Session::new("hola mundo\n");
+    session.keys("wver");
+    session.copy();
+    assert_eq!(session.clipboard.0.as_deref(), Some("mundo"));
+    assert_eq!(session.text(), "hola mundo\n", "r no reemplazó por \"");
+    session.clipboard.0 = Some("gente".to_owned());
+    session.keys("ve3");
+    session.paste_clipboard();
+    assert_eq!(
+        session.text(),
+        "hola gente\n",
+        "el count no repitió el pegado"
+    );
+}
+
+#[test]
+fn copiar_fuera_de_visual_no_mueve_el_cursor() {
+    let mut session = Session::new("uno\ndos\ntres\n");
+    session.keys("jl");
+    session.copy();
+    assert_eq!(session.cursor(), ByteOffset::new(5));
+    assert_eq!(session.mode(), Mode::Normal);
+}

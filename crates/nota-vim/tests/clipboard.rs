@@ -14,7 +14,7 @@
 mod support;
 
 use nota_buffer::{Buffer, Selections};
-use nota_vim::{Clipboard, SystemRegister, Vim};
+use nota_vim::{Action, Clipboard, Mode, Operator, PasteSide, SystemRegister, Vim};
 use pretty_assertions::assert_eq;
 
 #[derive(Default)]
@@ -138,4 +138,48 @@ fn repeating_a_clipboard_paste_reads_it_again() {
 fn without_a_clipboard_they_are_plain_registers() {
     let state = support::run_engine("|ab\ncd", "\"+yyj\"*yw\"+p\"*P");
     assert_eq!(state.text, "ab\ncd\nc|dab");
+}
+
+impl Editor {
+    fn with_system_register(&mut self, action: Action) -> &mut Self {
+        self.vim
+            .execute_with_system_register(
+                SystemRegister::Clipboard,
+                action,
+                &mut self.buffer,
+                &mut self.selections,
+                &mut self.clipboard,
+            )
+            .unwrap();
+        self
+    }
+}
+
+const YANK: Action = Action::Operator(Operator::Yank);
+const PUT: Action = Action::Paste(PasteSide::Before);
+
+#[test]
+fn a_system_register_action_in_visual_is_like_typing_it() {
+    let mut editor = Editor::new("|ab cd\nef");
+    editor.keys("ve").with_system_register(YANK);
+    assert_eq!(editor.clipboard.clipboard.as_deref(), Some("ab"));
+    assert_eq!(editor.vim.mode(), Mode::Normal);
+    editor.keys("jV").with_system_register(YANK);
+    assert_eq!(editor.clipboard.clipboard.as_deref(), Some("ef\n"));
+    editor.clipboard.clipboard = Some("X".to_owned());
+    editor.keys("ggwve").with_system_register(PUT);
+    assert_eq!(editor.text(), "ab |X\nef");
+}
+
+/// Lo pendiente no se completa con la acción: `r` no reemplaza por `"`, `3`
+/// no pega tres veces, `"a` no se usa y `i` no se vuelve `i"`.
+#[test]
+fn a_system_register_action_drops_what_was_pending() {
+    for pending in ["r", "3", "\"a", "i", "f"] {
+        let mut editor = Editor::new("|ab cd\nef");
+        editor.clipboard.clipboard = Some("X".to_owned());
+        editor.keys("ve").keys(pending).with_system_register(PUT);
+        assert_eq!(editor.text(), "|X cd\nef", "tras {pending:?}");
+        assert_eq!(editor.vim.mode(), Mode::Normal, "tras {pending:?}");
+    }
 }
