@@ -181,12 +181,12 @@ impl TagIcon {
 }
 
 /// El nombre de una plantilla si es una ruta del vault sin `.md`
-/// (`trabajo/semanal`): sin `..`, sin ser absoluta ni oculta.
+/// (`trabajo/semanal`): sin `..`, sin ser absoluta ni oculta. Sin espacios
+/// alrededor, que el frontmatter recorta al leer.
 #[must_use]
 pub fn parse_template(text: &str) -> Option<String> {
-    VaultPath::new(&format!("{text}.md"))
-        .is_ok()
-        .then(|| text.to_owned())
+    let valid = text.trim() == text && VaultPath::new(&format!("{text}.md")).is_ok();
+    valid.then(|| text.to_owned())
 }
 
 /// Símbolos con sus modificadores: variaciones, ZWJ, etiquetas de banderas y
@@ -245,6 +245,8 @@ mod tests {
     #[case("/absoluta", false)]
     #[case(".oculta", false)]
     #[case("a//b", false)]
+    #[case(" trabajo", false)]
+    #[case("trabajo ", false)]
     fn templates(#[case] text: &str, #[case] valid: bool) {
         assert_eq!(parse_template(text).is_some(), valid, "{text}");
     }
