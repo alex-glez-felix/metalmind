@@ -40,6 +40,7 @@ impl Vim {
     pub(super) fn follow_cursor(&mut self, buffer: &Buffer, selections: &Selections, version: u64) {
         if buffer.version() != version {
             self.viewport.invalidate();
+            self.catch_up(buffer);
         }
         self.viewport
             .reveal(buffer, selections.primary().head, self.scrolloff);

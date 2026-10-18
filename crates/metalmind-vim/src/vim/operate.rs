@@ -49,7 +49,7 @@ impl Vim {
                 })
             }),
             Subject::Mark(MarkJump { name, exact }) => {
-                let offset = self.marks.get(buffer, name)?;
+                let offset = self.mark_offset(name, buffer)?;
                 Some(Object::Mark { offset, exact })
             }
         }

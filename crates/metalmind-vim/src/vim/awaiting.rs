@@ -63,7 +63,9 @@ impl Vim {
                 Action::SetMark
             }
             Awaiting::Mark { exact } => {
-                self.go_to_mark(c, exact, buffer, selections, clipboard)?;
+                if let Some(outcome) = self.go_to_mark(c, exact, buffer, selections, clipboard)? {
+                    return Ok(outcome);
+                }
                 Action::GoToMark { exact }
             }
             Awaiting::Replace => {

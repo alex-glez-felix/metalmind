@@ -101,6 +101,10 @@ pub enum Action {
     GoToMark {
         exact: bool,
     },
+    /// `ctrl-o`: la entrada anterior de la jumplist.
+    JumpOlder,
+    /// `ctrl-i`: la siguiente.
+    JumpNewer,
     Undo,
     Redo,
     /// Estado anterior en orden cronológico, cruzando ramas del historial.
@@ -141,6 +145,7 @@ impl Action {
         Self::Motion(Motion::Window(Place::Top)),
         Self::Motion(Motion::Window(Place::Middle)),
         Self::Motion(Motion::Window(Place::Bottom)),
+        Self::Motion(Motion::Matching),
         Self::Scroll(Scroll::LineDown),
         Self::Scroll(Scroll::LineUp),
         Self::Scroll(Scroll::HalfPageDown),
@@ -268,6 +273,8 @@ impl Action {
         Self::SetMark,
         Self::GoToMark { exact: false },
         Self::GoToMark { exact: true },
+        Self::JumpOlder,
+        Self::JumpNewer,
         Self::Undo,
         Self::Redo,
         Self::Earlier,
@@ -297,6 +304,7 @@ impl Action {
         Self::Command(Command::OpenCommandPalette),
         Self::Command(Command::ToggleFolders),
         Self::Command(Command::ToggleTags),
+        Self::Command(Command::FollowLink),
     ];
 
     #[must_use]
@@ -353,6 +361,8 @@ impl Action {
             Self::SetMark => "vim::set_mark",
             Self::GoToMark { exact: false } => "vim::go_to_mark_line",
             Self::GoToMark { exact: true } => "vim::go_to_mark",
+            Self::JumpOlder => "vim::jump_older",
+            Self::JumpNewer => "vim::jump_newer",
             Self::Undo => "vim::undo",
             Self::Redo => "vim::redo",
             Self::Earlier => "vim::earlier",
@@ -401,6 +411,7 @@ fn motion_name(motion: Motion) -> &'static str {
         Motion::Window(Place::Top) => "vim::window_top",
         Motion::Window(Place::Middle) => "vim::window_middle",
         Motion::Window(Place::Bottom) => "vim::window_bottom",
+        Motion::Matching => "vim::matching",
     }
 }
 

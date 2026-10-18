@@ -182,7 +182,8 @@ impl Vim {
         Ok(line)
     }
 
-    /// `'a`–`'z`, `''` y `'<`, `'>` de la última selección Visual; desde 0.
+    /// `'a`–`'z`, `'A`–`'Z` de este archivo, `''` y `'<`, `'>` de la última
+    /// selección Visual; desde 0.
     fn mark_line(&self, mark: char, buffer: &Buffer) -> Result<usize, CommandError> {
         let line = match mark {
             '<' | '>' => self
@@ -191,7 +192,7 @@ impl Vim {
                 .and_then(|visual| visual.lines(buffer))
                 .map(|(start, end)| if mark == '<' { start } else { end }),
             _ => MarkName::parse(mark)
-                .and_then(|name| self.marks.get(buffer, name))
+                .and_then(|name| self.mark_offset(name, buffer))
                 .map(|offset| buffer.line_of(offset)),
         };
         line.ok_or(CommandError::MarkNotSet)

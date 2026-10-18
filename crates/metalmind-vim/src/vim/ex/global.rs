@@ -48,6 +48,7 @@ impl Vim {
                 inverted: command.inverted,
             }));
         }
+        self.jumped(buffer, selections)?;
         buffer.mark_lines(marked);
         self.global = Some(GlobalRun {
             substituted: Substitution::default(),

@@ -18,6 +18,11 @@ exec(
   local text, row, col = ...
   -- Metalmind todavía no implementa autoindent.
   vim.o.autoindent = false
+  -- Metalmind implementa el `%` de vim (`findmatchlimit`), no el de matchit,
+  -- que nvim carga por defecto.
+  for _, mode in ipairs({ "n", "x", "o" }) do
+    vim.keymap.del(mode, "%")
+  end
   -- La búsqueda de Metalmind usa estos defaults, como casi toda config de vim.
   vim.o.ignorecase = true
   vim.o.smartcase = true

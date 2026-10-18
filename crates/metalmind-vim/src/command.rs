@@ -49,6 +49,8 @@ pub enum Command {
     ToggleFolders,
     /// `space t`: lo mismo con la vista de tags.
     ToggleTags,
+    /// `gd` o `enter`: abre lo que nombra el link bajo el cursor.
+    FollowLink,
 }
 
 /// Un comando con el argumento que se le escribió, como `:e notas/a.md`.
@@ -127,6 +129,9 @@ pub enum CommandError {
     /// correr quien aloja el editor no puede ir dentro.
     #[error("Metalmind no corre :{0} dentro de :g ni de :normal")]
     HostCommandInside(String),
+    /// Un salto a otro archivo (`ctrl-o`, `'A`) dentro de `:g` o `:normal`.
+    #[error("Metalmind no cambia de archivo dentro de :g ni de :normal")]
+    FileSwitchInside,
     #[error(transparent)]
     Search(#[from] SearchError),
 }
@@ -166,6 +171,7 @@ impl Command {
         Self::OpenCommandPalette,
         Self::ToggleFolders,
         Self::ToggleTags,
+        Self::FollowLink,
     ];
 
     #[must_use]
@@ -190,6 +196,7 @@ impl Command {
             Self::OpenCommandPalette => "workspace::open_command_palette",
             Self::ToggleFolders => "panel::toggle_folders",
             Self::ToggleTags => "panel::toggle_tags",
+            Self::FollowLink => "editor::follow_link",
         }
     }
 
