@@ -14,7 +14,7 @@ mod pane_tree;
 use std::collections::BTreeMap;
 
 use nota_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
-use nota_vim::{Action, Mode, Vim, VimError};
+use nota_vim::{Action, Mode, Prompt, Vim, VimError};
 
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
@@ -70,7 +70,14 @@ pub struct PaneView<'a> {
     pub mode: Mode,
     /// El registro de la macro que se graba, solo en el panel con el foco.
     pub recording: Option<char>,
-    pub command_line: Option<&'a str>,
+    pub command_line: Option<CommandLine<'a>>,
+}
+
+/// Lo que se está escribiendo tras `:`, `/` o `?`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CommandLine<'a> {
+    pub prompt: Prompt,
+    pub typed: &'a str,
 }
 
 impl PaneView<'_> {
@@ -137,7 +144,7 @@ impl Workspace {
                 Mode::Normal
             },
             recording: self.vim.recording().filter(|_| focused),
-            command_line: self.vim.command_line().filter(|_| focused),
+            command_line: self.command_line().filter(|_| focused),
         })
     }
 
@@ -168,6 +175,13 @@ impl Workspace {
         })?;
         self.tree.set_focus(pane);
         Ok(())
+    }
+
+    fn command_line(&self) -> Option<CommandLine<'_>> {
+        Some(CommandLine {
+            prompt: self.vim.command_line_prompt()?,
+            typed: self.vim.command_line()?,
+        })
     }
 
     fn pane(&self, pane: PaneId) -> Result<&Pane, WorkspaceError> {

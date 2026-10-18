@@ -30,7 +30,7 @@ use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
 use crate::actions::{self, EDITOR_CONTEXT};
 use crate::theme::Theme;
-use crate::workspace::{PaneId, PaneView, Workspace, WorkspaceError};
+use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
 
 pub struct Editor {
     workspace: Entity<Workspace>,
@@ -175,7 +175,7 @@ impl Editor {
     fn ime_line(&self, cx: &App) -> Option<ImeLine> {
         let marked = self.marked.as_deref().unwrap_or("");
         let view = self.view(cx)?;
-        if let Some(typed) = view.command_line {
+        if let Some(CommandLine { typed, .. }) = view.command_line {
             return Some(ImeLine::new(typed.to_owned(), typed.len(), marked));
         }
         let buffer = view.buffer();
@@ -208,9 +208,11 @@ impl Editor {
         let view = self.view(cx)?;
         let buffer = view.buffer();
         let line = buffer.line_of(view.cursor());
-        let command_line = view
-            .command_line
-            .map(|typed| (typed.to_owned(), self.marked.clone().unwrap_or_default()));
+        let command_line = view.command_line.map(|line| status_bar::CommandLine {
+            symbol: line.prompt.symbol(),
+            typed: line.typed.to_owned(),
+            preedit: self.marked.clone().unwrap_or_default(),
+        });
         let message = view
             .focused
             .then(|| self.workspace.read(cx).message().cloned())

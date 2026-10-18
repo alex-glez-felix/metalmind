@@ -23,14 +23,27 @@ impl Workspace {
         let outcome = self.edit_pane(pane, |vim, buffer, selections| {
             Ok(vim.feed_with_clipboard(key, buffer, selections, clipboard)?)
         })?;
-        match &outcome {
-            KeyOutcome::Executed(Action::CommandLine) => self.message = None,
-            KeyOutcome::InvalidCommand(error) => {
-                self.message = Some(Message::Error(error.to_string()));
-            }
-            _ => {}
-        }
+        self.note(&outcome);
         Ok(outcome)
+    }
+
+    /// El aviso que deja una tecla. Abrir la línea de comandos o encontrar
+    /// lo buscado borra el anterior; lo demás no lo toca.
+    fn note(&mut self, outcome: &KeyOutcome) {
+        self.message = match outcome {
+            KeyOutcome::Executed(
+                Action::CommandLine
+                | Action::Search { .. }
+                | Action::SubmitCommand
+                | Action::SearchNext { .. }
+                | Action::SearchWord { .. },
+            ) => None,
+            KeyOutcome::InvalidCommand(error) => Some(Message::Error(error.to_string())),
+            KeyOutcome::SearchFailed(error) => Some(Message::Error(error.to_string())),
+            KeyOutcome::SearchWrapped(wrap) => Some(Message::wrapped(*wrap)),
+            KeyOutcome::Substituted(substitution) => Message::substituted(*substitution),
+            _ => return,
+        };
     }
 
     /// Texto ya compuesto por el teclado o el IME: cada carácter entra al
