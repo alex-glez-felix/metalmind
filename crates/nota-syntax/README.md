@@ -7,7 +7,7 @@ La sintaxis de nota sobre el texto de una nota, sin GUI ni I/O. Adopta de Obsidi
 - `Tag`: `#tag` y `#a/b/c` al inicio de línea o tras un espacio, terminados en espacio o puntuación, nunca solo números (`is_valid_tag_name`): `PR #15` no es un tag.
 - `Frontmatter`: el bloque `---` del principio con `tags`, `aliases` y `cssclasses` en forma de lista o de texto, leído como YAML 1.2 con `serde-saphyr` (el mismo crate que `nota-config`). Un YAML roto o un campo de otro tipo queda en `Scan::problems` y el resto se escanea igual.
 - Nada se reconoce dentro de bloques cercados (``` y ~~~, también en listas y citas), código inline ni comentarios `%% %%`; un `%%` sin cierre comenta hasta el final.
-- `resolve(target, rutas) -> Resolution`: sin distinguir mayúsculas, con o sin `.md`, por nombre o final de ruta (`carpeta/nota`); gana la de menos carpetas, un empate lo rompe la única con las mismas mayúsculas y si no, es `Ambiguous`.
+- `resolve(target, rutas) -> Resolution`: sin distinguir mayúsculas, con o sin `.md`, por nombre o final de ruta (`carpeta/nota`); gana la de menos carpetas, un empate lo rompe la única con las mismas mayúsculas y si no, es `Ambiguous`. `resolve_from(nota, target, rutas)` hace lo mismo pero un destino que empieza con `./` o `../` parte de la carpeta de la nota, como en un link markdown.
 - Lineal en el tamaño de la nota, también con corchetes o backticks sin cerrar.
 
 No sabe de bloques de markdown (listas, citas, código indentado) ni de tree-sitter, que entra en M4. Tampoco de `^block-id`, headings ni aliases del vault al resolver: eso es del índice.

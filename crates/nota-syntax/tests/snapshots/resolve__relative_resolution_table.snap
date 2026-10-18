@@ -1,0 +1,16 @@
+---
+source: crates/nota-syntax/tests/resolve.rs
+expression: table
+---
+"./nota" → proyectos/nota.md
+"./nota.md" → proyectos/nota.md
+"./Plan" → proyectos/Plan.md
+"../nota.md" → nota.md
+"../Inicio" → Inicio.md
+"../proyectos/./nota" → proyectos/nota.md
+"../archivo/2023/Plan.md" → archivo/2023/Plan.md
+"./../diario/2024-10-01" → diario/2024-10-01.md
+"./no-existe" → sin resolver
+"../../nota" → sin resolver
+"nota" → nota.md
+"duplicada" → ambiguo: a/Duplicada.md, b/Duplicada.md
