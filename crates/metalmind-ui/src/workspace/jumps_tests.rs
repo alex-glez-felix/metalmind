@@ -258,3 +258,28 @@ fn una_nota_oculta_se_relee_si_cambia_en_disco() {
     session.keys(&format!(":e {}⏎", path("c.md").display()));
     assert_eq!(session.text(), "c1x");
 }
+
+/// Releer una nota oculta que cambió en disco conserva sus marks en su
+/// línea, como vim; también `:e!`.
+#[test]
+fn releer_una_nota_conserva_sus_marks() {
+    let (_dir, vault, mut session) =
+        vault_session(&[("a.md", "uno\ndos\ntres\n"), ("b.md", B)], "a.md");
+    let path = |name: &str| vault.root().join(name);
+    session.keys(&format!("jjma:e {}⏎", path("b.md").display()));
+    fs::write(path("a.md"), "UNO\nDOS\nTRES\n").unwrap();
+    let modified = VaultChange::Modified {
+        path: VaultPath::new("a.md").unwrap(),
+    };
+    session.workspace.files_changed(vault.root(), &[modified]);
+    session.keys(&format!(":e {}⏎gg'a", path("a.md").display()));
+    assert_eq!(
+        (session.text(), session.line(session.pane())),
+        ("UNO\nDOS\nTRES".into(), 3)
+    );
+    fs::write(path("a.md"), "uno\n").unwrap();
+    // vim da E19 y la guarda; aquí se pierde con su línea.
+    session.keys(":e!⏎gg'a");
+    assert_eq!(session.line(session.pane()), 1);
+    assert_eq!(error(&session).as_deref(), Some("E20: Mark not set"));
+}

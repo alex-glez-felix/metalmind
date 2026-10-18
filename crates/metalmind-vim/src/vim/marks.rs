@@ -49,7 +49,13 @@ impl Vim {
         match name {
             MarkName::File(letter) => {
                 let jump = self.file_marks.get(letter)?;
-                (jump.file == self.file).then(|| buffer.offset_at_point(jump.point))
+                // Lo editado dentro del mismo comando (un rango de `:g`)
+                // todavía no lo siguió `catch_up`.
+                let pending = buffer.splices().get(self.splices_seen..).unwrap_or(&[]);
+                let point = pending
+                    .iter()
+                    .fold(jump.point, |point, splice| splice.lines.keep(point));
+                (jump.file == self.file).then(|| buffer.offset_at_point(point))
             }
             name => self.marks.get(buffer, name.of_buffer()?),
         }

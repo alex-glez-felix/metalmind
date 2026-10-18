@@ -263,13 +263,14 @@ impl Workspace {
             self.message = Some(Message::Error(SaveError::NoFileName.to_string()));
             return Ok(());
         };
-        let reloaded = match Document::open(path) {
+        let mut reloaded = match Document::open(path) {
             Ok(reloaded) => reloaded,
             Err(error) => {
                 self.message = Some(Message::Error(error.to_string()));
                 return Ok(());
             }
         };
+        reloaded.keep_marks_of(document)?;
         let old = std::mem::replace(self.document_mut(id)?, reloaded);
         let buffer = self
             .documents
