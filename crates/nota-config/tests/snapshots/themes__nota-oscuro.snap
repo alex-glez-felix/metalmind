@@ -1,0 +1,40 @@
+---
+source: crates/nota-config/tests/themes.rs
+expression: loaded.value
+---
+Theme {
+    name: "nota-oscuro",
+    ui: UiColors {
+        background: #1c1f24,
+        foreground: #d7dae0,
+        selection: #7aa2f7 α0.3,
+        current_line: #21252b,
+        gutter: #1c1f24,
+        gutter_foreground: #4b5263,
+        status_background: #16181d,
+        status_foreground: #9aa0a6,
+        status_border: #2a2e36,
+        modified: #e0af68,
+        error: #f7768e,
+    },
+    cursor: CursorColors {
+        normal: #7aa2f7 α0.5,
+        insert: #7aa2f7,
+        visual: #bb9af7 α0.5,
+        replace: #f7768e α0.5,
+    },
+    syntax: SyntaxColors {
+        heading: #7aa2f7,
+        bold: #ff9e64,
+        italic: #bb9af7,
+        link: #7dcfff,
+        tag: #9ece6a,
+        code: #9ece6a,
+        quote: #9aa0a6,
+        list_marker: #e0af68,
+        highlight: #e0af68 α0.3,
+        comment: #5c6370,
+        frontmatter: #9aa0a6,
+        markup: #4b5263,
+    },
+}
