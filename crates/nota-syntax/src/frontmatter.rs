@@ -1,20 +1,22 @@
 use std::ops::Range;
 
-use yaml_rust2::{Yaml, YamlLoader};
-
 use crate::Problem;
 use crate::code::line_end;
 use crate::tag::is_valid_tag_name;
 
+mod yaml;
+
+use yaml::{Field, Fields, ReadError};
+
 /// El bloque `---` … `---` al principio de la nota. Solo se leen los campos
-/// que Obsidian entiende; el YAML del usuario no se toca.
+/// que nota entiende; el YAML del usuario no se toca.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Frontmatter {
     /// Desde el primer `---` hasta el fin de la línea del `---` de cierre.
     pub span: Range<usize>,
     /// El YAML entre los dos `---`.
     pub yaml: Range<usize>,
-    /// Sin `#`, como los escribe Obsidian.
+    /// Sin `#`: `#tag` y `tag` son el mismo tag.
     pub tags: Vec<String>,
     pub aliases: Vec<String>,
     pub cssclasses: Vec<String>,
@@ -55,93 +57,54 @@ pub(crate) fn parse(text: &str, problems: &mut Vec<Problem>) -> (Option<Frontmat
     let body = (span.end + 1).min(text.len());
     let mut frontmatter = Frontmatter {
         span,
-        yaml,
+        yaml: yaml.clone(),
         ..Frontmatter::default()
     };
-    match YamlLoader::load_from_str(&text[frontmatter.yaml.clone()]) {
-        Err(error) => {
-            let yaml = frontmatter.yaml.clone();
-            let at = (yaml.start + error.marker().index()).min(yaml.end);
-            problems.push(Problem::InvalidYaml {
-                at: text.floor_char_boundary(at),
-                span: yaml,
-                message: error.info().to_owned(),
-            });
-        }
-        Ok(documents) => read_fields(&mut frontmatter, documents.first(), problems),
+    match yaml::read(&text[yaml.clone()]) {
+        Ok(fields) => frontmatter.read_fields(fields, problems),
+        Err(ReadError::Syntax { at, message }) => problems.push(Problem::InvalidYaml {
+            at: yaml.start + at,
+            span: yaml,
+            message,
+        }),
+        Err(ReadError::NotMapping) => problems.push(Problem::FrontmatterNotMapping { span: yaml }),
     }
     (Some(frontmatter), body)
 }
 
-fn read_fields(
-    frontmatter: &mut Frontmatter,
-    document: Option<&Yaml>,
-    problems: &mut Vec<Problem>,
-) {
-    let span = frontmatter.yaml.clone();
-    let fields = match document {
-        None | Some(Yaml::Null) => return,
-        Some(Yaml::Hash(fields)) => fields,
-        Some(_) => {
-            problems.push(Problem::FrontmatterNotMapping { span });
-            return;
-        }
-    };
-    // Obsidian sigue leyendo los nombres en singular de antes de la 1.4.
-    let mut field = |names: [&'static str; 2], split: fn(&str) -> Vec<String>| {
-        names
-            .iter()
-            .filter_map(|&name| {
-                fields
-                    .get(&Yaml::String(name.to_owned()))
-                    .map(|v| (name, v))
-            })
-            .flat_map(|(name, value)| {
-                values(value, split).unwrap_or_else(|| {
+impl Frontmatter {
+    fn read_fields(&mut self, fields: Fields, problems: &mut Vec<Problem>) {
+        let mut values = |name: &'static str,
+                          field: Option<Field>,
+                          split: fn(&str) -> Vec<String>| {
+            match field {
+                None => Vec::new(),
+                Some(Field::List(items)) => items
+                    .iter()
+                    .map(|item| item.trim())
+                    .filter(|item| !item.is_empty())
+                    .map(str::to_owned)
+                    .collect(),
+                Some(Field::Text(text)) => split(&text),
+                Some(Field::Invalid) => {
                     problems.push(Problem::InvalidField {
                         field: name,
-                        span: span.clone(),
+                        span: self.yaml.clone(),
                     });
                     Vec::new()
-                })
-            })
-            .collect::<Vec<_>>()
-    };
-    let tags = field(["tags", "tag"], split_words);
-    let aliases = field(["aliases", "alias"], split_commas);
-    let cssclasses = field(["cssclasses", "cssclass"], split_words);
-    frontmatter.tags = tags
-        .into_iter()
-        .map(|tag| tag.trim_start_matches('#').to_owned())
-        .filter(|tag| is_valid_tag_name(tag))
-        .collect();
-    frontmatter.aliases = aliases;
-    frontmatter.cssclasses = cssclasses;
-}
-
-fn scalar(value: &Yaml) -> Option<String> {
-    match value {
-        Yaml::String(s) | Yaml::Real(s) => Some(s.clone()),
-        Yaml::Integer(n) => Some(n.to_string()),
-        Yaml::Boolean(b) => Some(b.to_string()),
-        _ => None,
-    }
-}
-
-/// Una lista de valores o un texto que se parte con `split`. `None` si el
-/// campo es de otro tipo; un campo vacío no tiene valores.
-fn values(value: &Yaml, split: fn(&str) -> Vec<String>) -> Option<Vec<String>> {
-    match value {
-        Yaml::Null => Some(Vec::new()),
-        Yaml::Array(items) => Some(
-            items
-                .iter()
-                .filter_map(scalar)
-                .map(|item| item.trim().to_owned())
-                .filter(|item| !item.is_empty())
-                .collect(),
-        ),
-        other => scalar(other).map(|text| split(&text)),
+                }
+            }
+        };
+        let tags = values("tags", fields.tags, split_words);
+        let aliases = values("aliases", fields.aliases, split_commas);
+        let cssclasses = values("cssclasses", fields.cssclasses, split_words);
+        self.tags = tags
+            .into_iter()
+            .map(|tag| tag.trim_start_matches('#').to_owned())
+            .filter(|tag| is_valid_tag_name(tag))
+            .collect();
+        self.aliases = aliases;
+        self.cssclasses = cssclasses;
     }
 }
 

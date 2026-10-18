@@ -224,3 +224,20 @@ fn deeply_nested_yaml_does_not_overflow() {
     assert_eq!(scan.problems.len(), 1);
     assert_eq!(found(&text), ["#a"]);
 }
+
+/// nota lee solo los nombres en plural; los singulares de antes de Obsidian
+/// 1.4 son claves cualquiera.
+#[test]
+fn singular_field_names_are_not_read() {
+    let frontmatter = scan("---\ntag: a\nalias: b\ncssclass: c\n---\n")
+        .frontmatter
+        .unwrap();
+    assert_eq!(
+        (
+            frontmatter.tags,
+            frontmatter.aliases,
+            frontmatter.cssclasses
+        ),
+        (Vec::new(), Vec::new(), Vec::new())
+    );
+}

@@ -32,8 +32,6 @@ serde-saphyr = { version = "2.0.0", default-features = false, features = ["deser
 serde_ignored = "0.1.14"
 smallvec = "1.16.3"
 thiserror = "2.0.21"
-# serde_yaml está deprecado; yaml-rust2 lee sin serde y tolera YAML raro (03 §2).
-yaml-rust2 = { version = "0.13.0", default-features = false }
 insta = { version = "1.49.0", features = ["glob"] }
 proptest = "1.12.0"
 rstest = "0.27.0"

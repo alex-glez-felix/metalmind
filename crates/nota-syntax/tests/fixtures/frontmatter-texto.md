@@ -1,6 +1,6 @@
 ---
 tags: uno, dos tres
-alias: Viejo, Otro alias
-cssclass: [ancho]
+aliases: Viejo, Otro alias
+cssclasses: [ancho]
 ---
 Cuerpo [[link]].
