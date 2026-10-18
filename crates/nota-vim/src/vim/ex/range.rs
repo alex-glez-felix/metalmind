@@ -148,7 +148,7 @@ impl Vim {
         let cursor = buffer.line_of(selections.primary().head) + 1;
         let below = self.resolve_address(address, cursor, buffer)?;
         if below > buffer.line_count() {
-            return Err(CommandError::InvalidAddress.into());
+            return Err(CommandError::InvalidRange.into());
         }
         Ok(below)
     }

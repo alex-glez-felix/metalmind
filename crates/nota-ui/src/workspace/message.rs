@@ -10,9 +10,6 @@ pub enum Message {
     Error(String),
 }
 
-/// Desde cuántos reemplazos `:s` los cuenta, como `report=2` de vim.
-const REPORT: usize = 2;
-
 impl Message {
     #[must_use]
     pub fn wrapped(wrap: Wrap) -> Self {
@@ -27,21 +24,8 @@ impl Message {
 
     /// `None` si fueron pocos para avisar.
     #[must_use]
-    pub fn substituted(
-        Substitution {
-            replacements,
-            lines,
-        }: Substitution,
-    ) -> Option<Self> {
-        let plural =
-            |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
-        (replacements > REPORT).then(|| {
-            Self::Info(format!(
-                "{} en {}",
-                plural(replacements, "reemplazo", "reemplazos"),
-                plural(lines, "línea", "líneas"),
-            ))
-        })
+    pub fn substituted(substitution: Substitution) -> Option<Self> {
+        substitution.report().map(Self::Info)
     }
 
     /// Como vim al abrir: `"a.md" 3L, 20B`, `"a.md" [noeol] 1L, 3B` si le
@@ -97,11 +81,11 @@ mod tests {
         assert_eq!(report(2, 2), None);
         assert_eq!(
             report(3, 1),
-            Some(Message::Info("3 reemplazos en 1 línea".to_owned()))
+            Some(Message::Info("3 substitutions on 1 line".to_owned()))
         );
         assert_eq!(
             report(4, 2),
-            Some(Message::Info("4 reemplazos en 2 líneas".to_owned()))
+            Some(Message::Info("4 substitutions on 2 lines".to_owned()))
         );
     }
 

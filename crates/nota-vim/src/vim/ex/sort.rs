@@ -12,7 +12,8 @@ use crate::vim::Vim;
 
 impl Vim {
     /// Como vim, el cursor queda en el primer no blanco de la primera línea.
-    /// El patrón no queda como última búsqueda.
+    /// El patrón no queda como última búsqueda y, como en `ex_sort`, sigue
+    /// `ignorecase` sin `smartcase`.
     pub(super) fn sort_lines(
         &mut self,
         lines: RangeInclusive<usize>,
@@ -26,8 +27,15 @@ impl Vim {
             .map(|pattern| pattern.source.as_str())
         {
             None => None,
-            Some("") => Some(self.search.pattern.clone().ok_or(SearchError::NoPrevious)?),
-            Some(source) => Some(Pattern::compile(source, Case::Smart)?),
+            Some("") => {
+                let last = self
+                    .search
+                    .pattern
+                    .as_ref()
+                    .ok_or(SearchError::NoPrevious)?;
+                Some(Pattern::compile(last.source(), Case::Ignore)?)
+            }
+            Some(source) => Some(Pattern::compile(source, Case::Ignore)?),
         };
         let by_match = options
             .pattern

@@ -4,6 +4,10 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
+#[allow(
+    dead_code,
+    reason = "cada binario de test usa solo una parte del soporte compartido"
+)]
 mod support;
 
 use pretty_assertions::assert_eq;

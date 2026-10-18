@@ -192,12 +192,12 @@ fn register_and_count(bang: bool, args: &str) -> Result<RegisterAndCount, Comman
     RegisterAndCount::parse(args)
 }
 
-/// La línea debajo de la que van `:m` y `:t`.
+/// La línea debajo de la que van `:m` y `:t`. Como `ex_copymove` de vim,
+/// lo que sigue a la dirección no se mira.
 fn destination(bang: bool, args: &str) -> Result<Address, CommandError> {
     no_bang(bang)?;
-    let (address, rest) = Address::parse(args)?;
-    args::no_trailing(rest)?;
-    address.ok_or(CommandError::InvalidAddress)
+    let (address, _) = Address::parse(args)?;
+    address.ok_or(CommandError::InvalidRange)
 }
 
 #[cfg(test)]
@@ -298,8 +298,8 @@ mod tests {
             ("no", CommandError::Unknown("no".to_owned())),
             ("3w", CommandError::Unknown("3w".to_owned())),
             ("dd", CommandError::Unknown("dd".to_owned())),
-            ("m", CommandError::InvalidAddress),
-            ("t0 x", CommandError::TrailingCharacters("x".to_owned())),
+            ("m", CommandError::InvalidRange),
+            ("m x", CommandError::InvalidRange),
             ("d!", CommandError::NoBangAllowed),
             ("norm", CommandError::ArgumentRequired),
             ("1noh", CommandError::NoRangeAllowed),

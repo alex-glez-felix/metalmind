@@ -1,7 +1,11 @@
 //! `:sort`: sus opciones y el orden, como `ex_sort` de vim.
 
-use std::cmp::Ordering;
+mod number;
 
+use std::cmp::Ordering;
+use std::ops::Range;
+
+use self::number::Radix;
 use crate::CommandError;
 use crate::search::split_at_delimiter;
 
@@ -21,8 +25,11 @@ pub(crate) struct SortOptions {
 pub(crate) enum SortBy {
     #[default]
     Text,
-    /// `n`: el primer número decimal; las líneas sin número van antes.
-    Number,
+    /// `n`, `b`, `o` o `x`: el primer número en esa base; las líneas sin
+    /// número van antes.
+    Integer(Radix),
+    /// `f`: el número con que empieza, como `strtod`.
+    Float,
 }
 
 /// `/patrón/`: se ordena por lo que sigue a su primera coincidencia o, con
@@ -35,7 +42,8 @@ pub(crate) struct SortPattern {
 }
 
 impl SortOptions {
-    /// Las opciones van en cualquier orden, con o sin espacios.
+    /// Las opciones van en cualquier orden, con o sin espacios, y un `"`
+    /// empieza un comentario, como en `ex_sort` de vim.
     ///
     /// # Errors
     /// Con una opción que vim no tiene, o que nota no soporta todavía.
@@ -46,6 +54,7 @@ impl SortOptions {
         };
         let mut by_match = false;
         let mut source = None;
+        let mut formats = 0;
         let mut rest = args;
         while let Some(c) = rest.chars().next() {
             let after = &rest[c.len_utf8()..];
@@ -54,23 +63,38 @@ impl SortOptions {
                 'i' => set(&mut options.ignore_case, after),
                 'u' => set(&mut options.unique, after),
                 'r' => set(&mut by_match, after),
-                'n' => {
-                    options.by = SortBy::Number;
+                'n' | 'b' | 'o' | 'x' | 'f' => {
+                    options.by = SortBy::from_flag(c);
+                    formats += 1;
                     after
                 }
-                'b' | 'f' | 'o' | 'x' => return Err(CommandError::UnsupportedSortFlag(c)),
-                c if c.is_ascii_alphabetic() || c == '"' || c == '\\' => {
-                    return Err(CommandError::InvalidArgument);
-                }
-                delimiter => {
-                    let (pattern, after) = split_at_delimiter(after, delimiter);
+                'l' => return Err(CommandError::UnsupportedSortFlag(c)),
+                '"' => break,
+                delimiter if !delimiter.is_ascii_alphabetic() && source.is_none() => {
+                    let (pattern, rest) = split_at_delimiter(after, delimiter);
                     source = Some(pattern);
-                    after.ok_or_else(|| CommandError::MissingDelimiter(rest.to_owned()))?
+                    rest.ok_or_else(|| CommandError::MissingDelimiter(after.to_owned()))?
                 }
+                _ => return Err(CommandError::InvalidArgumentAt(rest.to_owned())),
             };
+        }
+        if formats > 1 {
+            return Err(CommandError::InvalidArgument);
         }
         options.pattern = source.map(|source| SortPattern { source, by_match });
         Ok(options)
+    }
+}
+
+impl SortBy {
+    fn from_flag(flag: char) -> Self {
+        match flag {
+            'b' => Self::Integer(Radix::Binary),
+            'o' => Self::Integer(Radix::Octal),
+            'x' => Self::Integer(Radix::Hex),
+            'f' => Self::Float,
+            _ => Self::Integer(Radix::Decimal),
+        }
     }
 }
 
@@ -84,15 +108,26 @@ fn set<'a>(flag: &mut bool, rest: &'a str) -> &'a str {
 pub(crate) fn sort<'a>(
     lines: &[&'a str],
     options: &SortOptions,
-    key: impl Fn(&str) -> std::ops::Range<usize>,
+    key: impl Fn(&str) -> Range<usize>,
 ) -> Vec<&'a str> {
-    let keys: Vec<Key> = lines
-        .iter()
-        .map(|line| Key::of(&line[key(line)], options))
-        .collect();
+    let keys = lines.iter().map(|line| &line[key(line)]);
     let mut order: Vec<usize> = (0..lines.len()).collect();
     // Estable: las líneas iguales conservan su orden, como en vim.
-    order.sort_by(|&a, &b| keys[a].cmp(&keys[b], options.ignore_case));
+    match options.by {
+        SortBy::Text => {
+            let keys: Vec<&str> = keys.collect();
+            order.sort_by(|&a, &b| compare(keys[a], keys[b], options.ignore_case));
+        }
+        SortBy::Integer(radix) => {
+            let keys: Vec<Option<i64>> =
+                keys.map(|key| number::first_integer(key, radix)).collect();
+            order.sort_by_key(|&index| keys[index]);
+        }
+        SortBy::Float => {
+            let keys: Vec<f64> = keys.map(number::float).collect();
+            order.sort_by(|&a, &b| number::compare_floats(keys[a], keys[b]));
+        }
+    }
     if options.reverse {
         order.reverse();
     }
@@ -109,30 +144,6 @@ pub(crate) fn sort<'a>(
     sorted
 }
 
-enum Key<'a> {
-    Text(&'a str),
-    /// Sin número va antes que cualquier número.
-    Number(Option<i64>),
-}
-
-impl<'a> Key<'a> {
-    fn of(text: &'a str, options: &SortOptions) -> Self {
-        match options.by {
-            SortBy::Number => Self::Number(first_number(text)),
-            SortBy::Text => Self::Text(text),
-        }
-    }
-
-    fn cmp(&self, other: &Self, ignore_case: bool) -> Ordering {
-        match (self, other) {
-            (Self::Number(a), Self::Number(b)) => a.cmp(b),
-            (Self::Text(a), Self::Text(b)) => compare(a, b, ignore_case),
-            (Self::Number(_), Self::Text(_)) => Ordering::Less,
-            (Self::Text(_), Self::Number(_)) => Ordering::Greater,
-        }
-    }
-}
-
 /// Por bytes, como `strcmp`; con `i`, ignorando las mayúsculas ASCII, como
 /// `STRICMP` de vim.
 fn compare(a: &str, b: &str, ignore_case: bool) -> Ordering {
@@ -142,19 +153,6 @@ fn compare(a: &str, b: &str, ignore_case: bool) -> Ordering {
     } else {
         a.cmp(b)
     }
-}
-
-/// El primer número decimal, con su `-` si lo lleva justo antes. Como
-/// `strtoll`, uno que no cabe se queda en el máximo.
-fn first_number(text: &str) -> Option<i64> {
-    let start = text.find(|c: char| c.is_ascii_digit())?;
-    let digits = &text[start..];
-    let len = digits
-        .find(|c: char| !c.is_ascii_digit())
-        .unwrap_or(digits.len());
-    let negative = text[..start].ends_with('-');
-    let magnitude = digits[..len].parse::<i64>().unwrap_or(i64::MAX);
-    Some(if negative { -magnitude } else { magnitude })
 }
 
 #[cfg(test)]
@@ -178,20 +176,21 @@ mod tests {
             by_match: true,
         };
         assert_eq!(parsed.pattern, Some(pattern));
-        assert_eq!(options("n").by, SortBy::Number);
+        assert_eq!(options("n").by, SortBy::Integer(Radix::Decimal));
+        assert_eq!(options("x").by, SortBy::Integer(Radix::Hex));
+        assert_eq!(options("f").by, SortBy::Float);
         assert_eq!(options("n").pattern, None);
-        assert_eq!(
-            SortOptions::parse(false, "x"),
-            Err(CommandError::UnsupportedSortFlag('x'))
-        );
-        assert_eq!(
-            SortOptions::parse(false, "z"),
-            Err(CommandError::InvalidArgument)
-        );
-        assert_eq!(
-            SortOptions::parse(false, "/a"),
-            Err(CommandError::MissingDelimiter("/a".to_owned()))
-        );
+        assert_eq!(options("u \" n").by, SortBy::Text);
+        let errors = [
+            ("l", CommandError::UnsupportedSortFlag('l')),
+            ("zq", CommandError::InvalidArgumentAt("zq".to_owned())),
+            ("/a/ /b/", CommandError::InvalidArgumentAt("/b/".to_owned())),
+            ("n x", CommandError::InvalidArgument),
+            ("/a", CommandError::MissingDelimiter("a".to_owned())),
+        ];
+        for (args, error) in errors {
+            assert_eq!(SortOptions::parse(false, args), Err(error), "{args:?}");
+        }
     }
 
     #[test]
@@ -214,9 +213,13 @@ mod tests {
     }
 
     #[test]
-    fn a_number_that_does_not_fit_is_the_largest() {
-        assert_eq!(first_number("a99999999999999999999"), Some(i64::MAX));
-        assert_eq!(first_number("a-7b"), Some(-7));
-        assert_eq!(first_number("ab"), None);
+    fn sorts_by_numbers_in_any_base() {
+        let lines = ["0x1F", "a", "-3", "0b10", "10"];
+        assert_eq!(sorted(&lines, "x"), ["-3", "a", "10", "0x1F", "0b10"]);
+        assert_eq!(sorted(&lines, "b"), ["a", "-3", "0x1F", "0b10", "10"]);
+        assert_eq!(
+            sorted(&["2.5", "", "-1e1", "x"], "f"),
+            ["", "-1e1", "x", "2.5"]
+        );
     }
 }

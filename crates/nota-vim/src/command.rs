@@ -78,14 +78,15 @@ pub enum CommandError {
     TrailingCharacters(String),
     #[error("E20: Mark not set")]
     MarkNotSet,
-    #[error("E14: Invalid address")]
-    InvalidAddress,
     #[error("E134: Cannot move a range of lines into itself")]
     MoveIntoItself,
     #[error("E471: Argument required")]
     ArgumentRequired,
     #[error("E474: Invalid argument")]
     InvalidArgument,
+    /// Con lo que queda de la línea desde lo que no se entendió.
+    #[error("E475: Invalid argument: {0}")]
+    InvalidArgumentAt(String),
     #[error("E477: No ! allowed")]
     NoBangAllowed,
     #[error("E481: No range allowed")]
@@ -98,7 +99,7 @@ pub enum CommandError {
     LetterDelimiter,
     #[error("E147: Cannot do :global recursive with a range")]
     RecursiveGlobal,
-    #[error("E148: Regular expression missing from :global")]
+    #[error("E148: Regular expression missing from global")]
     GlobalPatternMissing,
     #[error("nota no soporta el flag {0} de :s")]
     UnsupportedFlag(char),
