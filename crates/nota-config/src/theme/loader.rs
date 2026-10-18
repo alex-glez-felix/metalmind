@@ -130,22 +130,16 @@ impl Themes {
                     .in_file(&layer.file),
                 None => error,
             };
-            // Un tema del usuario que extiende su mismo nombre extiende al embebido.
-            let shadowed = chain
-                .iter()
-                .any(|layer| layer.name == next && !layer.builtin);
-            let looped = |builtin: bool| {
-                chain
-                    .iter()
-                    .any(|layer| layer.name == next && layer.builtin == builtin)
-            };
-            if shadowed && !is_builtin(&next) {
+            // Un tema del usuario que extiende directamente su mismo nombre
+            // extiende al embebido; cualquier otra repetición es un ciclo.
+            let extends_builtin = is_builtin(&next)
+                && chain
+                    .last()
+                    .is_some_and(|layer| layer.name == next && !layer.builtin);
+            if !extends_builtin && chain.iter().any(|layer| layer.name == next) {
                 return Err(referrer(circular(&chain, &next)));
             }
-            let (file, text, builtin) = self.read(&next, !shadowed).map_err(referrer)?;
-            if looped(builtin) {
-                return Err(referrer(circular(&chain, &next)));
-            }
+            let (file, text, builtin) = self.read(&next, !extends_builtin).map_err(referrer)?;
             let (theme, layer_warnings) =
                 parse::<ThemeFile>(&text).map_err(|error| error.in_file(&file))?;
             warnings.extend(
