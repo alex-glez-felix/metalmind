@@ -44,10 +44,11 @@ fn open(
     frame_log: Option<&Path>,
     launched: Instant,
 ) -> Result<(), StartError> {
+    let clock = gui::frame_clock(launched, frame_log)?;
     let session = Session::load()?;
     let target = target::resolve(path, session.sources())?;
     let prepared = gui::prepare(session, &target)?;
-    gui::run(prepared, frame_log, launched)
+    gui::run(prepared, clock)
 }
 
 fn run(command: Command, launched: Instant) -> Result<(), CliError> {
@@ -55,11 +56,12 @@ fn run(command: Command, launched: Instant) -> Result<(), CliError> {
         Command::Add(args) => commands::add(args),
         Command::Search(args) => commands::search(&args),
         Command::Open(args) => {
+            let clock = gui::frame_clock(launched, None)?;
             let note = commands::open(&args)?;
             let session = Session::load()?;
             let prepared = gui::prepare(session, &note.target())?;
             note.announce(args.common.json)?;
-            Ok(gui::run(prepared, None, launched)?)
+            Ok(gui::run(prepared, clock)?)
         }
     }
 }
