@@ -373,3 +373,32 @@ fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa_en_la_barra() {
     assert_eq!(session.workspace.message(), None);
     assert_eq!(session.cursor(), ByteOffset::new(8));
 }
+
+#[test]
+fn una_macro_que_cambia_de_panel_edita_en_el_nuevo() {
+    let mut session = Session::new("abc\n");
+    let left = session.pane();
+    session.keys("⌃wv");
+    let right = session.pane();
+    session.keys("qa⌃whxq");
+    assert_eq!((session.pane(), session.text()), (left, "bc\n".to_owned()));
+    session.keys("⌃wl$");
+    assert_eq!(session.pane(), right);
+    session.keys("@a");
+    assert_eq!(session.pane(), left);
+    assert_eq!(session.text(), "c\n");
+    assert_eq!(session.view(left).cursor(), ByteOffset::ZERO);
+}
+
+#[test]
+fn un_comando_que_falla_corta_la_macro() {
+    let mut session = Session::new("abc\n");
+    session.keys("xqa:e otro.md⏎xq");
+    assert_eq!(session.text(), "c\n");
+    session.keys("@a");
+    assert!(matches!(
+        session.workspace.message(),
+        Some(Message::Error(_))
+    ));
+    assert_eq!(session.text(), "c\n");
+}

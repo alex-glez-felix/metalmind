@@ -12,8 +12,19 @@
 )]
 mod support;
 
-use nota_vim::{Command, KeyOutcome, Vim};
+use nota_vim::{Clipboard, Command, KeyOutcome, SystemRegister, Vim};
 use pretty_assertions::assert_eq;
+
+/// Un sistema sin portapapeles: `"+` y `"*` siempre vacíos.
+struct NoClipboard;
+
+impl Clipboard for NoClipboard {
+    fn read(&mut self, _: SystemRegister) -> Option<String> {
+        None
+    }
+
+    fn write(&mut self, _: SystemRegister, _: String) {}
+}
 
 fn engine(marked: &str) -> (Vim, nota_buffer::Buffer, nota_buffer::Selections) {
     let (buffer, selections) = support::parse(marked);
@@ -71,4 +82,39 @@ fn a_macro_that_never_fails_stops_eventually() {
 fn a_huge_count_does_not_queue_every_repetition() {
     let state = support::run_engine("|abc", "qalq999999999@ax");
     assert_eq!(state.text, "a|b");
+}
+
+#[test]
+fn a_macro_pauses_on_a_host_command_until_resumed() {
+    let (mut vim, mut buffer, mut selections) = engine("|abc");
+    support::feed(&mut vim, &mut buffer, &mut selections, "qa<C-w>lxq");
+    assert_eq!(buffer.to_string(), "bc");
+    let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
+    assert_eq!(
+        played,
+        Some(KeyOutcome::Command(Command::FocusRight.into()))
+    );
+    assert_eq!(buffer.to_string(), "bc", "la x espera al otro panel");
+    let (mut other, mut other_selections) = support::parse("|xyz");
+    let resumed = vim
+        .resume_macro(&mut other, &mut other_selections, &mut NoClipboard)
+        .unwrap();
+    assert_eq!(resumed, None);
+    assert_eq!(other.to_string(), "yz");
+    assert_eq!(
+        vim.resume_macro(&mut buffer, &mut selections, &mut NoClipboard)
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
+fn aborting_drops_the_rest_of_the_macro() {
+    let (mut vim, mut buffer, mut selections) = engine("|abc");
+    support::feed(&mut vim, &mut buffer, &mut selections, "qa<C-w>lxq@a");
+    vim.abort_macro();
+    let resumed = vim
+        .resume_macro(&mut buffer, &mut selections, &mut NoClipboard)
+        .unwrap();
+    assert_eq!((resumed, buffer.to_string().as_str()), (None, "bc"));
 }

@@ -17,6 +17,7 @@ use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
     ForceQuit, Only, Quit, Save, SaveAndQuit, SplitDown, SplitRight,
 };
+use crate::clipboard::SystemClipboard;
 use crate::document::Document;
 use crate::editor::Editor;
 use crate::theme::Theme;
@@ -64,7 +65,7 @@ impl WorkspaceView {
     fn run(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
         let effect = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
-            workspace.run(invocation)
+            workspace.run(invocation, &mut SystemClipboard(cx))
         });
         match effect {
             Effect::CloseWindow => window.remove_window(),

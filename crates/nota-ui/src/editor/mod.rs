@@ -1,7 +1,6 @@
 //! Vista de un panel: pinta solo lo visible de su documento y le pasa la
 //! entrada al [`Workspace`], que es quien edita.
 
-mod clipboard;
 mod element;
 mod input;
 mod keys;
@@ -21,7 +20,6 @@ use gpui_kit::{
 use nota_buffer::ByteOffset;
 use nota_vim::{KeyOutcome, Mode};
 
-use self::clipboard::SystemClipboard;
 use self::element::EditorElement;
 use self::input::ImeLine;
 use self::keys::Route;
@@ -29,6 +27,7 @@ use self::layout::FrameLayout;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
 use crate::actions::{self, EDITOR_CONTEXT};
+use crate::clipboard::SystemClipboard;
 use crate::theme::Theme;
 use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
 
