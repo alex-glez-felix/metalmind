@@ -24,14 +24,18 @@ impl MarkName {
     }
 }
 
+/// Las marks de un buffer. Son anclas de ese buffer, así que quien edita
+/// varios con un solo [`Vim`](crate::Vim) le presta las del que edita con
+/// [`Vim::swap_marks`](crate::Vim::swap_marks), como vim, donde son de cada
+/// buffer.
 #[derive(Debug, Default)]
-pub(crate) struct Marks {
+pub struct Marks {
     named: [Option<LineAnchor>; 26],
     previous: Option<LineAnchor>,
 }
 
 impl Marks {
-    pub fn set(
+    pub(crate) fn set(
         &mut self,
         buffer: &mut Buffer,
         name: MarkName,
@@ -46,7 +50,7 @@ impl Marks {
     }
 
     /// `None` si no se puso o se borró su línea.
-    pub fn get(&self, buffer: &Buffer, name: MarkName) -> Option<ByteOffset> {
+    pub(crate) fn get(&self, buffer: &Buffer, name: MarkName) -> Option<ByteOffset> {
         let anchor = match name {
             MarkName::Named(letter) => self.named[usize::from(letter)],
             MarkName::Previous => self.previous,

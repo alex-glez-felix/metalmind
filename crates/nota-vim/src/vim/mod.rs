@@ -271,6 +271,12 @@ impl Vim {
         result
     }
 
+    /// Cambia las marks del motor por `marks`: antes de editar otro buffer
+    /// se le dan las suyas y después se recuperan las del anterior.
+    pub fn swap_marks(&mut self, marks: &mut Marks) {
+        std::mem::swap(&mut self.marks, marks);
+    }
+
     /// El cursor se movió por fuera del motor, como con un clic o un pegado
     /// en Normal: se cancela lo pendiente (count, operador, `f`) y, como en
     /// vim, lo tecleado en Insert ya no se repite con el count y lo que se

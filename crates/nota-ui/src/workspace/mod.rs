@@ -3,7 +3,9 @@
 //!
 //! Hay un solo [`Vim`] para todos los paneles, como en vim, donde el modo,
 //! los registros, `.` y `;` son globales: lo copiado en un buffer se pega en
-//! otro. Cambiar de panel lo deja en Normal antes, como un `ctrl-c`.
+//! otro. Las marks, en cambio, son de cada documento y el motor las toma
+//! prestadas mientras lo edita. Cambiar de panel lo deja en Normal antes,
+//! como un `ctrl-c`.
 
 mod commands;
 mod documents;
@@ -198,8 +200,9 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))
     }
 
-    /// Corre `edit` sobre el buffer y los cursores de `pane`; después, los
-    /// cursores de los otros paneles del mismo documento siguen al texto.
+    /// Corre `edit` sobre el buffer, las marks y los cursores de `pane`;
+    /// después, los cursores de los otros paneles del mismo documento siguen
+    /// al texto.
     fn edit_pane<T>(
         &mut self,
         pane: PaneId,
@@ -214,8 +217,10 @@ impl Workspace {
             .documents
             .get_mut(id)
             .ok_or(WorkspaceError::NoDocument(id))?;
-        let buffer = document.buffer_mut();
+        let (buffer, marks) = document.editable();
+        self.vim.swap_marks(marks);
         let result = edit(&mut self.vim, buffer, &mut state.selections);
+        self.vim.swap_marks(marks);
         let splices = buffer.take_splices();
         self.follow(pane, id, &splices)?;
         result

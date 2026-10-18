@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use nota_buffer::{Buffer, BufferError, HistorySeq};
 use nota_vault::FileError;
+use nota_vim::Marks;
 
 /// Tamaño de lo leído o escrito, para avisarlo como vim (`"a.md" 3L, 20B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +36,8 @@ pub struct Document {
     /// La ruta como se escribió, para mostrarla y guardar ahí.
     path: PathBuf,
     buffer: Buffer,
+    /// Las marks de vim son de cada buffer; el motor las toma prestadas.
+    marks: Marks,
     /// Estado del historial que coincide con el disco; `None` si se guardó
     /// a mitad de una transacción y ningún estado coincide.
     saved: Option<HistorySeq>,
@@ -60,6 +63,7 @@ impl Document {
         Self {
             path: path.to_owned(),
             saved: Some(buffer.history_seq()),
+            marks: Marks::default(),
             buffer,
             exists_on_disk: false,
         }
@@ -110,8 +114,9 @@ impl Document {
         &self.buffer
     }
 
-    pub(crate) fn buffer_mut(&mut self) -> &mut Buffer {
-        &mut self.buffer
+    /// El buffer para editarlo y sus marks para prestárselas al motor.
+    pub(crate) fn editable(&mut self) -> (&mut Buffer, &mut Marks) {
+        (&mut self.buffer, &mut self.marks)
     }
 
     /// # Errors
