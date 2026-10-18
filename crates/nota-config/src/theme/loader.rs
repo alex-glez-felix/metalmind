@@ -16,6 +16,14 @@ pub struct Themes {
     user_dir: Option<PathBuf>,
 }
 
+/// Un tema que no se pudo usar, con los avisos que juntó antes de fallar:
+/// una clave mal escrita suele explicar el error.
+#[derive(Debug)]
+pub struct LoadError {
+    pub error: Diagnostic,
+    pub warnings: Vec<Diagnostic>,
+}
+
 /// Un archivo de la cadena de `extends`.
 struct Layer {
     name: String,
@@ -57,9 +65,19 @@ impl Themes {
     /// # Errors
     /// Si el tema no existe, algún archivo de la cadena está mal, la cadena
     /// es circular o le faltan colores.
-    pub fn load(&self, name: &str) -> Result<Loaded<Theme>, Diagnostic> {
-        let mut diagnostics = Vec::new();
-        let chain = self.chain(name, &mut diagnostics)?;
+    pub fn load(&self, name: &str) -> Result<Loaded<Theme>, LoadError> {
+        let mut warnings = Vec::new();
+        match self.resolve(name, &mut warnings) {
+            Ok(theme) => Ok(Loaded {
+                value: theme,
+                diagnostics: warnings,
+            }),
+            Err(error) => Err(LoadError { error, warnings }),
+        }
+    }
+
+    fn resolve(&self, name: &str, warnings: &mut Vec<Diagnostic>) -> Result<Theme, Diagnostic> {
+        let chain = self.chain(name, warnings)?;
         let mut palette = Palette::new();
         for layer in chain.iter().rev() {
             palette.extend(
@@ -87,7 +105,7 @@ impl Themes {
                 .map_err(resolve)?
                 .over(syntax);
         }
-        let theme = complete(name, ui, cursor, syntax).map_err(|missing| {
+        complete(name, ui, cursor, syntax).map_err(|missing| {
             let error = Diagnostic::error(format!(
                 "al tema `{name}` le faltan colores: {}",
                 missing.join(", ")
@@ -96,10 +114,6 @@ impl Themes {
                 Some(leaf) => error.in_file(&leaf.file),
                 None => error,
             }
-        })?;
-        Ok(Loaded {
-            value: theme,
-            diagnostics,
         })
     }
 

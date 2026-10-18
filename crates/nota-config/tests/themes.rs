@@ -110,7 +110,10 @@ fn extends_circular_es_error_con_la_cadena() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "extends = \"b\"\n");
     write(dir.path(), "b", "# b\nextends = \"a\"\n");
-    let error = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    let error = Themes::new(dir.path().to_owned())
+        .load("a")
+        .unwrap_err()
+        .error;
     assert_eq!(error.message, "`extends` circular: a → b → a");
     assert_eq!(error.file, Some(dir.path().join("b.toml")));
     assert_eq!(
@@ -126,7 +129,10 @@ fn extends_circular_es_error_con_la_cadena() {
 fn un_tema_que_se_extiende_a_si_mismo_es_circular() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "extends = \"a\"\n");
-    let error = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    let error = Themes::new(dir.path().to_owned())
+        .load("a")
+        .unwrap_err()
+        .error;
     assert_eq!(error.message, "`extends` circular: a → a");
 }
 
@@ -134,7 +140,10 @@ fn un_tema_que_se_extiende_a_si_mismo_es_circular() {
 fn extends_a_un_tema_que_no_existe() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "extends = \"nada\"\n");
-    let error = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    let error = Themes::new(dir.path().to_owned())
+        .load("a")
+        .unwrap_err()
+        .error;
     assert_eq!(error.message, "no existe el tema `nada`");
     assert_eq!(error.file, Some(dir.path().join("a.toml")));
     assert_eq!(
@@ -150,7 +159,10 @@ fn extends_a_un_tema_que_no_existe() {
 fn sin_extends_le_faltan_colores() {
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a", "[ui]\nbackground = \"#000000\"\n");
-    let error = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    let error = Themes::new(dir.path().to_owned())
+        .load("a")
+        .unwrap_err()
+        .error;
     assert!(
         error
             .message
@@ -169,7 +181,10 @@ fn nombre_de_paleta_desconocido_con_posicion() {
         "a",
         "extends = \"nota-oscuro\"\n[cursor]\ninsert = { color = \"azull\" }\n",
     );
-    let error = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    let error = Themes::new(dir.path().to_owned())
+        .load("a")
+        .unwrap_err()
+        .error;
     assert_eq!(
         error.message,
         "`azull` no está en la paleta (en cursor.insert)"
@@ -188,7 +203,7 @@ fn toml_roto_y_tipo_equivocado_en_un_tema() {
     let dir = tempfile::tempdir().unwrap();
     let themes = Themes::new(dir.path().to_owned());
     write(dir.path(), "roto", "[ui\n");
-    let error = themes.load("roto").unwrap_err();
+    let error = themes.load("roto").unwrap_err().error;
     assert_eq!(error.file, Some(dir.path().join("roto.toml")));
     assert_eq!(error.location.map(|at| at.line), Some(1));
     write(
@@ -196,7 +211,7 @@ fn toml_roto_y_tipo_equivocado_en_un_tema() {
         "tipo",
         "extends = \"nota-oscuro\"\n[palette]\nblue = 3\n",
     );
-    let error = themes.load("tipo").unwrap_err();
+    let error = themes.load("tipo").unwrap_err().error;
     assert_eq!(error.location, Some(Location { line: 3, column: 8 }));
 }
 
@@ -252,10 +267,48 @@ fn clave_de_mas_en_un_color_con_alpha_avisa_y_lo_aplica() {
 }
 
 #[test]
+fn un_tema_que_falla_conserva_sus_avisos() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "a",
+        "extends = \"b\"\n[ui]\nfondo = \"#000000\"\n",
+    );
+    write(dir.path(), "b", "[ui]\nselction = \"#000000\"\n");
+    let failed = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
+    assert!(
+        failed.error.message.contains("ui.selection"),
+        "{}",
+        failed.error.message
+    );
+    let keys: Vec<_> = failed
+        .warnings
+        .iter()
+        .map(|warning| (warning.file.clone(), warning.location))
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            (
+                Some(dir.path().join("a.toml")),
+                Some(Location { line: 3, column: 1 })
+            ),
+            (
+                Some(dir.path().join("b.toml")),
+                Some(Location { line: 2, column: 1 })
+            ),
+        ]
+    );
+}
+
+#[test]
 fn nombres_que_no_son_un_archivo_del_directorio() {
     let dir = tempfile::tempdir().unwrap();
     for name in ["", "../fuera", "a/b", ".oculto"] {
-        let error = Themes::new(dir.path().to_owned()).load(name).unwrap_err();
+        let error = Themes::new(dir.path().to_owned())
+            .load(name)
+            .unwrap_err()
+            .error;
         assert!(
             error.message.contains("no es un nombre de tema válido"),
             "{name}"
