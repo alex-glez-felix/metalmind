@@ -97,5 +97,10 @@ fn renombrar_un_tag_con_pagina(bencher: Bencher) {
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let tags = vault.tags();
     assert!(tags.count(&TagKey::new("t1")) > 0);
-    bencher.bench(|| tags.plan_rename("#t1", "#uno").unwrap().edit_count());
+    bencher.bench(|| {
+        tags.plan_rename("#t1", "#uno")
+            .unwrap()
+            .changes
+            .edit_count()
+    });
 }

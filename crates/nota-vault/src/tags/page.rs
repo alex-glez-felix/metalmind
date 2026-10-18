@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use nota_syntax::{Frontmatter, Value};
+use nota_syntax::{Entry, Frontmatter, Value};
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
 use crate::path::VaultPath;
@@ -24,6 +24,53 @@ pub struct TagPage {
     pub parents: Vec<TagOccurrence>,
     /// Valores que no se entienden; el resto de la página vale igual.
     pub invalid: Vec<InvalidValue>,
+    /// Dónde escribir un campo sin tocar el resto.
+    pub layout: PageLayout,
+}
+
+/// Cómo está escrito el frontmatter de una página, para cambiar un campo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PageLayout {
+    /// Sin frontmatter: se agrega uno en `at`, tras el BOM si lo hay.
+    Bare { at: usize, crlf: bool },
+    /// Un mapa en bloque: un campo nuevo va en `end`, antes del `---` de cierre.
+    Block {
+        entries: Vec<Entry>,
+        end: usize,
+        crlf: bool,
+    },
+    /// YAML roto o con una forma que nota no edita (`{a: 1}`): hay que
+    /// arreglarlo a mano antes de cambiar un campo.
+    Unreadable,
+}
+
+impl PageLayout {
+    fn new(text: &str, frontmatter: Option<&Frontmatter>) -> Self {
+        let crlf = text
+            .split('\n')
+            .next()
+            .is_some_and(|line| line.ends_with('\r'));
+        match frontmatter {
+            None => Self::Bare {
+                at: if text.starts_with('\u{FEFF}') {
+                    '\u{FEFF}'.len_utf8()
+                } else {
+                    0
+                },
+                crlf,
+            },
+            Some(Frontmatter {
+                entries: Some(entries),
+                yaml,
+                ..
+            }) => Self::Block {
+                entries: entries.clone(),
+                end: yaml.end,
+                crlf,
+            },
+            Some(_) => Self::Unreadable,
+        }
+    }
 }
 
 /// Un nombre de la paleta del tema (`naranja`) o un hex (`#d97706`).
@@ -58,7 +105,12 @@ pub enum PageField {
 
 impl TagPage {
     /// La página de `name` a partir de su frontmatter, si tiene.
-    pub(crate) fn new(path: VaultPath, name: &str, frontmatter: Option<&Frontmatter>) -> Self {
+    pub(crate) fn new(
+        path: VaultPath,
+        name: &str,
+        text: &str,
+        frontmatter: Option<&Frontmatter>,
+    ) -> Self {
         let mut page = Self {
             path,
             key: TagKey::new(name),
@@ -68,6 +120,7 @@ impl TagPage {
             aliases: Vec::new(),
             parents: Vec::new(),
             invalid: Vec::new(),
+            layout: PageLayout::new(text, frontmatter),
         };
         if let Some(frontmatter) = frontmatter {
             page.read(frontmatter);
@@ -209,6 +262,7 @@ mod tests {
         let page = TagPage::new(
             VaultPath::new("tags/Rust.md").unwrap(),
             "Rust",
+            text,
             scan.frontmatter.as_ref(),
         );
         assert_eq!(page.key.as_str(), "rust");
@@ -238,6 +292,7 @@ mod tests {
         let page = TagPage::new(
             VaultPath::new("tags/a.md").unwrap(),
             "a",
+            text,
             scan.frontmatter.as_ref(),
         );
         let fields: Vec<PageField> = page.invalid.iter().map(|value| value.field).collect();

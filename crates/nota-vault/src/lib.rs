@@ -1,7 +1,9 @@
 //! El vault en disco: abrir una carpeta, sus índices de archivos, links y
-//! tags al día con lo que pasa en disco, crear, mover y borrar, y el
-//! guardado atómico de cada nota.
+//! tags al día con lo que pasa en disco, crear, mover y borrar, el guardado
+//! atómico de cada nota y aplicar y deshacer cambios en varios archivos.
 
+mod apply;
+mod changes;
 mod file;
 mod index;
 mod links;
@@ -15,6 +17,8 @@ pub mod tags;
 mod vault;
 mod watch;
 
+pub use apply::{Applied, ApplyError, ChangesInterruption, ChangesUndoReport};
+pub use changes::{Changes, FileEdit, NewFile, Rename, StaleFile, content_hash};
 pub use file::{FileError, read, write_atomic};
 pub use index::{Entry, EntryKind, VaultIndex};
 pub use links::{

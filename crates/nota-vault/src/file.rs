@@ -58,6 +58,28 @@ pub fn write_atomic(
     })
 }
 
+/// Crea `path` con `text`, sin dejarlo a medias y sin pisar nada: si ya
+/// existe, falla con [`io::ErrorKind::AlreadyExists`] y no lo toca.
+pub(crate) fn create_atomic(path: &Path, text: &str) -> Result<(), FileError> {
+    create(path, text).map_err(|source| FileError::Write {
+        path: path.to_owned(),
+        source,
+    })
+}
+
+fn create(path: &Path, text: &str) -> io::Result<()> {
+    let dir = parent_dir(path);
+    let mut temp = Builder::new()
+        .prefix(".nota-")
+        .suffix(".tmp")
+        .permissions(Permissions::from_mode(NEW_FILE_MODE))
+        .tempfile_in(dir)?;
+    write_contents(&mut temp, |out| out.write_all(text.as_bytes()))?;
+    temp.as_file().sync_all()?;
+    temp.persist_noclobber(path).map_err(|error| error.error)?;
+    File::open(dir)?.sync_all()
+}
+
 fn replace(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>) -> io::Result<()> {
     let target = resolve_symlink(path)?;
     let dir = parent_dir(&target);

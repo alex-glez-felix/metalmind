@@ -1,11 +1,11 @@
 //! Lo que una nota aporta a los tags: sus ocurrencias y, si es una página de
 //! tag, su metadata.
 
-use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use std::ops::Range;
 
 use nota_syntax::{Frontmatter, Value};
 
+use crate::changes::content_hash;
 use crate::path::VaultPath;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::page::TagPage;
@@ -61,14 +61,6 @@ impl TagOccurrence {
 pub struct NoteTags {
     pub occurrences: Vec<TagOccurrence>,
     pub hash: u64,
-}
-
-/// La huella con la que un plan comprueba que el archivo sigue como se escaneó.
-#[must_use]
-pub fn content_hash(text: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
 }
 
 /// Las ocurrencias de una nota y su frontmatter, del que una página de tag
