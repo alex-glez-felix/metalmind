@@ -235,10 +235,17 @@ struct LinkIndex {
 
 ### Config
 
-- TOML con `toml` 1.1 + `serde`. Rutas XDG con `etcetera` 0.11 o `dirs` 7.0: `~/.config/nota/config.toml`, `keymap.toml`, `themes/`.
+- TOML con `toml` 1.1 + `serde`. Rutas XDG con `dirs` 7.0 (elegido sobre `etcetera` 0.11: no pide autor ni dominio para las rutas de macOS y Windows): `~/.config/nota/config.toml`, `keymap.toml`, `themes/`.
 - Config **por vault** opcional en `<vault>/.nota/` (no tocar `.obsidian/`; leerlo de solo lectura, p. ej. para respetar `attachmentFolderPath`, más adelante).
 - Defaults embebidos con `include_str!`; config del usuario se fusiona encima; recarga en caliente vía `notify`.
 - Validar y reportar errores de config en la UI, nunca hacer panic.
+
+#### Estado (`nota-config`, 2026-10-18)
+
+- Crate `nota-config`, sin GPUI. Rutas con `dirs` 7.0: en Linux la especificación XDG se resuelve a mano (`Paths::from_xdg`, con el entorno inyectado para probarla; una `XDG_*` relativa se ignora, como pide la especificación); en macOS y Windows, lo que `dirs` da para cada plataforma. `Paths::under(raíz)` lo pone todo en una carpeta, para tests.
+- `config.toml`: tema, fuente (familia, tamaño), `scrolloff`, `tabstop`, `expandtab`, `ignorecase`, `smartcase` y vault por defecto; todo con default. `Settings::parse(texto)` es pura y sirve para la recarga: devuelve settings más diagnósticos y nunca falla. Un TOML roto, un tipo equivocado o un valor fuera de rango cambian el archivo entero por los defaults, con el error en archivo:línea:columna. Una clave desconocida es solo un aviso (vía `serde_ignored`, con su posición): se descartó `deny_unknown_fields` porque un typo costaría toda la config.
+- Temas: paleta con nombres más grupos semánticos `ui`, `cursor` (por modo) y `syntax` (para M4). Un color semántico es un hex, un nombre de la paleta o `{ color, alpha }`; el alpha va aparte para que `0.5` sea exacto y el tema oscuro embebido dé los mismos `Hsla` que los colores fijos de antes (hay un test). Embebidos: `nota-oscuro` (default y respaldo) y `nota-claro`. Los del usuario, en `<config>/themes/*.toml`, reemplazan a uno embebido del mismo nombre y pueden usar `extends`; la paleta se fusiona primero, así que una referencia heredada usa la paleta final. Cadenas circulares, temas inexistentes, nombres de paleta desconocidos y colores faltantes son errores con posición; el tema que falla se cambia por `nota-oscuro`.
+- El binario lee la config al arrancar y reporta los diagnósticos por el log; `nota-ui` toma colores y fuente del tema. Pendiente: mostrar los diagnósticos en la UI, el watcher de `notify` para la recarga en caliente, `keymap.toml` y la config por vault.
 
 ### Plugins (post-MVP, solo nota)
 
@@ -353,7 +360,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 ### Estado (M0b, 2026-10-17)
 
 - `nota-ui` (vista de editor sobre GPUI) y el binario `nota` existen; son los únicos que dependen de GPUI y el CI lo verifica con `cargo tree`. `gpui-kit` va sin features por defecto: solo `gpui-pre`, sin gpui-component ni su `Root` (04, riesgo 1).
-- La vista pinta solo las líneas visibles, guarda el scroll en líneas (04, riesgo 6) y en Insert y en la línea de comandos el texto entra siempre por el input handler (04, riesgo 4). Colores y tamaños salen de `Theme`; la fuente es la primera monoespaciada instalada de una lista, porque GPUI entra en pánico con una familia que no existe.
+- La vista pinta solo las líneas visibles, guarda el scroll en líneas (04, riesgo 6) y en Insert y en la línea de comandos el texto entra siempre por el input handler (04, riesgo 4). Colores y tamaños salen de `Theme`, cuyos colores vienen del tema de `nota-config` (§5, "Config"); la fuente es la de la config si está instalada y si no la primera monoespaciada instalada de una lista, porque GPUI entra en pánico con una familia que no existe.
 - `nota-vim` tiene una línea de comandos mínima: `:w`, `:q`, `:q!`, `:wq`. El motor no hace I/O: devuelve el `Command` y la vista invoca la acción con nombre (`editor::save`, `editor::quit`, …).
 - "Modificado" compara el estado del historial (`Buffer::history_seq`) con el guardado, más las ediciones de un Insert sin cerrar: como en vim, deshacer o `g-` hasta lo guardado quita el `[+]`, y llegar al mismo texto por otra edición no.
 - Smoke sin GPU, bajo `xvfb-run` (lavapipe), con XTest tecleando: archivo nuevo → `i…<Esc>:wq` lo crea; con cambios, `:q` y el cierre pedido por el gestor de ventanas se niegan; `:w` conserva permisos 0640; `:q!` sale sin guardar; no quedan temporales. Primer frame en release: 631 ms con un archivo chico y 762 ms con 50 MB (el spike midió 710 ms aquí y 293 ms en la máquina de pruebas). El número que vale es el de la máquina de pruebas.
