@@ -5,6 +5,8 @@ use std::ops::RangeInclusive;
 
 use ropey::Rope;
 
+use crate::LineEdit;
+
 /// Una posición que sigue a su línea. La crea [`crate::Buffer::create_anchor`]
 /// y solo vale en ese buffer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -117,6 +119,15 @@ impl LineChange {
     /// [`Self::line_shift`].
     pub(crate) fn lines(&self) -> RangeInclusive<usize> {
         self.start.line..=self.end.line
+    }
+
+    /// Lo mismo, línea a línea.
+    pub(crate) fn line_edit(&self) -> LineEdit {
+        LineEdit {
+            first: self.start.line,
+            removed: self.end.line - self.start.line + 1,
+            inserted: self.inserted_lines + 1,
+        }
     }
 
     pub(crate) fn line_shift(&self) -> isize {

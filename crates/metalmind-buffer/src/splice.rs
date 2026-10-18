@@ -12,6 +12,17 @@ pub struct Splice {
     pub lines: LineChange,
 }
 
+/// Un reemplazo visto por líneas: las líneas `first..first + removed` del
+/// texto de antes son ahora `inserted` líneas. Cuenta enteras las líneas
+/// de los bordes, aunque solo cambie una parte. Sirve a lo que se guarda
+/// por línea, como el estilo de cada una.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LineEdit {
+    pub first: usize,
+    pub removed: usize,
+    pub inserted: usize,
+}
+
 impl Splice {
     /// Lo de antes no se mueve, ni lo que está justo donde se insertó; lo de
     /// después se corre y lo borrado cae al inicio del reemplazo.
