@@ -98,7 +98,8 @@ impl Workspace {
 
     /// Como `autoread`: un documento oculto y sin cambios cuyo archivo
     /// cambió se relee, así al volver a él se ve lo de disco y un `:w` no
-    /// lo pisa. Uno con cambios se queda como está.
+    /// lo pisa; sus marks se quedan en su línea, como en vim. Uno con
+    /// cambios se queda como está.
     fn refresh_hidden(&mut self, path: &Path) {
         let Some(id) = self.documents.find(path) else {
             return;
@@ -114,14 +115,22 @@ impl Workspace {
         let Some(own) = document.path().map(Path::to_owned) else {
             return;
         };
-        match Document::open(&own) {
+        let mut reloaded = match Document::open(&own) {
             Ok(reloaded) if reloaded.buffer().to_string() != document.buffer().to_string() => {
-                if let Some(slot) = self.documents.get_mut(id) {
-                    *slot = reloaded;
-                }
+                reloaded
             }
-            Ok(_) => {}
-            Err(error) => log::warn!("no se releyó {}: {error}", own.display()),
+            Ok(_) => return,
+            Err(error) => {
+                log::warn!("no se releyó {}: {error}", own.display());
+                return;
+            }
+        };
+        if let Err(error) = reloaded.keep_marks_of(document) {
+            self.report(&error.into());
+            return;
+        }
+        if let Some(slot) = self.documents.get_mut(id) {
+            *slot = reloaded;
         }
     }
 }

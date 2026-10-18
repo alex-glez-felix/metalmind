@@ -246,6 +246,16 @@ impl Document {
         &self.buffer
     }
 
+    /// Este documento, releído de disco, se queda con las marks de `old`
+    /// en su línea y columna, como vim al releer un archivo.
+    ///
+    /// # Errors
+    /// Solo si una mark no cae en el buffer de `old`, lo que sería un bug.
+    pub(crate) fn keep_marks_of(&mut self, old: &Self) -> Result<(), BufferError> {
+        self.marks = old.marks.carried(&old.buffer, &mut self.buffer)?;
+        Ok(())
+    }
+
     /// El buffer para editarlo y sus marks para prestárselas al motor.
     pub(crate) fn editable(&mut self) -> (&mut Buffer, &mut Marks) {
         (&mut self.buffer, &mut self.marks)

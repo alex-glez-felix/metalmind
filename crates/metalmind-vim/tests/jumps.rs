@@ -101,6 +101,11 @@ const LINES: &str = "|l1\nl2\nl3\nl4\nl5\nl6";
 #[case(LINES, "jjmAjdkG'A", "l1\nl2\n|l5\nl6")]
 #[case(LINES, "jjmA:'A,'Ad<CR>", "l1\nl2\n|l4\nl5\nl6")]
 #[case(LINES, "jjmAG'A<C-o>", "l1\nl2\nl3\nl4\nl5\n|l6")]
+// y siguen a lo editado antes en la misma macro o el mismo :g
+#[case(LINES, "jjjmAggqqdd'Aq", "l2\nl3\n|l4\nl5\nl6")]
+#[case(LINES, "jjjmAggqqdd'Aqgg@q", "l3\n|l4\nl5\nl6")]
+#[case(LINES, "jjjmAgg:g/l[12]/'Ad<CR>", "l1\nl2\nl3\n|l6")]
+#[case(LINES, "jjmAgg:normal dd'Ax<CR>", "l2\n|3\nl4\nl5\nl6")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]

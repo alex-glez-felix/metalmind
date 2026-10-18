@@ -39,6 +39,33 @@ pub struct Marks {
 }
 
 impl Marks {
+    /// Las mismas marks, en la misma línea y columna, sobre `to`: el texto
+    /// releído de `from`, como hace vim al releer un archivo. Las de una
+    /// línea que `to` ya no tiene se pierden (vim las guarda y da `E19`).
+    ///
+    /// # Errors
+    /// Solo si una mark no cae en `from`, lo que sería un bug.
+    pub fn carried(&self, from: &Buffer, to: &mut Buffer) -> Result<Self, BufferError> {
+        let mut carry = |anchor: Option<LineAnchor>| -> Result<Option<LineAnchor>, BufferError> {
+            let Some(offset) = anchor.and_then(|anchor| from.anchor_offset(anchor)) else {
+                return Ok(None);
+            };
+            let point = from.point_at(offset)?;
+            if point.line > to.last_line() {
+                return Ok(None);
+            }
+            to.create_anchor(to.offset_at_point(point)).map(Some)
+        };
+        let mut named = [None; 26];
+        for (slot, &anchor) in named.iter_mut().zip(&self.named) {
+            *slot = carry(anchor)?;
+        }
+        Ok(Self {
+            named,
+            previous: carry(self.previous)?,
+        })
+    }
+
     pub(crate) fn set(
         &mut self,
         buffer: &mut Buffer,
