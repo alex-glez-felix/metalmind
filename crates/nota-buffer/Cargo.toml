@@ -13,8 +13,14 @@ smallvec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+divan.workspace = true
+nota-perf.workspace = true
 proptest.workspace = true
 pretty_assertions.workspace = true
+
+[[bench]]
+name = "buffer"
+harness = false
 
 [lints]
 workspace = true
