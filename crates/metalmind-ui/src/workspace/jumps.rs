@@ -48,7 +48,7 @@ impl Workspace {
                 true
             }
             None => match self.files.path(landing.file).map(Path::to_owned) {
-                Some(path) if path.exists() => self.show_file(pane, &shown_path(&path))?,
+                Some(path) if path.exists() => self.show_file(pane, &shown_path(&path))?.is_some(),
                 gone => {
                     self.vim.file_removed(landing.file);
                     let name = gone.map_or_else(String::new, |path| {
