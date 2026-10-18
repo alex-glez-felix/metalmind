@@ -149,10 +149,10 @@ impl Editor {
     }
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        FrameClock::input(cx);
         let keystroke = &event.keystroke;
         match keys::route(keystroke, self.mode(cx)) {
             Route::Engine(key) => {
+                FrameClock::input(cx);
                 cx.stop_propagation();
                 self.marked = None;
                 let outcome = self.update_workspace(cx, |workspace, pane, cx| {
@@ -160,7 +160,7 @@ impl Editor {
                 });
                 self.handle_outcome(outcome, window, cx);
             }
-            Route::TextInput => {}
+            Route::TextInput => FrameClock::input(cx),
             Route::Ignored => log::debug!("tecla sin equivalente en metalmind-vim: {keystroke}"),
         }
     }
