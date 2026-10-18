@@ -1,7 +1,7 @@
 //! El vault en disco: abrir una carpeta, sus índices de archivos, links y
 //! tags al día con lo que pasa en disco, crear, capturar, mover y borrar, el
 //! guardado atómico de cada nota, aplicar y deshacer cambios en varios
-//! archivos y los adjuntos.
+//! archivos, los adjuntos y el historial de versiones de cada nota.
 
 mod apply;
 mod attachment;
@@ -9,6 +9,7 @@ mod capture;
 mod changes;
 mod edit;
 mod file;
+mod history;
 mod index;
 mod links;
 mod ops;
@@ -19,6 +20,7 @@ mod scan;
 pub mod tags;
 mod vault;
 mod watch;
+mod worker;
 
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
 pub use attachment::{
@@ -28,6 +30,10 @@ pub use capture::{CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};
 pub use file::{FileError, create_atomic, read, write_atomic};
+pub use history::{
+    ChunkKind, ContentHash, DeletedNote, DiffChunk, History, HistoryError, Pruned, RestoreEdit,
+    RestorePlan, TextDiff, Version, VersionId,
+};
 pub use index::{Entry, EntryKind, VaultIndex};
 pub use links::{
     Destination, IndexedLink, LinkContext, LinkIndex, LinkSubpath, LinkTarget, NoteLink,
@@ -37,4 +43,7 @@ pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
 pub use scan::walk_notes;
-pub use vault::{Vault, VaultError, VaultOptions, VaultRoot, VaultUpdate};
+pub use vault::{
+    HistoryOptions, PendingVersion, SaveError, Vault, VaultError, VaultOptions, VaultRoot,
+    VaultUpdate, VersionError,
+};

@@ -52,6 +52,23 @@ pub(crate) fn create_note(root: &Path, path: &VaultPath) -> Result<(), FileOpErr
         .map_err(|source| io_error("crear", path, source))
 }
 
+/// Dónde guardar la nota `path`, con sus carpetas ya creadas.
+pub(crate) fn note_target(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpError> {
+    if EntryKind::of_file(path) != EntryKind::Note {
+        return Err(FileOpError::NotANote(path.clone()));
+    }
+    let target = prepare_target(root, path, "guardar")?;
+    // `write_atomic` escribe a través de un enlace, que puede apuntar fuera del vault.
+    match fs::symlink_metadata(&target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err(FileOpError::Symlink(path.clone()))
+        }
+        Ok(_) => Ok(target),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(target),
+        Err(error) => Err(io_error("leer", path, error)),
+    }
+}
+
 pub(crate) fn create_folder(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
     let target = prepare_target(root, path, "crear")?;
     fs::create_dir(target).map_err(|source| io_error("crear", path, source))

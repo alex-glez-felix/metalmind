@@ -9,15 +9,19 @@ publish.workspace = true
 
 [dependencies]
 arc-swap.workspace = true
+blake3.workspace = true
 caseless.workspace = true
 ignore.workspace = true
 jiff.workspace = true
 log.workspace = true
+miniz_oxide.workspace = true
+nota-config.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
 nota-syntax.workspace = true
 rustix.workspace = true
 serde.workspace = true
+similar.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true
@@ -45,6 +49,10 @@ harness = false
 
 [[bench]]
 name = "attachments"
+harness = false
+
+[[bench]]
+name = "history"
 harness = false
 
 [lints]

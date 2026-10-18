@@ -3230,7 +3230,7 @@ dependencies = [
  "console",
  "globset",
  "once_cell",
- "similar",
+ "similar 2.7.0",
  "tempfile",
  "walkdir",
 ]
@@ -3939,7 +3939,6 @@ dependencies = [
 name = "nota-config"
 version = "0.0.0"
 dependencies = [
- "blake3",
  "dirs 7.0.0",
  "insta",
  "pretty_assertions",
@@ -4042,12 +4041,15 @@ name = "nota-vault"
 version = "0.0.0"
 dependencies = [
  "arc-swap",
+ "blake3",
  "caseless",
  "divan",
  "ignore",
  "insta",
  "jiff",
  "log",
+ "miniz_oxide 0.9.1",
+ "nota-config",
  "nota-perf",
  "nota-syntax",
  "notify",
@@ -4057,6 +4059,7 @@ dependencies = [
  "rstest",
  "rustix",
  "serde",
+ "similar 3.2.0",
  "tempfile",
  "thiserror 2.0.21",
  "unicode-normalization",
@@ -5962,6 +5965,15 @@ name = "similar"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
+name = "similar"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f66ca1f7aca2474dc10c942eb22feffc897735f54cd1db90138c2fddb490987"
+dependencies = [
+ "bstr",
+]
 
 [[package]]
 name = "simplecss"

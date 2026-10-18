@@ -1,15 +1,17 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use arc_swap::ArcSwap;
 use jiff::civil::DateTime;
+use nota_config::{HistoryRetention, Paths};
 use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
+use notify_debouncer_full::{Debouncer, RecommendedCache, new_debouncer};
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
 use crate::attachment::{
@@ -17,17 +19,18 @@ use crate::attachment::{
 };
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
-use crate::file;
-use crate::index::VaultIndex;
+use crate::file::{FileError, write_atomic};
+use crate::history::{History, HistoryError, VersionId};
+use crate::index::{EntryKind, VaultIndex};
 use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
-use crate::refresh::{Touched, VaultChange, refresh};
+use crate::refresh::VaultChange;
 use crate::scan::scan;
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
-use crate::watch::{touched, touched_by_errors};
+use crate::worker::{Message, Save, Worker, read_note};
 
 /// Cuánto tiene que calmarse una ruta antes de releerla. Junta el temporal y
 /// el rename de un guardado atómico, y una ráfaga en un solo lote.
@@ -43,6 +46,40 @@ pub enum VaultError {
     Watch(#[from] notify::Error),
     #[error("no se pudo arrancar el hilo del watcher: {0}")]
     Spawn(io::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SaveError {
+    #[error(transparent)]
+    Path(#[from] FileOpError),
+    #[error(transparent)]
+    Write(#[from] FileError),
+}
+
+/// La nota ya se guardó; lo que falló es registrar su versión.
+#[derive(Debug, thiserror::Error)]
+pub enum VersionError {
+    #[error("la nota se guardó, pero no su versión: {0}")]
+    History(#[from] HistoryError),
+    #[error("la nota se guardó, pero el vault se cerró antes de registrar su versión")]
+    Stopped,
+}
+
+/// La versión de un guardado, que se registra en el hilo del vault para no
+/// demorar el guardado. Se puede soltar sin esperarla: un error igual queda
+/// en el log.
+#[derive(Debug)]
+pub struct PendingVersion(mpsc::Receiver<Result<Option<VersionId>, HistoryError>>);
+
+impl PendingVersion {
+    /// Espera a que se registre. `None` si el texto era igual a la última
+    /// versión y no hizo falta otra.
+    ///
+    /// # Errors
+    /// Si no se pudo escribir el historial o el vault se cerró antes.
+    pub fn wait(self) -> Result<Option<VersionId>, VersionError> {
+        Ok(self.0.recv().map_err(|_| VersionError::Stopped)??)
+    }
 }
 
 /// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
@@ -65,6 +102,16 @@ pub struct VaultOptions {
     pub tags_folder: VaultPath,
     /// Donde van los adjuntos pegados o arrastrados (06 §6).
     pub attachments_folder: VaultPath,
+    /// Dónde y cuánto historial de versiones guardar (06 §3); sin esto, el
+    /// vault no tiene historial.
+    pub history: Option<HistoryOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryOptions {
+    /// El historial va en la carpeta de datos del vault: `paths.vault_data`.
+    pub paths: Paths,
+    pub retention: HistoryRetention,
 }
 
 impl Default for VaultOptions {
@@ -72,6 +119,7 @@ impl Default for VaultOptions {
         Self {
             tags_folder: VaultPath::fixed(DEFAULT_TAGS_FOLDER),
             attachments_folder: VaultPath::fixed(DEFAULT_ATTACHMENTS_FOLDER),
+            history: None,
         }
     }
 }
@@ -120,6 +168,9 @@ pub struct Vault {
     index: Arc<ArcSwap<VaultIndex>>,
     links: Arc<ArcSwap<LinkIndex>>,
     tags: Arc<ArcSwap<Tags>>,
+    history: Option<Arc<History>>,
+    messages: mpsc::Sender<Message>,
+    saving: Arc<Mutex<()>>,
     watch: Option<Watch>,
 }
 
@@ -144,6 +195,10 @@ impl Vault {
     /// [`Vault::snapshot`] y [`Vault::tags`], que siguen al día igual;
     /// guardarlo sin leerlo acumula un snapshot por lote.
     ///
+    /// Con `options.history`, el historial sigue por su cuenta los renombres
+    /// y borrados que ve el watcher, y guarda como versión lo que cambie una
+    /// nota desde fuera.
+    ///
     /// # Errors
     /// Si `root` no existe, no es una carpeta o no se puede vigilar.
     pub fn open_with(
@@ -151,8 +206,12 @@ impl Vault {
         options: VaultOptions,
     ) -> Result<(Self, mpsc::Receiver<VaultUpdate>), VaultError> {
         let root = canonical_dir(root.as_ref())?;
-        let (events, raw) = mpsc::channel();
-        let mut debouncer = new_debouncer(DEBOUNCE, None, events)?;
+        let (messages, inbox) = mpsc::channel();
+        let disk = messages.clone();
+        let mut debouncer = new_debouncer(DEBOUNCE, None, move |result| {
+            // Si el hilo ya terminó, el vault se está cerrando.
+            let _ = disk.send(Message::Disk(result));
+        })?;
         // Vigilar antes del walk: lo que cambie mientras tanto llega como evento.
         debouncer.watch(&root, RecursiveMode::Recursive)?;
         let files = scan(&root);
@@ -163,22 +222,31 @@ impl Vault {
         let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
             read_note(&root, path)
         });
+        let history = options.history.map(|options| {
+            let dir = options.paths.vault_data(&root).join("history");
+            let history = History::new(dir, options.retention);
+            reconcile_history(&history, &root, &files);
+            Arc::new(history)
+        });
         let index = Arc::new(ArcSwap::from_pointee(files));
         let links = Arc::new(ArcSwap::from_pointee(links));
         let tags = Arc::new(ArcSwap::from_pointee(tags));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
+        let saving = Arc::new(Mutex::new(()));
         let worker = Worker {
             root: root.clone(),
             index: Arc::clone(&index),
             links: Arc::clone(&links),
             tags: Arc::clone(&tags),
+            history: history.as_ref().map(Arc::clone),
+            saving: Arc::clone(&saving),
             updates,
             stop: Arc::clone(&stop),
         };
         let worker = thread::Builder::new()
-            .name("nota-vault watcher".to_owned())
-            .spawn(move || worker.run(&raw))
+            .name("nota-vault".to_owned())
+            .spawn(move || worker.run(&inbox))
             .map_err(VaultError::Spawn)?;
         let vault = Self {
             root,
@@ -186,6 +254,9 @@ impl Vault {
             index,
             links,
             tags,
+            history,
+            messages,
+            saving,
             watch: Some(Watch {
                 debouncer,
                 worker,
@@ -220,6 +291,44 @@ impl Vault {
     #[must_use]
     pub fn tags(&self) -> Arc<Tags> {
         self.tags.load_full()
+    }
+
+    /// El historial de versiones de las notas de este vault, si tiene.
+    #[must_use]
+    pub fn history(&self) -> Option<&History> {
+        self.history.as_deref()
+    }
+
+    /// Guarda `text` en la nota `path` de forma atómica y registra la
+    /// versión: toda escritura de una nota del vault pasa por aquí (06 §3).
+    /// Vuelve en cuanto la nota está en disco; la versión se registra después,
+    /// en el hilo del vault. `None` si el vault no tiene historial.
+    ///
+    /// # Errors
+    /// Si `path` no es una nota o pasa por un enlace simbólico, o si falla la
+    /// escritura.
+    pub fn save(
+        &self,
+        path: &VaultPath,
+        text: String,
+    ) -> Result<Option<PendingVersion>, SaveError> {
+        let target = ops::note_target(&self.root, path)?;
+        if self.history.is_none() {
+            write_atomic(&target, |out| out.write_all(text.as_bytes()))?;
+            return Ok(None);
+        }
+        // Hasta mandar la versión: el hilo no lee el disco mientras tanto.
+        let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
+        write_atomic(&target, |out| out.write_all(text.as_bytes()))?;
+        let (done, pending) = mpsc::channel();
+        // Si el hilo terminó en pánico, `PendingVersion::wait` lo dice.
+        let _ = self.messages.send(Message::Save(Save {
+            path: path.clone(),
+            text,
+            at: SystemTime::now(),
+            done,
+        }));
+        Ok(Some(PendingVersion(pending)))
     }
 
     /// Crea una nota vacía, con las carpetas que le falten. El índice se
@@ -264,7 +373,7 @@ impl Vault {
     /// destinos estén libres, y luego edita, crea y renombra. Lo que quien
     /// llama aplique por su cuenta, como los buffers abiertos con cambios sin
     /// guardar, se quita de `changes.edits` antes. Lo devuelto sirve para
-    /// [`Vault::undo`]. El índice se entera por el watcher.
+    /// [`Vault::undo`]. El índice y el historial se enteran por el watcher.
     ///
     /// # Errors
     /// Si un archivo cambió o no se puede leer, o un destino está ocupado (no
@@ -322,100 +431,27 @@ impl Drop for Vault {
         else {
             return;
         };
-        // El hilo deja de releer lo pendiente; al parar, el debouncer suelta su
-        // emisor y el hilo sale del bucle.
+        // El hilo deja de releer el disco, pero registra las versiones que
+        // esperan antes de salir.
         stop.store(true, Ordering::Release);
         debouncer.stop();
+        // Si el hilo ya terminó en pánico, lo dice el `join`.
+        let _ = self.messages.send(Message::Stop);
         if worker.join().is_err() {
             log::error!("el watcher de {} terminó en pánico", self.root.display());
         }
     }
 }
 
-struct Worker {
-    root: PathBuf,
-    index: Arc<ArcSwap<VaultIndex>>,
-    links: Arc<ArcSwap<LinkIndex>>,
-    tags: Arc<ArcSwap<Tags>>,
-    updates: mpsc::Sender<VaultUpdate>,
-    stop: Arc<AtomicBool>,
-}
-
-impl Worker {
-    fn run(self, events: &mpsc::Receiver<DebounceEventResult>) {
-        let mut current = VaultIndex::clone(&self.index.load());
-        let mut links = LinkIndex::clone(&self.links.load());
-        let mut current_tags = Tags::clone(&self.tags.load());
-        let read = |path: &VaultPath| read_note(&self.root, path);
-        for first in events {
-            // Si el refresh se atrasó, todo lo que espera se relee en una sola pasada.
-            let mut touched = self.touched(first);
-            for more in events.try_iter() {
-                touched.merge(self.touched(more));
-            }
-            if self.stop.load(Ordering::Acquire) {
-                return;
-            }
-            let changes = refresh(&mut current, &self.root, &touched);
-            for change in &changes {
-                links.apply(change, |path| read_note(&self.root, path));
-            }
-            let mut reread = false;
-            for path in &touched.reread {
-                reread |= links.reread(path, |note| read_note(&self.root, note));
-            }
-            let mut tag_changes = current_tags.apply(&changes, &current, &read);
-            // Un chmod no cambia el índice de archivos, pero puede volver legible una nota.
-            let rescans: Vec<VaultChange> = touched
-                .reread
-                .iter()
-                .map(|path| VaultChange::Modified { path: path.clone() })
-                .collect();
-            tag_changes.extend(current_tags.apply(&rescans, &current, &read));
-            tag_changes.sort_unstable();
-            tag_changes.dedup();
-            if changes.is_empty() && !reread && tag_changes.is_empty() {
-                continue;
-            }
-            let snapshot = Arc::new(current.clone());
-            let published = Arc::new(links.clone());
-            let tags = Arc::new(current_tags.clone());
-            self.index.store(Arc::clone(&snapshot));
-            self.links.store(Arc::clone(&published));
-            self.tags.store(Arc::clone(&tags));
-            // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
-            let _ = self.updates.send(VaultUpdate {
-                changes,
-                snapshot,
-                links: published,
-                tags,
-                tag_changes,
-            });
-        }
-    }
-
-    fn touched(&self, result: DebounceEventResult) -> Touched {
-        match result {
-            Ok(events) => touched(&self.root, &events),
-            Err(errors) => {
-                for error in &errors {
-                    log::warn!("watcher de {}: {error}", self.root.display());
-                }
-                touched_by_errors(&self.root, &errors)
-            }
-        }
-    }
-}
-
-/// El contenido de una nota para los índices de links y de tags; si no se
-/// puede leer, queda sin links ni tags hasta su próximo cambio.
-fn read_note(root: &Path, path: &VaultPath) -> Option<String> {
-    match file::read(&path.to_fs(root)) {
-        Ok(text) => text,
-        Err(error) => {
-            log::warn!("{error}");
-            None
-        }
+/// Un historial que no se puede alinear no impide abrir el vault.
+fn reconcile_history(history: &History, root: &Path, index: &VaultIndex) {
+    let notes: HashSet<&VaultPath> = index
+        .files()
+        .filter(|entry| entry.kind == EntryKind::Note)
+        .map(|entry| entry.path)
+        .collect();
+    if let Err(error) = history.reconcile(root, &notes, SystemTime::now()) {
+        log::warn!("{error}");
     }
 }
 

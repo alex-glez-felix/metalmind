@@ -60,12 +60,15 @@ Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/nota/`, `Paths::data` e
 
 **Restricciones desde ya:**
 
-- El historial de versiones va en `data`, no en `state` ni en `cache`. (El comentario de `Paths::state` habla de "historial": es el de `:` y búsquedas, no este.)
+- El historial de versiones va en `data`, no en `state` ni en `cache`.
 - Se indexa por ruta relativa al vault y sigue los renombres (§1). La historia de una nota borrada se conserva un tiempo, para poder restaurarla.
 - Toda escritura de una nota pasa por un solo punto en `nota-vault` (hoy `write_atomic`), que es donde se registra la versión. Ninguna escritura del vault, tampoco la de la CLI (§7) ni la de un renombre de tags, se salta ese punto.
-- Los cambios externos que ve el watcher también son versiones **(propuesta)**: si Syncthing trae una versión mala, se puede volver a la anterior.
+- Los cambios externos que ve el watcher también son versiones **(propuesta)**: si Syncthing trae una versión mala, se puede volver a la anterior. Hecho así en el núcleo (2026-10-18, 03 §4): cada nota creada o modificada desde fuera se registra en el hilo del vault; lo que cambió con nota cerrada todavía no.
 - Notas cifradas: ver §4.
-- Retención **(propuesta)**: guardar una versión por cada guardado, pero juntar las del autosave (03 §5): todas las de las últimas 24 h, una por hora durante 30 días y una por día después. La historia de una nota borrada se guarda 90 días. Las versiones se guardan comprimidas y deduplicadas por contenido; el formato se decide al implementarlo. La retención se puede cambiar en la config.
+- Retención **(propuesta)**: guardar una versión por cada guardado, pero juntar las del autosave (03 §5): todas las de las últimas 24 h, una por hora durante 30 días y una por día después. La historia de una nota borrada se guarda 90 días. Las versiones se guardan comprimidas y deduplicadas por contenido. La retención se puede cambiar en la config.
+- Detalles de la retención, tal como quedaron en el núcleo **(propuesta)**: de cada hora o día se queda la **última** versión guardada en él; horas y días son de **UTC**, no de la zona horaria local, para que podar no dependa de dónde se poda; la última versión de una nota se guarda siempre, por vieja que sea; "una por día después" es **para siempre** (`daily_days: ~`), y se puede acotar. Defaults en `history:` de `config.yaml`: `keep_all_hours: 24`, `hourly_days: 30`, `daily_days: ~`, `deleted_days: 90`.
+- Formato (2026-10-18, 03 §4 "Estado (historial…)"): un log por nota con deltas por línea sobre la versión anterior y snapshots comprimidos cada tanto, más un índice ruta → log. Se eligió midiendo: con cambios chicos, copias enteras comprimidas ocupan de 70 a 600 veces más.
+- Renombrar encima de una ruta que ya tenía historia (una nota borrada ahí, o una pisada desde fuera) junta las dos historias por fecha **(propuesta)**. Volver a guardar una nota en la ruta de una borrada sigue su historia.
 - Solo notas markdown, no adjuntos (§6) **(propuesta)**.
 
 ## 4. Cifrado de notas
@@ -79,6 +82,7 @@ Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/nota/`, `Paths::data` e
 - Cada componente que persiste algo derivado del contenido de una nota (texto, títulos, headings, tags, links, fragmentos de búsqueda) lo hace a través de un punto que pueda decir "esta nota no se persiste en claro". Hoy no hay cifrado, pero no puede haber caminos que se lo salten.
 - Los logs llevan rutas, tamaños y errores, **nunca contenido** de notas, cifradas o no. Es la única forma de que la regla se cumpla sin acordarse caso por caso.
 - Lo que solo vive en memoria mientras la nota está abierta y descifrada no tiene esta restricción.
+- El historial (§3) ya tiene ese punto: todo contenido pasa a disco por un códec (`nota-vault`, `history/codec.rs`) y cada registro guarda cuál usó. Una nota cifrada será un códec que cifra después de comprimir, así que ni snapshots ni deltas quedan en claro; los deltas se calculan en memoria. El hash que identifica cada versión tendrá que ser con clave (`blake3::keyed_hash`) para no delatar un contenido conocido.
 
 Abierto **(propuesta)**:
 
@@ -146,7 +150,7 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 - El vault es un valor que se crea y se suelta, no un global: `:vault` tiene que poder cerrar uno y abrir otro en el mismo proceso sin que nada quede apuntando al anterior.
 - Config: la global y encima la del vault (`<vault>/.nota/`, 03 §5).
 - El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault` en los subcomandos de la CLI, §7), luego la variable de entorno `NOTA_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
-- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.nota/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
+- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral; `Paths::vault_data`, con la misma clave, para el historial de §3). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.nota/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
 
 ## 9. Buzón
 
