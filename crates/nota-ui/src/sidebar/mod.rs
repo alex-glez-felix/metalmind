@@ -1,5 +1,6 @@
 //! El panel lateral: el árbol de carpetas del vault, que se actualiza con
-//! el watcher, y las operaciones de archivo. La lógica vive en
+//! cada cambio que trae la [`VaultSession`] de la ventana, y las
+//! operaciones de archivo. La lógica vive en
 //! [`Panel`](crate::panel::Panel) y en el [`Workspace`]; aquí se pinta, se
 //! traduce la entrada y se ejecuta lo que el usuario confirmó.
 
@@ -12,20 +13,21 @@ mod prompt;
 mod rail;
 mod render;
 
-use std::io;
 use std::path::Path;
-use std::sync::{Arc, mpsc};
-use std::thread;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::{
-    App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Task, UniformListScrollHandle,
+    App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
+    UniformListScrollHandle,
 };
-use nota_vault::{Vault, VaultChange, VaultPath, VaultUpdate};
+use nota_vault::{Vault, VaultPath, VaultUpdate};
 
 pub use self::actions::bind_keys;
 use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
+use crate::finder::{VaultChanged, VaultSession};
 use crate::panel::{Panel, PanelView};
 use crate::session::PanelState;
 use crate::workspace::{Placement, Workspace, shown_path};
@@ -44,27 +46,29 @@ pub enum SidebarEvent {
 
 pub struct Sidebar {
     panel: Panel,
-    vault: Vault,
+    vault: Rc<Vault>,
     workspace: Entity<Workspace>,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
-    _updates: Task<()>,
+    _changes: Subscription,
 }
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
 
 impl Sidebar {
-    /// El panel de `vault` como lo dejó `state`; `updates` sale de
-    /// [`bridge`].
+    /// El panel del vault de `session` como lo dejó `state`.
     pub fn new(
-        vault: Vault,
-        updates: async_channel::Receiver<VaultUpdate>,
+        session: &Entity<VaultSession>,
         state: &PanelState,
         workspace: Entity<Workspace>,
         cx: &mut Context<Self>,
     ) -> Self {
+        let vault = session.read(cx).vault();
         let tree = FileTree::with_expanded(vault.snapshot(), state.expanded());
+        let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
+            sidebar.apply(update, cx);
+        });
         Self {
             panel: Panel::new(tree, state.visible, state.view()),
             vault,
@@ -72,7 +76,7 @@ impl Sidebar {
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             menu: None,
-            _updates: watch(updates, cx),
+            _changes: changes,
         }
     }
 
@@ -132,12 +136,10 @@ impl Sidebar {
         VaultPath::new(relative.to_str()?).ok()
     }
 
-    fn apply(&mut self, updates: Vec<VaultUpdate>, cx: &mut Context<Self>) {
-        let Some(snapshot) = updates.last().map(|update| Arc::clone(&update.snapshot)) else {
-            return;
-        };
-        let changes: Vec<VaultChange> = updates.into_iter().flat_map(|u| u.changes).collect();
-        self.panel.tree.apply(&changes, snapshot);
+    fn apply(&mut self, update: &VaultUpdate, cx: &mut Context<Self>) {
+        self.panel
+            .tree
+            .apply(&update.changes, Arc::clone(&update.snapshot));
         self.scroll_to_selection();
         cx.notify();
     }
@@ -175,45 +177,4 @@ impl Sidebar {
             .read(cx)
             .has_unsaved_within(&self.file_of(path))
     }
-}
-
-/// Pasa los cambios del watcher, que llegan por un `mpsc` bloqueante, a
-/// un canal que el bucle de GPUI puede esperar. El hilo termina cuando el
-/// vault suelta su watcher o cuando ya nadie escucha.
-///
-/// # Errors
-/// Si no se puede arrancar el hilo.
-pub fn bridge(
-    updates: mpsc::Receiver<VaultUpdate>,
-) -> io::Result<async_channel::Receiver<VaultUpdate>> {
-    let (sender, receiver) = async_channel::unbounded();
-    thread::Builder::new()
-        .name("nota-ui vault".to_owned())
-        .spawn(move || {
-            for update in updates {
-                if sender.send_blocking(update).is_err() {
-                    break;
-                }
-            }
-        })?;
-    Ok(receiver)
-}
-
-/// Aplica los cambios a medida que llegan; lo que se junte mientras la UI
-/// está ocupada se aplica de una vez.
-fn watch(updates: async_channel::Receiver<VaultUpdate>, cx: &mut Context<Sidebar>) -> Task<()> {
-    cx.spawn(async move |sidebar, cx| {
-        while let Ok(first) = updates.recv().await {
-            let mut batch = vec![first];
-            while let Ok(more) = updates.try_recv() {
-                batch.push(more);
-            }
-            if sidebar
-                .update(cx, |sidebar, cx| sidebar.apply(batch, cx))
-                .is_err()
-            {
-                break;
-            }
-        }
-    })
 }

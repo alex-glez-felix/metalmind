@@ -85,7 +85,7 @@ Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota
 
 ## El finder y la paleta
 
-El picker (`nota-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla manda la búsqueda al executor de fondo de GPUI, de a una a la vez y con la consulta versionada. Lo que vuelve de una versión vieja se descarta, y si se teclea mientras corre una, al terminar se busca solo lo último. Así los 8 ms del prompt son un tope de latencia, no de bloqueo: con 50 k rutas la UI sigue respondiendo aunque la búsqueda tarde. Lo único que corre en el hilo de la UI es la búsqueda de un `enter` que llega antes que los resultados (la que se está esperando) y las posiciones de las letras que coinciden, solo para las filas visibles de la lista virtual (`FuzzyMatcher::positions`). Abrir el vault del finder y leer y guardar las notas recientes van en el fondo.
+El picker (`nota-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla manda la búsqueda al executor de fondo de GPUI, de a una a la vez y con la consulta versionada. Lo que vuelve de una versión vieja se descarta, y si se teclea mientras corre una, al terminar se busca solo lo último. Así los 8 ms del prompt son un tope de latencia, no de bloqueo: con 50 k rutas la UI sigue respondiendo aunque la búsqueda tarde. Lo único que corre en el hilo de la UI es la búsqueda de un `enter` que llega antes que los resultados (la que se está esperando) y las posiciones de las letras que coinciden, solo para las filas visibles de la lista virtual (`FuzzyMatcher::positions`). Guardar las notas recientes va en un hilo propio; el vault lo abre el arranque, antes de la ventana (fila "Abrir el vault").
 
 ## Tres capas contra regresiones
 

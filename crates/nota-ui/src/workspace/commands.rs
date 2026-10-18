@@ -227,7 +227,7 @@ impl Workspace {
 
     /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
     /// muestra.
-    pub(super) fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
+    fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
         self.panes
             .values()
             .find(|pane| pane.document == id)
@@ -312,7 +312,7 @@ impl Workspace {
 
     /// El panel nuevo muestra lo mismo, con el mismo cursor, y se queda
     /// con el foco.
-    pub(super) fn split(&mut self, axis: Axis) -> Result<(), WorkspaceError> {
+    fn split(&mut self, axis: Axis) -> Result<(), WorkspaceError> {
         let copy = self.pane(self.focused())?.clone();
         let new = self.tree.split(axis);
         self.panes.insert(new, copy);

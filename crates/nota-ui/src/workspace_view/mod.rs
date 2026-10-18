@@ -27,6 +27,7 @@ use crate::actions::{
 };
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
+use crate::finder::VaultSession;
 use crate::panel::PanelView;
 use crate::session::VaultState;
 use crate::sidebar::{self, Sidebar, SidebarEvent};
@@ -52,6 +53,7 @@ impl WorkspaceView {
     pub fn new(
         workspace: Entity<Workspace>,
         sidebar: Entity<Sidebar>,
+        session: Entity<VaultSession>,
         paths: Option<Paths>,
         launched: Instant,
         window: &mut Window,
@@ -69,7 +71,7 @@ impl WorkspaceView {
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
             paths,
-            vault: FinderVault::default(),
+            vault: FinderVault::new(session, cx),
             overlay: None,
             _subscriptions: [repaint, events],
         }

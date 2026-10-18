@@ -11,7 +11,7 @@ use std::sync::Arc;
 use nota_vault::{EntryKind, VaultIndex, VaultPath};
 
 pub use self::recents::Recents;
-pub use self::session::{SessionError, VaultSession};
+pub use self::session::{Prepared, SessionError, VaultChanged, VaultSession};
 use crate::picker::PickerItem;
 
 /// Una nota del finder, por su ruta en el vault.
