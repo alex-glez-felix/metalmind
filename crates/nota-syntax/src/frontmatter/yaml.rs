@@ -45,10 +45,11 @@ pub(super) struct Item {
     pub span: Range<usize>,
 }
 
-/// Un campo tal como venía: lista, un solo texto, o algo que no es ninguno
-/// de los dos.
+/// Un campo tal como venía: `null`, lista, un solo texto, o algo que no es
+/// ninguno de esos. `null` no es una lista vacía: `template: []` es un error.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Field {
+    Null,
     List(Vec<Item>),
     Text(Item),
     Invalid,
@@ -62,6 +63,7 @@ pub(super) struct Fields {
     pub cssclasses: Option<Field>,
     pub color: Option<Field>,
     pub icon: Option<Field>,
+    pub template: Option<Field>,
     /// Las claves del primer nivel, en orden; `None` si alguna no es un
     /// escalar (`? [a]`).
     pub keys: Option<Vec<Item>>,
@@ -87,6 +89,7 @@ pub(super) fn read(yaml: &str) -> Result<Fields, ReadError> {
         cssclasses: field(fields.cssclasses),
         color: field(fields.color),
         icon: field(fields.icon),
+        template: field(fields.template),
         keys: fields
             .keys
             .into_iter()
@@ -173,6 +176,7 @@ struct RawFields {
     cssclasses: Option<RawField>,
     color: Option<RawField>,
     icon: Option<RawField>,
+    template: Option<RawField>,
     keys: Vec<Spanned<Scalar>>,
 }
 
@@ -183,6 +187,7 @@ struct RawField {
 }
 
 enum Shape {
+    Null,
     List(Vec<Spanned<Scalar>>),
     Text(String),
     Invalid,
@@ -206,6 +211,7 @@ impl RawField {
                 text,
                 span: byte_range(yaml, self.span),
             }),
+            Shape::Null => Field::Null,
             Shape::Invalid => Field::Invalid,
         }
     }
@@ -252,6 +258,7 @@ impl<'de> Visitor<'de> for DocumentVisitor {
                 Some("cssclasses") => &mut fields.cssclasses,
                 Some("color") => &mut fields.color,
                 Some("icon") => &mut fields.icon,
+                Some("template") => &mut fields.template,
                 _ => {
                     map.next_value::<IgnoredAny>()?;
                     continue;
@@ -290,7 +297,7 @@ impl<'de> Visitor<'de> for ShapeVisitor {
     }
 
     fn visit_unit<E: de::Error>(self) -> Result<Shape, E> {
-        Ok(Shape::List(Vec::new()))
+        Ok(Shape::Null)
     }
 
     fn visit_none<E: de::Error>(self) -> Result<Shape, E> {
@@ -363,6 +370,7 @@ mod tests {
         match read(yaml).ok()?.tags? {
             Field::List(items) => Some(items.into_iter().map(item).collect()),
             Field::Text(text) => Some(vec![item(text)]),
+            Field::Null => Some(Vec::new()),
             Field::Invalid => None,
         }
     }
@@ -389,6 +397,11 @@ mod tests {
     #[test]
     fn a_mapping_is_not_a_field() {
         assert_eq!(read("tags: {a: b}").unwrap().tags, Some(Field::Invalid));
+        assert_eq!(read("tags:").unwrap().tags, Some(Field::Null));
+        assert_eq!(
+            read("tags: []").unwrap().tags,
+            Some(Field::List(Vec::new()))
+        );
     }
 
     #[test]

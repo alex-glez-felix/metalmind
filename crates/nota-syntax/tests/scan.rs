@@ -452,6 +452,22 @@ fn a_value_written_differently_is_not_literal(#[case] text: &str) {
     "---\nicon: {a: b}\n---\n",
     "el campo `icon` del frontmatter no es un texto"
 )]
+#[case::empty_list(
+    "---\ncolor: []\n---\n",
+    "el campo `color` del frontmatter no es un texto"
+)]
+#[case::template_list(
+    "---\ntemplate: [a, b]\n---\n",
+    "el campo `template` del frontmatter no es un texto"
+)]
+#[case::template_wikilink(
+    "---\ntemplate: [[reunion]]\n---\n",
+    "el campo `template` del frontmatter no es un texto"
+)]
+#[case::template_only_nulls(
+    "---\ntemplate: [~, null]\n---\n",
+    "el campo `template` del frontmatter no es un texto"
+)]
 fn single_fields_are_text(#[case] text: &str, #[case] message: &str) {
     let problems: Vec<String> = scan(text).problems.iter().map(Problem::to_string).collect();
     assert_eq!(problems, [message]);
@@ -553,4 +569,17 @@ tags: [\"#ru\", ok]
 fn the_tag_under_a_byte(#[case] marked: &str, #[case] expected: Option<(&str, TagPlace)>) {
     let expected = expected.map(|(name, place)| (name.to_owned(), place));
     assert_eq!(tag_at(marked), expected);
+}
+
+#[rstest]
+#[case::text("template: reunión", Some("reunión"))]
+#[case::trimmed("template: \"  diario  \"", Some("diario"))]
+#[case::number("template: 2024", Some("2024"))]
+#[case::null("template:", None)]
+#[case::empty_text("template: \"\"", None)]
+#[case::absent("tags: [a]", None)]
+fn template_field(#[case] yaml: &str, #[case] template: Option<&str>) {
+    let scan = scan(&format!("---\n{yaml}\n---\n"));
+    let found = scan.frontmatter.unwrap().template.map(|value| value.text);
+    assert_eq!((found.as_deref(), scan.problems), (template, Vec::new()));
 }

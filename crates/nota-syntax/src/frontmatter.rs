@@ -28,6 +28,8 @@ pub struct Frontmatter {
     pub cssclasses: Vec<Value>,
     pub color: Option<Value>,
     pub icon: Option<Value>,
+    /// La plantilla de las notas nuevas del tag, en una página de tag.
+    pub template: Option<Value>,
     /// Las claves del primer nivel con lo que ocupa cada una, en orden. Es
     /// `None` si el YAML no se pudo leer o no es un mapa en bloque con cada
     /// clave al principio de su línea: solo así se puede cambiar o agregar un
@@ -134,6 +136,7 @@ impl Frontmatter {
         self.cssclasses = reader.list("cssclasses", fields.cssclasses);
         self.color = reader.single("color", fields.color);
         self.icon = reader.single("icon", fields.icon);
+        self.template = reader.single("template", fields.template);
     }
 }
 
@@ -184,7 +187,7 @@ impl FieldReader<'_> {
     /// que reescribir dentro de él.
     fn list(&mut self, field: &'static str, value: Option<Field>) -> Vec<Value> {
         match value {
-            None => Vec::new(),
+            None | Some(Field::Null) => Vec::new(),
             Some(Field::List(items)) => items
                 .iter()
                 .filter_map(|item| self.value(item, Place::List))
@@ -203,8 +206,8 @@ impl FieldReader<'_> {
     /// Un solo texto; vacío o `null` es no tenerlo.
     fn single(&mut self, field: &'static str, value: Option<Field>) -> Option<Value> {
         match value? {
+            Field::Null => None,
             Field::Text(item) => self.value(&item, Place::Text),
-            Field::List(items) if items.is_empty() => None,
             Field::List(_) | Field::Invalid => {
                 self.problems.push(Problem::NotText {
                     field,
