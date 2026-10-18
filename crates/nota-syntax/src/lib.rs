@@ -18,7 +18,7 @@ use std::ops::Range;
 
 pub use frontmatter::Frontmatter;
 pub use link::{Link, LinkSyntax, Subpath};
-pub use resolve::{Resolution, resolve, resolve_from};
+pub use resolve::{Resolution, path_keys, resolve, resolve_from, target_key};
 pub use tag::{Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.
@@ -56,4 +56,13 @@ pub enum Problem {
 #[must_use]
 pub fn scan(text: &str) -> Scan {
     scanner::scan(text)
+}
+
+/// El link que contiene el byte `offset`, si lo hay: lo que sigue `gd`.
+#[must_use]
+pub fn link_at(text: &str, offset: usize) -> Option<Link> {
+    scan(text)
+        .links
+        .into_iter()
+        .find(|link| link.span.contains(&offset))
 }

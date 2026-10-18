@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 /// A qué archivo del vault apunta el destino de un link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolution<'p> {
@@ -57,20 +59,60 @@ where
 /// Resuelve `target` escrito en la nota `source` (su ruta en el vault). Un
 /// destino que empieza con `./` o `../` es relativo a la carpeta de `source`,
 /// como en un link markdown, y un `../` que sale del vault no resuelve;
-/// cualquier otro se resuelve con [`resolve`].
+/// cualquier otro se resuelve con [`resolve`]. Si quedan varias empatadas, gana
+/// la única que está en la misma carpeta que `source`.
 pub fn resolve_from<'p, I>(source: &str, target: &str, paths: I) -> Resolution<'p>
 where
     I: IntoIterator<Item = &'p str>,
 {
+    let resolution = match absolute(source, target) {
+        Some(target) => resolve(&target, paths),
+        None => Resolution::Unresolved,
+    };
+    let Resolution::Ambiguous(tied) = resolution else {
+        return resolution;
+    };
+    let folder = folder(source);
+    let mut beside = tied.iter().filter(|path| self::folder(path) == folder);
+    match (beside.next(), beside.next()) {
+        (Some(path), None) => Resolution::Resolved(path),
+        _ => Resolution::Ambiguous(tied),
+    }
+}
+
+/// La clave con que un índice encuentra las rutas que `target`, escrito en
+/// `source`, puede resolver: su último componente en minúsculas. Toda ruta
+/// que [`resolve_from`] pueda elegir tiene esa clave entre sus [`path_keys`],
+/// así que basta con pasarle esas. `None` si no puede resolver nada.
+#[must_use]
+pub fn target_key(source: &str, target: &str) -> Option<String> {
+    let target = absolute(source, target)?;
+    let target = target.trim();
+    let target = target.strip_prefix('/').unwrap_or(target);
+    let name = target.rsplit('/').next()?;
+    (!name.is_empty()).then(|| name.to_lowercase())
+}
+
+/// Las claves con que se encuentra `path` (ver [`target_key`]): su nombre en
+/// minúsculas y, si termina en `.md`, también sin la extensión.
+pub fn path_keys(path: &str) -> impl Iterator<Item = String> {
+    let name = path.rsplit('/').next().unwrap_or_default().to_lowercase();
+    let stem = strip_md(&name).map(str::to_owned);
+    std::iter::once(name).chain(stem)
+}
+
+/// `target` como lo compara [`resolve`]: los relativos se vuelven una ruta
+/// desde la raíz. `None` si un relativo sube más allá de la raíz.
+fn absolute<'t>(source: &str, target: &'t str) -> Option<Cow<'t, str>> {
     let target = target.trim();
     if !target.starts_with("./") && !target.starts_with("../") {
-        return resolve(target, paths);
+        return Some(Cow::Borrowed(target));
     }
-    let folder = source.rsplit_once('/').map_or("", |(folder, _)| folder);
-    match join(folder, target) {
-        Some(path) => resolve(&format!("/{path}"), paths),
-        None => Resolution::Unresolved,
-    }
+    join(folder(source), target).map(|path| Cow::Owned(format!("/{path}")))
+}
+
+fn folder(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(folder, _)| folder)
 }
 
 /// `relative` sobre `folder`, con `.` y `..` resueltos. `None` si sube más
@@ -135,6 +177,33 @@ mod tests {
         let paths = ["Casa.MD", "casa.md"];
         assert_eq!(resolve("Casa", paths), Resolution::Resolved("Casa.MD"));
         assert_eq!(resolve("/casa", paths), Resolution::Resolved("casa.md"));
+    }
+
+    #[test]
+    fn the_same_folder_breaks_a_tie() {
+        let paths = ["a/x.md", "b/x.md", "c/x.md"];
+        assert_eq!(
+            resolve_from("b/y.md", "x", paths),
+            Resolution::Resolved("b/x.md")
+        );
+        assert_eq!(
+            resolve_from("y.md", "x", paths),
+            Resolution::Ambiguous(paths.to_vec())
+        );
+    }
+
+    #[test]
+    fn keys_are_the_lowercase_last_component() {
+        assert_eq!(
+            target_key("a/b.md", "Carpeta/Nota.MD").as_deref(),
+            Some("nota.md")
+        );
+        assert_eq!(target_key("a/b.md", "../x/./").as_deref(), Some("x"));
+        assert_eq!(target_key("a/b.md", "../../x"), None);
+        assert_eq!(target_key("a/b.md", "/"), None);
+        let keys: Vec<String> = path_keys("a/Nota.MD").collect();
+        assert_eq!(keys, ["nota.md", "nota"]);
+        assert_eq!(path_keys("img.png").collect::<Vec<_>>(), ["img.png"]);
     }
 
     #[test]
