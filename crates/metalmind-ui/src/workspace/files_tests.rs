@@ -44,7 +44,7 @@ fn abrir_en_el_panel_reemplaza_lo_que_muestra() {
     assert!(opened);
     assert_eq!(shown(&session), file(&vault, "b.md"));
     assert_eq!(session.workspace.tree().len(), 1);
-    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(session.workspace.documents.iter().count(), 2);
 }
 
 /// `:e` del mismo archivo lo relee; abrirlo desde el árbol no lo toca.

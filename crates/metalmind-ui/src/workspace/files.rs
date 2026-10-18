@@ -52,21 +52,30 @@ impl Workspace {
         from: &VaultPath,
         to: &VaultPath,
     ) -> Result<(), FileOpError> {
-        let old = vault.root().join(from.as_str());
-        let moved = self.documents_within(&old);
         vault.rename(from, to)?;
-        let new = vault.root().join(to.as_str());
-        for (id, rest) in moved {
+        let root = vault.root();
+        self.moved(&root.join(from.as_str()), &root.join(to.as_str()));
+        Ok(())
+    }
+
+    /// `old` (un archivo o una carpeta) pasó a llamarse `new`: sus
+    /// documentos abiertos, con sus cambios, su lugar en la jumplist y sus
+    /// marks `A`–`Z` lo siguen.
+    pub(super) fn moved(&mut self, old: &Path, new: &Path) {
+        for (id, rest) in self.documents_within(old) {
             if let Some(document) = self.documents.get_mut(id) {
                 let path = if rest.as_os_str().is_empty() {
-                    new.clone()
+                    new.to_owned()
                 } else {
                     new.join(rest)
                 };
                 document.set_path(shown_path(&path));
             }
         }
-        Ok(())
+        self.files.rename(old, new);
+        for file in self.files.within(new) {
+            self.vim.file_restored(file);
+        }
     }
 
     /// Manda `path` a la papelera de `vault` y cierra los documentos de lo
@@ -83,6 +92,9 @@ impl Workspace {
             .map(|(id, _)| id)
             .collect();
         vault.move_to_trash(path)?;
+        for file in self.files.within(&vault.root().join(path.as_str())) {
+            self.vim.file_removed(file);
+        }
         let showing: Vec<PaneId> = self
             .panes
             .iter()
@@ -97,11 +109,16 @@ impl Workspace {
         for pane in showing {
             if self.tree.len() > 1 {
                 self.close(pane);
-            } else if let Some(state) = self.panes.get_mut(&pane) {
-                let id = self.documents.insert(Document::unnamed());
-                *state = Pane::at_start(id, state.numbers, self.tabstop);
-                self.drop_unshown();
+            } else if let Some(numbers) = self.panes.get(&pane).map(|state| state.numbers) {
+                let id = self.insert_document(Document::unnamed());
+                let jumps = self.panes.get(&pane).map(|state| state.jumps.clone());
+                let mut state = Pane::at_start(id, numbers, self.tabstop);
+                state.jumps = jumps.unwrap_or_default();
+                self.panes.insert(pane, state);
             }
+        }
+        for id in gone {
+            self.documents.remove(id);
         }
         self.vim.cursor_moved();
         Ok(())

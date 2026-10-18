@@ -29,6 +29,9 @@ pub enum Effect {
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
     /// paneles de ese lado, como el panel lateral, puede tomar el foco.
     FocusPastEdge(Direction),
+    /// `gd` o `enter` sobre un link cuyo nombre empata entre varias notas:
+    /// la ventana muestra [`Workspace::link_choice`] para elegir una.
+    ChooseLink,
 }
 
 impl Workspace {
@@ -107,6 +110,7 @@ impl Workspace {
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
+            Command::FollowLink => self.follow_link(),
         }
     }
 
@@ -121,10 +125,12 @@ impl Workspace {
             return Ok(false);
         }
         let document = self.document_mut(id)?;
+        let unnamed = document.path().is_none();
         let saved = match path {
             Some(path) => document.save_to(path),
             None => document.save(),
         };
+
         let message = match saved {
             Ok(stats) => {
                 let name =
@@ -138,7 +144,20 @@ impl Workspace {
         };
         let saved = matches!(message, Message::Info(_));
         self.message = Some(message);
+        if saved && unnamed {
+            self.adopt_file(id)?;
+        }
         Ok(saved)
+    }
+
+    /// Un `[No Name]` al que `:w ruta` le dio archivo sigue con su lugar en
+    /// la jumplist.
+    fn adopt_file(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
+        let resolved = self.document(id)?.resolved_path();
+        if let (Some(resolved), Some(file)) = (resolved, self.documents.file(id)) {
+            self.files.adopt(file, &resolved);
+        }
+        Ok(())
     }
 
     /// `:wq [ruta]`. Si `ruta` es otro archivo y el buffer tiene cambios,
@@ -207,29 +226,14 @@ impl Workspace {
             self.message = Some(Message::unsaved());
             return Ok(());
         }
-        let numbers = self.pane(pane)?.numbers;
-        let shown = match self.documents.find(target) {
-            Some(id) => self.pane_on(id, numbers),
-            None => match Document::open(target) {
-                Ok(document) => {
-                    Pane::at_start(self.documents.insert(document), numbers, self.tabstop)
-                }
-                Err(error) => {
-                    self.message = Some(Message::Error(error.to_string()));
-                    return Ok(());
-                }
-            },
-        };
-        self.message = Some(Message::opened(self.document(shown.document)?));
-        self.vim.cursor_moved();
-        self.panes.insert(pane, shown);
-        self.drop_unshown();
+        self.push_jump(pane)?;
+        self.show_file(pane, target)?;
         Ok(())
     }
 
     /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
     /// muestra.
-    fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
+    pub(super) fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
         self.panes
             .values()
             .find(|pane| pane.document == id)
@@ -299,7 +303,7 @@ impl Workspace {
             Some(id) => self.pane_on(id, numbers),
             None => match Document::open(path) {
                 Ok(document) => {
-                    Pane::at_start(self.documents.insert(document), numbers, self.tabstop)
+                    Pane::at_start(self.insert_document(document), numbers, self.tabstop)
                 }
                 Err(error) => {
                     self.message = Some(Message::Error(error.to_string()));
@@ -307,10 +311,12 @@ impl Workspace {
                 }
             },
         };
+        self.push_jump(focused)?;
+        let jumps = self.pane(focused)?.jumps.clone();
         self.message = Some(Message::opened(self.document(shown.document)?));
         self.vim.cursor_moved();
         let new = self.tree.split(axis);
-        self.panes.insert(new, shown);
+        self.panes.insert(new, Pane { jumps, ..shown });
         Ok(())
     }
 

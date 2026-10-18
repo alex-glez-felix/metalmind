@@ -6,6 +6,7 @@
 //! abierto, el finder o la paleta.
 
 mod finder;
+mod link_choice;
 mod overlay;
 mod palette;
 
@@ -21,8 +22,8 @@ use metalmind_config::Paths;
 use metalmind_vim::Invocation;
 
 use crate::actions::{
-    CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, ForceEdit,
-    ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, SaveAs,
+    CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, FollowLink,
+    ForceEdit, ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, SaveAs,
     SaveAsAndQuit, Set, SplitDown, SplitRight, ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
@@ -65,13 +66,14 @@ impl WorkspaceView {
         });
         let pane = workspace.read(cx).focused();
         let first = cx.new(|cx| Editor::new(workspace.clone(), pane, Some(launched), cx));
+        let vault = FinderVault::new(session, &workspace, cx);
         Self {
             workspace,
             sidebar,
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
             paths,
-            vault: FinderVault::new(session, cx),
+            vault,
             overlay: None,
             _subscriptions: [repaint, events],
         }
@@ -150,6 +152,10 @@ impl WorkspaceView {
                 self.focus_sidebar(window, cx);
             }
             Effect::FocusPastEdge(_) => {}
+            Effect::ChooseLink => {
+                self.sync_editors(cx);
+                self.open_link_choice(window, cx);
+            }
         }
     }
 
@@ -293,6 +299,7 @@ impl Render for WorkspaceView {
         element = on_command::<OpenCommandPalette>(element, cx);
         element = on_command::<ToggleFolders>(element, cx);
         element = on_command::<ToggleTags>(element, cx);
+        element = on_command::<FollowLink>(element, cx);
         let sidebar = self.sidebar.read(cx);
         let shown = sidebar.shown();
         element

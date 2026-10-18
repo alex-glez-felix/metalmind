@@ -126,6 +126,8 @@ mod tests {
             ("tab", None, Mods::None, Some(Key::Tab)),
             ("tab", None, Mods::Shift, None),
             ("r", None, Mods::Ctrl, Some(Key::Ctrl('r'))),
+            // A diferencia de una terminal, GPUI distingue `ctrl-i` de Tab.
+            ("i", None, Mods::Ctrl, Some(Key::Ctrl('i'))),
             ("[", None, Mods::Ctrl, Some(Key::Ctrl('['))),
             ("c", None, Mods::CtrlShift, None),
             ("x", Some("x"), Mods::Alt, None),

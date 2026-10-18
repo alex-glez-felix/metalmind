@@ -11,6 +11,7 @@ use std::sync::Arc;
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 pub use self::recents::Recents;
+pub(crate) use self::session::relative_to;
 pub use self::session::{Prepared, SessionError, VaultChanged, VaultSession};
 use crate::picker::PickerItem;
 

@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
+use metalmind_vim::FileId;
+
 use crate::document::Document;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -20,19 +22,37 @@ impl fmt::Display for DocumentId {
 #[derive(Debug, Default)]
 pub struct Documents {
     open: BTreeMap<DocumentId, Document>,
+    /// El archivo de cada uno para el motor vim.
+    files: BTreeMap<DocumentId, FileId>,
     next_id: u32,
 }
 
 impl Documents {
-    pub fn insert(&mut self, document: Document) -> DocumentId {
+    pub fn insert(&mut self, document: Document, file: FileId) -> DocumentId {
         let id = DocumentId(self.next_id);
         self.next_id += 1;
         self.open.insert(id, document);
+        self.files.insert(id, file);
         id
     }
 
     pub fn remove(&mut self, id: DocumentId) -> Option<Document> {
+        self.files.remove(&id);
         self.open.remove(&id)
+    }
+
+    #[must_use]
+    pub fn file(&self, id: DocumentId) -> Option<FileId> {
+        self.files.get(&id).copied()
+    }
+
+    /// El documento abierto de `file`.
+    #[must_use]
+    pub fn of_file(&self, file: FileId) -> Option<DocumentId> {
+        self.files
+            .iter()
+            .find(|&(_, &own)| own == file)
+            .map(|(&id, _)| id)
     }
 
     #[must_use]
@@ -74,8 +94,11 @@ mod tests {
         let path = dir.path().join("notas").join("a.md");
         fs::write(&path, "a\n").unwrap();
         let mut documents = Documents::default();
-        let a = documents.insert(Document::open(&path).unwrap());
-        let b = documents.insert(Document::open(&dir.path().join("b.md")).unwrap());
+        let a = documents.insert(Document::open(&path).unwrap(), FileId::new(0));
+        let b = documents.insert(
+            Document::open(&dir.path().join("b.md")).unwrap(),
+            FileId::new(1),
+        );
         assert_ne!(a, b);
         let roundabout = dir
             .path()
@@ -91,11 +114,11 @@ mod tests {
     #[test]
     fn quitar_libera_el_documento() {
         let mut documents = Documents::default();
-        let a = documents.insert(Document::new(Path::new("a.md"), "a"));
+        let a = documents.insert(Document::new(Path::new("a.md"), "a"), FileId::new(0));
         assert!(documents.remove(a).is_some());
         assert_eq!(documents.iter().count(), 0);
         assert!(documents.get(a).is_none());
-        let b = documents.insert(Document::new(Path::new("a.md"), "a"));
+        let b = documents.insert(Document::new(Path::new("a.md"), "a"), FileId::new(0));
         assert_ne!(a, b);
     }
 }

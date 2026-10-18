@@ -2,31 +2,51 @@
 //! que el watcher trae otro índice y abre lo elegido como `:e` o `:vsplit`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, Entity, Subscription, Window};
 use metalmind_vim::{Command, Invocation};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::finder::{Note, VaultSession};
+use crate::finder::{Note, VaultChanged, VaultSession};
 use crate::picker::{Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
-use crate::workspace::{Axis, Message, shown_path};
+use crate::workspace::{Axis, Message, Workspace, shown_path};
 
-/// El vault de la ventana visto por el finder.
+/// El vault de la ventana visto por el finder y por el workspace, que
+/// sigue los links y los archivos de la jumplist con él.
 pub struct FinderVault {
     session: Entity<VaultSession>,
     /// La última nota que se marcó como reciente.
     touched: Option<PathBuf>,
     _changes: Subscription,
+    _files: Subscription,
 }
 
 impl FinderVault {
-    pub fn new(session: Entity<VaultSession>, cx: &mut Context<WorkspaceView>) -> Self {
+    pub fn new(
+        session: Entity<VaultSession>,
+        workspace: &Entity<Workspace>,
+        cx: &mut Context<WorkspaceView>,
+    ) -> Self {
         let changes = cx.observe(&session, |view, _, cx| view.refresh_finder(cx));
+        let files = cx.subscribe(&session, |view, session, VaultChanged(update), cx| {
+            let root = session.read(cx).root().to_owned();
+            view.workspace.update(cx, |workspace, _| {
+                workspace.files_changed(&root, &update.changes);
+                workspace.set_links(&root, Arc::clone(&update.links));
+            });
+        });
+        let (root, links) = {
+            let session = session.read(cx);
+            (session.root().to_owned(), session.vault().links())
+        };
+        workspace.update(cx, |workspace, _| workspace.set_links(&root, links));
         Self {
             session,
             touched: None,
             _changes: changes,
+            _files: files,
         }
     }
 }

@@ -26,7 +26,7 @@ impl Workspace {
             Ok(vim.feed_with_clipboard(key, buffer, selections, clipboard)?)
         })?;
         self.note(&outcome);
-        Ok(outcome)
+        self.settle(outcome, clipboard)
     }
 
     /// Ejecuta `action` en `pane` como si se hubiera tecleado su atajo; así
@@ -45,26 +45,41 @@ impl Workspace {
             Ok(vim.execute_with_clipboard(action, buffer, selections, clipboard)?)
         })?;
         self.note(&outcome);
-        Ok(outcome)
+        self.settle(outcome, clipboard)
     }
 
-    /// Sigue la macro pausada en el panel enfocado; devuelve su próximo
-    /// comando, si llega a uno.
+    /// Sigue la macro pausada en el panel enfocado, saltando de archivo
+    /// cuando lo pida; devuelve su próximo comando, si llega a uno.
     pub(super) fn resume_macro(&mut self, clipboard: &mut dyn Clipboard) -> Option<Invocation> {
-        let resumed = self.edit_pane(self.focused(), |vim, buffer, selections| {
-            Ok(vim.resume_macro(buffer, selections, clipboard)?)
-        });
-        match resumed {
-            Ok(Some(KeyOutcome::Command(invocation))) => Some(invocation),
-            Ok(Some(outcome)) => {
-                self.note(&outcome);
-                None
-            }
-            Ok(None) => None,
-            Err(error) => {
-                self.vim.abort_macro();
-                self.report(&error);
-                None
+        loop {
+            let resumed = self
+                .edit_pane(self.focused(), |vim, buffer, selections| {
+                    Ok(vim.resume_macro(buffer, selections, clipboard)?)
+                })
+                .and_then(|resumed| match resumed {
+                    Some(KeyOutcome::SwitchFile(landing)) => {
+                        self.land(self.focused(), landing).map(|landed| {
+                            if !landed {
+                                self.vim.abort_macro();
+                            }
+                            Some(KeyOutcome::SwitchFile(landing))
+                        })
+                    }
+                    resumed => Ok(resumed),
+                });
+            match resumed {
+                Ok(Some(KeyOutcome::Command(invocation))) => return Some(invocation),
+                Ok(Some(KeyOutcome::SwitchFile(_))) => {}
+                Ok(Some(outcome)) => {
+                    self.note(&outcome);
+                    return None;
+                }
+                Ok(None) => return None,
+                Err(error) => {
+                    self.vim.abort_macro();
+                    self.report(&error);
+                    return None;
+                }
             }
         }
     }

@@ -49,7 +49,8 @@ fn e_abre_otro_archivo_en_el_panel() {
     assert_eq!(shown(&session), path(&dir, "b.md"));
     assert_eq!(session.text(), "b1\nb2");
     assert_eq!(session.cursor(), ByteOffset::ZERO);
-    assert_eq!(session.workspace.documents.iter().count(), 1);
+    // Como vim con `hidden`, a.md queda oculto.
+    assert_eq!(session.workspace.documents.iter().count(), 2);
     let opened = format!("\"{}\" 2L, 6B", path(&dir, "b.md").display());
     assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
 }
@@ -103,15 +104,18 @@ fn e_se_niega_si_se_perderian_cambios() {
     );
 }
 
+/// Como nvim con `hidden`, `:e! otra` no descarta los cambios: el buffer
+/// queda oculto con ellos.
 #[test]
-fn e_con_bang_descarta_los_cambios() {
+fn e_con_bang_a_otra_nota_deja_los_cambios_ocultos() {
     let (dir, mut session) = two_files();
     session.keys("x");
     edit(&mut session, "e!", &path(&dir, "b.md"));
     assert_eq!(shown(&session), path(&dir, "b.md"));
-    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(session.workspace.documents.iter().count(), 2);
     edit(&mut session, "e", &path(&dir, "a.md"));
-    assert_eq!(session.text(), "a");
+    assert_eq!(session.text(), "");
+    assert!(session.is_modified());
 }
 
 #[test]
@@ -135,7 +139,7 @@ fn e_de_un_archivo_abierto_comparte_el_documento() {
     let right = session.pane();
     session.keys("⌃wh");
     edit(&mut session, "e", &dir.path().join(".").join("b.md"));
-    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(session.workspace.documents.iter().count(), 2);
     assert_eq!(session.cursor(), ByteOffset::new(3));
     session.keys("x");
     assert_eq!(session.view(right).buffer().to_string(), "b1\n2");
@@ -217,7 +221,7 @@ fn q_se_niega_si_el_panel_es_el_unico_con_esos_cambios() {
     assert!(error(&session).is_some());
     session.keys(":q!⏎");
     assert_eq!(session.workspace.tree().len(), 1);
-    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert_eq!(session.workspace.documents.iter().count(), 2);
     assert_eq!(shown(&session), path(&dir, "a.md"));
 }
 
@@ -279,7 +283,7 @@ fn only_cierra_los_demas_salvo_los_que_perderian_cambios() {
         error(&session),
         Some("E445: otros paneles tienen cambios sin guardar")
     );
-    assert_eq!(session.workspace.documents.iter().count(), 2);
+    assert_eq!(session.workspace.documents.iter().count(), 3);
 }
 
 #[test]
