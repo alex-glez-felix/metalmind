@@ -2,7 +2,7 @@
 
 Texto editable de `nota`, sin GUI ni I/O.
 
-- `Buffer`: rope (`ropey`) con líneas separadas solo por `\n`.
+- `Buffer`: rope (`ropey`) con líneas separadas solo por `\n`; `line_text` da una línea sin su `\n`.
 - `ByteOffset`: todo offset es en bytes; columnas en caracteres solo con `column_of` / `offset_at_column`.
 - `Selection` / `Selections`: siempre al menos una, ordenadas y sin solapes (multi-cursor).
 - `Edit` + `Buffer::apply`: lote de ediciones en coordenadas previas; `EditMap` traduce posiciones al texto nuevo.

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::ops::Range;
 
@@ -128,6 +129,17 @@ impl Buffer {
         let line_end = self.rope.byte_to_char(self.line_end(line).get());
         let target = line_start.saturating_add(column).min(line_end);
         ByteOffset::new(self.rope.char_to_byte(target))
+    }
+
+    /// Texto de la línea sin su `\n`; sin copiar si está en un solo trozo del rope.
+    #[must_use]
+    pub fn line_text(&self, line: usize) -> Cow<'_, str> {
+        let slice = self
+            .rope
+            .byte_slice(self.line_start(line).get()..self.line_end(line).get());
+        slice
+            .as_str()
+            .map_or_else(|| Cow::Owned(slice.to_string()), Cow::Borrowed)
     }
 
     /// # Errors
