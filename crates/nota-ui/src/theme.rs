@@ -27,6 +27,8 @@ pub struct Theme {
     pub caret: Hsla,
     /// El cursor de bloque deja ver el carácter que tapa.
     pub block_cursor: Hsla,
+    /// El cursor de bloque en Visual.
+    pub visual_cursor: Hsla,
     /// El cursor de un panel sin foco.
     pub unfocused_cursor: Hsla,
     pub selection: Hsla,
@@ -82,6 +84,7 @@ impl Theme {
             foreground: hsla(ui.foreground),
             caret: hsla(cursor.insert),
             block_cursor: hsla(cursor.normal),
+            visual_cursor: hsla(cursor.visual),
             unfocused_cursor: hsla(cursor.unfocused),
             selection: hsla(ui.selection),
             gutter: hsla(ui.gutter),
@@ -170,11 +173,16 @@ mod tests {
     fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
         let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
         let blue = Hsla::from(rgb(0x7a_a2_f7));
-        let expected: [(&str, Hsla, Hsla); 13] = [
+        let expected: [(&str, Hsla, Hsla); 14] = [
             ("background", theme.background, rgb(0x1c_1f_24).into()),
             ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
             ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
             ("block_cursor", theme.block_cursor, blue.opacity(0.5)),
+            (
+                "visual_cursor",
+                theme.visual_cursor,
+                Hsla::from(rgb(0xbb_9a_f7)).opacity(0.5),
+            ),
             (
                 "unfocused_cursor",
                 theme.unfocused_cursor,

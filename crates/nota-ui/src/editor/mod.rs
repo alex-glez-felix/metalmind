@@ -3,11 +3,13 @@
 
 mod element;
 mod gutter;
+mod highlight;
 mod input;
 mod keys;
 mod layout;
 mod mouse;
 mod scroll;
+mod spans;
 mod status_bar;
 mod utf16;
 

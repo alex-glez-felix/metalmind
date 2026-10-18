@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use gpui_kit::{Bounds, Pixels, Point, ShapedLine, point, px};
 
 use super::scroll::{Scroll, to_line};
@@ -61,6 +63,14 @@ pub struct FrameLayout {
 }
 
 impl FrameLayout {
+    /// Las líneas pintadas, de la primera a la última.
+    pub fn visible_lines(&self) -> Range<usize> {
+        match (self.lines.first(), self.lines.last()) {
+            (Some(first), Some(last)) => first.line..last.line + 1,
+            _ => 0..0,
+        }
+    }
+
     pub fn line(&self, line: usize) -> Option<&LaidLine> {
         self.lines.iter().find(|laid| laid.line == line)
     }
