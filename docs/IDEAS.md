@@ -43,7 +43,7 @@ Lo que quiere (17-oct-2026, al probar `u` / `ctrl-r` en el spike): algo tipo **u
 
 Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo que quedó fuera de M2.5:
 
-- **Vistas guardadas**: una consulta de tags con nombre (`#rust -#archivado` → "Rust activo"), como las carpetas inteligentes. Aparecerían en el panel y en `:focus` por su nombre. Dónde se guardan (config del vault o un archivo dentro del vault, para que viaje con él) está por decidir.
+- **Vistas guardadas**: decididas en [06](research/06-decisiones-de-fondo.md#10-vistas-guardadas): una consulta de tags con nombre (`gs` = `#gs -#archivado`) que aparece en el panel junto al árbol de tags. Falta decidir el archivo exacto donde se guardan.
 - Consultas más ricas: "o", paréntesis, comodines (`#proyecto/*`) y "solo este tag, sin hijos". Juntas con las vistas guardadas, que es donde una consulta larga vale la pena.
 - Recordar el focus al reabrir el vault.
 - Color o ícono por tag, en el panel y en el texto.
@@ -55,6 +55,16 @@ Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo 
 **Impacto en el diseño temprano:**
 - La consulta es un tipo (`TagQuery`) con parseo puro y tabla de casos: agregar "o" o darle nombre a una consulta no toca a quien la usa.
 - Renombrar tags y renombrar notas (M3) comparten el motor de refactorización del vault con vista previa y deshacer.
+
+## Decididas, sin fecha
+
+Ver [06 — Decisiones de fondo](research/06-decisiones-de-fondo.md), que dice qué restringe cada una desde ya.
+
+- **Celular**: quizá una app simple de captura rápida; la principal es la de escritorio ([06 §2](research/06-decisiones-de-fondo.md#2-celular)).
+- **Cifrado de notas**: deseable, sin fecha; nada derivado guarda en claro una nota cifrada ([06 §4](research/06-decisiones-de-fondo.md#4-cifrado-de-notas)).
+- **Grafo**: deseable, prioridad baja ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
+- **Plantillas de notas**: deseables ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
+- **Daily notes**: opcionales y apagadas por defecto; el flujo principal es el buzón ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
 
 ## Importador de Obsidian (y quizá de otros)
 
