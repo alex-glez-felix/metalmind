@@ -10,7 +10,7 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
-use nota_vault::{FileOpError, Vault, VaultPath};
+use nota_vault::{FileOpError, SaveError, Vault, VaultPath};
 use pretty_assertions::assert_eq;
 use support::{entries, make_tree, settle};
 use tempfile::TempDir;
@@ -196,6 +196,24 @@ fn nada_sale_del_vault_por_un_enlace() {
     ));
     assert_eq!(entries(outside.path()), ["ajena.md"]);
     assert_eq!(read(dir.path(), "a.md"), "a.md");
+}
+
+#[test]
+fn guardar_no_sale_del_vault_por_una_nota_enlazada() {
+    let outside = TempDir::new().unwrap();
+    make_tree(outside.path(), &["ajena.md"]);
+    let dir = TempDir::new().unwrap();
+    symlink(
+        outside.path().join("ajena.md"),
+        dir.path().join("enlace.md"),
+    )
+    .unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    assert!(matches!(
+        vault.save(&path("enlace.md"), "pisada".to_owned()),
+        Err(SaveError::Path(FileOpError::Symlink(_)))
+    ));
+    assert_eq!(read(outside.path(), "ajena.md"), "ajena.md");
 }
 
 #[test]

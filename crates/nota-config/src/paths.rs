@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 
 const APP: &str = "nota";
-/// Hasta cuántos caracteres del nombre del vault van en el de su carpeta.
-const VAULT_NAME_CHARS: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Paths {
@@ -18,7 +16,8 @@ pub struct Paths {
     pub data: PathBuf,
     pub cache: PathBuf,
     /// Lo que debe sobrevivir a un reinicio pero no es del usuario: journal de
-    /// recuperación, historial.
+    /// recuperación, historial de `:` y de búsquedas. Las versiones de las
+    /// notas van en `data` (06 §3).
     pub state: PathBuf,
 }
 
@@ -97,7 +96,7 @@ impl Paths {
     /// completa para que dos vaults con el mismo nombre no choquen.
     #[must_use]
     pub fn vault_data(&self, root: &Path) -> PathBuf {
-        self.data.join("vaults").join(vault_dir_name(root))
+        self.data.join("vaults").join(vault_key(root))
     }
 
     /// Pasa los datos de un vault que se movió de `from` a `to` (las dos
@@ -184,25 +183,6 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     bytes.iter().fold(OFFSET, |hash, &byte| {
         (hash ^ u64::from(byte)).wrapping_mul(PRIME)
     })
-}
-
-fn vault_dir_name(root: &Path) -> String {
-    let name: String = root
-        .file_name()
-        .map(|name| name.to_string_lossy())
-        .unwrap_or_default()
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .take(VAULT_NAME_CHARS)
-        .collect();
-    let hash = blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex();
-    format!("{name}-{}", &hash[..16])
 }
 
 #[cfg(test)]

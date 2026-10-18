@@ -9,14 +9,14 @@
 - **Lo que va a correr mientras se escribe en un prompt** (el finder en `space f`, la búsqueda con `/` si se hace incremental como el `incsearch` de nvim) tiene **8 ms**: la mitad de un frame de 60 Hz, la otra mitad es de la UI. Si no cabe, pasa a un hilo de fondo, que es más complejo; el presupuesto dice cuándo hace falta.
 - **Un comando que se lanza una vez** y toca todo el buffer (`:%s`, el undo de un `:%s`, una macro con count) tiene **16 ms** en una nota de 5 k líneas: termina antes del frame siguiente y no se ve ningún salto.
 - **Una búsqueda en todo el vault** corre en hilos de fondo y entrega en streaming: **100 ms** con 5 k notas, que se siente inmediato, y **1 s** con 50 k. Lo que sí bloquea la UI es cancelar la anterior al escribir otra letra, y eso tiene los 8 ms de un prompt. Buscar en una nota abierta con cambios sin guardar es en memoria y en el mismo hilo: también 8 ms.
-- **Lo que pasa en segundo plano** (indexar el vault) no bloquea la UI, pero el finder y el árbol lo esperan: abrir 5 k notas tiene que estar antes de que la ventana pinte su primer frame (~300 ms).
+- **Lo que pasa en segundo plano** (indexar el vault) no bloquea la UI, pero el finder y el árbol lo esperan: abrir 5 k notas tiene que estar antes de que la ventana pinte su primer frame (~300 ms). Registrar la versión de una nota en el historial también va en segundo plano: el guardado no la espera, porque comprimir la primera versión de una nota de 50 k líneas pasa de 160 ms.
 - **Tamaños**: 5 k líneas es una nota larga; 50 k, el peor caso realista (un log, una nota exportada). 5 k notas es un vault grande de Obsidian; 50 k, uno enorme.
 
 Los objetivos valen para la **máquina de pruebas** de los hitos (la de 04, con GPU). Los números de hoy salen de una máquina de escritorio x86_64 más rápida, así que lo que quede a menos del doble de su objetivo se marca ⚠️: en la máquina de pruebas puede no cumplir.
 
 ## Presupuesto y números de hoy
 
-Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una máquina de escritorio x86_64 con Linux. Las notas salen de `nota_perf::note` y los vaults de `nota_perf::vault_paths` (las rutas) y `nota_perf::write_vault` (en disco, notas de ~1.5 KB): texto sintético y determinista, nada de datos reales. La búsqueda de texto se mide con la caché de disco caliente; en frío y el umbral de `tantivy`, en [03 §4](research/03-core-architecture.md).
+Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una máquina de escritorio x86_64 con Linux. Las notas salen de `nota_perf::note` y los vaults de `nota_perf::vault_paths` (las rutas) y `nota_perf::write_vault` (en disco, notas de ~1.5 KB): texto sintético y determinista, nada de datos reales. La búsqueda de texto se mide con la caché de disco caliente; en frío y el umbral de `tantivy`, en [03 §4](research/03-core-architecture.md). Lo que escribe en disco (guardar, el historial) se midió en un sistema de archivos en disco y no en tmpfs, donde `fsync` no cuesta nada.
 
 | Operación | Objetivo | Hoy | | Bench |
 |---|---|---|---|---|
@@ -66,6 +66,9 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Árbol: bajar una fila | ≤ 1 ms | 20 ns | ✅ | `nota-ui` `bajar_una_fila` |
 | Árbol: filtrar con `/`, peor consulta (`tema nota`), 5 k / 50 k | ≤ 8 ms | 2.6 / 35 ms | ❌ | `nota-ui` `filtrar` ([#59](https://github.com/alex-glez-felix/nota/issues/59)) |
 | Árbol: aplicar el rename de las 10 carpetas de arriba que manda el watcher, 5 k / 50 k | ≤ 16 ms | 0.19 / 1.8 ms | ✅ | `nota-ui` `aplicar_un_rename` |
+| Guardar una nota, 5 k / 50 k líneas (`Vault::save`: escritura atómica con `fsync`, lo que espera la UI) | ≤ 16 ms | 3.0 / 4.8 ms | ✅ | `nota-vault` `guardar_desde_el_vault` |
+| Historial: versión con una línea cambiada, 5 k / 50 k (en el hilo del vault) | segundo plano y lineal | 1.5 / 5.1 ms | ✅ | `nota-vault` `version_con_una_linea_cambiada`, test `una_version_con_una_linea_cambiada_es_lineal` |
+| Historial: primera versión / todas las líneas cambiadas, 5 k / 50 k (en el hilo del vault) | segundo plano | 18 / 171 ms; 33 / 342 ms | ✅ | `nota-vault` `primera_version`, `version_con_todo_cambiado` |
 | Finder, 5 k rutas, peor consulta (`tema nota`): ordenar todo y las posiciones de 50 | ≤ 8 ms | 0.67 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.8 ms (en el fondo: no bloquea la UI) | ⚠️ | `nota-search` |
 | Finder, una tecla en el picker con 5 k rutas: filtrar todo y preparar las 12 filas visibles, peor consulta (`tema nota`) | ≤ 8 ms | 0.75 ms | ✅ | `nota-ui` `picker` |

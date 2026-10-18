@@ -5,6 +5,7 @@
     reason = "cada archivo de tests usa una parte distinta de support"
 )]
 
+pub mod history;
 pub mod links;
 
 use std::fs;

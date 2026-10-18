@@ -38,6 +38,8 @@ grep-searcher = "0.1.17"
 ignore = "0.4.33"
 jiff = "0.2.38"
 log = "0.4.34"
+# Deflate sin C para los snapshots del historial; GPUI ya lo trae.
+miniz_oxide = "0.9.1"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
 nucleo-matcher = "0.3.1"
@@ -49,6 +51,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = { version = "2.0.0", default-features = false, features = ["deserialize"] }
 serde_ignored = "0.1.14"
 serde_json = "1.0.154"
+similar = "3.2.0"
 smallvec = "1.16.3"
 thiserror = "2.0.21"
 unicode-normalization = "0.1.26"
