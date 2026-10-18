@@ -850,6 +850,10 @@ use rstest_reuse::{self, apply, template};
 #[case("a\nb|b\ncc\ndd", "makdjgg`a", "c|c\ndd")]
 #[case("a\nb|b", "maggdG`a", "|")]
 #[case("|ab", "maddix<Esc>`a", "|x")]
+// borrar una línea no se lleva la mark de la línea vacía de abajo
+#[case("x\ny\n|\nz", "makddgg'a", "x\n|\nz")]
+#[case("x\n\n|\ny", "makddgg'a", "x\n|\ny")]
+#[case("x\ny\n|\nz", "makddG`a", "x\n|\nz")]
 // si su línea se une a la anterior, se va con su texto
 #[case("ab\nc|d", "ma0i<BS><Esc>0`a", "abc|d")]
 #[case("ab\nc|d", "makA<CR><Esc>G0`a", "ab\n\nc|d")]
