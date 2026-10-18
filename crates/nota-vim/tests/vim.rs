@@ -778,6 +778,10 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab\nab\ncd\nab", "qa:s/a/X/<CR>jq9@a", "Xb\nXb\n|cd\nab")]
 #[case("|ab x\ncd x", "/x<CR>ggqanxq@a@@", "ab| \ncd ")]
 #[case("|ab\ncd", "qa/zz<CR>xq@a", "|b\ncd")]
+// ctrl-j envía la línea de comandos: un registro por líneas con :s o / se ejecuta
+#[case("|:s/a/X/\nab a", "\"ayyj@a", ":s/a/X/\n|Xb a")]
+#[case("|/c\nab c", "\"ayyj0@ax", "/c\nab| ")]
+#[case("|ab cd", ":s/b/Z/<C-j>", "|aZ cd")]
 // marks: m{a-z} pone, '{a-z} va al primer no blanco de su línea y `{a-z} a su posición
 #[case("ab\n  c|d\nef", "maggG'a", "ab\n  |cd\nef")]
 #[case("ab\n  c|d\nef", "maggG`a", "ab\n  c|d\nef")]

@@ -227,6 +227,7 @@ const VIM: &[(Context, &[Key], Action)] = {
         (CommandLine, &[Key::Ctrl('c')], Action::Interrupt),
         (CommandLine, &[Key::Backspace], Action::Backspace),
         (CommandLine, &[Key::Enter], Action::SubmitCommand),
+        (CommandLine, &[Key::Ctrl('j')], Action::SubmitCommand),
         (CommandLine, &[Key::Up], Action::HistoryPrevious),
         (CommandLine, &[Key::Down], Action::HistoryNext),
         // Búsqueda: `/`, `?` y lo que repite o busca la palabra del cursor.
