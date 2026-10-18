@@ -74,6 +74,8 @@ impl Translator {
             '.' => self.atom("."),
             '*' => self.quantifier("*", '*'),
             '[' => self.collection()?,
+            // Un salto de línea pegado es un patrón de varias líneas, como `\n`.
+            '\n' => return Err(unsupported("\\n")),
             c => self.literal(c),
         }
         Ok(())
@@ -366,7 +368,9 @@ mod tests {
 
     #[test]
     fn rejects_what_has_no_equivalent() {
-        for source in ["a\\nb", "\\zsa", "\\va", "\\1", "\\%V", "[\\n]", "\\l"] {
+        for source in [
+            "a\\nb", "a\nb", "\n\\|b", "\\zsa", "\\va", "\\1", "\\%V", "[\\n]", "\\l",
+        ] {
             assert!(
                 matches!(translate(source), Err(SearchError::Unsupported(_))),
                 "{source:?}"
