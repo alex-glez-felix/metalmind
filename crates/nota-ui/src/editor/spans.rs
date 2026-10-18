@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use nota_buffer::{Buffer, ByteOffset, Selection};
-use nota_vim::{Mode, Pattern, VisualKind};
+use nota_vim::{Mode, Pattern, Viewport, VisualBlock, VisualKind};
 
 /// Un tramo resaltado de una línea, en bytes desde su inicio.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,13 +28,15 @@ pub enum SpanEnd {
 /// Lo que se pinta de `selection` en las líneas `visible`. En Visual, los
 /// dos extremos van incluidos (el contrato de `nota-vim`): `v` pinta hasta
 /// el carácter bajo el cursor y, si está sobre el fin de línea, el salto;
-/// `V` pinta las líneas completas hasta el borde, también las vacías. Fuera
-/// de Visual es una selección del ratón, con `head` exclusivo.
+/// `V` pinta las líneas completas hasta el borde, también las vacías; un
+/// bloque, lo que abarca en cada línea, medido con el `tabstop` del panel.
+/// Fuera de Visual es una selección del ratón, con `head` exclusivo.
 #[must_use]
 pub fn selection_spans(
     buffer: &Buffer,
     selection: Selection,
     mode: Mode,
+    viewport: &Viewport,
     visible: Range<usize>,
 ) -> Vec<Span> {
     let (start, end) = (
@@ -61,8 +63,9 @@ pub fn selection_spans(
                 .collect();
         }
         Mode::Visual(VisualKind::Char) => inclusive_end(buffer, end),
-        // Un bloque todavía no se pinta: solo se ve el cursor.
-        Mode::Visual(VisualKind::Block) => return Vec::new(),
+        Mode::Visual(VisualKind::Block) => {
+            return block_spans(buffer, &selection, viewport, in_view);
+        }
         _ if selection.is_cursor() => return Vec::new(),
         _ => SpanEnd::At(end.get() - buffer.line_start(*lines.end()).get()),
     };
@@ -77,6 +80,28 @@ pub fn selection_spans(
             },
         })
         .filter(|span| span.end != SpanEnd::At(span.start))
+        .collect()
+}
+
+/// Los caracteres de cada línea que el bloque abarca, aunque sea en parte,
+/// como un tab; nada en las que terminan antes de él.
+fn block_spans(
+    buffer: &Buffer,
+    selection: &Selection,
+    viewport: &Viewport,
+    lines: Range<usize>,
+) -> Vec<Span> {
+    let block = VisualBlock::new(buffer, selection, viewport);
+    lines
+        .filter_map(|line| {
+            let bytes = block.bytes_on(buffer, line);
+            let line_start = buffer.line_start(line).get();
+            (!bytes.is_empty()).then(|| Span {
+                line,
+                start: bytes.start.get() - line_start,
+                end: SpanEnd::At(bytes.end.get() - line_start),
+            })
+        })
         .collect()
 }
 
@@ -136,15 +161,27 @@ mod tests {
 
     const CHAR: Mode = Mode::Visual(VisualKind::Char);
     const LINE: Mode = Mode::Visual(VisualKind::Line);
+    const BLOCK: Mode = Mode::Visual(VisualKind::Block);
 
     fn spans(text: &str, anchor: usize, head: usize, mode: Mode) -> Vec<(usize, usize, SpanEnd)> {
+        spans_with_goal(text, anchor, head, mode, Goal::None)
+    }
+
+    fn spans_with_goal(
+        text: &str,
+        anchor: usize,
+        head: usize,
+        mode: Mode,
+        goal: Goal,
+    ) -> Vec<(usize, usize, SpanEnd)> {
         let buffer = Buffer::from(text);
         let selection = Selection {
             anchor: ByteOffset::new(anchor),
             head: ByteOffset::new(head),
-            goal: Goal::None,
+            goal,
         };
-        selection_spans(&buffer, selection, mode, 0..buffer.line_count())
+        let viewport = Viewport::default();
+        selection_spans(&buffer, selection, mode, &viewport, 0..buffer.line_count())
             .into_iter()
             .map(|span| (span.line, span.start, span.end))
             .collect()
@@ -185,6 +222,30 @@ mod tests {
             [full(0), full(1), full(2)]
         );
         assert_eq!(spans("\n", 0, 0, LINE), [full(0)]);
+    }
+
+    #[test]
+    fn un_bloque_pinta_lo_que_abarca_en_cada_linea() {
+        assert_eq!(
+            spans("abcd\na\tb\nxy", 0, 11, BLOCK),
+            [
+                (0, 0, SpanEnd::At(3)),
+                (1, 0, SpanEnd::At(2)),
+                (2, 0, SpanEnd::At(2)),
+            ]
+        );
+        assert_eq!(
+            spans("abcd\nx\nabcd", 1, 12, BLOCK),
+            [(0, 1, SpanEnd::At(4)), (2, 1, SpanEnd::At(4))]
+        );
+    }
+
+    #[test]
+    fn un_bloque_con_dolar_llega_al_fin_de_cada_linea() {
+        assert_eq!(
+            spans_with_goal("ab\ncdef\ng", 1, 7, BLOCK, Goal::LineEnd),
+            [(0, 1, SpanEnd::At(2)), (1, 1, SpanEnd::At(4))]
+        );
     }
 
     #[test]
@@ -272,10 +333,11 @@ mod tests {
             head: ByteOffset::new(6),
             goal: Goal::None,
         };
-        let lines: Vec<usize> = selection_spans(&buffer, selection, LINE, 1..3)
-            .iter()
-            .map(|span| span.line)
-            .collect();
+        let lines: Vec<usize> =
+            selection_spans(&buffer, selection, LINE, &Viewport::default(), 1..3)
+                .iter()
+                .map(|span| span.line)
+                .collect();
         assert_eq!(lines, [1, 2]);
     }
 }
