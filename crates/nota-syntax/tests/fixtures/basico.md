@@ -11,8 +11,8 @@ Markdown: [texto](destino.md), [con ruta](carpeta/Mi%20Nota.md#Un%20Heading),
 [con ángulos](<Nota con espacios.md>), [título](nota.md "Título"), ![img](adjuntos/a.png).
 Externos: [web](https://example.com/#ancla), [correo](mailto:a@example.com), <https://example.com/#x>.
 
-Tags: #tag, #anidado/sub/más, #y1984 #con-guion #con_guion_bajo.
-No son tags: #1984, texto#pegado, https://example.com/#fragmento, \#escapado, # heading.
+Tags: #tag, #anidado/sub/más, #1984 #y1984 #con-guion #con_guion_bajo.
+No son tags: texto#pegado, https://example.com/#fragmento, \#escapado, # heading.
 
 No son links: [[]], [[|solo alias]], [[sin cierre
 ]], \[[escapado]], [roto](, [sin destino] (nota.md).

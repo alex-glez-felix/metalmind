@@ -51,7 +51,11 @@ fn code_and_comments_hide_syntax(#[case] text: &str, #[case] expected: &[&str]) 
 #[case::autolink("<https://example.com/#a>", &[])]
 #[case::glued_to_text("texto#a", &[])]
 #[case::after_paren("(#a)", &[])]
-#[case::only_digits("#1984 #y1984 #2024/10", &["#y1984", "#2024/10"])]
+#[case::only_digits("#2024 #y1984 #2024/10", &["#2024", "#y1984", "#2024/10"])]
+#[case::digits_at_end_of_line("primero\nel #1\nfin", &["#1"])]
+#[case::digits_end_at_punctuation("año #2024.", &["#2024"])]
+#[case::digits_in_url("https://example.com/#123 [x](https://example.com/#123)", &[])]
+#[case::digits_in_inline_code("`#123` #124", &["#124"])]
 #[case::heading("# Heading", &[])]
 #[case::heading_with_tag("## Heading #a", &["#a"])]
 #[case::no_space_is_a_tag("#Heading", &["#Heading"])]
@@ -251,10 +255,6 @@ fn empty_frontmatter() {
     "---\ntags: rust, nota\n---\n",
     "`rust, nota` en `tags` del frontmatter no es un tag válido"
 )]
-#[case::only_digits(
-    "---\ntags: [a, 2024]\n---\n",
-    "`2024` en `tags` del frontmatter no es un tag válido"
-)]
 #[case::double_hash(
     "---\ntags: \"##project\"\n---\n",
     "`##project` en `tags` del frontmatter no es un tag válido"
@@ -282,6 +282,12 @@ fn a_text_field_is_one_value() {
     assert_eq!(frontmatter.tags, ["rust"]);
     assert_eq!(frontmatter.aliases, ["Uno, dos"]);
     assert_eq!(frontmatter.cssclasses, ["ancho"]);
+}
+
+#[test]
+fn a_number_in_frontmatter_tags_is_a_tag() {
+    let frontmatter = scan("---\ntags: [a, 2024]\n---\n").frontmatter.unwrap();
+    assert_eq!(frontmatter.tags, ["a", "2024"]);
 }
 
 #[test]

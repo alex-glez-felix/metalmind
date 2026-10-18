@@ -36,13 +36,13 @@ fn is_tag_char(c: char) -> bool {
     }
 }
 
-/// Un nombre de tag válido: solo caracteres de tag, no solo números ni solo
-/// separadores (`-`, `_`, `/`) y sin niveles vacíos (`a//b`, `/a`).
+/// Un nombre de tag válido: solo caracteres de tag, no solo separadores
+/// (`-`, `_`, `/`) y sin niveles vacíos (`a//b`, `/a`). Los números solos sí
+/// valen: `#2024` agrupa un año.
 #[must_use]
 pub fn is_valid_tag_name(name: &str) -> bool {
     name.chars().all(is_tag_char)
         && name.chars().any(|c| !matches!(c, '-' | '_' | '/'))
-        && !name.chars().all(char::is_numeric)
         && name.split('/').all(|level| !level.is_empty())
 }
 
@@ -72,9 +72,10 @@ mod tests {
     #[case("tag", true)]
     #[case("a/b/c", true)]
     #[case("y1984", true)]
-    #[case("1984", false)]
+    #[case("1984", true)]
+    #[case("1", true)]
     #[case("2024/10", true)]
-    #[case("１２", false)]
+    #[case("１２", true)]
     #[case("", false)]
     #[case("con espacio", false)]
     #[case("canción", true)]
