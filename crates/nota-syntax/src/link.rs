@@ -54,15 +54,11 @@ impl Link {
         })
     }
 
-    /// El alias o el texto de un link markdown. Es texto y no una URL: en
-    /// markdown se quitan los escapes pero sus `%` quedan como están.
+    /// El alias o el texto de un link markdown, sin sus escapes. Es texto y
+    /// no una URL: sus `%` quedan como están.
     #[must_use]
     pub fn alias_text<'t>(&self, text: &'t str) -> Option<Cow<'t, str>> {
-        let raw = &text[self.alias.clone()?];
-        Some(match self.syntax {
-            LinkSyntax::Wiki => Cow::Borrowed(raw),
-            LinkSyntax::Markdown => unescape(raw),
-        })
+        Some(unescape(&text[self.alias.clone()?]))
     }
 
     fn destination_text<'t>(&self, raw: &'t str) -> Cow<'t, str> {

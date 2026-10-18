@@ -154,6 +154,7 @@ fn parts(text: &str) -> (String, Option<String>, Option<String>, bool) {
 )]
 #[case("[[nota\\|alias]]", "nota", None, Some("alias"), false)]
 #[case("[[a|b|c]]", "a", None, Some("b|c"), false)]
+#[case("[[nota|ver\\*]]", "nota", None, Some("ver*"), false)]
 #[case("![[img.png]]", "img.png", None, None, true)]
 #[case("![[img.png|300]]", "img.png", None, Some("300"), true)]
 #[case("![[nota#sección]]", "nota", Some("#sección"), None, true)]
