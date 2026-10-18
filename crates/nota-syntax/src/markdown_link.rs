@@ -87,17 +87,19 @@ fn destination(text: &str, from: usize) -> Option<(Range<usize>, usize)> {
     Some((from..end, end))
 }
 
-/// Tras el destino: un título opcional entre comillas y el `)` de cierre.
+/// Tras el destino: un título opcional entre `"…"`, `'…'` o `(…)` y el `)`
+/// de cierre.
 fn closing_paren(text: &str, from: usize) -> Option<usize> {
     let bytes = text.as_bytes();
     let mut at = skip_spaces(bytes, from);
-    if let Some(&quote @ (b'"' | b'\'')) = bytes.get(at) {
-        let title = at + 1;
-        let len = text[title..].find([char::from(quote), '\n'])?;
-        if bytes[title + len] != quote {
-            return None;
-        }
-        at = skip_spaces(bytes, title + len + 1);
+    let title_close = match bytes.get(at) {
+        Some(b'"') => Some(b'"'),
+        Some(b'\'') => Some(b'\''),
+        Some(b'(') => Some(b')'),
+        _ => None,
+    };
+    if let Some(close) = title_close {
+        at = skip_spaces(bytes, title_end(bytes, at + 1, close)?);
     }
     (bytes.get(at) == Some(&b')')).then_some(at + 1)
 }
@@ -107,6 +109,21 @@ fn skip_spaces(bytes: &[u8], from: usize) -> usize {
         .iter()
         .take_while(|&&b| b == b' ' || b == b'\t')
         .count()
+}
+/// Tras el `close` que cierra el título que empieza en `from`, en la misma
+/// línea y sin contar los escapados.
+fn title_end(bytes: &[u8], from: usize, close: u8) -> Option<usize> {
+    let mut i = from;
+    while let Some(&b) = bytes.get(i) {
+        match b {
+            _ if is_escape(bytes, i) => i += 1,
+            b'\n' => return None,
+            _ if b == close => return Some(i + 1),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 /// `scheme:` o `//host`: apunta fuera del vault.
