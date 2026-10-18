@@ -108,6 +108,8 @@ impl Action {
         Self::TextObject(TextObject::Parentheses { around: true }),
         Self::TextObject(TextObject::DoubleQuotes { around: false }),
         Self::TextObject(TextObject::DoubleQuotes { around: true }),
+        Self::TextObject(TextObject::Paragraph { around: false }),
+        Self::TextObject(TextObject::Paragraph { around: true }),
         Self::Operator(Operator::Delete),
         Self::Operator(Operator::Change),
         Self::Operator(Operator::Yank),
@@ -234,6 +236,8 @@ fn text_object_name(object: TextObject) -> &'static str {
         TextObject::Parentheses { around: true } => "vim::a_parentheses",
         TextObject::DoubleQuotes { around: false } => "vim::inner_double_quotes",
         TextObject::DoubleQuotes { around: true } => "vim::a_double_quotes",
+        TextObject::Paragraph { around: false } => "vim::inner_paragraph",
+        TextObject::Paragraph { around: true } => "vim::a_paragraph",
     }
 }
 
