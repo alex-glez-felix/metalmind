@@ -47,6 +47,9 @@ pub(crate) struct Touched {
     /// Las rutas donde se escribió contenido: un archivo movido en el mismo
     /// lote también cuenta como modificado.
     pub written: BTreeSet<VaultPath>,
+    /// Rutas a releer cuyo contenido no cambió (permisos, dueño): pueden hacer
+    /// legible una carpeta, pero no son una modificación.
+    pub reread: BTreeSet<VaultPath>,
 }
 
 impl Touched {
@@ -54,12 +57,14 @@ impl Touched {
         self.paths.extend(other.paths);
         self.renames.extend(other.renames);
         self.written.extend(other.written);
+        self.reread.extend(other.reread);
     }
 }
 
 /// Relee del disco lo que dice `touched` y devuelve qué cambió.
 pub(crate) fn refresh(index: &mut VaultIndex, root: &Path, touched: &Touched) -> Vec<VaultChange> {
-    let dirty = dirty_roots(index, &touched.paths);
+    let all: BTreeSet<VaultPath> = touched.paths.union(&touched.reread).cloned().collect();
+    let dirty = dirty_roots(index, &all);
     let before = subtrees(index, &dirty);
     for path in &dirty {
         index.remove_subtree(path);
@@ -364,6 +369,44 @@ mod tests {
     }
 
     #[test]
+    fn devolver_los_permisos_a_una_carpeta_indexa_su_contenido() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("cerrada")).unwrap();
+        fs::write(root.join("cerrada/a.md"), "").unwrap();
+        fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o000)).unwrap();
+        let mut index = scan(&root);
+        fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o755)).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            reread: [path("cerrada")].into(),
+            ..Touched::default()
+        };
+        assert_eq!(
+            refresh(&mut index, &root, &touched),
+            [VaultChange::Created {
+                path: path("cerrada/a.md"),
+                kind: EntryKind::Note
+            }]
+        );
+        assert_eq!(index, scan(&root));
+    }
+
+    #[test]
+    fn un_chmod_no_es_una_modificacion() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::write(root.join("a.md"), "").unwrap();
+        let mut index = scan(&root);
+        let touched = Touched {
+            reread: [VaultPath::new("a.md").unwrap()].into(),
+            ..Touched::default()
+        };
+        assert_eq!(refresh(&mut index, &root, &touched), []);
+    }
+
+    #[test]
     fn editar_y_mover_en_un_lote_avisa_las_dos_cosas() {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -378,6 +421,7 @@ mod tests {
             paths: [path("a/x.md"), path("a"), path("b")].into(),
             renames: vec![(path("a"), path("b"))],
             written: [path("a/x.md")].into(),
+            ..Touched::default()
         };
         assert_eq!(
             refresh(&mut index, &root, &touched),
