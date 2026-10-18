@@ -30,6 +30,11 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | `:%s/nota/apunte/g` en 5 k (cada `nota` del texto) | ≤ 16 ms | 6.6 ms | ✅ | `nota-vim` `sustituir_todo` |
 | `u` de ese `:%s` | ≤ 16 ms | 2.9 ms | ✅ | `nota-vim` `deshacer_sustituir_todo` |
 | `:%s` en 50 k | ≤ 160 ms | 84 ms | ⚠️ | `nota-vim` `sustituir_todo` |
+| `:sort` en 5 k / 50 k | ≤ 16 / 160 ms | 0.71 / 11 ms | ✅ | `nota-vim` `ordenar` |
+| `:g/nota/d` en 5 k / 50 k; su `u` en 5 k | ≤ 16 / 160 ms; ≤ 16 ms | 11.1 / 126 ms; 1.5 ms | ⚠️ | `nota-vim` `global_borrar`, `deshacer_global_borrar` |
+| `:g/nota/s/nota/apunte/` en 5 k / 50 k | ≤ 16 / 160 ms | 11.3 / 144 ms | ⚠️ | `nota-vim` `global_sustituir` |
+| `:g/^/m0` y `:%norm Ax` en 5 k | ≤ 16 ms | 14.3 / 13.4 ms | ⚠️ | `nota-vim` `global_mover_arriba`, `normal_en_cada_linea` |
+| `:g/^/m0` y `:%norm Ax` en 50 k | ≤ 160 ms | 167 / 165 ms | ❌ | ídem ([#66](https://github.com/alex-glez-felix/nota/issues/66)) |
 | `/` sin coincidencias en 50 k (recorre todo) | ≤ 8 ms | 0.34 ms | ✅ | `nota-vim` `buscar_sin_resultado` |
 | `?`, `/\<…\>` y `:%s` sin coincidencias en 50 k | ≤ 8 ms | 0.35 / 0.37 / 0.35 ms | ✅ | `nota-vim` `…_sin_resultado` |
 | `/` hasta la siguiente coincidencia en 50 k; `n` | ≤ 1 ms | 36 µs; 2 µs | ✅ | `nota-vim` |
@@ -70,6 +75,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `nota_perf::tagged_vault`, con las rutas de `vault_paths`, una nota de cada diez sin tags y las demás con un tag en `tags:`, dos en el texto y un alias, y una página de tag cada 25 notas en un árbol de `parents` con varios padres. Abrir el vault también escanea los tags de cada nota: en la misma máquina, `main` con solo el índice de links abría 5 k y 50 k notas en 33.9 y 434 ms, y los tags suman 4.8 y 45 ms (un 14 % y un 10 %). El objetivo de la consulta es el de 05 §9 (filtrar `space f` por un tag con descendientes); con 50 k notas, 8 de sus 13 ms son juntar en un conjunto las rutas de 2 800 tags, lo que bajaría con ids de nota (el `NoteId` de M3). La UI no la repite mientras solo cambia la parte difusa de la consulta. El panel y los candidatos se arman una vez por `VaultUpdate`, no por tecla.
 
 ⏳ es pendiente: todavía no se puede medir sin abrir una ventana. El arranque se mide a mano con el `--bench` del spike; hacerlo en CI pide un Xvfb, y bajo lavapipe los tiempos de frame no significan nada (04, "smoke sin GPU").
+
+❌ no cumple y tiene su issue. `:g` y `:normal` corren su comando en cada línea como una edición aparte, igual que vim, y lo que cuesta es la transacción del buffer: unos 3 µs por línea.
 
 ## El finder y la paleta
 
