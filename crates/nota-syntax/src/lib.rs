@@ -18,7 +18,7 @@ mod tag;
 use std::ops::Range;
 
 pub use anchor::{BlockId, Heading};
-pub use frontmatter::{Frontmatter, Value};
+pub use frontmatter::{Entry, Frontmatter, Value};
 pub use link::{Link, LinkSyntax, Subpath};
 pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
@@ -61,6 +61,56 @@ pub enum Problem {
     },
     #[error("`{name}` en `tags` del frontmatter no es un tag válido")]
     InvalidTag { name: String, span: Range<usize> },
+}
+
+/// Un tag bajo un byte de la nota.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagSpot {
+    /// El nombre, sin `#` ni comillas. Si el YAML lo escribe con escapes, el
+    /// escalar entero.
+    pub name: Range<usize>,
+    pub place: TagPlace,
+}
+
+/// Dónde está escrito un tag. `aliases` y `parents` solo nombran tags en
+/// una página de tag, y eso lo sabe quien conoce la ruta de la nota.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagPlace {
+    /// Un `#tag` del cuerpo.
+    Inline,
+    Tags,
+    Aliases,
+    Parents,
+}
+
+impl Scan {
+    /// El tag sobre el que está `at`, contando el `#` o las comillas y el
+    /// byte justo después del nombre: ahí queda el cursor al escribirlo, que
+    /// es cuando se completa (05 §5), y donde se abre su menú (05 §3).
+    #[must_use]
+    pub fn tag_at(&self, at: usize) -> Option<TagSpot> {
+        let covers = |span: &Range<usize>| span.start <= at && at <= span.end;
+        if let Some(frontmatter) = self.frontmatter.as_ref().filter(|f| covers(&f.yaml)) {
+            let fields = [
+                (TagPlace::Tags, &frontmatter.tags),
+                (TagPlace::Aliases, &frontmatter.aliases),
+                (TagPlace::Parents, &frontmatter.parents),
+            ];
+            return fields.into_iter().find_map(|(place, values)| {
+                let value = values.iter().find(|value| covers(&value.span))?.as_tag()?;
+                Some(TagSpot {
+                    name: value.literal.unwrap_or(value.span),
+                    place,
+                })
+            });
+        }
+        let index = self.tags.partition_point(|tag| tag.span.end < at);
+        let tag = self.tags.get(index).filter(|tag| covers(&tag.span))?;
+        Some(TagSpot {
+            name: tag.name.clone(),
+            place: TagPlace::Inline,
+        })
+    }
 }
 
 /// Escanea una nota completa.

@@ -140,6 +140,22 @@ proptest! {
         }
     }
 
+    /// Quitar el campo `tags` entero por su `Entry` deja los demás campos
+    /// byte a byte, y el frontmatter sigue siendo editable.
+    #[test]
+    fn a_whole_field_can_be_removed((_names, text) in tags_frontmatter()) {
+        let frontmatter = scan(&text).frontmatter.unwrap();
+        let keys: Vec<&str> = frontmatter.entries.iter().flatten().map(|entry| entry.key.as_str()).collect();
+        prop_assert_eq!(keys, ["title", "tags", "otro"]);
+        let entry = frontmatter.entry("tags").unwrap();
+        let rest = format!("{}{}", &text[..entry.span.start], &text[entry.span.end..]);
+        let left = scan(&rest).frontmatter.unwrap();
+        let keys: Vec<&str> = left.entries.iter().flatten().map(|entry| entry.key.as_str()).collect();
+        prop_assert_eq!(keys, ["title", "otro"]);
+        prop_assert!(left.tags.is_empty());
+        prop_assert!(rest.contains("title: x") && rest.contains("otro: 1"));
+    }
+
     #[test]
     fn spans_stay_on_char_boundaries(text in note()) {
         let scan = scan(&text);

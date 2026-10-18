@@ -10,6 +10,11 @@ pub(crate) fn line_end(text: &str, start: usize) -> usize {
     text[start..].find('\n').map_or(text.len(), |i| start + i)
 }
 
+/// Inicio de la línea donde está `at`.
+pub(crate) fn line_start(text: &str, at: usize) -> usize {
+    text[..at].rfind('\n').map_or(0, |newline| newline + 1)
+}
+
 /// Inicio de la línea siguiente a la que empieza en `start`.
 fn next_line(text: &str, start: usize) -> usize {
     text[start..]

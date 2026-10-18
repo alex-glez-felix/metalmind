@@ -97,6 +97,14 @@ pub fn render(text: &str, scan: &Scan) -> String {
         for (field, value) in fields {
             writeln!(out, "    {field} {}", value_line(text, value)).unwrap();
         }
+        match &frontmatter.entries {
+            Some(entries) => {
+                for entry in entries {
+                    writeln!(out, "    entry {} {}", entry.key, part(text, &entry.span)).unwrap();
+                }
+            }
+            None => writeln!(out, "    entries: no se puede editar").unwrap(),
+        }
     }
     for problem in &scan.problems {
         writeln!(out, "problem {problem}").unwrap();

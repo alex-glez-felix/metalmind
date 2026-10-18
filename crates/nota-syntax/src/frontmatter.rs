@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::Problem;
-use crate::code::line_end;
+use crate::code::{line_end, line_start};
 
 mod value;
 mod yaml;
@@ -28,6 +28,21 @@ pub struct Frontmatter {
     pub cssclasses: Vec<Value>,
     pub color: Option<Value>,
     pub icon: Option<Value>,
+    /// Las claves del primer nivel con lo que ocupa cada una, en orden. Es
+    /// `None` si el YAML no se pudo leer o no es un mapa en bloque con cada
+    /// clave al principio de su línea: solo así se puede cambiar o agregar un
+    /// campo sin tocar los demás.
+    pub entries: Option<Vec<Entry>>,
+}
+
+/// Una clave del primer nivel del frontmatter y su valor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    pub key: String,
+    /// Desde el principio de la línea de la clave hasta el fin de la última
+    /// línea de su valor, salto incluido. Las líneas en blanco y los
+    /// comentarios que la siguen quedan fuera.
+    pub span: Range<usize>,
 }
 
 /// El BOM no es parte de la primera línea: sin saltarlo, ni una cerca ni un
@@ -91,7 +106,14 @@ pub(crate) fn parse(text: &str, problems: &mut Vec<Problem>) -> (Option<Frontmat
 }
 
 impl Frontmatter {
+    /// El campo `key`, si el frontmatter se puede editar y lo tiene.
+    #[must_use]
+    pub fn entry(&self, key: &str) -> Option<&Entry> {
+        self.entries.as_ref()?.iter().find(|entry| entry.key == key)
+    }
+
     fn read_fields(&mut self, text: &str, fields: Fields, problems: &mut Vec<Problem>) {
+        self.entries = fields.keys.and_then(|keys| entries(text, &self.yaml, keys));
         let mut reader = FieldReader {
             text,
             offset: self.yaml.start,
@@ -113,6 +135,37 @@ impl Frontmatter {
         self.color = reader.single("color", fields.color);
         self.icon = reader.single("icon", fields.icon);
     }
+}
+
+fn entries(text: &str, yaml: &Range<usize>, keys: Vec<Item>) -> Option<Vec<Entry>> {
+    let starts: Vec<usize> = keys.iter().map(|key| yaml.start + key.span.start).collect();
+    if starts.iter().any(|&start| line_start(text, start) != start) {
+        return None;
+    }
+    let ends = starts.iter().skip(1).copied().chain([yaml.end]);
+    Some(
+        keys.into_iter()
+            .zip(starts.iter().copied().zip(ends))
+            .map(|(key, (start, end))| Entry {
+                key: key.text,
+                span: start..without_trailing_lines(text, start, end),
+            })
+            .collect(),
+    )
+}
+
+/// `end` sin las líneas en blanco ni los comentarios de la columna 0 que
+/// cierran el tramo: son del campo siguiente o de nadie.
+fn without_trailing_lines(text: &str, start: usize, mut end: usize) -> usize {
+    while end > start {
+        let last = line_start(text, end - 1).max(start);
+        let line = &text[last..end];
+        if last == start || !(line.trim().is_empty() || line.starts_with('#')) {
+            break;
+        }
+        end = last;
+    }
+    end
 }
 
 /// Pasa los campos del YAML a valores con rangos sobre la nota.

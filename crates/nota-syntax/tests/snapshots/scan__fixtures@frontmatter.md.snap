@@ -10,6 +10,10 @@ frontmatter 0..167 yaml 4..164
     aliases "Alias Uno" en 109..118 "Alias Uno" literal 109..118 quita "Alias Uno, "
     aliases "Alias, con coma" en 120..137 "\"Alias, con coma\"" literal 121..136 quita ", \"Alias, con coma\""
     cssclasses "ancho limpio" en 151..163 "ancho limpio" literal 151..163 quita "ancho limpio"
+    entry title 4..32 "title: Nota con frontmatter\n"
+    entry tags 32..99 "tags:\n  - proyecto\n  - \"#con-almohadilla\"\n  - anidado/sub\n  - 2024\n"
+    entry aliases 99..139 "aliases: [Alias Uno, \"Alias, con coma\"]\n"
+    entry cssclasses 139..164 "cssclasses: ancho limpio\n"
 problem `anidado/sub` en `tags` del frontmatter no es un tag válido
 wikilink 199..210 "[[un link]]"
     target 201..208 "un link"

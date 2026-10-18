@@ -62,6 +62,9 @@ pub(super) struct Fields {
     pub cssclasses: Option<Field>,
     pub color: Option<Field>,
     pub icon: Option<Field>,
+    /// Las claves del primer nivel, en orden; `None` si alguna no es un
+    /// escalar (`? [a]`).
+    pub keys: Option<Vec<Item>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -84,6 +87,16 @@ pub(super) fn read(yaml: &str) -> Result<Fields, ReadError> {
         cssclasses: field(fields.cssclasses),
         color: field(fields.color),
         icon: field(fields.icon),
+        keys: fields
+            .keys
+            .into_iter()
+            .map(|key| {
+                Some(Item {
+                    text: key.value.0?,
+                    span: byte_range(yaml, key.referenced.span()),
+                })
+            })
+            .collect(),
     })
 }
 
@@ -160,6 +173,7 @@ struct RawFields {
     cssclasses: Option<RawField>,
     color: Option<RawField>,
     icon: Option<RawField>,
+    keys: Vec<Spanned<Scalar>>,
 }
 
 /// El valor de un campo y dónde está.
@@ -228,8 +242,10 @@ impl<'de> Visitor<'de> for DocumentVisitor {
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Document, A::Error> {
         let mut fields = RawFields::default();
-        while let Some(Scalar(key)) = map.next_key()? {
-            let slot = match key.as_deref() {
+        while let Some(key) = map.next_key::<Spanned<Scalar>>()? {
+            let name = key.value.0.clone();
+            fields.keys.push(key);
+            let slot = match name.as_deref() {
                 Some("tags") => &mut fields.tags,
                 Some("aliases") => &mut fields.aliases,
                 Some("parents") => &mut fields.parents,
@@ -394,7 +410,11 @@ mod tests {
     #[case::only_comment("# nada")]
     #[case::null("~")]
     fn an_empty_document_has_no_fields(#[case] yaml: &str) {
-        assert_eq!(read(yaml), Ok(Fields::default()));
+        let empty = Fields {
+            keys: Some(Vec::new()),
+            ..Fields::default()
+        };
+        assert_eq!(read(yaml), Ok(empty));
     }
 
     #[rstest]
