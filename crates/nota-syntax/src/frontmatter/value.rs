@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::code::line_end;
+use crate::code::{line_end, line_start};
 use crate::tag::is_valid_tag_name;
 
 /// Un texto del frontmatter y dónde está en la nota, para poder reescribirlo
@@ -82,10 +82,6 @@ fn literal(text: &str, raw: &str, span: &Range<usize>) -> Option<Range<usize>> {
         span.clone()
     };
     (text[inner.clone()] == *raw).then_some(inner)
-}
-
-fn line_start(text: &str, at: usize) -> usize {
-    text[..at].rfind('\n').map_or(0, |newline| newline + 1)
 }
 
 /// En una lista en bloque, la línea entera; en una lista entre corchetes,

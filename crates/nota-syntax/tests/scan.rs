@@ -9,7 +9,7 @@ mod support;
 use std::borrow::Cow;
 use std::fs;
 
-use nota_syntax::{LinkSyntax, Problem, Resolution, Subpath, resolve, scan};
+use nota_syntax::{LinkSyntax, Problem, Resolution, Subpath, TagPlace, resolve, scan};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -464,4 +464,76 @@ fn a_color_written_as_a_comment_is_no_color() {
         (scan.frontmatter.unwrap().color, scan.problems),
         (None, Vec::new())
     );
+}
+
+/// Cada clave del frontmatter con el texto que ocupa.
+fn entries(text: &str) -> Option<Vec<(String, &str)>> {
+    let frontmatter = scan(text).frontmatter?;
+    let entries = frontmatter.entries?;
+    Some(
+        entries
+            .into_iter()
+            .map(|entry| (entry.key, &text[entry.span]))
+            .collect(),
+    )
+}
+
+#[rstest]
+#[case::flat("---\na: 1\nb: [x, y]\n---\n", &[("a", "a: 1\n"), ("b", "b: [x, y]\n")])]
+#[case::block_list("---\ntags:\n  - a\n  - b\ncolor: rojo\n---\n", &[("tags", "tags:\n  - a\n  - b\n"), ("color", "color: rojo\n")])]
+#[case::list_at_column_zero("---\ntags:\n- a\n- b\nicon: x\n---\n", &[("tags", "tags:\n- a\n- b\n"), ("icon", "icon: x\n")])]
+#[case::blank_and_comments_stay_out("---\na: 1\n\n# sobre b\nb: 2\n# fin\n---\n", &[("a", "a: 1\n"), ("b", "b: 2\n")])]
+#[case::indented_comment_is_inside("---\na:\n  - x\n  # nota\nb: 2\n---\n", &[("a", "a:\n  - x\n  # nota\n"), ("b", "b: 2\n")])]
+#[case::multiline_scalar("---\nd: |\n  uno\n  dos\ne: 1\n---\n", &[("d", "d: |\n  uno\n  dos\n"), ("e", "e: 1\n")])]
+#[case::quoted_key("---\n\"color\": rojo\n---\n", &[("color", "\"color\": rojo\n")])]
+#[case::crlf("---\r\na: 1\r\nb: 2\r\n---\r\n", &[("a", "a: 1\r\n"), ("b", "b: 2\r\n")])]
+#[case::empty("---\n---\n", &[])]
+#[case::only_comment("---\n# nada\n---\n", &[])]
+fn frontmatter_entries(#[case] text: &str, #[case] expected: &[(&str, &str)]) {
+    let expected: Vec<(String, &str)> = expected
+        .iter()
+        .map(|&(key, source)| (key.to_owned(), source))
+        .collect();
+    assert_eq!(entries(text), Some(expected));
+}
+
+#[rstest]
+#[case::flow_mapping("---\n{a: 1, b: 2}\n---\n")]
+#[case::complex_key("---\n? [a]\n: 1\n---\n")]
+#[case::broken("---\ntags: [a\n---\n")]
+#[case::not_a_mapping("---\n- a\n---\n")]
+fn frontmatter_that_cannot_be_edited(#[case] text: &str) {
+    assert_eq!(entries(text), None);
+}
+
+/// El tag bajo cada `|` de `marked`, quitando la marca.
+fn tag_at(marked: &str) -> Option<(String, TagPlace)> {
+    let at = marked.find('|').unwrap();
+    let text = marked.replacen('|', "", 1);
+    let spot = scan(&text).tag_at(at)?;
+    Some((text[spot.name].to_owned(), spot.place))
+}
+
+#[rstest]
+#[case::on_the_hash("hoy |#rust y", Some(("rust", TagPlace::Inline)))]
+#[case::inside("hoy #ru|st y", Some(("rust", TagPlace::Inline)))]
+#[case::just_after("hoy #rust| y", Some(("rust", TagPlace::Inline)))]
+#[case::while_typing("hoy #r|", Some(("r", TagPlace::Inline)))]
+#[case::after_the_space("hoy #rust |y", None)]
+#[case::only_hash("hoy #|", None)]
+#[case::heading("#| título", None)]
+#[case::in_code("`#ru|st`", None)]
+#[case::in_fence("```\n#ru|st\n```", None)]
+#[case::tags_field("---\ntags: [a, ru|st]\n---\n", Some(("rust", TagPlace::Tags)))]
+#[case::tags_with_hash("---\ntags: [\"#ru|st\"]\n---\n", Some(("rust", TagPlace::Tags)))]
+#[case::block_list("---\ntags:\n  - |rust\n---\n", Some(("rust", TagPlace::Tags)))]
+#[case::parents("---\nparents: [lenguajes, ui|]\n---\n", Some(("ui", TagPlace::Parents)))]
+#[case::aliases("---\naliases: r|s\n---\n", Some(("rs", TagPlace::Aliases)))]
+#[case::other_key("---\ntitulo: ru|st\n---\n", None)]
+#[case::invalid_value("---\nparents: [a/|b]\n---\n", None)]
+#[case::key_name("---\nta|gs: [a]\n---\n", None)]
+#[case::body_after_frontmatter("---\ntags: [a]\n---\n#b|", Some(("b", TagPlace::Inline)))]
+fn the_tag_under_a_byte(#[case] marked: &str, #[case] expected: Option<(&str, TagPlace)>) {
+    let expected = expected.map(|(name, place)| (name.to_owned(), place));
+    assert_eq!(tag_at(marked), expected);
 }

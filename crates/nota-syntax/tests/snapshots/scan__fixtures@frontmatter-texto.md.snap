@@ -6,6 +6,9 @@ input_file: crates/nota-syntax/tests/fixtures/frontmatter-texto.md
 frontmatter 0..74 yaml 4..71
     aliases "Viejo, Otro alias" en 33..50 "Viejo, Otro alias" literal 33..50 quita "Viejo, Otro alias"
     cssclasses "ancho" en 64..69 "ancho" literal 64..69 quita "ancho"
+    entry tags 4..24 "tags: uno, dos tres\n"
+    entry aliases 24..51 "aliases: Viejo, Otro alias\n"
+    entry cssclasses 51..71 "cssclasses: [ancho]\n"
 problem `uno, dos tres` en `tags` del frontmatter no es un tag válido
 wikilink 82..90 "[[link]]"
     target 84..88 "link"
