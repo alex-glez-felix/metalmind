@@ -86,6 +86,27 @@ fn follow_the_link_under_the_cursor() {
     assert_eq!(index.follow(&source, text, 26), None);
 }
 
+/// Lo que pregunta el editor por cada link que pinta, sin el texto.
+#[test]
+fn resolve_a_target_written_in_a_note() {
+    let index = build(&model(FIXTURE));
+    let source = path("Inicio.md");
+    assert_eq!(
+        index.resolve(&source, "proyectos/Plan"),
+        LinkTarget::Resolved(path("proyectos/Plan.md"))
+    );
+    assert_eq!(
+        index.resolve(&path("proyectos/nota.md"), "../nota"),
+        LinkTarget::Resolved(path("nota.md"))
+    );
+    assert_eq!(index.resolve(&source, "No existe"), LinkTarget::Unresolved);
+    assert_eq!(index.resolve(&source, ""), LinkTarget::SameNote);
+    assert!(matches!(
+        index.resolve(&source, "duplicada"),
+        LinkTarget::Ambiguous(_)
+    ));
+}
+
 #[test]
 fn locate_the_heading_or_block_in_the_destination() {
     let destination = "# Plan\n\n## Fechas\n\nlunes ^b\n";

@@ -118,6 +118,14 @@ impl LinkIndex {
         self.notes.get(note).map_or(&[], |links| links.as_slice())
     }
 
+    /// A dónde lleva un link a `target` (el destino ya decodificado, como
+    /// `metalmind_syntax::Link::target_text`) escrito en `source`. No
+    /// recorre el vault: el editor lo pregunta por cada link que pinta.
+    #[must_use]
+    pub fn resolve(&self, source: &VaultPath, target: &str) -> LinkTarget {
+        self.names.resolve(source, target)
+    }
+
     /// Si `path` es una nota del índice.
     #[must_use]
     pub fn is_note(&self, path: &VaultPath) -> bool {
