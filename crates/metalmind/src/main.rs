@@ -21,7 +21,7 @@ fn main() -> ExitCode {
     let cli = cli::Cli::parse_spanish();
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let Some(command) = cli.command else {
-        return match open(cli.path.as_deref(), launched) {
+        return match open(cli.path.as_deref(), cli.frame_log.as_deref(), launched) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("metalmind: {error}");
@@ -39,11 +39,15 @@ fn main() -> ExitCode {
     }
 }
 
-fn open(path: Option<&Path>, launched: Instant) -> Result<(), StartError> {
+fn open(
+    path: Option<&Path>,
+    frame_log: Option<&Path>,
+    launched: Instant,
+) -> Result<(), StartError> {
     let session = Session::load()?;
     let target = target::resolve(path, session.sources())?;
     let prepared = gui::prepare(session, &target)?;
-    gui::run(prepared, launched)
+    gui::run(prepared, frame_log, launched)
 }
 
 fn run(command: Command, launched: Instant) -> Result<(), CliError> {
@@ -55,7 +59,7 @@ fn run(command: Command, launched: Instant) -> Result<(), CliError> {
             let session = Session::load()?;
             let prepared = gui::prepare(session, &note.target())?;
             note.announce(args.common.json)?;
-            Ok(gui::run(prepared, launched)?)
+            Ok(gui::run(prepared, None, launched)?)
         }
     }
 }

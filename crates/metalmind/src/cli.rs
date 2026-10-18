@@ -29,6 +29,10 @@ pub struct Cli {
     /// un archivo que se llama como un comando: `metalmind -- add`.
     #[arg(value_name = "CARPETA|ARCHIVO")]
     pub path: Option<PathBuf>,
+    /// Escribe los tiempos de cada frame en este archivo; es para el
+    /// benchmark de la UI (docs/performance.md), por eso no sale en la ayuda.
+    #[arg(long, value_name = "ARCHIVO", hide = true)]
+    pub frame_log: Option<PathBuf>,
 }
 
 /// Los subcomandos no abren ventana, salvo `open`.
@@ -243,6 +247,23 @@ mod tests {
     }
 
     #[test]
+    fn el_registro_de_frames_va_con_la_ventana() {
+        assert_eq!(parse(&["a.md"]).unwrap().frame_log, None);
+        let cli = parse(&["--frame-log", "f.log", "a.md"]).unwrap();
+        assert_eq!(cli.frame_log, Some("f.log".into()));
+        assert_eq!(cli.path, Some("a.md".into()));
+        assert_eq!(
+            parse(&["--frame-log", "f.log"]).unwrap().path,
+            None,
+            "sin ruta abre el vault de siempre"
+        );
+        assert_eq!(
+            parse(&["--frame-log", "f.log", "add", "x"]).unwrap_err(),
+            ErrorKind::ArgumentConflict
+        );
+    }
+
+    #[test]
     fn la_version_es_la_del_crate() {
         let version = command().render_version();
         assert_eq!(
@@ -268,6 +289,7 @@ mod tests {
         ] {
             assert!(help.contains(expected), "falta {expected:?} en:\n{help}");
         }
+        assert!(!help.contains("frame-log"), "{help}");
     }
 
     #[test]

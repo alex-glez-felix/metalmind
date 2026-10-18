@@ -3,7 +3,6 @@
 //! `shift-tab` y `ctrl-c` (04 §riesgo 1).
 
 use std::sync::mpsc;
-use std::time::Instant;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
 use metalmind_config::{Config, Paths};
@@ -12,6 +11,7 @@ use metalmind_vault::{Vault, VaultUpdate};
 use crate::actions;
 use crate::document::Document;
 use crate::finder::{Prepared, SessionError, VaultSession};
+use crate::frames::FrameClock;
 use crate::picker;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
@@ -48,8 +48,8 @@ pub struct Startup {
 }
 
 /// Abre `startup` en una ventana nueva, con el tema y la fuente de
-/// `config`, y lo anota como el último vault. La aplicación termina cuando
-/// se cierra la última ventana.
+/// `config`, y lo anota como el último vault; los tiempos de cada frame van
+/// a `clock`. La aplicación termina cuando se cierra la última ventana.
 ///
 /// # Errors
 /// Si no hay sesión gráfica ni fuente monoespaciada, no arranca el hilo
@@ -57,7 +57,7 @@ pub struct Startup {
 pub fn open(
     startup: Startup,
     config: &Config,
-    launched: Instant,
+    clock: FrameClock,
     cx: &mut App,
 ) -> Result<(), OpenError> {
     // Sin display, GPUI arranca headless y la ventana se abriría sin que nadie la vea.
@@ -65,6 +65,7 @@ pub fn open(
         return Err(OpenError::NoDisplay);
     }
     cx.set_global(Theme::new(config, cx)?);
+    cx.set_global(clock);
     actions::bind_keys(cx);
     picker::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
@@ -97,17 +98,8 @@ pub fn open(
         if let Some(file) = &file {
             sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
         }
-        let view = cx.new(|cx| {
-            WorkspaceView::new(
-                workspace,
-                sidebar.clone(),
-                session,
-                paths,
-                launched,
-                window,
-                cx,
-            )
-        });
+        let view =
+            cx.new(|cx| WorkspaceView::new(workspace, sidebar.clone(), session, paths, window, cx));
         view.update(cx, |view, cx| {
             if file.is_none() && sidebar.read(cx).is_visible() {
                 view.focus_sidebar(window, cx);

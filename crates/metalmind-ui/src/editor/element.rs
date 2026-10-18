@@ -16,6 +16,7 @@ use super::layout::{FrameLayout, Viewport};
 pub use super::lines::Typeface;
 use super::lines::{code_block_quads, shape_visible_lines};
 use super::scroll::Scroll;
+use crate::frames::FrameClock;
 use crate::theme::Theme;
 
 pub struct EditorElement {
@@ -219,8 +220,7 @@ impl gpui_kit::Element for EditorElement {
                 paint_line(&preedit.shaped, preedit.origin, preedit.height, window, cx);
             }
         });
-        self.editor
-            .update(cx, |editor, _| editor.report_first_paint());
+        FrameClock::painted(cx);
     }
 }
 
