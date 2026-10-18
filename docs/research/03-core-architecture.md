@@ -295,7 +295,7 @@ Falta el número con la caché de disco fría y en un vault real de Obsidian; el
 
 ### Medido (M6, 2026-10-18): búsqueda de texto completo
 
-`cargo bench -p nota-search --bench text`, en release, en un contenedor Linux x86_64 de 4 hilos con disco virtual, caché caliente. Vaults sintéticos de notas de ~1.5 KB (frontmatter, encabezado, 24 líneas de palabras al azar, links y una fecha), 100 por carpeta:
+Con la primera versión de `cargo bench -p nota-search --bench text`, en release, en un contenedor Linux x86_64 de 4 hilos con disco virtual, caché caliente. Vaults sintéticos de notas de ~1.5 KB (frontmatter, encabezado, 24 líneas de palabras al azar, links y una fecha), 100 por carpeta. El benchmark de hoy usa el vault de `nota_perf::write_vault`, del mismo tamaño de nota, y sus números con 5 k y 50 k notas están en el [presupuesto de rendimiento](../performance.md):
 
 | Búsqueda (mediana) | 5 k notas | 20 k notas | 50 k notas |
 |---|---|---|---|

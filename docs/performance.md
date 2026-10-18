@@ -8,6 +8,7 @@
 - **Lo que corre en cada tecla** (escribir, borrar, mover, un comando de Normal) tiene **1 ms** de núcleo. Así queda casi todo el frame para layout y paint, también a 240 Hz y en una máquina más lenta que la de desarrollo.
 - **Lo que va a correr mientras se escribe en un prompt** (el finder en `space f`, la búsqueda con `/` si se hace incremental como el `incsearch` de nvim) tiene **8 ms**: la mitad de un frame de 60 Hz, la otra mitad es de la UI. Si no cabe, pasa a un hilo de fondo, que es más complejo; el presupuesto dice cuándo hace falta.
 - **Un comando que se lanza una vez** y toca todo el buffer (`:%s`, el undo de un `:%s`, una macro con count) tiene **16 ms** en una nota de 5 k líneas: termina antes del frame siguiente y no se ve ningún salto.
+- **Una búsqueda en todo el vault** corre en hilos de fondo y entrega en streaming: **100 ms** con 5 k notas, que se siente inmediato, y **1 s** con 50 k. Lo que sí bloquea la UI es cancelar la anterior al escribir otra letra, y eso tiene los 8 ms de un prompt. Buscar en una nota abierta con cambios sin guardar es en memoria y en el mismo hilo: también 8 ms.
 - **Lo que pasa en segundo plano** (indexar el vault) no bloquea la UI, pero el finder y el árbol lo esperan: abrir 5 k notas tiene que estar antes de que la ventana pinte su primer frame (~300 ms).
 - **Tamaños**: 5 k líneas es una nota larga; 50 k, el peor caso realista (un log, una nota exportada). 5 k notas es un vault grande de Obsidian; 50 k, uno enorme.
 
@@ -15,7 +16,7 @@ Los objetivos valen para la **máquina de pruebas** de los hitos (la de 04, con 
 
 ## Presupuesto y números de hoy
 
-Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una máquina de escritorio x86_64 con Linux. Las notas salen de `nota_perf::note` y los vaults de `nota_perf::vault_paths`: texto sintético y determinista, nada de datos reales.
+Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una máquina de escritorio x86_64 con Linux. Las notas salen de `nota_perf::note` y los vaults de `nota_perf::vault_paths` (las rutas) y `nota_perf::write_vault` (en disco, notas de ~1.5 KB): texto sintético y determinista, nada de datos reales. La búsqueda de texto se mide con la caché de disco caliente; en frío y el umbral de `tantivy`, en [03 §4](research/03-core-architecture.md).
 
 | Operación | Objetivo | Hoy | | Bench |
 |---|---|---|---|---|
@@ -39,6 +40,11 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Abrir el vault, 50 k notas | ≤ 2 s | 95 ms | ✅ | `nota-vault` `abrir_50k_notas` |
 | Finder, 5 k rutas, peor consulta (`tema nota`) | ≤ 8 ms | 0.63 ms | ✅ | `nota-search` |
 | Finder, 50 k rutas, peor consulta | ≤ 8 ms | 6.2 ms | ⚠️ | `nota-search` |
+| Texto completo en el vault, palabra en 1 de cada 1 000 notas (lee todo), 5 k / 50 k notas | ≤ 100 ms / ≤ 1 s | 6.0 / 33 ms | ✅ | `nota-search` `palabra_rara` |
+| Texto completo, palabra en casi todas las notas, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 11 / 116 ms | ✅ | `nota-search` `palabra_comun` |
+| Texto completo, regex sin literal que la acelere, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 12 / 49 ms | ✅ | `nota-search` `regex_de_fecha` |
+| Empezar una búsqueda de texto, recibir la primera nota y cancelarla, 5 k / 50 k | ≤ 8 ms | 1.3 / 1.4 ms | ✅ | `nota-search` `empezar_y_cancelar` |
+| Texto completo en una nota abierta de 5 k líneas: palabra frecuente / sin resultado | ≤ 8 ms | 0.95 ms / 18 µs | ✅ | `nota-search` `nota_en_memoria` |
 | Buffer: insertar / borrar un carácter en 50 k | ≤ 0.1 ms | 5.2 / 2.8 µs | ✅ | `nota-buffer` |
 | Buffer: undo + redo de una edición en 50 k | ≤ 0.1 ms | 2.0 µs | ✅ | `nota-buffer` |
 | Buffer: una edición por línea en un lote, 5 k / 50 k | ≤ 16 / 160 ms | 4.4 / 60 ms | ✅ | `nota-buffer` `una_edicion_por_linea` |
@@ -57,7 +63,7 @@ No sirven para CI: en los runners de GitHub el tiempo de pared varía más que l
 
 ### 2. Conteo de instrucciones en cada PR (`gungraun`, CI)
 
-`crates/nota-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal y patológico), el finder y editar y deshacer en el buffer. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
+`crates/nota-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal y patológico), el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
 
 `gungraun` 0.20 y no `iai-callgrind`: es el mismo proyecto renombrado; `iai-callgrind` se quedó en 0.16.1 (julio de 2025) y `gungraun` sigue publicando (0.20.0, septiembre de 2026).
 
@@ -83,6 +89,7 @@ Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparar�
 | Scan 5 k / 50 k | 18.0 M / 179.6 M |
 | Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 9.1 M / 4.4 M / 5.8 M / 29.1 M / 57.3 M |
 | Finder 5 k / 50 k | 17.3 M / 169.3 M |
+| Texto completo en una nota de 5 k: palabra frecuente / sin resultado | — / — |
 
 Para correrlo en local hacen falta `valgrind` y `gungraun-runner` de la misma versión que `gungraun` (`cargo binstall gungraun-runner@0.20.0`, o el binario de su release):
 
