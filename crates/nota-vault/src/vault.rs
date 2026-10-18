@@ -12,11 +12,11 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
-use crate::attachment::{self, NewAttachment, SavedAttachment};
+use crate::attachment::{self, AttachmentRefs, NewAttachment, SavedAttachment};
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
-use crate::file;
-use crate::index::VaultIndex;
+use crate::file::{self, FileError};
+use crate::index::{EntryKind, VaultIndex};
 use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
@@ -290,6 +290,23 @@ impl Vault {
         attachment: &NewAttachment<'_>,
     ) -> Result<SavedAttachment, FileOpError> {
         attachment::save(&self.root, &self.snapshot(), folder, attachment)
+    }
+
+    /// Los adjuntos de `folder` que ninguna nota enlaza ni embebe. Lee todas
+    /// las notas del vault: el índice de links todavía no existe.
+    ///
+    /// # Errors
+    /// Si alguna nota no se puede leer: sin ella no se sabe qué usa.
+    pub fn orphan_attachments(&self, folder: &VaultPath) -> Result<Vec<VaultPath>, FileError> {
+        let index = self.snapshot();
+        let mut refs = AttachmentRefs::new(&index, folder);
+        for note in index.files().filter(|entry| entry.kind == EntryKind::Note) {
+            // Una nota borrada mientras tanto ya no usa nada.
+            if let Some(text) = file::read(&note.path.to_fs(&self.root))? {
+                refs.add_note(note.path, &text);
+            }
+        }
+        Ok(refs.orphans().into_iter().cloned().collect())
     }
 }
 

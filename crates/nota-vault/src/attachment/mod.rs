@@ -1,9 +1,10 @@
 //! Adjuntos (06 §6): guardar lo que se pega o se arrastra en la carpeta de
-//! adjuntos del vault.
+//! adjuntos del vault y saber cuáles ya no usa ninguna nota.
 
 mod embed;
 mod kind;
 mod name;
+mod refs;
 
 use std::fs::{File, Permissions};
 use std::io::{self, Write as _};
@@ -19,6 +20,7 @@ use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 
 pub use kind::FileKind;
+pub use refs::AttachmentRefs;
 
 /// La carpeta de adjuntos de un vault que no configura otra.
 pub const DEFAULT_ATTACHMENT_FOLDER: &str = "adjuntos";

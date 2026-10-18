@@ -308,6 +308,7 @@ Sin UI, en `nota-vault` (`links/`), sobre el scanner y la resolución de `nota-s
 - Escritura atómica y sin pisar: temporal oculto en la misma carpeta, `fsync`, y `persist_noclobber` de `tempfile` (`renameat2(RENAME_NOREPLACE)`); si el nombre está tomado se prueba el siguiente con el mismo temporal, sin carrera.
 - La extensión sale del contenido (`FileKind::detect`, firmas de imagen, PDF, audio y video). Solo formatos con firma inequívoca: un zip puede ser un `.docx`, así que no se adivina. Si no se reconoce, se usa la extensión del archivo arrastrado o `bin` en un pegado; lo que diga el portapapeles nunca cuenta.
 - El embed usa el final de ruta más corto que resuelve sin ambigüedad (con `nota_syntax::resolve`): el nombre solo, o con la carpeta si otro archivo del vault se llama igual.
+- Huérfanos: `AttachmentRefs` junta los adjuntos de la carpeta y marca los que usa alguna nota, con un link o un embed (borrar un PDF enlazado rompe el link igual). Un link ambiguo marca a todos sus candidatos. Hoy `Vault::orphan_attachments` le pasa todas las notas leídas de disco (`add_note`); cuando exista el índice de links le pasará los destinos ya resueltos (`mark_used`) sin leer nada.
 
 ### Medido (M2, 2026-10-17)
 
