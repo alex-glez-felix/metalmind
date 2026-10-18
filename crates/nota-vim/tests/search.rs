@@ -138,6 +138,12 @@ use rstest_reuse::{self, apply, template};
 #[case("|a b c b", "2d/b<CR>", "|b")]
 #[case("fo|o x foo", "d*", "fo|foo")]
 #[case("fo|o x foo", "d#", "fo|foo")]
+// . tras d* y d# vuelve a leer la palabra bajo el cursor, y n la busca
+#[case("|aa x aa bb x bb", "d*w.", "aa |bb")]
+#[case("|aa x aa bb x bb", "d*wn", "|aa bb x bb")]
+#[case("|aa x aa bb x bb y bb", "d*w.n", "aa bb y |bb")]
+#[case("aa x a|a b", "d#.", "|a b")]
+#[case("q aa x a|a aa", "d#u.", "q |aa")]
 #[case("|a x b x", "dn", "|a x b x")]
 #[case("|ab ab", "d/b<CR>u", "|ab ab")]
 // historial con las flechas

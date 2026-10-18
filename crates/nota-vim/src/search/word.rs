@@ -3,7 +3,36 @@
 
 use nota_buffer::{Buffer, ByteOffset};
 
+use super::{Case, Hit, Pattern, Query};
 use crate::cursor::Class;
+
+/// `*`, `#`, `g*` o `g#`. Como en vim, la palabra se lee al buscar, así que
+/// `.` tras `d*` busca la palabra donde esté el cursor entonces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WordSearch {
+    pub backward: bool,
+    pub whole_word: bool,
+}
+
+impl WordSearch {
+    /// Lo que busca desde `head` y el inicio de su palabra; `None` si no hay
+    /// texto bajo el cursor. Ignora `smartcase`, como vim.
+    pub fn query(self, buffer: &Buffer, head: ByteOffset) -> Option<(ByteOffset, Query)> {
+        let word = Word::under_cursor(buffer, head)?;
+        let pattern = Pattern::compile(&word.pattern(self.whole_word), Case::Ignore).ok()?;
+        let query = Query {
+            pattern,
+            backward: self.backward,
+        };
+        Some((word.start, query))
+    }
+
+    /// Busca desde el inicio de la palabra, para saltarla.
+    pub fn find(self, buffer: &Buffer, head: ByteOffset, times: usize) -> Option<Hit> {
+        let (start, query) = self.query(buffer, head)?;
+        query.find(buffer, start, times)
+    }
+}
 
 /// La palabra bajo el cursor o la siguiente en la línea; si no queda
 /// ninguna, la puntuación.

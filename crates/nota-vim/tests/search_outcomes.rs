@@ -176,12 +176,13 @@ fn search_actions_run_by_name() {
     assert!(vim.search_highlight().is_none());
 }
 
-/// nvim no tiene multi-cursor: cada cursor busca desde donde está.
+/// nvim no tiene multi-cursor: cada cursor busca desde donde está, y con `*`
+/// su propia palabra.
 #[rstest]
 #[case("|a x\n|b x", "/x<CR>", "a |x\nb |x")]
 #[case("a |x\nb |x", "?x<CR>", "a |x\nb |x")]
 #[case("|a x y\n|b x y", "d/y<CR>", "|y\n|y")]
-#[case("fo|o x\nfoo |bar foo", "*", "foo x\n|foo bar |foo")]
+#[case("fo|o x\nfoo |bar foo", "*", "foo x\n|foo |bar foo")]
 #[case("|a\n|a\na", ":%s/a/b/<CR>", "b\nb\n|b")]
 fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(support::run_engine(before, keys).text, after);

@@ -1,7 +1,7 @@
 //! `/`, `?`, `n`, `N`, `*`, `#`, `g*` y `g#`, solos o como objeto de un
 //! operador.
 
-use nota_buffer::{Buffer, ByteOffset, Selection, Selections};
+use nota_buffer::{Buffer, Selection, Selections};
 
 use super::{Vim, combined};
 use crate::dot::Subject;
@@ -9,7 +9,7 @@ use crate::history::History;
 use crate::lines::clamp_normal;
 use crate::object::Object;
 use crate::operator::Operand;
-use crate::search::{Case, Query, Word, split_at_delimiter};
+use crate::search::{Case, Hit, Query, WordSearch, split_at_delimiter};
 use crate::span::Missed;
 use crate::{Action, KeyOutcome, Mode, Operator, Pattern, Prompt, SearchError, VimError};
 
@@ -80,8 +80,18 @@ impl Vim {
         };
         self.search.remember(&query);
         let subject = Subject::Object(Object::Search(query.clone()));
-        self.jump_to_match(&query, subject, awaiting, at_head, buffer, selections)
-            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SubmitCommand)))
+        let find = |buffer: &Buffer, selection: &Selection, times| {
+            query.find(buffer, selection.head, times)
+        };
+        self.jump_to_match(
+            query.pattern.source(),
+            find,
+            subject,
+            awaiting,
+            buffer,
+            selections,
+        )
+        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SubmitCommand)))
     }
 
     pub(super) fn search_next(
@@ -100,12 +110,22 @@ impl Vim {
             ..last
         };
         let subject = Subject::SearchNext { reversed };
-        self.jump_to_match(&query, subject, awaiting, at_head, buffer, selections)
-            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SearchNext { reversed })))
+        let find = |buffer: &Buffer, selection: &Selection, times| {
+            query.find(buffer, selection.head, times)
+        };
+        self.jump_to_match(
+            query.pattern.source(),
+            find,
+            subject,
+            awaiting,
+            buffer,
+            selections,
+        )
+        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SearchNext { reversed })))
     }
 
-    /// Como vim, ignora `smartcase`, y cada cursor busca desde el inicio de
-    /// su palabra para saltarla.
+    /// Cada cursor busca su palabra desde donde empieza, para saltarla; la
+    /// del principal queda como último patrón.
     pub(super) fn search_word(
         &mut self,
         backward: bool,
@@ -114,27 +134,44 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.take_motion_context();
-        let Some(word) = Word::under_cursor(buffer, selections.primary().head) else {
+        let search = WordSearch {
+            backward,
+            whole_word,
+        };
+        let Some(query) = self.remember_word(search, buffer, selections) else {
             return Ok(KeyOutcome::SearchFailed(SearchError::NoStringUnderCursor));
         };
-        let source = word.pattern(whole_word);
-        let pattern = match Pattern::compile(&source, Case::Ignore) {
-            Ok(pattern) => pattern,
-            Err(error) => return Ok(KeyOutcome::SearchFailed(error)),
-        };
-        self.search.history.push(&source);
-        let query = Query { pattern, backward };
-        self.search.remember(&query);
-        let subject = Subject::Object(Object::Search(query.clone()));
-        let from = |buffer: &Buffer, selection: &Selection| {
-            Word::under_cursor(buffer, selection.head).map_or(selection.head, |word| word.start)
+        self.search.history.push(query.pattern.source());
+        let subject = Subject::Object(Object::SearchWord(search));
+        let find = |buffer: &Buffer, selection: &Selection, times| {
+            search.find(buffer, selection.head, times)
         };
         let action = Action::SearchWord {
             backward,
             whole_word,
         };
-        self.jump_to_match(&query, subject, awaiting, from, buffer, selections)
-            .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(action)))
+        self.jump_to_match(
+            query.pattern.source(),
+            find,
+            subject,
+            awaiting,
+            buffer,
+            selections,
+        )
+        .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(action)))
+    }
+
+    /// Como vim, `*` (también al repetirlo con `.`) deja la palabra del
+    /// cursor principal como último patrón.
+    pub(super) fn remember_word(
+        &mut self,
+        search: WordSearch,
+        buffer: &Buffer,
+        selections: &Selections,
+    ) -> Option<Query> {
+        let (_, query) = search.query(buffer, selections.primary().head)?;
+        self.search.remember(&query);
+        Some(query)
     }
 
     /// El operador pendiente, si hay, y el count total; deja el resto limpio.
@@ -166,23 +203,18 @@ impl Vim {
     /// salió bien sin dar la vuelta.
     fn jump_to_match(
         &mut self,
-        query: &Query,
+        pattern: &str,
+        find: impl Fn(&Buffer, &Selection, usize) -> Option<Hit>,
         subject: Subject,
         awaiting: AwaitingSearch,
-        from: impl Fn(&Buffer, &Selection) -> ByteOffset,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let times = awaiting.count.unwrap_or(1);
-        let hits = selections.map_to(|selection| {
-            let hit = query.find(buffer, from(buffer, selection), times);
-            (*selection, hit)
-        });
+        let hits = selections.map_to(|selection| (*selection, find(buffer, selection, times)));
         if hits.iter().all(|(_, hit)| hit.is_none()) {
-            let pattern = query.pattern.source().to_owned();
-            return Ok(Some(KeyOutcome::SearchFailed(SearchError::NotFound(
-                pattern,
-            ))));
+            let error = SearchError::NotFound(pattern.to_owned());
+            return Ok(Some(KeyOutcome::SearchFailed(error)));
         }
         let wrapped = hits
             .iter()
@@ -218,8 +250,4 @@ impl Vim {
         }
         Ok(wrapped.map(KeyOutcome::SearchWrapped))
     }
-}
-
-fn at_head(_: &Buffer, selection: &Selection) -> ByteOffset {
-    selection.head
 }
