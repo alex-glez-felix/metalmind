@@ -12,6 +12,7 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
+use crate::attachment::{self, NewAttachment, SavedAttachment};
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
 use crate::file;
@@ -274,6 +275,21 @@ impl Vault {
     /// Si el origen de un renombre ya está ocupado: no se toca nada.
     pub fn undo(&self, applied: &Applied) -> Result<UndoReport, FileOpError> {
         apply::undo(&self.root, applied)
+    }
+
+    /// Guarda un adjunto pegado o arrastrado en `folder` (la carpeta de
+    /// adjuntos del vault), creándola si falta, y devuelve su ruta y el
+    /// `![[...]]` que lo embebe.
+    ///
+    /// # Errors
+    /// Si `folder` es un archivo, pasa por un enlace simbólico o no se puede
+    /// escribir.
+    pub fn save_attachment(
+        &self,
+        folder: &VaultPath,
+        attachment: &NewAttachment<'_>,
+    ) -> Result<SavedAttachment, FileOpError> {
+        attachment::save(&self.root, &self.snapshot(), folder, attachment)
     }
 }
 
