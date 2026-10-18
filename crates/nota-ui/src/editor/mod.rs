@@ -179,6 +179,7 @@ impl Editor {
             .map(|typed| (typed.to_owned(), self.marked.clone().unwrap_or_default()));
         Status {
             mode: self.document.mode(),
+            recording: self.document.recording(),
             file: self.file_name(),
             modified: self.document.is_modified(),
             command_line,
