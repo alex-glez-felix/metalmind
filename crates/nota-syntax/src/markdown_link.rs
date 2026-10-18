@@ -111,13 +111,15 @@ fn closing_paren(text: &str, from: usize) -> Option<usize> {
 }
 
 /// Tras el `close` que cierra el título que empieza en `from`, en la misma
-/// línea y sin contar los escapados.
+/// línea y sin contar los escapados. Un título `(…)` no admite otro `(` sin
+/// escapar (CommonMark): cortar ahí acota cada intento hasta el siguiente.
 fn title_end(bytes: &[u8], from: usize, close: u8) -> Option<usize> {
     let mut i = from;
     while let Some(&b) = bytes.get(i) {
         match b {
             _ if is_escape(bytes, i) => i += 1,
             b'\n' => return None,
+            b'(' if close == b')' => return None,
             _ if b == close => return Some(i + 1),
             _ => {}
         }

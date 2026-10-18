@@ -101,6 +101,8 @@ fn crlf(#[case] text: &str, #[case] expected: &[&str]) {
 #[case::markdown_only_hash("[x](#) #a", &["#a"])]
 #[case::markdown_title_unclosed("[x](a.md \"t)", &[])]
 #[case::markdown_paren_title("[x](a.md (un título)) #b", &["[x](a.md (un título))", "#b"])]
+#[case::markdown_paren_in_paren_title("[x](a.md (un ( título)) #b", &["#b"])]
+#[case::markdown_escaped_paren_in_paren_title("[x](a.md (un \\( t))", &["[x](a.md (un \\( t))"])]
 #[case::markdown_escaped_quote_in_title("[x](a.md \"un \\\" t\")", &["[x](a.md \"un \\\" t\")"])]
 #[case::markdown_code_in_label("[a `[b` #c](nota.md)", &["[a `[b` #c](nota.md)"])]
 #[case::markdown_code_with_bracket_in_label("[a `]` b](nota.md)", &["[a `]` b](nota.md)"])]
@@ -254,6 +256,20 @@ fn singular_field_names_are_not_read() {
             frontmatter.cssclasses
         ),
         (Vec::new(), Vec::new(), Vec::new())
+    );
+}
+
+/// Una línea de `[a](b (` sin cerrar: si el título de cada intento buscara
+/// su `)` hasta el fin de la línea, el scan sería cuadrático.
+#[test]
+fn unclosed_paren_titles_stay_linear() {
+    let text = "[a](b (".repeat(100_000);
+    let start = std::time::Instant::now();
+    assert_eq!(scan(&text).links, []);
+    assert!(
+        start.elapsed() < std::time::Duration::from_secs(5),
+        "{:?}",
+        start.elapsed()
     );
 }
 
