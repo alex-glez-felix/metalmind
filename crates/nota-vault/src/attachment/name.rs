@@ -3,16 +3,33 @@
 
 use jiff::civil::DateTime;
 
+use super::MAX_ATTEMPT;
+use crate::path::is_word_char;
+
 /// Base de un pegado cuando no queda nada legible del nombre de origen.
 const FALLBACK_BASE: &str = "adjunto";
 /// Extensión de un contenido que no se reconoce y no trae una propia.
-const FALLBACK_EXTENSION: &str = "bin";
-/// Largo máximo de la base, en caracteres: el resto del nombre es fijo.
-const MAX_BASE_CHARS: usize = 60;
+pub(crate) const FALLBACK_EXTENSION: &str = "bin";
+/// Largo máximo de la base, en caracteres.
+const MAX_BASE_CHARS: usize = 50;
 const MAX_EXTENSION_CHARS: usize = 10;
+/// `-AAAA-MM-DD-HHMMSS`.
+const STAMP_BYTES: usize = 18;
 
-/// La base legible de un nombre: letras y números de cualquier alfabeto,
-/// `-` y `_`; lo demás (espacios, puntos, `[`, `|`, `#`, …) se vuelve un
+// Con 4 bytes por carácter en el peor caso, el nombre cabe en los 255 de ext4.
+const _: () = assert!(
+    MAX_BASE_CHARS * 4
+        + STAMP_BYTES
+        + "-".len()
+        + MAX_ATTEMPT.ilog10() as usize
+        + 1
+        + ".".len()
+        + MAX_EXTENSION_CHARS
+        <= 255
+);
+
+/// La base legible de un nombre: letras y números de cualquier alfabeto con
+/// sus marcas, `-` y `_`; lo demás (espacios, puntos, `[`, `|`, `#`, …) se vuelve un
 /// solo `-`. Así el nombre nunca rompe un `![[...]]` ni queda oculto.
 pub(crate) fn base(raw: &str) -> String {
     let mut out = String::new();
@@ -21,7 +38,7 @@ pub(crate) fn base(raw: &str) -> String {
         if chars == MAX_BASE_CHARS {
             break;
         }
-        if c.is_alphanumeric() || c == '_' {
+        if is_word_char(c) || c == '_' {
             out.push(c);
         } else if !out.is_empty() && !out.ends_with('-') {
             out.push('-');
@@ -48,13 +65,6 @@ pub(crate) fn extension_of(file_name: &str) -> Option<String> {
     valid.then(|| extension.to_ascii_lowercase())
 }
 
-/// `extension_of` o `bin`.
-pub(crate) fn extension_or_fallback(file_name: Option<&str>) -> String {
-    file_name
-        .and_then(extension_of)
-        .unwrap_or_else(|| FALLBACK_EXTENSION.to_owned())
-}
-
 /// El nombre del intento `attempt`: el primero sin sufijo.
 pub(crate) fn file_name(base: &str, at: DateTime, extension: &str, attempt: u32) -> String {
     let stamp = at.strftime("%Y-%m-%d-%H%M%S");
@@ -79,6 +89,7 @@ mod tests {
     #[case::sintaxis_de_link("a[[b]]|c#d^e", "a-b-c-d-e")]
     #[case::oculto(".config", "config")]
     #[case::acentos("señal_ñandú", "señal_ñandú")]
+    #[case::acento_descompuesto("cafe\u{301} con leche", "cafe\u{301}-con-leche")]
     #[case::solo_simbolos("!!!", "adjunto")]
     #[case::vacio("", "adjunto")]
     fn base_legible(#[case] raw: &str, #[case] expected: &str) {
@@ -89,6 +100,13 @@ mod tests {
     fn la_base_se_corta_por_caracteres() {
         let long = "ñ".repeat(100);
         assert_eq!(base(&long).chars().count(), MAX_BASE_CHARS);
+    }
+
+    #[test]
+    fn el_nombre_mas_largo_cabe_en_255_bytes() {
+        let at = date(2026, 10, 18).at(9, 5, 7, 0);
+        let name = file_name(&base(&"𝒜".repeat(100)), at, "extensión", MAX_ATTEMPT);
+        assert!(name.len() <= 255, "{} bytes", name.len());
     }
 
     #[rstest]

@@ -42,8 +42,11 @@ impl Names {
         self.files.contains(path)
     }
 
-    /// `path` y lo que hay dentro, si es una carpeta.
+    /// `path` y lo que hay dentro, si es una carpeta; todo, si es la raíz.
     pub fn within(&self, path: &VaultPath) -> Vec<VaultPath> {
+        if path.is_root() {
+            return self.files.iter().cloned().collect();
+        }
         let inside = format!("{path}/");
         let mut found: Vec<VaultPath> = self
             .files
@@ -91,7 +94,7 @@ impl Names {
 
     /// Los nombres como quedan tras mover `moved` (las rutas de antes) de
     /// `from` a `to`. Solo copia las claves que cambian.
-    pub fn renamed(&self, moved: &[VaultPath], from: &VaultPath, to: &VaultPath) -> Renamed<'_> {
+    pub fn renamed(&self, moved: &[VaultPath], from: &VaultPath, to: &VaultPath) -> Overlay<'_> {
         let mut changed: HashMap<String, KeyFiles> = HashMap::new();
         let mut added = Vec::new();
         for old in moved {
@@ -104,10 +107,23 @@ impl Names {
                 added.push(key);
             }
         }
-        Renamed {
+        Overlay {
             base: self,
             changed,
             added,
+        }
+    }
+
+    /// Los nombres con `path`, que puede no estar todavía. Solo copia sus claves.
+    pub fn with_file(&self, path: &VaultPath) -> Overlay<'_> {
+        let mut changed = HashMap::new();
+        for key in path_keys(path.as_str()) {
+            self.changed_entry(&mut changed, key).insert(path);
+        }
+        Overlay {
+            base: self,
+            changed,
+            added: Vec::new(),
         }
     }
 
@@ -123,14 +139,15 @@ impl Names {
     }
 }
 
-/// Los nombres tras un rename que todavía no se hizo: ver [`Names::renamed`].
-pub(super) struct Renamed<'a> {
+/// Los nombres con cambios que todavía no se hicieron: un rename
+/// ([`Names::renamed`]) o un archivo recién creado ([`Names::with_file`]).
+pub(super) struct Overlay<'a> {
     base: &'a Names,
     changed: HashMap<String, KeyFiles>,
     added: Vec<String>,
 }
 
-impl Renamed<'_> {
+impl Overlay<'_> {
     pub fn resolve(&self, source: &VaultPath, target: &str) -> LinkTarget {
         let lookup = |key: &str| match self.changed.get(key) {
             Some(files) => (!files.by_depth.is_empty()).then_some(files),

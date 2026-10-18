@@ -3,6 +3,7 @@
 //! [`LinkIndex::build`] y se mantiene al día aplicando cada
 //! [`crate::VaultChange`].
 
+mod attachments;
 mod complete;
 mod follow;
 mod names;

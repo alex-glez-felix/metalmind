@@ -6,7 +6,7 @@ pub(super) mod form;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::ops::Range;
 
-use super::names::{Names, Renamed, key_of};
+use super::names::{Names, Overlay, key_of};
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::changes::{Changes, Rename};
 use crate::edit::{FileEdits, TextEdit};
@@ -171,7 +171,7 @@ enum Rewrite {
 
 /// El vault como queda tras el rename, para resolver contra él.
 struct After<'a> {
-    names: Renamed<'a>,
+    names: Overlay<'a>,
     from: &'a VaultPath,
     to: &'a VaultPath,
 }

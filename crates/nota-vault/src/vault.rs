@@ -12,11 +12,13 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, new_debouncer};
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
-use crate::attachment::{self, AttachmentRefs, NewAttachment, SavedAttachment};
+use crate::attachment::{
+    self, AttachmentError, DEFAULT_ATTACHMENTS_FOLDER, NewAttachment, SavedAttachment,
+};
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
-use crate::file::{self, FileError};
-use crate::index::{EntryKind, VaultIndex};
+use crate::file;
+use crate::index::VaultIndex;
 use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
@@ -61,12 +63,15 @@ pub struct VaultUpdate {
 pub struct VaultOptions {
     /// La carpeta plana de las páginas de tag (05 §7).
     pub tags_folder: VaultPath,
+    /// Donde van los adjuntos pegados o arrastrados (06 §6).
+    pub attachments_folder: VaultPath,
 }
 
 impl Default for VaultOptions {
     fn default() -> Self {
         Self {
             tags_folder: VaultPath::fixed(DEFAULT_TAGS_FOLDER),
+            attachments_folder: VaultPath::fixed(DEFAULT_ATTACHMENTS_FOLDER),
         }
     }
 }
@@ -111,6 +116,7 @@ impl VaultRoot {
 /// mantiene al día en un hilo propio.
 pub struct Vault {
     root: PathBuf,
+    attachments_folder: VaultPath,
     index: Arc<ArcSwap<VaultIndex>>,
     links: Arc<ArcSwap<LinkIndex>>,
     tags: Arc<ArcSwap<Tags>>,
@@ -176,6 +182,7 @@ impl Vault {
             .map_err(VaultError::Spawn)?;
         let vault = Self {
             root,
+            attachments_folder: options.attachments_folder,
             index,
             links,
             tags,
@@ -277,36 +284,31 @@ impl Vault {
         apply::undo(&self.root, applied)
     }
 
-    /// Guarda un adjunto pegado o arrastrado en `folder` (la carpeta de
-    /// adjuntos del vault), creándola si falta, y devuelve su ruta y el
-    /// `![[...]]` que lo embebe.
+    /// Guarda un adjunto pegado o arrastrado en la carpeta de adjuntos,
+    /// creándola si falta, y devuelve su ruta y el `![[...]]` con que lo
+    /// embebe su nota. El índice se entera por el watcher.
     ///
     /// # Errors
-    /// Si `folder` es un archivo, pasa por un enlace simbólico o no se puede
-    /// escribir.
+    /// Si el archivo sería una nota, la carpeta es un archivo o pasa por un
+    /// enlace simbólico, el vault lo ignoraría, un wikilink no puede
+    /// nombrarlo o falla la escritura. En todos los casos no queda nada.
     pub fn save_attachment(
         &self,
-        folder: &VaultPath,
         attachment: &NewAttachment<'_>,
-    ) -> Result<SavedAttachment, FileOpError> {
-        attachment::save(&self.root, &self.snapshot(), folder, attachment)
+    ) -> Result<SavedAttachment, AttachmentError> {
+        attachment::save(
+            &self.root,
+            &self.links(),
+            &self.attachments_folder,
+            attachment,
+        )
     }
 
-    /// Los adjuntos de `folder` que ninguna nota enlaza ni embebe. Lee todas
-    /// las notas del vault: el índice de links todavía no existe.
-    ///
-    /// # Errors
-    /// Si alguna nota no se puede leer: sin ella no se sabe qué usa.
-    pub fn orphan_attachments(&self, folder: &VaultPath) -> Result<Vec<VaultPath>, FileError> {
-        let index = self.snapshot();
-        let mut refs = AttachmentRefs::new(&index, folder);
-        for note in index.files().filter(|entry| entry.kind == EntryKind::Note) {
-            // Una nota borrada mientras tanto ya no usa nada.
-            if let Some(text) = file::read(&note.path.to_fs(&self.root))? {
-                refs.add_note(note.path, &text);
-            }
-        }
-        Ok(refs.orphans().into_iter().cloned().collect())
+    /// Los adjuntos de la carpeta de adjuntos que ninguna nota usa, según
+    /// los links de este momento: ver [`LinkIndex::orphan_attachments`].
+    #[must_use]
+    pub fn orphan_attachments(&self) -> Vec<VaultPath> {
+        self.links().orphan_attachments(&self.attachments_folder)
     }
 }
 

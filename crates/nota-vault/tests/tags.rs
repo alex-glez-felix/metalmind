@@ -92,6 +92,7 @@ fn la_carpeta_de_tags_se_configura() {
     make_tree(dir.path(), &["etiquetas/rust.md", "tags/gpui.md"]);
     let options = VaultOptions {
         tags_folder: VaultPath::new("etiquetas").unwrap(),
+        ..VaultOptions::default()
     };
     let (vault, _updates) = Vault::open_with(dir.path(), options).unwrap();
     let tags = vault.tags();
