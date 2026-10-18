@@ -117,7 +117,7 @@ pub(crate) fn scan(root: &Path) -> VaultIndex {
         })
     });
     drop(sender);
-    VaultIndex::from_entries(receiver.into_iter().collect())
+    VaultIndex::from_entries(receiver)
 }
 
 /// Lo que el walk parcial encontró, y las carpetas que no pudo leer: de esas

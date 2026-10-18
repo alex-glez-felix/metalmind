@@ -27,7 +27,12 @@ fn edit(session: &mut Session, command: &str, path: &Path) {
 }
 
 fn shown(session: &Session) -> PathBuf {
-    session.view(session.pane()).document.path().to_owned()
+    session
+        .view(session.pane())
+        .document
+        .path()
+        .unwrap()
+        .to_owned()
 }
 
 fn error(session: &Session) -> Option<&str> {
@@ -421,7 +426,10 @@ fn open_in_split_abre_otro_archivo_en_un_panel_nuevo() {
     assert_eq!(session.workspace.tree().len(), 2);
     assert_ne!(session.pane(), before);
     assert_eq!(shown(&session), path(&dir, "b.md"));
-    assert_eq!(session.view(before).document.path(), path(&dir, "a.md"));
+    assert_eq!(
+        session.view(before).document.path(),
+        Some(path(&dir, "a.md").as_path())
+    );
 }
 
 /// Abrir en split la nota del panel, con cambios, la comparte: no relee ni
@@ -499,4 +507,30 @@ fn abrir_desde_un_modo_a_medias_es_como_nvim_tras_ctrl_c(
 enum Opened {
     Split,
     Edit,
+}
+
+#[test]
+fn space_e_y_space_t_le_piden_el_panel_lateral_a_la_ventana() {
+    let mut session = Session::new("texto");
+    session.keys(" e");
+    assert_eq!(session.effect, Effect::TogglePanel(PanelView::Folders));
+    session.keys(" t");
+    assert_eq!(session.effect, Effect::TogglePanel(PanelView::Tags));
+    assert_eq!(session.cursor(), ByteOffset::ZERO, "space no se movió");
+}
+
+/// Sin vecino a la izquierda, `ctrl-w h` le deja el foco a lo que haya
+/// fuera de los paneles, como el panel lateral.
+#[test]
+fn ctrl_w_hacia_el_borde_sale_de_los_paneles() {
+    let mut session = Session::new("texto");
+    session.keys("⌃wh");
+    assert_eq!(session.effect, Effect::FocusPastEdge(Direction::Left));
+    session.keys("⌃wv");
+    let right = session.pane();
+    session.keys("⌃wh");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_ne!(session.pane(), right);
+    session.keys("⌃wk");
+    assert_eq!(session.effect, Effect::FocusPastEdge(Direction::Up));
 }

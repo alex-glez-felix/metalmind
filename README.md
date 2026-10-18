@@ -14,16 +14,16 @@ Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra h
 
 ## Estado
 
-M0 hecho: `nota archivo.md` abre una ventana (GPUI) donde se edita con vim y se guarda con `:w` de forma atómica.
+M0 y M1 hechos; M2 en curso: `nota carpeta/` abre la carpeta como vault, con un panel lateral con el árbol de carpetas, y `nota archivo.md` abre el archivo en el vault de su carpeta. Se edita con vim y se guarda con `:w` de forma atómica.
 
 - `crates/nota-buffer`: texto, selecciones, undo.
 - `crates/nota-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
 - `crates/nota-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico.
 - `crates/nota-search`: búsqueda difusa para el finder y la paleta, y de texto completo en las notas (esta, sin interfaz todavía).
-- `crates/nota-ui` y `crates/nota`: el editor, el finder (`space f`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI.
+- `crates/nota-ui` y `crates/nota`: el editor, el panel lateral con el árbol de carpetas (`space e`), el finder (`space f`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI ([`nota-ui`](crates/nota-ui/README.md)).
 
 ```sh
-cargo run --release -p nota -- archivo.md
+cargo run --release -p nota -- ~/Notas      # o un archivo: abre el vault de su carpeta
 cargo nextest run --workspace   # incluye el oráculo contra nvim si `nvim` está en el PATH
 cargo clippy --workspace --all-targets -- -D warnings
 ```

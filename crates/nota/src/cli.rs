@@ -15,9 +15,11 @@ use clap::{Arg, ArgAction, Parser};
     arg(flag("version", 'V', ArgAction::Version, "Muestra la versión"))
 )]
 pub struct Cli {
-    /// Archivo markdown a abrir; si no existe, se crea al guardar con `:w`.
-    #[arg(value_name = "ARCHIVO", help_heading = "Argumentos")]
-    pub path: PathBuf,
+    /// Carpeta a abrir como vault, o archivo markdown a abrir en el vault de
+    /// su carpeta (si no existe, se crea al guardar con `:w`). Sin nada, el
+    /// último vault abierto.
+    #[arg(value_name = "CARPETA|ARCHIVO", help_heading = "Argumentos")]
+    pub path: Option<PathBuf>,
 }
 
 /// Las de clap traen el texto en inglés; estas, en el idioma de la app.
@@ -37,7 +39,9 @@ mod tests {
 
     use super::*;
 
-    fn parse(args: &[&str]) -> Result<PathBuf, ErrorKind> {
+    type Parsed = Result<Option<PathBuf>, ErrorKind>;
+
+    fn parse(args: &[&str]) -> Parsed {
         Cli::try_parse_from(std::iter::once("nota").chain(args.iter().copied()))
             .map(|cli| cli.path)
             .map_err(|error| error.kind())
@@ -45,15 +49,15 @@ mod tests {
 
     #[test]
     fn argumentos() {
-        let cases: [(&[&str], Result<PathBuf, ErrorKind>); 10] = [
-            (&["a.md"], Ok("a.md".into())),
-            (&["notas/b c.md"], Ok("notas/b c.md".into())),
-            (&["--", "-raro.md"], Ok("-raro.md".into())),
+        let cases: [(&[&str], Parsed); 10] = [
+            (&["a.md"], Ok(Some("a.md".into()))),
+            (&["notas/b c.md"], Ok(Some("notas/b c.md".into()))),
+            (&["--", "-raro.md"], Ok(Some("-raro.md".into()))),
             (&["--help"], Err(ErrorKind::DisplayHelp)),
             (&["-h"], Err(ErrorKind::DisplayHelp)),
             (&["--version"], Err(ErrorKind::DisplayVersion)),
             (&["-V"], Err(ErrorKind::DisplayVersion)),
-            (&[], Err(ErrorKind::MissingRequiredArgument)),
+            (&[], Ok(None)),
             (&["a.md", "b.md"], Err(ErrorKind::UnknownArgument)),
             (&["--raro"], Err(ErrorKind::UnknownArgument)),
         ];
@@ -72,7 +76,7 @@ mod tests {
     fn la_ayuda_esta_en_espanol() {
         let help = Cli::command().render_help().to_string();
         for expected in [
-            "uso: nota <ARCHIVO>",
+            "uso: nota [CARPETA|ARCHIVO]",
             "Argumentos:",
             "Opciones:",
             "-h, --help",

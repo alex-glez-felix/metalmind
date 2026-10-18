@@ -212,3 +212,43 @@ fn la_paleta_ejecuta_acciones_con_nombre() {
     assert_eq!(smoke.read("a.md"), "xuno\nydos\n");
     assert_eq!(smoke.files(), ["a.md"]);
 }
+
+/// `nota .` abre la carpeta como vault con el foco en el árbol: `j` baja a
+/// `b.md` y `o` la abre en el panel de edición, que se queda con el foco.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn abre_una_nota_desde_el_arbol() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut nota = smoke.launch(&["."]);
+    let window = nota.window();
+    window.wait_title("sin archivo", |title| title.starts_with("[No Name]"));
+    window.type_keys("jo");
+    window.wait_title("de b.md", |title| title.contains("b.md"));
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "uno\n");
+    assert_eq!(smoke.read("b.md"), "xdos\n");
+}
+
+/// `ctrl-w h` pasa al árbol, con la nota abierta seleccionada; `r` la
+/// renombra y el buffer sigue al archivo: lo que se guarda va al nombre nuevo.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn renombra_desde_el_arbol_y_el_buffer_la_sigue() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let mut nota = smoke.launch(&["a.md"]);
+    let window = nota.window();
+    window.type_keys("ix<Esc><C-w>hr<C-u>c<CR>");
+    smoke.wait_files(&["c.md"]);
+    window.type_keys("<C-w>l");
+    window.wait_title("de c.md con [+]", |title| {
+        title.contains("c.md") && title.contains("[+]")
+    });
+    window.type_keys(":wq<CR>");
+    assert!(nota.wait_exit().success());
+    assert_eq!(smoke.read("c.md"), "xuno\n");
+    assert_eq!(smoke.files(), ["c.md"]);
+}

@@ -13,6 +13,17 @@ use nota_vim::Marks;
 /// la última no lo lleva.
 const EOL: &str = "\n";
 
+/// Lo que vim muestra en lugar de la ruta de un buffer sin archivo.
+const NO_NAME: &str = "[No Name]";
+
+#[derive(Debug, thiserror::Error)]
+pub enum SaveError {
+    #[error("E32: No file name")]
+    NoFileName,
+    #[error(transparent)]
+    File(#[from] FileError),
+}
+
 /// Tamaño del archivo, para avisarlo como vim (`"a.md" 3L, 20B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileStats {
@@ -28,8 +39,9 @@ impl fmt::Display for FileStats {
 
 #[derive(Debug)]
 pub struct Document {
-    /// La ruta como se escribió, para mostrarla y guardar ahí.
-    path: PathBuf,
+    /// La ruta como se escribió, para mostrarla y guardar ahí; `None` en
+    /// un buffer sin archivo, como el de abrir un vault sin nota.
+    path: Option<PathBuf>,
     buffer: Buffer,
     /// Las marks de vim son de cada buffer; el motor las toma prestadas.
     marks: Marks,
@@ -64,9 +76,19 @@ impl Document {
 
     #[must_use]
     pub fn new(path: &Path, text: &str) -> Self {
+        Self::with_path(Some(path.to_owned()), text)
+    }
+
+    /// Un buffer vacío sin archivo: `:w` pide una ruta, como en vim.
+    #[must_use]
+    pub fn unnamed() -> Self {
+        Self::with_path(None, "")
+    }
+
+    fn with_path(path: Option<PathBuf>, text: &str) -> Self {
         let buffer = Buffer::from(text);
         Self {
-            path: path.to_owned(),
+            path,
             saved: Some(buffer.history_seq()),
             marks: Marks::default(),
             buffer,
@@ -77,8 +99,16 @@ impl Document {
     }
 
     #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    /// La ruta para mostrar, o `[No Name]` como vim.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        self.path
+            .as_deref()
+            .map_or_else(|| NO_NAME.to_owned(), |path| path.display().to_string())
     }
 
     /// `path` nombra el archivo de este documento, aunque se escriba de
@@ -86,7 +116,18 @@ impl Document {
     /// rutas ahora, porque guardar sigue los enlaces como estén al guardar.
     #[must_use]
     pub fn is_file(&self, path: &Path) -> bool {
-        resolve(path) == resolve(&self.path)
+        self.resolved_path().is_some_and(|own| own == resolve(path))
+    }
+
+    /// La ruta absoluta y sin enlaces de su archivo, si tiene.
+    #[must_use]
+    pub fn resolved_path(&self) -> Option<PathBuf> {
+        self.path.as_deref().map(resolve)
+    }
+
+    /// Su archivo pasó a llamarse `path`: se renombró desde nota.
+    pub(crate) fn set_path(&mut self, path: PathBuf) {
+        self.path = Some(path);
     }
 
     #[must_use]
@@ -148,10 +189,12 @@ impl Document {
     /// Escribe el buffer con un `\n` al final, aunque el archivo no lo tuviera.
     ///
     /// # Errors
-    /// Si no se pudo escribir; el archivo en disco queda como estaba.
-    pub fn save(&mut self) -> Result<FileStats, FileError> {
+    /// Si no tiene archivo o no se pudo escribir; el archivo en disco queda
+    /// como estaba.
+    pub fn save(&mut self) -> Result<FileStats, SaveError> {
         let eol = self.final_eol();
-        nota_vault::write_atomic(&self.path, |out| write!(out, "{}{eol}", self.buffer))?;
+        let path = self.path.as_deref().ok_or(SaveError::NoFileName)?;
+        nota_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))?;
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
         self.exists_on_disk = true;
         self.noeol = false;

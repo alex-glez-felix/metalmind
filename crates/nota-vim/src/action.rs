@@ -280,6 +280,8 @@ impl Action {
         Self::Command(Command::Set),
         Self::Command(Command::OpenFinder),
         Self::Command(Command::OpenCommandPalette),
+        Self::Command(Command::ToggleFolders),
+        Self::Command(Command::ToggleTags),
     ];
 
     #[must_use]

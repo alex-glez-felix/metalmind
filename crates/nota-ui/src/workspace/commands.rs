@@ -13,7 +13,8 @@ use super::pane_tree::{Axis, Direction};
 use super::{
     DocumentId, LineNumbers, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor,
 };
-use crate::document::Document;
+use crate::document::{Document, SaveError};
+use crate::panel::PanelView;
 
 /// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,6 +24,11 @@ pub enum Effect {
     CloseWindow,
     OpenFinder,
     OpenCommandPalette,
+    /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
+    TogglePanel(PanelView),
+    /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
+    /// paneles de ese lado, como el panel lateral, puede tomar el foco.
+    FocusPastEdge(Direction),
 }
 
 impl Workspace {
@@ -93,10 +99,10 @@ impl Workspace {
             Command::ForceEdit => self.edit(path, true).map(|()| Effect::Stay),
             Command::SplitRight => self.split(Axis::Row).map(|()| Effect::Stay),
             Command::SplitDown => self.split(Axis::Column).map(|()| Effect::Stay),
-            Command::FocusLeft => self.move_focus(Direction::Left).map(|()| Effect::Stay),
-            Command::FocusDown => self.move_focus(Direction::Down).map(|()| Effect::Stay),
-            Command::FocusUp => self.move_focus(Direction::Up).map(|()| Effect::Stay),
-            Command::FocusRight => self.move_focus(Direction::Right).map(|()| Effect::Stay),
+            Command::FocusLeft => self.move_focus(Direction::Left),
+            Command::FocusDown => self.move_focus(Direction::Down),
+            Command::FocusUp => self.move_focus(Direction::Up),
+            Command::FocusRight => self.move_focus(Direction::Right),
             Command::FocusNext => {
                 let next = self.tree.next();
                 self.focus(next).map(|()| Effect::Stay)
@@ -105,6 +111,8 @@ impl Workspace {
             Command::Set => self.set_options(invocation.argument.as_deref()),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
+            Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
+            Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
         }
     }
 
@@ -153,7 +161,7 @@ impl Workspace {
     /// `:e`: sin ruta, o con la del mismo archivo, lo relee; si no, el
     /// panel pasa a mostrar ese archivo. Una ruta relativa parte del
     /// directorio de trabajo, como en vim.
-    fn edit(&mut self, path: Option<&Path>, force: bool) -> Result<(), WorkspaceError> {
+    pub(super) fn edit(&mut self, path: Option<&Path>, force: bool) -> Result<(), WorkspaceError> {
         let pane = self.focused();
         // Desde `:` ya se está en Normal; desde el finder puede quedar un
         // Insert, que termina antes, también si `:e` se niega.
@@ -187,7 +195,7 @@ impl Workspace {
 
     /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
     /// muestra.
-    fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
+    pub(super) fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
         self.panes
             .values()
             .find(|pane| pane.document == id)
@@ -210,7 +218,11 @@ impl Workspace {
             self.message = Some(Message::unsaved("usa :e! para descartarlos"));
             return Ok(());
         }
-        let reloaded = match Document::open(document.path()) {
+        let Some(path) = document.path() else {
+            self.message = Some(Message::Error(SaveError::NoFileName.to_string()));
+            return Ok(());
+        };
+        let reloaded = match Document::open(path) {
             Ok(reloaded) => reloaded,
             Err(error) => {
                 self.message = Some(Message::Error(error.to_string()));
@@ -268,17 +280,17 @@ impl Workspace {
 
     /// El panel nuevo muestra lo mismo, con el mismo cursor, y se queda
     /// con el foco.
-    fn split(&mut self, axis: Axis) -> Result<(), WorkspaceError> {
+    pub(super) fn split(&mut self, axis: Axis) -> Result<(), WorkspaceError> {
         let copy = self.pane(self.focused())?.clone();
         let new = self.tree.split(axis);
         self.panes.insert(new, copy);
         Ok(())
     }
 
-    fn move_focus(&mut self, direction: Direction) -> Result<(), WorkspaceError> {
+    fn move_focus(&mut self, direction: Direction) -> Result<Effect, WorkspaceError> {
         match self.tree.neighbor(direction) {
-            Some(pane) => self.focus(pane),
-            None => Ok(()),
+            Some(pane) => self.focus(pane).map(|()| Effect::Stay),
+            None => Ok(Effect::FocusPastEdge(direction)),
         }
     }
 

@@ -17,6 +17,8 @@ nota-config.workspace = true
 nota-search.workspace = true
 nota-vault.workspace = true
 nota-vim.workspace = true
+serde.workspace = true
+serde-saphyr = { workspace = true, features = ["serialize"] }
 thiserror.workspace = true
 unicode-segmentation.workspace = true
 
@@ -29,6 +31,10 @@ tempfile.workspace = true
 
 [[bench]]
 name = "picker"
+harness = false
+
+[[bench]]
+name = "file_tree"
 harness = false
 
 [lints]

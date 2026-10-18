@@ -24,6 +24,9 @@ editor:
 panes:
   border_width: 4
 
+panel:
+  width: 320
+
 search:
   ignorecase: true
   smartcase: true
@@ -49,6 +52,9 @@ fn every_setting() -> Settings {
             },
         },
         panes: Panes { border_width: 4 },
+        panel: Panel {
+            width: PanelWidth(320),
+        },
         search: Search {
             ignorecase: true,
             smartcase: true,
@@ -93,11 +99,37 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "padding": { "horizontal": 20, "vertical": 0 }
   },
   "panes": { "border_width": 4 },
+  "panel": { "width": 320 },
   "search": { "ignorecase": true, "smartcase": true }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);
     assert_eq!(loaded.value, every_setting());
+}
+
+#[test]
+fn el_ancho_del_panel_tiene_limites() {
+    assert_eq!(Settings::default().panel.width.get(), 260);
+    for width in [0, 119, 1201] {
+        let loaded = Settings::parse(&format!("panel:\n  width: {width}\n"));
+        assert_eq!(loaded.value, Settings::default(), "{width}");
+        let [error] = loaded.diagnostics.as_slice() else {
+            panic!("{:?}", loaded.diagnostics)
+        };
+        assert!(
+            error.message.contains("entre 120 y 1200"),
+            "{}",
+            error.message
+        );
+    }
+    assert_eq!(
+        Settings::parse("panel:\n  width: 120\n")
+            .value
+            .panel
+            .width
+            .get(),
+        120
+    );
 }
 
 #[test]

@@ -9,11 +9,14 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
+dirs.workspace = true
 env_logger.workspace = true
 gpui-kit.workspace = true
 log.workspace = true
 nota-config.workspace = true
 nota-ui.workspace = true
+nota-vault.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

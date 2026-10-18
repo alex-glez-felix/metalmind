@@ -16,7 +16,7 @@ Todas las claves son opcionales; estos son los valores por defecto:
 
 ```yaml
 theme: nota-oscuro        # o nota-claro, o uno tuyo de themes/
-# vault: ~/Notas          # vault que se abre si no pasas ninguno
+# vault: ~/Notas          # vault que se abre si no pasas ninguno y no hay uno anterior
 
 font:
   # family: JetBrains Mono  # sin esto, la primera monoespaciada instalada
@@ -35,6 +35,9 @@ editor:
 panes:
   border_width: 2         # ancho de la línea entre paneles, en píxeles (0–255); el color es ui.pane_border
 
+panel:
+  width: 260              # ancho del panel lateral (el árbol de carpetas), en píxeles (120–1200)
+
 search:
   ignorecase: false
   smartcase: false        # con ignorecase, una mayúscula vuelve la búsqueda exacta
@@ -49,7 +52,9 @@ editor:
 
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
-Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes` y `scrolloff`; el resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+Hoy la app usa el tema, la fuente, los números de línea, `editor.padding`, `panes`, `panel`, `scrolloff` y `vault`; el resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+
+`nota` sin argumentos abre el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Lo que nota recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/nota/`, por defecto `~/.local/state/nota/`): no es configuración y se puede borrar sin perder nada.
 
 ### En JSON
 
@@ -106,5 +111,7 @@ Para heredar un color, no pongas la clave: una clave vacía o `null` es un error
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`nota-oscuro.yaml`](../crates/nota-config/themes/nota-oscuro.yaml) y [`nota-claro.yaml`](../crates/nota-config/themes/nota-claro.yaml).
 
 - `ui`: `background`, `foreground`, `selection`, `search` (las coincidencias de la búsqueda), `search_current` (la coincidencia donde está el cursor), `current_line`, `gutter`, `gutter_foreground`, `gutter_current` (el número de la línea del cursor), `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`, y los del finder y la paleta: `picker_background`, `picker_border`, `picker_selected` (la fila elegida), `picker_hover` (la fila bajo el ratón), `picker_match` (las letras que coinciden) y `picker_muted` (carpeta, atajo y texto de ayuda).
+  - El panel lateral y su barra de botones: `panel_background`, `panel_foreground`, `panel_muted` (adjuntos, encabezado y botones), `panel_selection` (la fila seleccionada con el foco en el panel), `panel_selection_unfocused` (con el foco en otro lado), `panel_hover`, `panel_border`, `panel_folder` y `panel_note` (los íconos), `panel_match` (las letras que coinciden con el filtro).
+  - Los menús contextuales: `menu_background`, `menu_border`, `menu_hover`.
 - `cursor`: `normal`, `insert`, `visual`, `replace`, `unfocused` (el cursor de un panel sin foco).
 - `syntax`: `heading`, `bold`, `italic`, `link`, `tag`, `code`, `quote`, `list_marker`, `highlight`, `comment`, `frontmatter`, `markup`.

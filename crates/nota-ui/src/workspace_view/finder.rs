@@ -212,7 +212,9 @@ impl WorkspaceView {
         let Ok(document) = self.workspace.read(cx).focused_document() else {
             return;
         };
-        let path = document.path().to_owned();
+        let Some(path) = document.path().map(Path::to_owned) else {
+            return;
+        };
         if self.vault.touched.as_ref() == Some(&path) {
             return;
         }
@@ -226,7 +228,7 @@ impl WorkspaceView {
     fn focused_folder(&self, cx: &Context<Self>) -> Option<PathBuf> {
         let document = self.workspace.read(cx).focused_document().ok()?;
         let parent = document
-            .path()
+            .path()?
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty());
         std::fs::canonicalize(parent.unwrap_or(Path::new("."))).ok()

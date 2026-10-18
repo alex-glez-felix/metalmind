@@ -55,6 +55,21 @@ pub struct Theme {
     pub picker_hover: Hsla,
     pub picker_match: Hsla,
     pub picker_muted: Hsla,
+    pub panel_background: Hsla,
+    pub panel_foreground: Hsla,
+    /// Adjuntos, encabezado y botones inactivos.
+    pub panel_muted: Hsla,
+    pub panel_selection: Hsla,
+    pub panel_selection_unfocused: Hsla,
+    pub panel_hover: Hsla,
+    pub panel_border: Hsla,
+    pub panel_folder: Hsla,
+    pub panel_note: Hsla,
+    /// Las letras que coinciden con el filtro.
+    pub panel_match: Hsla,
+    pub menu_background: Hsla,
+    pub menu_border: Hsla,
+    pub menu_hover: Hsla,
     pub font_family: SharedString,
     pub font_size: Pixels,
     /// Alto de línea relativo al tamaño de la fuente.
@@ -77,6 +92,21 @@ pub struct Theme {
     pub picker_padding_x: Pixels,
     pub picker_padding_y: Pixels,
     pub picker_radius: Pixels,
+    pub panel_width: Pixels,
+    /// Alto de cada fila del árbol: todas iguales, para virtualizarlo.
+    pub panel_row_height: Pixels,
+    /// Sangría por nivel del árbol.
+    pub panel_indent: Pixels,
+    pub panel_padding_x: Pixels,
+    pub panel_padding_y: Pixels,
+    pub panel_gap: Pixels,
+    pub icon_size: Pixels,
+    /// La barra de botones a la izquierda del panel.
+    pub rail_width: Pixels,
+    pub rail_button_size: Pixels,
+    pub radius: Pixels,
+    pub menu_width: Pixels,
+    pub menu_padding: Pixels,
 }
 
 impl Global for Theme {}
@@ -123,6 +153,19 @@ impl Theme {
             picker_hover: hsla(ui.picker_hover),
             picker_match: hsla(ui.picker_match),
             picker_muted: hsla(ui.picker_muted),
+            panel_background: hsla(ui.panel_background),
+            panel_foreground: hsla(ui.panel_foreground),
+            panel_muted: hsla(ui.panel_muted),
+            panel_selection: hsla(ui.panel_selection),
+            panel_selection_unfocused: hsla(ui.panel_selection_unfocused),
+            panel_hover: hsla(ui.panel_hover),
+            panel_border: hsla(ui.panel_border),
+            panel_folder: hsla(ui.panel_folder),
+            panel_note: hsla(ui.panel_note),
+            panel_match: hsla(ui.panel_match),
+            menu_background: hsla(ui.menu_background),
+            menu_border: hsla(ui.menu_border),
+            menu_hover: hsla(ui.menu_hover),
             font_family,
             font_size: px(settings.font.size.get()),
             line_height: 1.4,
@@ -141,6 +184,18 @@ impl Theme {
             picker_padding_x: px(12.),
             picker_padding_y: px(6.),
             picker_radius: px(8.),
+            panel_width: px(f32::from(settings.panel.width.get())),
+            panel_row_height: px((settings.font.size.get() * 1.7).round()),
+            panel_indent: px(14.),
+            panel_padding_x: px(8.),
+            panel_padding_y: px(6.),
+            panel_gap: px(6.),
+            icon_size: px((settings.font.size.get() * 0.8).round()),
+            rail_width: px(36.),
+            rail_button_size: px(28.),
+            radius: px(4.),
+            menu_width: px(240.),
+            menu_padding: px(4.),
         }
     }
 
