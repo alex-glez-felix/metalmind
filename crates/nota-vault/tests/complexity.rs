@@ -6,6 +6,8 @@
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
 
+use std::fmt::Write as _;
+
 use nota_perf::{NoteNames, assert_linear, linked_vault};
 use nota_vault::{EntryKind, LinkIndex, VaultChange, VaultPath};
 
@@ -115,5 +117,23 @@ fn un_nombre_en_cada_carpeta_es_lineal() {
             index.apply(&change, |_| Some(String::new()));
             index
         },
+    );
+}
+
+/// Una nota de una sola línea con `links` links: el contexto de cada uno no
+/// puede volver a recorrer la línea entera.
+#[test]
+fn muchos_links_en_una_linea_es_lineal() {
+    let path = VaultPath::new("larga.md").unwrap();
+    assert_linear(
+        1_000,
+        |links| {
+            let mut text = String::new();
+            for n in 0..links {
+                write!(text, "[[nota-{n}]] y ").unwrap();
+            }
+            (path.clone(), text)
+        },
+        |(path, text)| LinkIndex::build([(path.clone(), EntryKind::Note)], |_| Some(text.clone())),
     );
 }
