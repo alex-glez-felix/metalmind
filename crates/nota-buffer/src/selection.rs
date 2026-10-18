@@ -94,7 +94,7 @@ impl Selections {
         &self.0[0]
     }
 
-    #[must_use]
+    #[must_use = "recorrer las selecciones no las cambia"]
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &Selection> {
         self.0.iter()
     }
