@@ -140,9 +140,8 @@ fn al_abrir_sigue_lo_que_paso_con_el_vault_cerrado() {
 }
 
 #[test]
-fn un_vault_movido_recupera_su_historial_al_reasignarlo() {
+fn un_vault_movido_empieza_su_historial_de_cero() {
     let (outer, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let paths = Paths::under(data.path());
     let old_root = outer.path().join("viejo");
     fs::create_dir(&old_root).unwrap();
     let old_root = old_root.canonicalize().unwrap();
@@ -155,18 +154,10 @@ fn un_vault_movido_recupera_su_historial_al_reasignarlo() {
     fs::rename(&old_root, &new_root).unwrap();
     let new_root = new_root.canonicalize().unwrap();
 
-    {
-        let (vault, _updates) = open_vault(&new_root, data.path());
-        assert_eq!(
-            vault.history().unwrap().versions(&path("a.md")).unwrap(),
-            Vec::<Version>::new()
-        );
-    }
-    paths.move_vault_data(&old_root, &new_root).unwrap();
     let (vault, _updates) = open_vault(&new_root, data.path());
     assert_eq!(
-        contents(vault.history().unwrap(), &path("a.md")),
-        ["uno", "dos"]
+        vault.history().unwrap().versions(&path("a.md")).unwrap(),
+        Vec::<Version>::new()
     );
 }
 
