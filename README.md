@@ -10,7 +10,7 @@ Tres prioridades, en este orden cuando choquen:
 2. **UX**: pulida, sin fricción, que se sienta como herramienta y no como página web.
 3. **Modo vim en todo**: edición modal en el buffer *y* en el resto de la UI (árbol de archivos, búsqueda, paleta de comandos, `:` comandos, leader keys).
 
-Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra herramienta. Compatibilidad con vaults de Obsidian **no es requisito**: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
+Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra herramienta. El eje de organización son los **tags**, no las carpetas: una nota puede pertenecer a varias cosas a la vez. Compatibilidad con vaults de Obsidian **no es requisito**: se adopta su sintaxis (`[[wikilinks]]`, `#tags`, frontmatter) solo donde sea la mejor opción, no por obligación.
 
 ## Estado
 
@@ -35,6 +35,7 @@ Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Prim
 - [02 — Stack de GUI en Rust](docs/research/02-gui-stack.md)
 - [03 — Arquitectura del núcleo](docs/research/03-core-architecture.md)
 - [04 — Spike de GPUI: resultados](docs/research/04-spike-gpui.md)
+- [05 — Tags: el eje de organización](docs/research/05-tags.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
 - [Cómo se hace un release](docs/release.md) y [CHANGELOG](CHANGELOG.md)
 - [Ideas a futuro (plugins, temas…)](docs/IDEAS.md)
