@@ -51,7 +51,7 @@ fn code_and_comments_hide_syntax(#[case] text: &str, #[case] expected: &[&str]) 
 #[case::autolink("<https://example.com/#a>", &[])]
 #[case::glued_to_text("texto#a", &[])]
 #[case::after_paren("(#a)", &[])]
-#[case::only_digits("#2024 #y1984 #2024/10", &["#2024", "#y1984", "#2024/10"])]
+#[case::only_digits("#2024 #y1984 #2024/10", &["#2024", "#y1984", "#2024"])]
 #[case::digits_at_end_of_line("primero\nel #1\nfin", &["#1"])]
 #[case::digits_end_at_punctuation("año #2024.", &["#2024"])]
 #[case::digits_in_url("https://example.com/#123 [x](https://example.com/#123)", &[])]
@@ -61,9 +61,11 @@ fn code_and_comments_hide_syntax(#[case] text: &str, #[case] expected: &[&str]) 
 #[case::no_space_is_a_tag("#Heading", &["#Heading"])]
 #[case::ends_at_punctuation("#a. #b, #c! #d? #e:", &["#a", "#b", "#c", "#d", "#e"])]
 #[case::ends_at_hash("#a#b", &["#a"])]
-#[case::nested("#a/b/c", &["#a/b/c"])]
+#[case::slash_ends_tag("#a/b/c", &["#a"])]
 #[case::trailing_slash("#proyecto/ fin", &["#proyecto"])]
-#[case::only_separators("#- #/ #_ #a//b", &[])]
+#[case::leading_slash("#/a", &[])]
+#[case::only_separators("#- #/ #_ #a//b", &["#a"])]
+#[case::file_name_chars("#a\\b #c:d #e*f #g?h #i\"j #k<l #m>n #o|p", &["#a", "#c", "#e", "#g", "#i", "#k", "#m", "#o"])]
 #[case::escaped("\\#a", &[])]
 #[case::inside_wikilink("[[nota#a]]", &["[[nota#a]]"])]
 fn tags(#[case] text: &str, #[case] expected: &[&str]) {
@@ -255,6 +257,10 @@ fn empty_frontmatter() {
     "---\ntags: rust, nota\n---\n",
     "`rust, nota` en `tags` del frontmatter no es un tag válido"
 )]
+#[case::slash(
+    "---\ntags: [2024/10]\n---\n",
+    "`2024/10` en `tags` del frontmatter no es un tag válido"
+)]
 #[case::double_hash(
     "---\ntags: \"##project\"\n---\n",
     "`##project` en `tags` del frontmatter no es un tag válido"
@@ -382,4 +388,14 @@ fn blocks_by_id() {
         Some(2..6)
     );
     assert_eq!(scan.block(text, "tres"), None);
+}
+
+#[test]
+fn a_tag_longer_than_a_file_name_is_not_a_tag() {
+    let longest = format!("#{} fin", "a".repeat(250));
+    assert_eq!(found(&longest), [&longest[..251]]);
+    assert_eq!(
+        found(&format!("#{} fin", "a".repeat(251))),
+        Vec::<String>::new()
+    );
 }
