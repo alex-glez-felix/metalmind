@@ -1,0 +1,19 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+graficos (1) (solo como padre)
+  gpui (1)
+lenguajes (3)
+  rust (2)
+    gpui (1)
+ui (2)
+  gpui (1)
+tags:
+  gpui: padres [rust, graficos, ui] alias [] trae [gpui]
+  graficos: padres [] alias [] trae [gpui, graficos]
+  lenguajes: padres [] alias [] trae [gpui, lenguajes, rust]
+  rust: padres [lenguajes] alias [] trae [gpui, rust]
+  ui: padres [] alias [] trae [gpui, ui]
+avisos:

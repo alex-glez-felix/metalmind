@@ -1,0 +1,11 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+rust (2)
+Ñandú (1)
+tags:
+  rust: padres [] alias [] trae [rust]
+  ñandú: padres [] alias [] trae [ñandú]
+avisos:

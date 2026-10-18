@@ -1,0 +1,12 @@
+---
+source: crates/nota-vault/src/tags/tests/graph.rs
+expression: render(&tags(files))
+---
+panel:
+b (1) (solo como padre)
+  a (1)
+tags:
+  a: padres [b] alias [] trae [a]
+  b: padres [] alias [] trae [a, b]
+avisos:
+  tags/a.md: es su propio padre

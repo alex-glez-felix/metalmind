@@ -18,6 +18,7 @@ use crate::path::VaultPath;
 use crate::refactor::{self, AppliedRename, ApplyRenameError, UndoReport};
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::scan::scan;
+use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
 use crate::watch::{touched, touched_by_errors};
 
 /// Cuánto tiene que calmarse una ruta antes de releerla. Junta el temporal y
@@ -37,21 +38,40 @@ pub enum VaultError {
 }
 
 /// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
-/// puede venir vacío si solo cambiaron los links: un chmod que vuelve
-/// legible una nota.
+/// puede venir vacío si solo cambiaron los links o los tags: un chmod que
+/// vuelve legible una nota.
 #[derive(Debug, Clone)]
 pub struct VaultUpdate {
     pub changes: Vec<VaultChange>,
     pub snapshot: Arc<VaultIndex>,
     pub links: Arc<LinkIndex>,
+    pub tags: Arc<Tags>,
+    /// Los tags cuyas notas, formas escritas o página pueden haber cambiado.
+    pub tag_changes: Vec<TagKey>,
 }
 
-/// Un vault abierto: la carpeta raíz, su índice y el watcher que lo mantiene
-/// al día en un hilo propio.
+/// Lo que el vault puede ajustar al abrirse (03 §5, config del vault).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VaultOptions {
+    /// La carpeta plana de las páginas de tag (05 §7).
+    pub tags_folder: VaultPath,
+}
+
+impl Default for VaultOptions {
+    fn default() -> Self {
+        Self {
+            tags_folder: VaultPath::fixed(DEFAULT_TAGS_FOLDER),
+        }
+    }
+}
+
+/// Un vault abierto: la carpeta raíz, sus índices y el watcher que los
+/// mantiene al día en un hilo propio.
 pub struct Vault {
     root: PathBuf,
     index: Arc<ArcSwap<VaultIndex>>,
     links: Arc<ArcSwap<LinkIndex>>,
+    tags: Arc<ArcSwap<Tags>>,
     watch: Option<Watch>,
 }
 
@@ -62,14 +82,26 @@ struct Watch {
 }
 
 impl Vault {
-    /// Abre la carpeta `root`, la indexa y empieza a vigilarla. Cada cambio en
-    /// disco llega por el receptor como un [`VaultUpdate`]. Quien no quiera
-    /// los cambios suelta el receptor y usa [`Vault::snapshot`], que sigue al
-    /// día igual; guardarlo sin leerlo acumula un snapshot por lote.
+    /// Abre la carpeta `root` con las opciones por defecto: ver [`Vault::open_with`].
     ///
     /// # Errors
     /// Si `root` no existe, no es una carpeta o no se puede vigilar.
     pub fn open(root: impl AsRef<Path>) -> Result<(Self, mpsc::Receiver<VaultUpdate>), VaultError> {
+        Self::open_with(root, VaultOptions::default())
+    }
+
+    /// Abre la carpeta `root`, indexa sus archivos y sus tags y empieza a
+    /// vigilarla. Cada cambio en disco llega por el receptor como un
+    /// [`VaultUpdate`]. Quien no quiera los cambios suelta el receptor y usa
+    /// [`Vault::snapshot`] y [`Vault::tags`], que siguen al día igual;
+    /// guardarlo sin leerlo acumula un snapshot por lote.
+    ///
+    /// # Errors
+    /// Si `root` no existe, no es una carpeta o no se puede vigilar.
+    pub fn open_with(
+        root: impl AsRef<Path>,
+        options: VaultOptions,
+    ) -> Result<(Self, mpsc::Receiver<VaultUpdate>), VaultError> {
         let root = canonical_dir(root.as_ref())?;
         let (events, raw) = mpsc::channel();
         let mut debouncer = new_debouncer(DEBOUNCE, None, events)?;
@@ -80,14 +112,19 @@ impl Vault {
             files.files().map(|entry| (entry.path.clone(), entry.kind)),
             |path| read_note(&root, path),
         );
+        let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
+            read_note(&root, path)
+        });
         let index = Arc::new(ArcSwap::from_pointee(files));
         let links = Arc::new(ArcSwap::from_pointee(links));
+        let tags = Arc::new(ArcSwap::from_pointee(tags));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let worker = Worker {
             root: root.clone(),
             index: Arc::clone(&index),
             links: Arc::clone(&links),
+            tags: Arc::clone(&tags),
             updates,
             stop: Arc::clone(&stop),
         };
@@ -99,6 +136,7 @@ impl Vault {
             root,
             index,
             links,
+            tags,
             watch: Some(Watch {
                 debouncer,
                 worker,
@@ -125,6 +163,12 @@ impl Vault {
     #[must_use]
     pub fn links(&self) -> Arc<LinkIndex> {
         self.links.load_full()
+    }
+
+    /// Los tags de este momento, al día con [`Vault::snapshot`]. No bloquea.
+    #[must_use]
+    pub fn tags(&self) -> Arc<Tags> {
+        self.tags.load_full()
     }
 
     /// Crea una nota vacía, con las carpetas que le falten. El índice se
@@ -212,6 +256,7 @@ struct Worker {
     root: PathBuf,
     index: Arc<ArcSwap<VaultIndex>>,
     links: Arc<ArcSwap<LinkIndex>>,
+    tags: Arc<ArcSwap<Tags>>,
     updates: mpsc::Sender<VaultUpdate>,
     stop: Arc<AtomicBool>,
 }
@@ -220,6 +265,8 @@ impl Worker {
     fn run(self, events: &mpsc::Receiver<DebounceEventResult>) {
         let mut current = VaultIndex::clone(&self.index.load());
         let mut links = LinkIndex::clone(&self.links.load());
+        let mut current_tags = Tags::clone(&self.tags.load());
+        let read = |path: &VaultPath| read_note(&self.root, path);
         for first in events {
             // Si el refresh se atrasó, todo lo que espera se relee en una sola pasada.
             let mut touched = self.touched(first);
@@ -237,18 +284,32 @@ impl Worker {
             for path in &touched.reread {
                 reread |= links.reread(path, |note| read_note(&self.root, note));
             }
-            if changes.is_empty() && !reread {
+            let mut tag_changes = current_tags.apply(&changes, &current, &read);
+            // Un chmod no cambia el índice de archivos, pero puede volver legible una nota.
+            let rescans: Vec<VaultChange> = touched
+                .reread
+                .iter()
+                .map(|path| VaultChange::Modified { path: path.clone() })
+                .collect();
+            tag_changes.extend(current_tags.apply(&rescans, &current, &read));
+            tag_changes.sort_unstable();
+            tag_changes.dedup();
+            if changes.is_empty() && !reread && tag_changes.is_empty() {
                 continue;
             }
             let snapshot = Arc::new(current.clone());
             let published = Arc::new(links.clone());
+            let tags = Arc::new(current_tags.clone());
             self.index.store(Arc::clone(&snapshot));
             self.links.store(Arc::clone(&published));
+            self.tags.store(Arc::clone(&tags));
             // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
             let _ = self.updates.send(VaultUpdate {
                 changes,
                 snapshot,
                 links: published,
+                tags,
+                tag_changes,
             });
         }
     }
@@ -266,8 +327,8 @@ impl Worker {
     }
 }
 
-/// El contenido de una nota para el índice de links; si no se puede leer,
-/// queda sin links hasta su próximo cambio.
+/// El contenido de una nota para los índices de links y de tags; si no se
+/// puede leer, queda sin links ni tags hasta su próximo cambio.
 fn read_note(root: &Path, path: &VaultPath) -> Option<String> {
     match file::read(&path.to_fs(root)) {
         Ok(text) => text,
