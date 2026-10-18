@@ -9,6 +9,8 @@ use gpui_kit::{
 use metalmind_buffer::ByteOffset;
 
 use super::Editor;
+use super::lines;
+use super::rows::scroll_by_pixels;
 use crate::actions::{Copy, Paste};
 use crate::clipboard::SystemClipboard;
 
@@ -27,12 +29,16 @@ impl Editor {
         let Some(line_height) = self.layout.as_ref().map(|l| l.viewport.line_height) else {
             return;
         };
-        let Some(last_line) = self.view(cx).map(|view| view.buffer().last_line()) else {
+        let Some(view) = self.view(cx) else {
             return;
         };
         let delta = event.delta.pixel_delta(line_height).y;
-        self.scroll
-            .scroll_by(-f64::from(delta / line_height), last_line);
+        self.scroll = scroll_by_pixels(
+            self.scroll,
+            -f64::from(delta),
+            view.buffer().last_line(),
+            |line| f64::from(lines::line_height(&view, line_height, line)),
+        );
         let top = self.scroll.first_full_line();
         if self.synced_top != Some(top) {
             self.synced_top = Some(top);

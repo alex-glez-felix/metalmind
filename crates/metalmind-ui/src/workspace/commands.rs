@@ -271,6 +271,7 @@ impl Workspace {
             }
         };
         reloaded.keep_marks_of(document)?;
+        reloaded.set_rows(self.documents.rows());
         let old = std::mem::replace(self.document_mut(id)?, reloaded);
         let buffer = self
             .documents

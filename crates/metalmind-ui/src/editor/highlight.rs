@@ -22,7 +22,6 @@ fn quads(
     cells: Cells,
     color: Hsla,
 ) -> Vec<PaintQuad> {
-    let line_height = layout.viewport.line_height;
     spans
         .into_iter()
         .filter_map(|span| {
@@ -35,7 +34,7 @@ fn quads(
                 SpanEnd::Edge => cells.edge,
             };
             Some(fill(
-                Bounds::new(point(left, laid.origin.y), size(right - left, line_height)),
+                Bounds::new(point(left, laid.origin.y), size(right - left, laid.height)),
                 color,
             ))
         })

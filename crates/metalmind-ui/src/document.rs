@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use metalmind_buffer::{Buffer, BufferError, HistorySeq};
 use metalmind_vault::FileError;
-use metalmind_vim::Marks;
+use metalmind_vim::{Layout, Marks, Rows};
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
 /// la última no lo lleva.
@@ -39,6 +39,13 @@ impl fmt::Display for FileStats {
     }
 }
 
+/// Lo que el motor toma prestado de un documento mientras edita.
+pub(crate) struct Editable<'a> {
+    pub buffer: &'a mut Buffer,
+    pub marks: &'a mut Marks,
+    pub layout: &'a mut Option<Layout>,
+}
+
 #[derive(Debug)]
 pub struct Document {
     /// La ruta como se escribió, para mostrarla y guardar ahí; `None` en
@@ -47,6 +54,9 @@ pub struct Document {
     buffer: Buffer,
     /// Las marks de vim son de cada buffer; el motor las toma prestadas.
     marks: Marks,
+    /// El estilo de cada línea y lo que mide; también lo toma prestado el
+    /// motor, que lo sigue al editar. Siempre está, salvo mientras lo tiene.
+    layout: Option<Layout>,
     /// Estado del historial que coincide con el disco; `None` si se guardó
     /// a mitad de una transacción y ningún estado coincide.
     saved: Option<HistorySeq>,
@@ -93,6 +103,7 @@ impl Document {
             path,
             saved: Some(buffer.history_seq()),
             marks: Marks::default(),
+            layout: Some(Layout::new(&buffer)),
             buffer,
             exists_on_disk: false,
             blank_line: false,
@@ -256,9 +267,27 @@ impl Document {
         Ok(())
     }
 
-    /// El buffer para editarlo y sus marks para prestárselas al motor.
-    pub(crate) fn editable(&mut self) -> (&mut Buffer, &mut Marks) {
-        (&mut self.buffer, &mut self.marks)
+    /// Lo que mide una línea de texto y cada heading.
+    pub(crate) fn set_rows(&mut self, rows: Rows) {
+        if let Some(layout) = self.layout.as_mut() {
+            layout.set_rows(rows);
+        }
+    }
+
+    /// El estilo de las líneas, para pintarlas.
+    #[must_use]
+    pub fn layout(&self) -> Option<&Layout> {
+        self.layout.as_ref()
+    }
+
+    /// El buffer para editarlo, y sus marks y su layout para prestárselos
+    /// al motor.
+    pub(crate) fn editable(&mut self) -> Editable<'_> {
+        Editable {
+            buffer: &mut self.buffer,
+            marks: &mut self.marks,
+            layout: &mut self.layout,
+        }
     }
 
     /// # Errors

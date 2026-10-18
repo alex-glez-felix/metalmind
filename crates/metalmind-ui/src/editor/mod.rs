@@ -1,18 +1,25 @@
 //! Vista de un panel: pinta solo lo visible de su documento y le pasa la
 //! entrada al [`Workspace`], que es quien edita.
 
+mod cursor;
 mod element;
 mod gutter;
 mod highlight;
 mod input;
 mod keys;
 mod layout;
+mod lines;
+mod links;
+mod markdown;
 mod mouse;
+mod rows;
 mod scroll;
 mod spans;
 mod status_bar;
+mod text;
 
 use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use gpui_kit::{
@@ -20,15 +27,18 @@ use gpui_kit::{
     KeyDownEvent, MouseButton, ParentElement as _, Render, Styled as _, Subscription, Window, div,
 };
 use metalmind_buffer::ByteOffset;
+use metalmind_vault::VaultPath;
 use metalmind_vim::{KeyOutcome, Mode};
 
 use self::element::EditorElement;
 use self::keys::Route;
 use self::layout::FrameLayout;
+use self::links::Links;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
 use crate::actions::{self, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
+use crate::finder::{VaultChanged, VaultSession};
 use crate::ime::ImeLine;
 use crate::theme::Theme;
 use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
@@ -36,6 +46,10 @@ use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError}
 pub struct Editor {
     workspace: Entity<Workspace>,
     pane: PaneId,
+    /// El vault de la ventana, para saber qué links no llevan a nada.
+    session: Entity<VaultSession>,
+    /// La ruta del documento en el vault, de la última vez que se miró.
+    source: Option<(PathBuf, Option<VaultPath>)>,
     focus_handle: FocusHandle,
     scroll: Scroll,
     /// Lo pintado en el último frame, para el ratón y el IME.
@@ -50,18 +64,24 @@ pub struct Editor {
     /// Arranque del proceso, hasta que se pinta el primer frame.
     launched: Option<Instant>,
     _repaint: Subscription,
+    _vault_changed: Subscription,
 }
 
 impl Editor {
     pub fn new(
         workspace: Entity<Workspace>,
+        session: Entity<VaultSession>,
         pane: PaneId,
         launched: Option<Instant>,
         cx: &mut Context<Self>,
     ) -> Self {
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
+        // Una nota nueva puede resolver un link que se ve.
+        let vault_changed = cx.subscribe(&session, |_, _, _: &VaultChanged, cx| cx.notify());
         Self {
             workspace,
+            session,
+            source: None,
             pane,
             focus_handle: cx.focus_handle(),
             scroll: Scroll::default(),
@@ -71,7 +91,28 @@ impl Editor {
             synced_top: None,
             launched,
             _repaint: repaint,
+            _vault_changed: vault_changed,
         }
+    }
+
+    /// Con qué saber si cada link del documento lleva a algo.
+    fn links(&mut self, cx: &App) -> Links {
+        let path = self
+            .view(cx)
+            .and_then(|view| view.document.path().map(Path::to_path_buf));
+        let Some(path) = path else {
+            return Links::default();
+        };
+        let session = self.session.read(cx);
+        let source = match &self.source {
+            Some((cached, source)) if *cached == path => source.clone(),
+            _ => {
+                let source = session.vault_path(&path);
+                self.source = Some((path, source.clone()));
+                source
+            }
+        };
+        Links::new(session.vault().links(), source)
     }
 
     #[must_use]

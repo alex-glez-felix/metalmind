@@ -25,7 +25,8 @@ use std::collections::BTreeMap;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_vim::{
-    Action, FileId, JumpList, Keymap, Mode, Pattern, Prompt, Viewport, Vim, VimError,
+    Action, FileId, JumpList, Keymap, Layout, Mode, Pattern, Prompt, Uniform, Viewport, Vim,
+    VimError,
 };
 
 pub use self::commands::Effect;
@@ -38,7 +39,7 @@ pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
-use crate::document::Document;
+use crate::document::{Document, Editable};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceError {
@@ -50,6 +51,25 @@ pub enum WorkspaceError {
     NoPane(PaneId),
     #[error("no existe el documento {0}")]
     NoDocument(DocumentId),
+}
+
+/// `viewport` muestra `head` con `scrolloff` líneas alrededor, con lo que
+/// mide cada línea: antes se sigue lo editado y se mide lo que va a mirar.
+fn reveal(
+    viewport: &mut Viewport,
+    buffer: &mut Buffer,
+    layout: Option<&mut Layout>,
+    head: ByteOffset,
+    scrolloff: usize,
+) {
+    if let Some(layout) = layout {
+        layout.sync(buffer);
+        layout.ensure_window(buffer, viewport, head, scrolloff, 0);
+        viewport.reveal(buffer, head, scrolloff, layout);
+    } else {
+        let uniform = Uniform(viewport.row());
+        viewport.reveal(buffer, head, scrolloff, &uniform);
+    }
 }
 
 /// Lo que muestra un panel.
@@ -304,18 +324,30 @@ impl Workspace {
             .documents
             .get_mut(id)
             .ok_or(WorkspaceError::NoDocument(id))?;
-        let (buffer, marks) = document.editable();
+        let Editable {
+            buffer,
+            marks,
+            layout,
+        } = document.editable();
         self.vim.swap_marks(marks);
         self.vim.swap_viewport(&mut state.viewport);
         self.vim.swap_jumps(&mut state.jumps);
         self.vim.set_file(file);
+        self.vim.swap_layout(layout);
         let result = edit(&mut self.vim, buffer, &mut state.selections);
+        self.vim.swap_layout(layout);
         self.vim.catch_up(buffer);
         self.vim.swap_jumps(&mut state.jumps);
         self.vim.swap_viewport(&mut state.viewport);
         self.vim.swap_marks(marks);
         let head = state.selections.primary().head;
-        state.viewport.reveal(buffer, head, scrolloff);
+        reveal(
+            &mut state.viewport,
+            buffer,
+            layout.as_mut(),
+            head,
+            scrolloff,
+        );
         let splices = buffer.take_splices();
         self.follow(pane, id, file, &splices)?;
         result
@@ -333,11 +365,11 @@ impl Workspace {
         if splices.is_empty() {
             return Ok(());
         }
-        let buffer = self
+        let Editable { buffer, layout, .. } = self
             .documents
-            .get(id)
+            .get_mut(id)
             .ok_or(WorkspaceError::NoDocument(id))?
-            .buffer();
+            .editable();
         let scrolloff = self.scrolloff;
         for (_, other) in self.panes.iter_mut().filter(|(pane, _)| **pane != edited) {
             other.jumps.adjust(file, splices);
@@ -353,7 +385,13 @@ impl Workspace {
                 normal_selection(buffer, anchor, head)
             });
             let head = other.selections.primary().head;
-            other.viewport.reveal(buffer, head, scrolloff);
+            reveal(
+                &mut other.viewport,
+                buffer,
+                layout.as_mut(),
+                head,
+                scrolloff,
+            );
         }
         Ok(())
     }
