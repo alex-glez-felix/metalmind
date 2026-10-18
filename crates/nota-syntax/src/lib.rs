@@ -23,7 +23,7 @@ pub use link::{Link, LinkSyntax, Subpath};
 pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
 };
-pub use tag::{Tag, is_valid_tag_name};
+pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
