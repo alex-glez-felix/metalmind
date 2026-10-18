@@ -9,6 +9,7 @@ use metalmind_vault::VaultChange;
 use metalmind_vim::{Clipboard, KeyOutcome, Landing};
 
 use super::{Message, PaneId, Workspace, WorkspaceError, shown_path};
+use crate::document::Document;
 
 impl Workspace {
     /// Antes de que `pane` muestre otra cosa, su cursor queda en su
@@ -84,12 +85,43 @@ impl Workspace {
                     }
                 }
                 VaultChange::Created { path, .. } => {
-                    for file in self.files.within(&root.join(path.as_str())) {
+                    let path = root.join(path.as_str());
+                    for file in self.files.within(&path) {
                         self.vim.file_restored(file);
                     }
+                    self.refresh_hidden(&path);
                 }
-                VaultChange::Modified { .. } => {}
+                VaultChange::Modified { path } => self.refresh_hidden(&root.join(path.as_str())),
             }
+        }
+    }
+
+    /// Como `autoread`: un documento oculto y sin cambios cuyo archivo
+    /// cambió se relee, así al volver a él se ve lo de disco y un `:w` no
+    /// lo pisa. Uno con cambios se queda como está.
+    fn refresh_hidden(&mut self, path: &Path) {
+        let Some(id) = self.documents.find(path) else {
+            return;
+        };
+        let hidden = self.panes_showing(id).next().is_none();
+        let Some(document) = self
+            .documents
+            .get(id)
+            .filter(|d| hidden && !d.is_modified())
+        else {
+            return;
+        };
+        let Some(own) = document.path().map(Path::to_owned) else {
+            return;
+        };
+        match Document::open(&own) {
+            Ok(reloaded) if reloaded.buffer().to_string() != document.buffer().to_string() => {
+                if let Some(slot) = self.documents.get_mut(id) {
+                    *slot = reloaded;
+                }
+            }
+            Ok(_) => {}
+            Err(error) => log::warn!("no se releyó {}: {error}", own.display()),
         }
     }
 }

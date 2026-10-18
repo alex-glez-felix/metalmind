@@ -151,11 +151,14 @@ impl Workspace {
     }
 
     /// Un `[No Name]` al que `:w ruta` le dio archivo sigue con su lugar en
-    /// la jumplist.
+    /// la jumplist; lo que guardaba el archivo que antes tenía esa ruta ya no
+    /// lleva a ningún lado.
     fn adopt_file(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
         let resolved = self.document(id)?.resolved_path();
-        if let (Some(resolved), Some(file)) = (resolved, self.documents.file(id)) {
-            self.files.adopt(file, &resolved);
+        if let (Some(resolved), Some(file)) = (resolved, self.documents.file(id))
+            && let Some(displaced) = self.files.adopt(file, &resolved)
+        {
+            self.vim.file_removed(displaced);
         }
         Ok(())
     }

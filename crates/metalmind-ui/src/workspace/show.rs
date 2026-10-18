@@ -24,7 +24,14 @@ impl Workspace {
         let id = match self.documents.find(path) {
             Some(id) => id,
             None => match Document::open(path) {
-                Ok(document) => self.insert_document(document),
+                Ok(document) => {
+                    let on_disk = document.exists_on_disk();
+                    let id = self.insert_document(document);
+                    if let Some(file) = self.documents.file(id).filter(|_| on_disk) {
+                        self.vim.file_restored(file);
+                    }
+                    id
+                }
                 Err(error) => {
                     self.interrupt(pane)?;
                     self.message = Some(Message::Error(error.to_string()));
