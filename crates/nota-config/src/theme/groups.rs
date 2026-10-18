@@ -4,16 +4,16 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
-use toml::Spanned;
-
 use super::color::{Base, Color, ColorRef};
+use crate::diagnostic::Location;
+use crate::parse::Spanned;
+use serde::Deserialize;
 
 /// Un nombre de la paleta que no existe, con dónde se escribió.
 pub(crate) struct UnknownColor {
     pub(crate) key: String,
     pub(crate) name: String,
-    pub(crate) offset: usize,
+    pub(crate) location: Option<Location>,
 }
 
 pub(crate) type Palette = BTreeMap<String, Color>;
@@ -32,7 +32,7 @@ fn resolve(
         Base::Palette(name) => *palette.get(name).ok_or_else(|| UnknownColor {
             key,
             name: name.clone(),
-            offset: spanned.span().start,
+            location: spanned.location(),
         })?,
     };
     Ok(Some(Color {

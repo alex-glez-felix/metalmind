@@ -1,5 +1,5 @@
 //! Temas: una paleta con nombres y los colores semánticos que la UI usa.
-//! Hay temas embebidos; los del usuario van en `<config>/themes/*.toml` y
+//! Hay temas embebidos; los del usuario van en `<config>/themes/*.yaml` y
 //! pueden extender a otro con `extends`.
 
 mod color;
@@ -9,7 +9,6 @@ mod loader;
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use toml::Spanned;
 
 pub use color::Color;
 pub use groups::{CursorColors, SyntaxColors, UiColors};
@@ -18,13 +17,15 @@ pub use loader::{LoadError, Themes};
 use color::Hex;
 use groups::{RawCursor, RawSyntax, RawUi};
 
-/// El tema si `config.toml` no dice otro, y el de respaldo si el elegido falla.
+use crate::parse::Spanned;
+
+/// El tema si `config.yaml` no dice otro, y el de respaldo si el elegido falla.
 pub const DEFAULT_THEME: &str = "nota-oscuro";
 
 /// Los temas que vienen con nota.
 pub const BUILTIN_THEMES: &[(&str, &str)] = &[
-    ("nota-oscuro", include_str!("../../themes/nota-oscuro.toml")),
-    ("nota-claro", include_str!("../../themes/nota-claro.toml")),
+    ("nota-oscuro", include_str!("../../themes/nota-oscuro.yaml")),
+    ("nota-claro", include_str!("../../themes/nota-claro.yaml")),
 ];
 
 #[derive(Clone, Debug, PartialEq)]

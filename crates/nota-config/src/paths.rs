@@ -80,7 +80,7 @@ impl Paths {
 
     #[must_use]
     pub fn config_file(&self) -> PathBuf {
-        self.config.join("config.toml")
+        self.config.join("config.yaml")
     }
 
     #[must_use]
@@ -120,7 +120,7 @@ mod tests {
         );
         assert_eq!(
             paths.config_file(),
-            home.path().join(".config/nota/config.toml")
+            home.path().join(".config/nota/config.yaml")
         );
         assert_eq!(paths.themes_dir(), home.path().join(".config/nota/themes"));
     }

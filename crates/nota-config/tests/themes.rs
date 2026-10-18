@@ -10,7 +10,7 @@ use nota_config::{BUILTIN_THEMES, Color, DEFAULT_THEME, Location, Severity, Them
 use pretty_assertions::assert_eq;
 
 fn write(dir: &Path, name: &str, text: &str) {
-    fs::write(dir.join(format!("{name}.toml")), text).unwrap();
+    fs::write(dir.join(format!("{name}.yaml")), text).unwrap();
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn un_tema_del_usuario_extiende_y_cambia_la_paleta_heredada() {
     write(
         dir.path(),
         "mio",
-        "extends = \"nota-oscuro\"\n[palette]\nblue = \"#112233\"\n[ui]\nerror = \"#ff0000\"\n",
+        "extends: nota-oscuro\npalette:\n  blue: \"#112233\"\nui:\n  error: \"#ff0000\"\n",
     );
     let theme = Themes::new(dir.path().to_owned())
         .load("mio")
@@ -74,15 +74,11 @@ fn un_tema_del_usuario_extiende_y_cambia_la_paleta_heredada() {
 #[test]
 fn extends_encadenado_entre_temas_del_usuario() {
     let dir = tempfile::tempdir().unwrap();
-    write(
-        dir.path(),
-        "a",
-        "extends = \"b\"\n[ui]\nerror = \"#000001\"\n",
-    );
+    write(dir.path(), "a", "extends: b\nui:\n  error: \"#000001\"\n");
     write(
         dir.path(),
         "b",
-        "extends = \"nota-claro\"\n[ui]\nerror = \"#000002\"\nmodified = \"#000003\"\n",
+        "extends: nota-claro\nui:\n  error: \"#000002\"\n  modified: \"#000003\"\n",
     );
     let theme = Themes::new(dir.path().to_owned()).load("a").unwrap().value;
     assert_eq!(theme.ui.error.rgb, 1);
@@ -92,11 +88,11 @@ fn extends_encadenado_entre_temas_del_usuario() {
 #[test]
 fn un_tema_del_usuario_reemplaza_al_embebido_del_mismo_nombre() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "base", "extends = \"nota-oscuro\"\n");
+    write(dir.path(), "base", "extends: nota-oscuro\n");
     write(
         dir.path(),
         "nota-claro",
-        "extends = \"base\"\n[ui]\nerror = \"#000009\"\n",
+        "extends: base\nui:\n  error: \"#000009\"\n",
     );
     let theme = Themes::new(dir.path().to_owned())
         .load("nota-claro")
@@ -111,7 +107,7 @@ fn un_tema_del_usuario_puede_extender_al_embebido_que_reemplaza() {
     write(
         dir.path(),
         "nota-oscuro",
-        "extends = \"nota-oscuro\"\n[ui]\nerror = \"#000009\"\n",
+        "extends: nota-oscuro\nui:\n  error: \"#000009\"\n",
     );
     let loaded = Themes::new(dir.path().to_owned())
         .load("nota-oscuro")
@@ -125,8 +121,8 @@ fn un_tema_del_usuario_puede_extender_al_embebido_que_reemplaza() {
 #[test]
 fn un_ciclo_que_pasa_por_el_reemplazo_de_un_embebido_es_circular() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "nota-oscuro", "extends = \"x\"\n");
-    write(dir.path(), "x", "extends = \"x\"\n");
+    write(dir.path(), "nota-oscuro", "extends: x\n");
+    write(dir.path(), "x", "extends: x\n");
     let error = Themes::new(dir.path().to_owned())
         .load("nota-oscuro")
         .unwrap_err()
@@ -137,8 +133,8 @@ fn un_ciclo_que_pasa_por_el_reemplazo_de_un_embebido_es_circular() {
 #[test]
 fn volver_al_reemplazo_de_un_embebido_por_otro_tema_es_circular() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "nota-oscuro", "extends = \"x\"\n");
-    write(dir.path(), "x", "extends = \"nota-oscuro\"\n");
+    write(dir.path(), "nota-oscuro", "extends: x\n");
+    write(dir.path(), "x", "extends: nota-oscuro\n");
     let error = Themes::new(dir.path().to_owned())
         .load("nota-oscuro")
         .unwrap_err()
@@ -147,25 +143,25 @@ fn volver_al_reemplazo_de_un_embebido_por_otro_tema_es_circular() {
         error.message,
         "`extends` circular: nota-oscuro → x → nota-oscuro"
     );
-    assert_eq!(error.file, Some(dir.path().join("x.toml")));
+    assert_eq!(error.file, Some(dir.path().join("x.yaml")));
 }
 
 #[test]
 fn extends_circular_es_error_con_la_cadena() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a", "extends = \"b\"\n");
-    write(dir.path(), "b", "# b\nextends = \"a\"\n");
+    write(dir.path(), "a", "extends: b\n");
+    write(dir.path(), "b", "# b\nextends: a\n");
     let error = Themes::new(dir.path().to_owned())
         .load("a")
         .unwrap_err()
         .error;
     assert_eq!(error.message, "`extends` circular: a → b → a");
-    assert_eq!(error.file, Some(dir.path().join("b.toml")));
+    assert_eq!(error.file, Some(dir.path().join("b.yaml")));
     assert_eq!(
         error.location,
         Some(Location {
             line: 2,
-            column: 11
+            column: 10
         })
     );
 }
@@ -173,7 +169,7 @@ fn extends_circular_es_error_con_la_cadena() {
 #[test]
 fn un_tema_que_se_extiende_a_si_mismo_es_circular() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a", "extends = \"a\"\n");
+    write(dir.path(), "a", "extends: a\n");
     let error = Themes::new(dir.path().to_owned())
         .load("a")
         .unwrap_err()
@@ -184,18 +180,18 @@ fn un_tema_que_se_extiende_a_si_mismo_es_circular() {
 #[test]
 fn extends_a_un_tema_que_no_existe() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a", "extends = \"nada\"\n");
+    write(dir.path(), "a", "extends: nada\n");
     let error = Themes::new(dir.path().to_owned())
         .load("a")
         .unwrap_err()
         .error;
     assert_eq!(error.message, "no existe el tema `nada`");
-    assert_eq!(error.file, Some(dir.path().join("a.toml")));
+    assert_eq!(error.file, Some(dir.path().join("a.yaml")));
     assert_eq!(
         error.location,
         Some(Location {
             line: 1,
-            column: 11
+            column: 10
         })
     );
 }
@@ -203,7 +199,7 @@ fn extends_a_un_tema_que_no_existe() {
 #[test]
 fn sin_extends_le_faltan_colores() {
     let dir = tempfile::tempdir().unwrap();
-    write(dir.path(), "a", "[ui]\nbackground = \"#000000\"\n");
+    write(dir.path(), "a", "ui:\n  background: \"#000000\"\n");
     let error = Themes::new(dir.path().to_owned())
         .load("a")
         .unwrap_err()
@@ -224,7 +220,7 @@ fn nombre_de_paleta_desconocido_con_posicion() {
     write(
         dir.path(),
         "a",
-        "extends = \"nota-oscuro\"\n[cursor]\ninsert = { color = \"azull\" }\n",
+        "extends: nota-oscuro\ncursor:\n  insert: { color: azull }\n",
     );
     let error = Themes::new(dir.path().to_owned())
         .load("a")
@@ -238,26 +234,26 @@ fn nombre_de_paleta_desconocido_con_posicion() {
         error.location,
         Some(Location {
             line: 3,
-            column: 10
+            column: 11
         })
     );
 }
 
 #[test]
-fn toml_roto_y_tipo_equivocado_en_un_tema() {
+fn yaml_roto_y_tipo_equivocado_en_un_tema() {
     let dir = tempfile::tempdir().unwrap();
     let themes = Themes::new(dir.path().to_owned());
-    write(dir.path(), "roto", "[ui\n");
+    write(dir.path(), "roto", "ui:\n  error: red\n modified: red\n");
     let error = themes.load("roto").unwrap_err().error;
-    assert_eq!(error.file, Some(dir.path().join("roto.toml")));
-    assert_eq!(error.location.map(|at| at.line), Some(1));
+    assert_eq!(error.file, Some(dir.path().join("roto.yaml")));
+    assert_eq!(error.location, Some(Location { line: 3, column: 2 }));
     write(
         dir.path(),
         "tipo",
-        "extends = \"nota-oscuro\"\n[palette]\nblue = 3\n",
+        "extends: nota-oscuro\npalette:\n  blue: 3\n",
     );
     let error = themes.load("tipo").unwrap_err().error;
-    assert_eq!(error.location, Some(Location { line: 3, column: 8 }));
+    assert_eq!(error.location, Some(Location { line: 3, column: 9 }));
 }
 
 #[test]
@@ -266,15 +262,15 @@ fn clave_desconocida_en_un_tema_avisa_y_lo_aplica() {
     write(
         dir.path(),
         "a",
-        "extends = \"nota-oscuro\"\n[ui]\nfondo = \"#000000\"\n",
+        "extends: nota-oscuro\nui:\n  fondo: \"#000000\"\n",
     );
     let loaded = Themes::new(dir.path().to_owned()).load("a").unwrap();
     let [warning] = loaded.diagnostics.as_slice() else {
         panic!("{:?}", loaded.diagnostics)
     };
     assert_eq!(warning.severity, Severity::Warning);
-    assert_eq!(warning.file, Some(dir.path().join("a.toml")));
-    assert_eq!(warning.location, Some(Location { line: 3, column: 1 }));
+    assert_eq!(warning.file, Some(dir.path().join("a.yaml")));
+    assert_eq!(warning.location, Some(Location { line: 3, column: 3 }));
 }
 
 #[test]
@@ -283,7 +279,7 @@ fn clave_de_mas_en_un_color_con_alpha_avisa_y_lo_aplica() {
     write(
         dir.path(),
         "a",
-        "extends = \"nota-oscuro\"\n[ui]\nselection = { color = \"#010203\", alhpa = 0.5 }\n",
+        "extends: nota-oscuro\nui:\n  selection: { color: \"#010203\", alhpa: 0.5 }\n",
     );
     let loaded = Themes::new(dir.path().to_owned()).load("a").unwrap();
     assert_eq!(
@@ -314,12 +310,8 @@ fn clave_de_mas_en_un_color_con_alpha_avisa_y_lo_aplica() {
 #[test]
 fn un_tema_que_falla_conserva_sus_avisos() {
     let dir = tempfile::tempdir().unwrap();
-    write(
-        dir.path(),
-        "a",
-        "extends = \"b\"\n[ui]\nfondo = \"#000000\"\n",
-    );
-    write(dir.path(), "b", "[ui]\nselction = \"#000000\"\n");
+    write(dir.path(), "a", "extends: b\nui:\n  fondo: \"#000000\"\n");
+    write(dir.path(), "b", "ui:\n  selction: \"#000000\"\n");
     let failed = Themes::new(dir.path().to_owned()).load("a").unwrap_err();
     assert!(
         failed.error.message.contains("ui.selection"),
@@ -335,12 +327,12 @@ fn un_tema_que_falla_conserva_sus_avisos() {
         keys,
         [
             (
-                Some(dir.path().join("a.toml")),
-                Some(Location { line: 3, column: 1 })
+                Some(dir.path().join("a.yaml")),
+                Some(Location { line: 3, column: 3 })
             ),
             (
-                Some(dir.path().join("b.toml")),
-                Some(Location { line: 2, column: 1 })
+                Some(dir.path().join("b.yaml")),
+                Some(Location { line: 2, column: 3 })
             ),
         ]
     );
@@ -359,4 +351,37 @@ fn nombres_que_no_son_un_archivo_del_directorio() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn un_tema_en_yml_tambien_carga() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("mio.yml"), "extends: nota-claro\n").unwrap();
+    let loaded = Themes::new(dir.path().to_owned()).load("mio").unwrap();
+    assert_eq!(loaded.diagnostics, []);
+    let base = Themes::builtin().load("nota-claro").unwrap().value;
+    assert_eq!(loaded.value.ui, base.ui);
+}
+
+#[test]
+fn un_tema_en_toml_ya_no_se_lee_y_se_avisa() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("nota-oscuro.toml"),
+        "[ui]\nerror = \"#000009\"\n",
+    )
+    .unwrap();
+    let loaded = Themes::new(dir.path().to_owned())
+        .load("nota-oscuro")
+        .unwrap();
+    assert_eq!(
+        loaded.value,
+        Themes::builtin().load("nota-oscuro").unwrap().value
+    );
+    let [warning] = loaded.diagnostics.as_slice() else {
+        panic!("{:?}", loaded.diagnostics)
+    };
+    assert_eq!(warning.severity, Severity::Warning);
+    assert_eq!(warning.file, Some(dir.path().join("nota-oscuro.toml")));
+    assert!(warning.message.contains("`nota-oscuro.yaml`"));
 }

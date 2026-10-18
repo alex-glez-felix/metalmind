@@ -1,0 +1,57 @@
+# nota-oscuro: el tema por defecto.
+#
+# Un tema es una paleta con nombres y los colores semánticos que usa la UI.
+# Cada color semántico es un `"#rrggbb"` (con comillas: sin ellas, `#` empieza
+# un comentario), un nombre de la paleta o
+# `{ color: <hex o nombre>, alpha: 0.0–1.0 }`.
+
+palette:
+  bg: "#1c1f24"
+  bg_dark: "#16181d"
+  bg_highlight: "#21252b"
+  fg: "#d7dae0"
+  fg_dim: "#9aa0a6"
+  fg_faint: "#4b5263"
+  border: "#2a2e36"
+  blue: "#7aa2f7"
+  cyan: "#7dcfff"
+  green: "#9ece6a"
+  magenta: "#bb9af7"
+  orange: "#ff9e64"
+  yellow: "#e0af68"
+  red: "#f7768e"
+  comment: "#5c6370"
+
+ui:
+  background: bg
+  foreground: fg
+  selection: { color: blue, alpha: 0.3 }
+  current_line: bg_highlight
+  gutter: bg
+  gutter_foreground: fg_faint
+  status_background: bg_dark
+  status_foreground: fg_dim
+  status_border: border
+  modified: yellow
+  error: red
+
+cursor:
+  # El bloque deja ver el carácter que tapa.
+  normal: { color: blue, alpha: 0.5 }
+  insert: blue
+  visual: { color: magenta, alpha: 0.5 }
+  replace: { color: red, alpha: 0.5 }
+
+syntax:
+  heading: blue
+  bold: orange
+  italic: magenta
+  link: cyan
+  tag: green
+  code: green
+  quote: fg_dim
+  list_marker: yellow
+  highlight: { color: yellow, alpha: 0.3 }
+  comment: comment
+  frontmatter: fg_dim
+  markup: fg_faint

@@ -1,11 +1,12 @@
-//! Configuración de `nota`: rutas XDG, `config.toml` y temas. Sin GUI: la UI
-//! convierte lo que sale de aquí a sus propios tipos.
+//! Configuración de `nota`: rutas XDG, `config.yaml` y temas, en YAML 1.2.
+//! Sin GUI: la UI convierte lo que sale de aquí a sus propios tipos.
 //!
 //! Nada de esto impide arrancar: un archivo roto se reemplaza por los
 //! defaults y el problema vuelve como [`Diagnostic`].
 
 mod config;
 mod diagnostic;
+mod file;
 mod parse;
 mod paths;
 mod settings;
