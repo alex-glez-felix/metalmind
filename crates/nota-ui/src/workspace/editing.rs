@@ -84,6 +84,7 @@ impl Workspace {
             KeyOutcome::SearchFailed(error) => Some(Message::Error(error.to_string())),
             KeyOutcome::SearchWrapped(wrap) => Some(Message::wrapped(*wrap)),
             KeyOutcome::Substituted(substitution) => Message::substituted(*substitution),
+            KeyOutcome::GlobalMissed(miss) => Some(Message::Info(miss.to_string())),
             _ => return,
         };
     }
