@@ -2,6 +2,7 @@
 //! archivos con su contenido.
 
 mod graph;
+mod query;
 
 use std::collections::{BTreeMap, BTreeSet};
 
