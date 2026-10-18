@@ -299,7 +299,7 @@ nota/
 └── tests/fixtures/vaults/  # vaults de ejemplo (incluir uno exportado de Obsidian real)
 ```
 
-Estado (2026-10-18): existen `nota-buffer`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault`, `nota-ui` y `nota`.
+Estado (2026-10-18): existen `nota-buffer`, `nota-config`, `nota-syntax` (scanner de la sintaxis de nota y resolución de nombres, sin tree-sitter todavía), `nota-vim`, `nota-vault`, `nota-ui` y `nota`.
 
 Regla de dependencias (verificable con `cargo tree` en CI): **solo `nota-ui` y `nota` dependen del framework de GUI**. Todo lo demás compila y se testea sin ventana. Eso hace que cambiar GPUI ↔ iced cueste una sola capa.
 
