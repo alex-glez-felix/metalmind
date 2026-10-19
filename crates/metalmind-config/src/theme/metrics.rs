@@ -201,13 +201,10 @@ metric_group! {
         status_padding_y: Length,
         /// Entre los campos de la barra de estado.
         status_gap: Length,
-        /// Cuánto cede el nombre de la nota frente al mensaje cuando la barra
-        /// de estado no alcanza: 0.5 es la mitad.
-        status_file_shrink: Fraction,
-        /// Lo que se le deja como mínimo al mensaje de la barra de estado,
-        /// si hay uno, antes de recortar el nombre de la nota: menos que esto
-        /// no se lee.
-        status_message_min_width: Length,
+        /// La fracción del espacio entre el modo y la posición que puede ocupar
+        /// el mensaje de la barra de estado: hasta ahí se lee entero y el nombre
+        /// de la nota se recorta antes.
+        status_message_max_width: Fraction,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,

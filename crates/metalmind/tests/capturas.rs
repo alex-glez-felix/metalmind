@@ -176,16 +176,12 @@ fn read_only(notes: &Path) {
     set_writable(&notes.join(vault::DEEP_FOLDER_2), false);
 }
 
-/// Otro programa cambia la nota, que tiene cambios sin guardar. Se escribe
-/// antes de devolver el permiso: así ningún reintento la guarda entremedio.
+/// Otro programa cambia la nota, que tiene cambios sin guardar. La carpeta
+/// sigue sin permiso de escritura hasta el final del caso: un reintento del
+/// autoguardado que leyó el disco justo antes no llega a escribir encima.
 fn changed_outside(notes: &Path) {
-    let folder = notes.join(vault::DEEP_FOLDER_2);
-    fs::write(
-        folder.join(vault::DEEP_NOTE),
-        "Editada desde otro equipo.\n",
-    )
-    .unwrap();
-    set_writable(&folder, true);
+    let note = notes.join(vault::DEEP_FOLDER_2).join(vault::DEEP_NOTE);
+    fs::write(note, "Editada desde otro equipo.\n").unwrap();
 }
 
 fn set_writable(folder: &Path, writable: bool) {
@@ -297,6 +293,8 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
         writeln!(titles, "{name}: {}", window.title()).unwrap();
     }
     drop(metalmind);
+    // Para que la carpeta del caso se pueda borrar.
+    set_writable(&smoke.notes().join(vault::DEEP_FOLDER_2), true);
     // El título no sale en la captura: sin gestor de ventanas no hay barra de título.
     fs::write(out.join(format!("titulos-{theme}-{width}.txt")), titles).unwrap();
     finish(&out, &format!("{theme}-{width}"), &report);

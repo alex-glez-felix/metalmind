@@ -166,8 +166,7 @@ layout:
   status_padding_x: 10
   status_padding_y: 3
   status_gap: lg
-  status_file_shrink: 0.5  # cuánto cede el nombre frente al mensaje
-  status_message_min_width: 240  # el mensaje no se recorta a menos que esto
+  status_message_max_width: 0.5  # entre el modo y la posición; el nombre se recorta antes
   picker_width: 640
   picker_top: 64
   picker_rows: 12

@@ -204,11 +204,8 @@ Theme {
             status_gap: Length(
                 16.0,
             ),
-            status_file_shrink: Fraction(
+            status_message_max_width: Fraction(
                 0.5,
-            ),
-            status_message_min_width: Length(
-                240.0,
             ),
             picker_width: Length(
                 640.0,

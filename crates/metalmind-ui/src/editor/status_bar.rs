@@ -4,7 +4,7 @@
 //! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
 
 use gpui_kit::{
-    Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _,
+    Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _, relative,
 };
 use metalmind_vim::{Mode, VisualKind};
 
@@ -40,22 +40,24 @@ pub struct CommandLine {
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let center = match (status.command_line, status.message) {
-        // Con algo que decir, un mínimo legible: el nombre cede antes que el
-        // mensaje quede en un `…` suelto.
-        (Some(line), _) => command_line(line, theme).min_w(theme.status.message_min_width),
-        (None, Some(message)) => message_line(message, theme).min_w(theme.status.message_min_width),
-        (None, None) => div().min_w_0(),
+        (Some(line), _) => Some(command_line(line, theme)),
+        (None, Some(message)) => Some(message_line(message, theme)),
+        (None, None) => None,
     };
     let foreground = if status.mode.is_some() {
         theme.status.foreground
     } else {
         theme.status.unfocused_foreground
     };
+    let mark = match status.save {
+        Some(state) => Some(save_label(state, theme)),
+        None => status
+            .modified
+            .then(|| fixed().text_color(theme.modified).child(" [+]")),
+    };
     div()
         .flex()
         .flex_row()
-        // En un panel más angosto que lo mínimo, se recorta el final sin salirse.
-        .overflow_hidden()
         .gap(theme.status.gap)
         .px(theme.status.padding_x)
         .py(theme.status.padding_y)
@@ -67,8 +69,7 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .when_some(status.recording, |bar, register| {
             bar.child(fixed().child(format!("grabando @{register}")))
         })
-        .child(file_label(status.file, status.save, status.modified, theme))
-        .child(center.flex_grow_1().truncate())
+        .child(middle(status.file, mark, center, theme))
         .child(fixed().child(format!("{line}:{column}")))
 }
 
@@ -77,20 +78,19 @@ fn fixed() -> Div {
     div().flex_shrink_0().whitespace_nowrap()
 }
 
-/// El nombre se recorta por el medio, para que se vean el principio y la
-/// extensión; el indicador o el `[+]` siempre se ven enteros. La barra es de
-/// una sola línea: cuando no alcanza, el nombre cede frente al mensaje lo que
-/// diga el tema (`layout.status_file_shrink`).
-fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme: &Theme) -> Div {
-    let mark = match save {
-        Some(state) => Some(save_label(state, theme)),
-        None => modified.then(|| fixed().text_color(theme.modified).child(" [+]")),
-    };
+/// Entre el modo y la posición: el nombre de la nota, el indicador (o el
+/// `[+]`) y el mensaje. El mensaje no cede: mide lo que dice, hasta su parte
+/// de este espacio, y se lee entero; el nombre toma lo que queda y se
+/// recorta por el medio, para que se vean el principio y la extensión. La
+/// barra es de una sola línea; en un panel más angosto que lo mínimo, se
+/// recorta el final sin salirse.
+fn middle(file: SharedString, mark: Option<Div>, center: Option<Div>, theme: &Theme) -> Div {
     div()
         .flex()
         .flex_row()
+        .flex_grow_1()
         .min_w_0()
-        .flex_shrink(theme.status.file_shrink)
+        .overflow_hidden()
         .child(
             div()
                 .min_w_0()
@@ -100,6 +100,13 @@ fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme
                 .child(file),
         )
         .children(mark)
+        .children(center.map(|center| {
+            center
+                .flex_shrink_0()
+                .max_w(relative(theme.status.message_max_width))
+                .ml(theme.status.gap)
+                .truncate()
+        }))
 }
 
 /// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
