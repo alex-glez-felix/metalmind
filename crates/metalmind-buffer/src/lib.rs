@@ -13,6 +13,7 @@ mod history;
 mod marked;
 mod offset;
 mod selection;
+mod snapshot;
 mod splice;
 
 pub use anchor::{LineAnchor, LineChange, Point};
@@ -22,4 +23,5 @@ pub use error::BufferError;
 pub use history::{HistorySeq, Transaction};
 pub use offset::ByteOffset;
 pub use selection::{Goal, PerSelection, Selection, Selections};
+pub use snapshot::Snapshot;
 pub use splice::{LineEdit, Splice};

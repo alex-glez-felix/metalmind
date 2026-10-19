@@ -202,7 +202,7 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   Telescope. Cada resultado es una línea con su contexto y lo que coincide
   resaltado, y a la derecha la nota y el número de línea. `Enter` abre la nota
   en esa línea, con el cursor en la coincidencia; `ctrl-v` y `ctrl-s`, en un
-  split, como en `space f`.
+  split, como en `space f`. Abrir un resultado es un salto: `ctrl-o` vuelve.
 - El patrón es un regex, y distingue mayúsculas solo si las lleva. Uno a medio
   escribir no borra los resultados: dice "patrón inválido" hasta que se arregla.
 - Las notas abiertas con cambios sin guardar se buscan en lo que se ve, no en

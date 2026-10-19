@@ -11,7 +11,8 @@ use crate::anchor::{Anchors, LineChange};
 use crate::history::{AppliedEdit, Direction, History, Step};
 use crate::marked::MarkedLines;
 use crate::{
-    BufferError, ByteOffset, Edit, EditMap, HistorySeq, LineEdit, Selections, Splice, Transaction,
+    BufferError, ByteOffset, Edit, EditMap, HistorySeq, LineEdit, Selections, Snapshot, Splice,
+    Transaction,
 };
 
 /// Texto editable. Las líneas se separan solo por `\n`.
@@ -74,6 +75,12 @@ impl Buffer {
     #[must_use]
     pub fn history_seq(&self) -> HistorySeq {
         self.history.current()
+    }
+
+    /// El texto de ahora, sin copiarlo, para otro hilo.
+    #[must_use]
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot::new(self.rope.clone())
     }
 
     #[must_use]

@@ -30,22 +30,12 @@ pub enum Status {
     Idle,
     Searching,
     Done,
-    /// Llegó a [`MAX_HITS`] y se cortó.
+    /// Había más de [`MAX_HITS`] líneas y se cortó.
     Truncated,
     /// Lo escrito no compila; lo mostrado es de la búsqueda anterior.
     Invalid(String),
     /// No se pudo buscar.
     Failed(String),
-}
-
-/// Qué hacer tras recibir notas.
-#[derive(Debug, Default, PartialEq, Eq)]
-#[must_use]
-pub struct Received {
-    /// Se pidió elegir antes de que llegaran resultados, y ya llegaron.
-    pub chosen: Option<Chosen>,
-    /// La búsqueda llegó al tope: hay que cancelarla.
-    pub stop: bool,
 }
 
 #[derive(Debug)]
@@ -149,15 +139,13 @@ impl TextSearchState {
     }
 
     /// Llegaron notas de la búsqueda `version`.
-    pub fn receive(&mut self, version: u64, notes: Vec<NoteMatches>) -> Received {
+    /// Si se había pedido elegir antes de que llegaran resultados, devuelve
+    /// lo elegido.
+    pub fn receive(&mut self, version: u64, notes: Vec<NoteMatches>) -> Option<Chosen> {
         if version != self.version || self.progress != Status::Searching || notes.is_empty() {
-            return Received::default();
+            return None;
         }
-        let chosen = self.add(notes);
-        Received {
-            chosen,
-            stop: self.progress == Status::Truncated,
-        }
+        self.add(notes)
     }
 
     fn add(&mut self, notes: Vec<NoteMatches>) -> Option<Chosen> {
@@ -167,7 +155,7 @@ impl TextSearchState {
         }
         for note in notes {
             let room = MAX_HITS - self.hits.len();
-            if note.lines.len() >= room {
+            if note.lines.len() > room {
                 self.progress = Status::Truncated;
             }
             let path = note.path;
@@ -196,10 +184,17 @@ impl TextSearchState {
         }
     }
 
-    /// La búsqueda `version` no pudo empezar.
+    /// La búsqueda `version` no pudo seguir: lo que ya llegó de ella se
+    /// queda, con el error.
     pub fn failed(&mut self, version: u64, error: String) {
-        if version == self.version {
+        if version != self.version {
+            return;
+        }
+        if self.stale {
             self.show_nothing(Status::Failed(error));
+        } else {
+            self.pending_choice = None;
+            self.progress = Status::Failed(error);
         }
     }
 

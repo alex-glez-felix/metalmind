@@ -1,5 +1,5 @@
 //! El contexto de una línea que coincide, como se pinta en su fila: sin la
-//! sangría, con la primera coincidencia cerca del inicio y cortado a un
+//! sangría que no coincide, con la primera coincidencia cerca del inicio y cortado a un
 //! largo que se puede pintar aunque la línea tenga un megabyte.
 
 use std::ops::Range;
@@ -24,9 +24,10 @@ pub struct RowText {
 pub fn row_text(line: &LineMatch) -> RowText {
     let first = line.matches.first().map_or(0, |found| found.start);
     let indent = line.text.len() - line.text.trim_start().len();
-    let start = indent.max(start_before(&line.text[..first], BEFORE));
+    let kept = indent.min(first);
+    let start = kept.max(start_before(&line.text[..first], BEFORE));
     let end = end_after(&line.text, start, WIDTH);
-    let prefix = if start > indent { ELLIPSIS } else { "" };
+    let prefix = if start > kept { ELLIPSIS } else { "" };
     let suffix = if end < line.text.trim_end().len() {
         ELLIPSIS
     } else {
@@ -91,6 +92,14 @@ mod tests {
     fn una_linea_corta_va_entera_sin_la_sangria() {
         let found = row_text(&line("\t  - una idea\tsuelta", &[(9, 13)]));
         assert_eq!(marked(&found), "- una [idea] suelta");
+    }
+
+    /// Con `^\s+`, lo que coincide es la sangría: se queda y se resalta.
+    #[test]
+    fn la_sangria_que_coincide_se_queda() {
+        assert_eq!(marked(&row_text(&line("  - x", &[(0, 2)]))), "[  ]- x");
+        assert_eq!(marked(&row_text(&line("\t\t", &[(0, 2)]))), "[  ]");
+        assert_eq!(marked(&row_text(&line("    x y", &[(2, 5)]))), "[  x] y");
     }
 
     #[test]
