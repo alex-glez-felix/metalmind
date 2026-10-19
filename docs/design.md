@@ -20,7 +20,7 @@ Zed y el estilo de las apps de escritorio en tiling de Linux, minimalistas pero 
 
 ## Tokens
 
-Todo color, tamaño y espacio de la UI sale del tema ([`docs/config.md`](config.md#temas)); el código de `metalmind-ui` no escribe ni un píxel ni un color fuera de su módulo de tokens (`crates/metalmind-ui/src/theme.rs`), y un test lo vigila (`crates/metalmind-ui/tests/tokens.rs`, con sus excepciones justificadas).
+Todo color, tamaño y espacio de la UI sale del tema ([`docs/config.md`](config.md#temas)); el código de `metalmind-ui` no escribe ni un píxel ni un color fuera de su módulo de tokens (`crates/metalmind-ui/src/theme.rs` y sus submódulos en `src/theme/`), y un test lo vigila (`crates/metalmind-ui/tests/tokens.rs`, con sus excepciones justificadas).
 
 Lo que hay hoy, con los valores de los temas de fábrica:
 

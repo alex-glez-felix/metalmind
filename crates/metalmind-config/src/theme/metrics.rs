@@ -201,6 +201,9 @@ metric_group! {
         status_padding_y: Length,
         /// Entre los campos de la barra de estado.
         status_gap: Length,
+        /// Cuánto cede el nombre de la nota frente al mensaje cuando la barra
+        /// de estado no alcanza: 0.5 es la mitad.
+        status_file_shrink: Fraction,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,

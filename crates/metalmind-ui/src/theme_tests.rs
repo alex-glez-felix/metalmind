@@ -58,20 +58,20 @@ fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
         ),
         (
             "status_background",
-            theme.status_background,
+            theme.status.background,
             rgb(0x16_18_1d).into(),
         ),
         (
             "status_foreground",
-            theme.status_foreground,
+            theme.status.foreground,
             rgb(0x9a_a0_a6).into(),
         ),
         (
             "status_unfocused_foreground",
-            theme.status_unfocused_foreground,
+            theme.status.unfocused_foreground,
             rgb(0x5c_63_70).into(),
         ),
-        ("status_border", theme.status_border, rgb(0x2a_2e_36).into()),
+        ("status_border", theme.status.border, rgb(0x2a_2e_36).into()),
         ("pane_border", theme.pane_border, rgb(0x5c_63_70).into()),
         ("modified", theme.modified, rgb(0xe0_af_68).into()),
         ("error", theme.error, rgb(0xf7_76_8e).into()),
@@ -94,9 +94,9 @@ fn la_parte_del_detalle_del_picker_sale_del_tema() {
 fn las_medidas_de_fabrica_son_las_de_antes() {
     let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
     let expected = [
-        ("status_padding_x", theme.status_padding_x, 10.),
-        ("status_padding_y", theme.status_padding_y, 3.),
-        ("status_gap", theme.status_gap, 16.),
+        ("status_padding_x", theme.status.padding_x, 10.),
+        ("status_padding_y", theme.status.padding_y, 3.),
+        ("status_gap", theme.status.gap, 16.),
         ("picker_width", theme.picker_width, 640.),
         ("picker_top", theme.picker_top, 64.),
         ("picker_padding_x", theme.picker_padding_x, 12.),
@@ -212,4 +212,21 @@ fn sin_ninguna_candidata_no_hay_fuente() {
         first_installed(MONO_FONTS, &installed(&["Cantarell"])),
         None
     );
+}
+
+/// El indicador del autoguardado tiene sus propios tokens, con los colores
+/// que usaba antes de tenerlos; el claro tiene los mismos nombres de su paleta
+/// (snapshots de `metalmind-config`).
+#[test]
+fn el_indicador_del_autoguardado_sale_del_tema() {
+    let mut config = config::Config::defaults().unwrap();
+    let theme = Theme::with_font(&config, "Mono".into());
+    let status = &theme.status;
+    assert_eq!(status.saved, status.unfocused_foreground);
+    assert_eq!(status.unsaved, theme.modified);
+    assert_eq!(status.changed_on_disk, theme.error);
+    assert!((status.file_shrink - 0.5).abs() < f32::EPSILON);
+    config.theme.metrics.layout.status_file_shrink = config::Fraction(0.25);
+    let theme = Theme::with_font(&config, "Mono".into());
+    assert!((theme.status.file_shrink - 0.25).abs() < f32::EPSILON);
 }

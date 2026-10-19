@@ -55,6 +55,9 @@ ui:
   status_border: border_subtle
   pane_border: border_strong
   modified: warning
+  status_saved: text_inactive
+  status_unsaved: warning
+  status_changed_on_disk: danger
   error: danger
   picker_background: surface
   picker_border: border_subtle
@@ -163,6 +166,7 @@ layout:
   status_padding_x: 10
   status_padding_y: 3
   status_gap: lg
+  status_file_shrink: 0.5  # cuánto cede el nombre frente al mensaje
   picker_width: 640
   picker_top: 64
   picker_rows: 12

@@ -206,6 +206,13 @@ color_group! {
         pane_border,
         /// El `[+]` de un archivo con cambios sin guardar.
         modified,
+        /// El indicador del autoguardado: "guardado".
+        status_saved,
+        /// El indicador del autoguardado: "sin guardar".
+        status_unsaved,
+        /// El indicador del autoguardado: el archivo cambió fuera con cambios
+        /// sin guardar.
+        status_changed_on_disk,
         error,
         /// La ventana flotante del finder y de la paleta.
         picker_background,

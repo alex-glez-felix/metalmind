@@ -35,6 +35,9 @@ Theme {
         status_border: #d2d6dc,
         pane_border: #8a909a,
         modified: #8f6400,
+        status_saved: #8a909a,
+        status_unsaved: #8f6400,
+        status_changed_on_disk: #c4304f,
         error: #c4304f,
         picker_background: #e6e8ec,
         picker_border: #d2d6dc,
@@ -200,6 +203,9 @@ Theme {
             ),
             status_gap: Length(
                 16.0,
+            ),
+            status_file_shrink: Fraction(
+                0.5,
             ),
             picker_width: Length(
                 640.0,
