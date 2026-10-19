@@ -331,6 +331,17 @@ fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
     assert!(autosaving.tick());
     assert!(matches!(autosaving.message(), Some(Message::Error(_))));
     assert!(autosaving.session.is_modified());
+    autosaving
+        .session
+        .workspace
+        .set_message(Message::Info("otro aviso".to_owned()));
+    autosaving.wait(SECOND * 5);
+    assert!(autosaving.tick());
+    assert_eq!(
+        autosaving.message(),
+        Some(&Message::Info("otro aviso".to_owned())),
+        "el mismo error no vuelve a tapar la barra"
+    );
     fs::create_dir(autosaving.path("falta")).unwrap();
     autosaving.wait(SECOND);
     assert!(!autosaving.tick(), "espera antes de reintentar");
@@ -381,4 +392,20 @@ fn un_cambio_de_fuera_a_mitad_de_un_insert_no_rompe_lo_que_se_escribe() {
     assert_eq!(autosaving.session.text(), "xyuno");
     assert_eq!(autosaving.state(), Some(SaveState::ChangedOnDisk));
     assert_eq!(autosaving.read("a.md"), "de fuera\n");
+}
+
+#[test]
+fn lo_que_cambio_fuera_durante_un_insert_sin_cambios_se_relee_al_cerrarlo() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n")]);
+    autosaving.session.keys("i");
+    fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
+    autosaving.modified_on_disk("a.md");
+    assert_eq!(
+        autosaving.session.text(),
+        "uno",
+        "a mitad del Insert no se toca"
+    );
+    autosaving.session.keys("⎋");
+    assert_eq!(autosaving.session.text(), "de fuera");
+    assert_eq!(autosaving.state(), Some(SaveState::Saved));
 }

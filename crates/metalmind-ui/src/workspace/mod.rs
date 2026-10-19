@@ -416,6 +416,7 @@ impl Workspace {
         self.vim.swap_jumps(&mut state.jumps);
         self.vim.set_file(file);
         self.vim.swap_layout(layout);
+        let was_editing = buffer.has_open_transaction();
         let result = edit(&mut self.vim, buffer, &mut state.selections);
         self.vim.swap_layout(layout);
         self.vim.catch_up(buffer);
@@ -432,9 +433,18 @@ impl Workspace {
         );
         let splices = buffer.take_splices();
         document.settle();
+        // Lo que cambió fuera durante un Insert se relee al cerrarlo, si no
+        // quedó nada sin guardar.
+        let reread = was_editing
+            && document.changed_on_disk()
+            && !document.is_modified()
+            && !document.buffer().has_open_transaction();
         self.follow(pane, id, file, &splices)?;
         if !splices.is_empty() {
             self.edited(id);
+        }
+        if reread {
+            self.refresh(id)?;
         }
         result
     }
