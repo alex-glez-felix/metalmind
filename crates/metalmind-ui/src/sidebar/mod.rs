@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use gpui_kit::{
     App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
-    UniformListScrollHandle,
+    UniformListScrollHandle, Window,
 };
 use metalmind_vault::{Vault, VaultPath, VaultUpdate};
 
@@ -35,8 +35,9 @@ use crate::workspace::{Placement, Workspace, shown_path};
 /// Lo que la ventana tiene que hacer por el panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarEvent {
-    /// Se abrió un archivo en el panel de edición enfocado: pasa el foco ahí.
-    Opened,
+    /// Se abrió un archivo en el panel de edición enfocado; con
+    /// `focus_editor`, el foco pasa ahí y si no se queda en el árbol.
+    Opened { focus_editor: bool },
     /// El foco vuelve al panel de edición.
     FocusEditor,
     /// Se cerraron paneles de edición (al borrar lo que mostraban); el
@@ -52,6 +53,7 @@ pub struct Sidebar {
     scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
     _changes: Subscription,
+    _workspace: Subscription,
 }
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
@@ -69,6 +71,8 @@ impl Sidebar {
         let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
             sidebar.apply(update, cx);
         });
+        // La nota activa se marca en el árbol: cambia con el panel de edición.
+        let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         Self {
             panel: Panel::new(tree, state.visible, state.view()),
             vault,
@@ -77,6 +81,7 @@ impl Sidebar {
             scroll: UniformListScrollHandle::new(),
             menu: None,
             _changes: changes,
+            _workspace: workspace_changes,
         }
     }
 
@@ -121,11 +126,12 @@ impl Sidebar {
         cx.notify();
     }
 
-    /// Muestra `view`, o esconde el panel si ya la mostraba. Devuelve si
-    /// quedó visible.
-    pub fn toggle(&mut self, view: PanelView, cx: &mut Context<Self>) -> bool {
+    /// Muestra `view`, o esconde el panel si ya la mostraba con el foco.
+    /// Devuelve si quedó visible.
+    pub fn toggle(&mut self, view: PanelView, window: &Window, cx: &mut Context<Self>) -> bool {
         self.menu = None;
-        let visible = self.panel.toggle(view);
+        let focused = self.focus_handle.contains_focused(window, cx);
+        let visible = self.panel.toggle(view, focused);
         cx.notify();
         visible
     }
@@ -157,9 +163,22 @@ impl Sidebar {
         }
     }
 
+    /// La nota del panel de edición enfocado, si es del vault.
+    fn active(&self, cx: &App) -> Option<VaultPath> {
+        let workspace = self.workspace.read(cx);
+        let document = workspace.focused_document().ok()?;
+        self.vault_path(document.path()?)
+    }
+
     /// Abre `path` donde dice `placement`; si el panel de edición enfocado
-    /// lo muestra, la ventana le pasa el foco.
-    fn open(&mut self, path: &VaultPath, placement: Placement, cx: &mut Context<Self>) {
+    /// lo muestra y `focus_editor`, la ventana le pasa el foco.
+    fn open(
+        &mut self,
+        path: &VaultPath,
+        placement: Placement,
+        focus_editor: bool,
+        cx: &mut Context<Self>,
+    ) {
         let file = shown_path(&self.vault.root().join(path.as_str()));
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
@@ -171,7 +190,7 @@ impl Sidebar {
                 })
         });
         if opened {
-            cx.emit(SidebarEvent::Opened);
+            cx.emit(SidebarEvent::Opened { focus_editor });
         }
     }
 

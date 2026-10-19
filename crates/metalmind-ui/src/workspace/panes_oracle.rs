@@ -26,6 +26,11 @@ pub(crate) struct Window {
 pub(crate) struct Panes {
     /// Como `mode()` de vim: `n`, `i`, `c`…
     pub mode: String,
+    /// El último error, como `v:errmsg`; vacío si no hubo.
+    pub error: String,
+    /// Los archivos de los buffers con cambios, visibles u ocultos, en
+    /// orden.
+    pub modified: Vec<String>,
     /// En orden, sin importar el lado: Metalmind divide a la derecha y abajo
     /// (`splitright`, `splitbelow`) y nvim `--clean`, al revés.
     pub windows: Vec<Window>,
@@ -56,6 +61,13 @@ pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
     let dump = std::fs::read_to_string(output.path()).unwrap();
     let mut lines = dump.lines();
     let mode = lines.next().unwrap().to_owned();
+    let error = lines.next().unwrap().to_owned();
+    let modified = lines
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
     let mut windows: Vec<Window> = lines
         .map(|line| {
             let fields: Vec<&str> = line.split(' ').collect();
@@ -68,5 +80,10 @@ pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
         })
         .collect();
     windows.sort();
-    Panes { mode, windows }
+    Panes {
+        mode,
+        error,
+        modified,
+        windows,
+    }
 }

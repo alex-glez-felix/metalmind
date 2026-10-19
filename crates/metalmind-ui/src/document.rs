@@ -156,6 +156,16 @@ impl Document {
         self.exists_on_disk
     }
 
+    /// Representa el mismo archivo en disco que `other`: si existe, su texto
+    /// y sus saltos de línea finales, que el texto del buffer no distingue.
+    #[must_use]
+    pub fn same_on_disk(&self, other: &Self) -> bool {
+        self.exists_on_disk == other.exists_on_disk
+            && self.blank_line == other.blank_line
+            && self.noeol == other.noeol
+            && self.buffer.to_string() == other.buffer.to_string()
+    }
+
     /// Lo que ocuparía en disco al guardarlo ahora.
     #[must_use]
     pub fn stats(&self) -> FileStats {

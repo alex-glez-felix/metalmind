@@ -128,21 +128,23 @@ expect_file "$case_dir/a.md" "unodos"
 [[ "$(stat -c %a "$case_dir/a.md")" == 640 ]] || fail "los permisos cambiaron"
 expect_only "$case_dir" a.md
 
-new_case ":e abre otro archivo y se niega si se perderían cambios" editar
-printf 'a\n' >"$work/editar/a.md"
+new_case ":e abre otro archivo y el de antes queda oculto con sus cambios" editar
+printf 'a1\na2\n' >"$work/editar/a.md"
 printf 'b\n' >"$work/editar/b.md"
 launch "$case_dir" a.md
 typed "x"
 typed ":e b.md"
 keys Return
-typed ":e! b.md"
-keys Return
 typed "Ax"
 keys Escape
 typed ":wq"
 keys Return
-expect_exit ":wq en b.md no cerró"
-expect_file "$case_dir/a.md" "a"
+expect_alive ":wq cerró aunque a.md tenía cambios"
+typed ":wqa"
+keys Return
+expect_exit ":wqa no cerró"
+expect_file "$case_dir/a.md" "1
+a2"
 expect_file "$case_dir/b.md" "bx"
 expect_only "$case_dir" a.md b.md
 

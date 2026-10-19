@@ -1,5 +1,6 @@
 -- Oráculo de paneles: abre <archivo> en <carpeta>, teclea <teclas> en nvim y
--- escribe el modo y, por ventana, archivo, si tiene el foco y cursor.
+-- escribe el modo, el último error, los buffers con cambios y, por ventana,
+-- archivo, si tiene el foco y cursor.
 -- Uso: nvim --clean --headless -n -l panes_oracle.lua <carpeta> <archivo> <teclas> <salida>
 local dir, file, keys, out = arg[1], arg[2], arg[3], arg[4]
 
@@ -11,8 +12,8 @@ local function exec(code, ...)
   return vim.rpcrequest(child, "nvim_exec_lua", code, { ... })
 end
 
--- Metalmind es vim sin `hidden` (03 §8): `:e` se niega si se perderían cambios.
-exec("vim.o.autoindent = false; vim.o.hidden = false; vim.cmd.edit(...)", file)
+-- Con `hidden`, el default de nvim, como Metalmind.
+exec("vim.o.autoindent = false; vim.cmd.edit(...)", file)
 
 local function type_keys(typed)
   vim.rpcrequest(child, "nvim_input", typed)
@@ -35,7 +36,14 @@ while rest ~= "" do
 end
 
 local lines = exec([[
-  local lines = { vim.api.nvim_get_mode().mode }
+  local modified = {}
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].modified then
+      modified[#modified + 1] = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buf), ":t")
+    end
+  end
+  table.sort(modified)
+  local lines = { vim.api.nvim_get_mode().mode, vim.v.errmsg, table.concat(modified, " ") }
   local current = vim.api.nvim_get_current_win()
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)), ":t")

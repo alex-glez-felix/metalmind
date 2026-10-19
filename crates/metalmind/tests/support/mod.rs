@@ -251,6 +251,11 @@ impl Window<'_> {
         self.display.type_keys(self.id, &keys::parse(notation));
     }
 
+    /// Un clic en `(x, y)`, en píxeles desde la esquina de la ventana.
+    pub fn click(&self, x: i16, y: i16) {
+        self.display.click(self.id, x, y);
+    }
+
     /// Pide el cierre como lo haría el gestor de ventanas.
     pub fn request_close(&self) {
         self.display.request_close(self.id);

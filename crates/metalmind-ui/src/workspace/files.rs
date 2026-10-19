@@ -21,10 +21,9 @@ pub enum Placement {
 
 impl Workspace {
     /// Muestra `path` donde dice `placement` y devuelve si el panel
-    /// enfocado lo muestra. En el panel enfocado se niega, como `:e`, si
-    /// se perderían cambios; un archivo que no se puede leer no abre
-    /// ningún split. En los dos casos, el aviso queda en
-    /// [`Workspace::message`].
+    /// enfocado lo muestra. En el panel enfocado es como `:e`: el documento
+    /// de antes queda oculto. Un archivo que no se puede leer no cambia
+    /// nada y el aviso queda en [`Workspace::message`].
     ///
     /// # Errors
     /// Solo si el estado está inconsistente, lo que sería un bug.
@@ -118,7 +117,7 @@ impl Workspace {
             }
         }
         for id in gone {
-            self.documents.remove(id);
+            self.forget(id);
         }
         self.vim.cursor_moved();
         Ok(())

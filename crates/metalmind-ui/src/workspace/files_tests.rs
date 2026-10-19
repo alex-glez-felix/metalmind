@@ -62,20 +62,69 @@ fn abrir_el_archivo_que_ya_muestra_no_lo_relee() {
     assert_eq!(session.workspace.message(), before.as_ref());
 }
 
+/// Como `:e` con `hidden`: la nota con cambios queda oculta y vuelve
+/// igual, con el cursor donde se dejó.
 #[test]
-fn con_cambios_se_niega_como_e() {
+fn con_cambios_cambia_y_la_nota_queda_oculta() {
     let (_dir, vault, mut session) = vault();
-    session.keys("x");
+    session.keys("ix⎋");
     let opened = session
         .workspace
         .open_file(&file(&vault, "b.md"), Placement::Current)
         .unwrap();
-    assert!(!opened);
-    assert_eq!(shown(&session), file(&vault, "a.md"));
-    assert!(matches!(
+    assert!(opened);
+    assert_eq!(shown(&session), file(&vault, "b.md"));
+    assert!(!matches!(
         session.workspace.message(),
-        Some(Message::Error(text)) if text.starts_with("E37")
+        Some(Message::Error(_))
     ));
+    session
+        .workspace
+        .open_file(&file(&vault, "a.md"), Placement::Current)
+        .unwrap();
+    assert_eq!(session.text(), "xa");
+    assert!(session.is_modified());
+    assert_eq!(session.cursor(), metalmind_buffer::ByteOffset::ZERO);
+}
+
+/// Una nota oculta con cambios también va a la papelera, sin volver.
+#[test]
+fn borrar_suelta_la_nota_oculta() {
+    let (_dir, vault, mut session) = vault();
+    session.keys("x");
+    session
+        .workspace
+        .open_file(&file(&vault, "b.md"), Placement::Current)
+        .unwrap();
+    session
+        .workspace
+        .trash_file(&vault, &vault_path("a.md"))
+        .unwrap();
+    assert_eq!(shown(&session), file(&vault, "b.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 1);
+    assert!(session.workspace.hidden.is_empty());
+    assert!(session.workspace.may_close_window());
+}
+
+/// Renombrar una nota oculta la lleva a su ruta nueva con sus cambios.
+#[test]
+fn renombrar_lleva_la_nota_oculta() {
+    let (_dir, vault, mut session) = vault();
+    session.keys("x");
+    session
+        .workspace
+        .open_file(&file(&vault, "b.md"), Placement::Current)
+        .unwrap();
+    session
+        .workspace
+        .rename_file(&vault, &vault_path("a.md"), &vault_path("z.md"))
+        .unwrap();
+    session
+        .workspace
+        .open_file(&file(&vault, "z.md"), Placement::Current)
+        .unwrap();
+    assert_eq!(session.text(), "");
+    assert!(session.is_modified());
 }
 
 #[test]

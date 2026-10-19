@@ -310,6 +310,86 @@ fn abre_una_nota_desde_el_arbol() {
     assert_eq!(smoke.read("b.md"), "xdos\n");
 }
 
+/// El centro de la fila `row` del árbol, con el tema y la fuente por
+/// defecto: la barra de botones mide 36 px, el panel empieza con su
+/// encabezado y cada fila mide la fuente (15 px) por 1.7, redondeado
+/// (`metalmind-ui/src/theme.rs`).
+fn tree_row(row: i16) -> (i16, i16) {
+    const RAIL: i16 = 36;
+    const ROW: i16 = 26;
+    (RAIL + 60, ROW + ROW * row + ROW / 2)
+}
+
+/// Como nvim con `hidden`: abrir otra nota desde el árbol con la actual
+/// modificada no da E37; la de antes vuelve con sus cambios, y `:q` con
+/// una nota oculta modificada no sale: la muestra.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn cambiar_de_nota_desde_el_arbol_conserva_los_cambios() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("ix<Esc><C-w>hj<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("<C-w>hk<CR>");
+    window.wait_title("de a.md con [+]", |title| {
+        title.starts_with("a.md") && title.contains("[+]")
+    });
+    window.type_keys("<C-w>hj<CR>");
+    window.wait_title("de b.md otra vez", |title| title.starts_with("b.md"));
+    window.type_keys(":q<CR>");
+    window.wait_title("de a.md, que :q mostró por sus cambios", |title| {
+        title.starts_with("a.md") && title.contains("[+]")
+    });
+    assert!(metalmind.is_running());
+    window.type_keys(":wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\n");
+    assert_eq!(smoke.read("b.md"), "dos\n");
+}
+
+/// Un clic en una nota del árbol la abre y deja el foco en el árbol, como
+/// en Zed: `k` y `enter` abren la de arriba.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn un_clic_en_una_nota_la_abre() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut metalmind = smoke.launch(&["."]);
+    let window = metalmind.window();
+    window.wait_title("sin archivo", |title| title.starts_with("[No Name]"));
+    let (x, y) = tree_row(1);
+    window.click(x, y);
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("k<CR>");
+    window.wait_title("de a.md", |title| title.starts_with("a.md"));
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\n");
+    assert_eq!(smoke.read("b.md"), "dos\n");
+}
+
+/// Con el árbol a la vista, `space e` desde el editor le da el foco en vez
+/// de esconderlo: `j` y `enter` abren la nota de abajo.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn space_e_le_da_el_foco_al_arbol() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "dos\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>ej<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "uno\n");
+    assert_eq!(smoke.read("b.md"), "xdos\n");
+}
+
 /// `ctrl-w h` pasa al árbol, con la nota abierta seleccionada; `r` la
 /// renombra y el buffer sigue al archivo: lo que se guarda va al nombre nuevo.
 #[test]

@@ -49,7 +49,8 @@ ui:
   panel_foreground: fg
   panel_muted: fg_dim
   panel_selection: { color: blue, alpha: 0.3 }
-  panel_selection_unfocused: { color: fg_faint, alpha: 0.3 }
+  panel_selection_unfocused: { color: fg_dim, alpha: 0.6 }
+  panel_active: { color: fg, alpha: 0.08 }
   panel_hover: bg_highlight
   panel_border: border
   panel_folder: blue

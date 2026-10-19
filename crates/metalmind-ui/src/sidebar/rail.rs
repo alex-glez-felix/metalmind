@@ -59,7 +59,7 @@ fn rail_button<A: Action + Clone>(
         .text_color(theme.panel_muted)
         .when(active, |button| {
             button
-                .bg(theme.panel_selection_unfocused)
+                .bg(theme.panel_active)
                 .text_color(theme.panel_foreground)
         })
         .hover(|button| button.bg(theme.panel_hover))

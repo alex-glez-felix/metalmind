@@ -4,6 +4,7 @@ use metalmind_buffer::ByteOffset;
 use metalmind_vault::{EntryKind, VaultChange, VaultPath};
 use pretty_assertions::assert_eq;
 
+use super::super::Effect;
 use super::super::links::tests::vault_session;
 use super::super::test_session::Session;
 use super::*;
@@ -282,4 +283,31 @@ fn releer_una_nota_conserva_sus_marks() {
     session.keys(":e!⏎gg'a");
     assert_eq!(session.line(session.pane()), 1);
     assert_eq!(error(&session).as_deref(), Some("E20: Mark not set"));
+}
+
+/// Con `hidden`, todos los caminos dejan oculta la nota con cambios: `gd`,
+/// `ctrl-o`, `'A` y `:e`. Vuelve con su texto y `:q` no sale mientras la
+/// tenga; al mostrarla, como nvim, deja un salto que `ctrl-o` deshace.
+#[test]
+fn los_saltos_dejan_oculta_la_nota_con_cambios_y_q_la_muestra() {
+    let (_dir, vault, mut session) = vault_session(&[("a.md", A), ("b.md", B)], "a.md");
+    session.keys("mAx");
+    session.keys("jgd");
+    assert_eq!(session.file(), "b.md");
+    assert_eq!(error(&session), None);
+    session.keys("⌃o");
+    assert_eq!(session.file(), "a.md");
+    assert_eq!(session.text(), "no\n[[b]]\ntres");
+    session.keys("⌃i'A");
+    assert_eq!(session.file(), "a.md");
+    assert!(session.is_modified());
+    let b = vault.root().join("b.md");
+    session.keys(&format!(":e {}⏎", b.display()));
+    assert_eq!(session.file(), "b.md");
+    session.keys(":q⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(session.file(), "a.md");
+    assert!(error(&session).is_some_and(|text| text.starts_with("E162")));
+    session.keys("⌃o");
+    assert_eq!(session.file(), "b.md");
 }

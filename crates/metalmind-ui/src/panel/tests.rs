@@ -26,13 +26,23 @@ fn type_text(panel: &mut Panel, text: &str) {
 }
 
 #[test]
-fn mostrar_una_vista_o_esconder_si_ya_se_ve() {
+fn mostrar_una_vista_o_esconder_si_ya_se_ve_con_el_foco() {
     let mut panel = panel();
-    assert!(!panel.toggle(PanelView::Folders));
-    assert!(panel.toggle(PanelView::Folders));
-    assert!(panel.toggle(PanelView::Tags));
+    assert!(!panel.toggle(PanelView::Folders, true));
+    assert!(panel.toggle(PanelView::Folders, false));
+    assert!(panel.toggle(PanelView::Tags, true));
     assert_eq!(panel.view, PanelView::Tags);
     assert_eq!(panel.view.other(), PanelView::Folders);
+}
+
+/// Desde el editor, `space e` con el árbol ya a la vista no lo esconde: le
+/// da el foco. Si no, `j` y `enter` irían al editor.
+#[test]
+fn la_vista_que_se_ve_sin_foco_sigue_visible() {
+    let mut panel = panel();
+    assert!(panel.toggle(PanelView::Folders, false));
+    assert!(panel.visible);
+    assert_eq!(panel.view, PanelView::Folders);
 }
 
 #[test]
@@ -188,7 +198,7 @@ fn el_filtro_se_aplica_al_escribir_y_escape_lo_quita() {
 }
 
 #[test]
-fn un_clic_abre_o_cierra_la_carpeta_y_el_doble_abre_el_archivo() {
+fn un_clic_abre_o_cierra_la_carpeta_y_abre_el_archivo() {
     let mut panel = panel();
     assert_eq!(panel.click(0, 1), None);
     assert_eq!(panel.tree.rows().len(), 2, "diario se cerró");
@@ -198,10 +208,16 @@ fn un_clic_abre_o_cierra_la_carpeta_y_el_doble_abre_el_archivo() {
         2,
         "el segundo clic no la vuelve a abrir"
     );
-    assert_eq!(panel.click(1, 1), None);
+    let open = |focus_editor| {
+        Some(ClickOpen {
+            path: path("a.md"),
+            focus_editor,
+        })
+    };
+    assert_eq!(panel.click(1, 1), open(false), "como en Zed");
     assert_eq!(panel.tree.selected(), Some(&path("a.md")));
-    assert_eq!(panel.click(1, 2), Some(path("a.md")));
-    assert_eq!(panel.click(1, 3), Some(path("a.md")));
+    assert_eq!(panel.click(1, 2), open(true), "el doble pasa al editor");
+    assert_eq!(panel.click(1, 3), open(true));
 }
 
 fn renamed(from: &str, to: &str) -> VaultChange {

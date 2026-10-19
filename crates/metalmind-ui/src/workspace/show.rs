@@ -3,16 +3,17 @@
 
 use std::path::Path;
 
-use super::{DocumentId, Pane, PaneId, Workspace, WorkspaceError};
+use super::{DocumentId, LineNumbers, Pane, PaneId, Workspace, WorkspaceError};
 use crate::document::Document;
 use crate::workspace::Message;
 
 impl Workspace {
     /// `pane` pasa a mostrar `path`, abriéndolo si no está abierto. Como
     /// vim con `hidden`, no se niega por cambios sin guardar: el documento
-    /// de antes queda oculto, con sus cambios. Lo que estuviera a medias en
-    /// el panel termina como con `ctrl-c`. Devuelve el documento que muestra;
-    /// `None` si no se pudo leer, con el error en [`Workspace::message`].
+    /// de antes queda oculto, con sus cambios y su cursor. Lo que estuviera
+    /// a medias termina como con `ctrl-c`. Devuelve el documento que
+    /// muestra; `None` si no se pudo leer, con el error en
+    /// [`Workspace::message`].
     ///
     /// # Errors
     /// Solo si el estado está inconsistente, lo que sería un bug.
@@ -21,36 +22,47 @@ impl Workspace {
         pane: PaneId,
         path: &Path,
     ) -> Result<Option<DocumentId>, WorkspaceError> {
-        let id = match self.documents.find(path) {
-            Some(id) => id,
-            None => match Document::open(path) {
-                Ok(document) => {
-                    let on_disk = document.exists_on_disk();
-                    let id = self.insert_document(document);
-                    if let Some(file) = self.documents.file(id).filter(|_| on_disk) {
-                        self.vim.file_restored(file);
-                    }
-                    id
-                }
-                Err(error) => {
-                    self.interrupt(pane)?;
-                    self.message = Some(Message::Error(error.to_string()));
-                    return Ok(None);
-                }
-            },
+        self.interrupt(self.focused())?;
+        let Some(id) = self.open_document(path) else {
+            return Ok(None);
         };
         self.show_document(pane, id)?;
         Ok(Some(id))
     }
 
+    /// El documento abierto de `path`, o uno nuevo leído del disco. Si no se
+    /// puede leer, `None` con el error en [`Workspace::message`].
+    pub(super) fn open_document(&mut self, path: &Path) -> Option<DocumentId> {
+        if let Some(id) = self.documents.find(path) {
+            return Some(id);
+        }
+        match Document::open(path) {
+            Ok(document) => {
+                let on_disk = document.exists_on_disk();
+                let id = self.insert_document(document);
+                if let Some(file) = self.documents.file(id).filter(|_| on_disk) {
+                    self.vim.file_restored(file);
+                }
+                Some(id)
+            }
+            Err(error) => {
+                self.message = Some(Message::Error(error.to_string()));
+                None
+            }
+        }
+    }
+
     /// `pane` pasa a mostrar `id`, con el cursor de un panel que ya lo
-    /// muestra; sus números y su jumplist se quedan.
+    /// muestra o, si estaba oculto, del último que lo mostró; sus números y
+    /// su jumplist se quedan. El documento de antes queda oculto.
     pub(super) fn show_document(
         &mut self,
         pane: PaneId,
         id: DocumentId,
     ) -> Result<(), WorkspaceError> {
-        self.interrupt(pane)?;
+        // Lo pendiente (modo, operador, `:`) es del motor, que edita el panel
+        // enfocado aunque se cambie otro.
+        self.interrupt(self.focused())?;
         let current = self.pane(pane)?;
         if current.document == id {
             return Ok(());
@@ -58,12 +70,58 @@ impl Workspace {
         let (numbers, jumps) = (current.numbers, current.jumps.clone());
         let shown = Pane {
             jumps,
-            ..self.pane_on(id, numbers)
+            ..self.pane_on(id, numbers)?
         };
         self.message = Some(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
-        self.panes.insert(pane, shown);
-        self.drop_unshown();
+        if let Some(old) = self.panes.insert(pane, shown) {
+            self.hide(old);
+        }
         Ok(())
+    }
+
+    /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
+    /// muestra o, si está oculto, del último que lo mostró, tras releerlo.
+    /// La jumplist es la de un panel nuevo: quien llama pone la suya.
+    pub(super) fn pane_on(
+        &mut self,
+        id: DocumentId,
+        numbers: LineNumbers,
+    ) -> Result<Pane, WorkspaceError> {
+        if let Some(shown) = self.panes.values().find(|pane| pane.document == id) {
+            return Ok(Pane {
+                numbers,
+                ..shown.clone()
+            });
+        }
+        let mut pane = Pane::at_start(id, numbers, self.tabstop);
+        if self.hidden.contains_key(&id) {
+            self.refresh(id)?;
+        }
+        if let Some(last) = self.hidden.remove(&id) {
+            pane.selections = last.selections;
+            pane.viewport = last.viewport;
+        }
+        Ok(pane)
+    }
+
+    /// Un documento oculto sin cambios vuelve con lo que tenga el disco,
+    /// como con `autoread` de nvim: un cambio de fuera mientras no se veía
+    /// (git, Syncthing) no deja texto viejo, y un archivo que apareció se
+    /// carga. Si no cambió, conserva su historial. Si ya no se puede leer o
+    /// lo borraron, se queda como estaba: el buffer es la única copia.
+    fn refresh(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
+        let document = self.document(id)?;
+        if document.is_modified() {
+            return Ok(());
+        }
+        let Some(fresh) = document.path().and_then(|path| Document::open(path).ok()) else {
+            return Ok(());
+        };
+        let deleted = document.exists_on_disk() && !fresh.exists_on_disk();
+        if deleted || fresh.same_on_disk(document) {
+            return Ok(());
+        }
+        self.replace_document(id, fresh)
     }
 }

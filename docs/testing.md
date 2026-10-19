@@ -68,7 +68,7 @@ Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/t
 - `smoke.launch(&["a.md", …])`: lanza `metalmind` con esos argumentos desde la carpeta de notas, que es también el vault (con `&["."]`, sin archivo y con el foco en el árbol). Devuelve un `Metalmind`.
 - `smoke.launch_without_gpu(&["a.md"])`: igual, pero sin ningún driver de Vulkan ni EGL a la vista, para probar que `metalmind` sale con error cuando no puede dibujar.
 - `metalmind.window()` espera la primera ventana; `metalmind.windows()` da todas las que tiene abiertas ahora, sin asumir una sola. `metalmind.wait_exit()` espera la salida y devuelve el `ExitStatus`; `metalmind.is_running()` no espera.
-- `window.type_keys("…")`, `window.title()`, `window.wait_title(…)` y `window.request_close()`, que manda `WM_DELETE_WINDOW` como la "x" de un gestor de ventanas.
+- `window.type_keys("…")`, `window.click(x, y)` (un clic izquierdo en píxeles de la ventana), `window.title()`, `window.wait_title(…)` y `window.request_close()`, que manda `WM_DELETE_WINDOW` como la "x" de un gestor de ventanas.
 
 **Nada de `sleep`.** Teclear vuelve cuando el servidor X procesó las teclas, no cuando `metalmind` las leyó; lo que se espera es un efecto: que el archivo cambie (`wait_contents`), que el proceso termine (`wait_exit`) o el título (`wait_title`, que tiene `[+]` si hay cambios). Para probar que algo **no** pasó (`:q` con cambios no cierra), se teclea detrás algo con efecto visible y se espera ese efecto: las teclas llegan en orden, así que si `:q` hubiera cerrado, el `:w` siguiente nunca llegaría al disco.
 

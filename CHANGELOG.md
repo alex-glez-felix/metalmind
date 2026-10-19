@@ -145,9 +145,13 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   `ctrl-w h j k l` y `ctrl-w w` mueven el foco, `ctrl-w q` y `:q` cierran el
   panel y `ctrl-w o` y `:on` dejan solo el actual. Dos paneles pueden mostrar
   el mismo archivo con cursores independientes.
-- Como vim sin `hidden`, `:e` y `:q` se niegan si se perderían cambios, salvo
-  que otro panel siga mostrando ese archivo; cerrar la ventana revisa todos
-  los archivos abiertos.
+- Como nvim, con `hidden`: cambiar de nota (con `:e`, el finder o el panel
+  lateral) o cerrar un panel deja la nota de antes abierta en segundo plano,
+  con sus cambios, su historial y su cursor. Al volver a una sin cambios, se
+  relee si cambió en disco. Salir (`:q` en el último panel, `:qa` o cerrar
+  la ventana) se niega mientras alguna nota tenga cambios: muestra cuál con
+  `E162` y la abre. `:wa` guarda todas, `:wqa`/`:xa` guardan y salen y
+  `:qa!` sale sin guardar.
 
 #### Links (M3)
 
@@ -162,6 +166,10 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 
 #### Vault y panel lateral (M2)
 
+- Un clic en una nota del árbol la abre y deja el foco en el árbol, como en
+  Zed; el doble clic pasa al editor. `space e` con el árbol a la vista le da
+  el foco en vez de esconderlo. El cursor del árbol se ve con el acento del
+  tema solo si el árbol tiene el foco, y la nota abierta se marca aparte.
 - `metalmind carpeta/` abre la carpeta como vault; `metalmind archivo.md` abre el
   archivo en el vault de la carpeta que lo contiene, y `metalmind` sin argumentos,
   la carpeta de `METALMIND_VAULT`, el último vault abierto o el `vault:` de la

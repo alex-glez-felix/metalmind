@@ -60,7 +60,7 @@ impl Sidebar {
         match self.panel.tree.selected_entry() {
             Some(row) if row.kind != EntryKind::Folder => {
                 let path = row.path.clone();
-                self.open(&path, Placement::Current, cx);
+                self.open(&path, Placement::Current, true, cx);
             }
             _ => self.navigate(cx, FileTree::expand_or_enter),
         }
@@ -75,7 +75,7 @@ impl Sidebar {
         if row.kind == EntryKind::Folder {
             self.navigate(cx, |tree| tree.toggle(&path));
         } else {
-            self.open(&path, Placement::Current, cx);
+            self.open(&path, Placement::Current, true, cx);
         }
     }
 
@@ -104,7 +104,7 @@ impl Sidebar {
         };
         if row.kind != EntryKind::Folder {
             let path = row.path.clone();
-            self.open(&path, placement, cx);
+            self.open(&path, placement, true, cx);
         }
     }
 
@@ -211,7 +211,7 @@ impl Sidebar {
         let result = match request {
             Request::CreateNote(path) => self.vault.create_note(&path).map(|()| {
                 self.panel.tree.reveal(path.clone());
-                self.open(&path, Placement::Current, cx);
+                self.open(&path, Placement::Current, true, cx);
             }),
             Request::CreateFolder(path) => self
                 .vault

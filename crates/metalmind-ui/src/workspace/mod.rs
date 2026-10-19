@@ -4,9 +4,13 @@
 //! Hay un solo [`Vim`] para todos los paneles, como en vim, donde el modo,
 //! los registros, `.` y `;` son globales: lo copiado en un buffer se pega en
 //! otro. Las marks, en cambio, son de cada documento, y la ventana
-//! ([`Viewport`]) de cada panel: el motor las toma prestadas mientras edita. Cambiar de panel lo deja en Normal antes,
-//! como un `ctrl-c`.
+//! ([`Viewport`]) de cada panel: el motor las toma prestadas mientras edita.
+//! Cambiar de panel lo deja en Normal antes, como un `ctrl-c`.
+//!
+//! Como vim con `hidden`, el default de nvim, un documento que ningún panel
+//! muestra queda oculto, con sus cambios, su historial y su cursor.
 
+mod buffers;
 mod commands;
 mod documents;
 mod editing;
@@ -83,6 +87,14 @@ struct Pane {
     jumps: JumpList,
 }
 
+/// Dónde estaba el cursor de un documento oculto, para volver ahí. La
+/// jumplist y los números no van: son del panel, no del documento.
+#[derive(Clone, Debug)]
+struct LastView {
+    selections: Selections,
+    viewport: Viewport,
+}
+
 impl Pane {
     fn at_start(document: DocumentId, numbers: LineNumbers, tabstop: usize) -> Self {
         let mut viewport = Viewport::default();
@@ -103,6 +115,9 @@ pub struct Workspace {
     files: FileIds,
     panes: BTreeMap<PaneId, Pane>,
     tree: PaneTree,
+    /// Los documentos ocultos, con el cursor del último panel que los
+    /// mostró.
+    hidden: BTreeMap<DocumentId, LastView>,
     vim: Vim,
     /// Las líneas que se dejan visibles alrededor del cursor en cada panel.
     scrolloff: usize,
@@ -169,6 +184,7 @@ impl Workspace {
             files,
             panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers, tabstop))]),
             tree,
+            hidden: BTreeMap::new(),
             vim,
             scrolloff,
             tabstop,
@@ -404,29 +420,37 @@ impl Workspace {
             .map(|(&pane, _)| pane)
     }
 
-    /// Cerrar o cambiar el documento de `pane` perdería cambios: está
-    /// modificado y ningún otro panel lo muestra.
-    fn would_lose_changes(&self, pane: PaneId) -> Result<bool, WorkspaceError> {
-        let id = self.pane(pane)?.document;
-        let shown_elsewhere = self.panes_showing(id).any(|other| other != pane);
-        Ok(!shown_elsewhere && self.document(id)?.is_modified())
+    /// `pane`, que ya no está en el árbol o muestra otra cosa, mostraba
+    /// `old`: si ningún otro panel muestra ese documento, queda oculto con
+    /// su cursor, como los buffers de vim con `hidden`, con sus cambios, sus
+    /// marks y su historial. Un `[No Name]` sin cambios se suelta, como vim
+    /// lo reusa.
+    fn hide(&mut self, old: Pane) {
+        let id = old.document;
+        if self.panes_showing(id).next().is_some() {
+            return;
+        }
+        let disposable = self
+            .documents
+            .get(id)
+            .is_some_and(|document| document.path().is_none() && !document.is_modified());
+        if disposable {
+            self.forget(id);
+        } else {
+            self.hidden.insert(
+                id,
+                LastView {
+                    selections: old.selections,
+                    viewport: old.viewport,
+                },
+            );
+        }
     }
 
-    /// Suelta los documentos que ya no muestra ningún panel y no tienen
-    /// nada que guardar: los `[No Name]` sin cambios. Los demás quedan
-    /// ocultos, como los buffers de vim con `hidden`, con sus cambios, sus
-    /// marks y su historial.
-    fn drop_unshown(&mut self) {
-        let unshown: Vec<DocumentId> = self
-            .documents
-            .iter()
-            .filter(|(_, document)| document.path().is_none() && !document.is_modified())
-            .map(|(id, _)| id)
-            .filter(|&id| self.panes_showing(id).next().is_none())
-            .collect();
-        for id in unshown {
-            self.documents.remove(id);
-        }
+    /// Suelta `id`, aunque tenga cambios.
+    fn forget(&mut self, id: DocumentId) {
+        self.documents.remove(id);
+        self.hidden.remove(&id);
     }
 }
 

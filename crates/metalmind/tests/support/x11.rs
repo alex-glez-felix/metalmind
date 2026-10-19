@@ -1,5 +1,6 @@
 //! Lo que el harness le hace al servidor X: buscar las ventanas de un proceso,
-//! leer su título, teclear con `XTest` y pedir el cierre como un gestor de ventanas.
+//! leer su título, teclear y hacer clic con `XTest` y pedir el cierre como un
+//! gestor de ventanas.
 
 use x11rb::connection::Connection as _;
 use x11rb::protocol::xproto::{
@@ -107,6 +108,34 @@ impl Display {
             for &modifier in held.iter().rev() {
                 self.fake_key(xproto::KEY_RELEASE_EVENT, modifier);
             }
+        }
+        self.conn.sync().expect("esperar al servidor");
+    }
+
+    /// Un clic con el botón izquierdo en `(x, y)` de `window`, con `XTest`.
+    /// Vuelve cuando el servidor lo procesó.
+    pub fn click(&self, window: xproto::Window, x: i16, y: i16) {
+        let at = self
+            .conn
+            .translate_coordinates(window, self.root, x, y)
+            .expect("pedir la posición")
+            .reply()
+            .expect("leer la posición");
+        self.conn
+            .xtest_fake_input(
+                xproto::MOTION_NOTIFY_EVENT,
+                0,
+                x11rb::CURRENT_TIME,
+                self.root,
+                at.dst_x,
+                at.dst_y,
+                0,
+            )
+            .expect("mover el puntero");
+        for kind in [xproto::BUTTON_PRESS_EVENT, xproto::BUTTON_RELEASE_EVENT] {
+            self.conn
+                .xtest_fake_input(kind, 1, x11rb::CURRENT_TIME, self.root, 0, 0, 0)
+                .expect("mandar el clic");
         }
         self.conn.sync().expect("esperar al servidor");
     }

@@ -4,10 +4,12 @@
 //! quien tiene el vault; así las reglas de los nombres se prueban sin disco.
 
 mod input;
+mod marks;
 
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
+pub use self::marks::{Fill, RowMarks};
 use crate::file_tree::FileTree;
 
 /// Las dos vistas del panel (05 §3). La de tags llega con el índice de
@@ -27,6 +29,15 @@ impl PanelView {
             Self::Tags => Self::Folders,
         }
     }
+}
+
+/// Un archivo que un clic pide abrir.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClickOpen {
+    pub path: VaultPath,
+    /// El doble clic le pasa el foco al editor; el simple lo deja en el
+    /// árbol.
+    pub focus_editor: bool,
 }
 
 /// Qué se crea con [`Panel::start_create`].
@@ -120,30 +131,34 @@ impl Panel {
         self.error = Some(error.to_string());
     }
 
-    /// Muestra `view`, o esconde el panel si ya la mostraba. Devuelve si
-    /// quedó visible.
-    pub fn toggle(&mut self, view: PanelView) -> bool {
-        self.visible = !(self.visible && self.view == view);
+    /// Muestra `view`, o esconde el panel si ya la mostraba con el foco
+    /// (`focused`): si la mostraba sin el foco, sigue visible para que lo
+    /// tome, como `ToggleFocus` de Zed. Devuelve si quedó visible.
+    pub fn toggle(&mut self, view: PanelView, focused: bool) -> bool {
+        self.visible = !(self.visible && self.view == view && focused);
         self.view = view;
         self.visible
     }
 
-    /// Un clic en la fila `at`, el `count`-ésimo seguido: selecciona, el
-    /// primero abre o cierra una carpeta y el segundo sobre un archivo
-    /// devuelve el archivo a abrir. El segundo clic sobre una carpeta no
-    /// hace nada: si no, un doble clic la dejaría como estaba.
-    pub fn click(&mut self, at: usize, count: usize) -> Option<VaultPath> {
+    /// Un clic en la fila `at`, el `count`-ésimo seguido: selecciona, y el
+    /// primero abre o cierra una carpeta. Sobre un archivo, cada clic lo
+    /// abre, como en Zed: el primero deja el foco en el árbol y el doble se
+    /// lo pasa al editor. El segundo clic sobre una carpeta no hace nada:
+    /// si no, un doble clic la dejaría como estaba.
+    pub fn click(&mut self, at: usize, count: usize) -> Option<ClickOpen> {
         self.tree.select_row(at);
         let row = self.tree.selected_entry()?;
         let path = row.path.clone();
-        match (row.kind, count) {
-            (EntryKind::Folder, 1) => {
-                self.tree.toggle(&path);
-                None
-            }
-            (EntryKind::Folder, _) | (_, ..=1) => None,
-            _ => Some(path),
+        if row.kind != EntryKind::Folder {
+            return Some(ClickOpen {
+                path,
+                focus_editor: count > 1,
+            });
         }
+        if count == 1 {
+            self.tree.toggle(&path);
+        }
+        None
     }
 
     /// El campo que se está editando, si hay uno.

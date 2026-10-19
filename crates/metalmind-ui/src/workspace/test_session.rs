@@ -6,7 +6,7 @@ use metalmind_buffer::ByteOffset;
 use metalmind_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
-use super::{Effect, LineNumbers, PaneId, PaneView, Workspace};
+use super::{Effect, LineNumbers, Message, PaneId, PaneView, Workspace};
 use crate::document::{Document, FileStats, SaveError};
 
 /// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
@@ -154,8 +154,9 @@ impl Session {
         view.buffer().line_of(view.cursor()) + 1
     }
 
-    /// Los paneles como los describe el oráculo de nvim, en el mismo orden.
-    pub fn panes(&self) -> Panes {
+    /// Los paneles como los describe el oráculo de nvim, en el mismo orden,
+    /// con los nombres de los archivos de `dir` sin la carpeta.
+    pub fn panes(&self, dir: &Path) -> Panes {
         let mut windows: Vec<Window> = self
             .workspace
             .tree()
@@ -181,8 +182,23 @@ impl Session {
             })
             .collect();
         windows.sort();
+        let error = match self.workspace.message() {
+            Some(Message::Error(text)) => text.replace(&format!("{}/", dir.display()), ""),
+            _ => String::new(),
+        };
+        let mut modified: Vec<String> = self
+            .workspace
+            .documents
+            .iter()
+            .filter(|(_, document)| document.is_modified())
+            .filter_map(|(_, document)| document.path()?.file_name())
+            .map(|name| name.to_string_lossy().into_owned())
+            .collect();
+        modified.sort();
         Panes {
             mode: vim_mode(self.mode()).to_owned(),
+            error,
+            modified,
             windows,
         }
     }
