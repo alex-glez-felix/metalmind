@@ -28,6 +28,7 @@ unicode-properties.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
+gungraun.workspace = true
 insta.workspace = true
 metalmind-perf.workspace = true
 pretty_assertions.workspace = true
@@ -52,6 +53,11 @@ harness = false
 
 [[bench]]
 name = "history"
+harness = false
+
+# Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
+[[bench]]
+name = "instrucciones"
 harness = false
 
 [lints]
