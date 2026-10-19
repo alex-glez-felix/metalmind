@@ -71,7 +71,7 @@ pub struct PickerRow {
     /// Cómo se recorta `text` si no cabe.
     pub overflow: Overflow,
     /// Lo que va a la derecha, apagado: el atajo de una acción o dónde está.
-    /// Si no cabe, se recorta por el medio.
+    /// Si no cabe, se recorta como una ruta.
     pub detail: Option<String>,
 }
 
@@ -81,8 +81,8 @@ pub enum Overflow {
     /// Alrededor del primer resaltado, que queda a la vista y centrado.
     #[default]
     Around,
-    /// Como una ruta: por el medio, con el nombre entero si cabe y, si el
-    /// primer resaltado cae en la carpeta, también él.
+    /// Como una ruta: lo último que se pierde es el nombre y, si el primer
+    /// resaltado cae en la carpeta, también se ve él.
     Path,
 }
 

@@ -122,13 +122,21 @@ impl gpui_kit::Element for RowLine {
             Overflow::Around => {
                 fit::around(&text.widths, focus.unwrap_or(0..0), text_budget, ellipsis)
             }
-            Overflow::Path => fit::path(&text.widths, focus, text_budget, ellipsis, text.name()),
+            Overflow::Path => {
+                fit::path(&text.widths, &text.slashes(), focus, text_budget, ellipsis)
+            }
         };
         let muted = typeface.muted(self.muted);
         Shaped {
             text: text.render(&kept, &typeface, self.matched, window),
             detail: detail.map(|detail| {
-                let kept = fit::middle(&detail.widths, detail_budget, ellipsis, detail.name());
+                let kept = fit::path(
+                    &detail.widths,
+                    &detail.slashes(),
+                    None,
+                    detail_budget,
+                    ellipsis,
+                );
                 detail.render(&kept, &muted, self.muted, window)
             }),
             line_height: window.line_height(),
@@ -290,8 +298,8 @@ impl Measured {
         }
     }
 
-    fn name(&self) -> usize {
-        fit::name_graphemes(&self.text)
+    fn slashes(&self) -> Vec<usize> {
+        fit::slashes(&self.text)
     }
 
     fn total(&self) -> f32 {
