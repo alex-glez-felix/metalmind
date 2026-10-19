@@ -55,6 +55,13 @@ fn guardar_desde_el_vault_registra_la_version() {
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let (vault, _updates) = open_vault(dir.path(), data.path());
     let note = path("sub/a.md");
+    assert!(
+        vault
+            .save(&note, "uno\n".to_owned(), SaveKind::Explicit)
+            .is_err(),
+        "como el E212 de vim, no crea la carpeta"
+    );
+    fs::create_dir(dir.path().join("sub")).unwrap();
     assert!(save(&vault, &note, "uno\n").is_some());
     assert_eq!(save(&vault, &note, "uno\n"), None);
     save(&vault, &note, "dos\n");

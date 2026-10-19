@@ -52,12 +52,14 @@ pub(crate) fn create_note(root: &Path, path: &VaultPath) -> Result<(), FileOpErr
         .map_err(|source| io_error("crear", path, source))
 }
 
-/// Dónde guardar la nota `path`, con sus carpetas ya creadas.
+/// Dónde guardar la nota `path`. Sus carpetas no se crean: como el `E212`
+/// de vim, guardar en una que no existe falla al escribir.
 pub(crate) fn note_target(root: &Path, path: &VaultPath) -> Result<PathBuf, FileOpError> {
     if EntryKind::of_file(path) != EntryKind::Note {
         return Err(FileOpError::NotANote(path.clone()));
     }
-    let target = prepare_target(root, path, "guardar")?;
+    check_ancestors(root, path)?;
+    let target = path.to_fs(root);
     // `write_atomic` escribe a través de un enlace, que puede apuntar fuera del vault.
     match fs::symlink_metadata(&target) {
         Ok(metadata) if metadata.file_type().is_symlink() => {

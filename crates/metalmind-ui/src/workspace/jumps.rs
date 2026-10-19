@@ -105,18 +105,18 @@ impl Workspace {
         }
     }
 
-    /// El archivo de `id` cambió en disco. Si está oculto y sin cambios, se
-    /// relee como con `autoread` ([`Workspace::refresh`]): al volver a él
-    /// se ve lo de disco y un `:w` no lo pisa. Si no, queda anotado si ya no
-    /// es lo que se leyó o escribió, para no pisarlo al guardar; si además
-    /// tiene cambios, se avisa como el `W12` de vim. El propio guardado
-    /// también llega aquí, pero el disco tiene justo lo que se escribió.
+    /// El archivo de `id` cambió en disco. Si no tiene cambios, se relee
+    /// como con `autoread` ([`Workspace::refresh`]), se vea o esté oculto:
+    /// no se edita texto viejo y un `:w` no pisa lo de fuera. Si tiene
+    /// cambios, queda anotado si ya no es lo que se leyó o escribió, para no
+    /// pisarlo al guardar, y se avisa como el `W12` de vim. El propio
+    /// guardado también llega aquí, pero el disco tiene justo lo que se
+    /// escribió.
     fn disk_changed(&mut self, id: DocumentId) {
-        let shown = self.panes_showing(id).next().is_some();
         let Some(document) = self.documents.get_mut(id) else {
             return;
         };
-        if !shown && !document.is_modified() {
+        if !document.is_modified() {
             if let Err(error) = self.refresh(id) {
                 self.report(&error);
             }

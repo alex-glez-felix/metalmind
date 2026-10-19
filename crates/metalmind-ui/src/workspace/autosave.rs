@@ -133,7 +133,10 @@ impl Workspace {
             return Autosaved::Skipped;
         };
         let wanted = document.path().is_some() && document.is_modified();
-        if !wanted || document.changed_on_disk() {
+        // Un conflicto se vuelve a mirar: el archivo pudo volver a lo que se
+        // leyó sin que el watcher avisara.
+        let conflict = document.changed_on_disk() && !matches!(document.check_disk(), Ok(false));
+        if !wanted || conflict {
             return Autosaved::Skipped;
         }
         match document.save(self.disk.as_ref(), SaveKind::Autosave) {
