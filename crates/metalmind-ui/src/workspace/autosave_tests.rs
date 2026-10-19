@@ -154,6 +154,30 @@ fn cambiar_de_nota_en_el_panel_guarda_la_que_deja() {
 }
 
 #[test]
+fn escribir_en_otro_panel_no_atrasa_el_autoguardado_de_esta_nota() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n"), ("b.md", "dos\n")]);
+    let b = autosaving.path("b.md");
+    autosaving.session.keys("⌃wv");
+    edit_file(&mut autosaving.session, &b);
+    autosaving.session.keys("⌃wwAx⎋⌃ww");
+    for _ in 0..3 {
+        autosaving.wait(SECOND / 2);
+        autosaving.session.keys("Ay⎋");
+        autosaving.tick();
+    }
+    assert_eq!(
+        autosaving.read("a.md"),
+        "unox\n",
+        "a lleva un segundo y medio quieta"
+    );
+    assert_eq!(autosaving.read("b.md"), "dos\n", "b se sigue editando");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.read("b.md"), "dosyyy\n");
+    assert_eq!(autosaving.session.workspace.autosave_deadline(), None);
+}
+
+#[test]
 fn un_buffer_sin_archivo_no_se_autoguarda() {
     let dir = TempDir::new().unwrap();
     let mut autosaving = Autosaving::with(dir, Session::unnamed());
