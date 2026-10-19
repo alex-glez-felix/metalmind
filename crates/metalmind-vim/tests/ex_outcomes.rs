@@ -61,6 +61,12 @@ const TEXT: &str = "a|b\ncd\nab";
 #[case("Vj:wq<CR>", CommandError::PartialWrite)]
 #[case(":2q<CR>", CommandError::UnsupportedRange("q".to_owned()))]
 #[case(":'<lt>,'>vs<CR>", CommandError::UnsupportedRange("vs".to_owned()))]
+#[case(":delm<CR>", CommandError::ArgumentRequired)]
+#[case(":delm! a<CR>", CommandError::InvalidArgument)]
+#[case(":delm b-a<CR>", CommandError::InvalidArgumentAt("b-a".to_owned()))]
+#[case(":1delm a<CR>", CommandError::NoRangeAllowed)]
+#[case(":delm a<lt><CR>", CommandError::UnsupportedDeleteMark('<'))]
+#[case(":delm >a<CR>", CommandError::UnsupportedDeleteMark('>'))]
 #[case(":norm x p<CR>", CommandError::HostCommandInside("workspace::open_command_palette".to_owned()))]
 fn reports_why_a_command_failed(#[case] keys: &str, #[case] error: CommandError) {
     let (outcome, _, _) = run(TEXT, keys);
@@ -127,6 +133,17 @@ fn message(outcome: &KeyOutcome) -> String {
 #[case(":g/./s/^/x/<CR>", "3 substitutions on 3 lines")]
 #[case(":%j<CR>:s/[ab]/x/g<CR>", "4 substitutions on 1 line")]
 #[case(":%s/a/x/<CR>", "")]
+#[case(":delm<CR>", "E471: Argument required")]
+#[case(":delm \"a<CR>", "E471: Argument required")]
+#[case(":delm! a<CR>", "E474: Invalid argument")]
+#[case(":delm b-a<CR>", "E475: Invalid argument: b-a")]
+#[case(":delm a-Z<CR>", "E475: Invalid argument: a-Z")]
+#[case(":delm a-<CR>", "E475: Invalid argument: a-")]
+#[case(":delm ab?c<CR>", "E475: Invalid argument: ?c")]
+#[case(":delm '<CR>", "E475: Invalid argument: '")]
+#[case(":1delm a<CR>", "E481: No range allowed")]
+#[case(":delm a 0-9 ^.[]<CR>", "")]
+#[case(":delmarks a<CR>", "")]
 fn messages(#[case] keys: &str, #[case] text: &str) {}
 
 #[apply(messages)]

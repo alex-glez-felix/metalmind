@@ -393,6 +393,23 @@ fn deleting_its_line_drops_the_anchor_and_undo_brings_it_back() {
     assert_eq!(buffer.anchor_offset(anchor), None);
 }
 
+/// Como `:delm` de vim: el undo de un cambio hecho con la mark puesta la
+/// devuelve.
+#[test]
+fn a_cleared_anchor_comes_back_with_an_undo_from_before() {
+    let (mut buffer, anchor) = anchored("ab\ncd", 4);
+    edit(&mut buffer, vec![Edit::insert(at(0), "x")]);
+    buffer.clear_anchor(anchor).unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), None);
+    buffer.undo().unwrap();
+    assert_eq!(buffer.anchor_offset(anchor), Some(at(4)));
+    let mut other = Buffer::from("ab");
+    assert_eq!(
+        other.clear_anchor(anchor),
+        Err(BufferError::UnknownAnchor(anchor))
+    );
+}
+
 /// Como las marks de vim: cada lado de un cambio guarda dónde estaban.
 #[test]
 fn undo_and_redo_put_anchors_back_where_they_were() {

@@ -11,7 +11,7 @@ use metalmind_buffer::{Buffer, BufferError, Selections};
 pub(super) use self::global::GlobalRun;
 use self::range::DefaultRange;
 use super::Vim;
-use crate::ex::{ExCommand, ExLine, ParsedLine};
+use crate::ex::{DeleteMarks, ExCommand, ExLine, ParsedLine};
 use crate::register::Clipboard;
 use crate::{Action, CommandError, KeyOutcome, SearchError, VimError};
 
@@ -172,8 +172,22 @@ impl Vim {
             ExCommand::Global(command) => {
                 return self.global(&command, range, lines, buffer, selections, clipboard);
             }
+            ExCommand::DeleteMarks(marks) => self.delete_marks(marks, buffer)?,
         }
         Ok(done())
+    }
+
+    /// Como vim, borra las marks de antes de lo que no se entendió. Va
+    /// aparte para no agrandar el marco de `run_parsed`, que se apila en
+    /// cada `:normal` anidado.
+    fn delete_marks(&mut self, marks: DeleteMarks, buffer: &mut Buffer) -> Result<(), Failure> {
+        for letter in marks.named() {
+            self.marks.delete(buffer, letter)?;
+        }
+        for letter in marks.file() {
+            self.file_marks.delete(letter);
+        }
+        marks.error.map_or(Ok(()), |error| Err(error.into()))
     }
 }
 

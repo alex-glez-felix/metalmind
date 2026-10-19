@@ -5,8 +5,8 @@ use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
 
 use super::Vim;
 use crate::dot::{MarkJump, Subject};
-use crate::jumplist::{Jump, Landing};
-use crate::mark::{self, MarkName};
+use crate::jumplist::{FileId, Jump, Landing};
+use crate::mark::{self, MarkName, Marks, PlacedMark};
 use crate::object::Object;
 use crate::register::Clipboard;
 use crate::{CommandError, KeyOutcome, Mode, VimError};
@@ -41,6 +41,29 @@ impl Vim {
             None => self.fail(),
         }
         Ok(())
+    }
+
+    /// Las marks `a`–`z` de `marks` y las `A`–`Z` de `file` que caen en
+    /// `buffer`, en ese orden, con lo editado ya seguido
+    /// ([`Vim::catch_up`]).
+    pub fn placed_marks<'a>(
+        &'a self,
+        marks: &'a Marks,
+        file: FileId,
+        buffer: &'a Buffer,
+    ) -> impl Iterator<Item = PlacedMark> + 'a {
+        let named = marks.named(buffer).map(|(letter, offset)| PlacedMark {
+            name: char::from(b'a' + letter),
+            line: buffer.line_of(offset),
+        });
+        let of_file = self
+            .file_marks
+            .in_file(file)
+            .map(|(letter, jump)| PlacedMark {
+                name: char::from(b'A' + letter),
+                line: jump.point.line.min(buffer.last_line()),
+            });
+        named.chain(of_file)
     }
 
     /// Dónde está la mark en este buffer; `None` si no se puso, se borró su
