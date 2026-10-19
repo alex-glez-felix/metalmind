@@ -108,6 +108,57 @@ macro_rules! color_group {
 }
 
 color_group! {
+    /// Los colores por su papel. Se escriben con la paleta, y `ui`, `cursor`
+    /// y `syntax` los nombran como a un color de la paleta: cambiar `accent`
+    /// cambia todo lo que lo usa.
+    "roles" => RoleColors, RawRoles, PartialRoles {
+        /// El fondo del editor.
+        background,
+        /// El fondo de los paneles, las barras y lo que flota.
+        surface,
+        /// Lo que se levanta sobre `surface`: hover, la línea del cursor.
+        raised,
+        text,
+        /// Lo secundario: atajos, detalles, encabezados.
+        text_muted,
+        /// Lo que casi no se ve: números de línea, la sintaxis atenuada.
+        text_faint,
+        /// Lo que está pero no tiene el foco.
+        text_inactive,
+        /// El color de la app: cursor, coincidencias, lo elegido.
+        accent,
+        /// La línea entre dos superficies.
+        border_subtle,
+        /// Una línea que tiene que verse, como la que separa paneles.
+        border_strong,
+        /// Error y lo que destruye.
+        danger,
+        /// Aviso y lo pendiente, como cambios sin guardar.
+        warning,
+    }
+}
+
+impl PartialRoles {
+    /// Cada rol con su nombre, para resolver los grupos que lo nombran.
+    pub(crate) fn named(&self) -> [(&'static str, Option<Color>); 12] {
+        [
+            ("background", self.background),
+            ("surface", self.surface),
+            ("raised", self.raised),
+            ("text", self.text),
+            ("text_muted", self.text_muted),
+            ("text_faint", self.text_faint),
+            ("text_inactive", self.text_inactive),
+            ("accent", self.accent),
+            ("border_subtle", self.border_subtle),
+            ("border_strong", self.border_strong),
+            ("danger", self.danger),
+            ("warning", self.warning),
+        ]
+    }
+}
+
+color_group! {
     /// La interfaz: editor, gutter, barra de estado, panel lateral y menús.
     "ui" => UiColors, RawUi, PartialUi {
         background,

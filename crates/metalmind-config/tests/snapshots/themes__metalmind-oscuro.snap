@@ -4,6 +4,20 @@ expression: loaded.value
 ---
 Theme {
     name: "metalmind-oscuro",
+    roles: RoleColors {
+        background: #1c1f24,
+        surface: #16181d,
+        raised: #21252b,
+        text: #d7dae0,
+        text_muted: #9aa0a6,
+        text_faint: #4b5263,
+        text_inactive: #5c6370,
+        accent: #7aa2f7,
+        border_subtle: #2a2e36,
+        border_strong: #5c6370,
+        danger: #f7768e,
+        warning: #e0af68,
+    },
     ui: UiColors {
         background: #1c1f24,
         foreground: #d7dae0,
@@ -104,4 +118,132 @@ Theme {
             },
         ],
     ),
+    metrics: Metrics {
+        spacing: Spacing {
+            xs: Px(
+                4.0,
+            ),
+            sm: Px(
+                8.0,
+            ),
+            md: Px(
+                12.0,
+            ),
+            lg: Px(
+                16.0,
+            ),
+        },
+        radius: Radius {
+            sm: Px(
+                2.0,
+            ),
+            md: Px(
+                4.0,
+            ),
+            lg: Px(
+                8.0,
+            ),
+        },
+        stroke: Stroke {
+            border: Px(
+                1.0,
+            ),
+            caret: Px(
+                2.0,
+            ),
+            text_line: Px(
+                1.0,
+            ),
+        },
+        text: Text {
+            editor: TextStyle {
+                size: 1.0,
+                line_height: 1.4,
+            },
+            ui_md: TextStyle {
+                size: 1.0,
+                line_height: 1.4,
+            },
+            ui_sm: TextStyle {
+                size: 1.0,
+                line_height: 1.4,
+            },
+            normal: Weight(
+                400,
+            ),
+            strong: Weight(
+                700,
+            ),
+        },
+        rows: Rows {
+            tree: Factor(
+                1.7,
+            ),
+            menu: Factor(
+                1.7,
+            ),
+            picker_padding: Length(
+                6.0,
+            ),
+        },
+        layout: Layout {
+            status_padding_x: Length(
+                10.0,
+            ),
+            status_padding_y: Length(
+                3.0,
+            ),
+            status_gap: Length(
+                16.0,
+            ),
+            picker_width: Length(
+                640.0,
+            ),
+            picker_top: Length(
+                64.0,
+            ),
+            picker_rows: Count(
+                12,
+            ),
+            picker_padding_x: Length(
+                12.0,
+            ),
+            picker_input_padding_y: Length(
+                12.0,
+            ),
+            picker_gap: Length(
+                16.0,
+            ),
+            panel_padding_x: Length(
+                8.0,
+            ),
+            panel_padding_y: Length(
+                6.0,
+            ),
+            panel_gap: Length(
+                6.0,
+            ),
+            panel_indent: Length(
+                14.0,
+            ),
+            panel_button_padding_x: Length(
+                4.0,
+            ),
+            icon_size: Factor(
+                0.8,
+            ),
+            rail_width: Length(
+                36.0,
+            ),
+            rail_button_size: Length(
+                28.0,
+            ),
+            menu_width: Length(
+                240.0,
+            ),
+            menu_padding: Length(
+                4.0,
+            ),
+        },
+    },
 }

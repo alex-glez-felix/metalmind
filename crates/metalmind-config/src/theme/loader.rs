@@ -3,8 +3,9 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
-use super::groups::{Palette, PartialCursor, PartialSyntax, PartialUi, UnknownColor};
+use super::groups::{Palette, PartialCursor, PartialRoles, PartialSyntax, PartialUi, UnknownColor};
 use super::headings::PartialHeadings;
+use super::metrics::{PartialMetrics, PartialSpacing, UnknownStep};
 use super::{BUILTIN_THEMES, Theme, ThemeFile};
 use crate::diagnostic::{Diagnostic, Loaded, Location};
 use crate::file::{YamlFile, read_yaml};
@@ -40,9 +41,24 @@ impl Layer {
             name,
             location,
         } = unknown;
-        Diagnostic::error(format!("`{name}` no está en la paleta (en {key})"))
-            .at(location)
-            .in_file(&self.file)
+        Diagnostic::error(format!(
+            "`{name}` no está en la paleta ni es un rol (en {key})"
+        ))
+        .at(location)
+        .in_file(&self.file)
+    }
+
+    fn unknown_step(&self, unknown: UnknownStep) -> Diagnostic {
+        let UnknownStep {
+            key,
+            name,
+            location,
+        } = unknown;
+        Diagnostic::error(format!(
+            "`{name}` no es un paso de `spacing` (en {key}): xs, sm, md, lg o píxeles"
+        ))
+        .at(location)
+        .in_file(&self.file)
     }
 }
 
@@ -79,36 +95,7 @@ impl Themes {
 
     fn resolve(&self, name: &str, warnings: &mut Vec<Diagnostic>) -> Result<Theme, Diagnostic> {
         let chain = self.chain(name, warnings)?;
-        let mut palette = Palette::new();
-        for layer in chain.iter().rev() {
-            palette.extend(
-                layer
-                    .theme
-                    .palette
-                    .iter()
-                    .map(|(key, hex)| (key.clone(), hex.0)),
-            );
-        }
-        let (mut ui, mut cursor, mut syntax) = Default::default();
-        let mut headings = PartialHeadings::default();
-        for layer in chain.iter().rev() {
-            headings = layer.theme.headings.partial().over(headings);
-            let resolve = |unknown| layer.unknown_color(unknown);
-            ui = layer.theme.ui.resolve(&palette).map_err(resolve)?.over(ui);
-            cursor = layer
-                .theme
-                .cursor
-                .resolve(&palette)
-                .map_err(resolve)?
-                .over(cursor);
-            syntax = layer
-                .theme
-                .syntax
-                .resolve(&palette)
-                .map_err(resolve)?
-                .over(syntax);
-        }
-        complete(name, ui, cursor, syntax, headings).map_err(|missing| {
+        let missing_keys = |missing: Vec<&str>| {
             let error = Diagnostic::error(format!(
                 "al tema `{name}` le faltan claves: {}",
                 missing.join(", ")
@@ -117,7 +104,44 @@ impl Themes {
                 Some(leaf) => error.in_file(&leaf.file),
                 None => error,
             }
-        })
+        };
+        let palette = merged_palette(&chain);
+        let (roles, spacing) = scales(&chain, &palette)?;
+        let lookup = with_roles(&chain, palette, &roles)?;
+        let (mut ui, mut cursor, mut syntax) = Default::default();
+        let mut headings = PartialHeadings::default();
+        let mut metrics = PartialMetrics::default();
+        for layer in chain.iter().rev() {
+            headings = layer.theme.headings.partial().over(headings);
+            let resolve = |unknown| layer.unknown_color(unknown);
+            ui = layer.theme.ui.resolve(&lookup).map_err(resolve)?.over(ui);
+            cursor = layer
+                .theme
+                .cursor
+                .resolve(&lookup)
+                .map_err(resolve)?
+                .over(cursor);
+            syntax = layer
+                .theme
+                .syntax
+                .resolve(&lookup)
+                .map_err(resolve)?
+                .over(syntax);
+            metrics = layer
+                .theme
+                .metrics()
+                .resolve(&spacing)
+                .map_err(|unknown| layer.unknown_step(unknown))?
+                .over(metrics);
+        }
+        let groups = Groups {
+            ui,
+            cursor,
+            syntax,
+            headings,
+            metrics,
+        };
+        complete(name, roles, spacing, groups).map_err(missing_keys)
     }
 
     /// La cadena desde `name` hasta el tema sin `extends`, en ese orden.
@@ -209,26 +233,105 @@ fn circular(chain: &[Layer], next: &str) -> Diagnostic {
     ))
 }
 
-fn complete(
-    name: &str,
+/// La paleta de toda la cadena: lo de un tema pisa lo del que extiende.
+fn merged_palette(chain: &[Layer]) -> Palette {
+    let mut palette = Palette::new();
+    for layer in chain.iter().rev() {
+        palette.extend(
+            layer
+                .theme
+                .palette
+                .iter()
+                .map(|(key, hex)| (key.clone(), hex.0)),
+        );
+    }
+    palette
+}
+
+/// Los roles y la escala de espaciado de la cadena, que los demás grupos
+/// nombran: van antes que ellos.
+fn scales(
+    chain: &[Layer],
+    palette: &Palette,
+) -> Result<(PartialRoles, PartialSpacing), Diagnostic> {
+    let mut roles = PartialRoles::default();
+    let mut spacing = PartialSpacing::default();
+    for layer in chain.iter().rev() {
+        roles = layer
+            .theme
+            .roles
+            .resolve(palette)
+            .map_err(|unknown| layer.unknown_color(unknown))?
+            .over(roles);
+        spacing = layer
+            .theme
+            .metrics()
+            .spacing()
+            .map_err(|unknown| layer.unknown_step(unknown))?
+            .over(spacing);
+    }
+    Ok((roles, spacing))
+}
+
+/// La paleta con los roles: lo que `ui`, `cursor` y `syntax` pueden
+/// nombrar. Un rol que falta no entra; se reporta con las claves que faltan.
+fn with_roles(
+    chain: &[Layer],
+    mut palette: Palette,
+    roles: &PartialRoles,
+) -> Result<Palette, Diagnostic> {
+    for (role, color) in roles.named() {
+        let Some(color) = color else { continue };
+        if palette.insert(role.to_owned(), color).is_some() {
+            let layer = chain
+                .iter()
+                .find(|layer| layer.theme.palette.contains_key(role));
+            let error = Diagnostic::error(format!(
+                "`{role}` es un rol: la paleta no puede usar ese nombre"
+            ));
+            return Err(match layer {
+                Some(layer) => error.in_file(&layer.file),
+                None => error,
+            });
+        }
+    }
+    Ok(palette)
+}
+
+/// Lo que se resuelve capa por capa con la paleta y la escala finales.
+struct Groups {
     ui: PartialUi,
     cursor: PartialCursor,
     syntax: PartialSyntax,
     headings: PartialHeadings,
+    metrics: PartialMetrics,
+}
+
+fn complete(
+    name: &str,
+    roles: PartialRoles,
+    spacing: PartialSpacing,
+    groups: Groups,
 ) -> Result<Theme, Vec<&'static str>> {
     let mut missing = Vec::new();
-    let ui = ui.complete(&mut missing);
-    let cursor = cursor.complete(&mut missing);
-    let syntax = syntax.complete(&mut missing);
-    let headings = headings.complete(&mut missing);
-    match (ui, cursor, syntax, headings) {
-        (Some(ui), Some(cursor), Some(syntax), Some(headings)) => Ok(Theme {
-            name: name.to_owned(),
-            ui,
-            cursor,
-            syntax,
-            headings,
-        }),
+    let roles = roles.complete(&mut missing);
+    let ui = groups.ui.complete(&mut missing);
+    let cursor = groups.cursor.complete(&mut missing);
+    let syntax = groups.syntax.complete(&mut missing);
+    let headings = groups.headings.complete(&mut missing);
+    let metrics = groups.metrics.complete(spacing, &mut missing);
+    match (roles, ui, cursor, syntax, headings, metrics) {
+        (Some(roles), Some(ui), Some(cursor), Some(syntax), Some(headings), Some(metrics)) => {
+            Ok(Theme {
+                name: name.to_owned(),
+                roles,
+                ui,
+                cursor,
+                syntax,
+                headings,
+                metrics,
+            })
+        }
         _ => Err(missing),
     }
 }

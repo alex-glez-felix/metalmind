@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Div, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, Styled as _, Subscription, Window, div,
-    prelude::FluentBuilder as _, relative,
+    prelude::FluentBuilder as _,
 };
 use metalmind_config::Paths;
 use metalmind_vim::Invocation;
@@ -288,8 +288,7 @@ impl Render for WorkspaceView {
         let mut element = div()
             .size_full()
             .font_family(theme.font_family.clone())
-            .text_size(theme.font_size)
-            .line_height(relative(theme.line_height))
+            .map(|element| theme.ui_text(element))
             .text_color(theme.foreground)
             .bg(theme.background);
         element = on_command::<Save>(element, cx);

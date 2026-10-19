@@ -18,8 +18,8 @@ pub fn entry(kind: EntryKind, theme: &Theme) -> Div {
     let shape = match kind {
         EntryKind::Folder => div()
             .w(size)
-            .h(size * 0.75)
-            .rounded(theme.radius * 0.5)
+            .h(theme.icon_short_side())
+            .rounded(theme.radius_sm)
             .bg(theme.panel_folder),
         EntryKind::Note => page(size, theme.panel_note, theme),
         EntryKind::Attachment => page(size, theme.panel_muted, theme),
@@ -29,9 +29,9 @@ pub fn entry(kind: EntryKind, theme: &Theme) -> Div {
 
 fn page(size: gpui_kit::Pixels, color: Hsla, theme: &Theme) -> Div {
     div()
-        .w(size * 0.75)
+        .w(theme.icon_short_side())
         .h(size)
-        .rounded(theme.radius * 0.5)
+        .rounded(theme.radius_sm)
         .border(theme.border_width)
         .border_color(color)
 }
