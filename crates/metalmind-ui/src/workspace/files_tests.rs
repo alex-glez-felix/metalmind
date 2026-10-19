@@ -402,17 +402,36 @@ fn una_posicion_que_ya_no_existe_se_acerca_al_texto() {
     assert_eq!(session.line(session.pane()), 2, "la última línea");
 }
 
+/// Una carpeta no se puede leer como nota: no cambia nada.
 #[test]
 fn si_no_se_abre_el_cursor_no_se_mueve() {
     let (_dir, vault, mut session) = vault();
-    session.keys("x");
     let opened = session
         .workspace
-        .open_file_at(&file(&vault, "b.md"), Placement::Current, at(0, 1))
+        .open_file_at(&file(&vault, "notas"), Placement::Current, at(0, 1))
         .unwrap();
     assert!(!opened);
     assert_eq!(shown(&session), file(&vault, "a.md"));
     assert_eq!(session.cursor().get(), 0);
+}
+
+/// Con `hidden`, una nota con cambios no impide abrir el resultado: queda
+/// oculta con sus cambios y `ctrl-o` vuelve a ella.
+#[test]
+fn abrir_en_una_linea_con_cambios_deja_la_nota_oculta() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "b.md"), "uno\ndos\n").unwrap();
+    session.keys("x");
+    let opened = session
+        .workspace
+        .open_file_at(&file(&vault, "b.md"), Placement::Current, at(1, 0))
+        .unwrap();
+    assert!(opened);
+    assert_eq!(session.line(session.pane()), 2);
+    session.keys("⌃o");
+    assert_eq!(shown(&session), file(&vault, "a.md"));
+    assert_eq!(session.text(), "", "con sus cambios");
+    assert!(session.is_modified());
 }
 
 /// Abrir un resultado de `space /` es un salto: `ctrl-o` vuelve.
