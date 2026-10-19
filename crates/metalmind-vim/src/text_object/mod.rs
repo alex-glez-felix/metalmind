@@ -135,7 +135,8 @@ impl TextObject {
 }
 
 /// Selecciona la sección por líneas; si una selección por líneas ya la
-/// abarca, la que la contiene. Si no hay, nada cambia.
+/// abarca, la que la contiene. Si no hay, nada cambia. Una selección hacia
+/// arriba sigue hacia arriba, como con `ip`.
 fn select_section(
     outline: &LazyOutline,
     buffer: &Buffer,
@@ -148,8 +149,13 @@ fn select_section(
     let selected = (kind == VisualKind::Line).then(|| (anchor.min(head), anchor.max(head)));
     match markdown::select_section(outline.get(buffer), buffer, selected, head, count, around) {
         Some((first, last)) => {
-            ends.anchor = buffer.line_start(first);
-            ends.head = buffer.line_start(last);
+            let (from, to) = if head < anchor {
+                (last, first)
+            } else {
+                (first, last)
+            };
+            ends.anchor = buffer.line_start(from);
+            ends.head = buffer.line_start(to);
             VisualKind::Line
         }
         None => kind,
