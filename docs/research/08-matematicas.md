@@ -222,4 +222,6 @@ Sigue el §7; lo que cambió al implementarlo:
 - **Pánicos**: parsear, componer y pintar corren dentro de `catch_unwind`; un pánico de RaTeX (tiene ~240 `unwrap`/`expect`/`panic!`) se ve como el error de una fórmula mal escrita. Antes de convertir el layout a `DisplayList` se valida con `validate_layout`, el tope de RaTeX contra fórmulas gigantes.
 - **Números**: en [performance.md](../performance.md) ("Fórmulas").
 
-Capturas: [`docs/capturas/formulas-oscuro.png`](../capturas/formulas-oscuro.png) y [`formulas-claro.png`](../capturas/formulas-claro.png), con las 22 fórmulas del §2 (`scripts/capturas-formulas.sh`).
+Capturas: [`docs/capturas/formulas-oscuro.png`](../capturas/formulas-oscuro.png) y [`formulas-claro.png`](../capturas/formulas-claro.png), con las 22 fórmulas del §2 (`scripts/capturas-formulas.sh`). Una fórmula que no compone, con el ratón encima:
+
+![El mensaje de RaTeX sobre una fórmula mal escrita](img/matematicas-error.png)
