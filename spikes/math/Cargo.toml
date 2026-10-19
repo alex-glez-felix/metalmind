@@ -1,0 +1,66 @@
+[package]
+name = "metalmind-spike-math"
+description = "Spike de fórmulas LaTeX: mitex + typst, RaTeX y pulldown-latex; tiempos, memoria y una ventana GPUI con tres fórmulas."
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[features]
+default = ["typst", "ratex", "mathml"]
+typst = ["dep:comemo", "dep:mitex", "dep:serde_json", "dep:typst", "dep:typst-assets", "dep:typst-layout", "dep:typst-render"]
+ratex = ["dep:ratex-layout", "dep:ratex-parser", "dep:ratex-render", "dep:ratex-types"]
+mathml = ["dep:formulary", "dep:math-core", "dep:pulldown-latex", "dep:resvg", "dep:tiny-skia", "dep:usvg"]
+
+[dependencies]
+comemo = { version = "=0.5.1", optional = true }
+formulary = { version = "=0.3.0", optional = true }
+math-core = { version = "=0.9.0", optional = true }
+mitex = { version = "=0.2.4", optional = true }
+peak_alloc = "=0.3.0"
+# png, resvg, usvg y tiny-skia en las versiones de GPUI: no se duplican.
+png = "=0.17.16"
+pulldown-latex = { version = "=0.8.0", optional = true }
+ratex-layout = { version = "=0.1.15", optional = true }
+ratex-parser = { version = "=0.1.15", optional = true }
+ratex-render = { version = "=0.1.15", features = ["embed-fonts"], optional = true }
+ratex-types = { version = "=0.1.15", optional = true }
+resvg = { version = "=0.46.0", default-features = false, optional = true }
+serde_json = { version = "=1.0.154", optional = true }
+thiserror = "=2.0.21"
+tiny-skia = { version = "=0.11.4", optional = true }
+typst = { version = "=0.15.1", optional = true }
+typst-assets = { version = "=0.15.1", features = ["fonts"], optional = true }
+typst-layout = { version = "=0.15.1", optional = true }
+typst-render = { version = "=0.15.1", optional = true }
+usvg = { version = "=0.46.0", default-features = false, optional = true }
+
+[[bin]]
+name = "medir"
+required-features = ["typst", "ratex", "mathml"]
+
+[[bin]]
+name = "galeria"
+required-features = ["typst", "ratex", "mathml"]
+
+[[test]]
+name = "motores"
+required-features = ["typst", "ratex", "mathml"]
+
+[dev-dependencies]
+gpui-kit = { version = "=0.7.3", default-features = false }
+image = { version = "=0.25.10", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+dbg_macro = "deny"
+allow_attributes_without_reason = "deny"
+
+[patch.crates-io]
+mitex = { path = "vendor/mitex" }
