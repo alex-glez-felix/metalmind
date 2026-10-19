@@ -258,20 +258,37 @@ pub fn one_line(text: &str) -> String {
 /// El ancho de cada grafema de una línea ya con forma: `starts` son los
 /// bytes donde empieza cada uno, más el final del texto, y `glyphs` el byte
 /// y la `x` de cada glifo, en cualquier orden. Cada glifo avanza hasta el
-/// siguiente a su derecha y ese avance es de su grafema, así que vale
-/// también para texto de derecha a izquierda.
+/// siguiente a su derecha, así que vale también de derecha a izquierda, y
+/// ese avance se reparte entre los grafemas de su clúster, desde su byte
+/// hasta el del glifo siguiente en el texto: una ligadura mide lo que
+/// ocupan todos los que junta.
 #[must_use]
 pub fn grapheme_widths(starts: &[usize], glyphs: &[(usize, f32)], width: f32) -> Vec<f32> {
+    let end = starts.last().copied().unwrap_or(0);
     let mut by_x = glyphs.to_vec();
     by_x.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let mut by_index: Vec<usize> = glyphs.iter().map(|&(index, _)| index).collect();
+    by_index.sort_unstable();
+    let grapheme_of = |byte: usize| {
+        starts
+            .partition_point(|&start| start <= byte)
+            .saturating_sub(1)
+    };
     let mut widths = vec![0.0; starts.len().saturating_sub(1)];
     for (at, &(index, x)) in by_x.iter().enumerate() {
-        let next = by_x.get(at + 1).map_or(width, |&(_, x)| x);
-        let grapheme = starts
-            .partition_point(|&start| start <= index)
-            .saturating_sub(1);
-        if let Some(grapheme_width) = widths.get_mut(grapheme) {
-            *grapheme_width += (next - x).max(0.0);
+        let advance = (by_x.get(at + 1).map_or(width, |&(_, x)| x) - x).max(0.0);
+        let cluster_end = by_index
+            .get(by_index.partition_point(|&other| other <= index))
+            .copied()
+            .unwrap_or(end);
+        let first = grapheme_of(index);
+        let last = grapheme_of(cluster_end.saturating_sub(1)).max(first);
+        let Some(covered) = widths.get_mut(first..=last) else {
+            continue;
+        };
+        let share = advance / f32::from(u16::try_from(covered.len()).unwrap_or(u16::MAX));
+        for grapheme_width in covered {
+            *grapheme_width += share;
         }
     }
     widths
