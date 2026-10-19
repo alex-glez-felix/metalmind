@@ -6,6 +6,7 @@
 mod apply;
 mod attachment;
 mod capture;
+mod cause;
 mod changes;
 mod edit;
 mod file;

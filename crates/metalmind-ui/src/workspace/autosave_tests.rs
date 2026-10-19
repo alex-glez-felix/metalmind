@@ -329,7 +329,13 @@ fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
     autosaving.session.keys("ihola⎋");
     autosaving.wait(SECOND);
     assert!(autosaving.tick());
-    assert!(matches!(autosaving.message(), Some(Message::Error(_))));
+    assert_eq!(
+        autosaving.message(),
+        Some(&Message::Error(
+            "no se pudo guardar: la carpeta no existe".to_owned()
+        )),
+        "la causa, sin la ruta que ya muestra la barra"
+    );
     assert!(autosaving.session.is_modified());
     assert_eq!(
         autosaving.state(),
@@ -414,4 +420,21 @@ fn lo_que_cambio_fuera_durante_un_insert_sin_cambios_se_relee_al_cerrarlo() {
     autosaving.session.keys("⎋");
     assert_eq!(autosaving.session.text(), "de fuera");
     assert_eq!(autosaving.state(), Some(SaveState::Saved));
+}
+
+#[test]
+fn si_falla_una_nota_que_no_se_ve_el_aviso_la_nombra_despues_de_la_causa() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("b.md"), "dos\n").unwrap();
+    let missing = dir.path().join("falta").join("a.md");
+    let session = Session::open(&missing);
+    let mut autosaving = Autosaving::with(dir, session);
+    autosaving.session.keys("ihola⎋");
+    let b = autosaving.path("b.md");
+    edit_file(&mut autosaving.session, &b);
+    let expected = format!(
+        "no se pudo guardar: la carpeta no existe ({})",
+        missing.display()
+    );
+    assert_eq!(autosaving.message(), Some(&Message::Error(expected)));
 }

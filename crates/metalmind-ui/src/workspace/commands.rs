@@ -144,7 +144,9 @@ impl Workspace {
             }
             Err(error) => {
                 log::error!("{error}");
-                Message::Error(error.to_string())
+                // Una copia en otra ruta la nombra; el archivo propio ya se ve en la barra.
+                let other = path.map(|p| p.display().to_string());
+                Message::save_failed(other.as_deref(), &error)
             }
         };
         let saved = matches!(message, Message::Info(_));

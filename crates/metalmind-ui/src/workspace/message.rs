@@ -3,7 +3,7 @@
 use metalmind_vim::{Substitution, Wrap};
 
 use super::DocumentId;
-use crate::document::{Document, FileStats};
+use crate::document::{Document, FileStats, SaveError};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
@@ -47,6 +47,21 @@ impl Message {
         Self::Info(format!("\"{name}\" {stats} escritos"))
     }
 
+    /// Un guardado que falló: la causa primero, para que un nombre largo no
+    /// la tape al recortar la barra. `name` es el archivo, si no es el que
+    /// ya muestra la barra; los errores de vim van con su texto.
+    #[must_use]
+    pub fn save_failed(name: Option<&str>, error: &SaveError) -> Self {
+        if error.is_vim() {
+            return Self::Error(error.to_string());
+        }
+        let cause = error.cause();
+        Self::Error(match name {
+            Some(name) => format!("no se pudo guardar: {cause} ({name})"),
+            None => format!("no se pudo guardar: {cause}"),
+        })
+    }
+
     /// `:e` sin ruta, que releería el archivo y perdería cambios.
     #[must_use]
     pub fn unsaved() -> Self {
@@ -88,9 +103,33 @@ impl Message {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    use metalmind_vault::FileError;
 
     use super::*;
+
+    #[test]
+    fn un_guardado_que_falla_dice_la_causa_primero() {
+        let denied = SaveError::File(FileError::Write {
+            path: PathBuf::from("/una/ruta/larguisima/nota.md"),
+            source: io::Error::from(io::ErrorKind::PermissionDenied),
+        });
+        assert_eq!(
+            Message::save_failed(None, &denied),
+            Message::Error("no se pudo guardar: permiso denegado".to_owned())
+        );
+        assert_eq!(
+            Message::save_failed(Some("otra.md"), &denied),
+            Message::Error("no se pudo guardar: permiso denegado (otra.md)".to_owned())
+        );
+        assert_eq!(
+            Message::save_failed(None, &SaveError::Exists),
+            Message::Error("E13: File exists (add ! to override)".to_owned()),
+            "los de vim, con su texto"
+        );
+    }
 
     #[test]
     fn s_avisa_desde_tres_reemplazos_como_vim() {
