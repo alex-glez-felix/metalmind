@@ -162,6 +162,20 @@ fn qa_se_niega_y_qa_bang_cierra() {
     assert_eq!(session.effect, Effect::CloseWindow);
 }
 
+/// Como nvim: `:q!` en un split descarta los cambios del documento que
+/// deja de verse, así que después `:qa` sale sin preguntar.
+#[test]
+fn q_bang_en_un_split_descarta_y_qa_sale() {
+    let (dir, mut session) = three_files();
+    session.keys("ix⎋⌃wv");
+    show(&mut session, &path(&dir, "b.md"));
+    session.keys("⌃wh:q!⏎");
+    assert_eq!(session.workspace.tree().len(), 1);
+    session.keys(":qa⏎");
+    assert_eq!(session.effect, Effect::CloseWindow);
+    assert_eq!(fs::read_to_string(path(&dir, "a.md")).unwrap(), "a1\na2\n");
+}
+
 #[test]
 fn wa_guarda_tambien_las_notas_ocultas() {
     let (dir, mut session) = three_files();
@@ -229,6 +243,8 @@ fn wqa_con_un_buffer_sin_nombre_guarda_los_demas_y_no_cierra() {
 #[case::q_en_un_split("ix<Esc><C-w>v:e b.md<CR><C-w>w:q<CR>")]
 #[case::ultimo_panel_tras_un_split("ix<Esc>:e b.md<CR><C-w>v:e c.md<CR>:q<CR>:q<CR>")]
 #[case::only("ix<Esc><C-w>v:e b.md<CR><C-w>o")]
+#[case::q_bang_en_un_split_descarta("ix<Esc><C-w>v:e b.md<CR><C-w>w:q!<CR>")]
+#[case::q_bang_con_el_buffer_en_otro_panel("ix<Esc><C-w>v:q!<CR>")]
 #[case::wa("ix<Esc>:e b.md<CR>iy<Esc>:wa<CR>:e a.md<CR>")]
 #[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
 fn como_nvim_con_hidden(#[case] keys: &str) {

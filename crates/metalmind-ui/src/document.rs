@@ -232,6 +232,9 @@ impl Document {
     /// El disco ya tiene lo que tiene el buffer.
     fn mark_saved(&mut self) -> FileStats {
         self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
+        // Ahora el archivo es lo que se escribió: una sola línea vacía solo
+        // si el buffer sigue vacío.
+        self.blank_line &= self.buffer.is_empty();
         self.exists_on_disk = true;
         self.noeol = false;
         self.stats()

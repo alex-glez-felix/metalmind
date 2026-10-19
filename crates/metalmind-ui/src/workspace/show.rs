@@ -105,18 +105,24 @@ impl Workspace {
         Ok(pane)
     }
 
-    /// Un documento oculto sin cambios vuelve con lo que tenga el disco,
-    /// como con `autoread` de nvim: un cambio de fuera mientras no se veía
-    /// (git, Syncthing) no deja texto viejo, y un archivo que apareció se
-    /// carga. Si no cambió, conserva su historial. Si ya no se puede leer o
-    /// lo borraron, se queda como estaba: el buffer es la única copia.
-    fn refresh(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
+    /// Un documento oculto sin cambios pasa a tener lo que dice el disco,
+    /// como con `autoread` de nvim: al volver o cuando avisa el watcher. Un
+    /// cambio de fuera mientras no se veía (git, Syncthing) no deja texto
+    /// viejo, y un archivo que apareció se carga. Si no cambió, conserva su
+    /// historial; las marks y el cursor guardado siguen a su línea. Si ya
+    /// no se puede leer o lo borraron, se queda como estaba: el buffer es
+    /// la única copia.
+    pub(super) fn refresh(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
         let document = self.document(id)?;
-        if document.is_modified() {
+        let Some(path) = document.path().filter(|_| !document.is_modified()) else {
             return Ok(());
-        }
-        let Some(fresh) = document.path().and_then(|path| Document::open(path).ok()) else {
-            return Ok(());
+        };
+        let fresh = match Document::open(path) {
+            Ok(fresh) => fresh,
+            Err(error) => {
+                log::warn!("no se releyó {}: {error}", path.display());
+                return Ok(());
+            }
         };
         let deleted = document.exists_on_disk() && !fresh.exists_on_disk();
         if deleted || fresh.same_on_disk(document) {

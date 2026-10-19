@@ -311,3 +311,21 @@ fn los_saltos_dejan_oculta_la_nota_con_cambios_y_q_la_muestra() {
     session.keys("⌃o");
     assert_eq!(session.file(), "b.md");
 }
+
+/// Si el watcher relee una nota oculta que se acortó fuera, el cursor
+/// guardado sigue a su línea: no queda en un offset del texto viejo.
+#[test]
+fn releer_una_nota_oculta_reubica_su_cursor() {
+    let (_dir, vault, mut session) =
+        vault_session(&[("a.md", "uno\ndos\ntres\ncuatro\n"), ("b.md", B)], "a.md");
+    let path = |name: &str| vault.root().join(name);
+    session.keys(&format!("3jll:e {}⏎", path("b.md").display()));
+    fs::write(path("a.md"), "x\nyy\nz\nw\n").unwrap();
+    let modified = VaultChange::Modified {
+        path: VaultPath::new("a.md").unwrap(),
+    };
+    session.workspace.files_changed(vault.root(), &[modified]);
+    session.keys(&format!(":e {}⏎", path("a.md").display()));
+    assert_eq!(session.text(), "x\nyy\nz\nw");
+    assert_eq!(session.cursor(), ByteOffset::new(7), "línea 4, columna 0");
+}
