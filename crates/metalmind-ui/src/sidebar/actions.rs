@@ -3,6 +3,8 @@
 
 use gpui_kit::{Action, App, KeyBinding};
 
+use crate::actions::{ToggleFolders, ToggleTags};
+
 /// Contexto de teclas del árbol con el foco.
 pub const TREE_CONTEXT: &str = "FileTree";
 /// Escribiendo un nombre o el filtro.
@@ -83,6 +85,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("m", Move, tree),
         KeyBinding::new("d", Delete, tree),
         KeyBinding::new("shift-t", ToggleView, tree),
+        KeyBinding::new("space e", ToggleFolders, tree),
+        KeyBinding::new("space t", ToggleTags, tree),
         KeyBinding::new("q", Hide, tree),
         KeyBinding::new("ctrl-w l", FocusEditor, tree),
         KeyBinding::new("ctrl-w ctrl-l", FocusEditor, tree),

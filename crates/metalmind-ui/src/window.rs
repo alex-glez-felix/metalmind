@@ -116,8 +116,10 @@ pub fn open(
             }
         });
         let closing = view.downgrade();
-        window.on_window_should_close(cx, move |_window, cx| {
-            closing.update(cx, WorkspaceView::may_close).unwrap_or(true)
+        window.on_window_should_close(cx, move |window, cx| {
+            closing
+                .update(cx, |view, cx| view.may_close(window, cx))
+                .unwrap_or(true)
         });
         view
     })

@@ -43,8 +43,9 @@ impl Default for Documents {
 impl Documents {
     pub fn insert(&mut self, mut document: Document, file: FileId) -> DocumentId {
         document.set_rows(self.rows);
-        let id = DocumentId(self.next_id);
+        // Desde 1, como los números de los buffers de vim.
         self.next_id += 1;
+        let id = DocumentId(self.next_id);
         self.open.insert(id, document);
         self.files.insert(id, file);
         id

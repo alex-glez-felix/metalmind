@@ -33,10 +33,20 @@ macro_rules! bare_commands {
 bare_commands! {
     Save = editor::"save";
     SaveAndQuit = editor::"save_and_quit";
-    /// Cierra el panel si no se pierden cambios; el último cierra la ventana.
+    /// Cierra el panel; el último cierra la ventana si ningún buffer tiene
+    /// cambios.
     Quit = editor::"quit";
-    /// Cierra el panel aunque se pierdan cambios.
+    /// Cierra el panel; el último cierra la ventana aunque se pierdan
+    /// cambios.
     ForceQuit = editor::"force_quit";
+    /// Guarda todos los buffers con cambios, también los ocultos.
+    SaveAll = workspace::"save_all";
+    /// Cierra la ventana si ningún buffer tiene cambios.
+    QuitAll = workspace::"quit_all";
+    /// Cierra la ventana aunque se pierdan cambios.
+    ForceQuitAll = workspace::"force_quit_all";
+    /// Guarda todos los buffers con cambios y cierra la ventana.
+    SaveAllAndQuit = workspace::"save_all_and_quit";
     SplitRight = pane::"split_right";
     SplitDown = pane::"split_down";
     FocusLeft = pane::"focus_left";
@@ -44,7 +54,7 @@ bare_commands! {
     FocusUp = pane::"focus_up";
     FocusRight = pane::"focus_right";
     FocusNext = pane::"focus_next";
-    /// Cierra los demás paneles, salvo los que perderían cambios.
+    /// Cierra los demás paneles; sus buffers quedan ocultos.
     Only = pane::"only";
     /// Busca una nota del vault por su ruta.
     OpenFinder = workspace::"open_finder";
@@ -166,6 +176,10 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
             Some(path) => Box::new(SaveAsAndQuit { path }),
             None => Box::new(SaveAndQuit),
         },
+        Command::SaveAll => Box::new(SaveAll),
+        Command::QuitAll => Box::new(QuitAll),
+        Command::ForceQuitAll => Box::new(ForceQuitAll),
+        Command::SaveAllAndQuit => Box::new(SaveAllAndQuit),
         Command::Edit => Box::new(Edit { path: argument }),
         Command::ForceEdit => Box::new(ForceEdit { path: argument }),
         Command::SplitRight => Box::new(SplitRight),

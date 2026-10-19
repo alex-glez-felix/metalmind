@@ -6,8 +6,8 @@ use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 use super::*;
-use crate::workspace::panes_oracle;
 use crate::workspace::test_session::Session;
+use crate::workspace::{LineNumbers, panes_oracle};
 
 /// Una carpeta con `a.md` y `b.md`, y una sesión abierta en `a.md`.
 fn two_files() -> (TempDir, Session) {
@@ -91,28 +91,135 @@ fn e_de_un_archivo_que_no_existe_lo_empieza_vacio() {
     );
 }
 
+/// Con `hidden`, el default de nvim: el buffer con cambios queda oculto.
 #[test]
-fn e_se_niega_si_se_perderian_cambios() {
+fn e_deja_oculto_el_buffer_con_cambios() {
     let (dir, mut session) = two_files();
     session.keys("x");
     edit(&mut session, "e", &path(&dir, "b.md"));
-    assert_eq!(shown(&session), path(&dir, "a.md"));
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(error(&session), None);
+    assert_eq!(session.workspace.documents.iter().count(), 2);
+    edit(&mut session, "e", &path(&dir, "a.md"));
     assert_eq!(session.text(), "");
-    assert_eq!(
-        error(&session),
-        Some("E37: No write since last change (add ! to override)")
-    );
+    assert!(session.is_modified());
 }
 
-/// Como nvim con `hidden`, `:e! otra` no descarta los cambios: el buffer
-/// queda oculto con ellos.
+/// `:e!` con otra ruta no descarta nada en nvim con `hidden`: solo `:e!`
+/// sin ruta relee.
 #[test]
-fn e_con_bang_a_otra_nota_deja_los_cambios_ocultos() {
+fn e_con_bang_y_otra_ruta_tambien_deja_oculto() {
     let (dir, mut session) = two_files();
     session.keys("x");
     edit(&mut session, "e!", &path(&dir, "b.md"));
     assert_eq!(shown(&session), path(&dir, "b.md"));
     assert_eq!(session.workspace.documents.iter().count(), 2);
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "");
+    session.keys(":e!⏎");
+    assert_eq!(session.text(), "a");
+    assert!(!session.is_modified());
+}
+
+/// Como en nvim, también sin cambios: al volver, el cursor y el historial
+/// siguen ahí.
+#[test]
+fn e_deja_oculto_el_buffer_sin_cambios() {
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "a1\na2\n").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
+    session.keys("jx:w⏎");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 2);
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.cursor(), ByteOffset::new(3));
+    session.keys("u");
+    assert_eq!(session.text(), "a1\na2");
+}
+
+/// Si el archivo cambió fuera de Metalmind mientras el buffer estaba oculto y
+/// sin cambios, vuelve con lo del disco, como con `autoread`; el cursor se
+/// queda en su línea.
+#[test]
+fn volver_a_un_buffer_oculto_sin_cambios_relee_lo_que_cambio_fuera() {
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "a1\na2\n").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
+    session.keys("j");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::write(path(&dir, "a.md"), "x1\nx2\nx3\n").unwrap();
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "x1\nx2\nx3");
+    assert_eq!(session.cursor(), ByteOffset::new(3));
+    assert!(!session.is_modified());
+}
+
+/// Un archivo que no existía al abrirlo y que otro programa creó mientras
+/// el buffer estaba oculto: vuelve con lo de fuera, y un `:w` no lo pisa.
+#[test]
+fn volver_a_un_buffer_oculto_carga_el_archivo_que_aparecio() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "e", &path(&dir, "nueva.md"));
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::write(path(&dir, "nueva.md"), "de fuera\n").unwrap();
+    edit(&mut session, "e", &path(&dir, "nueva.md"));
+    assert_eq!(session.text(), "de fuera");
+    session.keys(":w⏎");
+    assert_eq!(
+        fs::read_to_string(path(&dir, "nueva.md")).unwrap(),
+        "de fuera\n"
+    );
+}
+
+/// El texto del buffer no distingue un archivo vacío de una línea vacía:
+/// si solo cambió eso, también se relee, y `:w` escribe lo de fuera.
+#[test]
+fn volver_a_un_buffer_oculto_relee_un_salto_de_linea_que_aparecio() {
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::write(path(&dir, "a.md"), "\n").unwrap();
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    session.keys(":w⏎");
+    assert_eq!(fs::read_to_string(path(&dir, "a.md")).unwrap(), "\n");
+}
+
+/// Si lo borraron fuera, el buffer oculto es la única copia: vuelve igual,
+/// con su historial.
+#[test]
+fn volver_a_un_buffer_oculto_cuyo_archivo_borraron_lo_conserva() {
+    let (dir, _) = two_files();
+    let mut session = Session::open(&path(&dir, "a.md"));
+    session.keys("ix⎋:w⏎");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::remove_file(path(&dir, "a.md")).unwrap();
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "xa");
+    session.keys("u");
+    assert_eq!(session.text(), "a");
+}
+
+/// Lo mismo si vuelve en un split.
+#[test]
+fn abrir_en_split_un_buffer_oculto_sin_cambios_relee_lo_que_cambio_fuera() {
+    let (dir, mut session) = two_files();
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::write(path(&dir, "a.md"), "de fuera\n").unwrap();
+    session
+        .workspace
+        .open_in_split(Axis::Row, &path(&dir, "a.md"))
+        .unwrap();
+    assert_eq!(session.text(), "de fuera");
+}
+
+/// Con cambios, lo de fuera no pisa el buffer.
+#[test]
+fn volver_a_un_buffer_oculto_con_cambios_no_relee() {
+    let (dir, mut session) = two_files();
+    session.keys("x");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    fs::write(path(&dir, "a.md"), "de fuera\n").unwrap();
     edit(&mut session, "e", &path(&dir, "a.md"));
     assert_eq!(session.text(), "");
     assert!(session.is_modified());
@@ -205,24 +312,26 @@ fn q_cierra_un_panel_con_cambios_si_otro_muestra_el_buffer() {
     assert_eq!(session.effect, Effect::Stay);
     assert_eq!(
         error(&session),
-        Some("E37: No write since last change (add ! to override)")
+        Some("E162: No write since last change for buffer \"prueba.md\"")
     );
     session.keys(":q!⏎");
     assert_eq!(session.effect, Effect::CloseWindow);
 }
 
 #[test]
-fn q_se_niega_si_el_panel_es_el_unico_con_esos_cambios() {
+fn q_cierra_el_panel_y_sus_cambios_quedan_ocultos() {
     let (dir, mut session) = two_files();
     session.keys("⌃wv");
     edit(&mut session, "e", &path(&dir, "b.md"));
     session.keys("x:q⏎");
-    assert_eq!(session.workspace.tree().len(), 2);
-    assert!(error(&session).is_some());
-    session.keys(":q!⏎");
     assert_eq!(session.workspace.tree().len(), 1);
-    assert_eq!(session.workspace.documents.iter().count(), 2);
+    assert_eq!(error(&session), None);
     assert_eq!(shown(&session), path(&dir, "a.md"));
+    assert_eq!(session.workspace.documents.iter().count(), 2);
+    session.keys(":q⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(shown(&session), path(&dir, "b.md"));
+    assert_eq!(session.text(), "1\nb2");
 }
 
 #[test]
@@ -242,13 +351,16 @@ fn cerrar_la_ventana_mira_todos_los_buffers() {
     let (dir, mut session) = two_files();
     session.keys("x⌃wv");
     edit(&mut session, "e", &path(&dir, "b.md"));
+    let right = session.pane();
     assert!(!session.workspace.may_close_window());
     let unsaved = format!(
-        "E162: hay cambios sin guardar en \"{}\"",
+        "E162: No write since last change for buffer \"{}\"",
         path(&dir, "a.md").display()
     );
     assert_eq!(error(&session), Some(unsaved.as_str()));
-    session.keys("⌃wh:w⏎");
+    assert_ne!(session.pane(), right, "va al panel con cambios");
+    assert_eq!(shown(&session), path(&dir, "a.md"));
+    session.keys(":w⏎");
     assert!(session.workspace.may_close_window());
 }
 
@@ -269,7 +381,7 @@ fn dividir_copia_el_cursor_y_moverse_cambia_el_foco() {
 }
 
 #[test]
-fn only_cierra_los_demas_salvo_los_que_perderian_cambios() {
+fn only_cierra_los_demas_y_sus_cambios_quedan_ocultos() {
     let (dir, mut session) = two_files();
     session.keys("⌃wv⌃wv");
     edit(&mut session, "e", &path(&dir, "b.md"));
@@ -277,12 +389,9 @@ fn only_cierra_los_demas_salvo_los_que_perderian_cambios() {
     let keep = session.pane();
     edit(&mut session, "e", &path(&dir, "nueva.md"));
     session.keys("⌃wo");
-    assert_eq!(session.workspace.tree().len(), 2);
+    assert_eq!(session.workspace.tree().len(), 1);
     assert_eq!(session.pane(), keep);
-    assert_eq!(
-        error(&session),
-        Some("E445: otros paneles tienen cambios sin guardar")
-    );
+    assert_eq!(error(&session), None);
     assert_eq!(session.workspace.documents.iter().count(), 3);
 }
 
@@ -473,7 +582,7 @@ fn open_in_split_de_algo_ilegible_no_divide() {
 #[case::split_desde_insert("Aho", Opened::Split)]
 #[case::split_desde_un_operador("d", Opened::Split)]
 #[case::split_desde_la_linea_de_comandos(":ab", Opened::Split)]
-#[case::edit_desde_insert_se_niega_con_cambios("Aho", Opened::Edit)]
+#[case::edit_desde_insert_con_cambios("Aho", Opened::Edit)]
 #[case::edit_desde_la_linea_de_comandos(":ab", Opened::Edit)]
 #[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
 fn abrir_desde_un_modo_a_medias_es_como_nvim_tras_ctrl_c(
@@ -503,7 +612,7 @@ fn abrir_desde_un_modo_a_medias_es_como_nvim_tras_ctrl_c(
         "a.md",
         &format!("{pending}<C-c>:{command} b.md<CR>"),
     );
-    assert_eq!(session.panes(), nvim);
+    assert_eq!(session.panes(dir.path()), nvim);
     assert_eq!(nvim.mode, "n");
 }
 
@@ -577,8 +686,8 @@ fn w_con_otra_ruta_no_pisa_un_archivo() {
     assert_eq!(shown(&session), path(&dir, "a.md"));
 }
 
-/// nvim 0.12.6 con `nohidden`: `:wq otro.md` con cambios escribe la copia y
-/// da E37 sin sugerir el `!`; sin cambios, escribe y cierra.
+/// nvim 0.12.6: `:wq otro.md` con cambios escribe la copia y no cierra,
+/// porque el buffer sigue con cambios; sin cambios, escribe y cierra.
 #[test]
 fn wq_con_otra_ruta_y_cambios_escribe_la_copia_y_no_cierra() {
     let (dir, mut session) = two_files();
@@ -586,22 +695,27 @@ fn wq_con_otra_ruta_y_cambios_escribe_la_copia_y_no_cierra() {
     edit(&mut session, "wq", &path(&dir, "copia.md"));
     assert_eq!(fs::read_to_string(path(&dir, "copia.md")).unwrap(), "");
     assert_eq!(session.effect, Effect::Stay);
-    assert_eq!(error(&session), Some("E37: No write since last change"));
+    let unsaved = format!(
+        "E162: No write since last change for buffer \"{}\"",
+        path(&dir, "a.md").display()
+    );
+    assert_eq!(error(&session), Some(unsaved.as_str()));
     session.keys(":e!⏎");
     edit(&mut session, "wq", &path(&dir, "otra.md"));
     assert_eq!(session.effect, Effect::CloseWindow);
 }
 
-/// En un split, vim cierra la ventana y pierde los cambios; Metalmind se niega.
+/// En un split, el panel se cierra y el buffer queda oculto con sus cambios.
 #[test]
-fn wq_con_otra_ruta_en_un_split_no_pierde_los_cambios() {
+fn wq_con_otra_ruta_en_un_split_deja_oculto_el_buffer() {
     let (dir, mut session) = two_files();
     session.keys("x⌃wv");
     edit(&mut session, "e", &path(&dir, "b.md"));
     session.keys("⌃wh");
     edit(&mut session, "wq", &path(&dir, "copia.md"));
-    assert_eq!(error(&session), Some("E37: No write since last change"));
-    assert_eq!(session.workspace.tree().len(), 2);
+    assert_eq!(error(&session), None);
+    assert_eq!(session.workspace.tree().len(), 1);
+    edit(&mut session, "e", &path(&dir, "a.md"));
     assert!(session.is_modified());
 }
 

@@ -9,7 +9,7 @@ use gpui_kit::{
     SharedString, StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
     prelude::FluentBuilder as _, uniform_list,
 };
-use metalmind_vault::EntryKind;
+use metalmind_vault::{EntryKind, VaultPath};
 
 use super::actions::{
     CONFIRM_CONTEXT, FocusEditor, INPUT_CONTEXT, MENU_CONTEXT, NewFolder, NewNote, TREE_CONTEXT,
@@ -18,7 +18,7 @@ use super::actions::{
 use super::menu::ContextMenu;
 use super::{Sidebar, SidebarEvent, icons};
 use crate::file_tree::Row;
-use crate::panel::{PanelView, Prompt};
+use crate::panel::{Fill, PanelView, Prompt, RowMarks};
 use crate::theme::Theme;
 
 impl Render for Sidebar {
@@ -147,17 +147,13 @@ impl Sidebar {
                 "El vault está vacío."
             });
         }
-        let selection = if focused {
-            theme.panel_selection
-        } else {
-            theme.panel_selection_unfocused
-        };
+        let active = self.active(cx);
         let theme = theme.clone();
         uniform_list(
             "file-tree",
             rows,
             cx.processor(move |sidebar, range: Range<usize>, _, cx| {
-                sidebar.rows(range, selection, &theme, cx)
+                sidebar.rows(range, focused, active.as_ref(), &theme, cx)
             }),
         )
         .track_scroll(&self.scroll)
@@ -168,7 +164,8 @@ impl Sidebar {
     fn rows(
         &self,
         range: Range<usize>,
-        selection: gpui_kit::Hsla,
+        focused: bool,
+        active: Option<&VaultPath>,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
@@ -176,7 +173,10 @@ impl Sidebar {
         self.panel.tree.rows()[range.clone()]
             .iter()
             .zip(range)
-            .map(|(row, at)| row_view(row, at, selected == Some(at), selection, theme, cx))
+            .map(|(row, at)| {
+                let marks = RowMarks::of(selected == Some(at), focused, active == Some(&row.path));
+                row_view(row, at, marks, theme, cx)
+            })
             .collect()
     }
 
@@ -188,8 +188,9 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         self.focus(window, cx);
-        if let Some(file) = self.panel.click(at, event.click_count()) {
-            self.open(&file, crate::workspace::Placement::Current, cx);
+        if let Some(click) = self.panel.click(at, event.click_count()) {
+            let placement = crate::workspace::Placement::Current;
+            self.open(&click.path, placement, click.focus_editor, cx);
         }
         cx.notify();
     }
@@ -213,8 +214,7 @@ impl Sidebar {
 fn row_view(
     row: &Row,
     at: usize,
-    selected: bool,
-    selection: gpui_kit::Hsla,
+    marks: RowMarks,
     theme: &Theme,
     cx: &mut Context<Sidebar>,
 ) -> AnyElement {
@@ -235,12 +235,16 @@ fn row_view(
         .pl(indent)
         .pr(theme.panel_padding_x)
         .text_color(text_color)
-        .map(|element| {
-            if selected {
-                element.bg(selection)
-            } else {
-                element.hover(|element| element.bg(theme.panel_hover))
-            }
+        .map(|element| match marks.fill {
+            Some(Fill::Selection) => element.bg(theme.panel_selection),
+            Some(Fill::Active) => element.bg(theme.panel_active),
+            None => element.hover(|element| element.bg(theme.panel_hover)),
+        })
+        .border(theme.border_width)
+        .border_color(if marks.outline {
+            theme.panel_selection_unfocused
+        } else {
+            gpui_kit::transparent_black()
         })
         .on_click(cx.listener(move |sidebar, event: &ClickEvent, window, cx| {
             sidebar.click(at, event, window, cx);

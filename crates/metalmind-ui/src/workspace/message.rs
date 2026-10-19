@@ -2,6 +2,7 @@
 
 use metalmind_vim::{Substitution, Wrap};
 
+use super::DocumentId;
 use crate::document::{Document, FileStats};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,17 +47,10 @@ impl Message {
         Self::Info(format!("\"{name}\" {stats} escritos"))
     }
 
-    /// `:q` o `:e` que perderían cambios, con el texto de vim (`nohidden`).
+    /// `:e` sin ruta, que releería el archivo y perdería cambios.
     #[must_use]
     pub fn unsaved() -> Self {
         Self::Error("E37: No write since last change (add ! to override)".to_owned())
-    }
-
-    /// `:wq ruta` que escribió una copia pero no cierra porque el buffer
-    /// sigue con cambios: vim no sugiere el `!` aquí.
-    #[must_use]
-    pub fn unsaved_after_write() -> Self {
-        Self::Error("E37: No write since last change".to_owned())
     }
 
     /// `:w ruta` con `ruta` abierta, sin guardar todavía, en otro buffer.
@@ -65,15 +59,21 @@ impl Message {
         Self::Error("E139: File is loaded in another buffer".to_owned())
     }
 
+    /// Cerrar la ventana con cambios en `document`. nvim muestra antes
+    /// `E37: No write since last change`; la barra tiene una sola línea y
+    /// se queda con la que dice cuál es.
     #[must_use]
     pub fn unsaved_in(document: &Document) -> Self {
         let path = document.display_name();
-        Self::Error(format!("E162: hay cambios sin guardar en \"{path}\""))
+        Self::Error(format!(
+            "E162: No write since last change for buffer \"{path}\""
+        ))
     }
 
+    /// `:wa` con un buffer sin archivo.
     #[must_use]
-    pub fn others_unsaved() -> Self {
-        Self::Error("E445: otros paneles tienen cambios sin guardar".to_owned())
+    pub fn no_file_name_for(id: DocumentId) -> Self {
+        Self::Error(format!("E141: No file name for buffer {id}"))
     }
 }
 

@@ -1,7 +1,7 @@
 //! Los comandos de `:` y `ctrl-w`: guardar, abrir, cerrar y los paneles.
-//! Como en vim sin `hidden`, un documento vive mientras algún panel lo
-//! muestre, así que nada que cierre o cambie un panel puede perder cambios
-//! sin un `!`.
+//! Como en vim con `hidden`, cerrar o cambiar un panel deja su documento
+//! oculto con sus cambios; solo cerrar la ventana se niega sin un `!`
+//! ([`super::buffers`]).
 
 use std::path::Path;
 
@@ -10,9 +10,7 @@ use metalmind_vim::{Clipboard, Command, Invocation, Mode};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
-use super::{
-    DocumentId, LineNumbers, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor,
-};
+use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
 use crate::panel::PanelView;
 
@@ -70,28 +68,24 @@ impl Workspace {
         effect
     }
 
-    /// Si se puede cerrar la ventana sin perder cambios; si no, lo avisa.
-    pub fn may_close_window(&mut self) -> bool {
-        let focused = self.focused_document().ok();
-        let Some((_, unsaved)) = self.documents.iter().find(|(_, d)| d.is_modified()) else {
-            return true;
-        };
-        let focused_unsaved = focused.is_some_and(Document::is_modified);
-        self.message = Some(if focused_unsaved {
-            Message::unsaved()
-        } else {
-            Message::unsaved_in(unsaved)
-        });
-        false
-    }
-
     fn try_run(&mut self, invocation: &Invocation) -> Result<Effect, WorkspaceError> {
         let path = invocation.argument.as_deref().map(Path::new);
         match invocation.command {
             Command::Save => self.save(path).map(|_| Effect::Stay),
-            Command::Quit => self.quit(false),
-            Command::ForceQuit => self.quit(true),
+            Command::Quit => Ok(self.quit(false)),
+            Command::ForceQuit => Ok(self.quit(true)),
             Command::SaveAndQuit => self.save_and_quit(path),
+            Command::SaveAll => {
+                self.save_all();
+                Ok(Effect::Stay)
+            }
+            Command::QuitAll => Ok(self.quit_all(false)),
+            Command::ForceQuitAll => Ok(self.quit_all(true)),
+            Command::SaveAllAndQuit => Ok(if self.save_all() {
+                self.quit_all(false)
+            } else {
+                Effect::Stay
+            }),
             Command::Edit => self.edit(path, false).map(|()| Effect::Stay),
             Command::ForceEdit => self.edit(path, true).map(|()| Effect::Stay),
             Command::SplitRight => self.split(Axis::Row).map(|()| Effect::Stay),
@@ -104,7 +98,10 @@ impl Workspace {
                 let next = self.tree.next();
                 self.focus(next).map(|()| Effect::Stay)
             }
-            Command::Only => self.only().map(|()| Effect::Stay),
+            Command::Only => {
+                self.only();
+                Ok(Effect::Stay)
+            }
             Command::Set => self.set_options(invocation.argument.as_deref()),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
@@ -163,18 +160,14 @@ impl Workspace {
         Ok(())
     }
 
-    /// `:wq [ruta]`. Si `ruta` es otro archivo y el buffer tiene cambios,
-    /// escribe la copia pero no cierra, como vim con un solo panel; en un
-    /// split, vim cierra y pierde los cambios, y Metalmind se niega igual.
+    /// `:wq [ruta]`. Si `ruta` es otro archivo, el buffer sigue con sus
+    /// cambios tras escribir la copia: en un split, el panel se cierra y
+    /// el buffer queda oculto; en el último, no se cierra la ventana.
     fn save_and_quit(&mut self, path: Option<&Path>) -> Result<Effect, WorkspaceError> {
         if !self.save(path)? {
             return Ok(Effect::Stay);
         }
-        if self.would_lose_changes(self.focused())? {
-            self.message = Some(Message::unsaved_after_write());
-            return Ok(Effect::Stay);
-        }
-        self.quit(false)
+        Ok(self.quit(false))
     }
 
     /// Otro documento abierto es de `path`, que todavía no existe en
@@ -187,66 +180,48 @@ impl Workspace {
     }
 
     /// `:q` cierra el panel; el último cierra la ventana.
-    fn quit(&mut self, force: bool) -> Result<Effect, WorkspaceError> {
-        let pane = self.focused();
+    fn quit(&mut self, force: bool) -> Effect {
         if self.tree.len() == 1 {
-            let closes = force || self.may_close_window();
-            return Ok(if closes {
-                Effect::CloseWindow
-            } else {
-                Effect::Stay
-            });
+            return self.quit_all(force);
         }
-        if !force && self.would_lose_changes(pane)? {
-            self.message = Some(Message::unsaved());
-            return Ok(Effect::Stay);
+        self.close(self.focused());
+        Effect::Stay
+    }
+
+    /// `:qa`, o `:q` en el último panel.
+    fn quit_all(&mut self, force: bool) -> Effect {
+        if force || self.may_close_window() {
+            Effect::CloseWindow
+        } else {
+            Effect::Stay
         }
-        self.close(pane);
-        Ok(Effect::Stay)
     }
 
     pub(super) fn close(&mut self, pane: PaneId) {
-        if self.tree.close(pane) {
-            self.panes.remove(&pane);
-            self.drop_unshown();
+        if self.tree.close(pane)
+            && let Some(old) = self.panes.remove(&pane)
+        {
+            self.hide(old);
         }
     }
 
     /// `:e`: sin ruta, o con la del mismo archivo, lo relee; si no, el
-    /// panel pasa a mostrar ese archivo. Una ruta relativa parte del
-    /// directorio de trabajo, como en vim.
+    /// panel pasa a mostrar ese archivo y el de antes queda oculto, también
+    /// con `:e!`, como en nvim. Una ruta relativa parte del directorio de
+    /// trabajo, como en vim.
     pub(super) fn edit(&mut self, path: Option<&Path>, force: bool) -> Result<(), WorkspaceError> {
         let pane = self.focused();
         // Desde `:` ya se está en Normal; desde el finder puede quedar un
-        // Insert, que termina antes, también si `:e` se niega.
+        // Insert, que termina antes, también si se niega.
         self.interrupt(pane)?;
         let current = self.pane(pane)?.document;
         let target = match path {
             Some(path) if !self.document(current)?.is_file(path) => path,
             _ => return self.reload(force),
         };
-        if !force && self.would_lose_changes(pane)? {
-            self.message = Some(Message::unsaved());
-            return Ok(());
-        }
         self.push_jump(pane)?;
         self.show_file(pane, target)?;
         Ok(())
-    }
-
-    /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
-    /// muestra.
-    pub(super) fn pane_on(&self, id: DocumentId, numbers: LineNumbers) -> Pane {
-        self.panes
-            .values()
-            .find(|pane| pane.document == id)
-            .map_or_else(
-                || Pane::at_start(id, numbers, self.tabstop),
-                |pane| Pane {
-                    numbers,
-                    ..pane.clone()
-                },
-            )
     }
 
     /// `:e` y `:e!` sin ruta: vuelve a leer el archivo. Los cursores de
@@ -263,14 +238,29 @@ impl Workspace {
             self.message = Some(Message::Error(SaveError::NoFileName.to_string()));
             return Ok(());
         };
-        let mut reloaded = match Document::open(path) {
+        let reloaded = match Document::open(path) {
             Ok(reloaded) => reloaded,
             Err(error) => {
                 self.message = Some(Message::Error(error.to_string()));
                 return Ok(());
             }
         };
-        reloaded.keep_marks_of(document)?;
+        self.replace_document(id, reloaded)?;
+        self.message = Some(Message::opened(self.document(id)?));
+        self.vim.cursor_moved();
+        Ok(())
+    }
+
+    /// `id` pasa a ser `reloaded`, leído de nuevo del disco, con sus marks.
+    /// Los cursores de sus paneles, también el del último que lo mostró si
+    /// está oculto, se quedan en la misma línea y columna, o lo más cerca
+    /// que se pueda. El historial empieza de nuevo.
+    pub(super) fn replace_document(
+        &mut self,
+        id: DocumentId,
+        mut reloaded: Document,
+    ) -> Result<(), WorkspaceError> {
+        reloaded.keep_marks_of(self.document(id)?)?;
         reloaded.set_rows(self.documents.rows());
         let old = std::mem::replace(self.document_mut(id)?, reloaded);
         let buffer = self
@@ -278,16 +268,20 @@ impl Workspace {
             .get(id)
             .ok_or(WorkspaceError::NoDocument(id))?
             .buffer();
-        for pane in self.panes.values_mut().filter(|pane| pane.document == id) {
-            pane.selections = pane.selections.map(|selection| {
+        let shown = self
+            .panes
+            .values_mut()
+            .filter(|pane| pane.document == id)
+            .map(|pane| &mut pane.selections);
+        let hidden = self.hidden.get_mut(&id).map(|last| &mut last.selections);
+        for selections in shown.chain(hidden) {
+            *selections = selections.map(|selection| {
                 let line = old.buffer().line_of(selection.head);
                 let column = old.buffer().column_of(selection.head);
                 let head = buffer.offset_at_column(line, column);
                 Selection::cursor(clamp_cursor(buffer, head, Mode::Normal))
             });
         }
-        self.message = Some(Message::opened(self.document(id)?));
-        self.vim.cursor_moved();
         Ok(())
     }
 
@@ -304,18 +298,10 @@ impl Workspace {
         let focused = self.focused();
         self.interrupt(focused)?;
         let numbers = self.pane(focused)?.numbers;
-        let shown = match self.documents.find(path) {
-            Some(id) => self.pane_on(id, numbers),
-            None => match Document::open(path) {
-                Ok(document) => {
-                    Pane::at_start(self.insert_document(document), numbers, self.tabstop)
-                }
-                Err(error) => {
-                    self.message = Some(Message::Error(error.to_string()));
-                    return Ok(());
-                }
-            },
+        let Some(id) = self.open_document(path) else {
+            return Ok(());
         };
+        let shown = self.pane_on(id, numbers)?;
         self.push_jump(focused)?;
         let jumps = self.pane(focused)?.jumps.clone();
         self.message = Some(Message::opened(self.document(shown.document)?));
@@ -354,25 +340,14 @@ impl Workspace {
         Ok(Effect::Stay)
     }
 
-    /// `ctrl-w o`: cierra los demás paneles, salvo los que se llevarían
-    /// cambios sin guardar, como vim sin `hidden`.
-    fn only(&mut self) -> Result<(), WorkspaceError> {
+    /// `ctrl-w o`: cierra los demás paneles; sus documentos quedan ocultos.
+    fn only(&mut self) {
         let keep = self.focused();
-        let mut kept_changes = false;
         for pane in self.tree.panes() {
-            if pane == keep {
-                continue;
-            }
-            if self.would_lose_changes(pane)? {
-                kept_changes = true;
-            } else {
+            if pane != keep {
                 self.close(pane);
             }
         }
-        if kept_changes {
-            self.message = Some(Message::others_unsaved());
-        }
-        Ok(())
     }
 }
 

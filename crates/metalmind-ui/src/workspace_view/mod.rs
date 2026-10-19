@@ -23,8 +23,9 @@ use metalmind_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, FollowLink,
-    ForceEdit, ForceQuit, Only, OpenCommandPalette, OpenFinder, Quit, Save, SaveAndQuit, SaveAs,
-    SaveAsAndQuit, Set, SplitDown, SplitRight, ToggleFolders, ToggleTags,
+    ForceEdit, ForceQuit, ForceQuitAll, Only, OpenCommandPalette, OpenFinder, Quit, QuitAll, Save,
+    SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs, SaveAsAndQuit, Set, SplitDown, SplitRight,
+    ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
@@ -101,14 +102,18 @@ impl WorkspaceView {
         window.focus(&handle, cx);
     }
 
-    /// Lo consulta la ventana cuando el compositor pide cerrarla.
-    pub fn may_close(&mut self, cx: &mut Context<Self>) -> bool {
+    /// Lo consulta la ventana cuando el compositor pide cerrarla. Si hay
+    /// cambios, el workspace muestra la nota que los tiene.
+    pub fn may_close(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let closes = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             workspace.may_close_window()
         });
         if closes {
             self.save_state(cx);
+        } else {
+            self.sync_editors(cx);
+            self.focus(window, cx);
         }
         closes
     }
@@ -165,7 +170,7 @@ impl WorkspaceView {
     fn toggle_panel(&mut self, view: PanelView, window: &mut Window, cx: &mut Context<Self>) {
         let visible = self
             .sidebar
-            .update(cx, |sidebar, cx| sidebar.toggle(view, cx));
+            .update(cx, |sidebar, cx| sidebar.toggle(view, window, cx));
         if visible {
             self.focus_sidebar(window, cx);
         } else {
@@ -181,9 +186,11 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         match event {
-            SidebarEvent::Opened => {
+            SidebarEvent::Opened { focus_editor } => {
                 self.sync_editors(cx);
-                self.focus(window, cx);
+                if focus_editor {
+                    self.focus(window, cx);
+                }
                 self.touch_focused(cx);
             }
             SidebarEvent::PanesChanged => self.sync_editors(cx),
@@ -287,6 +294,10 @@ impl Render for WorkspaceView {
         element = on_command::<SaveAndQuit>(element, cx);
         element = on_command::<SaveAs>(element, cx);
         element = on_command::<SaveAsAndQuit>(element, cx);
+        element = on_command::<SaveAll>(element, cx);
+        element = on_command::<QuitAll>(element, cx);
+        element = on_command::<ForceQuitAll>(element, cx);
+        element = on_command::<SaveAllAndQuit>(element, cx);
         element = on_command::<Edit>(element, cx);
         element = on_command::<ForceEdit>(element, cx);
         element = on_command::<SplitRight>(element, cx);

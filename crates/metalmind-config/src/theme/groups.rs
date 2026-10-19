@@ -153,8 +153,11 @@ color_group! {
         panel_muted,
         /// La fila seleccionada con el panel enfocado.
         panel_selection,
-        /// La fila seleccionada con el foco en otro lado.
+        /// El borde de la fila seleccionada con el foco en otro lado.
         panel_selection_unfocused,
+        /// La fila de la nota abierta en el panel de edición enfocado, y el
+        /// botón de la vista que se ve.
+        panel_active,
         panel_hover,
         /// La línea entre el panel y los editores.
         panel_border,
