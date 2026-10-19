@@ -1,7 +1,7 @@
 //! Una nota abierta en el motor vim, para medir teclas como las recibe el editor.
 
 use metalmind_buffer::{Buffer, Selection, Selections};
-use metalmind_vim::{Key, KeyOutcome, Vim, VimError};
+use metalmind_vim::{Key, KeyOutcome, Layout, Vim, VimError};
 
 /// En [`Session::feed`], `\x1b` es Esc, `\n` es Enter y `\x08` es Backspace.
 pub struct Session {
@@ -21,6 +21,18 @@ impl Session {
             buffer,
             selections: Selections::single(Selection::cursor(cursor)),
         }
+    }
+
+    /// Como [`Session::new`], con el estilo de todas las líneas ya calculado
+    /// en el [`Layout`] del motor, como lo deja el editor tras pintar la nota
+    /// entera.
+    #[must_use]
+    pub fn styled(text: &str, line: usize) -> Self {
+        let mut session = Self::new(text, line);
+        let mut layout = Layout::new(&session.buffer);
+        layout.ensure(&session.buffer, session.buffer.last_line());
+        session.vim.swap_layout(&mut Some(layout));
+        session
     }
 
     /// Lo que pasó con la última tecla.
