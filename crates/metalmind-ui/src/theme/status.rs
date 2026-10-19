@@ -22,6 +22,8 @@ pub struct StatusBar {
     pub gap: Pixels,
     /// Cuánto cede el nombre de la nota frente al mensaje (`flex_shrink`).
     pub file_shrink: f32,
+    /// El ancho mínimo del mensaje, si hay uno.
+    pub message_min_width: Pixels,
 }
 
 impl StatusBar {
@@ -38,6 +40,7 @@ impl StatusBar {
             padding_y: px(layout.status_padding_y.0),
             gap: px(layout.status_gap.0),
             file_shrink: layout.status_file_shrink.0,
+            message_min_width: px(layout.status_message_min_width.0),
         }
     }
 }

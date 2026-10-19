@@ -226,6 +226,7 @@ fn el_indicador_del_autoguardado_sale_del_tema() {
     assert_eq!(status.unsaved, theme.modified);
     assert_eq!(status.changed_on_disk, theme.error);
     assert!((status.file_shrink - 0.5).abs() < f32::EPSILON);
+    assert_eq!(status.message_min_width, px(240.));
     config.theme.metrics.layout.status_file_shrink = config::Fraction(0.25);
     let theme = Theme::with_font(&config, "Mono".into());
     assert!((theme.status.file_shrink - 0.25).abs() < f32::EPSILON);

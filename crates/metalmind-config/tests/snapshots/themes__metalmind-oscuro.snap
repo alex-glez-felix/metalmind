@@ -207,6 +207,9 @@ Theme {
             status_file_shrink: Fraction(
                 0.5,
             ),
+            status_message_min_width: Length(
+                240.0,
+            ),
             picker_width: Length(
                 640.0,
             ),
