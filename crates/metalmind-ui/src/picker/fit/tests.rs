@@ -182,24 +182,60 @@ fn la_ruta_con_grafemas_anchos_no_se_pasa() {
 
 #[test]
 fn si_caben_los_dos_cada_uno_se_queda_con_lo_suyo() {
-    assert_eq!(split(100.0, 40.0, 20.0, 8.0, 0.4), (72.0, 20.0));
+    assert_eq!(
+        split(100.0, 40.0, Some(20.0), 8.0, 0.4, 1.0),
+        (72.0, Some(20.0))
+    );
 }
 
 #[test]
 fn un_texto_largo_le_deja_al_detalle_su_parte() {
-    assert_eq!(split(108.0, 500.0, 60.0, 8.0, 0.4), (60.0, 40.0));
-    assert_eq!(split(108.0, 500.0, 30.0, 8.0, 0.4), (70.0, 30.0));
+    assert_eq!(
+        split(108.0, 500.0, Some(60.0), 8.0, 0.4, 1.0),
+        (60.0, Some(40.0))
+    );
+    assert_eq!(
+        split(108.0, 500.0, Some(30.0), 8.0, 0.4, 1.0),
+        (70.0, Some(30.0))
+    );
 }
 
 #[test]
 fn un_texto_corto_le_deja_al_detalle_lo_que_sobra() {
-    assert_eq!(split(108.0, 20.0, 500.0, 8.0, 0.4), (20.0, 80.0));
+    assert_eq!(
+        split(108.0, 20.0, Some(500.0), 8.0, 0.4, 1.0),
+        (20.0, Some(80.0))
+    );
 }
 
 #[test]
 fn sin_detalle_el_texto_usa_toda_la_fila() {
-    assert_eq!(split(100.0, 500.0, 0.0, 8.0, 0.4), (100.0, 0.0));
-    assert_eq!(split(4.0, 500.0, 30.0, 8.0, 0.4), (0.0, 0.0));
+    assert_eq!(split(100.0, 500.0, None, 8.0, 0.4, 1.0), (100.0, None));
+}
+
+/// Si la fila no deja lugar ni para la elipsis del detalle (un picker más
+/// angosto que su separación), el detalle no se pinta.
+#[test]
+fn un_picker_angosto_no_pinta_el_detalle() {
+    assert_eq!(split(4.0, 500.0, Some(30.0), 8.0, 0.4, 1.0), (4.0, None));
+    assert_eq!(split(10.0, 500.0, Some(30.0), 8.0, 0.4, 1.0), (10.0, None));
+    assert_eq!(split(11.0, 500.0, Some(30.0), 8.0, 0.4, 2.0), (11.0, None));
+}
+
+/// Recortar es lineal en el largo de la fila: con 200 000 grafemas, cada
+/// recorte termina en mucho menos de lo que tardaría uno cuadrático.
+#[test]
+fn una_fila_enorme_se_recorta_en_tiempo_lineal() {
+    let widths = vec![1.0; 200_000];
+    let slashes: Vec<usize> = (0..widths.len()).step_by(1000).collect();
+    let started = std::time::Instant::now();
+    let around_kept = around(&widths, 100_000..100_004, 150_000.0, 1.0);
+    let middle_kept = middle_all(&Widths::new(&widths), 150_000.0, 1.0);
+    let path_kept = path(&widths, &slashes, Some(5_000..5_004), 150_000.0, 1.0);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    assert!(around_kept.shows(&(100_000..100_004)));
+    assert_eq!(middle_kept.ranges.len(), 2);
+    assert!(path_kept.shows(&(5_000..5_004)));
 }
 
 #[test]
@@ -357,7 +393,7 @@ proptest! {
 
     #[test]
     fn middle_nunca_se_pasa(widths in graphemes(), budget in 0.0_f32..40.0) {
-        let kept = middle(&widths, budget, 1.0);
+        let kept = middle_all(&Widths::new(&widths), budget, 1.0);
         prop_assert!(kept.ranges.len() <= 2);
         prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
     }

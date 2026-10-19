@@ -3,12 +3,14 @@
 //! medido por la vista.
 
 mod path;
+mod widths;
 
 use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation as _;
 
 pub use self::path::path;
+use self::widths::Widths;
 
 /// Lo que se pinta en lugar de lo que no cabe.
 pub const ELLIPSIS: &str = "…";
@@ -51,6 +53,10 @@ impl Kept {
 /// `focus` solo no cabe, se queda su principio.
 #[must_use]
 pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -> Kept {
+    around_all(&Widths::new(widths), focus, budget, ellipsis)
+}
+
+fn around_all(widths: &Widths, focus: Range<usize>, budget: f32, ellipsis: f32) -> Kept {
     let len = widths.len();
     let kept = around_within(widths, 0..len, &(0..len), focus, budget, ellipsis);
     Kept::new(len, [kept])
@@ -59,7 +65,7 @@ pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -
 /// Como [`around`], pero sin salir de `bounds`, y con una elipsis por cada
 /// lado en el que lo que se queda no llega a `gaps` (lo que ya se ve).
 fn around_within(
-    widths: &[f32],
+    widths: &Widths,
     bounds: Range<usize>,
     gaps: &Range<usize>,
     focus: Range<usize>,
@@ -71,7 +77,7 @@ fn around_within(
     let cost = |kept: &Range<usize>| {
         let edges =
             f32::from(u8::from(kept.start > gaps.start)) + f32::from(u8::from(kept.end < gaps.end));
-        sum(&widths[kept.clone()]) + edges * ellipsis
+        widths.sum(kept.clone()) + edges * ellipsis
     };
     // Si `focus` no cabe por sus elipsis, puede caber estirado hasta un
     // borde, donde no la paga; si tampoco, se queda su principio.
@@ -101,8 +107,8 @@ fn around_within(
         (kept.end < bounds.end).then(|| [kept.start..kept.end + 1, kept.start..bounds.end])
     };
     loop {
-        let before = sum(&widths[kept.start..focus.start]);
-        let after = sum(&widths[focus.end..kept.end]);
+        let before = widths.sum(kept.start..focus.start);
+        let after = widths.sum(focus.end..kept.end);
         let sides = if before <= after {
             [left(&kept), right(&kept)]
         } else {
@@ -128,17 +134,29 @@ struct Middle {
 
 /// Recorta `widths` a `budget` quitando del medio, con el mismo ancho a
 /// cada lado; con un empate gana el final.
-#[must_use]
-pub fn middle(widths: &[f32], budget: f32, ellipsis: f32) -> Kept {
+fn middle_all(widths: &Widths, budget: f32, ellipsis: f32) -> Kept {
     let len = widths.len();
-    if sum(widths) <= budget {
-        return Kept::whole(len);
+    Kept::new(len, middle_within(widths, 0..len, budget, ellipsis))
+}
+
+/// Como [`middle_all`], pero solo con los grafemas de `bounds`.
+fn middle_within(
+    widths: &Widths,
+    bounds: Range<usize>,
+    budget: f32,
+    ellipsis: f32,
+) -> [Range<usize>; 2] {
+    if widths.sum(bounds.clone()) <= budget {
+        return [bounds.clone(), bounds.end..bounds.end];
     }
-    let mut cut = Middle { head: 0, tail: len };
-    let cost = |cut: Middle| sum(&widths[..cut.head]) + sum(&widths[cut.tail..]) + ellipsis;
+    let mut cut = Middle {
+        head: bounds.start,
+        tail: bounds.end,
+    };
+    let front = |cut: Middle| widths.sum(bounds.start..cut.head);
+    let back = |cut: Middle| widths.sum(cut.tail..bounds.end);
+    let cost = |cut: Middle| front(cut) + back(cut) + ellipsis;
     while cut.head < cut.tail {
-        let front = sum(&widths[..cut.head]);
-        let back = sum(&widths[cut.tail..]);
         let from_tail = Middle {
             tail: cut.tail - 1,
             ..cut
@@ -147,7 +165,7 @@ pub fn middle(widths: &[f32], budget: f32, ellipsis: f32) -> Kept {
             head: cut.head + 1,
             ..cut
         };
-        let order = if back <= front {
+        let order = if back(cut) <= front(cut) {
             [from_tail, from_head]
         } else {
             [from_head, from_tail]
@@ -157,7 +175,7 @@ pub fn middle(widths: &[f32], budget: f32, ellipsis: f32) -> Kept {
         };
         cut = next;
     }
-    Kept::new(len, [0..cut.head, cut.tail..len])
+    [bounds.start..cut.head, cut.tail..bounds.end]
 }
 
 /// Dónde están las `/` de `text`, en grafemas.
@@ -173,15 +191,25 @@ pub fn slashes(text: &str) -> Vec<usize> {
 /// Cuánto ancho le toca al texto y cuánto al detalle de la derecha en una
 /// fila de `available`, con `gap` entre los dos: si no caben, el detalle se
 /// queda con lo que el texto no usa, pero nunca con menos de `detail_share`
-/// de la fila.
+/// de la fila. Sin lugar ni para una elipsis, el detalle no se pinta
+/// (`None`) y el texto usa toda la fila.
 #[must_use]
-pub fn split(available: f32, text: f32, detail: f32, gap: f32, detail_share: f32) -> (f32, f32) {
-    if detail <= 0.0 {
-        return (available.max(0.0), 0.0);
-    }
+pub fn split(
+    available: f32,
+    text: f32,
+    detail: Option<f32>,
+    gap: f32,
+    detail_share: f32,
+    ellipsis: f32,
+) -> (f32, Option<f32>) {
     let room = (available - gap).max(0.0);
-    let detail = detail.min((room - text).max(room * detail_share));
-    (room - detail, detail)
+    let detail = detail
+        .map(|detail| detail.min((room - text).max(room * detail_share)))
+        .filter(|&detail| detail >= ellipsis);
+    match detail {
+        Some(detail) => (room - detail, Some(detail)),
+        None => (available.max(0.0), None),
+    }
 }
 
 /// El alto de la lista: filas enteras, todas si caben y si no `max_rows`
@@ -282,10 +310,6 @@ pub fn grapheme_widths(starts: &[usize], glyphs: &[(usize, f32)], width: f32) ->
         }
     }
     widths
-}
-
-fn sum(widths: &[f32]) -> f32 {
-    widths.iter().sum()
 }
 
 #[cfg(test)]
