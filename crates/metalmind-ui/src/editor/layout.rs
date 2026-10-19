@@ -34,6 +34,8 @@ pub struct LaidLine {
     pub origin: Point<Pixels>,
     /// Lo que mide la línea: más que el texto si es un heading.
     pub height: Pixels,
+    /// El tamaño de su letra: más grande en un heading.
+    pub font_size: Pixels,
     pub shaped: ShapedLine,
     /// Es parte de un bloque de código cercado: lleva fondo.
     pub code_block: bool,
@@ -96,6 +98,7 @@ mod tests {
                         line,
                         origin: point(px(0.), px(top)),
                         height: px(height),
+                        font_size: px(10.),
                         shaped: ShapedLine::default(),
                         code_block: false,
                     };

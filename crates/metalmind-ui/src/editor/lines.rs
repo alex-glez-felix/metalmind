@@ -69,6 +69,7 @@ pub fn shape_visible_lines(
                     viewport.bounds.top() + px(placed.top),
                 ),
                 height: px(placed.height),
+                font_size,
                 shaped,
                 code_block: matches!(kind, Some(LineKind::Fence(_))),
             })

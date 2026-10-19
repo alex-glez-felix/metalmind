@@ -70,7 +70,15 @@ fn block_width(
                 - left,
         )
     } else {
-        Some(em_width(typeface, window))
+        Some(em_width(&line_face(typeface, laid), window))
+    }
+}
+
+/// La letra de `laid`: la del editor con el tamaño de esa línea.
+fn line_face(typeface: &Typeface, laid: &LaidLine) -> Typeface {
+    Typeface {
+        font: typeface.font.clone(),
+        size: laid.font_size,
     }
 }
 
@@ -114,7 +122,7 @@ pub fn preedit(
     };
     let shaped = shape(
         text.into(),
-        typeface,
+        &line_face(typeface, laid),
         theme.foreground,
         Some(underline),
         window,
