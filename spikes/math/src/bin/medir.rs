@@ -50,12 +50,18 @@ fn run(kind: Kind, look: Look) -> Result<(), MathError> {
     let after_start = sample();
 
     let [first, rest @ ..] = &FORMULAS;
-    let first_time = render(engine.as_mut(), first, &look).map(|(phases, _)| phases.total());
+    let mut failed = Vec::new();
+    let mut pixels = 0;
+    let first_time = render(engine.as_mut(), first, &look).map(|(phases, bytes)| {
+        pixels += bytes;
+        phases.total()
+    });
+    if first_time.is_err() {
+        failed.push(first.name);
+    }
     let after_first = sample();
 
     let mut fresh = Vec::new();
-    let mut failed = Vec::new();
-    let mut pixels = 0;
     for formula in rest {
         match render(engine.as_mut(), formula, &look) {
             Ok((phases, bytes)) => {

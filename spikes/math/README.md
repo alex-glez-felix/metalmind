@@ -9,7 +9,7 @@ Proyecto aparte, fuera del workspace (como `spikes/gpui`): no toca el editor ni 
 | `mathml` | `pulldown-latex` (LaTeX → MathML) + `formulary` (layout de MathML Core) + `resvg` |
 | `mathcore` | lo mismo con `math-core` en lugar de `pulldown-latex` |
 
-Cada motor es una feature (`typst`, `ratex`, `mathml`; todas por defecto), para medir lo que pesa cada uno solo.
+Cada motor es una feature (`typst`, `ratex`, `mathml`; todas por defecto), para enlazar uno solo en otro binario: así se midió cuánto crece `metalmind` con cada uno (08 §5). `medir`, `galeria` y los tests comparan los motores entre sí y piden las tres.
 
 ## Antes de compilar
 

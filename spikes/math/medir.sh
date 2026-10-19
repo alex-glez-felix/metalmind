@@ -21,7 +21,13 @@ for motor in typst ratex mathml mathcore; do
       for (i = 2; i <= fields; i++) {
         n = 0
         for (r = 1; r <= rows; r++) sorted[++n] = values[i, r]
-        if (sorted[1] ~ /^[0-9.]+$/) asort(sorted)
+        if (sorted[1] ~ /^[0-9.]+$/) {
+          for (a = 2; a <= n; a++) {
+            v = sorted[a]
+            for (b = a - 1; b >= 1 && sorted[b] + 0 > v + 0; b--) sorted[b + 1] = sorted[b]
+            sorted[b + 1] = v
+          }
+        }
         printf "%s=%s\t", key[i], sorted[int((n + 1) / 2)]
         delete sorted
       }

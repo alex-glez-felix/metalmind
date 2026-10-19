@@ -110,3 +110,14 @@ fn pinta_encima_con_alfa() {
     canvas.draw(&top, 1, 0);
     assert_eq!(canvas.rgba, [255, 255, 255, 255, 0, 0, 0, 255]);
 }
+
+#[test]
+fn pinta_sobre_un_fondo_transparente_sin_perder_color() {
+    let mut canvas = Image::filled(1, 1, [0, 0, 0, 0]);
+    canvas.draw(&Image::filled(1, 1, [255, 0, 0, 128]), 0, 0);
+    assert_eq!(canvas.rgba, [255, 0, 0, 128]);
+
+    let mut half = Image::filled(1, 1, [0, 0, 255, 128]);
+    half.draw(&Image::filled(1, 1, [255, 0, 0, 128]), 0, 0);
+    assert_eq!(half.rgba, [170, 0, 85, 192]);
+}
