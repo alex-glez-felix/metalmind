@@ -319,3 +319,23 @@ fn el_indicador_no_parpadea_mientras_se_escribe() {
         "vuelve a contar"
     );
 }
+
+#[test]
+fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("falta").join("a.md");
+    let session = Session::open(&path);
+    let mut autosaving = Autosaving::with(dir, session);
+    autosaving.session.keys("ihola⎋");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert!(matches!(autosaving.message(), Some(Message::Error(_))));
+    assert!(autosaving.session.is_modified());
+    fs::create_dir(autosaving.path("falta")).unwrap();
+    autosaving.wait(SECOND);
+    assert!(!autosaving.tick(), "espera antes de reintentar");
+    autosaving.wait(SECOND * 4);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.read("falta/a.md"), "hola\n");
+    assert_eq!(autosaving.session.workspace.autosave_deadline(), None);
+}

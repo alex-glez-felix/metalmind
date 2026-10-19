@@ -212,12 +212,13 @@ impl Worker {
         if let Err(error) = history.reconcile(&self.root, &notes, SystemTime::now()) {
             log::warn!("{error}");
         }
-        // Si el vault ya se cierra (la app no llegó a abrir), la poda espera
-        // a la próxima apertura en vez de demorar la salida.
+        // Si el vault ya se cierra (la app sale, o no llegó a abrir), la poda
+        // espera a la próxima apertura en vez de demorar la salida.
         if self.stop.load(Ordering::Acquire) {
             return;
         }
-        if let Err(error) = history.prune(SystemTime::now()) {
+        let running = || !self.stop.load(Ordering::Acquire);
+        if let Err(error) = history.prune_while(SystemTime::now(), running) {
             log::warn!("{error}");
         }
     }

@@ -96,7 +96,7 @@ impl VaultSession {
         // y a las versiones de los últimos guardados.
         let quit = cx.on_app_quit(|this: &mut Self, _| {
             this.writer.take();
-            this.vault.wait_for_versions();
+            this.vault.shut_down();
             async {}
         });
         let notes = notes(&vault.snapshot(), &recents);
