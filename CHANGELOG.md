@@ -136,6 +136,23 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   `ctrl-d`, `ctrl-u`, el cursor, la selección, la rueda y los números de línea
   cuentan lo que mide cada línea.
 
+#### Fórmulas
+
+- Las fórmulas LaTeX se ven compuestas, con RaTeX (el dialecto de KaTeX):
+  `$…$` en línea, alineada con el texto, y `$$…$$` en bloque, centrado. La
+  línea del cursor, todas las de una selección de Visual y el bloque `$$`
+  donde está el cursor muestran su fuente; vim siempre edita el texto.
+- Un bloque `$$` de varias líneas se compone debajo de la línea que lo cierra
+  y su fuente se sigue viendo.
+- Una fórmula alta agranda su línea, y el scroll y el cursor lo cuentan. Las
+  imágenes se pintan en segundo plano: mientras llegan, su lugar queda
+  reservado y nada se mueve.
+- La fórmula toma el color del texto del tema. Una que no compone muestra su
+  fuente en el color de error y, con el ratón encima, el mensaje de RaTeX.
+- Un `$` suelto no abre una fórmula (`$5 y $10` es texto), `\$` es un dólar y
+  dentro del código no hay fórmulas. Dentro de una fórmula no hay tags ni links.
+- Tema: `syntax.math`, el color del LaTeX cuando se ve su fuente.
+
 #### Buffers y paneles (M2)
 
 - Varios archivos abiertos a la vez. `:e ruta` abre otro en el panel activo
