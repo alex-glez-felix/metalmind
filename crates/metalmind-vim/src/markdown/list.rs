@@ -12,6 +12,7 @@ use crate::lines::is_blank;
 /// Como en la especificación de markdown, un número de lista tiene a lo
 /// sumo nueve dígitos.
 const MAX_DIGITS: usize = 9;
+const MAX_NUMBER: u32 = 999_999_999;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Marker {
@@ -36,6 +37,9 @@ impl<'a> ListItem<'a> {
     /// El ítem que empieza `line`, que no lleva su `\n`. El marcador va
     /// seguido de un blanco: `-` solo o `-x` no son ítems.
     pub(crate) fn parse(line: &'a str) -> Option<Self> {
+        if metalmind_syntax::is_thematic_break(line) {
+            return None;
+        }
         let start = leading_blanks(line).len();
         let rest = &line[start..];
         let (marker, len) = marker(rest)?;
@@ -118,14 +122,14 @@ impl<'a> ListItem<'a> {
     }
 
     /// El marcador que sigue a este en la lista: el mismo, o el número
-    /// siguiente.
-    pub(crate) fn next_marker(&self) -> Marker {
+    /// siguiente; `None` tras el último que cabe en nueve dígitos.
+    pub(crate) fn next_marker(&self) -> Option<Marker> {
         match self.marker {
-            Marker::Bullet(_) => self.marker,
-            Marker::Number { value, delimiter } => Marker::Number {
-                value: value.saturating_add(1),
+            Marker::Bullet(_) => Some(self.marker),
+            Marker::Number { value, delimiter } => Some(Marker::Number {
+                value: following(value)?,
                 delimiter,
-            },
+            }),
         }
     }
 
@@ -176,12 +180,17 @@ impl ListItem<'_> {
 }
 
 impl Numbering {
-    pub(crate) fn next(self) -> Self {
-        Self {
-            value: self.value.saturating_add(1),
+    pub(crate) fn next(self) -> Option<Self> {
+        Some(Self {
+            value: following(self.value)?,
             ..self
-        }
+        })
     }
+}
+
+/// El número que sigue a `value`, si todavía es un número de lista.
+fn following(value: u32) -> Option<u32> {
+    value.checked_add(1).filter(|&next| next <= MAX_NUMBER)
 }
 
 /// Las ediciones que numeran desde `numbering` los ítems que siguen a
@@ -200,7 +209,7 @@ pub(crate) fn renumber(
     let mut siblings = Vec::new();
     for next in line + 1..buffer.line_count() {
         let text = buffer.line_text(next);
-        if text.chars().all(is_blank) {
+        if value > MAX_NUMBER || text.chars().all(is_blank) {
             break;
         }
         let level = columns.line_width(leading_blanks(&text));
@@ -223,7 +232,7 @@ pub(crate) fn renumber(
                 value.to_string(),
             ));
         }
-        value = value.saturating_add(1);
+        value += 1;
     }
     (edits, siblings)
 }
@@ -248,6 +257,8 @@ mod tests {
     #[case("-", None, "")]
     #[case("-a", None, "")]
     #[case("--- ", None, "")]
+    #[case("- - -", None, "")]
+    #[case("* * *", None, "")]
     #[case("1234567890. a", None, "")]
     #[case("a. b", None, "")]
     #[case("# a", None, "")]
@@ -269,7 +280,7 @@ mod tests {
     #[case("1.  [X]  a", "2.  [ ]  ")]
     fn next_sibling(#[case] line: &str, #[case] sibling: &str) {
         let item = ListItem::parse(line).unwrap();
-        assert_eq!(item.sibling(item.next_marker()), sibling);
+        assert_eq!(item.sibling(item.next_marker().unwrap()), sibling);
     }
 
     #[rstest]
@@ -300,7 +311,7 @@ mod tests {
         let numbering = ListItem::parse(&text)
             .and_then(|item| item.numbering(Columns::default()))
             .map_or(Vec::new(), |numbering| {
-                renumber(&buffer, line, numbering.next(), Columns::default()).0
+                renumber(&buffer, line, numbering.next().unwrap(), Columns::default()).0
             });
         let edits = numbering;
         buffer

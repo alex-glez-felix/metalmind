@@ -26,6 +26,13 @@ use std::ops::Range;
 
 pub use cache::Styles;
 
+/// Si `line` es una regla horizontal (`---`, `* * *`, `- - -`), que no es
+/// un ítem de lista aunque empiece con `-` o `*`.
+#[must_use]
+pub fn is_thematic_break(line: &str) -> bool {
+    block::is_rule(line)
+}
+
 /// De dónde sale el texto de cada línea: el buffer del editor o, en tests,
 /// un `&str`.
 pub trait Lines {

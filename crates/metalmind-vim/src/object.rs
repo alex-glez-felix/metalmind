@@ -91,7 +91,7 @@ impl Object {
             Self::ListItems => {
                 let target = current_lines(buffer, selection, operator, count.unwrap_or(1))
                     .ok_or(Missed::Stay)?;
-                return Ok(with_children(buffer, target, viewport.columns()));
+                return Ok(with_children(buffer, target, viewport.columns(), outline));
             }
             Self::Visual(area) => return Ok(area.target(buffer, selection, viewport.columns())),
         };
@@ -121,14 +121,20 @@ fn current_lines(
     })
 }
 
-/// Si la primera línea es un ítem de lista, extiende las líneas hasta el
-/// último hijo de cada ítem: lo que sigue más indentado, con las líneas en
-/// blanco de en medio.
-fn with_children(buffer: &Buffer, target: Target, columns: Columns) -> Target {
+/// Si la primera línea es un ítem de lista fuera de un bloque de código,
+/// extiende las líneas hasta el último hijo de cada ítem: lo que sigue más
+/// indentado, con las líneas en blanco de en medio.
+fn with_children(
+    buffer: &Buffer,
+    target: Target,
+    columns: Columns,
+    outline: &LazyOutline,
+) -> Target {
     let Region::Lines { first, last } = target.region else {
         return target;
     };
-    if ListItem::parse(&buffer.line_text(first)).is_none() {
+    let item = ListItem::parse(&buffer.line_text(first)).is_some();
+    if !item || outline.get(buffer).in_code(first) {
         return target;
     }
     let last = (first..=last).fold(last, |end, line| end.max(last_child(buffer, line, columns)));

@@ -48,6 +48,8 @@ use rstest_reuse::{self, apply, template};
 #[case("ab|c\nx\ny", "Vj2>", "  |      abc\n        x\ny")]
 #[case("ab|c\nx\ny", "Vj>.", "  |      abc\n        x\ny")]
 #[case("        ab|c", "v<lt>", "    ab|c")]
+#[case("ab|c\nx\ny", "v$>", "    ab|c\nx\ny")]
+#[case("    a|b\n    c\n    d", "vj$<lt>", "a|b\nc\n    d")]
 // ]] [[: al inicio de la línea del heading siguiente o anterior
 #[case("|a\n# h1\nb\n## h2\nc", "]]", "a\n|# h1\nb\n## h2\nc")]
 #[case("a\n# h1\nb\n## h2\n|c", "[[", "a\n# h1\nb\n|## h2\nc")]
@@ -92,6 +94,14 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("  - a|", "a<CR>", "  - a\n  - |")]
 #[case("1. a|", "a<CR>", "1. a\n2. |")]
 #[case("9) a|", "a<CR>", "9) a\n10) |")]
+#[case("999999999. a|", "a<CR>", "999999999. a\n|")]
+#[case(
+    "999999998. a|\n999999999. b",
+    "a<CR>",
+    "999999998. a\n999999999. |\n999999999. b"
+)]
+#[case("- - |-", "o", "- - -\n|")]
+#[case("* * |*", "A<CR>", "* * *\n|")]
 #[case("- [x] a|", "a<CR>", "- [x] a\n- [ ] |")]
 #[case("- [ ] a|", "a<CR>", "- [ ] a\n- [ ] |")]
 #[case("1. [x] a|", "a<CR>", "1. [x] a\n2. [ ] |")]
@@ -174,6 +184,8 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("- |a\n  - b\n\n- c", ">>", "  |  - a\n      - b\n\n- c")]
 #[case("- |a\n- b\n  - c", "2>>", "  |  - a\n    - b\n      - c")]
 #[case("- |a\n  - b\n- c", ">j", "  |  - a\n      - b\n- c")]
+// dentro de código, `>>` es el de vim
+#[case("```\n- |a\n    b\n```", ">>", "```\n  |  - a\n    b\n```")]
 #[case("- |a\n  - b\n- c", ">>j.", "    - a\n  |        - b\n- c")]
 // En Visual las líneas son las elegidas: `<` es el de vim, sin hijos.
 #[case("  - |a\n    - b", "Vj<lt>", "- |a\n- b")]
