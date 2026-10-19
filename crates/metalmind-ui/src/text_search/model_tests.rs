@@ -84,11 +84,14 @@ fn lo_anterior_se_ve_hasta_que_llega_lo_nuevo() {
     let first = typed(&mut state, "idea").version;
     let _ = state.receive(first, vec![note("a.md", &[(0, "idea"), (1, "idea")])]);
     state.select_next();
+    assert!(!state.is_stale());
     let second = typed(&mut state, "s").version;
     assert_eq!(rows(&state), ["a.md:1", "a.md:2"]);
+    assert!(state.is_stale(), "las filas son de `idea`, no de `ideas`");
     assert_eq!(state.selected(), 1);
     let _ = state.receive(second, vec![note("b.md", &[(4, "ideas")])]);
     assert_eq!(rows(&state), ["b.md:5"]);
+    assert!(!state.is_stale());
     assert_eq!(state.selected(), 0);
 }
 

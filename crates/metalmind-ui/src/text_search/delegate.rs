@@ -135,6 +135,8 @@ impl PickerDelegate for TextSearch {
         let count = self.state.len();
         match self.state.status() {
             Status::Idle => None,
+            // Lo que se ve es de la búsqueda anterior: su cuenta no vale.
+            Status::Searching if self.state.is_stale() => Some("…".into()),
             Status::Searching => Some(format!("{count}…").into()),
             Status::Done if count == 0 => None,
             Status::Done if count == 1 => Some("1 resultado".into()),
