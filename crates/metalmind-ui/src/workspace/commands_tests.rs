@@ -200,6 +200,21 @@ fn volver_a_un_buffer_oculto_cuyo_archivo_borraron_lo_conserva() {
     assert_eq!(session.text(), "a");
 }
 
+/// Guardar una nota que era una sola línea vacía la deja como lo que dice
+/// el disco: al volver no parece cambiada fuera y conserva su historial.
+#[test]
+fn volver_a_una_nota_guardada_que_era_una_linea_vacia_conserva_el_historial() {
+    let (dir, _) = two_files();
+    fs::write(path(&dir, "a.md"), "\n").unwrap();
+    let mut session = Session::open(&path(&dir, "a.md"));
+    session.keys("ix⎋:w⏎");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    edit(&mut session, "e", &path(&dir, "a.md"));
+    assert_eq!(session.text(), "x");
+    session.keys("u");
+    assert_eq!(session.text(), "", "el undo sigue ahí");
+}
+
 /// Lo mismo si vuelve en un split.
 #[test]
 fn abrir_en_split_un_buffer_oculto_sin_cambios_relee_lo_que_cambio_fuera() {

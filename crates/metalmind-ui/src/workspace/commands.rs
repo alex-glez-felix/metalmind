@@ -179,12 +179,19 @@ impl Workspace {
             .is_some_and(|other| other != id && path.symlink_metadata().is_err())
     }
 
-    /// `:q` cierra el panel; el último cierra la ventana.
+    /// `:q` cierra el panel; el último cierra la ventana. Con `!`, como en
+    /// nvim, el documento que ya no se ve en ningún panel se suelta con sus
+    /// cambios en vez de quedar oculto.
     fn quit(&mut self, force: bool) -> Effect {
         if self.tree.len() == 1 {
             return self.quit_all(force);
         }
-        self.close(self.focused());
+        let pane = self.focused();
+        let shown = self.panes.get(&pane).map(|state| state.document);
+        self.close(pane);
+        if let Some(id) = shown.filter(|&id| force && self.panes_showing(id).next().is_none()) {
+            self.forget(id);
+        }
         Effect::Stay
     }
 

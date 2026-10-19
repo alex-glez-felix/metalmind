@@ -9,7 +9,6 @@ use metalmind_vault::VaultChange;
 use metalmind_vim::{Clipboard, KeyOutcome, Landing};
 
 use super::{Message, PaneId, Workspace, WorkspaceError, shown_path};
-use crate::document::Document;
 
 impl Workspace {
     /// Antes de que `pane` muestre otra cosa, su cursor queda en su
@@ -96,41 +95,18 @@ impl Workspace {
         }
     }
 
-    /// Como `autoread`: un documento oculto y sin cambios cuyo archivo
-    /// cambió se relee, así al volver a él se ve lo de disco y un `:w` no
-    /// lo pisa; sus marks se quedan en su línea, como en vim. Uno con
-    /// cambios se queda como está.
+    /// Como `autoread`: un documento oculto cuyo archivo cambió se relee
+    /// con [`Workspace::refresh`], así al volver a él se ve lo de disco y un
+    /// `:w` no lo pisa.
     fn refresh_hidden(&mut self, path: &Path) {
         let Some(id) = self.documents.find(path) else {
             return;
         };
-        let hidden = self.panes_showing(id).next().is_none();
-        let Some(document) = self
-            .documents
-            .get(id)
-            .filter(|d| hidden && !d.is_modified())
-        else {
-            return;
-        };
-        let Some(own) = document.path().map(Path::to_owned) else {
-            return;
-        };
-        let mut reloaded = match Document::open(&own) {
-            Ok(reloaded) if reloaded.buffer().to_string() != document.buffer().to_string() => {
-                reloaded
-            }
-            Ok(_) => return,
-            Err(error) => {
-                log::warn!("no se releyó {}: {error}", own.display());
-                return;
-            }
-        };
-        if let Err(error) = reloaded.keep_marks_of(document) {
-            self.report(&error.into());
+        if self.panes_showing(id).next().is_some() {
             return;
         }
-        if let Some(slot) = self.documents.get_mut(id) {
-            *slot = reloaded;
+        if let Err(error) = self.refresh(id) {
+            self.report(&error);
         }
     }
 }
