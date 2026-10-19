@@ -1,6 +1,7 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
 use metalmind_buffer::{Bias, ByteOffset, Edit, Goal, Selection, Selections};
+use metalmind_syntax::Conceal;
 use metalmind_vim::{
     Action, Clipboard, Invocation, Key, KeyOutcome, Mode, Operator, PasteSide, SystemRegister,
 };
@@ -151,6 +152,42 @@ impl Workspace {
             *selections = Selections::single(selection);
             Ok(())
         })
+    }
+
+    /// Un clic en `offset`: lleva el cursor ahí y, si cae en la casilla de
+    /// una tarea (`- [ ]`) en Normal, la marca o desmarca, como en Obsidian.
+    ///
+    /// # Errors
+    /// Si `pane` no existe o una edición resulta inválida, lo que sería un bug.
+    pub fn click(
+        &mut self,
+        pane: PaneId,
+        offset: ByteOffset,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        self.select(pane, offset, offset)?;
+        if self.vim.mode() == Mode::Normal && self.on_checkbox(pane, offset)? {
+            self.execute(pane, Action::ToggleCheckbox, clipboard)?;
+        }
+        Ok(())
+    }
+
+    /// Si `offset` cae en una casilla, según el estilo con que se pinta.
+    fn on_checkbox(&self, pane: PaneId, offset: ByteOffset) -> Result<bool, WorkspaceError> {
+        let view = self.view(pane)?;
+        let buffer = view.document.buffer();
+        let line = buffer.line_of(offset);
+        let index = offset.get() - buffer.line_start(line).get();
+        let style = view
+            .document
+            .layout()
+            .and_then(|layout| layout.styles().line(line));
+        Ok(style.is_some_and(|style| {
+            style.spans.iter().any(|span| {
+                matches!(span.conceal, Some(Conceal::Checkbox { .. }))
+                    && span.range.contains(&index)
+            })
+        }))
     }
 
     /// # Errors

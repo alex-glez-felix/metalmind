@@ -194,3 +194,37 @@ fn el_tabstop_de_la_config_mide_la_columna_de_j() {
     let column = |session: &Session| session.cursor().get() - "a\tbc\n".len();
     assert_eq!((column(&cuatro), column(&ocho)), (5, 9));
 }
+
+#[test]
+fn un_clic_en_la_casilla_la_marca_y_desmarca() {
+    let text = "- [ ] uno\n- [x] dos\nfin";
+    let mut session = Session::new(text);
+    session.keys("0");
+    session.click(ByteOffset::new(3));
+    assert_eq!(session.text(), "- [x] uno\n- [x] dos\nfin");
+    session.click(ByteOffset::new(12));
+    assert_eq!(session.text(), "- [x] uno\n- [ ] dos\nfin");
+    session.keys("u");
+    assert_eq!(session.text(), "- [x] uno\n- [x] dos\nfin");
+}
+
+#[test]
+fn un_clic_fuera_de_la_casilla_solo_mueve_el_cursor() {
+    let text = "- [ ] uno\n```\n- [ ] código\n```";
+    let mut session = Session::new(text);
+    session.keys("0");
+    for offset in [7, 18] {
+        session.click(ByteOffset::new(offset));
+        assert_eq!(session.text(), text);
+        assert_eq!(session.cursor(), ByteOffset::new(offset));
+    }
+}
+
+#[test]
+fn en_insert_un_clic_en_la_casilla_no_la_cambia() {
+    let mut session = Session::new("- [ ] uno");
+    session.keys("A");
+    session.click(ByteOffset::new(3));
+    assert_eq!(session.text(), "- [ ] uno");
+    assert_eq!(session.mode(), Mode::Insert);
+}
