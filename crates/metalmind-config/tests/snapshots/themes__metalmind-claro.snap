@@ -244,6 +244,9 @@ Theme {
             menu_padding: Length(
                 4.0,
             ),
+            menu_item_padding_x: Length(
+                8.0,
+            ),
         },
     },
 }

@@ -208,7 +208,9 @@ fn compare(out: &Path, name: &str, image: &Image) -> (String, usize) {
     };
     let path = before.join(format!("{name}.png"));
     if !path.exists() {
-        return (format!("| {name} | no hay captura de antes |"), 0);
+        // Sin la de antes no hay comparación: cuenta como si cambiara todo.
+        let pixels = usize::from(image.width) * usize::from(image.height);
+        return (format!("| {name} | no hay captura de antes |"), pixels);
     }
     match Image::load(&path).diff(image) {
         None => (format!("| {name} | 0 |"), 0),

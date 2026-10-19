@@ -183,7 +183,7 @@ impl ContextMenu {
             .id(("menu-item", index))
             .flex()
             .justify_between()
-            .px(theme.panel_padding_x)
+            .px(theme.menu_item_padding_x)
             .h(theme.menu_row_height)
             .items_center()
             .rounded(theme.radius_md)

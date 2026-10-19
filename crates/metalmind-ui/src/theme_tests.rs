@@ -113,6 +113,7 @@ fn las_medidas_de_fabrica_son_las_de_antes() {
         ("radius_lg", theme.radius_lg, 8.),
         ("menu_width", theme.menu_width, 240.),
         ("menu_padding", theme.menu_padding, 4.),
+        ("menu_item_padding_x", theme.menu_item_padding_x, 8.),
         ("caret_width", theme.caret_width, 2.),
         ("border_width", theme.border_width, 1.),
         ("underline_thickness", theme.underline_thickness, 1.),
@@ -150,6 +151,30 @@ fn las_medidas_salen_del_tema() {
     assert_eq!(theme.radius_lg, px(0.));
     assert_eq!(theme.weight_strong, FontWeight(600.));
     assert_eq!(theme.editor_font_size, px(15.), "el editor no cambia");
+}
+
+/// Si lo secundario va más grande que el texto, las filas que lo llevan
+/// (el detalle del picker, el atajo del menú) crecen con él y no se pisan.
+#[test]
+fn las_filas_miden_por_su_texto_mas_grande() {
+    let mut config = config::Config::defaults().unwrap();
+    config.theme.metrics.text.ui_sm.size = 2.;
+    let theme = Theme::with_font(&config, "Mono".into());
+    assert_eq!(theme.picker_row_height(), px(30. * 1.4 + 12.));
+    assert_eq!(theme.menu_row_height, px(51.), "30 × 1.7");
+    assert_eq!(
+        theme.panel_row_height,
+        px(26.),
+        "el árbol no lleva texto secundario"
+    );
+}
+
+#[test]
+fn el_menu_no_sigue_al_padding_del_panel() {
+    let mut config = config::Config::defaults().unwrap();
+    config.theme.metrics.layout.panel_padding_x = config::Length(20.);
+    let theme = Theme::with_font(&config, "Mono".into());
+    assert_eq!(theme.menu_item_padding_x, px(8.));
 }
 
 #[test]

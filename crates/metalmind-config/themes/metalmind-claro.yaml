@@ -165,3 +165,4 @@ layout:
   rail_button_size: 28
   menu_width: 240
   menu_padding: xs
+  menu_item_padding_x: sm

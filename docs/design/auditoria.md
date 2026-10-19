@@ -82,7 +82,7 @@ El mismo concepto con valores distintos según la parte de la interfaz:
 
 Otras:
 
-- **Medidas prestadas.** Los botones del encabezado del panel usan el padding del menú (`sidebar/render.rs:292`); el picker usa la separación de la barra de estado (`picker/view/render.rs:90`, `:163`); el formulario del panel usa su padding vertical como separación (`sidebar/prompt.rs:20`, `:94`); el menú usa el alto de fila y el padding del árbol (`sidebar/menu.rs:186-187`). Cambiar una de esas medidas cambiaba otra parte sin quererlo.
+- **Medidas prestadas.** Los botones del encabezado del panel usan el padding del menú (`sidebar/render.rs:292`); el picker usa la separación de la barra de estado (`picker/view/render.rs:90`, `:163`); el formulario del panel usa su padding vertical como separación (`sidebar/prompt.rs:20`, `:94`); el menú usa el alto de fila y el padding del árbol (`sidebar/menu.rs:186-187`). Con esta PR cada una tiene su token, con el mismo valor. Cambiar una de esas medidas cambiaba otra parte sin quererlo.
 - **Dos formas de medir una fila.** Árbol y menú, en veces la fuente redondeado; picker, una línea más padding. Con otra fuente no escalan igual.
 - **Fuera de la escala de 4.** El padding vertical de la barra de estado (3 px), el del panel y las filas del picker y la separación del panel (6 px), el padding horizontal de la barra de estado (10 px), la sangría del árbol (14 px) y el radio de los íconos (2 px) no son múltiplos de 4. El resto sí: 4, 8, 12, 16, 28, 36, 64, 240 y 640.
 - **Un solo tamaño de letra.** El título del encabezado, los botones, los atajos, los detalles del picker y el texto de las notas miden lo mismo; lo secundario se distingue solo por el color (`text_muted`).

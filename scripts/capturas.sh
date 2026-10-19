@@ -25,6 +25,10 @@ while (($#)); do
 done
 mkdir -p "$out"
 out="$(realpath "$out")"
+if [[ -n "$before" ]]; then
+  [[ "$before" != "$out" ]] || { echo "--antes no puede ser la carpeta de salida: se borraría" >&2; exit 2; }
+  compgen -G "$before/*.png" >/dev/null || { echo "no hay capturas en $before" >&2; exit 2; }
+fi
 rm -f "$out"/*.png "$out"/resumen*.md
 
 export METALMIND_CAPTURAS="$out"

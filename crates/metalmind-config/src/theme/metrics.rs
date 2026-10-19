@@ -224,6 +224,8 @@ metric_group! {
         menu_width: Length,
         /// Alrededor de las entradas del menú y de sus separadores.
         menu_padding: Length,
+        /// A los lados del texto de cada entrada del menú.
+        menu_item_padding_x: Length,
     }
 }
 

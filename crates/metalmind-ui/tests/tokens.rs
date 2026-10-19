@@ -77,6 +77,8 @@ struct Finding {
     file: String,
     line: usize,
     text: String,
+    /// Lo que violó la regla: una excepción cubre solo esto, no la línea.
+    hit: String,
     rule: &'static str,
 }
 
@@ -120,18 +122,19 @@ fn findings(root: &Path) -> Vec<Finding> {
                 break;
             }
             let code = line.split("//").next().unwrap_or_default();
-            let broken = rules.iter().find(|(regex, _)| {
-                regex
+            for (regex, rule) in &rules {
+                let hits = regex
                     .find_iter(code)
-                    .any(|hit| !ALLOWED_SHORTCUTS.contains(&hit.as_str()))
-            });
-            if let Some(&(_, rule)) = broken {
-                found.push(Finding {
-                    file: file.clone(),
-                    line: index + 1,
-                    text: line.trim().to_owned(),
-                    rule,
-                });
+                    .filter(|hit| !ALLOWED_SHORTCUTS.contains(&hit.as_str()));
+                for hit in hits {
+                    found.push(Finding {
+                        file: file.clone(),
+                        line: index + 1,
+                        text: line.trim().to_owned(),
+                        hit: hit.as_str().to_owned(),
+                        rule,
+                    });
+                }
             }
         }
     }
@@ -139,9 +142,9 @@ fn findings(root: &Path) -> Vec<Finding> {
 }
 
 fn excepted(finding: &Finding) -> bool {
-    EXCEPTIONS
-        .iter()
-        .any(|&(file, snippet, _)| finding.file == file && finding.text.contains(snippet))
+    EXCEPTIONS.iter().any(|&(file, snippet, _)| {
+        finding.file == file && finding.text.contains(snippet) && snippet.contains(&finding.hit)
+    })
 }
 
 #[test]
@@ -226,4 +229,24 @@ fn las_reglas_atrapan_lo_suelto() {
         .map(|finding| finding.text)
         .collect();
     assert_eq!(found, loose);
+}
+
+/// Una excepción cubre su valor, no la línea entera: otro valor suelto en
+/// la misma línea se reporta igual.
+#[test]
+fn una_excepcion_no_tapa_otro_valor_de_la_misma_linea() {
+    let dir = tempfile::tempdir().unwrap();
+    let view = dir.path().join("src/picker/view");
+    fs::create_dir_all(&view).unwrap();
+    fs::write(
+        view.join("render.rs"),
+        ".max_w(relative(0.9)).px(px(10.))\n",
+    )
+    .unwrap();
+    let loose: Vec<String> = findings(dir.path())
+        .into_iter()
+        .filter(|finding| !excepted(finding))
+        .map(|finding| finding.hit)
+        .collect();
+    assert_eq!(loose, ["px(1"]);
 }
