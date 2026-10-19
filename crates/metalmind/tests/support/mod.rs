@@ -37,7 +37,26 @@ impl Smoke {
 
     /// Con una pantalla de `screen` (`1920x1080`), para que quepa una ventana de ese tamaño.
     pub fn with_screen(screen: &str) -> Self {
-        let dir = tempfile::tempdir().expect("carpeta temporal");
+        Self::in_dir(tempfile::tempdir().expect("carpeta temporal"), screen)
+    }
+
+    /// Como `with_screen`, en `<tmp>/<name>`: una ruta que no cambia entre
+    /// corridas, porque sale en lo que se captura (un error con la ruta de la
+    /// nota). Lo que quedó de una corrida cortada se borra.
+    pub fn with_screen_at(screen: &str, name: &str) -> Self {
+        let path = std::env::temp_dir().join(name);
+        if path.exists() {
+            fs::remove_dir_all(&path).expect("borrar lo de la corrida anterior");
+        }
+        let dir = tempfile::Builder::new()
+            .prefix(name)
+            .rand_bytes(0)
+            .tempdir()
+            .expect("carpeta temporal");
+        Self::in_dir(dir, screen)
+    }
+
+    fn in_dir(dir: TempDir, screen: &str) -> Self {
         for sub in ["home", "notas"] {
             fs::create_dir(dir.path().join(sub)).expect("crear la carpeta");
         }
