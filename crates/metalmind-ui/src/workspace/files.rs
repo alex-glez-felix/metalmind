@@ -92,13 +92,13 @@ impl Workspace {
         Ok(true)
     }
 
-    /// Los documentos con cambios sin guardar que tienen archivo: su texto
-    /// no es el del disco.
-    pub fn unsaved_files(&self) -> impl Iterator<Item = (&Path, &Buffer)> {
+    /// Los documentos con cambios sin guardar que tienen archivo, también
+    /// los que todavía no existen en disco: su texto no es el del disco.
+    pub fn unsaved_files(&self) -> impl Iterator<Item = (&Path, &Document)> {
         self.documents
             .iter()
             .filter(|(_, document)| document.is_modified())
-            .filter_map(|(_, document)| Some((document.path()?, document.buffer())))
+            .filter_map(|(_, document)| Some((document.path()?, document)))
     }
 
     /// Renombra o mueve `from` a `to` en `vault`; los documentos abiertos de

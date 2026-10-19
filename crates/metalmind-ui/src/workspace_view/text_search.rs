@@ -3,12 +3,11 @@
 //! como `space f`.
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::EntryKind;
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::picker::{Open, PickerEvent, PickerOptions, PickerView};
-use crate::text_search::{Hit, OpenNote, TextSearch};
+use crate::text_search::{Hit, OpenNote, TextSearch, searchable};
 use crate::workspace::{Axis, LinePosition, Placement, shown_path};
 
 /// El picker de `space /`.
@@ -18,17 +17,16 @@ impl WorkspaceView {
     pub(super) fn open_text_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
         let root = session.root().to_owned();
-        // Solo las que la búsqueda en disco recorre: las notas del índice.
         let index = session.vault().snapshot();
         let open: Vec<OpenNote> = self
             .workspace
             .read(cx)
             .unsaved_files()
-            .filter_map(|(path, buffer)| {
+            .filter_map(|(path, document)| {
                 let path = session.vault_path(path)?;
-                (index.kind(&path) == Some(EntryKind::Note)).then(|| OpenNote {
+                searchable(&index, &path, document.exists_on_disk()).then(|| OpenNote {
                     path,
-                    text: buffer.snapshot(),
+                    text: document.buffer().snapshot(),
                 })
             })
             .collect();
