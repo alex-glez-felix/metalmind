@@ -1,8 +1,12 @@
 //! Los índices del vault del presupuesto (`docs/performance.md`), contados en
 //! instrucciones con callgrind, como `metalmind-perf/benches/instrucciones.rs`.
-//! Solo lo que corre en un hilo sobre datos en memoria: abrir el vault lee
-//! el disco con varios hilos y su conteo no es determinista, así que va en
-//! la preparación, fuera de la cuenta.
+//! Solo lo que corre en un hilo sobre datos en memoria: gungraun cuenta el
+//! hilo de la función medida. Abrir el vault (disco, varios hilos) y armar
+//! el índice de links, que reparte el scan en un hilo por núcleo, van en la
+//! preparación; que armarlo siga lineal lo cuenta, con todos sus hilos,
+//! `tests/complexity.rs`.
+//! Cada benchmark devuelve lo que recibe, para que se suelte fuera de la
+//! cuenta: soltar un índice de 5 k notas cuesta más que lo que se mide.
 //! Correr con `cargo bench -p metalmind-vault --bench instrucciones`.
 
 #![allow(
@@ -60,13 +64,6 @@ fn index(names: NoteNames) -> LinkIndex {
     build(&files(names))
 }
 
-#[library_benchmark]
-#[bench::nombres_repetidos(args = (NoteNames::Repeated), setup = files)]
-#[bench::nombres_unicos(args = (NoteNames::Unique), setup = files)]
-fn links_indexar(files: Files) -> LinkIndex {
-    black_box(build(&files))
-}
-
 // Un cambio del watcher: modificar una nota y crear una cuyo nombre usan
 // 300 links de las 100 carpetas.
 #[library_benchmark]
@@ -75,8 +72,16 @@ fn links_indexar(files: Files) -> LinkIndex {
 fn links_cambio_del_watcher(
     (mut index, change, text): (LinkIndex, VaultChange, String),
 ) -> LinkIndex {
-    index.apply(&change, |_| Some(text.clone()));
+    apply(&mut index, &change, &text);
     black_box(index)
+}
+
+// Los closures van fuera de las funciones medidas: el nombre de lo que los
+// recibe (`apply::<…::links_cambio_del_watcher::{closure}>`) contiene el de
+// la función medida, y el `--toggle-collect` de gungraun apagaría la cuenta
+// al entrar ahí.
+fn apply(index: &mut LinkIndex, change: &VaultChange, text: &str) {
+    index.apply(change, |_| Some(text.to_owned()));
 }
 
 fn modified(names: NoteNames) -> (LinkIndex, VaultChange, String) {
@@ -97,8 +102,8 @@ fn created(names: NoteNames) -> (LinkIndex, VaultChange, String) {
 
 #[library_benchmark]
 #[bench::notas_5k(args = (NoteNames::Repeated), setup = index)]
-fn links_clonar_el_indice(index: LinkIndex) -> LinkIndex {
-    black_box(index.clone())
+fn links_clonar_el_indice(index: LinkIndex) -> (LinkIndex, LinkIndex) {
+    black_box((index.clone(), index))
 }
 
 // Renombrar una nota con 6 links que llegan, y mover una carpeta de 500
@@ -107,8 +112,10 @@ fn links_clonar_el_indice(index: LinkIndex) -> LinkIndex {
 #[bench::una_nota(args = (NoteNames::Unique, "area-3/tema-4/nota-3-4-7.md", "area-3/tema-4/otra.md"), setup = rename)]
 #[bench::una_carpeta_nombres_unicos(args = (NoteNames::Unique, "area-3", "archivo/area-3"), setup = rename)]
 #[bench::una_carpeta_nombres_repetidos(args = (NoteNames::Repeated, "area-3", "archivo/area-3"), setup = rename)]
-fn links_plan_de_renombre((index, from, to): (LinkIndex, VaultPath, VaultPath)) -> RenamePlan {
-    black_box(index.rename_plan(&from, &to).unwrap())
+fn links_plan_de_renombre(
+    (index, from, to): (LinkIndex, VaultPath, VaultPath),
+) -> (RenamePlan, LinkIndex) {
+    black_box((index.rename_plan(&from, &to).unwrap(), index))
 }
 
 fn rename(names: NoteNames, from: &str, to: &str) -> (LinkIndex, VaultPath, VaultPath) {
@@ -118,9 +125,11 @@ fn rename(names: NoteNames, from: &str, to: &str) -> (LinkIndex, VaultPath, Vaul
 // `gd` sobre el último link de una nota de 5 000 líneas.
 #[library_benchmark]
 #[bench::lineas_5k(args = (NoteNames::Repeated), setup = follow_setup)]
-fn links_seguir_un_link((index, text, offset): (LinkIndex, String, usize)) -> Destination {
+fn links_seguir_un_link(
+    (index, text, offset): (LinkIndex, String, usize),
+) -> (Destination, LinkIndex, String) {
     let source = path("area-0/tema-0/nota-0.md");
-    black_box(index.follow(&source, &text, offset).unwrap())
+    black_box((index.follow(&source, &text, offset).unwrap(), index, text))
 }
 
 fn follow_setup(names: NoteNames) -> (LinkIndex, String, usize) {
@@ -132,13 +141,17 @@ fn follow_setup(names: NoteNames) -> (LinkIndex, String, usize) {
 // Lo que insertaría el autocompletado de `[[` para una página de 50.
 #[library_benchmark]
 #[bench::pagina_de_50(args = (NoteNames::Repeated), setup = completion_setup)]
-fn links_nombrar_para_completar((index, page): (LinkIndex, Vec<VaultPath>)) -> usize {
+fn links_nombrar_para_completar(
+    (index, page): (LinkIndex, Vec<VaultPath>),
+) -> (usize, LinkIndex, Vec<VaultPath>) {
     let source = path("area-0/tema-0/nota-0.md");
-    black_box(
-        page.iter()
-            .filter_map(|target| index.wikilink_target(&source, target))
-            .count(),
-    )
+    black_box((complete(&index, &source, &page), index, page))
+}
+
+fn complete(index: &LinkIndex, source: &VaultPath, page: &[VaultPath]) -> usize {
+    page.iter()
+        .filter_map(|target| index.wikilink_target(source, target))
+        .count()
 }
 
 fn completion_setup(names: NoteNames) -> (LinkIndex, Vec<VaultPath>) {
@@ -173,8 +186,8 @@ fn with_attachments(notes: usize) -> (TempDir, Vault) {
 
 #[library_benchmark]
 #[bench::notas_5k(args = (NOTES), setup = with_attachments)]
-fn adjuntos_huerfanos((_dir, vault): (TempDir, Vault)) -> usize {
-    black_box(vault.orphan_attachments().len())
+fn adjuntos_huerfanos((dir, vault): (TempDir, Vault)) -> (Vec<VaultPath>, TempDir, Vault) {
+    black_box((vault.orphan_attachments(), dir, vault))
 }
 
 /// Una página de tag cada 25 notas, como `benches/tags.rs`.
@@ -189,15 +202,19 @@ fn tagged(notes: usize) -> (TempDir, Tags) {
 
 #[library_benchmark]
 #[bench::consulta_con_descendientes(args = (NOTES), setup = tagged)]
-fn tags_consulta((_dir, tags): (TempDir, Tags)) -> usize {
-    black_box(TagQuery::parse("#t1 -#t3").query.notes(&tags).len())
+fn tags_consulta((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
+    black_box((
+        TagQuery::parse("#t1 -#t3").query.notes(&tags).len(),
+        dir,
+        tags,
+    ))
 }
 
 #[library_benchmark]
 #[bench::entero(args = (NOTES, None), setup = tags_in)]
 #[bench::en_focus(args = (NOTES, Some("area-1/ #t1")), setup = tags_in)]
-fn tags_panel((_dir, tags, scope): (TempDir, Tags, Scope)) -> usize {
-    black_box(tags.tree(&scope.filter(&tags)).roots().len())
+fn tags_panel((dir, tags, scope): (TempDir, Tags, Scope)) -> (usize, TempDir, Tags) {
+    black_box((tags.tree(&scope.filter(&tags)).roots().len(), dir, tags))
 }
 
 fn tags_in(notes: usize, scope: Option<&str>) -> (TempDir, Tags, Scope) {
@@ -208,31 +225,30 @@ fn tags_in(notes: usize, scope: Option<&str>) -> (TempDir, Tags, Scope) {
 
 #[library_benchmark]
 #[bench::notas_5k(args = (NOTES), setup = tagged)]
-fn tags_candidatos_de_autocompletado((_dir, tags): (TempDir, Tags)) -> usize {
-    black_box(tags.completions().len())
+fn tags_candidatos_de_autocompletado((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
+    black_box((tags.completions().len(), dir, tags))
 }
 
 #[library_benchmark]
 #[bench::con_pagina(args = (NOTES), setup = tagged)]
-fn tags_plan_de_renombre((_dir, tags): (TempDir, Tags)) -> usize {
-    black_box(
-        tags.plan_rename("#t1", "#uno")
-            .unwrap()
-            .changes
-            .edit_count(),
-    )
+fn tags_plan_de_renombre((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
+    let edits = tags
+        .plan_rename("#t1", "#uno")
+        .unwrap()
+        .changes
+        .edit_count();
+    black_box((edits, dir, tags))
 }
 
 #[library_benchmark]
 #[bench::notas_5k(args = (NOTES), setup = tagged)]
-fn tags_clonar((_dir, tags): (TempDir, Tags)) -> Tags {
-    black_box(Tags::clone(&tags))
+fn tags_clonar((dir, tags): (TempDir, Tags)) -> (Tags, TempDir, Tags) {
+    black_box((Tags::clone(&tags), dir, tags))
 }
 
 library_benchmark_group!(
     name = links,
     benchmarks = [
-        links_indexar,
         links_cambio_del_watcher,
         links_clonar_el_indice,
         links_plan_de_renombre,

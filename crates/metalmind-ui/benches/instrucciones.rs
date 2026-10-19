@@ -3,6 +3,8 @@
 //! los modelos (finder, árbol, fórmulas, búsqueda de texto) y el editor en la
 //! plataforma de pruebas de GPUI, de la tecla al frame (`render`, layout y
 //! `paint`) con el sistema de texto de verdad. Sin la GPU ni `present`.
+//! Cada benchmark devuelve lo que recibe, para que se suelte fuera de la
+//! cuenta, y la ventana no se suelta (ver `keep`).
 //! Correr con `cargo bench -p metalmind-ui --bench instrucciones`.
 
 #![allow(
@@ -45,7 +47,7 @@ fn paths(notes: usize) -> Arc<[String]> {
 
 #[library_benchmark]
 #[bench::peor_consulta_5k(args = (NOTES), setup = paths)]
-fn finder_tecla(paths: Arc<[String]>) -> usize {
+fn finder_tecla(paths: Arc<[String]>) -> (PickerState<String>, FuzzyMatcher, FuzzyMatcher) {
     let mut search = FuzzyMatcher::paths();
     let mut paint = FuzzyMatcher::paths();
     let mut picker = PickerState::new(paths);
@@ -55,7 +57,7 @@ fn finder_tecla(paths: Arc<[String]>) -> usize {
     for row in 0..picker.len().min(VISIBLE) {
         black_box(picker.positions(row, &mut paint));
     }
-    black_box(picker.len())
+    black_box((picker, search, paint))
 }
 
 /// El índice de `vault_paths(notes)` con sus carpetas; `top` cambia el
@@ -185,23 +187,30 @@ fn cold(count: usize) -> (MetricsCache, Vec<(String, bool)>) {
 #[library_benchmark]
 #[bench::en_frio_200(args = (200), setup = cold)]
 #[bench::en_caliente_200(args = (200), setup = warm)]
-fn formulas_medir((cache, formulas): (MetricsCache, Vec<(String, bool)>)) -> MetricsCache {
+fn formulas_medir(
+    (cache, formulas): (MetricsCache, Vec<(String, bool)>),
+) -> (MetricsCache, Vec<(String, bool)>) {
     for (latex, display) in &formulas {
         let _ = black_box(cache.get(latex, *display));
     }
-    black_box(cache)
+    black_box((cache, formulas))
 }
 
 // Pintar las 22 del spike a escala 1, como en el executor de fondo.
 #[library_benchmark]
 #[bench::escala_1()]
 fn formulas_pintar_las_22() -> usize {
-    let look = Look {
+    black_box(paint_22(Look {
         size: 16.0 * 1.21,
         scale: 1.0,
         color: [0.85, 0.85, 0.88, 1.0],
         padding: 1.0,
-    };
+    }))
+}
+
+// Fuera de la función medida: el closure lleva su nombre, y el
+// `--toggle-collect` de gungraun apagaría la cuenta dentro de `filter_map`.
+fn paint_22(look: Look) -> usize {
     FORMULAS
         .iter()
         .filter_map(|formula| black_box(render(formula.latex, formula.display, look)).ok())
@@ -275,13 +284,13 @@ fn batch(notes: usize) -> (TextSearchState, u64, Vec<NoteMatches>, TempDir) {
 #[library_benchmark]
 #[bench::lote_de_50(args = (500), setup = batch)]
 fn busqueda_recibir_un_lote(
-    (mut state, version, batch, _dir): (TextSearchState, u64, Vec<NoteMatches>, TempDir),
-) -> TextSearchState {
+    (mut state, version, batch, dir): (TextSearchState, u64, Vec<NoteMatches>, TempDir),
+) -> (TextSearchState, TempDir) {
     let _ = state.receive(version, batch);
     for row in 0..state.len().min(VISIBLE) {
         black_box(row_text(&state.hit(row).unwrap().line));
     }
-    black_box(state)
+    black_box((state, dir))
 }
 
 fn long_note(lines: usize) -> Prepared {
