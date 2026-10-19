@@ -1,0 +1,46 @@
+---
+source: crates/metalmind-syntax/tests/scan.rs
+expression: "table.join(\"\\n\")"
+---
+en línea: Euler: ⟦$e^{i\pi} + 1 = 0$⟧.
+  índice: []
+precios: cuesta $5 y $10
+  índice: []
+precio con cierre: de ⟦$5 a $10$⟧ no
+  índice: []
+dígito tras el cierre: ⟦$a$1 y $b$⟧
+  índice: []
+espacio tras abrir: $ x$ y $x $
+  índice: []
+pegada a palabras: a⟦$x$⟧b
+  índice: []
+escapado: \$x\$ y ⟦$\$$⟧
+  índice: []
+dólar escapado dentro: ⟦$a \$ b$⟧
+  índice: []
+en código inline: `$x$` y ⟦$y$⟧
+  índice: []
+código dentro: ⟦$a `b$⟧` c`
+  índice: []
+en una cerca: ```⏎$x$⏎```⏎⟦$y$⟧
+  índice: []
+cerca dentro de un bloque: $$⏎```⏎⟦$$⟧^2⏎```
+  índice: []
+bloque en una línea: ⟦$$x^2$$⟧
+  índice: []
+bloque multilínea: $$⏎a⏎⏎b⏎⟦$$⟧^4 #fuera
+  índice: ["#fuera"]
+bloque sin cerrar: $$ x⏎#a [[b]]
+  índice: []
+dólar suelto: un $ y otro
+  índice: []
+vacía: $$$$ y $$ $$
+  índice: []
+tags y links dentro: ⟦$\#a$⟧ ⟦$[[b]]$⟧ #c
+  índice: ["#c"]
+comentario dentro: ⟦$%%$⟧ [[a]] %%
+  índice: ["[[a]]"]
+fórmula en un comentario: %% $x$ %% ⟦$y$⟧
+  índice: []
+link antes: [[a$]] ⟦$b$⟧
+  índice: ["[[a$]]"]

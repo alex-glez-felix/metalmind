@@ -7,9 +7,12 @@
 mod support;
 
 use std::borrow::Cow;
+use std::fmt::Write as _;
 use std::fs;
 
-use metalmind_syntax::{LinkSyntax, Problem, Resolution, Subpath, TagPlace, resolve, scan};
+use metalmind_syntax::{
+    Lines, LinkSyntax, Problem, Resolution, Styles, Subpath, TagPlace, TextLines, resolve, scan,
+};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
@@ -70,6 +73,65 @@ fn code_and_comments_hide_syntax(#[case] text: &str, #[case] expected: &[&str]) 
 #[case::inside_wikilink("[[nota#a]]", &["[[nota#a]]"])]
 fn tags(#[case] text: &str, #[case] expected: &[&str]) {
     assert_eq!(found(text), expected);
+}
+
+/// Cada caso con sus fórmulas entre `⟦ ⟧` (las que se componen; `⟦$$…⟧^n`
+/// si van debajo de un bloque de `n` líneas) y lo que el índice ve fuera.
+fn formulas(text: &str) -> String {
+    let lines = TextLines::new(text);
+    let mut styles = Styles::new(lines.line_count());
+    styles.ensure(usize::MAX, &lines);
+    let mut marked = Vec::new();
+    for index in 0..lines.line_count() {
+        let line = lines.line(index);
+        let mut out = String::new();
+        let mut at = 0;
+        for math in &styles.line(index).unwrap().math {
+            out.push_str(&line[at..math.range.start]);
+            out.push('⟦');
+            out.push_str(&line[math.range.clone()]);
+            out.push('⟧');
+            if math.below() {
+                write!(out, "^{}", math.above).unwrap();
+            }
+            at = math.range.end;
+        }
+        out.push_str(&line[at..]);
+        marked.push(out);
+    }
+    format!("{}\n  índice: {:?}", marked.join("⏎"), found(text))
+}
+
+#[test]
+fn formula_edges() {
+    let cases = [
+        ("en línea", "Euler: $e^{i\\pi} + 1 = 0$."),
+        ("precios", "cuesta $5 y $10"),
+        ("precio con cierre", "de $5 a $10$ no"),
+        ("dígito tras el cierre", "$a$1 y $b$"),
+        ("espacio tras abrir", "$ x$ y $x $"),
+        ("pegada a palabras", "a$x$b"),
+        ("escapado", "\\$x\\$ y $\\$$"),
+        ("dólar escapado dentro", "$a \\$ b$"),
+        ("en código inline", "`$x$` y $y$"),
+        ("código dentro", "$a `b$` c`"),
+        ("en una cerca", "```\n$x$\n```\n$y$"),
+        ("cerca dentro de un bloque", "$$\n```\n$$\n```"),
+        ("bloque en una línea", "$$x^2$$"),
+        ("bloque multilínea", "$$\na\n\nb\n$$ #fuera"),
+        ("bloque sin cerrar", "$$ x\n#a [[b]]"),
+        ("dólar suelto", "un $ y otro"),
+        ("vacía", "$$$$ y $$ $$"),
+        ("tags y links dentro", "$\\#a$ $[[b]]$ #c"),
+        ("comentario dentro", "$%%$ [[a]] %%"),
+        ("fórmula en un comentario", "%% $x$ %% $y$"),
+        ("link antes", "[[a$]] $b$"),
+    ];
+    let table: Vec<String> = cases
+        .iter()
+        .map(|(name, text)| format!("{name}: {}", formulas(text)))
+        .collect();
+    insta::assert_snapshot!(table.join("\n"));
 }
 
 #[rstest]

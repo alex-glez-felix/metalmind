@@ -1,0 +1,32 @@
+---
+source: crates/metalmind-syntax/src/style/tests.rs
+expression: render(MATH)
+---
+Text | [$]Markup~ [e^{i\pi} + 1 = 0]Math~Math { display: false } [$]Markup~ $"e^{i\\pi} + 1 = 0"@23..41
+Text |
+Text | [$]Markup~ [x]Math~Math { display: false } [$]Markup~ [$]Markup~ [y]Math~Math { display: false } [$]Markup~ $"x"@20..23 $"y"@27..30
+Text |
+Text | [\]Markup~ [\]Markup~ [$]Markup~ [\$ = \text{dólar}]Math~Math { display: false } [$]Markup~ $"\\$ = \\text{dólar}"@26..46
+Text | [`]Markup~ [$x$]Code+code [`]Markup~ [``]Markup~ [$$]Code+code [``]Markup~
+Text | [$]Markup~ [\#a [[b]]]Math~Math { display: false } [$]Markup~ [#c]Tag [[[]Markup~ [d]Wikilink []]]Markup~ ->"d" $"\\#a [[b]]"@29..40
+Text |
+Text | [$$]Markup~ [\int_0^1 x\,dx = \frac{1}{2}]Math~Math { display: true } [$$]Markup~ $$"\\int_0^1 x\\,dx = \\frac{1}{2}"@0..32
+Text | [$$]Markup~ [a^2]Math~Math { display: true } [$$]Markup~ $$"a^2"@12..19
+Text | [$$]Markup~
+Text | [\begin{aligned}]Math
+Text | [#no-es-tag &= [[tampoco]] \\]Math
+Text | [b &= c]Math
+Text | [\end{aligned}]Math
+Text | [$$]Markup~ [#tag]Tag $$"\n\\begin{aligned}\n#no-es-tag &= [[tampoco]] \\\\\nb &= c\n\\end{aligned}\n"@0..2^5
+Text |
+Fence(Open) | [```]Markup~
+Fence(Body) | [$$ en una cerca no abre]Code
+Fence(Close) | [```]Markup~
+Text |
+Text | [$$]Markup~ [\sum_{n=1}^{\infty} \frac{1}{n^2}]Math
+Text | [= \frac{\pi^2}{6}]Math [$$]Markup~ $$"\\sum_{n=1}^{\\infty} \\frac{1}{n^2}\n= \\frac{\\pi^2}{6}"@0..19^1
+Text |
+Text | [$$]Markup~ [ ]Math [$$]Markup~
+Text | [$$]Markup~ [ \frac{a}{b}]Math
+Text | [#nada]Math
+Text |

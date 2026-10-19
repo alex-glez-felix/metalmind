@@ -10,8 +10,8 @@
 mod styled;
 
 use metalmind_perf::{
-    assert_flat, assert_linear, backtick_runs, hash_runs, huge_line, note, unclosed_link_titles,
-    unclosed_wikilinks,
+    assert_flat, assert_linear, backtick_runs, dollar_runs, hash_runs, huge_line, math_note, note,
+    unclosed_link_titles, unclosed_wikilinks,
 };
 use metalmind_syntax::{Lines, Styles, scan};
 use styled::{NoteLines, StyledNote};
@@ -39,6 +39,16 @@ fn unclosed_link_titles_scan_in_linear_time() {
 #[test]
 fn a_huge_line_scans_in_linear_time() {
     assert_linear(100_000, huge_line, |text| scan(&text));
+}
+
+#[test]
+fn unclosed_dollars_scan_in_linear_time() {
+    assert_linear(10_000, dollar_runs, |text| scan(&text));
+}
+
+#[test]
+fn formulas_scan_in_linear_time() {
+    assert_linear(5_000, math_note, |text| scan(&text));
 }
 
 /// Rachas de 1 a k: el texto mide ~k²/2, así que k crece con la raíz.
@@ -81,6 +91,16 @@ fn styling_unclosed_link_titles_is_linear() {
 #[test]
 fn styling_a_huge_line_is_linear() {
     assert_linear(100_000, huge_line, |text| style_all(&text));
+}
+
+#[test]
+fn styling_unclosed_dollars_is_linear() {
+    assert_linear(10_000, dollar_runs, |text| style_all(&text));
+}
+
+#[test]
+fn styling_formulas_is_linear() {
+    assert_linear(2_000, math_note, |text| style_all(&text));
 }
 
 #[test]

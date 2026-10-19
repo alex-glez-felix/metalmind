@@ -8,8 +8,9 @@ use super::block::{BlockKind, BlockLine, block_line};
 use super::emphasis::{Delimiters, Styled};
 use super::flatten::{Layer, Layers};
 use super::pieces::Pieces;
-use super::{Conceal, LineKind, LineStyle, LinkSpot, Role};
+use super::{Conceal, LineKind, LineStyle, LinkSpot, MathSpot, Role};
 use crate::markdown_link::MarkdownLink;
+use crate::math::Math;
 use crate::scanner::{self, RegionEnd};
 use crate::{Heading, Link};
 
@@ -19,12 +20,45 @@ pub(crate) struct Chunk {
     pub end: RegionEnd,
 }
 
-/// Cómo empieza el tramo: en `body`, que es el inicio de una línea si
-/// `starts_line`; si no, lo de antes es el cierre de un comentario.
-#[derive(Debug, Clone, Copy)]
+/// Cómo empieza el tramo: en `body` de su primera línea, tras `lead`.
+#[derive(Debug, Clone)]
 pub(crate) struct Entry {
     pub body: usize,
-    pub starts_line: bool,
+    pub lead: Lead,
+}
+
+impl Entry {
+    /// Desde el inicio de la línea, o tras su BOM.
+    pub(crate) fn line(body: usize) -> Self {
+        Self {
+            body,
+            lead: Lead::Line,
+        }
+    }
+
+    pub(crate) fn starts_line(&self) -> bool {
+        matches!(self.lead, Lead::Line)
+    }
+}
+
+/// Lo que hay antes de `body` en la primera línea del tramo.
+#[derive(Debug, Clone)]
+pub(crate) enum Lead {
+    /// Nada: `body` es el inicio de la línea.
+    Line,
+    /// El cierre de un comentario `%%`.
+    Comment,
+    /// El cierre de un bloque `$$` de varias líneas, que termina en `body`.
+    Math(BlockEnd),
+}
+
+/// Un bloque `$$` que cierra en esta línea.
+#[derive(Debug, Clone)]
+pub(crate) struct BlockEnd {
+    /// El LaTeX entero, de todas sus líneas.
+    pub latex: String,
+    /// Cuántas líneas arriba abrió.
+    pub above: usize,
 }
 
 /// Los rangos de cada línea de `text`, sin el salto.
@@ -42,16 +76,34 @@ pub(crate) fn line_ranges(text: &str) -> Vec<Range<usize>> {
 /// Las `count` líneas de `text`, que puede terminar con el salto de la
 /// última.
 pub(crate) fn style_chunk(text: &str, entry: Entry, count: usize) -> Chunk {
-    let (pieces, end) = scanner::region(text, entry.body, entry.starts_line, Pieces::default());
+    let starts_line = entry.starts_line();
+    let (pieces, end) = scanner::region(text, entry.body, starts_line, Pieces::default());
     let mut lines = line_ranges(text);
     lines.truncate(count);
-    if let RegionEnd::InComment { line_end } = end {
+    if let RegionEnd::InComment { line_end } | RegionEnd::InMath { line_end, .. } = end {
         lines.retain(|line| line.start <= line_end);
     }
     let mut opaque = pieces.opaque();
     let mut layers = Layers::default();
-    if !entry.starts_line {
-        layers.push(0..entry.body, Layer::Role(Role::Comment));
+    let mut formulas = vec![Vec::new(); lines.len()];
+    match entry.lead {
+        Lead::Line => {}
+        Lead::Comment => layers.push(0..entry.body, Layer::Role(Role::Comment)),
+        Lead::Math(block) => {
+            let close = entry.body - 2;
+            layers.push(0..close, Layer::Role(Role::Math));
+            hide(close..entry.body, &mut layers);
+            if !block.latex.trim().is_empty() {
+                formulas[0].push(MathSpot {
+                    range: 0..entry.body,
+                    latex: block.latex,
+                    display: true,
+                    above: block.above,
+                });
+            }
+        }
+    }
+    if !starts_line {
         opaque.insert(0, 0..entry.body);
     }
     let mut out = vec![LineStyle::default(); lines.len()];
@@ -60,13 +112,22 @@ pub(crate) fn style_chunk(text: &str, entry: Entry, count: usize) -> Chunk {
         lines: &lines,
         opaque: &opaque,
     };
-    let blocks = painter.blocks(entry, &pieces.headings, &mut layers, &mut out);
+    let blocks = painter.blocks(
+        entry.body,
+        starts_line,
+        &pieces.headings,
+        &mut layers,
+        &mut out,
+    );
     painter.emphasis(&blocks, &pieces, &mut layers);
     let mut spots = vec![Vec::new(); lines.len()];
     painter.pieces(&pieces, &mut layers, &mut spots);
-    for ((line, spans), spots) in out.iter_mut().zip(layers.flatten(&lines)).zip(spots) {
+    painter.math(&pieces.math, &mut layers, &mut formulas);
+    let flat = layers.flatten(&lines);
+    for (((line, spans), spots), math) in out.iter_mut().zip(flat).zip(spots).zip(formulas) {
         line.spans = spans;
         line.links = spots;
+        line.math = math;
     }
     Chunk { lines: out, end }
 }
@@ -104,7 +165,8 @@ impl Painter<'_> {
 
     fn blocks(
         &self,
-        entry: Entry,
+        body: usize,
+        starts_line: bool,
         headings: &[Heading],
         layers: &mut Layers,
         out: &mut [LineStyle],
@@ -116,9 +178,9 @@ impl Painter<'_> {
         let mut block = 0;
         for (index, range) in self.lines.iter().enumerate() {
             let line = &self.text[range.clone()];
-            let start = if index == 0 { entry.body } else { range.start };
+            let start = if index == 0 { body } else { range.start };
             let heading = headings.next_if(|heading| heading.span.start == start);
-            let structured = (index > 0 || entry.starts_line) && !self.continues(range.start);
+            let structured = (index > 0 || starts_line) && !self.continues(range.start);
             let parsed = if structured {
                 block_line(&line[start - range.start..])
             } else {
@@ -329,6 +391,35 @@ impl Painter<'_> {
             embed: link.embed,
         });
         spots.len() - 1
+    }
+}
+
+impl Painter<'_> {
+    /// Los `$` se ocultan; el LaTeX de una fórmula cerrada se reemplaza
+    /// por la fórmula, y se anota en su línea.
+    fn math(&self, found: &[Math], layers: &mut Layers, formulas: &mut [Vec<MathSpot>]) {
+        for math in found {
+            hide(math.span.start..math.content.start, layers);
+            hide(math.content.end..math.span.end, layers);
+            layers.push(math.content.clone(), Layer::Role(Role::Math));
+            let latex = &self.text[math.content.clone()];
+            if !math.closed || latex.trim().is_empty() {
+                continue;
+            }
+            let display = math.display;
+            layers.push(
+                math.content.clone(),
+                Layer::Conceal(Conceal::Math { display }),
+            );
+            let index = self.line_of(math.span.start);
+            let start = self.lines[index].start;
+            formulas[index].push(MathSpot {
+                range: math.span.start - start..math.span.end - start,
+                latex: latex.to_owned(),
+                display,
+                above: 0,
+            });
+        }
     }
 }
 

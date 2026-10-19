@@ -7,6 +7,7 @@
 use std::ops::Range;
 
 use crate::markdown_link::MarkdownLink;
+use crate::math::Math;
 use crate::{BlockId, Heading, Link, Scan, Tag};
 
 pub(crate) trait Sink {
@@ -29,6 +30,9 @@ pub(crate) trait Sink {
 
     /// La `\` de una puntuación escapada.
     fn escape(&mut self, _at: usize) {}
+
+    /// Una fórmula `$…$` o `$$…$$`.
+    fn math(&mut self, _math: Math) {}
 }
 
 impl Sink for Scan {

@@ -46,6 +46,13 @@ fn render(text: &str) -> String {
         for link in &style.links {
             write!(out, " ->{:?}", link.target).unwrap();
         }
+        for math in &style.math {
+            let kind = if math.display { "$$" } else { "$" };
+            write!(out, " {kind}{:?}@{:?}", math.latex, math.range).unwrap();
+            if math.below() {
+                write!(out, "^{}", math.above).unwrap();
+            }
+        }
         out.push('\n');
     }
     out
@@ -56,6 +63,34 @@ const NOTE: &str = include_str!("../../tests/fixtures/estilos.md");
 #[test]
 fn every_kind_of_syntax() {
     insta::assert_snapshot!(render(NOTE));
+}
+
+const MATH: &str = include_str!("../../tests/fixtures/formulas.md");
+
+#[test]
+fn formulas() {
+    insta::assert_snapshot!(render(MATH));
+}
+
+#[test]
+fn a_block_follows_its_lines_when_edited() {
+    let mut text = String::from("a\n$$\nx\n$$\nb");
+    let mut lines = TextLines::new(&text);
+    let mut styles = Styles::new(lines.line_count());
+    styles.ensure(usize::MAX, &lines);
+    assert_eq!(styles.line(3).unwrap().math[0].latex, "\nx\n");
+    text = String::from("a\n$$\nx\ny\n$$\nb");
+    lines = TextLines::new(&text);
+    styles.edit(3, 0, 1);
+    styles.ensure(usize::MAX, &lines);
+    let closing = &styles.line(4).unwrap().math[0];
+    assert_eq!((closing.latex.as_str(), closing.above), ("\nx\ny\n", 3));
+    assert_eq!(
+        (0..lines.line_count())
+            .map(|line| styles.line(line).unwrap().clone())
+            .collect::<Vec<_>>(),
+        styled(&text)
+    );
 }
 
 #[test]
@@ -116,6 +151,10 @@ fn piece() -> impl Strategy<Value = String> {
         Just("_".to_owned()),
         Just("~~".to_owned()),
         Just("==".to_owned()),
+        Just("$".to_owned()),
+        Just("$$".to_owned()),
+        Just("\\$".to_owned()),
+        Just("5".to_owned()),
         Just("\n".to_owned()),
         Just("\n\n".to_owned()),
         Just(" ".to_owned()),

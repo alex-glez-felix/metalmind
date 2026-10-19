@@ -4,6 +4,7 @@
 use std::ops::Range;
 
 use crate::markdown_link::MarkdownLink;
+use crate::math::Math;
 use crate::sink::Sink;
 use crate::{BlockId, Heading, Link, Tag};
 
@@ -17,6 +18,7 @@ pub(crate) struct Pieces {
     pub code_spans: Vec<Range<usize>>,
     pub comments: Vec<Range<usize>>,
     pub escapes: Vec<usize>,
+    pub math: Vec<Math>,
 }
 
 impl Sink for Pieces {
@@ -51,18 +53,23 @@ impl Sink for Pieces {
     fn escape(&mut self, at: usize) {
         self.escapes.push(at);
     }
+
+    fn math(&mut self, math: Math) {
+        self.math.push(math);
+    }
 }
 
 impl Pieces {
     /// Lo que no es texto para la negrita ni para un marcador de bloque:
-    /// código, comentarios, links (salvo el texto de uno markdown), tags,
-    /// escapes y `^bloques`. Ordenado y sin solaparse.
+    /// código, comentarios, fórmulas, links (salvo el texto de uno
+    /// markdown), tags, escapes y `^bloques`. Ordenado y sin solaparse.
     pub(crate) fn opaque(&self) -> Vec<Range<usize>> {
         let mut ranges: Vec<Range<usize>> = self
             .code_spans
             .iter()
             .chain(&self.comments)
             .cloned()
+            .chain(self.math.iter().map(|math| math.span.clone()))
             .chain(self.wikilinks.iter().map(|link| link.span.clone()))
             .chain(self.markdown.iter().flat_map(|link| {
                 [

@@ -1,7 +1,8 @@
 use crate::code::{self, CodeSpans};
 use crate::markdown_link::{self, Brackets};
+use crate::math::InlineMath;
 use crate::sink::Sink;
-use crate::{Scan, anchor, frontmatter, link, tag};
+use crate::{Scan, anchor, frontmatter, link, math, tag};
 
 /// Recorre la nota de izquierda a derecha. Todo disparador es ASCII, así que
 /// avanzar de a un byte nunca deja un rango en medio de un carácter.
@@ -15,6 +16,7 @@ pub(crate) struct Scanner<'t, S> {
     sink: S,
     code_spans: CodeSpans,
     brackets: Brackets,
+    inline_math: InlineMath,
 }
 
 pub(crate) fn scan(text: &str) -> Scan {
@@ -33,6 +35,9 @@ pub(crate) enum RegionEnd {
     End,
     /// Un comentario sigue tras la línea: su tramo llega hasta `line_end`.
     InComment { line_end: usize },
+    /// Un bloque `$$` sigue tras la línea, que termina en `line_end`; su
+    /// LaTeX empieza en el byte `column` de esa línea.
+    InMath { line_end: usize, column: usize },
 }
 
 impl<'t, S: Sink> Scanner<'t, S> {
@@ -44,6 +49,7 @@ impl<'t, S: Sink> Scanner<'t, S> {
             sink,
             code_spans: CodeSpans::default(),
             brackets: Brackets::default(),
+            inline_math: InlineMath::default(),
         }
     }
 
@@ -78,6 +84,17 @@ impl<'t, S: Sink> Scanner<'t, S> {
                 let end = at + 2 + i + 2;
                 self.sink.comment(at..end);
                 at = end;
+            } else if self.text.as_bytes()[at..].starts_with(b"$$") {
+                let line_end = code::line_end(self.text, at);
+                let found = math::display_at(self.text, at, line_end);
+                let closed = found.closed;
+                let (end, column) = (found.span.end, found.content.start);
+                self.sink.math(found);
+                if !closed {
+                    let column = column - code::line_start(self.text, at);
+                    return RegionEnd::InMath { line_end, column };
+                }
+                at = end;
             } else {
                 at = self.step(at);
             }
@@ -108,6 +125,7 @@ impl<'t, S: Sink> Scanner<'t, S> {
                 self.sink.comment(at..end);
                 end
             }
+            b'$' => self.math(at, next == Some(b'$')),
             b'!' if next == Some(b'[') => self.link(at, at + 1).unwrap_or(at + 1),
             b'[' => self.link(at, at).unwrap_or(at + 1),
             b'#' | b'^' if self.after_space(at) => self.after_space_trigger(at),
@@ -121,6 +139,24 @@ impl<'t, S: Sink> Scanner<'t, S> {
             self.sink.code_span(at..end);
         }
         end
+    }
+
+    /// Un bloque `$$` busca su cierre en todo lo que sigue; una fórmula en
+    /// línea, en su línea.
+    fn math(&mut self, at: usize, display: bool) -> usize {
+        let found = if display {
+            Some(math::display_at(self.text, at, self.text.len()))
+        } else {
+            self.inline_math.at(self.text, at)
+        };
+        match found {
+            Some(found) => {
+                let end = found.span.end;
+                self.sink.math(found);
+                end
+            }
+            None => at + 1,
+        }
     }
 
     /// Un `#` (heading o tag) o un `^` (bloque) que empieza tras un espacio.
