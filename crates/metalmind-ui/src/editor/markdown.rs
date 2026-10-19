@@ -121,6 +121,23 @@ mod tests {
     }
 
     #[test]
+    fn a_markdown_link_that_goes_nowhere_is_unresolved() {
+        let found = render("[ver](no.md) y [ver](si.md)", |spot| spot.target == "si.md");
+        assert_eq!(
+            found,
+            [
+                "[[]Markup",
+                "[ver]Link!",
+                "[](no.md)]Markup",
+                "[ y ]Text",
+                "[[]Markup",
+                "[ver]Link",
+                "[](si.md)]Markup",
+            ]
+        );
+    }
+
+    #[test]
     fn without_a_style_it_is_text() {
         assert_eq!(
             runs(3, None, |_| true),

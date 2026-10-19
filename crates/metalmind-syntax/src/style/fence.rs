@@ -186,7 +186,12 @@ pub(crate) fn highlight(line: &str, lang: Lang) -> Vec<(Range<usize>, Role)> {
                 at = end;
                 continue;
             }
-        } else if b.is_ascii_digit() && (at == 0 || !is_word(bytes[at - 1])) {
+        } else if b.is_ascii_digit()
+            && line[..at]
+                .chars()
+                .next_back()
+                .is_none_or(|c| !is_word_char(c))
+        {
             let end = at
                 + bytes[at..]
                     .iter()
@@ -195,8 +200,13 @@ pub(crate) fn highlight(line: &str, lang: Lang) -> Vec<(Range<usize>, Role)> {
             out.push((at..end, Role::Token(Token::Number)));
             at = end;
             continue;
-        } else if is_word(b) {
-            let end = at + bytes[at..].iter().take_while(|&&b| is_word(b)).count();
+        } else if line[at..].chars().next().is_some_and(is_word_char) {
+            let end = at
+                + line[at..]
+                    .chars()
+                    .take_while(|&c| is_word_char(c))
+                    .map(char::len_utf8)
+                    .sum::<usize>();
             if is_keyword(lang, &line[at..end]) {
                 out.push((at..end, Role::Token(Token::Keyword)));
             }
@@ -210,6 +220,12 @@ pub(crate) fn highlight(line: &str, lang: Lang) -> Vec<(Range<usize>, Role)> {
 
 fn is_word(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Un identificador puede llevar letras de cualquier idioma: `élet` no
+/// esconde un `let`.
+fn is_word_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
 }
 
 fn is_keyword(lang: Lang, word: &str) -> bool {
@@ -290,6 +306,13 @@ mod tests {
             tokens("echo a#b # c", Lang::Shell),
             [("# c", Token::Comment)]
         );
+    }
+
+    #[test]
+    fn a_keyword_inside_a_unicode_name_is_not_one() {
+        assert_eq!(tokens("élet let", Lang::Rust), [("let", Token::Keyword)]);
+        assert_eq!(highlight("élet", Lang::Rust), []);
+        assert_eq!(highlight("año2", Lang::Rust), []);
     }
 
     #[test]
