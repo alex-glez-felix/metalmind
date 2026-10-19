@@ -9,7 +9,7 @@ use gpui_kit::{
 use metalmind_buffer::ByteOffset;
 
 use super::Editor;
-use super::formula_tooltip::Hover;
+use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
 use crate::actions::{Copy, Paste};
@@ -80,7 +80,7 @@ impl Editor {
             self.hover_formula(event.position, cx);
             return;
         };
-        if self.formula_error.take().is_some() {
+        if self.pointer.take().is_some() {
             cx.notify();
         }
         let Some(head) = self.offset_at(event.position, cx) else {
@@ -150,15 +150,13 @@ impl Editor {
         }
     }
 
-    /// Sobre una fórmula que no compone, su mensaje; fuera, nada.
+    /// El ratón se movió a `position`: si entra o sale de una fórmula que no
+    /// compone, se repinta para mostrar o quitar su mensaje.
     fn hover_formula(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
-        let hover = self
-            .layout
-            .as_ref()
-            .and_then(|layout| layout.error_at(position))
-            .map(Hover::new);
-        if hover != self.formula_error {
-            self.formula_error = hover;
+        let layout = self.layout.as_ref();
+        let changed = hover_at(layout, self.pointer) != hover_at(layout, Some(position));
+        self.pointer = Some(position);
+        if changed {
             cx.notify();
         }
     }

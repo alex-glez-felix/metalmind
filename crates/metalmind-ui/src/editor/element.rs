@@ -42,7 +42,8 @@ impl EditorElement {
         cx: &mut App,
     ) {
         let editor = self.editor.read(cx);
-        let (mark, formula) = (editor.shown_mark_tooltip(), editor.formula_error.clone());
+        let mark = editor.shown_mark_tooltip();
+        let formula = formula_tooltip::hover_at(Some(layout), editor.pointer);
         if let Some(line) = mark {
             gutter.mark_tooltip(line, layout, clip, &self.theme, window, cx);
         }
