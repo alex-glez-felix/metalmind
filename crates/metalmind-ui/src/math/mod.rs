@@ -26,6 +26,14 @@ pub struct Formulas {
     /// el motor compara las medidas para saber si revisar las ventanas.
     measure: Option<Arc<FormulaMeasure>>,
     images: Images,
+    /// Las que se están pintando en el fondo ahora mismo.
+    running: usize,
+}
+
+/// Cuántas fórmulas se pintan a la vez: una por núcleo. Las demás esperan
+/// su turno, y las que dejan de verse antes de tenerlo no se pintan.
+fn painters() -> usize {
+    std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
 }
 
 impl Formulas {
@@ -62,30 +70,42 @@ impl Formulas {
         self.images.next_frame();
     }
 
-    /// La imagen de `key` si ya está; si no, la manda a pintar al fondo y
-    /// avisa a quien observa esta entidad cuando llega.
+    /// La imagen de `key` si ya está; si no, queda pendiente para pintarse
+    /// en el fondo y avisa a quien observa esta entidad cuando llega.
     pub fn image(&mut self, key: &ImageKey, cx: &mut Context<Self>) -> Image {
         if let Some(image) = self.images.get(key) {
             return image;
         }
-        let job = key.clone();
-        let painting = cx.background_spawn(async move {
-            let image = paint(&job);
-            (job, image)
-        });
-        cx.spawn(async move |this, cx| {
-            let (key, image) = painting.await;
-            // Si la ventana ya se cerró, no hay a quién dársela.
-            let _ = this.update(cx, |formulas, cx| {
-                if let Image::Failed(error) = &image {
-                    log::error!("no se pudo pintar la fórmula {:?}: {error}", key.latex);
-                }
-                formulas.images.finish(key, image);
-                cx.notify();
-            });
-        })
-        .detach();
+        self.paint_pending(cx);
         Image::Pending
+    }
+
+    /// Lanza las pendientes que quepan entre los pintores libres.
+    fn paint_pending(&mut self, cx: &mut Context<Self>) {
+        while self.running < painters() {
+            let Some(job) = self.images.next_job() else {
+                return;
+            };
+            self.running += 1;
+            let painting = cx.background_spawn(async move {
+                let image = paint(&job);
+                (job, image)
+            });
+            cx.spawn(async move |this, cx| {
+                let (key, image) = painting.await;
+                // Si la ventana ya se cerró, no hay a quién dársela.
+                let _ = this.update(cx, |formulas, cx| {
+                    if let Image::Failed(error) = &image {
+                        log::error!("no se pudo pintar la fórmula {:?}: {error}", key.latex);
+                    }
+                    formulas.running -= 1;
+                    formulas.images.finish(key, image);
+                    formulas.paint_pending(cx);
+                    cx.notify();
+                });
+            })
+            .detach();
+        }
     }
 
     /// Suelta del atlas de la ventana las imágenes que salieron de la
