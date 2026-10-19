@@ -15,12 +15,10 @@ use gpui_kit::{
     UniformListScrollHandle, Window,
 };
 
-use super::actions::{
-    Confirm, ConfirmSplitDown, ConfirmSplitRight, DeleteBackward, DeleteForward, DeleteToStart,
-    DeleteWordBackward, Dismiss, MoveLeft, MoveRight, MoveToEnd, MoveToStart, PICKER_CONTEXT,
-    SPLITS_CONTEXT, SelectNext, SelectPrevious,
-};
+use metalmind_keymap::{Action, PickerAction, context};
+
 use super::{Chosen, InputLine, LineEdit, Open};
+use crate::actions::Dispatch;
 
 /// Lo que se lista y cómo se busca. Sus métodos que reciben el contexto de
 /// la vista pueden lanzar trabajo de fondo y avisar al volver con
@@ -156,14 +154,40 @@ impl<D: PickerDelegate> PickerView<D> {
         self.update_delegate(cx, |delegate, cx| delegate.edit(edit, cx));
     }
 
-    fn select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
-        self.delegate.select_next();
-        self.changed(cx);
-    }
-
-    fn select_previous(&mut self, _: &SelectPrevious, _: &mut Window, cx: &mut Context<Self>) {
-        self.delegate.select_previous();
-        self.changed(cx);
+    /// Las acciones del picker; las demás siguen hacia la raíz de la
+    /// ventana.
+    fn on_dispatch(
+        &mut self,
+        Dispatch(invocation): &Dispatch,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Action::Picker(action) = invocation.action else {
+            cx.propagate();
+            return;
+        };
+        match action {
+            PickerAction::SelectNext => {
+                self.delegate.select_next();
+                self.changed(cx);
+            }
+            PickerAction::SelectPrevious => {
+                self.delegate.select_previous();
+                self.changed(cx);
+            }
+            PickerAction::Confirm => self.choose(Open::Here, cx),
+            PickerAction::ConfirmSplitRight => self.choose(Open::SplitRight, cx),
+            PickerAction::ConfirmSplitDown => self.choose(Open::SplitDown, cx),
+            PickerAction::Dismiss => cx.emit(PickerEvent::Dismissed),
+            PickerAction::DeleteBackward => self.edit(LineEdit::DeleteBackward, cx),
+            PickerAction::DeleteForward => self.edit(LineEdit::DeleteForward, cx),
+            PickerAction::DeleteWordBackward => self.edit(LineEdit::DeleteWordBackward, cx),
+            PickerAction::DeleteToStart => self.edit(LineEdit::DeleteToStart, cx),
+            PickerAction::MoveLeft => self.edit(LineEdit::Left, cx),
+            PickerAction::MoveRight => self.edit(LineEdit::Right, cx),
+            PickerAction::MoveToStart => self.edit(LineEdit::Home, cx),
+            PickerAction::MoveToEnd => self.edit(LineEdit::End, cx),
+        }
     }
 
     fn choose(&mut self, open: Open, cx: &mut Context<Self>) {
@@ -172,62 +196,17 @@ impl<D: PickerDelegate> PickerView<D> {
         }
     }
 
-    fn confirm(&mut self, _: &Confirm, _: &mut Window, cx: &mut Context<Self>) {
-        self.choose(Open::Here, cx);
-    }
-
-    fn confirm_split_right(
-        &mut self,
-        _: &ConfirmSplitRight,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.choose(Open::SplitRight, cx);
-    }
-
-    fn confirm_split_down(&mut self, _: &ConfirmSplitDown, _: &mut Window, cx: &mut Context<Self>) {
-        self.choose(Open::SplitDown, cx);
-    }
-
-    fn dismiss(_: &mut Self, _: &Dismiss, _: &mut Window, cx: &mut Context<Self>) {
-        cx.emit(PickerEvent::Dismissed);
-    }
-
     fn click(&mut self, row: usize, cx: &mut Context<Self>) {
         self.delegate.select(row);
         self.choose(Open::Here, cx);
     }
 
     fn key_context(&self) -> KeyContext {
-        let mut context = KeyContext::new_with_defaults();
-        context.add(PICKER_CONTEXT);
+        let mut key_context = KeyContext::new_with_defaults();
+        key_context.add(context::PICKER);
         if self.options.splits {
-            context.add(SPLITS_CONTEXT);
+            key_context.add(context::SPLITS);
         }
-        context
+        key_context
     }
-}
-
-/// Una acción `picker::` que solo edita la línea.
-macro_rules! line_edits {
-    ($($method:ident: $action:ident => $edit:expr;)*) => {
-        impl<D: PickerDelegate> PickerView<D> {
-            $(
-                fn $method(&mut self, _: &$action, _: &mut Window, cx: &mut Context<Self>) {
-                    self.edit($edit, cx);
-                }
-            )*
-        }
-    };
-}
-
-line_edits! {
-    delete_backward: DeleteBackward => LineEdit::DeleteBackward;
-    delete_forward: DeleteForward => LineEdit::DeleteForward;
-    delete_word_backward: DeleteWordBackward => LineEdit::DeleteWordBackward;
-    delete_to_start: DeleteToStart => LineEdit::DeleteToStart;
-    move_left: MoveLeft => LineEdit::Left;
-    move_right: MoveRight => LineEdit::Right;
-    move_to_start: MoveToStart => LineEdit::Home;
-    move_to_end: MoveToEnd => LineEdit::End;
 }

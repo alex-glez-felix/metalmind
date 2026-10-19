@@ -30,6 +30,7 @@ use gpui_kit::{
     Subscription, Window, div, prelude::FluentBuilder as _,
 };
 use metalmind_buffer::ByteOffset;
+use metalmind_keymap::{Action, EditorAction};
 use metalmind_vault::VaultPath;
 use metalmind_vim::{KeyOutcome, Mode};
 
@@ -39,7 +40,7 @@ use self::layout::FrameLayout;
 use self::links::Links;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
-use crate::actions::{self, EDITOR_CONTEXT};
+use crate::actions::{self, Dispatch, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -295,8 +296,15 @@ impl Render for Editor {
             .flex()
             .flex_col()
             .on_key_down(cx.listener(Self::on_key_down))
-            .on_action(cx.listener(Self::copy))
-            .on_action(cx.listener(Self::paste))
+            .on_action(
+                cx.listener(|editor, Dispatch(invocation): &Dispatch, _, cx| {
+                    match invocation.action {
+                        Action::Editor(EditorAction::Copy) => editor.copy(cx),
+                        Action::Editor(EditorAction::Paste) => editor.paste(cx),
+                        _ => cx.propagate(),
+                    }
+                }),
+            )
             .child(
                 div()
                     .flex_1()

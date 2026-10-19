@@ -3,17 +3,52 @@
 use gpui_kit::{Context, Window};
 use metalmind_vault::EntryKind;
 
-use super::actions::{
-    Cancel, CollapseOrParent, Confirm, Delete, ExpandOrOpen, Filter, Hide, MenuNext, MenuPrevious,
-    Move, NewFolder, NewNote, Open, OpenSplitDown, OpenSplitRight, Rename, SelectFirst, SelectLast,
-    SelectNext, SelectPrevious, ToggleView,
-};
+use metalmind_keymap::{Action, PanelAction};
+
 use super::{Sidebar, SidebarEvent};
+use crate::actions::Dispatch;
 use crate::file_tree::FileTree;
 use crate::panel::{NewEntry, Request};
 use crate::workspace::{Axis, Placement};
 
 impl Sidebar {
+    /// Las acciones del panel; las demás siguen hacia la raíz de la ventana.
+    pub(super) fn on_dispatch(
+        &mut self,
+        Dispatch(invocation): &Dispatch,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Action::Panel(action) = invocation.action else {
+            cx.propagate();
+            return;
+        };
+        match action {
+            PanelAction::ToggleView => self.toggle_view(window, cx),
+            PanelAction::Hide => self.hide(window, cx),
+            PanelAction::FocusEditor => cx.emit(SidebarEvent::FocusEditor),
+            PanelAction::SelectNext => self.select_next(window, cx),
+            PanelAction::SelectPrevious => self.select_previous(window, cx),
+            PanelAction::SelectFirst => self.select_first(window, cx),
+            PanelAction::SelectLast => self.select_last(window, cx),
+            PanelAction::CollapseOrParent => self.collapse_or_parent(window, cx),
+            PanelAction::ExpandOrOpen => self.expand_or_open(window, cx),
+            PanelAction::Open => self.open_selected(window, cx),
+            PanelAction::OpenSplitRight => self.open_split_right(window, cx),
+            PanelAction::OpenSplitDown => self.open_split_down(window, cx),
+            PanelAction::Filter => self.filter(window, cx),
+            PanelAction::NewNote => self.new_note(window, cx),
+            PanelAction::NewFolder => self.new_folder(window, cx),
+            PanelAction::Rename => self.rename(window, cx),
+            PanelAction::Move => self.move_entry(window, cx),
+            PanelAction::Delete => self.delete(window, cx),
+            PanelAction::Confirm => self.confirm(window, cx),
+            PanelAction::Cancel => self.cancel(window, cx),
+            PanelAction::MenuNext => self.menu_next(window, cx),
+            PanelAction::MenuPrevious => self.menu_previous(window, cx),
+        }
+    }
+
     /// Una operación del árbol que mueve la selección.
     fn navigate(&mut self, cx: &mut Context<Self>, step: impl FnOnce(&mut FileTree)) {
         step(&mut self.panel.tree);
@@ -21,42 +56,27 @@ impl Sidebar {
         cx.notify();
     }
 
-    pub(super) fn select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
+    fn select_next(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.navigate(cx, FileTree::select_next);
     }
 
-    pub(super) fn select_previous(
-        &mut self,
-        _: &SelectPrevious,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn select_previous(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.navigate(cx, FileTree::select_previous);
     }
 
-    pub(super) fn select_first(&mut self, _: &SelectFirst, _: &mut Window, cx: &mut Context<Self>) {
+    fn select_first(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.navigate(cx, FileTree::select_first);
     }
 
-    pub(super) fn select_last(&mut self, _: &SelectLast, _: &mut Window, cx: &mut Context<Self>) {
+    fn select_last(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.navigate(cx, FileTree::select_last);
     }
 
-    pub(super) fn collapse_or_parent(
-        &mut self,
-        _: &CollapseOrParent,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn collapse_or_parent(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.navigate(cx, FileTree::collapse_or_parent);
     }
 
-    pub(super) fn expand_or_open(
-        &mut self,
-        _: &ExpandOrOpen,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn expand_or_open(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         match self.panel.tree.selected_entry() {
             Some(row) if row.kind != EntryKind::Folder => {
                 let path = row.path.clone();
@@ -67,7 +87,7 @@ impl Sidebar {
     }
 
     /// Un archivo se abre; una carpeta se abre o se cierra.
-    pub(super) fn open_selected(&mut self, _: &Open, _: &mut Window, cx: &mut Context<Self>) {
+    fn open_selected(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let Some(row) = self.panel.tree.selected_entry() else {
             return;
         };
@@ -79,21 +99,11 @@ impl Sidebar {
         }
     }
 
-    pub(super) fn open_split_right(
-        &mut self,
-        _: &OpenSplitRight,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_split_right(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.open_selected_in(Placement::Split(Axis::Row), cx);
     }
 
-    pub(super) fn open_split_down(
-        &mut self,
-        _: &OpenSplitDown,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_split_down(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.open_selected_in(Placement::Split(Axis::Column), cx);
     }
 
@@ -108,36 +118,36 @@ impl Sidebar {
         }
     }
 
-    pub(super) fn filter(&mut self, _: &Filter, _: &mut Window, cx: &mut Context<Self>) {
+    fn filter(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.panel.start_filter();
         cx.notify();
     }
 
-    pub(super) fn new_note(&mut self, _: &NewNote, _: &mut Window, cx: &mut Context<Self>) {
+    fn new_note(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_create(NewEntry::Note);
         cx.notify();
     }
 
-    pub(super) fn new_folder(&mut self, _: &NewFolder, _: &mut Window, cx: &mut Context<Self>) {
+    fn new_folder(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_create(NewEntry::Folder);
         cx.notify();
     }
 
-    pub(super) fn rename(&mut self, _: &Rename, _: &mut Window, cx: &mut Context<Self>) {
+    fn rename(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_rename();
         cx.notify();
     }
 
-    pub(super) fn move_entry(&mut self, _: &Move, _: &mut Window, cx: &mut Context<Self>) {
+    fn move_entry(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_move();
         cx.notify();
     }
 
-    pub(super) fn delete(&mut self, _: &Delete, _: &mut Window, cx: &mut Context<Self>) {
+    fn delete(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let Some(path) = self.panel.tree.selected().cloned() else {
             return;
@@ -147,10 +157,10 @@ impl Sidebar {
         cx.notify();
     }
 
-    pub(super) fn confirm(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
+    fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(menu) = self.menu.take() {
             if let Some(item) = menu.selected_item() {
-                window.dispatch_action(item.action(), cx);
+                window.dispatch_action(Box::new(Dispatch(item.action().into())), cx);
             }
             cx.notify();
             return;
@@ -161,7 +171,7 @@ impl Sidebar {
         cx.notify();
     }
 
-    pub(super) fn cancel(&mut self, _: &Cancel, _: &mut Window, cx: &mut Context<Self>) {
+    fn cancel(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.menu.take().is_none() {
             if self.panel.prompt().is_some() {
                 self.panel.cancel();
@@ -173,31 +183,26 @@ impl Sidebar {
         cx.notify();
     }
 
-    pub(super) fn menu_next(&mut self, _: &MenuNext, _: &mut Window, cx: &mut Context<Self>) {
+    fn menu_next(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(menu) = &mut self.menu {
             menu.select_next();
         }
         cx.notify();
     }
 
-    pub(super) fn menu_previous(
-        &mut self,
-        _: &MenuPrevious,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn menu_previous(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(menu) = &mut self.menu {
             menu.select_previous();
         }
         cx.notify();
     }
 
-    pub(super) fn toggle_view(&mut self, _: &ToggleView, _: &mut Window, cx: &mut Context<Self>) {
+    fn toggle_view(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.panel.view = self.panel.view.other();
         cx.notify();
     }
 
-    pub(super) fn hide(&mut self, _: &Hide, _: &mut Window, cx: &mut Context<Self>) {
+    fn hide(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.panel.visible = false;
         self.menu = None;
         cx.emit(SidebarEvent::FocusEditor);

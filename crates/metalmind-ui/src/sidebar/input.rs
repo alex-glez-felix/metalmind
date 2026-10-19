@@ -1,5 +1,6 @@
 //! El texto que se escribe en el panel: un nombre o el filtro. Enter y
-//! Escape son acciones ([`super::actions`]); lo demás llega aquí.
+//! Escape son acciones del registro ([`metalmind_keymap::PanelAction`]);
+//! lo demás llega aquí.
 
 use gpui_kit::{Context, KeyDownEvent, Keystroke, Window};
 

@@ -34,8 +34,8 @@ pub enum Effect {
     /// `gd` o `enter` sobre un link cuyo nombre empata entre varias notas:
     /// la ventana muestra [`Workspace::link_choice`] para elegir una.
     ChooseLink,
-    /// Una acción que no es un comando, como las del motor: la atiende la
-    /// vista que la tenga.
+    /// Una acción que no es un comando, como las del panel lateral: la
+    /// atiende la vista que la tenga.
     Dispatch(Action),
 }
 
@@ -49,7 +49,7 @@ impl Workspace {
         loop {
             let effect = match invocation.action {
                 Action::Command(command) => self.run_one(command, invocation.argument.as_deref()),
-                action @ Action::Vim(_) => Effect::Dispatch(action),
+                action => Effect::Dispatch(action),
             };
             if effect != Effect::Stay {
                 // Lo que quede de la macro no tiene a dónde ir: la ventana

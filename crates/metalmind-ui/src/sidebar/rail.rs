@@ -2,7 +2,7 @@
 //! del panel lateral: el ratón llega a lo mismo que `space e` y `space t`.
 
 use gpui_kit::{
-    Action, AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
+    AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
 };
 use metalmind_keymap::Command;
@@ -31,23 +31,23 @@ pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
             "rail-folders",
             shown == Some(PanelView::Folders),
             icons::entry(EntryKind::Folder, theme),
-            Dispatch(Command::ToggleFolders.into()),
+            Command::ToggleFolders,
             theme,
         ))
         .child(rail_button(
             "rail-tags",
             shown == Some(PanelView::Tags),
             div().child("#"),
-            Dispatch(Command::ToggleTags.into()),
+            Command::ToggleTags,
             theme,
         ))
 }
 
-fn rail_button<A: Action + Clone>(
+fn rail_button(
     id: &'static str,
     active: bool,
     icon: Div,
-    action: A,
+    command: Command,
     theme: &Theme,
 ) -> AnyElement {
     div()
@@ -64,7 +64,9 @@ fn rail_button<A: Action + Clone>(
                 .text_color(theme.panel_foreground)
         })
         .hover(|button| button.bg(theme.panel_hover))
-        .on_click(move |_, window, cx| window.dispatch_action(action.boxed_clone(), cx))
+        .on_click(move |_, window, cx| {
+            window.dispatch_action(Box::new(Dispatch(command.into())), cx);
+        })
         .child(icon)
         .into_any_element()
 }

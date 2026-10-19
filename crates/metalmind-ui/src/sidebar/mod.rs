@@ -4,7 +4,6 @@
 //! [`Panel`](crate::panel::Panel) y en el [`Workspace`]; aquí se pinta, se
 //! traduce la entrada y se ejecuta lo que el usuario confirmó.
 
-mod actions;
 mod handlers;
 mod icons;
 mod input;
@@ -23,7 +22,6 @@ use gpui_kit::{
 };
 use metalmind_vault::{Vault, VaultPath, VaultUpdate};
 
-pub use self::actions::bind_keys;
 use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
