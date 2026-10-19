@@ -61,8 +61,10 @@ pub(super) enum Autosaved {
 pub struct Autosave {
     delay: Duration,
     clock: Rc<dyn Clock>,
-    /// `delay` después de la última edición, si desde entonces no se guardó.
-    deadline: Option<Instant>,
+    /// Cuándo autoguardar cada documento: `delay` después de su última
+    /// edición, o el plazo de reintento si falló. Editar uno no atrasa a los
+    /// demás.
+    deadlines: BTreeMap<DocumentId, Instant>,
     /// Desde cuándo tiene cambios cada documento editado.
     unsaved_since: BTreeMap<DocumentId, Instant>,
     /// Los documentos cuyo autoguardado falló desde la última vez que se
@@ -77,7 +79,7 @@ impl Autosave {
         Self {
             delay,
             clock,
-            deadline: None,
+            deadlines: BTreeMap::new(),
             unsaved_since: BTreeMap::new(),
             failing: BTreeSet::new(),
         }
@@ -92,18 +94,26 @@ impl Workspace {
     /// Cuándo hay que llamar a [`Workspace::autosave_if_due`].
     #[must_use]
     pub fn autosave_deadline(&self) -> Option<Instant> {
-        self.autosave.as_ref()?.deadline
+        self.autosave.as_ref()?.deadlines.values().min().copied()
     }
 
-    /// Guarda lo que tenga cambios si ya pasó el delay desde la última
-    /// edición. Devuelve si guardó o avisó algo.
+    /// Guarda los documentos con cambios cuyo plazo ya pasó. Devuelve si
+    /// guardó o avisó algo.
     pub fn autosave_if_due(&mut self) -> bool {
-        let due = self
-            .autosave
-            .as_ref()
-            .and_then(|autosave| Some(autosave.deadline? <= autosave.clock.now()))
-            .unwrap_or(false);
-        due && self.autosave_all()
+        let Some(autosave) = self.autosave.as_mut() else {
+            return false;
+        };
+        let now = autosave.clock.now();
+        let due: Vec<DocumentId> = autosave
+            .deadlines
+            .iter()
+            .filter(|&(_, &at)| at <= now)
+            .map(|(&id, _)| id)
+            .collect();
+        for id in &due {
+            autosave.deadlines.remove(id);
+        }
+        self.autosave_documents(due)
     }
 
     /// Guarda ya todo lo que tenga cambios: al perder el foco y antes de
@@ -113,20 +123,25 @@ impl Workspace {
         let Some(autosave) = self.autosave.as_mut() else {
             return false;
         };
-        autosave.deadline = None;
+        autosave.deadlines.clear();
         let ids: Vec<DocumentId> = self.documents.iter().map(|(id, _)| id).collect();
-        let outcomes: Vec<Autosaved> = ids
-            .into_iter()
-            .map(|id| self.autosave_document(id))
-            .collect();
-        if outcomes.contains(&Autosaved::Failed)
-            && let Some(autosave) = self.autosave.as_mut()
-        {
-            autosave.deadline = Some(autosave.clock.now() + autosave.delay * RETRY_DELAYS);
+        self.autosave_documents(ids)
+    }
+
+    /// Autoguarda `ids` y deja un plazo de reintento a los que fallaron.
+    fn autosave_documents(&mut self, ids: Vec<DocumentId>) -> bool {
+        let mut any = false;
+        for id in ids {
+            let outcome = self.autosave_document(id);
+            any |= outcome != Autosaved::Skipped;
+            if outcome == Autosaved::Failed
+                && let Some(autosave) = self.autosave.as_mut()
+            {
+                let retry = autosave.clock.now() + autosave.delay * RETRY_DELAYS;
+                autosave.deadlines.insert(id, retry);
+            }
         }
-        outcomes
-            .iter()
-            .any(|&outcome| outcome != Autosaved::Skipped)
+        any
     }
 
     /// Guarda `id` si tiene archivo, cambios y su archivo no cambió en disco.
@@ -169,14 +184,14 @@ impl Workspace {
         }
     }
 
-    /// Se editó `id`: el autoguardado espera otro delay entero.
+    /// Se editó `id`: su autoguardado espera otro delay entero.
     pub(super) fn edited(&mut self, id: DocumentId) {
         let modified = self.documents.get(id).is_some_and(Document::is_modified);
         let Some(autosave) = self.autosave.as_mut() else {
             return;
         };
         let now = autosave.clock.now();
-        autosave.deadline = Some(now + autosave.delay);
+        autosave.deadlines.insert(id, now + autosave.delay);
         if modified {
             autosave.unsaved_since.entry(id).or_insert(now);
         } else {
@@ -187,6 +202,7 @@ impl Workspace {
     /// `id` quedó igual que su archivo: guardado o releído.
     pub(super) fn saved(&mut self, id: DocumentId) {
         if let Some(autosave) = self.autosave.as_mut() {
+            autosave.deadlines.remove(&id);
             autosave.unsaved_since.remove(&id);
             autosave.failing.remove(&id);
         }
@@ -209,7 +225,7 @@ impl Workspace {
             return Some(SaveState::Unsaved);
         }
         let quiet = autosave.delay * QUIET_DELAYS;
-        let coming = autosave.deadline.is_some() && document.path().is_some();
+        let coming = autosave.deadlines.contains_key(&id) && document.path().is_some();
         let fresh = autosave
             .unsaved_since
             .get(&id)
