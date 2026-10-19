@@ -331,6 +331,12 @@ fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
     assert!(autosaving.tick());
     assert!(matches!(autosaving.message(), Some(Message::Error(_))));
     assert!(autosaving.session.is_modified());
+    assert_eq!(
+        autosaving.state(),
+        Some(SaveState::Unsaved),
+        "con el reintento en camino sigue sin guardar"
+    );
+    assert!(autosaving.session.view(autosaving.session.pane()).unsaved());
     autosaving
         .session
         .workspace
