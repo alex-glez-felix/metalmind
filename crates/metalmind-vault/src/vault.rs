@@ -370,13 +370,16 @@ impl Vault {
         Ok(Some(PendingVersion(pending)))
     }
 
-    /// Espera a que el hilo del vault registre las versiones de los
-    /// guardados que ya volvieron, para que lo guardado justo antes de
-    /// salir de la app no se quede sin versión.
-    pub fn wait_for_versions(&self) {
-        if self.history.is_none() {
+    /// Antes de salir de la app: el hilo deja de releer el disco y de
+    /// mantener el historial (alinearlo o podarlo espera a la próxima
+    /// apertura) y se espera a que registre las versiones de los guardados
+    /// que ya volvieron, para que lo guardado justo antes de salir no se
+    /// quede sin versión. Después de esto, el vault solo sirve para soltarlo.
+    pub fn shut_down(&self) {
+        let Some(watch) = &self.watch else {
             return;
-        }
+        };
+        watch.stop.store(true, Ordering::Release);
         let (done, flushed) = mpsc::channel();
         if self.messages.send(Message::Flush(done)).is_ok() {
             // Si el hilo terminó, no queda nada que esperar.

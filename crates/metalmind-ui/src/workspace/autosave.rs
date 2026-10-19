@@ -19,6 +19,10 @@ use crate::document::{Document, SaveError};
 /// así no parpadea con cada pausa al escribir.
 const QUIET_DELAYS: u32 = 5;
 
+/// Si un autoguardado falla al escribir (un disco lleno, una carpeta sin
+/// permisos), se reintenta tras esta cantidad de veces el delay.
+const RETRY_DELAYS: u32 = 5;
+
 pub trait Clock: fmt::Debug {
     fn now(&self) -> Instant;
 }
@@ -39,6 +43,18 @@ pub enum SaveState {
     Unsaved,
     /// Tiene cambios y su archivo cambió fuera de Metalmind.
     ChangedOnDisk,
+}
+
+/// Qué pasó al intentar autoguardar un documento.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Autosaved {
+    /// No hacía falta: sin archivo, sin cambios o ya en conflicto.
+    Skipped,
+    Saved,
+    /// Su archivo cambió en disco: se avisó y no se tocó.
+    ChangedOnDisk,
+    /// No se pudo escribir: se avisó.
+    Failed,
 }
 
 #[derive(Debug)]
@@ -86,47 +102,55 @@ impl Workspace {
     }
 
     /// Guarda ya todo lo que tenga cambios: al perder el foco y antes de
-    /// cerrar la ventana. Devuelve si guardó o avisó algo.
+    /// cerrar la ventana. Devuelve si guardó o avisó algo. Si alguna
+    /// escritura falló, deja un plazo para reintentar.
     pub fn autosave_all(&mut self) -> bool {
         let Some(autosave) = self.autosave.as_mut() else {
             return false;
         };
         autosave.deadline = None;
         let ids: Vec<DocumentId> = self.documents.iter().map(|(id, _)| id).collect();
-        let mut acted = false;
-        for id in ids {
-            acted |= self.autosave_document(id);
+        let outcomes: Vec<Autosaved> = ids
+            .into_iter()
+            .map(|id| self.autosave_document(id))
+            .collect();
+        if outcomes.contains(&Autosaved::Failed)
+            && let Some(autosave) = self.autosave.as_mut()
+        {
+            autosave.deadline = Some(autosave.clock.now() + autosave.delay * RETRY_DELAYS);
         }
-        acted
+        outcomes
+            .iter()
+            .any(|&outcome| outcome != Autosaved::Skipped)
     }
 
     /// Guarda `id` si tiene archivo, cambios y su archivo no cambió en disco.
-    /// Devuelve si lo guardó o avisó algo.
-    pub(super) fn autosave_document(&mut self, id: DocumentId) -> bool {
+    pub(super) fn autosave_document(&mut self, id: DocumentId) -> Autosaved {
         if self.autosave.is_none() {
-            return false;
+            return Autosaved::Skipped;
         }
         let Some(document) = self.documents.get_mut(id) else {
-            return false;
+            return Autosaved::Skipped;
         };
         let wanted = document.path().is_some() && document.is_modified();
         if !wanted || document.changed_on_disk() {
-            return false;
+            return Autosaved::Skipped;
         }
         match document.save(self.disk.as_ref(), SaveKind::Autosave) {
             Ok(_) => {
                 self.saved(id);
-                return true;
+                Autosaved::Saved
             }
             Err(SaveError::ChangedOnDisk) => {
                 self.message = Some(Message::changed_on_disk(document));
+                Autosaved::ChangedOnDisk
             }
             Err(error) => {
                 log::error!("autoguardado de {}: {error}", document.display_name());
                 self.message = Some(Message::Error(error.to_string()));
+                Autosaved::Failed
             }
         }
-        true
     }
 
     /// Se editó `id`: el autoguardado espera otro delay entero.

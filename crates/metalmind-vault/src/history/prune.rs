@@ -26,6 +26,16 @@ impl History {
     /// # Errors
     /// Si no se puede leer o escribir el historial.
     pub fn prune(&self, now: SystemTime) -> Result<Pruned, HistoryError> {
+        self.prune_while(now, || true)
+    }
+
+    /// Como [`History::prune`], pero deja de podar en cuanto `running` da
+    /// `false`: lo que falte se poda la próxima vez.
+    pub(crate) fn prune_while(
+        &self,
+        now: SystemTime,
+        running: impl Fn() -> bool,
+    ) -> Result<Pruned, HistoryError> {
         let now = to_millis(now);
         let deleted_for = millis(self.retention.deleted());
         let expired =
@@ -44,6 +54,9 @@ impl History {
             .values()
             .chain(index.set_aside.iter().map(|(_, entry)| entry));
         for entry in entries.filter(|entry| !expired(entry.deleted)) {
+            if !running() {
+                return Ok(pruned);
+            }
             let lock = self.store.lock()?;
             match self.prune_log(&lock, entry.id, now) {
                 Ok(versions) => pruned.versions += versions,

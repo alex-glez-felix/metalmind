@@ -106,7 +106,7 @@ fn el_autoguardado_del_vault_se_agrupa() {
 }
 
 #[test]
-fn se_puede_esperar_a_las_versiones_sin_cerrar_el_vault() {
+fn shut_down_espera_las_versiones_de_los_guardados() {
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let (vault, _updates) = open_vault(dir.path(), data.path());
     let note = path("a.md");
@@ -117,7 +117,7 @@ fn se_puede_esperar_a_las_versiones_sin_cerrar_el_vault() {
                 .unwrap(),
         );
     }
-    vault.wait_for_versions();
+    vault.shut_down();
     assert_eq!(contents(vault.history().unwrap(), &note), ["uno", "dos"]);
 }
 
