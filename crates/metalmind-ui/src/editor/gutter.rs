@@ -48,9 +48,7 @@ impl Gutter {
         rows: usize,
         column_width: Pixels,
     ) -> Self {
-        let mark_columns = marks
-            .as_ref()
-            .map_or(0, |_| GutterMarks::columns(view.numbers.shown()));
+        let mark_columns = marks.as_ref().map_or(0, |_| GutterMarks::COLUMNS);
         let columns = view.numbers.width(view.buffer().line_count(), rows) + mark_columns;
         Self {
             columns,

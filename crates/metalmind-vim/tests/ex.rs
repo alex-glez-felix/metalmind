@@ -61,6 +61,7 @@ use rstest_reuse::{self, apply, template};
 #[case("a\n|bc\nd", "maxG:delm a<CR>ugg'a", "a\n|bc\nd")]
 #[case("a\n|bc\nd", "maG:delm a<CR>xugg'a", "|a\nbc\nd")]
 #[case("|a\nb\nc\nd", "jmajmb:g/./delm a<CR>gg'a", "|a\nb\nc\nd")]
+#[case("|ab\ncd\nef", "maxjj:delm a<CR>mauG`a", "|ab\ncd\nef")]
 // rangos con patrones: siguen desde el cursor, dan la vuelta y quedan como búsqueda
 #[case("a\nb|\nc\nd\ne", ":/d/d<CR>", "a\nb\nc\n|e")]
 #[case("a\nb|\nc\nd\ne", ":/d<CR>", "a\nb\nc\n|d\ne")]

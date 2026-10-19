@@ -35,12 +35,6 @@ fn el_tooltip_las_lista_todas() {
     assert_eq!(marks.at(0), None);
 }
 
-#[test]
-fn la_columna_no_depende_de_que_haya_marks() {
-    assert_eq!(GutterMarks::columns(true), 2);
-    assert_eq!(GutterMarks::columns(false), 3, "un espacio antes del texto");
-}
-
 /// Las marks de cada línea del panel enfocado: la que se ve y las demás.
 fn shown(session: &Session) -> Vec<(usize, String)> {
     let marks = session
