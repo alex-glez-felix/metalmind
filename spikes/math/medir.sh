@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Corre `medir` en procesos nuevos (la primera fórmula de cada uno es la
+# primera de verdad) y da la mediana de cada campo del resumen.
+#   ./medir.sh [corridas] [escala]
+set -euo pipefail
+cd "$(dirname "$0")"
+runs="${1:-7}"
+scale="${2:-1}"
+cargo build --release --bin medir >/dev/null
+for motor in typst ratex mathml mathcore; do
+  for _ in $(seq "$runs"); do
+    ./target/release/medir "$motor" "$scale" | grep '^resumen'
+  done | awk -F'\t' '
+    {
+      for (i = 2; i <= NF; i++) {
+        split($i, kv, "="); key[i] = kv[1]; values[i, NR] = kv[2]
+      }
+      fields = NF; rows = NR
+    }
+    END {
+      for (i = 2; i <= fields; i++) {
+        n = 0
+        for (r = 1; r <= rows; r++) sorted[++n] = values[i, r]
+        if (sorted[1] ~ /^[0-9.]+$/) asort(sorted)
+        printf "%s=%s\t", key[i], sorted[int((n + 1) / 2)]
+        delete sorted
+      }
+      print ""
+    }'
+done
