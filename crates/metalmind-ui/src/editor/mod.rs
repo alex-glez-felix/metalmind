@@ -3,6 +3,7 @@
 
 mod cursor;
 mod element;
+mod formula_tooltip;
 mod gutter;
 mod highlight;
 mod input;
@@ -13,6 +14,7 @@ mod links;
 mod mark_hover;
 mod markdown;
 mod mouse;
+mod replaced;
 mod rows;
 mod scroll;
 mod spans;
@@ -42,6 +44,7 @@ use crate::clipboard::SystemClipboard;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::frames::FrameClock;
 use crate::ime::ImeLine;
+use crate::math::Formulas;
 use crate::theme::Theme;
 use crate::workspace::{CommandLine, PaneId, PaneView, Workspace, WorkspaceError};
 
@@ -50,6 +53,10 @@ pub struct Editor {
     pane: PaneId,
     /// El vault de la ventana, para saber qué links no llevan a nada.
     session: Entity<VaultSession>,
+    /// Las fórmulas de la ventana: su layout y sus imágenes.
+    formulas: Entity<Formulas>,
+    /// El mensaje de la fórmula rota bajo el ratón.
+    formula_error: Option<formula_tooltip::Hover>,
     /// La ruta del documento en el vault, de la última vez que se miró.
     source: Option<(PathBuf, Option<VaultPath>)>,
     focus_handle: FocusHandle,
@@ -67,21 +74,27 @@ pub struct Editor {
     mark_hover: Option<self::mark_hover::MarkHover>,
     _repaint: Subscription,
     _vault_changed: Subscription,
+    _formulas: Subscription,
 }
 
 impl Editor {
     pub fn new(
         workspace: Entity<Workspace>,
         session: Entity<VaultSession>,
+        formulas: Entity<Formulas>,
         pane: PaneId,
         cx: &mut Context<Self>,
     ) -> Self {
         let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
         // Una nota nueva puede resolver un link que se ve.
         let vault_changed = cx.subscribe(&session, |_, _, _: &VaultChanged, cx| cx.notify());
+        // Llegó la imagen de una fórmula.
+        let formulas_ready = cx.observe(&formulas, |_, _, cx| cx.notify());
         Self {
             workspace,
             session,
+            formulas,
+            formula_error: None,
             source: None,
             pane,
             focus_handle: cx.focus_handle(),
@@ -93,6 +106,7 @@ impl Editor {
             mark_hover: None,
             _repaint: repaint,
             _vault_changed: vault_changed,
+            _formulas: formulas_ready,
         }
     }
 
@@ -289,5 +303,10 @@ impl Render for Editor {
                     .child(EditorElement::new(cx.entity(), theme.clone())),
             )
             .children(status)
+            .children(
+                self.formula_error
+                    .as_ref()
+                    .map(|hover| formula_tooltip::tooltip(hover, &theme)),
+            )
     }
 }

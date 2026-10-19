@@ -286,9 +286,9 @@ impl Document {
     }
 
     /// Lo que mide una línea de texto y cada heading.
-    pub(crate) fn set_rows(&mut self, rows: Rows) {
+    pub(crate) fn set_rows(&mut self, rows: &Rows) {
         if let Some(layout) = self.layout.as_mut() {
-            layout.set_rows(rows);
+            layout.set_rows(rows.clone());
         }
     }
 

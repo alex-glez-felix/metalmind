@@ -1,6 +1,9 @@
 //! De los tramos de estilo de una línea (`metalmind-syntax`) a lo que pinta
-//! la vista, sin nada de GPUI: tramos seguidos que cubren toda la línea, y
-//! cuáles son links que no llevan a ninguna nota.
+//! la vista, sin nada de GPUI: tramos seguidos que cubren toda la línea,
+//! cuáles son links que no llevan a ninguna nota y cuáles son fórmulas que
+//! no componen.
+
+use std::ops::Range;
 
 use metalmind_syntax::{LineStyle, LinkSpot, Role, Style};
 
@@ -11,19 +14,24 @@ pub struct Run {
     pub style: Style,
     /// Es parte de un link a algo que no existe.
     pub unresolved: bool,
+    /// Es parte de una fórmula que no compone.
+    pub failed: bool,
 }
 
 /// Los tramos de una línea de `len` bytes, sin huecos. Sin estilo
-/// calculado, todo es texto. `resolves` dice si un link lleva a algo.
+/// calculado, todo es texto. `resolves` dice si un link lleva a algo, y
+/// `failed` son los bytes de las fórmulas que no componen.
 pub fn runs(
     len: usize,
     line: Option<&LineStyle>,
     resolves: impl Fn(&LinkSpot) -> bool,
+    failed: &[Range<usize>],
 ) -> Vec<Run> {
     let plain = |len| Run {
         len,
         style: Style::default(),
         unresolved: false,
+        failed: false,
     };
     let Some(line) = line else {
         return vec![plain(len)];
@@ -46,6 +54,9 @@ pub fn runs(
                 len: end - start,
                 style: span.style,
                 unresolved,
+                failed: failed
+                    .iter()
+                    .any(|range| range.start <= start && end <= range.end),
             });
         }
         at = at.max(end);
@@ -78,7 +89,7 @@ mod tests {
     fn render(text: &str, resolves: impl Fn(&LinkSpot) -> bool) -> Vec<String> {
         let style = styled(text);
         let mut at = 0;
-        runs(text.len(), Some(&style), resolves)
+        runs(text.len(), Some(&style), resolves, &[])
             .into_iter()
             .map(|run| {
                 let part = &text[at..at + run.len];
@@ -138,13 +149,30 @@ mod tests {
     }
 
     #[test]
+    fn a_formula_that_does_not_compose_is_marked_whole() {
+        let text = r"a $\frac{$ b";
+        let style = styled(text);
+        let failed: Vec<bool> = runs(
+            text.len(),
+            Some(&style),
+            |_| true,
+            std::slice::from_ref(&(2..10)),
+        )
+        .iter()
+        .map(|run| run.failed)
+        .collect();
+        assert_eq!(failed, [false, true, true, true, false]);
+    }
+
+    #[test]
     fn without_a_style_it_is_text() {
         assert_eq!(
-            runs(3, None, |_| true),
+            runs(3, None, |_| true, &[]),
             [Run {
                 len: 3,
                 style: Style::default(),
-                unresolved: false
+                unresolved: false,
+                failed: false
             }]
         );
     }

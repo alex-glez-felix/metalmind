@@ -9,6 +9,7 @@ use gpui_kit::{
 use metalmind_buffer::ByteOffset;
 
 use super::Editor;
+use super::formula_tooltip::Hover;
 use super::lines;
 use super::rows::scroll_by_pixels;
 use crate::actions::{Copy, Paste};
@@ -72,6 +73,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let Some(anchor) = self.drag_anchor.filter(|_| event.dragging()) else {
+            self.hover_formula(event.position, cx);
             return;
         };
         let Some(head) = self.offset_at(event.position, cx) else {
@@ -126,6 +128,19 @@ impl Editor {
         });
         if let Err(error) = pasted {
             self.report(&error, cx);
+        }
+    }
+
+    /// Sobre una fórmula que no compone, su mensaje; fuera, nada.
+    fn hover_formula(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        let hover = self
+            .layout
+            .as_ref()
+            .and_then(|layout| layout.error_at(position))
+            .map(|error| Hover::new(error, position));
+        if hover != self.formula_error {
+            self.formula_error = hover;
+            cx.notify();
         }
     }
 

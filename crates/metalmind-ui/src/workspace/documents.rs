@@ -42,7 +42,7 @@ impl Default for Documents {
 
 impl Documents {
     pub fn insert(&mut self, mut document: Document, file: FileId) -> DocumentId {
-        document.set_rows(self.rows);
+        document.set_rows(&self.rows);
         // Desde 1, como los números de los buffers de vim.
         self.next_id += 1;
         let id = DocumentId(self.next_id);
@@ -52,8 +52,8 @@ impl Documents {
     }
 
     #[must_use]
-    pub fn rows(&self) -> Rows {
-        self.rows
+    pub fn rows(&self) -> &Rows {
+        &self.rows
     }
 
     /// Lo que mide cada línea, en todos. Devuelve si cambió.
@@ -61,10 +61,10 @@ impl Documents {
         if rows == self.rows {
             return false;
         }
-        self.rows = rows;
         for document in self.open.values_mut() {
-            document.set_rows(rows);
+            document.set_rows(&rows);
         }
+        self.rows = rows;
         true
     }
 

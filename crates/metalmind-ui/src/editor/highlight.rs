@@ -26,15 +26,17 @@ fn quads(
         .into_iter()
         .filter_map(|span| {
             let laid = layout.line(span.line)?;
-            let shaped = &laid.shaped;
-            let left = laid.origin.x + shaped.x_for_index(span.start);
+            let left = laid.origin.x + laid.x_for_index(span.start);
             let right = match span.end {
-                SpanEnd::At(end) => laid.origin.x + shaped.x_for_index(end),
-                SpanEnd::PastText => laid.origin.x + shaped.width() + cells.width,
+                SpanEnd::At(end) => laid.origin.x + laid.x_for_index(end),
+                SpanEnd::PastText => laid.origin.x + laid.width() + cells.width,
                 SpanEnd::Edge => cells.edge,
             };
             Some(fill(
-                Bounds::new(point(left, laid.origin.y), size(right - left, laid.height)),
+                Bounds::new(
+                    point(left, laid.origin.y),
+                    size(right - left, laid.text_height),
+                ),
                 color,
             ))
         })

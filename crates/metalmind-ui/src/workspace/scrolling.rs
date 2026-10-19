@@ -19,10 +19,11 @@ impl Workspace {
         height: usize,
         rows: Rows,
     ) -> Result<(), WorkspaceError> {
+        let text = rows.text;
         self.set_rows(rows);
         let scrolloff = self.scrolloff;
         let (state, editable) = self.shown(pane)?;
-        state.viewport.resize(height, rows.text);
+        state.viewport.resize(height, text);
         let head = state.selections.primary().head;
         super::reveal(
             &mut state.viewport,

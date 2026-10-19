@@ -99,7 +99,7 @@ impl Gutter {
         for laid in &layout.lines {
             let at = |x: Pixels, shaped| Label {
                 origin: point(x, laid.origin.y),
-                height: laid.height,
+                height: laid.text_height,
                 shaped,
             };
             if let Some(mark) = self.mark_at(laid.line) {

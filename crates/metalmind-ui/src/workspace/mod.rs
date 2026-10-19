@@ -25,6 +25,7 @@ mod options;
 mod pane_tree;
 mod scrolling;
 mod show;
+mod source_lines;
 
 use std::collections::BTreeMap;
 
@@ -45,6 +46,7 @@ pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
+pub use self::source_lines::SourceLines;
 use crate::document::{Document, Editable};
 
 #[derive(Debug, thiserror::Error)]
@@ -504,6 +506,9 @@ fn clamp_cursor(buffer: &Buffer, offset: ByteOffset, mode: Mode) -> ByteOffset {
 
 #[cfg(test)]
 mod panes_oracle;
+#[cfg(test)]
+#[path = "source_lines_tests.rs"]
+mod source_lines_tests;
 #[cfg(test)]
 mod test_session;
 #[cfg(test)]

@@ -110,6 +110,9 @@ syntax:
   code_string: green
   code_number: orange
   code_comment: comment
+  # El LaTeX de una fórmula con el cursor encima; la fórmula compuesta va
+  # en `ui.foreground` y una que no compone, en `ui.error`.
+  math: blue
   # Los marcadores de la sintaxis (`**`, `#`, `[[`): se ven, atenuados.
   markup: fg_faint
 

@@ -117,21 +117,24 @@ pub const FORMULAS: [Formula; 22] = [
 ];
 
 /// Las 22 fórmulas en una nota, cada una con su nombre: las de bloque en
-/// su línea y las demás dentro de un párrafo.
+/// su línea y las demás dentro de un párrafo; al final, una que no compone
+/// y un bloque de varias líneas.
 #[must_use]
 pub fn formulas_note() -> String {
-    let mut text = String::from("# Las 22 fórmulas\n\n");
+    let mut text = String::from("# Las 22 fórmulas\n");
     for formula in FORMULAS {
         if formula.display {
-            let _ = write!(text, "{}:\n$${}$$\n\n", formula.name, formula.latex);
+            let _ = write!(text, "{}:\n$${}$$\n", formula.name, formula.latex);
         } else {
-            let _ = write!(
+            let _ = writeln!(
                 text,
-                "La {}, ${}$, en un párrafo.\n\n",
+                "La {}, ${}$, en un párrafo.",
                 formula.name, formula.latex
             );
         }
     }
+    text.push_str("Una mal escrita, $\\frac{1}{$, y un bloque de varias líneas:\n");
+    text.push_str("$$\n\\begin{pmatrix} 1 & 0 \\\\\n0 & 1 \\end{pmatrix}\n$$\n");
     text
 }
 
@@ -172,4 +175,15 @@ pub fn dollar_runs(count: usize) -> String {
         let _ = write!(text, "${n}a ");
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    /// La nota de las capturas (`scripts/capturas-formulas.sh`) es la de
+    /// [`super::formulas_note`].
+    #[test]
+    fn la_nota_de_las_capturas_esta_al_dia() {
+        let fixture = include_str!("../fixtures/22-formulas.md");
+        assert_eq!(fixture, super::formulas_note());
+    }
 }

@@ -89,6 +89,7 @@ Theme {
         code_string: #3f7a1e,
         code_number: #b35a00,
         code_comment: #8a909a,
+        math: #2e5cd6,
         markup: #a0a6b0,
     },
     headings: Headings(

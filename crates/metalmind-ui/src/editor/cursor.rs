@@ -42,11 +42,11 @@ pub fn cursor_quad(
         }
     };
     let (laid, column) = cursor_position(view, layout)?;
-    let left = laid.shaped.x_for_index(column);
+    let left = laid.x_for_index(column);
     Some(fill(
         Bounds::new(
             point(laid.origin.x + left, laid.origin.y),
-            size(width, laid.height),
+            size(width, laid.text_height),
         ),
         color,
     ))
@@ -62,13 +62,9 @@ fn block_width(
     let (laid, column) = cursor_position(view, layout)?;
     let cursor = view.cursor();
     let next = view.buffer().next_boundary(cursor);
-    if next > cursor && column < laid.shaped.len() {
-        let left = laid.shaped.x_for_index(column);
-        Some(
-            laid.shaped
-                .x_for_index(column + (next.get() - cursor.get()))
-                - left,
-        )
+    if next > cursor && column < laid.len() {
+        let left = laid.x_for_index(column);
+        Some(laid.x_for_index(column + (next.get() - cursor.get())) - left)
     } else {
         Some(em_width(&line_face(typeface, laid), window))
     }
@@ -127,17 +123,14 @@ pub fn preedit(
         Some(underline),
         window,
     );
-    let origin = point(
-        laid.origin.x + laid.shaped.x_for_index(column),
-        laid.origin.y,
-    );
+    let origin = point(laid.origin.x + laid.x_for_index(column), laid.origin.y);
     let background = fill(
-        Bounds::new(origin, size(shaped.width(), laid.height)),
+        Bounds::new(origin, size(shaped.width(), laid.text_height)),
         theme.background,
     );
     Some(Preedit {
         origin,
-        height: laid.height,
+        height: laid.text_height,
         background,
         shaped,
     })
