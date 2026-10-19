@@ -438,3 +438,50 @@ fn si_falla_una_nota_que_no_se_ve_el_aviso_la_nombra_despues_de_la_causa() {
     );
     assert_eq!(autosaving.message(), Some(&Message::Error(expected)));
 }
+
+/// `:w otra-ruta` escribe una copia: la nota sigue con sus cambios y su
+/// autoguardado, que fallaba, sigue fallando sin volver a avisar.
+#[test]
+fn guardar_una_copia_no_olvida_que_el_autoguardado_falla() {
+    let dir = TempDir::new().unwrap();
+    let missing = dir.path().join("falta").join("a.md");
+    let session = Session::open(&missing);
+    let mut autosaving = Autosaving::with(dir, session);
+    autosaving.session.keys("ihola⎋");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    let copy = autosaving.path("copia.md");
+    autosaving.session.keys(&format!(":w {}⏎", copy.display()));
+    assert_eq!(autosaving.read("copia.md"), "hola\n");
+    assert!(autosaving.session.is_modified());
+    assert_eq!(autosaving.state(), Some(SaveState::Unsaved));
+    autosaving
+        .session
+        .workspace
+        .set_message(Message::Info("otro aviso".to_owned()));
+    autosaving.wait(SECOND * 5);
+    assert!(autosaving.tick());
+    assert_eq!(
+        autosaving.message(),
+        Some(&Message::Info("otro aviso".to_owned())),
+        "el reintento que falla no vuelve a avisar"
+    );
+}
+
+/// `:wa` que se niega por una nota oculta que cambió en disco dice cuál es.
+#[test]
+fn wa_dice_que_nota_oculta_cambio_en_disco() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n"), ("b.md", "dos\n")]);
+    autosaving.session.workspace.set_autosave(None);
+    autosaving.session.keys("Ax⎋");
+    let b = autosaving.path("b.md");
+    edit_file(&mut autosaving.session, &b);
+    fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
+    autosaving.session.keys(":wa⏎");
+    let expected = format!(
+        "WARNING: The file has been changed since reading it!!! ({})",
+        autosaving.path("a.md").display()
+    );
+    assert_eq!(autosaving.message(), Some(&Message::Error(expected)));
+    assert_eq!(autosaving.read("a.md"), "de fuera\n");
+}

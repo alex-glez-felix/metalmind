@@ -144,14 +144,19 @@ impl Workspace {
             }
             Err(error) => {
                 log::error!("{error}");
-                // Una copia en otra ruta la nombra; el archivo propio ya se ve en la barra.
-                let other = path.map(|p| p.display().to_string());
+                // Una copia en otra ruta la nombra; el archivo propio ya se ve en la
+                // barra, y un error de vim sobre lo recién escrito va tal cual.
+                let other = path
+                    .filter(|_| !error.is_vim())
+                    .map(|p| p.display().to_string());
                 Message::save_failed(other.as_deref(), &error)
             }
         };
         let saved = matches!(message, Message::Info(_));
         self.message = Some(message);
-        if saved {
+        // `:w otra-ruta` escribe una copia y la nota sigue con sus cambios: su
+        // autoguardado sigue como estaba.
+        if saved && !self.document(id)?.is_modified() {
             self.saved(id);
         }
         if saved && unnamed {
