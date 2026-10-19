@@ -32,6 +32,22 @@ Que esté hecho con IA no es excusa. Se escribe como si lo fuera a revisar algui
 
 Al crear el workspace, estas reglas se vuelven automáticas en `Cargo.toml` (`[workspace.lints.clippy]`): `unwrap_used`, `expect_used`, `todo`, `dbg_macro`, `allow_attributes_without_reason` en `deny`. Lo que la máquina puede revisar no depende de la buena voluntad del agente.
 
+## Diseño: red flags (A Philosophy of Software Design)
+
+Antes de abrir una PR, revisa el cambio contra esta lista y di en la descripción cuáles revisaste. Si encuentras uno en código que ya existía, abre un issue con la etiqueta `diseño` en vez de arreglarlo de paso.
+
+**Preferir módulos profundos**: interfaz chica, mucha funcionalidad escondida. `Vault::open(raíz)` es el modelo: una llamada, y adentro el walk paralelo, `.gitignore`, ocultos, symlinks y el orden del árbol.
+
+- **Módulo poco profundo**: la interfaz cuesta casi lo mismo de entender que lo que hace. P. ej., un módulo de `metalmind-vault` que solo renombra funciones de `std::fs`.
+- **Fuga de información**: una misma decisión vive en dos módulos y cambiarla obliga a tocar los dos. P. ej., `metalmind-ui` y `metalmind-vault` sabiendo cada uno cómo se escribe un tag en el frontmatter.
+- **Descomposición temporal**: el código se parte por el orden en que pasan las cosas y no por lo que cada parte sabe. P. ej., leer, parsear y guardar una nota en tres módulos que comparten el formato del archivo.
+- **Métodos o capas que solo pasan argumentos**: reciben algo solo para dárselo a otro sin decidir nada. P. ej., un método de `metalmind-ui` que reenvía a `metalmind-vim` los mismos parámetros.
+- **La misma abstracción en dos capas**: cada capa ofrece algo distinto de la de abajo. P. ej., una `Selection` en `metalmind-ui` con los campos de la de `metalmind-buffer`.
+- **Nombres vagos**: `data`, `info`, `manager`, `utils`, `handle`. `LinkIndex`, no `IndexData`.
+- **Difícil de describir en una frase**: si el doc comment necesita "y además", hace dos cosas. P. ej., una vista del editor que pinta y además decide qué es un heading (eso es de `metalmind-syntax`).
+- **Comentarios que repiten el código**: `// sube el count` encima de `count += 1`. Ver "Comentarios cortos o ninguno".
+- **Errores que podrían dejar de existir**: antes de agregar un `Err` o un caso especial, buscar el diseño que lo defina fuera de existencia. P. ej., `VaultPath` no admite `..`, así que ninguna operación del vault comprueba si una ruta se sale de la raíz.
+
 ## Repo público
 
 El repo es público. Commits, PRs, docs y comentarios no llevan datos personales: nada de nombres de máquinas, specs de hardware, IPs, rutas de un home, ni quién corrió qué. Se habla del proyecto, no de quien lo usa ("en una máquina con GPU NVIDIA", no "en la PC de X"). Los números de rendimiento sí van, con el tipo de máquina en términos genéricos.

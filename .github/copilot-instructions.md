@@ -15,7 +15,7 @@ El formato (rustfmt), clippy con `-D warnings`, `unwrap_used`, `expect_used`, `t
 5. **Guardado**: siempre atómico (temporal en el mismo directorio, fsync, rename). Nunca reescribir el frontmatter YAML del usuario salvo el campo editado.
 6. **UI**: ningún color ni tamaño hardcodeado fuera de `theme.rs`; todo sale de tokens del tema.
 7. **Acciones con nombre**: toda acción del usuario es una acción en snake_case con espacio de nombres (`vim::next_word_start`, `editor::save`). Atajos, paleta y `:` solo la invocan.
-8. **Diseño**: funciones que no caben en pantalla, archivos de más de ~400 líneas, módulos con más de una responsabilidad, código muerto.
+8. **Diseño**: funciones que no caben en pantalla, archivos de más de ~400 líneas, módulos con más de una responsabilidad, código muerto, y los red flags de `CLAUDE.md` ("Diseño: red flags").
 9. **Comentarios**: cortos y que digan *por qué*, no *qué*. Un párrafo para justificar algo es señal de que hay que rediseñar.
 
 Si las decisiones de `docs/research/` contradicen el cambio, dilo y cita el documento.
