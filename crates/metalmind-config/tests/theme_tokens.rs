@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::Path;
 
-use metalmind_config::{Color, Length, Location, Theme, Themes};
+use metalmind_config::{Color, Length, Location, Px, Theme, Themes};
 use pretty_assertions::assert_eq;
 
 fn load(text: &str) -> Result<Theme, metalmind_config::Diagnostic> {
@@ -132,4 +132,20 @@ fn medidas_fuera_de_rango_son_error() {
             error.message
         );
     }
+}
+
+/// El tema de ejemplo de `docs/config.md` carga y hace lo que dice.
+#[test]
+fn el_ejemplo_de_la_documentacion_carga() {
+    let doc = include_str!("../../../docs/config.md");
+    let start = doc.find("# ~/.config/metalmind/themes/mio.yaml").unwrap();
+    let example = &doc[start..start + doc[start..].find("```").unwrap()];
+    let theme = load(example).unwrap();
+    assert_eq!(
+        theme.roles.accent.rgb, 0x9e_ce_6a,
+        "`green` de la paleta oscura"
+    );
+    assert_eq!(theme.ui.picker_match, theme.roles.accent);
+    assert_eq!(theme.metrics.layout.picker_padding_x, Length(10.));
+    assert_eq!(theme.metrics.radius.lg, Px(0.));
 }

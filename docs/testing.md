@@ -76,9 +76,9 @@ Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/t
 
 Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s para lo demás. Si se acaba, el test falla con lo último que vio.
 
-### Capturas del markdown con estilo
+### Capturas
 
-Lo que se ve no lo comprueba ningún test: se mira. `scripts/capturas-markdown.sh [binario]` abre la nota de prueba (`crates/metalmind-syntax/tests/fixtures/estilos.md`, con headings, negrita, links resueltos y no, tags, embeds, código, listas, tareas, citas y una regla) en los dos temas de fábrica y deja `docs/capturas/markdown-oscuro.png` y `markdown-claro.png`. Arranca su propio Xvfb en un display libre del `:90` al `:99` y usa una carpeta temporal como configuración, estado y datos, así no toca nada de quien lo corre. Necesita Xvfb, xdotool, ImageMagick (`import`) y lavapipe. Si cambia cómo se ve el markdown, se rehacen en la misma PR.
+Lo que se ve no lo comprueba el smoke: se mira, y se compara. `scripts/capturas.sh [salida] [--antes carpeta]` corre el test `capturas` de `metalmind` (`--run-ignored only`) con el mismo harness: un Xvfb propio por caso, `HOME` y `XDG_*` en una carpeta temporal y un vault de fixtures que estresa el layout. Toma cada pantalla (editor con markdown, árbol, menú, split, línea de comandos, finder, búsqueda de texto y paleta) en los dos temas y en ventanas de 1920x1080 y 1280x720, y deja los PNG en `target/capturas/`. Espera a que la app deje de pintar (el registro de `--frame-log` quieto 400 ms) y lee los píxeles de la ventana: dos corridas en la misma máquina dan los mismos píxeles. Con `--antes` compara contra otra corrida y falla si cambió alguno. Cuándo se usan: [diseño, "Proceso"](design.md#proceso).
 
 ### Lo que encontró
 

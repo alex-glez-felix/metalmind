@@ -100,15 +100,16 @@ Lo que sí sigue siendo YAML:
 
 ## Temas
 
-Un tema es una **paleta** con nombres y los **colores semánticos** que usa la interfaz. Los temas propios van en `themes/<nombre>.yaml` dentro de la carpeta de configuración y se eligen con `theme: <nombre>`.
+Un tema es una **paleta** con nombres, los **roles** (cada color por su papel), los **colores semánticos** de cada parte de la interfaz y las **medidas**: espaciado, radios, anchos de línea, letra, filas y el tamaño de cada parte. Todo color y tamaño de la interfaz sale de aquí ([diseño](design.md#tokens)). Los temas propios van en `themes/<nombre>.yaml` dentro de la carpeta de configuración y se eligen con `theme: <nombre>`.
 
-Cada color semántico puede ser:
+Cada color de los roles y de los grupos semánticos puede ser:
 
 - un hex, entre comillas: `"#7aa2f7"`
 - un nombre de la paleta: `blue`
-- un mapa con opacidad: `{ color: blue, alpha: 0.5 }`
+- en `ui`, `cursor` y `syntax`, un rol: `accent`
+- un mapa con opacidad: `{ color: accent, alpha: 0.5 }`
 
-Con `extends` un tema parte de otro y solo cambia lo que define. Los colores heredados que nombran la paleta usan la paleta final, así que cambiar `blue` cambia todo lo que era azul:
+Con `extends` un tema parte de otro y solo cambia lo que define. Los colores heredados que nombran la paleta o un rol usan los finales, así que cambiar `blue` cambia todo lo que era azul y cambiar el rol `accent` cambia todo lo que lo usa:
 
 ```yaml
 # ~/.config/metalmind/themes/mio.yaml
@@ -117,18 +118,39 @@ extends: metalmind-oscuro
 palette:
   blue: "#82aaff"
 
+roles:
+  accent: green           # lo elegido, lo que coincide y las carpetas del panel
+
 ui:
   background: "#101216"
-  selection: { color: blue, alpha: 0.25 }
+  selection: { color: accent, alpha: 0.25 }
+
+spacing:
+  md: 10                  # todo lo que usa `md` (el padding del picker, por ejemplo)
+
+radius:
+  lg: 0                   # el picker con esquinas rectas
 ```
 
-Para heredar un color, no pongas la clave: una clave vacía o `null` es un error, no una herencia. Un tema sin `extends` tiene que definir todos los colores. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan colores), se usa `metalmind-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/metalmind-oscuro.yaml` con `extends: metalmind-oscuro` parte del embebido.
+Para heredar un color, no pongas la clave: una clave vacía o `null` es un error, no una herencia. Un tema sin `extends` tiene que definir todos los colores y todas las medidas. Si un tema no carga (no existe, tiene un error, su cadena de `extends` es circular o le faltan claves), se usa `metalmind-oscuro` y se reporta el problema. Un tema tuyo con el nombre de uno embebido lo reemplaza, y puede extenderlo: `themes/metalmind-oscuro.yaml` con `extends: metalmind-oscuro` parte del embebido.
 
 Las secciones y sus claves son las de los temas embebidos, que sirven de plantilla: [`metalmind-oscuro.yaml`](../crates/metalmind-config/themes/metalmind-oscuro.yaml) y [`metalmind-claro.yaml`](../crates/metalmind-config/themes/metalmind-claro.yaml).
 
+- `roles`: los colores por su papel, que `ui`, `cursor` y `syntax` nombran como a la paleta: `background` (el editor), `surface` (paneles, barras y lo que flota), `raised` (hover y la línea del cursor), `text`, `text_muted` (atajos, detalles, encabezados), `text_faint` (números de línea, la sintaxis atenuada), `text_inactive` (lo que no tiene el foco), `accent`, `border_subtle`, `border_strong` (la línea entre paneles), `danger` y `warning`. La paleta no puede usar el nombre de un rol.
 - `ui`: `background`, `foreground`, `selection`, `search` (las coincidencias de la búsqueda), `search_current` (la coincidencia donde está el cursor), `current_line`, `gutter`, `gutter_foreground`, `gutter_current` (el número de la línea del cursor), `status_background`, `status_foreground`, `status_unfocused_foreground`, `status_border`, `pane_border`, `modified`, `error`, y los del finder y la paleta: `picker_background`, `picker_border`, `picker_selected` (la fila elegida), `picker_hover` (la fila bajo el ratón), `picker_match` (las letras que coinciden) y `picker_muted` (carpeta, atajo y texto de ayuda).
   - El panel lateral y su barra de botones: `panel_background`, `panel_foreground`, `panel_muted` (adjuntos, encabezado y botones), `panel_selection` (el fondo de la fila seleccionada con el foco en el panel), `panel_selection_unfocused` (su borde con el foco en otro lado), `panel_active` (la fila de la nota abierta en el panel de edición enfocado, y el botón de la vista que se ve), `panel_hover`, `panel_border`, `panel_folder` y `panel_note` (los íconos), `panel_match` (las letras que coinciden con el filtro).
   - Los menús contextuales: `menu_background`, `menu_border`, `menu_hover`.
 - `cursor`: `normal`, `insert`, `visual`, `replace`, `unfocused` (el cursor de un panel sin foco).
 - `syntax`: el markdown del editor. `markup` es la sintaxis (`**`, `#`, `[[`, `` ` ``, `>`), que se ve atenuada; `heading`, `bold`, `italic`, `link` (wikilinks y links a algo del vault, y los externos), `link_unresolved` (un link a una nota que no existe), `embed`, `tag`, `code` y `code_background` (código inline), `code_block_background` (el fondo de un bloque cercado), `quote`, `list_marker`, `checkbox` (`[ ]` y `[x]`), `task_done` (el texto de una tarea marcada), `highlight` (el fondo de `==resaltado==`), `comment` (`%% %%`), `frontmatter`, `frontmatter_key`, `block_id` (`^bloque`), `fence_info` (el lenguaje tras la cerca) y el resaltado de los bloques de código: `code_keyword`, `code_string`, `code_number`, `code_comment`.
 - `headings`: el tamaño y el peso de cada nivel, de `h1` a `h6`, como `{ size: 1.6, weight: 700 }`. `size` es cuántas veces la fuente del editor (de 0.5 a 4) y `weight` el grosor, de 100 a 900 de cien en cien (400 es normal y 700 negrita). Un heading más grande ocupa más alto: el scroll, `H`, `M`, `L`, `zt`, `zz`, `zb`, `ctrl-d` y `ctrl-u` lo cuentan. Como los colores, un tema con `extends` hereda los niveles que no define.
+
+Las medidas, también heredables una por una:
+
+- `spacing`: la escala de espaciado en píxeles, base 4: `xs` (4), `sm` (8), `md` (12) y `lg` (16). `rows` y `layout` nombran sus pasos (`picker_padding_x: md`) o dan píxeles (`status_padding_y: 3`); un paso heredado usa la escala final.
+- `radius`: los radios en píxeles, `sm` (2, los íconos), `md` (4: menú, botones y campos) y `lg` (8, el picker).
+- `stroke`: los anchos de línea en píxeles: `border` (bordes y separadores), `caret` (el cursor de barra) y `text_line` (subrayado y tachado).
+- `text`: el tamaño de letra, en veces `font.size` (de 0.5 a 4), y el interlineado, en veces el tamaño (de 1 a 3), de `editor` (las notas), `ui_md` (la interfaz) y `ui_sm` (lo secundario: atajos, detalles y contadores), como `{ size: 1.0, line_height: 1.4 }`; y los pesos `normal` y `strong` (la negrita del markdown y las letras que coinciden en el picker).
+- `rows`: el alto de una fila del árbol (`tree`, que es también el del encabezado del panel y sus campos) y del menú (`menu`), en veces la fuente de la interfaz, redondeado; y el aire arriba y abajo de la línea de texto de una fila del picker (`picker_padding`).
+- `layout`: las medidas de cada parte, en píxeles o un paso de `spacing`: la barra de estado (`status_padding_x`, `status_padding_y`, `status_gap`), el picker (`picker_width`, `picker_top`, `picker_rows`, que son filas, `picker_padding_x`, `picker_input_padding_y`, `picker_gap`), el panel lateral (`panel_padding_x`, `panel_padding_y`, `panel_gap`, `panel_indent`, `panel_button_padding_x` e `icon_size`, en veces la fuente), su barra de botones (`rail_width`, `rail_button_size`) y el menú contextual (`menu_width`, `menu_padding`).
+
+El tamaño base de la letra (`font.size`), el margen del texto (`editor.padding`), el borde entre paneles (`panes.border_width`) y el ancho del panel (`panel.width`) siguen en `config.yaml`: son de quien usa la app, no del estilo.
