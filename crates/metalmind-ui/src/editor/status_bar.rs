@@ -30,20 +30,34 @@ pub struct Status {
 }
 
 /// Lo escrito tras `:`, `/` o `?` y el preedit del IME.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommandLine {
     pub symbol: char,
     pub typed: String,
     pub preedit: String,
 }
 
+/// Lo que va entre el modo y la posición.
+#[derive(Debug, PartialEq)]
+enum Middle {
+    /// La nota, su indicador y el último aviso, si hay.
+    Note(Option<Message>),
+    /// Lo que se teclea tras `:`, `/` o `?`: ocupa todo el medio, como la
+    /// línea de comandos de vim, sin el límite de un aviso.
+    Typing(CommandLine),
+}
+
+impl Middle {
+    fn of(command_line: Option<CommandLine>, message: Option<Message>) -> Self {
+        match command_line {
+            Some(line) => Self::Typing(line),
+            None => Self::Note(message),
+        }
+    }
+}
+
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
-    let center = match (status.command_line, status.message) {
-        (Some(line), _) => Some(command_line(line, theme)),
-        (None, Some(message)) => Some(message_line(message, theme)),
-        (None, None) => None,
-    };
     let foreground = if status.mode.is_some() {
         theme.status.foreground
     } else {
@@ -69,7 +83,10 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .when_some(status.recording, |bar, register| {
             bar.child(fixed().child(format!("grabando @{register}")))
         })
-        .child(middle(status.file, mark, center, theme))
+        .child(match Middle::of(status.command_line, status.message) {
+            Middle::Typing(line) => command_line(line, theme),
+            Middle::Note(message) => note(status.file, mark, message, theme),
+        })
         .child(fixed().child(format!("{line}:{column}")))
 }
 
@@ -84,7 +101,7 @@ fn fixed() -> Div {
 /// recorta por el medio, para que se vean el principio y la extensión. La
 /// barra es de una sola línea; en un panel más angosto que lo mínimo, se
 /// recorta el final sin salirse.
-fn middle(file: SharedString, mark: Option<Div>, center: Option<Div>, theme: &Theme) -> Div {
+fn note(file: SharedString, mark: Option<Div>, message: Option<Message>, theme: &Theme) -> Div {
     div()
         .flex()
         .flex_row()
@@ -100,8 +117,8 @@ fn middle(file: SharedString, mark: Option<Div>, center: Option<Div>, theme: &Th
                 .child(file),
         )
         .children(mark)
-        .children(center.map(|center| {
-            center
+        .children(message.map(|message| {
+            message_line(message, theme)
                 .flex_shrink_0()
                 .max_w(relative(theme.status.message_max_width))
                 .ml(theme.status.gap)
@@ -141,18 +158,29 @@ impl CommandLine {
     }
 }
 
+/// Si no cabe, se recorta el principio de lo escrito: el preedit y el cursor,
+/// que es donde se escribe, siempre se ven.
 fn command_line(line: CommandLine, theme: &Theme) -> Div {
     let text = line.text();
     let preedit = line.preedit;
     div()
         .flex()
         .flex_row()
+        .flex_grow_1()
+        .min_w_0()
         .text_color(theme.foreground)
-        .child(text)
+        .child(
+            div()
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis_start()
+                .child(text),
+        )
         .when(!preedit.is_empty(), |line| {
-            line.child(div().underline().child(preedit))
+            line.child(fixed().underline().child(preedit))
         })
-        .child(div().w(theme.caret_width).h_full().bg(theme.caret))
+        .child(fixed().w(theme.caret_width).h_full().bg(theme.caret))
 }
 
 fn message_line(message: Message, theme: &Theme) -> Div {
@@ -167,6 +195,25 @@ mod tests {
     use metalmind_vim::Prompt;
 
     use super::*;
+
+    #[test]
+    fn lo_que_se_teclea_ocupa_todo_el_medio_sin_el_limite_de_un_aviso() {
+        let line = CommandLine {
+            symbol: ':',
+            typed: "una línea de comandos larga".to_owned(),
+            preedit: String::new(),
+        };
+        let message = Message::Info("un aviso".to_owned());
+        assert_eq!(
+            Middle::of(Some(line.clone()), Some(message.clone())),
+            Middle::Typing(line)
+        );
+        assert_eq!(
+            Middle::of(None, Some(message.clone())),
+            Middle::Note(Some(message))
+        );
+        assert_eq!(Middle::of(None, None), Middle::Note(None));
+    }
 
     #[test]
     fn la_linea_de_comandos_lleva_el_simbolo_de_su_prompt() {
