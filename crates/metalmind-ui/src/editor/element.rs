@@ -22,6 +22,7 @@ use super::scroll::Scroll;
 use crate::frames::FrameClock;
 use crate::math::{Formulas, Geometry, Image, Look};
 use crate::theme::Theme;
+use crate::workspace::{PaneId, Workspace};
 
 pub struct EditorElement {
     editor: Entity<Editor>,
@@ -54,6 +55,35 @@ impl IntoElement for EditorElement {
 
     fn into_element(self) -> Self::Element {
         self
+    }
+}
+
+impl EditorElement {
+    /// Le da al panel su alto y lo que mide cada línea en este frame, con
+    /// el medidor de fórmulas de la letra de hoy.
+    fn resize(
+        &self,
+        content: Bounds<Pixels>,
+        line_height: Pixels,
+        geometry: Geometry,
+        cx: &mut App,
+    ) -> (Entity<Workspace>, PaneId, Entity<Formulas>) {
+        let (workspace, pane, formulas) = {
+            let editor = self.editor.read(cx);
+            (
+                editor.workspace.clone(),
+                editor.pane,
+                editor.formulas.clone(),
+            )
+        };
+        let measure = formulas.update(cx, |formulas, _| formulas.measure(geometry));
+        let measures = rows_of(line_height, &self.theme, measure);
+        let height = to_units(f32::from(content.size.height).floor());
+        let resized = workspace.update(cx, |workspace, _| workspace.resize(pane, height, measures));
+        if let Err(error) = resized {
+            log::error!("{error}");
+        }
+        (workspace, pane, formulas)
     }
 }
 
@@ -104,18 +134,7 @@ impl gpui_kit::Element for EditorElement {
         let line_height = window.line_height();
         let rows = Viewport::new(content, line_height, Scroll::default()).full_rows();
         let geometry = geometry_of(&typeface, line_height, &self.theme, window);
-        let formulas = self.editor.read(cx).formulas.clone();
-        let measure = formulas.update(cx, |formulas, _| formulas.measure(geometry));
-        let measures = rows_of(line_height, &self.theme, measure);
-        let height = to_units(f32::from(content.size.height).floor());
-        let (workspace, pane) = {
-            let editor = self.editor.read(cx);
-            (editor.workspace.clone(), editor.pane)
-        };
-        let resized = workspace.update(cx, |workspace, _| workspace.resize(pane, height, measures));
-        if let Err(error) = resized {
-            log::error!("{error}");
-        }
+        let (workspace, pane, formulas) = self.resize(content, line_height, geometry, cx);
         let marks = workspace
             .read(cx)
             .gutter_marks(pane)
