@@ -81,8 +81,9 @@ pub enum Overflow {
     /// Alrededor del primer resaltado, que queda a la vista y centrado.
     #[default]
     Around,
-    /// Por el medio, como una ruta: quedan su principio y su nombre.
-    Middle,
+    /// Como una ruta: por el medio, con el nombre entero si cabe y, si el
+    /// primer resaltado cae en la carpeta, también él.
+    Path,
 }
 
 /// Cómo se ve y se comporta un picker.

@@ -6,27 +6,39 @@ use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation as _;
 
-/// Lo que queda de un texto recortado alrededor de un tramo: los grafemas
-/// de `kept` y si lleva elipsis a cada lado.
+/// Lo que se pinta en lugar de lo que no cabe.
+pub const ELLIPSIS: &str = "…";
+
+/// Lo que queda de un texto de `len` grafemas que no cabe: los tramos que
+/// se ven, en orden y sin tocarse. Cada hueco (al principio, entre dos
+/// tramos o al final) se pinta como una elipsis.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Around {
-    pub kept: Range<usize>,
-    pub ellipsis_before: bool,
-    pub ellipsis_after: bool,
+pub struct Kept {
+    pub ranges: Vec<Range<usize>>,
+    pub len: usize,
 }
 
-/// Lo que queda de un texto recortado por el medio: los primeros `head`
-/// grafemas, una elipsis si hace falta y los grafemas desde `tail`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Middle {
-    pub head: usize,
-    pub tail: usize,
-}
+impl Kept {
+    fn new(len: usize, ranges: impl IntoIterator<Item = Range<usize>>) -> Self {
+        let mut kept: Vec<Range<usize>> = Vec::new();
+        for range in ranges.into_iter().filter(|range| !range.is_empty()) {
+            match kept.last_mut() {
+                Some(last) if last.end == range.start => last.end = range.end,
+                _ => kept.push(range),
+            }
+        }
+        Self { ranges: kept, len }
+    }
 
-impl Middle {
-    #[must_use]
-    pub fn is_cut(self) -> bool {
-        self.head < self.tail
+    fn whole(len: usize) -> Self {
+        Self::new(len, std::iter::once(0..len))
+    }
+
+    /// Si se ve entero `range`.
+    fn shows(&self, range: &Range<usize>) -> bool {
+        self.ranges
+            .iter()
+            .any(|kept| kept.start <= range.start && range.end <= kept.end)
     }
 }
 
@@ -34,7 +46,7 @@ impl Middle {
 /// vista y centrado: lo que sobra se reparte a los dos lados por ancho. Si
 /// `focus` solo no cabe, se queda su principio.
 #[must_use]
-pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -> Around {
+pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -> Kept {
     let len = widths.len();
     let focus = focus.start.min(len)..focus.end.clamp(focus.start.min(len), len);
     let cost = |kept: &Range<usize>| {
@@ -72,12 +84,13 @@ pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -
             kept = next;
         }
     }
-    // Sin nada que mostrar basta una elipsis.
-    Around {
-        ellipsis_before: kept.start > 0 && !kept.is_empty(),
-        ellipsis_after: kept.end < len || (kept.is_empty() && len > 0),
-        kept,
-    }
+    Kept::new(len, [kept])
+}
+
+#[derive(Clone, Copy)]
+struct Middle {
+    head: usize,
+    tail: usize,
 }
 
 /// Recorta `widths` a `budget` quitando del medio, con el mismo ancho a
@@ -85,13 +98,10 @@ pub fn around(widths: &[f32], focus: Range<usize>, budget: f32, ellipsis: f32) -
 /// nombre de una ruta) quedan enteros si caben, y entonces se reparte lo
 /// que sobra entre el principio y lo de antes del nombre.
 #[must_use]
-pub fn middle(widths: &[f32], budget: f32, ellipsis: f32, keep: usize) -> Middle {
+pub fn middle(widths: &[f32], budget: f32, ellipsis: f32, keep: usize) -> Kept {
     let len = widths.len();
     if sum(widths) <= budget {
-        return Middle {
-            head: len,
-            tail: len,
-        };
+        return Kept::whole(len);
     }
     let kept_tail = len - keep.min(len);
     let tail = if sum(&widths[kept_tail..]) + ellipsis <= budget {
@@ -122,7 +132,44 @@ pub fn middle(widths: &[f32], budget: f32, ellipsis: f32, keep: usize) -> Middle
         };
         cut = next;
     }
-    cut
+    Kept::new(len, [0..cut.head, cut.tail..len])
+}
+
+/// Recorta una ruta: si `focus` (lo que coincide) cae antes del nombre, los
+/// últimos `name` grafemas, se ven los dos, la carpeta recortada alrededor
+/// de `focus`; si no caben juntos, gana `focus`. Sin `focus` antes del
+/// nombre, se recorta por el medio con [`middle`].
+#[must_use]
+pub fn path(
+    widths: &[f32],
+    focus: Option<Range<usize>>,
+    budget: f32,
+    ellipsis: f32,
+    name: usize,
+) -> Kept {
+    let len = widths.len();
+    let name_start = len - name.min(len);
+    let Some(focus) = focus.filter(|focus| name > 0 && focus.end <= name_start) else {
+        return middle(widths, budget, ellipsis, name);
+    };
+    let name_width = sum(&widths[name_start..]);
+    let folder = around(
+        &widths[..name_start],
+        focus.clone(),
+        budget - name_width,
+        ellipsis,
+    );
+    if folder.shows(&focus) {
+        Kept::new(
+            len,
+            folder
+                .ranges
+                .into_iter()
+                .chain(std::iter::once(name_start..len)),
+        )
+    } else {
+        around(widths, focus, budget, ellipsis)
+    }
 }
 
 /// Cuántos grafemas tiene el nombre de la ruta `text`, lo de después de la
@@ -158,36 +205,46 @@ pub fn list_height(len: usize, max_rows: u8, row_height: f32, border: f32) -> f3
     f32::from(rows) * row_height + border
 }
 
-/// Los tramos de `highlights` que caen en `kept`, contados desde el
-/// principio de lo que se muestra, que empieza `offset` bytes después.
+/// El texto que se pinta para `kept` y sus resaltados: `starts` son los
+/// bytes donde empieza cada grafema de `text`, más el final, y
+/// `highlights` los bytes que coinciden.
 #[must_use]
-pub fn cut_highlights(
+pub fn render(
+    text: &str,
+    starts: &[usize],
+    kept: &Kept,
+    highlights: &[Range<usize>],
+) -> (String, Vec<Range<usize>>) {
+    let byte = |grapheme: usize| starts.get(grapheme).copied().unwrap_or(text.len());
+    let mut shown = String::new();
+    let mut shown_highlights = Vec::new();
+    let mut end = 0;
+    for range in &kept.ranges {
+        if range.start > end {
+            shown.push_str(ELLIPSIS);
+        }
+        let bytes = byte(range.start)..byte(range.end);
+        shown_highlights.extend(cut_highlights(highlights, bytes.clone(), shown.len()));
+        shown.push_str(&text[bytes]);
+        end = range.end;
+    }
+    if end < kept.len {
+        shown.push_str(ELLIPSIS);
+    }
+    (shown, shown_highlights)
+}
+
+/// Los tramos de `highlights` que caen en `kept`, contados desde `offset`.
+fn cut_highlights(
     highlights: &[Range<usize>],
     kept: Range<usize>,
     offset: usize,
-) -> Vec<Range<usize>> {
-    let shift = |at: usize| at.clamp(kept.start, kept.end) - kept.start + offset;
+) -> impl Iterator<Item = Range<usize>> {
+    let shift = move |at: usize| at.clamp(kept.start, kept.end) - kept.start + offset;
     highlights
         .iter()
-        .map(|range| shift(range.start)..shift(range.end))
+        .map(move |range| shift(range.start)..shift(range.end))
         .filter(|range| !range.is_empty())
-        .collect()
-}
-
-/// Los tramos de `highlights` que quedan en un texto de `len` bytes
-/// recortado por el medio: los de los primeros `head` bytes y, corridos
-/// detrás de la elipsis de `ellipsis` bytes, los desde `tail`.
-#[must_use]
-pub fn middle_highlights(
-    highlights: &[Range<usize>],
-    len: usize,
-    head: usize,
-    tail: usize,
-    ellipsis: usize,
-) -> Vec<Range<usize>> {
-    let mut kept = cut_highlights(highlights, 0..head, 0);
-    kept.extend(cut_highlights(highlights, tail..len, head + ellipsis));
-    kept
 }
 
 /// Un salto de línea o un tab en el texto de una fila (un nombre de archivo
@@ -200,24 +257,24 @@ pub fn one_line(text: &str) -> String {
 
 /// El ancho de cada grafema de una línea ya con forma: `starts` son los
 /// bytes donde empieza cada uno, más el final del texto, y `glyphs` el byte
-/// y la `x` de cada glifo, de izquierda a derecha. Un grafema empieza en la
-/// `x` del primer glifo de su byte en adelante, como `ShapedLine::x_for_index`,
-/// pero en una sola pasada.
+/// y la `x` de cada glifo, en cualquier orden. Cada glifo avanza hasta el
+/// siguiente a su derecha y ese avance es de su grafema, así que vale
+/// también para texto de derecha a izquierda.
 #[must_use]
 pub fn grapheme_widths(starts: &[usize], glyphs: &[(usize, f32)], width: f32) -> Vec<f32> {
-    let mut glyph = 0;
-    let xs: Vec<f32> = starts
-        .iter()
-        .map(|&start| {
-            while glyphs.get(glyph).is_some_and(|&(index, _)| index < start) {
-                glyph += 1;
-            }
-            glyphs.get(glyph).map_or(width, |&(_, x)| x)
-        })
-        .collect();
-    xs.windows(2)
-        .map(|pair| (pair[1] - pair[0]).max(0.0))
-        .collect()
+    let mut by_x = glyphs.to_vec();
+    by_x.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let mut widths = vec![0.0; starts.len().saturating_sub(1)];
+    for (at, &(index, x)) in by_x.iter().enumerate() {
+        let next = by_x.get(at + 1).map_or(width, |&(_, x)| x);
+        let grapheme = starts
+            .partition_point(|&start| start <= index)
+            .saturating_sub(1);
+        if let Some(grapheme_width) = widths.get_mut(grapheme) {
+            *grapheme_width += (next - x).max(0.0);
+        }
+    }
+    widths
 }
 
 fn sum(widths: &[f32]) -> f32 {

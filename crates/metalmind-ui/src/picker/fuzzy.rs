@@ -36,7 +36,7 @@ impl Haystack {
 
     fn overflow(self) -> Overflow {
         match self {
-            Self::Paths => Overflow::Middle,
+            Self::Paths => Overflow::Path,
             Self::Text => Overflow::Around,
         }
     }
