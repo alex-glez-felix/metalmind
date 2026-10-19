@@ -31,39 +31,43 @@ pub fn path(
     };
     let cut = Cut {
         widths,
+        slashes,
         name_slash,
         ellipsis,
     };
     match focus {
         Some(focus) if !focus.is_empty() && focus.end <= name_slash => cut
-            .folder_and_name(slashes, focus.clone(), budget)
+            .folder_and_name(focus.clone(), budget)
             .unwrap_or_else(|| around_all(&cut.widths, focus, budget, ellipsis)),
         focus => cut.name_first(focus, budget),
     }
 }
 
-struct Cut {
+struct Cut<'a> {
     widths: Widths,
+    slashes: &'a [usize],
     /// La última `/`: desde ahí va el nombre.
     name_slash: usize,
     ellipsis: f32,
 }
 
-impl Cut {
+impl Cut<'_> {
     fn len(&self) -> usize {
         self.widths.len()
     }
 
-    /// El nombre entero si cabe, y lo que sobra para la carpeta de justo
-    /// antes; si no cabe, `…/` y el nombre recortado.
+    /// El nombre entero si cabe, con las carpetas enteras de justo antes que
+    /// quepan (`…/carpeta/nombre`); si no cabe, `…/` y el nombre recortado.
     fn name_first(&self, focus: Option<Range<usize>>, budget: f32) -> Kept {
         let len = self.len();
         let name = self.name_slash..len;
         let lead = self.gap_before(self.name_slash);
         let focus = focus.filter(|focus| !focus.is_empty());
-        let kept = if self.widths.sum(name.clone()) + lead <= budget {
-            let kept = around_within(&self.widths, 0..len, &(0..len), name, budget, self.ellipsis);
-            Some(Kept::new(len, [kept]))
+        let kept = if self.widths.sum(name) + lead <= budget {
+            Some(Kept::new(
+                len,
+                std::iter::once(self.with_folders(budget)..len),
+            ))
         } else {
             let in_name = focus.clone().filter(|focus| focus.start > self.name_slash);
             self.fitting_cut(in_name, budget - lead)
@@ -76,17 +80,32 @@ impl Cut {
         }
     }
 
+    /// Desde qué `/` se ve la ruta: la de más atrás que quepa con todo lo que
+    /// le sigue, así nunca queda un pedazo de carpeta. El nombre ya cabe.
+    fn with_folders(&self, budget: f32) -> usize {
+        let len = self.len();
+        self.slashes
+            .iter()
+            .rev()
+            .copied()
+            .take_while(|&slash| self.widths.sum(slash..len) + self.gap_before(slash) <= budget)
+            .last()
+            .unwrap_or(self.name_slash)
+    }
+
     /// Lo que coincide, con el trozo de carpeta que quepa alrededor, y el
     /// nombre; `None` si no caben los dos.
-    fn folder_and_name(&self, slashes: &[usize], focus: Range<usize>, budget: f32) -> Option<Kept> {
+    fn folder_and_name(&self, focus: Range<usize>, budget: f32) -> Option<Kept> {
         let len = self.len();
-        let slash_before = slashes
+        let slash_before = self
+            .slashes
             .iter()
             .rev()
             .copied()
             .find(|&slash| slash < focus.start);
         let start = slash_before.unwrap_or(0);
-        let end = slashes
+        let end = self
+            .slashes
             .iter()
             .copied()
             .find(|&slash| slash >= focus.end)
