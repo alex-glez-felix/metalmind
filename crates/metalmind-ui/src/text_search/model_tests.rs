@@ -154,6 +154,22 @@ fn enter_antes_de_los_resultados_elige_el_primero_que_llega() {
     assert_eq!(state.line().text(), "idea");
 }
 
+/// Lo que traería la búsqueda de antes del `(` no se vio: no se abre.
+#[test]
+fn enter_con_un_patron_invalido_no_espera_a_la_busqueda_anterior() {
+    let mut state = TextSearchState::new();
+    let first = typed(&mut state, "ide").version;
+    let _ = state.receive(first, vec![note("vieja.md", &[(0, "idea")])]);
+    let valid = typed(&mut state, "a").version;
+    assert!(state.edit(LineEdit::Insert("(")).is_none());
+    assert_eq!(state.choose(Open::Here), None);
+    let received = state.receive(valid, vec![note("b.md", &[(1, "idea")])]);
+    assert_eq!(received, None);
+    assert_eq!(rows(&state), ["b.md:2"]);
+    let chosen = state.choose(Open::Here).unwrap();
+    assert_eq!(chosen.item, 0, "lo que ya se ve sí se elige");
+}
+
 #[test]
 fn enter_sin_resultados_no_elige_nada() {
     let mut state = TextSearchState::new();
