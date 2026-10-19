@@ -1,10 +1,11 @@
 //! Lo que el harness le hace al servidor X: buscar las ventanas de un proceso,
-//! leer su título, teclear y hacer clic con `XTest` y pedir el cierre como un
-//! gestor de ventanas.
+//! leer su título, teclear y hacer clic con `XTest`, pedir el cierre y el
+//! tamaño como un gestor de ventanas y leer sus píxeles.
 
 use x11rb::connection::Connection as _;
 use x11rb::protocol::xproto::{
-    self, AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, InputFocus, MapState,
+    self, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask,
+    ImageFormat, InputFocus, MapState,
 };
 use x11rb::protocol::xtest::ConnectionExt as _;
 use x11rb::rust_connection::RustConnection;
@@ -112,9 +113,20 @@ impl Display {
         self.conn.sync().expect("esperar al servidor");
     }
 
-    /// Un clic con el botón izquierdo en `(x, y)` de `window`, con `XTest`.
-    /// Vuelve cuando el servidor lo procesó.
-    pub fn click(&self, window: xproto::Window, x: i16, y: i16) {
+    /// Un clic con `button` (1 el izquierdo, 3 el derecho) en `(x, y)` de
+    /// `window`, con `XTest`. Vuelve cuando el servidor lo procesó.
+    pub fn click(&self, window: xproto::Window, button: u8, x: i16, y: i16) {
+        self.move_pointer(window, x, y);
+        for kind in [xproto::BUTTON_PRESS_EVENT, xproto::BUTTON_RELEASE_EVENT] {
+            self.conn
+                .xtest_fake_input(kind, button, x11rb::CURRENT_TIME, self.root, 0, 0, 0)
+                .expect("mandar el clic");
+        }
+        self.conn.sync().expect("esperar al servidor");
+    }
+
+    /// Lleva el puntero a `(x, y)` de `window`, con `XTest`.
+    pub fn move_pointer(&self, window: xproto::Window, x: i16, y: i16) {
         let at = self
             .conn
             .translate_coordinates(window, self.root, x, y)
@@ -132,12 +144,54 @@ impl Display {
                 0,
             )
             .expect("mover el puntero");
-        for kind in [xproto::BUTTON_PRESS_EVENT, xproto::BUTTON_RELEASE_EVENT] {
-            self.conn
-                .xtest_fake_input(kind, 1, x11rb::CURRENT_TIME, self.root, 0, 0, 0)
-                .expect("mandar el clic");
-        }
         self.conn.sync().expect("esperar al servidor");
+    }
+
+    /// Le da a `window` ese tamaño, como un gestor de ventanas: sin gestor,
+    /// el servidor lo aplica tal cual.
+    pub fn resize(&self, window: xproto::Window, width: u32, height: u32) {
+        let size = ConfigureWindowAux::new().width(width).height(height);
+        self.conn
+            .configure_window(window, &size)
+            .expect("cambiar el tamaño");
+        self.conn.sync().expect("esperar al servidor");
+    }
+
+    /// El tamaño de `window` ahora.
+    pub fn size(&self, window: xproto::Window) -> (u16, u16) {
+        let geometry = self
+            .conn
+            .get_geometry(window)
+            .expect("pedir el tamaño")
+            .reply()
+            .expect("leer el tamaño");
+        (geometry.width, geometry.height)
+    }
+
+    /// Los píxeles de `window` en RGB, fila por fila.
+    pub fn pixels(&self, window: xproto::Window) -> (u16, u16, Vec<u8>) {
+        let (width, height) = self.size(window);
+        let image = self
+            .conn
+            .get_image(ImageFormat::Z_PIXMAP, window, 0, 0, width, height, !0)
+            .expect("pedir la imagen")
+            .reply()
+            .expect("leer la imagen");
+        // GPUI pide un visual de 32 bits; con 24 o 32, cada píxel ocupa 4 bytes:
+        // azul, verde, rojo y el alfa (o nada), que sin compositor no se ve.
+        assert!(
+            matches!(image.depth, 24 | 32),
+            "visual de {} bits",
+            image.depth
+        );
+        let rgb = image
+            .data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|&[blue, green, red, _]| [red, green, blue])
+            .collect();
+        (width, height, rgb)
     }
 
     /// Lo que manda un gestor de ventanas al pulsar la "x": `WM_DELETE_WINDOW`.

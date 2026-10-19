@@ -24,6 +24,9 @@ const DISPLAYS: Range<u32> = 100..300;
 /// uno en uno (`--test-threads 1`).
 const DISPLAY_VAR: &str = "METALMIND_SMOKE_DISPLAY";
 
+/// La pantalla del smoke, que no mira píxeles.
+pub const SCREEN: &str = "1280x800";
+
 pub struct Xvfb {
     child: Child,
     name: String,
@@ -37,15 +40,21 @@ pub struct Connection {
 }
 
 impl Xvfb {
-    pub fn start(log: &Path) -> (Self, Connection) {
+    /// `screen` es el tamaño de la pantalla, como `1280x800`.
+    pub fn start(log: &Path, screen: &str) -> (Self, Connection) {
         let displays = displays(env::var(DISPLAY_VAR).ok().as_deref());
-        Self::start_with("Xvfb", displays, log)
+        Self::start_with("Xvfb", displays, log, screen)
     }
 
-    fn start_with(program: &str, displays: Range<u32>, log: &Path) -> (Self, Connection) {
+    fn start_with(
+        program: &str,
+        displays: Range<u32>,
+        log: &Path,
+        screen: &str,
+    ) -> (Self, Connection) {
         displays
             .clone()
-            .find_map(|number| Self::try_start(program, number, log))
+            .find_map(|number| Self::try_start(program, number, log, screen))
             .unwrap_or_else(|| {
                 panic!(
                     "ningún display libre en {displays:?}; el último error está en {}",
@@ -55,12 +64,17 @@ impl Xvfb {
     }
 
     /// `None` si el display está ocupado: Xvfb ve un lock vivo y sale.
-    fn try_start(program: &str, number: u32, log: &Path) -> Option<(Self, Connection)> {
+    fn try_start(
+        program: &str,
+        number: u32,
+        log: &Path,
+        screen: &str,
+    ) -> Option<(Self, Connection)> {
         let log = File::create(log).expect("crear el log de Xvfb");
         let name = format!(":{number}");
         let child = Command::new(program)
             .arg(&name)
-            .args(["-screen", "0", "1280x800x24", "-nolisten", "tcp"])
+            .args(["-screen", "0", &format!("{screen}x24"), "-nolisten", "tcp"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(log)
@@ -186,7 +200,12 @@ fn un_display_fijo_invalido_falla() {
 #[should_panic(expected = "sin Xvfb el smoke no corre")]
 fn sin_xvfb_aborta_en_vez_de_usar_el_display_del_entorno() {
     let dir = tempfile::tempdir().unwrap();
-    Xvfb::start_with("/no/existe/Xvfb", 100..101, &dir.path().join("xvfb.log"));
+    Xvfb::start_with(
+        "/no/existe/Xvfb",
+        100..101,
+        &dir.path().join("xvfb.log"),
+        SCREEN,
+    );
 }
 
 #[test]
@@ -194,7 +213,12 @@ fn sin_xvfb_aborta_en_vez_de_usar_el_display_del_entorno() {
 #[should_panic(expected = "ningún display libre")]
 fn un_display_ocupado_no_se_comparte() {
     let dir = tempfile::tempdir().unwrap();
-    let (first, _connection) = Xvfb::start(&dir.path().join("primero.log"));
+    let (first, _connection) = Xvfb::start(&dir.path().join("primero.log"), SCREEN);
     let number: u32 = first.name()[1..].parse().unwrap();
-    Xvfb::start_with("Xvfb", number..number + 1, &dir.path().join("segundo.log"));
+    Xvfb::start_with(
+        "Xvfb",
+        number..number + 1,
+        &dir.path().join("segundo.log"),
+        SCREEN,
+    );
 }

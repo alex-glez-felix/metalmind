@@ -25,6 +25,7 @@ thiserror.workspace = true
 [dev-dependencies]
 metalmind-perf.workspace = true
 metalmind-syntax.workspace = true
+png.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
 tempfile.workspace = true

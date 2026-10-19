@@ -29,11 +29,16 @@ pub struct Smoke {
 
 impl Smoke {
     pub fn new() -> Self {
+        Self::with_screen(xvfb::SCREEN)
+    }
+
+    /// Con una pantalla de `screen` (`1920x1080`), para que quepa una ventana de ese tamaño.
+    pub fn with_screen(screen: &str) -> Self {
         let dir = tempfile::tempdir().expect("carpeta temporal");
         for sub in ["home", "notas"] {
             fs::create_dir(dir.path().join(sub)).expect("crear la carpeta");
         }
-        let (xvfb, connection) = Xvfb::start(&dir.path().join("xvfb.log"));
+        let (xvfb, connection) = Xvfb::start(&dir.path().join("xvfb.log"), screen);
         let display = Display::new(connection);
         Self { display, xvfb, dir }
     }
@@ -253,7 +258,27 @@ impl Window<'_> {
 
     /// Un clic en `(x, y)`, en píxeles desde la esquina de la ventana.
     pub fn click(&self, x: i16, y: i16) {
-        self.display.click(self.id, x, y);
+        self.display.click(self.id, 1, x, y);
+    }
+
+    /// Un clic con el botón derecho en `(x, y)`.
+    pub fn right_click(&self, x: i16, y: i16) {
+        self.display.click(self.id, 3, x, y);
+    }
+
+    /// Deja el puntero en `(x, y)`, por ejemplo donde no resalte nada.
+    pub fn move_pointer(&self, x: i16, y: i16) {
+        self.display.move_pointer(self.id, x, y);
+    }
+
+    /// Le pide a la ventana este tamaño, como un gestor de ventanas.
+    pub fn resize(&self, width: u32, height: u32) {
+        self.display.resize(self.id, width, height);
+    }
+
+    /// Lo que se ve en la ventana ahora: ancho, alto y píxeles en RGB.
+    pub fn pixels(&self) -> (u16, u16, Vec<u8>) {
+        self.display.pixels(self.id)
     }
 
     /// Pide el cierre como lo haría el gestor de ventanas.
