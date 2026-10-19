@@ -3795,6 +3795,7 @@ dependencies = [
  "metalmind-syntax",
  "metalmind-ui",
  "metalmind-vault",
+ "png 0.18.1",
  "pretty_assertions",
  "rstest",
  "serde",

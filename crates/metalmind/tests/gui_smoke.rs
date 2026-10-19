@@ -9,6 +9,7 @@
 //! `cargo nextest run -p metalmind --test gui_smoke --run-ignored only`
 //! (ver `docs/testing.md`).
 
+#[allow(dead_code, reason = "el smoke usa solo una parte del harness")]
 mod support;
 
 use rstest::rstest;
