@@ -18,7 +18,7 @@ use crate::attachment::{
 };
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
-use crate::file::{FileError, write_atomic};
+use crate::file::{FileError, create_atomic, write_atomic};
 use crate::history::{History, HistoryError, VersionId};
 use crate::index::VaultIndex;
 use crate::links::LinkIndex;
@@ -306,7 +306,7 @@ impl Vault {
 
     /// Guarda `text` en la nota `path` de forma atómica y registra la
     /// versión, según `kind`: toda escritura de una nota del vault pasa por
-    /// aquí (06 §3). Vuelve en cuanto la nota está en disco; la versión se
+    /// aquí o por [`Vault::create`] (06 §3). Vuelve en cuanto la nota está en disco; la versión se
     /// registra después, en el hilo del vault. `None` si el vault no tiene
     /// historial.
     ///
@@ -319,14 +319,45 @@ impl Vault {
         text: String,
         kind: SaveKind,
     ) -> Result<Option<PendingVersion>, SaveError> {
+        self.store(path, text, kind, |target, text| {
+            write_atomic(target, |out| out.write_all(text.as_bytes()))
+        })
+    }
+
+    /// Como [`Vault::save`], pero solo crea la nota: si ya existe, da
+    /// [`FileError::Exists`] y no la toca, también si aparece mientras se
+    /// escribe.
+    ///
+    /// # Errors
+    /// Si ya existe, `path` no es una nota o pasa por un enlace simbólico, o
+    /// si falla la escritura.
+    pub fn create(
+        &self,
+        path: &VaultPath,
+        text: String,
+        kind: SaveKind,
+    ) -> Result<Option<PendingVersion>, SaveError> {
+        self.store(path, text, kind, |target, text| {
+            create_atomic(target, |out| out.write_all(text.as_bytes()))
+        })
+    }
+
+    /// Escribe `text` en la nota con `write` y manda su versión al hilo.
+    fn store(
+        &self,
+        path: &VaultPath,
+        text: String,
+        kind: SaveKind,
+        write: impl FnOnce(&Path, &str) -> Result<(), FileError>,
+    ) -> Result<Option<PendingVersion>, SaveError> {
         let target = ops::note_target(&self.root, path)?;
         if self.history.is_none() {
-            write_atomic(&target, |out| out.write_all(text.as_bytes()))?;
+            write(&target, &text)?;
             return Ok(None);
         }
         // Hasta mandar la versión: el hilo no lee el disco mientras tanto.
         let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
-        write_atomic(&target, |out| out.write_all(text.as_bytes()))?;
+        write(&target, &text)?;
         let (done, pending) = mpsc::channel();
         // Si el hilo terminó en pánico, `PendingVersion::wait` lo dice.
         let _ = self.messages.send(Message::Save(Save {

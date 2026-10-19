@@ -122,6 +122,13 @@ fn guarda_a_mitad_de_un_insert_y_al_salir_queda_limpio() {
     autosaving.wait(SECOND);
     assert!(autosaving.tick());
     assert_eq!(autosaving.read("a.md"), "hola uno\n");
+    assert_eq!(autosaving.state(), Some(SaveState::Saved));
+    assert!(!autosaving.session.view(autosaving.session.pane()).unsaved());
+    assert!(autosaving.session.workspace.may_close_window());
+    assert!(
+        !autosaving.session.workspace.autosave_all(),
+        "nada que reescribir"
+    );
     autosaving.session.keys("⎋");
     assert!(!autosaving.session.is_modified());
     assert_eq!(autosaving.session.workspace.autosave_deadline(), None);
