@@ -223,6 +223,11 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - Temas `metalmind-oscuro` y `metalmind-claro`, y temas propios en `themes/*.yaml` que
   pueden extender a otro. `ui.pane_border`, `ui.status_unfocused_foreground`
   y `cursor.unfocused` pintan los paneles sin foco.
+- Todo color y tamaño de la interfaz sale del tema: roles de color (`accent`,
+  `text_muted`, `border_subtle`…) que los demás colores nombran, y las medidas:
+  escala de espaciado, radios, anchos de línea, tamaños de letra de las notas y
+  de la interfaz, alto de las filas y el tamaño de cada parte (`layout`). Ver
+  [docs/config.md](docs/config.md#temas).
 
 #### Release
 
