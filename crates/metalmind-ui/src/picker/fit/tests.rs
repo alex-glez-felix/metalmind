@@ -378,6 +378,17 @@ fn una_ligadura_reparte_su_ancho_entre_los_grafemas_que_junta() {
 }
 
 #[test]
+fn las_dos_lineas_de_una_fila_comparten_la_linea_base() {
+    let theme = (15.0, 4.0);
+    assert_close(baseline_shift(theme, 15.0, 4.0), 0.0);
+    // Una fuente de respaldo CJK más alta: su línea sube lo que la centraría de más.
+    assert_close(baseline_shift(theme, 18.0, 5.0), -1.0);
+    assert_close(baseline_shift(theme, 17.0, 6.0), 0.0);
+    // Un detalle más chico baja para apoyarse en la misma línea base.
+    assert_close(baseline_shift(theme, 12.0, 3.0), 1.0);
+}
+
+#[test]
 fn una_fila_es_una_sola_linea() {
     assert_eq!(one_line("a\nb\tc\r"), "a b c ");
     assert_eq!(one_line("niño").len(), "niño".len());
@@ -438,9 +449,9 @@ proptest! {
             let name: f32 = widths[name_slash..].iter().sum();
             if name + 1.0 <= budget {
                 prop_assert!(kept.shows(&(name_slash..len)));
+                let start = kept.ranges.first().map_or(0, |range| range.start);
+                prop_assert!(start == 0 || slashes.contains(&start), "pedazo de carpeta desde {start}");
             }
         }
     }
 }
-                let start = kept.ranges.first().map_or(0, |range| range.start);
-                prop_assert!(start == 0 || slashes.contains(&start), "pedazo de carpeta desde {start}");

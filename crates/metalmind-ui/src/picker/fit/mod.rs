@@ -265,6 +265,15 @@ fn cut_highlights(
         .filter(|range| !range.is_empty())
 }
 
+/// Cuánto hay que bajar una línea de `ascent` y `descent` (lo que trae su
+/// fuente de respaldo, si entró una) para que, centrada en la fila como la
+/// pinta GPUI, su línea base caiga en la de `reference` (la fuente del tema).
+#[must_use]
+pub fn baseline_shift(reference: (f32, f32), ascent: f32, descent: f32) -> f32 {
+    let (reference_ascent, reference_descent) = reference;
+    f32::midpoint(reference_ascent - reference_descent, descent - ascent)
+}
+
 /// Un salto de línea o un tab en el texto de una fila (un nombre de archivo
 /// puede tenerlos) se pinta como espacio: mide un byte igual, así que los
 /// resaltados no se mueven.
