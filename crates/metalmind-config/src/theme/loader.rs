@@ -41,11 +41,14 @@ impl Layer {
             name,
             location,
         } = unknown;
-        Diagnostic::error(format!(
-            "`{name}` no está en la paleta ni es un rol (en {key})"
-        ))
-        .at(location)
-        .in_file(&self.file)
+        let message = if key.starts_with("roles.") {
+            format!("`{name}` no está en la paleta (en {key}): un rol nombra la paleta o un hex")
+        } else if PartialRoles::NAMES.contains(&name.as_str()) {
+            format!("el rol `{name}` no está definido (lo usa {key}): falta `roles.{name}`")
+        } else {
+            format!("`{name}` no está en la paleta ni es un rol (en {key})")
+        };
+        Diagnostic::error(message).at(location).in_file(&self.file)
     }
 
     fn unknown_step(&self, unknown: UnknownStep) -> Diagnostic {

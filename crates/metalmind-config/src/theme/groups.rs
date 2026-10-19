@@ -139,22 +139,42 @@ color_group! {
 }
 
 impl PartialRoles {
+    pub(crate) const NAMES: [&'static str; 12] = [
+        "background",
+        "surface",
+        "raised",
+        "text",
+        "text_muted",
+        "text_faint",
+        "text_inactive",
+        "accent",
+        "border_subtle",
+        "border_strong",
+        "danger",
+        "warning",
+    ];
+
     /// Cada rol con su nombre, para resolver los grupos que lo nombran.
     pub(crate) fn named(&self) -> [(&'static str, Option<Color>); 12] {
-        [
-            ("background", self.background),
-            ("surface", self.surface),
-            ("raised", self.raised),
-            ("text", self.text),
-            ("text_muted", self.text_muted),
-            ("text_faint", self.text_faint),
-            ("text_inactive", self.text_inactive),
-            ("accent", self.accent),
-            ("border_subtle", self.border_subtle),
-            ("border_strong", self.border_strong),
-            ("danger", self.danger),
-            ("warning", self.warning),
-        ]
+        let colors = [
+            self.background,
+            self.surface,
+            self.raised,
+            self.text,
+            self.text_muted,
+            self.text_faint,
+            self.text_inactive,
+            self.accent,
+            self.border_subtle,
+            self.border_strong,
+            self.danger,
+            self.warning,
+        ];
+        let mut named = Self::NAMES.map(|name| (name, None));
+        for ((_, slot), color) in named.iter_mut().zip(colors) {
+            *slot = color;
+        }
+        named
     }
 }
 

@@ -32,7 +32,7 @@ const RULES: &[(&str, &str)] = &[
         "tamaños fijos de los atajos de GPUI",
     ),
     (
-        r"[*/]\s*\d+\.\d*",
+        r"[*/]\s*\d+(\.\d*)?",
         "multiplicadores literales sobre una medida",
     ),
     (r"\brelative\(0\.\d", "fracciones literales"),
@@ -67,6 +67,11 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "geometría, no estilo: el margen del texto se resta arriba y abajo",
     ),
     (
+        "src/editor/markdown.rs",
+        "spans.len() * 2",
+        "la capacidad de un Vec (dos tramos por span y uno más), no una medida",
+    ),
+    (
         "src/picker/view/render.rs",
         "relative(0.9)",
         "tope del picker en una ventana angosta, como fracción de la ventana; es una pregunta abierta de la auditoría",
@@ -97,6 +102,30 @@ fn is_test_file(path: &str) -> bool {
     path.ends_with("_tests.rs") || path.ends_with("/tests.rs") || path.ends_with("/proptests.rs")
 }
 
+/// Las líneas de código de un archivo, sin comentarios de línea y hasta su
+/// módulo de tests; un `#[cfg(test)]` sobre otra cosa no corta el archivo.
+fn code_lines(text: &str) -> Vec<&str> {
+    let lines: Vec<&str> = text.lines().collect();
+    let end = (0..lines.len())
+        .find(|&index| {
+            lines[index].trim_start().starts_with("#[cfg(test)]")
+                && opens_a_module(&lines[index + 1..])
+        })
+        .unwrap_or(lines.len());
+    lines[..end]
+        .iter()
+        .map(|line| line.split("//").next().unwrap_or_default())
+        .collect()
+}
+
+/// Si lo que sigue a un atributo, saltando otros atributos, es un `mod`.
+fn opens_a_module(rest: &[&str]) -> bool {
+    rest.iter()
+        .map(|line| line.trim_start())
+        .find(|line| !line.starts_with("#["))
+        .is_some_and(|line| line.starts_with("mod ") || line.starts_with("pub mod "))
+}
+
 /// Lo que viola una regla en el código de la UI, sin contar los tests.
 fn findings(root: &Path) -> Vec<Finding> {
     let rules: Vec<(Regex, &str)> = RULES
@@ -117,27 +146,26 @@ fn findings(root: &Path) -> Vec<Finding> {
             continue;
         }
         let text = fs::read_to_string(&path).unwrap();
-        for (index, line) in text.lines().enumerate() {
-            if line.trim_start().starts_with("#[cfg(test)]") {
-                break;
-            }
-            let code = line.split("//").next().unwrap_or_default();
-            for (regex, rule) in &rules {
-                let hits = regex
-                    .find_iter(code)
-                    .filter(|hit| !ALLOWED_SHORTCUTS.contains(&hit.as_str()));
-                for hit in hits {
-                    found.push(Finding {
-                        file: file.clone(),
-                        line: index + 1,
-                        text: line.trim().to_owned(),
-                        hit: hit.as_str().to_owned(),
-                        rule,
-                    });
-                }
+        let lines = code_lines(&text);
+        // Todo el archivo de una vez: un valor partido en varias líneas también cuenta.
+        let code = lines.join("\n");
+        for (regex, rule) in &rules {
+            let hits = regex
+                .find_iter(&code)
+                .filter(|hit| !ALLOWED_SHORTCUTS.contains(&hit.as_str()));
+            for hit in hits {
+                let line = code[..hit.start()].matches('\n').count();
+                found.push(Finding {
+                    file: file.clone(),
+                    line: line + 1,
+                    text: lines[line].trim().to_owned(),
+                    hit: hit.as_str().to_owned(),
+                    rule,
+                });
             }
         }
     }
+    found.sort_by_key(|finding| (finding.file.clone(), finding.line));
     found
 }
 
@@ -206,6 +234,7 @@ fn las_reglas_atrapan_lo_suelto() {
         ".shadow_lg()",
         "font_weight: Some(FontWeight::BOLD),",
         ".h(size * 0.75)",
+        ".w(size * 2)",
         ".max_w(relative(0.5))",
         ".text_color(theme.foreground.opacity(0.5))",
     ];
@@ -249,4 +278,27 @@ fn una_excepcion_no_tapa_otro_valor_de_la_misma_linea() {
         .map(|finding| finding.hit)
         .collect();
     assert_eq!(loose, ["px(1"]);
+}
+
+/// Un valor partido en varias líneas, o debajo de un `#[cfg(test)]` que no
+/// abre el módulo de tests, también se ve.
+#[test]
+fn la_guarda_lee_el_archivo_entero() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src");
+    fs::create_dir(&src).unwrap();
+    let text = "fn a() {\n    div().px(px(\n        12.,\n    ))\n}\n\
+                #[cfg(test)]\nconst X: u8 = 1;\n\
+                fn b() { div().bg(rgb(0x112233)) }\n\
+                #[cfg(test)]\n#[path = \"x_tests.rs\"]\nmod tests;\n\
+                fn c() { px(9.) }\n";
+    fs::write(src.join("view.rs"), text).unwrap();
+    let found: Vec<(usize, String)> = findings(dir.path())
+        .into_iter()
+        .map(|finding| (finding.line, finding.hit))
+        .collect();
+    assert_eq!(
+        found,
+        [(2, "px(\n        12".to_owned()), (8, "rgb(".to_owned())]
+    );
 }

@@ -5,7 +5,7 @@
 use x11rb::connection::Connection as _;
 use x11rb::protocol::xproto::{
     self, AtomEnum, ClientMessageEvent, ConfigureWindowAux, ConnectionExt as _, EventMask,
-    ImageFormat, InputFocus, MapState,
+    ImageFormat, ImageOrder, InputFocus, MapState,
 };
 use x11rb::protocol::xtest::ConnectionExt as _;
 use x11rb::rust_connection::RustConnection;
@@ -177,13 +177,7 @@ impl Display {
             .expect("pedir la imagen")
             .reply()
             .expect("leer la imagen");
-        // GPUI pide un visual de 32 bits; con 24 o 32, cada píxel ocupa 4 bytes:
-        // azul, verde, rojo y el alfa (o nada), que sin compositor no se ve.
-        assert!(
-            matches!(image.depth, 24 | 32),
-            "visual de {} bits",
-            image.depth
-        );
+        self.assert_bgrx(image.depth, image.visual);
         let rgb = image
             .data
             .as_chunks::<4>()
@@ -192,6 +186,36 @@ impl Display {
             .flat_map(|&[blue, green, red, _]| [red, green, blue])
             .collect();
         (width, height, rgb)
+    }
+
+    /// Que cada píxel de una imagen de `depth` bits con `visual` sean 4 bytes:
+    /// azul, verde, rojo y el alfa (o nada), que sin compositor no se ve. Es
+    /// lo que da el Xvfb del harness; otro formato leería colores falsos.
+    fn assert_bgrx(&self, depth: u8, visual: xproto::Visualid) {
+        let setup = self.conn.setup();
+        assert_eq!(
+            setup.image_byte_order,
+            ImageOrder::LSB_FIRST,
+            "orden de bytes"
+        );
+        let bits = setup
+            .pixmap_formats
+            .iter()
+            .find(|format| format.depth == depth)
+            .map(|format| format.bits_per_pixel);
+        assert_eq!(bits, Some(32), "bits por píxel con profundidad {depth}");
+        let masks = setup
+            .roots
+            .iter()
+            .flat_map(|screen| &screen.allowed_depths)
+            .flat_map(|allowed| &allowed.visuals)
+            .find(|candidate| candidate.visual_id == visual)
+            .map(|found| (found.red_mask, found.green_mask, found.blue_mask));
+        assert_eq!(
+            masks,
+            Some((0xff_00_00, 0xff_00, 0xff)),
+            "máscaras del visual"
+        );
     }
 
     /// Lo que manda un gestor de ventanas al pulsar la "x": `WM_DELETE_WINDOW`.
