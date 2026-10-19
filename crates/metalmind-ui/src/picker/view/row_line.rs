@@ -15,8 +15,6 @@ use super::{Overflow, PickerRow};
 use crate::picker::fit;
 use crate::theme::Theme;
 
-const ELLIPSIS: &str = "…";
-
 pub struct RowLine {
     row: PickerRow,
     matched: Hsla,
@@ -107,7 +105,7 @@ impl gpui_kit::Element for RowLine {
                 window,
             )
         });
-        let ellipsis = f32::from(typeface.shape(ELLIPSIS.into(), window).width());
+        let ellipsis = f32::from(typeface.shape(fit::ELLIPSIS.into(), window).width());
         let (text_budget, detail_budget) = fit::split(
             f32::from(bounds.size.width),
             text.total(),
@@ -115,27 +113,23 @@ impl gpui_kit::Element for RowLine {
             f32::from(self.gap),
             self.detail_share,
         );
-        let text = match self.row.overflow {
+        let focus = self
+            .row
+            .highlights
+            .first()
+            .map(|range| text.graphemes_of(range));
+        let kept = match self.row.overflow {
             Overflow::Around => {
-                let focus = self
-                    .row
-                    .highlights
-                    .first()
-                    .map_or(0..0, |range| text.graphemes_of(range));
-                let fitted = fit::around(&text.widths, focus, text_budget, ellipsis);
-                text.around(&fitted, &typeface, self.matched, window)
+                fit::around(&text.widths, focus.unwrap_or(0..0), text_budget, ellipsis)
             }
-            Overflow::Middle => {
-                let cut = fit::middle(&text.widths, text_budget, ellipsis, text.name());
-                text.middle(cut, &typeface, self.matched, window)
-            }
+            Overflow::Path => fit::path(&text.widths, focus, text_budget, ellipsis, text.name()),
         };
         let muted = typeface.muted(self.muted);
         Shaped {
-            text,
+            text: text.render(&kept, &typeface, self.matched, window),
             detail: detail.map(|detail| {
-                let cut = fit::middle(&detail.widths, detail_budget, ellipsis, detail.name());
-                detail.middle(cut, &muted, self.muted, window)
+                let kept = fit::middle(&detail.widths, detail_budget, ellipsis, detail.name());
+                detail.render(&kept, &muted, self.muted, window)
             }),
             line_height: window.line_height(),
         }
@@ -314,50 +308,14 @@ impl Measured {
         start..end.max(start)
     }
 
-    fn byte(&self, grapheme: usize) -> usize {
-        self.starts
-            .get(grapheme)
-            .copied()
-            .unwrap_or(self.text.len())
-    }
-
-    fn around(
+    fn render(
         &self,
-        fitted: &fit::Around,
+        kept: &fit::Kept,
         typeface: &Typeface,
         matched: Hsla,
         window: &Window,
     ) -> ShapedLine {
-        let kept = self.byte(fitted.kept.start)..self.byte(fitted.kept.end);
-        let before = if fitted.ellipsis_before { ELLIPSIS } else { "" };
-        let after = if fitted.ellipsis_after { ELLIPSIS } else { "" };
-        let text = format!("{before}{}{after}", &self.text[kept.clone()]);
-        let highlights = fit::cut_highlights(&self.highlights, kept, before.len());
-        let runs = typeface.runs(text.len(), &highlights, matched);
-        typeface.shape_runs(text.into(), &runs, window)
-    }
-
-    fn middle(
-        &self,
-        cut: fit::Middle,
-        typeface: &Typeface,
-        matched: Hsla,
-        window: &Window,
-    ) -> ShapedLine {
-        let (text, highlights) = if cut.is_cut() {
-            let (head, tail) = (self.byte(cut.head), self.byte(cut.tail));
-            let text = format!("{}{ELLIPSIS}{}", &self.text[..head], &self.text[tail..]);
-            let highlights = fit::middle_highlights(
-                &self.highlights,
-                self.text.len(),
-                head,
-                tail,
-                ELLIPSIS.len(),
-            );
-            (text, highlights)
-        } else {
-            (self.text.clone(), self.highlights.clone())
-        };
+        let (text, highlights) = fit::render(&self.text, &self.starts, kept, &self.highlights);
         let runs = typeface.runs(text.len(), &highlights, matched);
         typeface.shape_runs(text.into(), &runs, window)
     }

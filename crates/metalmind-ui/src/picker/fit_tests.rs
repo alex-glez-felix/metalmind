@@ -16,23 +16,66 @@ fn widths(text: &str) -> Vec<f32> {
         .collect()
 }
 
+fn starts(text: &str) -> Vec<usize> {
+    text.char_indices()
+        .map(|(start, _)| start)
+        .chain([text.len()])
+        .collect()
+}
+
 /// `text` recortado como lo pinta la vista, con elipsis de ancho 1.
+fn shown(text: &str, kept: &Kept) -> String {
+    render(text, &starts(text), kept, &[]).0
+}
+
 fn shown_around(text: &str, focus: Range<usize>, budget: f32) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let fit = around(&widths(text), focus, budget, 1.0);
-    let kept: String = chars[fit.kept].iter().collect();
-    let before = if fit.ellipsis_before { "…" } else { "" };
-    let after = if fit.ellipsis_after { "…" } else { "" };
-    format!("{before}{kept}{after}")
+    shown(text, &around(&widths(text), focus, budget, 1.0))
 }
 
 fn shown_middle(text: &str, budget: f32) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let cut = middle(&widths(text), budget, 1.0, name_graphemes(text));
-    let head: String = chars[..cut.head].iter().collect();
-    let tail: String = chars[cut.tail..].iter().collect();
-    let ellipsis = if cut.is_cut() { "…" } else { "" };
-    format!("{head}{ellipsis}{tail}")
+    shown(
+        text,
+        &middle(&widths(text), budget, 1.0, name_graphemes(text)),
+    )
+}
+
+/// Una ruta con `found` (lo que coincide) resaltado, como `[found]`.
+fn shown_path(text: &str, found: &str, budget: f32) -> String {
+    let at = text.find(found).unwrap();
+    let focus = text[..at].chars().count()..text[..at + found.len()].chars().count();
+    let kept = path(
+        &widths(text),
+        Some(focus),
+        budget,
+        1.0,
+        name_graphemes(text),
+    );
+    let (mut shown, highlights) = render(
+        text,
+        &starts(text),
+        &kept,
+        std::slice::from_ref(&(at..at + found.len())),
+    );
+    for range in highlights.iter().rev() {
+        shown.insert(range.end, ']');
+        shown.insert(range.start, '[');
+    }
+    shown
+}
+
+/// Lo que mide `kept` pintado: sus grafemas y una elipsis por hueco.
+fn used(widths: &[f32], kept: &Kept) -> f32 {
+    let text: String = "x".repeat(kept.len);
+    let gaps = render(&text, &starts(&text), kept, &[])
+        .0
+        .matches(ELLIPSIS)
+        .count();
+    let shown: f32 = kept
+        .ranges
+        .iter()
+        .map(|range| widths[range.clone()].iter().sum::<f32>())
+        .sum();
+    shown + f32::from(u8::try_from(gaps).unwrap())
 }
 
 fn assert_close(found: f32, expected: f32) {
@@ -176,22 +219,49 @@ fn la_lista_mide_filas_enteras_mas_el_borde() {
 
 #[test]
 fn los_resaltados_siguen_al_recorte() {
-    let highlights = [0..2, 5..9, 12..14, 20..22];
-    assert_eq!(cut_highlights(&highlights, 6..13, "…".len()), [3..6, 9..10]);
-    assert_eq!(cut_highlights(&highlights, 0..22, 0), highlights);
-    assert_eq!(
-        cut_highlights(&highlights, 2..5, 0),
-        Vec::<Range<usize>>::new()
-    );
+    let text = "abcdefghijklmnopqrstuv";
+    let kept = Kept {
+        ranges: std::iter::once(6..13).collect(),
+        len: 22,
+    };
+    let (shown, highlights) = render(text, &starts(text), &kept, &[0..2, 5..9, 12..14, 20..22]);
+    assert_eq!(shown, "…ghijklm…");
+    assert_eq!(highlights, [3..6, 9..10]);
 }
 
 #[test]
 fn los_resaltados_de_una_ruta_recortada_por_el_medio() {
-    // "notas/largas/vin.md" → "notas…vin.md"
-    let highlights = [0..2, 4..8, 10..12, 13..16];
+    let text = "notas/largas/vin.md";
+    let kept = Kept {
+        ranges: vec![0..5, 13..19],
+        len: 19,
+    };
+    let (shown, highlights) = render(text, &starts(text), &kept, &[0..2, 4..8, 10..12, 13..16]);
+    assert_eq!(shown, "notas…vin.md");
+    assert_eq!(highlights, [0..2, 4..5, 8..11]);
+}
+
+#[test]
+fn una_ruta_muestra_lo_que_coincide_y_el_nombre() {
+    let text = "personajes/equipo de Kelsier/historias largas/Vin.md";
     assert_eq!(
-        middle_highlights(&highlights, 19, 5, 13, "…".len()),
-        [0..2, 4..5, 8..11]
+        shown_path(text, "historias", 30.0),
+        "…elsier/[historias] larga…Vin.md"
+    );
+}
+
+#[test]
+fn una_ruta_con_la_coincidencia_en_el_nombre_se_recorta_por_el_medio() {
+    let text = "personajes/equipo de Kelsier/historias largas/Vin.md";
+    assert_eq!(shown_path(text, "Vin", 20.0), "person…largas/[Vin].md");
+}
+
+#[test]
+fn si_no_caben_la_coincidencia_y_el_nombre_gana_la_coincidencia() {
+    let text = "personajes/equipo de Kelsier/historias/un nombre larguísimo.md";
+    assert_eq!(
+        shown_path(text, "historias", 20.0),
+        "…sier/[historias]/un …"
     );
 }
 
@@ -206,6 +276,17 @@ fn cada_grafema_mide_lo_que_avanzan_sus_glifos() {
         assert_close(found, expected);
     }
     assert_eq!(grapheme_widths(&[0], &[], 0.0), Vec::<f32>::new());
+}
+
+#[test]
+fn de_derecha_a_izquierda_cada_glifo_es_de_su_grafema() {
+    // Tres letras hebreas de dos bytes: los glifos van al revés de los bytes.
+    let starts = [0, 2, 4, 6];
+    let glyphs = [(4, 0.0), (2, 5.0), (0, 12.0)];
+    let found = grapheme_widths(&starts, &glyphs, 20.0);
+    for (found, expected) in found.into_iter().zip([8.0, 7.0, 5.0]) {
+        assert_close(found, expected);
+    }
 }
 
 #[test]
@@ -228,27 +309,37 @@ proptest! {
     ) {
         let len = widths.len();
         let focus = start.min(len)..(start + span).min(len);
-        let fit = around(&widths, focus.clone(), budget, 1.0);
-        let edges = f32::from(u8::from(fit.ellipsis_before)) + f32::from(u8::from(fit.ellipsis_after));
-        let used: f32 = widths[fit.kept.clone()].iter().sum::<f32>() + edges;
-        prop_assert!(used <= budget || fit.kept.is_empty());
-        prop_assert!(fit.kept.end <= len);
+        let kept = around(&widths, focus.clone(), budget, 1.0);
+        prop_assert!(kept.ranges.len() <= 1);
+        prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
         let focus_width: f32 = widths[focus.clone()].iter().sum();
         if focus_width + 2.0 <= budget {
-            prop_assert!(fit.kept.start <= focus.start && focus.end <= fit.kept.end);
+            prop_assert!(kept.shows(&focus) || focus.is_empty());
         }
         if widths.iter().sum::<f32>() <= budget {
-            prop_assert_eq!(fit.kept, 0..len);
+            prop_assert_eq!(kept.ranges, if len == 0 { vec![] } else { std::iter::once(0..len).collect() });
         }
     }
 
     #[test]
     fn middle_nunca_se_pasa(widths in graphemes(), budget in 0.0_f32..40.0, keep in 0usize..70) {
-        let cut = middle(&widths, budget, 1.0, keep);
-        let ellipsis = if cut.is_cut() { 1.0 } else { 0.0 };
-        let used: f32 =
-            widths[..cut.head].iter().sum::<f32>() + widths[cut.tail..].iter().sum::<f32>() + ellipsis;
-        prop_assert!(cut.head <= cut.tail && cut.tail <= widths.len());
-        prop_assert!(used <= budget || (cut.head == 0 && cut.tail == widths.len()));
+        let kept = middle(&widths, budget, 1.0, keep);
+        prop_assert!(kept.ranges.len() <= 2);
+        prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
+    }
+
+    #[test]
+    fn path_nunca_se_pasa(
+        widths in graphemes(),
+        start in 0usize..60,
+        span in 1usize..8,
+        name in 0usize..30,
+        budget in 0.0_f32..40.0,
+    ) {
+        let len = widths.len();
+        let focus = start.min(len)..(start + span).min(len);
+        let kept = path(&widths, Some(focus), budget, 1.0, name);
+        prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
+        prop_assert!(kept.ranges.iter().all(|range| range.end <= len));
     }
 }
