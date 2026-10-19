@@ -49,8 +49,8 @@ impl Formulas {
         self.metrics.get(latex, display)
     }
 
-    /// Empieza un frame: las imágenes que se pidan desde ahora no salen de
-    /// la caché.
+    /// Empieza un frame de la ventana: las imágenes que pida cualquier
+    /// panel desde ahora no salen de la caché hasta el siguiente.
     pub fn next_frame(&mut self) {
         self.images.next_frame();
     }
@@ -68,12 +68,16 @@ impl Formulas {
         });
         cx.spawn(async move |this, cx| {
             let (key, image) = painting.await;
-            if let Image::Failed(error) = &image {
-                // Compuso al medirla y falló al pintarla: su lugar queda vacío.
-                log::error!("no se pudo pintar la fórmula {:?}: {error}", key.latex);
-            }
             // Si la ventana ya se cerró, no hay a quién dársela.
             let _ = this.update(cx, |formulas, cx| {
+                if let Image::Failed(error) = &image {
+                    // Compuso al medirla y falló al pintarla: desde ahora se ve
+                    // como una que no compone, con su fuente y su mensaje.
+                    log::error!("no se pudo pintar la fórmula {:?}: {error}", key.latex);
+                    formulas
+                        .metrics
+                        .fail(&key.latex, key.display, error.clone());
+                }
                 formulas.images.finish(key, image);
                 cx.notify();
             });

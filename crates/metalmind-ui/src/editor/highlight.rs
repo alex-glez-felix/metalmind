@@ -28,7 +28,7 @@ fn quads(
             let laid = layout.line(span.line)?;
             let left = laid.origin.x + laid.x_for_index(span.start);
             let right = match span.end {
-                SpanEnd::At(end) => laid.origin.x + laid.x_for_index(end),
+                SpanEnd::At(end) => laid.origin.x + laid.x_for_end(end),
                 SpanEnd::PastText => laid.origin.x + laid.width() + cells.width,
                 SpanEnd::Edge => cells.edge,
             };

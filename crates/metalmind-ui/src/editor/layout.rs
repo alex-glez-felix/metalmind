@@ -110,6 +110,20 @@ impl LaidLine {
         }
     }
 
+    /// Dónde termina un tramo que acaba en el byte `index`: dentro de una
+    /// fórmula, en su borde derecho, así lo que toca una fórmula la cubre
+    /// entera.
+    pub fn x_for_end(&self, index: usize) -> Pixels {
+        match self
+            .pieces
+            .iter()
+            .find(|piece| piece.source.start < index && index <= piece.source.end)
+        {
+            Some(piece) if piece.text.is_none() => piece.x + piece.width,
+            _ => self.x_for_index(index),
+        }
+    }
+
     /// El byte más cercano a `x`; sobre una fórmula, su principio.
     pub fn closest_index_for_x(&self, x: Pixels) -> usize {
         let Some(piece) = self
@@ -252,6 +266,12 @@ mod tests {
         assert_eq!(laid.x_for_index(2), px(20.));
         assert_eq!(laid.x_for_index(4), px(20.), "dentro: el borde izquierdo");
         assert_eq!(laid.x_for_index(7), px(50.));
+        assert_eq!(
+            laid.x_for_end(4),
+            px(50.),
+            "un tramo que acaba dentro la cubre"
+        );
+        assert_eq!(laid.x_for_end(2), px(20.));
         assert_eq!(laid.closest_index_for_x(px(35.)), 2);
         assert_eq!(laid.closest_index_for_x(px(500.)), 7);
     }
