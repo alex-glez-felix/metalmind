@@ -11,6 +11,7 @@ use metalmind_search::{FuzzyMatcher, Query, TextQuery, TextSearcher};
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn fuzzy_search_is_linear_in_the_paths() {
     let mut matcher = FuzzyMatcher::paths();
     let query = Query::new("tema nota");
@@ -29,6 +30,7 @@ fn query(pattern: &str) -> TextQuery {
 /// Con N notas no se llenan todos los hilos del walk y lineal da menos de ×16,
 /// pero un costo cuadrático por nota igual pasa de ×40.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn text_search_is_linear_in_the_notes() {
     const NOTES: usize = 2_000;
     let vault = |notes| {
@@ -55,6 +57,7 @@ fn text_search_is_linear_in_the_notes() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn find_is_linear_in_the_text() {
     let matcher = query(WORD).compile().unwrap();
     assert_linear(4_000, metalmind_perf::note, |text| {

@@ -49,6 +49,7 @@ fn sorted(mut files: Files) -> Files {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn armar_el_indice_es_lineal() {
     for names in [NoteNames::Repeated, NoteNames::Unique] {
         assert_linear(
@@ -61,6 +62,7 @@ fn armar_el_indice_es_lineal() {
 
 /// Mover `area-3`, con la décima parte de las notas.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn planear_mover_una_carpeta_es_lineal() {
     let from = VaultPath::new("area-3").unwrap();
     let to = VaultPath::new("archivo/area-3").unwrap();
@@ -72,6 +74,7 @@ fn planear_mover_una_carpeta_es_lineal() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn borrar_una_carpeta_es_lineal() {
     let change = VaultChange::Removed {
         path: VaultPath::new("area-3").unwrap(),
@@ -104,6 +107,7 @@ fn folder_notes(folders: usize) -> Files {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn un_nombre_en_cada_carpeta_es_lineal() {
     assert_linear(500, folder_notes, |files| build(&files));
     let change = VaultChange::Created {
@@ -123,6 +127,7 @@ fn un_nombre_en_cada_carpeta_es_lineal() {
 /// Una nota de una sola línea con `links` links: el contexto de cada uno no
 /// puede volver a recorrer la línea entera.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn muchos_links_en_una_linea_es_lineal() {
     let path = VaultPath::new("larga.md").unwrap();
     assert_linear(

@@ -10,12 +10,13 @@ publish.workspace = true
 [dependencies]
 metalmind-buffer.workspace = true
 metalmind-vim.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 gungraun.workspace = true
 metalmind-search.workspace = true
 metalmind-syntax.workspace = true
-tempfile.workspace = true
 
 # Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
 [[bench]]

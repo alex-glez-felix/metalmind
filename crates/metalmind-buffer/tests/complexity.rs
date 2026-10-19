@@ -30,6 +30,7 @@ fn one_insert_per_line(buffer: &Buffer) -> Vec<Edit> {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn typing_does_not_depend_on_the_buffer_size() {
     assert_flat(2_000, buffer, |mut buffer| {
         let at = buffer.line_start(buffer.line_count() / 2);
@@ -41,6 +42,7 @@ fn typing_does_not_depend_on_the_buffer_size() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn a_batch_of_edits_is_linear() {
     assert_linear(
         300,
@@ -57,6 +59,7 @@ fn a_batch_of_edits_is_linear() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn undoing_a_batch_is_linear() {
     assert_linear(
         400,

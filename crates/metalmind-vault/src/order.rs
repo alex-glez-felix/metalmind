@@ -310,6 +310,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
     fn ordenar_un_borrado_grande_es_lineal() {
         metalmind_perf::assert_linear(1_000, folder_removal, |(before, removed)| {
             arrange(&before, &HashMap::new(), &removed, &Entries::new(), &[])
@@ -317,6 +318,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
     fn ordenar_muchos_renames_es_lineal() {
         metalmind_perf::assert_linear(1_000, RenameBatch::new, |batch| batch.arrange());
     }
