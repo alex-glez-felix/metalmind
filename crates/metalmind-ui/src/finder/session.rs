@@ -200,17 +200,29 @@ pub(crate) fn relative_to(root: &Path, path: &Path) -> Option<VaultPath> {
         .filter(|path| !path.is_root())
 }
 
-/// La ruta sin enlaces simbólicos; si el archivo todavía no existe (una
-/// nota nueva sin guardar), la de su carpeta.
+/// La ruta sin enlaces simbólicos. Lo que todavía no existe (una nota nueva
+/// sin guardar, o una cuya carpeta se borró o se movió desde fuera) se agrega
+/// tal cual a lo último que sí existe; un `..` en esa parte no se resuelve.
 fn canonical(path: &Path) -> Option<PathBuf> {
-    fs::canonicalize(path).ok().or_else(|| {
-        let name = path.file_name()?;
-        let parent = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty());
-        let folder = fs::canonicalize(parent.unwrap_or(Path::new("."))).ok()?;
-        Some(folder.join(name))
-    })
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        let probe = if current.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            current
+        };
+        if let Ok(real) = fs::canonicalize(probe) {
+            return Some(
+                missing
+                    .iter()
+                    .rev()
+                    .fold(real, |path, name| path.join(name)),
+            );
+        }
+        missing.push(current.file_name()?);
+        current = current.parent()?;
+    }
 }
 
 fn read_recents(file: &Path) -> Recents {
@@ -248,13 +260,18 @@ mod tests {
     }
 
     #[test]
-    fn una_nota_sin_guardar_se_ubica_por_su_carpeta() {
+    fn una_nota_sin_guardar_se_ubica_por_lo_que_existe() {
         let dir = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(dir.path()).unwrap();
         assert_eq!(
             canonical(&root.join("nueva.md")),
             Some(root.join("nueva.md"))
         );
-        assert_eq!(canonical(&root.join("no/existe.md")), None);
+        assert_eq!(
+            canonical(&root.join("no/existe.md")),
+            Some(root.join("no/existe.md")),
+            "su carpeta se borró desde fuera"
+        );
+        assert_eq!(canonical(&root.join("no/../existe.md")), None);
     }
 }
