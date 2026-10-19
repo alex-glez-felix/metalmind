@@ -271,6 +271,7 @@ impl Editor {
             recording: view.recording,
             file: view.document.display_name().into(),
             modified: view.document.is_modified(),
+            save: view.save,
             command_line,
             message,
             position: (line + 1, buffer.column_of(view.cursor()) + 1),

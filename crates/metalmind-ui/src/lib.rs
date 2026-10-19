@@ -4,6 +4,7 @@
 
 mod actions;
 mod clipboard;
+mod disk;
 mod document;
 mod editor;
 mod file_tree;

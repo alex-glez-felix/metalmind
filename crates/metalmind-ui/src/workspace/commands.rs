@@ -4,8 +4,10 @@
 //! ([`super::buffers`]).
 
 use std::path::Path;
+use std::rc::Rc;
 
 use metalmind_buffer::Selection;
+use metalmind_vault::SaveKind;
 use metalmind_vim::{Clipboard, Command, Invocation, Mode};
 
 use super::options;
@@ -72,7 +74,8 @@ impl Workspace {
     fn try_run(&mut self, invocation: &Invocation) -> Result<Effect, WorkspaceError> {
         let path = invocation.argument.as_deref().map(Path::new);
         match invocation.command {
-            Command::Save => self.save(path).map(|_| Effect::Stay),
+            Command::Save => self.save(path, false).map(|_| Effect::Stay),
+            Command::ForceSave => self.save(path, true).map(|_| Effect::Stay),
             Command::Quit => Ok(self.quit(false)),
             Command::ForceQuit => Ok(self.quit(true)),
             Command::SaveAndQuit => self.save_and_quit(path),
@@ -114,8 +117,9 @@ impl Workspace {
     }
 
     /// Guarda el documento enfocado, o lo escribe en `path` como `:w ruta`;
-    /// devuelve si se pudo.
-    fn save(&mut self, path: Option<&Path>) -> Result<bool, WorkspaceError> {
+    /// devuelve si se pudo. Con `force`, como `:w!`, pisa lo que haya en
+    /// disco.
+    fn save(&mut self, path: Option<&Path>, force: bool) -> Result<bool, WorkspaceError> {
         let id = self.pane(self.focused())?.document;
         if let Some(path) = path
             && self.loaded_elsewhere(id, path)
@@ -123,11 +127,13 @@ impl Workspace {
             self.message = Some(Message::loaded_elsewhere());
             return Ok(false);
         }
+        let disk = Rc::clone(&self.disk);
         let document = self.document_mut(id)?;
         let unnamed = document.path().is_none();
         let saved = match path {
-            Some(path) => document.save_to(path),
-            None => document.save(),
+            Some(path) => document.save_to(path, disk.as_ref(), force),
+            None if force => document.overwrite(disk.as_ref(), SaveKind::Explicit),
+            None => document.save(disk.as_ref(), SaveKind::Explicit),
         };
 
         let message = match saved {
@@ -143,6 +149,9 @@ impl Workspace {
         };
         let saved = matches!(message, Message::Info(_));
         self.message = Some(message);
+        if saved {
+            self.saved(id);
+        }
         if saved && unnamed {
             self.adopt_file(id)?;
         }
@@ -166,7 +175,7 @@ impl Workspace {
     /// cambios tras escribir la copia: en un split, el panel se cierra y
     /// el buffer queda oculto; en el último, no se cierra la ventana.
     fn save_and_quit(&mut self, path: Option<&Path>) -> Result<Effect, WorkspaceError> {
-        if !self.save(path)? {
+        if !self.save(path, false)? {
             return Ok(Effect::Stay);
         }
         Ok(self.quit(false))
@@ -272,6 +281,7 @@ impl Workspace {
         reloaded.keep_marks_of(self.document(id)?)?;
         reloaded.set_rows(self.documents.rows());
         let old = std::mem::replace(self.document_mut(id)?, reloaded);
+        self.saved(id);
         let buffer = self
             .documents
             .get(id)

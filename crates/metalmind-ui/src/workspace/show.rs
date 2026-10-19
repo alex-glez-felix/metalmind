@@ -54,7 +54,8 @@ impl Workspace {
 
     /// `pane` pasa a mostrar `id`, con el cursor de un panel que ya lo
     /// muestra o, si estaba oculto, del último que lo mostró; sus números y
-    /// su jumplist se quedan. El documento de antes queda oculto.
+    /// su jumplist se quedan. El documento de antes queda oculto y, con
+    /// autoguardado, se guarda.
     pub(super) fn show_document(
         &mut self,
         pane: PaneId,
@@ -75,7 +76,9 @@ impl Workspace {
         self.message = Some(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
         if let Some(old) = self.panes.insert(pane, shown) {
+            let left = old.document;
             self.hide(old);
+            self.autosave_document(left);
         }
         Ok(())
     }

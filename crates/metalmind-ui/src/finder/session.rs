@@ -92,9 +92,11 @@ impl VaultSession {
                 }
             }
         });
-        // Al salir de la app se espera a la última escritura.
+        // Al salir de la app se espera a la última escritura de los recientes
+        // y a las versiones de los últimos guardados.
         let quit = cx.on_app_quit(|this: &mut Self, _| {
             this.writer.take();
+            this.vault.wait_for_versions();
             async {}
         });
         let notes = notes(&vault.snapshot(), &recents);
@@ -203,7 +205,7 @@ pub(crate) fn relative_to(root: &Path, path: &Path) -> Option<VaultPath> {
 /// La ruta sin enlaces simbólicos. Lo que todavía no existe (una nota nueva
 /// sin guardar, o una cuya carpeta se borró o se movió desde fuera) se agrega
 /// tal cual a lo último que sí existe; un `..` en esa parte no se resuelve.
-fn canonical(path: &Path) -> Option<PathBuf> {
+pub(crate) fn canonical(path: &Path) -> Option<PathBuf> {
     let mut missing = Vec::new();
     let mut current = path;
     loop {

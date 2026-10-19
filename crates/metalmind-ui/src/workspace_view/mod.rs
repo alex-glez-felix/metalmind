@@ -5,6 +5,7 @@
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
 //! abierto, el finder, la búsqueda de texto o la paleta.
 
+mod autosave;
 mod finder;
 mod link_choice;
 mod overlay;
@@ -23,9 +24,9 @@ use metalmind_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, FollowLink,
-    ForceEdit, ForceQuit, ForceQuitAll, Only, OpenCommandPalette, OpenFinder, OpenTextSearch, Quit,
-    QuitAll, Save, SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs, SaveAsAndQuit, Set, SplitDown,
-    SplitRight, ToggleFolders, ToggleTags,
+    ForceEdit, ForceQuit, ForceQuitAll, ForceSave, Only, OpenCommandPalette, OpenFinder,
+    OpenTextSearch, Quit, QuitAll, Save, SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs,
+    SaveAsAndQuit, Set, SplitDown, SplitRight, ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
@@ -38,6 +39,7 @@ use crate::sidebar::{self, Sidebar, SidebarEvent};
 use crate::theme::Theme;
 use crate::workspace::{Axis, Direction, Effect, Node, PaneId, Workspace};
 
+use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
 
@@ -53,7 +55,8 @@ pub struct WorkspaceView {
     /// Las fórmulas, compartidas por los paneles de la ventana.
     formulas: Entity<Formulas>,
     overlay: Option<Overlay>,
-    _subscriptions: [Subscription; 2],
+    autosave: Option<AutosaveTimer>,
+    _subscriptions: [Subscription; 3],
 }
 
 impl WorkspaceView {
@@ -65,7 +68,11 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
+        let repaint = cx.observe(&workspace, |view, _, cx| {
+            view.schedule_autosave(cx);
+            cx.notify();
+        });
+        let activation = cx.observe_window_activation(window, Self::on_activation);
         let events = cx.subscribe_in(&sidebar, window, |view, _, event, window, cx| {
             view.on_sidebar_event(*event, window, cx);
         });
@@ -91,7 +98,8 @@ impl WorkspaceView {
             session,
             formulas,
             overlay: None,
-            _subscriptions: [repaint, events],
+            autosave: None,
+            _subscriptions: [repaint, events, activation],
         }
     }
 
@@ -249,11 +257,12 @@ impl WorkspaceView {
     }
 
     fn update_title(&mut self, window: &mut Window, cx: &Context<Self>) {
-        let Ok(document) = self.workspace.read(cx).focused_document() else {
+        let workspace = self.workspace.read(cx);
+        let Ok(view) = workspace.view(workspace.focused()) else {
             return;
         };
-        let modified = if document.is_modified() { " [+]" } else { "" };
-        let title = format!("{}{modified} — Metalmind", document.display_name());
+        let modified = if view.unsaved() { " [+]" } else { "" };
+        let title = format!("{}{modified} — Metalmind", view.document.display_name());
         if title != self.title {
             window.set_window_title(&title);
             self.title = title;
@@ -317,6 +326,7 @@ impl Render for WorkspaceView {
             .text_color(theme.foreground)
             .bg(theme.background);
         element = on_command::<Save>(element, cx);
+        element = on_command::<ForceSave>(element, cx);
         element = on_command::<Quit>(element, cx);
         element = on_command::<ForceQuit>(element, cx);
         element = on_command::<SaveAndQuit>(element, cx);

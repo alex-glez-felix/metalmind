@@ -11,7 +11,7 @@ use std::time::Instant;
 use gpui_kit::App;
 use metalmind_config::{Config, Diagnostic, Paths, Severity};
 use metalmind_ui::{Document, FrameClock, OpenError, Startup};
-use metalmind_vault::{FileError, Vault, VaultError};
+use metalmind_vault::{FileError, HistoryOptions, Vault, VaultError, VaultOptions};
 
 use crate::target::{self, Sources, Target};
 
@@ -63,14 +63,22 @@ pub struct Prepared {
     config: Config,
 }
 
-/// Abre el vault de `target` y su archivo, si tiene; un archivo que no
-/// existe empieza vacío.
+/// Abre el vault de `target`, con su historial si hay directorio de datos,
+/// y su archivo, si tiene; un archivo que no existe empieza vacío.
 ///
 /// # Errors
 /// Si el vault no se puede abrir o el archivo no se puede leer.
 pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError> {
     let Session { paths, config } = session;
-    let (vault, updates) = Vault::open(&target.vault)?;
+    let history = paths.clone().map(|paths| HistoryOptions {
+        paths,
+        retention: config.settings.history,
+    });
+    let options = VaultOptions {
+        history,
+        ..VaultOptions::default()
+    };
+    let (vault, updates) = Vault::open_with(&target.vault, options)?;
     let file = target
         .file
         .as_deref()

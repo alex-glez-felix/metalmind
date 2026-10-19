@@ -136,6 +136,23 @@ impl CommandAction for ForceEdit {
     }
 }
 
+/// `:w! [ruta]`: guarda aunque el archivo haya cambiado en disco, o pisa
+/// la ruta aunque exista.
+#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
+#[action(namespace = editor, name = "force_save", no_json)]
+pub struct ForceSave {
+    pub path: Option<String>,
+}
+
+impl CommandAction for ForceSave {
+    fn invocation(&self) -> Invocation {
+        Invocation {
+            command: Command::ForceSave,
+            argument: self.path.clone(),
+        }
+    }
+}
+
 /// `:set`: cambia opciones del panel enfocado, como sus números de línea.
 #[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
 #[action(namespace = editor, name = "set", no_json)]
@@ -172,6 +189,7 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
             Some(path) => Box::new(SaveAs { path }),
             None => Box::new(Save),
         },
+        Command::ForceSave => Box::new(ForceSave { path: argument }),
         Command::Quit => Box::new(Quit),
         Command::ForceQuit => Box::new(ForceQuit),
         Command::SaveAndQuit => match argument {

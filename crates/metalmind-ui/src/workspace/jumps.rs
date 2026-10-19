@@ -8,7 +8,7 @@ use std::path::Path;
 use metalmind_vault::VaultChange;
 use metalmind_vim::{Clipboard, KeyOutcome, Landing};
 
-use super::{Message, PaneId, Workspace, WorkspaceError, shown_path};
+use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, shown_path};
 
 impl Workspace {
     /// Antes de que `pane` muestre otra cosa, su cursor queda en su
@@ -71,7 +71,8 @@ impl Workspace {
     /// Un lote del watcher del vault de raíz `root`: los archivos movidos
     /// desde fuera se llevan sus documentos abiertos, su lugar en la
     /// jumplist y sus marks `A`–`Z`; los borrados pierden sus marks y
-    /// `ctrl-o` salta sus entradas.
+    /// `ctrl-o` salta sus entradas. Un documento cuyo archivo cambió queda
+    /// anotado ([`Workspace::disk_changed`]).
     pub fn files_changed(&mut self, root: &Path, changes: &[VaultChange]) {
         for change in changes {
             match change {
@@ -81,6 +82,9 @@ impl Workspace {
                 VaultChange::Removed { path, .. } => {
                     for file in self.files.within(&root.join(path.as_str())) {
                         self.vim.file_removed(file);
+                        if let Some(id) = self.documents.of_file(file) {
+                            self.disk_changed(id);
+                        }
                     }
                 }
                 VaultChange::Created { path, .. } => {
@@ -88,25 +92,43 @@ impl Workspace {
                     for file in self.files.within(&path) {
                         self.vim.file_restored(file);
                     }
-                    self.refresh_hidden(&path);
+                    self.file_changed(&path);
                 }
-                VaultChange::Modified { path } => self.refresh_hidden(&root.join(path.as_str())),
+                VaultChange::Modified { path } => self.file_changed(&root.join(path.as_str())),
             }
         }
     }
 
-    /// Como `autoread`: un documento oculto cuyo archivo cambió se relee
-    /// con [`Workspace::refresh`], así al volver a él se ve lo de disco y un
-    /// `:w` no lo pisa.
-    fn refresh_hidden(&mut self, path: &Path) {
-        let Some(id) = self.documents.find(path) else {
+    fn file_changed(&mut self, path: &Path) {
+        if let Some(id) = self.documents.find(path) {
+            self.disk_changed(id);
+        }
+    }
+
+    /// El archivo de `id` cambió en disco. Si está oculto y sin cambios, se
+    /// relee como con `autoread` ([`Workspace::refresh`]): al volver a él
+    /// se ve lo de disco y un `:w` no lo pisa. Si no, queda anotado si ya no
+    /// es lo que se leyó o escribió, para no pisarlo al guardar; si además
+    /// tiene cambios, se avisa como el `W12` de vim. El propio guardado
+    /// también llega aquí, pero el disco tiene justo lo que se escribió.
+    fn disk_changed(&mut self, id: DocumentId) {
+        let shown = self.panes_showing(id).next().is_some();
+        let Some(document) = self.documents.get_mut(id) else {
             return;
         };
-        if self.panes_showing(id).next().is_some() {
+        if !shown && !document.is_modified() {
+            if let Err(error) = self.refresh(id) {
+                self.report(&error);
+            }
             return;
         }
-        if let Err(error) = self.refresh(id) {
-            self.report(&error);
+        let noticed = document.changed_on_disk();
+        match document.check_disk() {
+            Ok(true) if !noticed && document.is_modified() => {
+                self.message = Some(Message::changed_on_disk(document));
+            }
+            Ok(_) => {}
+            Err(error) => log::warn!("no se releyó {}: {error}", document.display_name()),
         }
     }
 }

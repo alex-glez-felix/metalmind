@@ -3,14 +3,18 @@
 //! la protección está al salir, y la ventana no se cierra mientras algún
 //! documento, visible u oculto, tenga cambios.
 
+use metalmind_vault::SaveKind;
+
 use super::{DocumentId, Message, Workspace, WorkspaceError};
 use crate::document::{Document, SaveError};
 
 impl Workspace {
-    /// Si se puede cerrar la ventana sin perder cambios. Si no, como nvim,
-    /// muestra el primer documento con cambios (el del panel enfocado, el
-    /// de otro panel o uno oculto) y avisa cuál es.
+    /// Si se puede cerrar la ventana sin perder cambios; con autoguardado,
+    /// antes guarda lo que pueda. Si no, como nvim, muestra el primer
+    /// documento con cambios (el del panel enfocado, el de otro panel o uno
+    /// oculto) y avisa cuál es.
     pub fn may_close_window(&mut self) -> bool {
+        self.autosave_all();
         let Some(id) = self.first_unsaved() else {
             return true;
         };
@@ -74,8 +78,12 @@ impl Workspace {
             let Some(document) = self.documents.get_mut(id) else {
                 continue;
             };
-            let message = match document.save() {
-                Ok(stats) => Message::written(&document.display_name(), stats),
+            let message = match document.save(self.disk.as_ref(), SaveKind::Explicit) {
+                Ok(stats) => {
+                    let message = Message::written(&document.display_name(), stats);
+                    self.saved(id);
+                    message
+                }
                 Err(SaveError::NoFileName) => Message::no_file_name_for(id),
                 Err(error) => {
                     log::error!("{error}");

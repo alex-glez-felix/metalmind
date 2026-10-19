@@ -1,7 +1,7 @@
 //! Barra de estado de un panel: modo, si se graba una macro, archivo, `[+]`
-//! si hay cambios sin guardar, el último mensaje o la línea de comandos, y
-//! la posición del cursor. Modo, macro, mensaje y línea de comandos solo los
-//! muestra el panel con el foco.
+//! si hay cambios sin guardar (o, con autoguardado, si está guardado), el
+//! último mensaje o la línea de comandos, y la posición del cursor. Modo,
+//! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
 
 use gpui_kit::{
     Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _,
@@ -9,7 +9,7 @@ use gpui_kit::{
 use metalmind_vim::{Mode, VisualKind};
 
 use crate::theme::Theme;
-use crate::workspace::Message;
+use crate::workspace::{Message, SaveState};
 
 /// Lo que muestra la barra, ya calculado por el editor.
 #[derive(Clone, Debug)]
@@ -20,6 +20,9 @@ pub struct Status {
     pub recording: Option<char>,
     pub file: SharedString,
     pub modified: bool,
+    /// El indicador del autoguardado, en lugar del `[+]`; `None` si está
+    /// apagado.
+    pub save: Option<SaveState>,
     pub command_line: Option<CommandLine>,
     pub message: Option<Message>,
     /// Línea y columna en caracteres, desde 1.
@@ -65,12 +68,25 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
                 .flex()
                 .flex_row()
                 .child(status.file)
-                .when(status.modified, |file| {
-                    file.child(div().text_color(theme.modified).child(" [+]"))
+                .children(match status.save {
+                    Some(state) => Some(save_label(state, theme)),
+                    None => status
+                        .modified
+                        .then(|| div().text_color(theme.modified).child(" [+]")),
                 }),
         )
         .child(center.flex_1().min_w_0().overflow_hidden())
         .child(format!("{line}:{column}"))
+}
+
+/// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
+fn save_label(state: SaveState, theme: &Theme) -> Div {
+    let (text, color) = match state {
+        SaveState::Saved => (" · guardado", theme.status_unfocused_foreground),
+        SaveState::Unsaved => (" · sin guardar", theme.modified),
+        SaveState::ChangedOnDisk => (" · cambió en disco: :w! o :e!", theme.error),
+    };
+    div().text_color(color).child(text)
 }
 
 fn mode_label(mode: Mode) -> &'static str {
