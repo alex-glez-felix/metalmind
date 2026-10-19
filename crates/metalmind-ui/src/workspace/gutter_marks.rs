@@ -7,9 +7,6 @@ use metalmind_vim::PlacedMark;
 
 use super::{PaneId, Workspace, WorkspaceError};
 
-/// Columnas de la letra y de lo que avisa que hay más en la misma línea.
-const COLUMNS: usize = 2;
-
 /// Las marks de un documento por línea, en el orden en que se muestran: las
 /// `a`–`z` antes que las `A`–`Z`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -37,13 +34,10 @@ impl GutterMarks {
         Self(by_line)
     }
 
-    /// Las columnas que reserva el margen para las marks, haya o no: así el
-    /// ancho no cambia al poner la primera. Sin números, una más para
-    /// separarlas del texto.
-    #[must_use]
-    pub fn columns(numbers_shown: bool) -> usize {
-        if numbers_shown { COLUMNS } else { COLUMNS + 1 }
-    }
+    /// Las columnas que reserva el margen para las marks, haya o no, así el
+    /// ancho no cambia al poner la primera: la letra, el `+` de las demás y
+    /// un espacio, para que no se lea `a+1234` junto a un número ancho.
+    pub const COLUMNS: usize = 3;
 
     #[must_use]
     pub fn at(&self, line: usize) -> Option<MarkLabel<'_>> {
