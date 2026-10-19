@@ -32,6 +32,8 @@ const CASES: &[(&str, Command, &str)] = &[
     ("xall", Command::SaveAllAndQuit, "xall"),
     ("wq", Command::SaveAndQuit, "wq"),
     ("q!", Command::ForceQuit, "quit!"),
+    ("w!", Command::ForceSave, "write!"),
+    ("wri!", Command::ForceSave, "write!"),
 ];
 
 #[test]

@@ -10,6 +10,9 @@ pub enum Command {
     /// `:w [ruta]`; con ruta, le da archivo a un buffer sin nombre o
     /// escribe una copia.
     Save,
+    /// `:w! [ruta]`: guarda aunque el archivo haya cambiado en disco desde
+    /// que se leyó, y con ruta pisa un archivo que ya existe.
+    ForceSave,
     /// `:q`, que cierra el panel; en el último, se niega si algún buffer
     /// tiene cambios.
     Quit,
@@ -155,6 +158,7 @@ pub enum CommandError {
 /// Nombre completo, cuántas letras bastan para abreviarlo y el comando.
 const COMMANDS: &[(&str, usize, Command)] = &[
     ("write", 1, Command::Save),
+    ("write!", 1, Command::ForceSave),
     ("quit", 1, Command::Quit),
     ("quit!", 1, Command::ForceQuit),
     ("wq", 2, Command::SaveAndQuit),
@@ -176,6 +180,7 @@ const COMMANDS: &[(&str, usize, Command)] = &[
 impl Command {
     pub const ALL: &[Self] = &[
         Self::Save,
+        Self::ForceSave,
         Self::Quit,
         Self::ForceQuit,
         Self::SaveAndQuit,
@@ -206,6 +211,7 @@ impl Command {
     pub fn name(self) -> &'static str {
         match self {
             Self::Save => "editor::save",
+            Self::ForceSave => "editor::force_save",
             Self::Quit => "editor::quit",
             Self::ForceQuit => "editor::force_quit",
             Self::SaveAndQuit => "editor::save_and_quit",
@@ -245,14 +251,19 @@ impl Command {
     pub fn takes_argument(self) -> bool {
         matches!(
             self,
-            Self::Save | Self::SaveAndQuit | Self::Edit | Self::ForceEdit | Self::Set
+            Self::Save
+                | Self::ForceSave
+                | Self::SaveAndQuit
+                | Self::Edit
+                | Self::ForceEdit
+                | Self::Set
         )
     }
 
     /// Por qué no corre con un rango, que ningún comando del host admite.
     pub(crate) fn range_error(self, typed: &str) -> CommandError {
         match self {
-            Self::Save | Self::SaveAndQuit => CommandError::PartialWrite,
+            Self::Save | Self::ForceSave | Self::SaveAndQuit => CommandError::PartialWrite,
             Self::SaveAll | Self::QuitAll | Self::ForceQuitAll | Self::SaveAllAndQuit => {
                 CommandError::NoRangeAllowed
             }
@@ -344,6 +355,8 @@ mod tests {
             ("w", Some(Command::Save)),
             ("wr", Some(Command::Save)),
             ("write", Some(Command::Save)),
+            ("w!", Some(Command::ForceSave)),
+            ("write!", Some(Command::ForceSave)),
             ("q", Some(Command::Quit)),
             ("quit", Some(Command::Quit)),
             ("q!", Some(Command::ForceQuit)),
@@ -390,6 +403,7 @@ mod tests {
             ("e!a.md", Command::ForceEdit, "a.md"),
             ("set nu", Command::Set, "nu"),
             ("w nueva.md", Command::Save, "nueva.md"),
+            ("w! nueva.md", Command::ForceSave, "nueva.md"),
             ("wq notas/b.md", Command::SaveAndQuit, "notas/b.md"),
             ("se nonu rnu!", Command::Set, "nonu rnu!"),
         ];
@@ -407,9 +421,7 @@ mod tests {
 
     #[test]
     fn rejects_what_it_does_not_know() {
-        for line in [
-            "x", "writes", "wq!", "w!", "!", "efoo", "s", "v", "o", "qx", "xb",
-        ] {
+        for line in ["x", "writes", "wq!", "!", "efoo", "s", "v", "o", "qx", "xb"] {
             assert_eq!(
                 Invocation::parse(line),
                 Err(CommandError::Unknown(line.to_owned())),

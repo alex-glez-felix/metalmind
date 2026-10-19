@@ -2,6 +2,7 @@
 //! archivo ausente o vacío es una config válida.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::diagnostic::{Loaded, Location};
 use crate::history::HistoryRetention;
@@ -104,6 +105,10 @@ pub struct Editor {
     /// `Tab` inserta espacios.
     pub expandtab: bool,
     pub padding: Padding,
+    /// Guardar solo las notas con cambios: tras un rato sin editar, al
+    /// cambiar de nota en un panel, al perder el foco y al cerrar.
+    pub autosave: bool,
+    pub autosave_delay_ms: AutosaveDelay,
 }
 
 /// Espacio entre el borde del panel y el texto, en píxeles lógicos.
@@ -119,6 +124,11 @@ pub struct Padding {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "u8")]
 pub struct TabStop(u8);
+
+/// Cuánto esperar sin editar antes de autoguardar, en milisegundos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
+pub struct AutosaveDelay(u32);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
@@ -220,6 +230,8 @@ impl Default for Editor {
             tabstop: TabStop(4),
             expandtab: true,
             padding: Padding::default(),
+            autosave: true,
+            autosave_delay_ms: AutosaveDelay(1_000),
         }
     }
 }
@@ -314,6 +326,32 @@ impl TryFrom<u8> for TabStop {
             Err("tabstop debe ser al menos 1".to_owned())
         } else {
             Ok(Self(width))
+        }
+    }
+}
+
+impl AutosaveDelay {
+    const MIN: u32 = 100;
+    const MAX: u32 = 60_000;
+
+    #[must_use]
+    pub fn get(self) -> Duration {
+        Duration::from_millis(u64::from(self.0))
+    }
+}
+
+impl TryFrom<u32> for AutosaveDelay {
+    type Error = String;
+
+    fn try_from(ms: u32) -> Result<Self, String> {
+        if (Self::MIN..=Self::MAX).contains(&ms) {
+            Ok(Self(ms))
+        } else {
+            Err(format!(
+                "autosave_delay_ms debe estar entre {} y {}, no {ms}",
+                Self::MIN,
+                Self::MAX
+            ))
         }
     }
 }
