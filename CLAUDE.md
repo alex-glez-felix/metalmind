@@ -34,7 +34,7 @@ Al crear el workspace, estas reglas se vuelven automáticas en `Cargo.toml` (`[w
 
 ## Diseño: red flags (A Philosophy of Software Design)
 
-Antes de abrir una PR, revisa el cambio contra esta lista y di en la descripción cuáles revisaste. Si encuentras uno en código que ya existía, abre un issue con la etiqueta `diseño` en vez de arreglarlo de paso.
+Antes de abrir una PR, revisa el cambio contra esta lista y di en la descripción cuáles revisaste. Si encuentras uno en código que ya existía, abre un issue con la etiqueta `diseño` en vez de arreglarlo de paso. La revisión semanal de arquitectura (`docs/arquitectura/`, la primera es [2026-10-19](docs/arquitectura/2026-10-19.md)) usa esta misma lista.
 
 **Preferir módulos profundos**: interfaz chica, mucha funcionalidad escondida. `Vault::open(raíz)` es el modelo: una llamada, y adentro el walk paralelo, `.gitignore`, ocultos, symlinks y el orden del árbol.
 
