@@ -226,6 +226,11 @@ metric_group! {
         menu_padding: Length,
         /// A los lados del texto de cada entrada del menú.
         menu_item_padding_x: Length,
+        tooltip_padding_x: Length,
+        tooltip_padding_y: Length,
+        /// Las columnas de las marks en el margen: la letra, el `+` de las
+        /// demás y un espacio antes de los números.
+        gutter_mark_columns: Count,
     }
 }
 

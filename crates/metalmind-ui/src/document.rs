@@ -266,6 +266,11 @@ impl Document {
     }
 
     #[must_use]
+    pub fn marks(&self) -> &Marks {
+        &self.marks
+    }
+
+    #[must_use]
     pub fn buffer(&self) -> &Buffer {
         &self.buffer
     }

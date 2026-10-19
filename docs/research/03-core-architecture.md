@@ -640,6 +640,14 @@ Los números del árbol (armarlo, abrir y cerrar una carpeta, filtrar y aplicar 
 - Los tramos de cada línea pasan a `TextRun` de GPUI con color, peso, cursiva, tachado y fondo del tema (`editor/markdown.rs`, puro, y `editor/text.rs`); el fondo de un bloque cercado se pinta a lo ancho del panel. Un link no resuelto se pregunta al `LinkIndex` del vault de la ventana, por cada link visible; con un lote nuevo del watcher, el editor se repinta.
 - Capturas de los dos temas, sobre la nota de `crates/metalmind-syntax/tests/fixtures/estilos.md`: desde el 2026-10-19 son la pantalla `editor` de `scripts/capturas.sh` ([diseño](../design.md#proceso)).
 
+### Estado (`metalmind-ui`, marks en el margen, 2026-10-18)
+
+- A la izquierda de los números, la letra de cada mark `a`–`z` y `A`–`Z` del archivo que cae en la línea, como marks.nvim o vim-signature (`editor.gutter_marks`, prendido por defecto; color `ui.gutter_mark`). Con varias en una línea se ve la primera, minúsculas antes, y un `+`; un tooltip de GPUI las lista todas. La columna se reserva aunque no haya marks, para que el texto no salte con la primera.
+- El modelo no copia nada: `Vim::placed_marks` lee las `Marks` del documento (anclas del buffer) y las `A`–`Z` del motor para su `FileId`, y `GutterMarks` (`workspace/gutter_marks.rs`, sin GPUI, con sus tests) las agrupa por línea en cada frame. Son a lo más 52, así que no hace falta caché ni invalidar nada: lo que cambia una mark (`m`, una edición, el undo, `:delm`) se ve en el frame siguiente.
+- El tooltip sale de un `div` con `tooltip` por mark visible, que el elemento del editor arma y coloca en su `prepaint`, como los bloques de Zed: el editor sigue siendo un solo elemento propio.
+- `:delm` y `:delm!` en el motor (README de `metalmind-vim`). Las marks especiales (`''`, `'<`, `'>`) no se muestran: `'<`/`'>` no siguen las ediciones ni son del buffer, así que no hay `editor.gutter_marks_special`.
+- Capturas en `docs/capturas/marks-*.png`, rehechas con `scripts/capturas-marks.sh`.
+
 ### Estado (M2 y M6, finder, paleta y búsqueda de texto, 2026-10-18)
 
 - **Picker** (`metalmind-ui/src/picker/`): una ventana flotante centrada arriba, como el modal de Zed, con un input y la lista de lo que coincide, con las letras que coinciden resaltadas (`ui.picker_*` del tema). Se mueve con `ctrl-n`/`ctrl-p`, `ctrl-j`/`ctrl-k` y las flechas, `enter` elige, `escape` o `ctrl-c` cierran, y el input edita como readline (`backspace`, `delete`, `ctrl-w`, `ctrl-u`, flechas, `home`/`ctrl-a`, `end`/`ctrl-e`); el texto entra por el input handler, así que valen las teclas muertas y el IME. El ratón resalta la fila bajo el puntero, un clic la elige, la rueda hace scroll y un clic afuera cierra. Todas son acciones `picker::` con nombre, en el contexto de teclas `Picker`.

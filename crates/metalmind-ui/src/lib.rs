@@ -17,6 +17,7 @@ mod session;
 mod sidebar;
 pub mod text_search;
 mod theme;
+mod tooltip;
 mod utf16;
 mod window;
 mod workspace;

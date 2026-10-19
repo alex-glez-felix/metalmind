@@ -26,6 +26,11 @@ use support::Smoke;
 #[case::sustitucion("casa\nmala\n", ":%s/a/b/g<CR>:wq<CR>", "cbsb\nmblb\n")]
 #[case::registro_con_nombre("uno\ndos\n", "\"ayyjdd\"ap:wq<CR>", "uno\nuno\n")]
 #[case::macro_("a\nb\nc\n", "qaA!<Esc>jq@a:wq<CR>", "a!\nb!\nc\n")]
+#[case::delmarks(
+    "uno\ndos\n",
+    "majmb:delm a<CR>'aix<Esc>'bAy<Esc>:wq<CR>",
+    "uno\nxdosy\n"
+)]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn edita_y_guarda(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     let smoke = Smoke::new();

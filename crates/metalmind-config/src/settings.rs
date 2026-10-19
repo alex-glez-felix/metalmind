@@ -74,12 +74,19 @@ pub struct FontSize(f32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "cada uno es una opción de sí o no, independiente, como las de vim"
+)]
 pub struct Editor {
     /// El número de cada línea en el margen izquierdo.
     pub number: bool,
     /// La distancia de cada línea a la del cursor; con `number`, la del
     /// cursor muestra su número (el modo híbrido de vim).
     pub relativenumber: bool,
+    /// La letra de las marks `a`–`z` y `A`–`Z` de cada línea, a la
+    /// izquierda de los números.
+    pub gutter_marks: bool,
     /// Líneas que se dejan visibles por encima y por debajo del cursor.
     pub scrolloff: u32,
     pub tabstop: TabStop,
@@ -187,6 +194,7 @@ impl Default for Editor {
         Self {
             number: true,
             relativenumber: true,
+            gutter_marks: true,
             scrolloff: 0,
             tabstop: TabStop(4),
             expandtab: true,

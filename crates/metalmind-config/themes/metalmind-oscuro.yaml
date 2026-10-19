@@ -48,6 +48,7 @@ ui:
   gutter: background
   gutter_foreground: text_faint
   gutter_current: text
+  gutter_mark: magenta
   status_background: surface
   status_foreground: text_muted
   status_unfocused_foreground: text_inactive
@@ -175,3 +176,6 @@ layout:
   menu_width: 240
   menu_padding: xs
   menu_item_padding_x: sm
+  tooltip_padding_x: sm
+  tooltip_padding_y: xs
+  gutter_mark_columns: 3  # la letra, el + de las demás y un espacio

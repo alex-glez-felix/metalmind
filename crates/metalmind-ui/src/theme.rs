@@ -115,6 +115,8 @@ pub struct Theme {
     pub gutter_foreground: Hsla,
     /// El número de la línea del cursor.
     pub gutter_current: Hsla,
+    /// La letra de una mark.
+    pub gutter_mark: Hsla,
     pub status_background: Hsla,
     pub status_foreground: Hsla,
     pub status_unfocused_foreground: Hsla,
@@ -201,6 +203,10 @@ pub struct Theme {
     pub menu_item_padding_x: Pixels,
     /// Una entrada del menú; con el texto secundario más grande, mide por él.
     pub menu_row_height: Pixels,
+    pub tooltip_padding_x: Pixels,
+    pub tooltip_padding_y: Pixels,
+    /// Las columnas de las marks en el margen.
+    pub gutter_mark_columns: usize,
     pub markdown: Markdown,
 }
 
@@ -247,6 +253,7 @@ impl Theme {
             gutter: hsla(ui.gutter),
             gutter_foreground: hsla(ui.gutter_foreground),
             gutter_current: hsla(ui.gutter_current),
+            gutter_mark: hsla(ui.gutter_mark),
             status_background: hsla(ui.status_background),
             status_foreground: hsla(ui.status_foreground),
             status_unfocused_foreground: hsla(ui.status_unfocused_foreground),
@@ -316,6 +323,9 @@ impl Theme {
             menu_padding: px(layout.menu_padding.0),
             menu_item_padding_x: px(layout.menu_item_padding_x.0),
             menu_row_height: px((ui_font.max(ui_small_font) * rows.menu.0).round()),
+            tooltip_padding_x: px(layout.tooltip_padding_x.0),
+            tooltip_padding_y: px(layout.tooltip_padding_y.0),
+            gutter_mark_columns: usize::from(layout.gutter_mark_columns.0),
             markdown: Markdown::new(syntax, headings, stroke),
         }
     }
