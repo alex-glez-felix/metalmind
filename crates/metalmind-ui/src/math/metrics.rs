@@ -80,10 +80,8 @@ impl FormulaMeasure {
 impl FormulaRows for FormulaMeasure {
     fn rows(&self, formula: &MathSpot) -> Option<usize> {
         let metrics = self.cache.get(&formula.latex, formula.display).ok()?;
-        Some(
-            self.geometry
-                .rows(self.geometry.formula(metrics), formula.place),
-        )
+        let measured = self.geometry.formula(metrics).ok()?;
+        Some(self.geometry.rows(measured, formula.place))
     }
 }
 

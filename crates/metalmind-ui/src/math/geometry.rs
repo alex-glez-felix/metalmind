@@ -9,7 +9,7 @@
 
 use metalmind_syntax::MathPlace;
 
-use super::engine::Metrics;
+use super::engine::{MAX_SIDE, MathError, Metrics};
 
 /// Las medidas de la letra del editor y el tamaño de las fórmulas, en
 /// píxeles lógicos.
@@ -43,12 +43,27 @@ impl FormulaBox {
 }
 
 impl Geometry {
-    #[must_use]
-    pub fn formula(&self, metrics: Metrics) -> FormulaBox {
-        FormulaBox {
+    /// Lo que mide la fórmula con esta letra. Una más grande que lo que se
+    /// puede pintar ([`MAX_SIDE`]) no compone: se ve su fuente y su línea
+    /// mide como texto, en vez de un alto sin tope.
+    ///
+    /// # Errors
+    /// Si un lado pasa de [`MAX_SIDE`] o no es un número.
+    pub fn formula(&self, metrics: Metrics) -> Result<FormulaBox, MathError> {
+        let formula = FormulaBox {
             width: metrics.width * self.size,
             height: metrics.height * self.size,
             depth: metrics.depth * self.size,
+        };
+        let fits = |side: f32| side.is_finite() && (0.0..=MAX_SIDE).contains(&side);
+        if fits(formula.width) && fits(formula.total()) {
+            Ok(formula)
+        } else {
+            Err(MathError::Render(format!(
+                "la fórmula mide {:.0}×{:.0} píxeles; el tope es {MAX_SIDE:.0}",
+                formula.width,
+                formula.total()
+            )))
         }
     }
 
@@ -142,6 +157,22 @@ mod tests {
             height,
             depth,
         }
+    }
+
+    #[test]
+    fn una_formula_mas_grande_que_lo_que_se_pinta_no_compone() {
+        let huge = Metrics {
+            width: 1.0,
+            height: 1.0e30,
+            depth: 0.0,
+        };
+        assert!(GEOMETRY.formula(huge).is_err());
+        let fits = Metrics {
+            width: 1.0,
+            height: 1.0,
+            depth: 0.5,
+        };
+        assert!(GEOMETRY.formula(fits).is_ok());
     }
 
     #[test]

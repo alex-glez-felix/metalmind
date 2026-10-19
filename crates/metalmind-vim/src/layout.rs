@@ -57,15 +57,15 @@ impl Rows {
         let Some(formulas) = &self.formulas else {
             return base;
         };
-        let (mut line, mut below) = (base, 0);
+        let (mut line, mut below) = (base, 0_usize);
         for formula in &style.math {
             match formulas.rows(formula) {
-                Some(rows) if formula.below() => below += rows,
+                Some(rows) if formula.below() => below = below.saturating_add(rows),
                 Some(rows) => line = line.max(rows),
                 None => {}
             }
         }
-        line + below
+        line.saturating_add(below)
     }
 }
 
