@@ -4,7 +4,7 @@
 //! no se pisa: se avisa y lo decide `:w!` o `:e!`. El reloj se inyecta, así
 //! que los tests lo mueven a mano.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -65,6 +65,10 @@ pub struct Autosave {
     deadline: Option<Instant>,
     /// Desde cuándo tiene cambios cada documento editado.
     unsaved_since: BTreeMap<DocumentId, Instant>,
+    /// Los documentos cuyo autoguardado falló desde la última vez que se
+    /// guardaron: los reintentos que fallan no vuelven a avisar (el texto del
+    /// error cambia con el nombre del temporal).
+    failing: BTreeSet<DocumentId>,
 }
 
 impl Autosave {
@@ -75,6 +79,7 @@ impl Autosave {
             clock,
             deadline: None,
             unsaved_since: BTreeMap::new(),
+            failing: BTreeSet::new(),
         }
     }
 }
@@ -149,8 +154,14 @@ impl Workspace {
                 Autosaved::ChangedOnDisk
             }
             Err(error) => {
-                log::error!("autoguardado de {}: {error}", document.display_name());
-                self.message = Some(Message::Error(error.to_string()));
+                let first = self
+                    .autosave
+                    .as_mut()
+                    .is_some_and(|autosave| autosave.failing.insert(id));
+                if first {
+                    log::error!("autoguardado de {}: {error}", document.display_name());
+                    self.message = Some(Message::Error(error.to_string()));
+                }
                 Autosaved::Failed
             }
         }
@@ -175,6 +186,7 @@ impl Workspace {
     pub(super) fn saved(&mut self, id: DocumentId) {
         if let Some(autosave) = self.autosave.as_mut() {
             autosave.unsaved_since.remove(&id);
+            autosave.failing.remove(&id);
         }
     }
 
