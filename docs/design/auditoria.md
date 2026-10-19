@@ -4,7 +4,7 @@
 
 ## Qué se miró
 
-El editor con markdown, el árbol y su encabezado, la barra de botones del panel, los campos y confirmaciones del panel, el menú contextual, el picker (`space f`, `space /` y la paleta), la barra de estado y el margen de números (gutter), en los dos temas de fábrica y en ventanas de 1920x1080 y 1280x720, con el vault de fixtures de las capturas: nombres largos, multibyte y emoji, líneas más largas que la ventana, 120 notas que coinciden con una búsqueda y una carpeta vacía.
+El editor con markdown (también al final de una nota de más de 1000 líneas), el árbol y su encabezado, la barra de botones del panel, los campos y confirmaciones del panel, el menú contextual, el picker (`space f`, `space /` y la paleta), la barra de estado y el margen de números (gutter), en los dos temas de fábrica y en ventanas de 1920x1080 y 1280x720, con el vault de fixtures de las capturas: nombres y rutas largos, multibyte y emoji, líneas más largas que la ventana, una nota de más de 1000 líneas, 120 notas que coinciden con una búsqueda, una carpeta vacía y el menú abierto junto al borde de abajo. El editor no parte las líneas largas (como `nowrap` de vim): las corta en el borde. Cerca del borde, el menú se corre hacia arriba y entra entero.
 
 ## Valores sueltos
 
@@ -93,7 +93,7 @@ Otras:
 
 - **El encabezado del árbol se ve apretado** (`sidebar/render.rs:103-127`; [captura](../capturas/tokens/editor-oscuro-1280.png)). `Carpetas +nota +carpeta T` va en una fila de 26 px con 8 px a los lados: el título y los tres botones casi llenan los 260 px del panel. Entre botón y botón quedan 14 px (6 de separación y 4 de padding de cada lado) y no hay borde, fondo ni otro tamaño de letra que los distinga: título y botones van en el mismo color (`panel_muted`) y tamaño, y se leen como una sola línea de texto. `T` es la tecla de la acción y no dice qué hace.
 - **En el menú se enciman la etiqueta y el atajo** ([captura](../capturas/tokens/menu-oscuro-1280.png)). Con 240 px de ancho, "Abrir a la derecha" y `ctrl-v` quedan pegados (`Abrir a la derechactrl-v`): la fila reparte el espacio con `justify_between` y sin separación mínima (`sidebar/menu.rs:182-200`).
-- **El texto del picker se encima** ([finder](../capturas/tokens/finder-oscuro-1280.png), [`space /`](../capturas/tokens/buscar-oscuro-1280.png)). Un nombre más largo que el picker parte en dos líneas y la segunda se monta sobre la fila de abajo; en `space /`, con líneas largas, el texto de cada fila se encima entero. Lo arregla la PR #85 (`fix/picker-layout`).
+- **El texto del picker se encima** ([finder](../capturas/tokens/finder-oscuro-1280.png), [`space /`](../capturas/tokens/buscar-oscuro-1280.png)). Un nombre más largo que el picker parte en dos líneas y la segunda se monta sobre la fila de abajo, o queda cortada a media altura si es el único resultado (`finder-ruta-larga-*` de `scripts/capturas.sh`); en `space /`, con líneas largas, el texto de cada fila se encima entero. Lo arregla la PR #85 (`fix/picker-layout`).
 - **La barra de estado crece con un mensaje largo** ([split](../capturas/tokens/split-oscuro-1280.png)). El mensaje parte en varias líneas (`editor/status_bar.rs:72`) y la barra le quita alto al editor: al abrir un split en 1280x720, el mensaje de la nota abierta llena el panel nuevo.
 - **El picker cambia de alto mientras se escribe** (`picker/view/render.rs:20`, `:51`): mide las filas que hay, de 1 a 12. Ver [finder con resultados](../capturas/tokens/finder-oscuro-1280.png) y el finder vacío de `scripts/capturas.sh` (`finder-vacio-*`).
 
