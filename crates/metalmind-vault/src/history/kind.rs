@@ -71,7 +71,8 @@ pub(super) fn place(
             Placement::Skip
         };
     }
-    let same_group = at.saturating_sub(last.group) < millis(AUTOSAVE_GROUP);
+    // Con el reloj hacia atrás, otro grupo: reemplazar borraría una versión ajena.
+    let same_group = (last.group..last.group.saturating_add(millis(AUTOSAVE_GROUP))).contains(&at);
     if kind == VersionKind::Autosaved && autosaved && same_group {
         Placement::Replaces { group: last.group }
     } else {
@@ -109,6 +110,11 @@ mod tests {
         let autosave = |at| place(Some(&last), VersionKind::Autosaved, hash("b"), at);
         assert_eq!(autosave(4 * MINUTE), Placement::Replaces { group: 0 });
         assert_eq!(autosave(5 * MINUTE), Placement::After { group: 5 * MINUTE });
+        assert_eq!(
+            autosave(-MINUTE),
+            Placement::After { group: -MINUTE },
+            "con el reloj hacia atrás empieza otro grupo"
+        );
     }
 
     #[test]

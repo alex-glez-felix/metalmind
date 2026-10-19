@@ -367,3 +367,18 @@ fn una_nota_a_la_vista_sin_cambios_se_relee_si_cambia_fuera() {
     assert!(autosaving.tick());
     assert_eq!(autosaving.read("a.md"), "de fuerax\n");
 }
+
+#[test]
+fn un_cambio_de_fuera_a_mitad_de_un_insert_no_rompe_lo_que_se_escribe() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n")]);
+    autosaving.session.keys("ix");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
+    autosaving.modified_on_disk("a.md");
+    assert!(matches!(autosaving.message(), Some(Message::Error(text)) if text.starts_with("W12")));
+    autosaving.session.keys("y⎋");
+    assert_eq!(autosaving.session.text(), "xyuno");
+    assert_eq!(autosaving.state(), Some(SaveState::ChangedOnDisk));
+    assert_eq!(autosaving.read("a.md"), "de fuera\n");
+}
