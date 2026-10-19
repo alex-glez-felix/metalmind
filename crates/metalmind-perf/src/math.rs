@@ -179,7 +179,7 @@ pub fn dollar_runs(count: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    /// La nota de las capturas (`scripts/capturas-formulas.sh`) es la de
+    /// La nota de las capturas (`scripts/capturas.sh`, pantalla `formulas`) es la de
     /// [`super::formulas_note`].
     #[test]
     fn la_nota_de_las_capturas_esta_al_dia() {

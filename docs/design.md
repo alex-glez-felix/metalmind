@@ -32,7 +32,7 @@ Lo que hay hoy, con los valores de los temas de fábrica:
 | `spacing` | La escala de espaciado, base 4 | `xs` 4, `sm` 8, `md` 12, `lg` 16 |
 | `radius` | Los radios | `sm` 2, `md` 4, `lg` 8 |
 | `stroke` | Los anchos de línea | `border` 1, `caret` 2, `text_line` 1 |
-| `text` | Tamaño (veces `font.size`) e interlineado de `editor`, `ui_md` y `ui_sm`; pesos `normal` y `strong` | todo 1.0 / 1.4; 400 y 700 |
+| `text` | Tamaño (veces `font.size`) e interlineado de `editor`, `ui_md` y `ui_sm`; `math`, las fórmulas en veces `editor`; pesos `normal` y `strong` | todo 1.0 / 1.4; `math` 1.21; 400 y 700 |
 | `headings` | Tamaño y peso de `h1`…`h6` | de 1.6 a 1.0 |
 | `rows` | Alto de las filas del árbol y del menú (veces la fuente) y el aire de las del picker | 1.7, 1.7, 6 px |
 | `layout` | Las medidas de cada parte: barra de estado, picker, panel, barra de botones y menú | un nombre de `spacing` o píxeles |

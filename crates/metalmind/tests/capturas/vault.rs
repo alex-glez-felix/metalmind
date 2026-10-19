@@ -12,6 +12,18 @@ use std::path::Path;
 /// vault de la carpeta de la nota.
 pub const NOTE: &str = "estrés del layout — una nota con un nombre bastante largo 🦀.md";
 
+/// Las 22 fórmulas del spike (08 §2), una que no compone y un bloque de
+/// varias líneas al final.
+pub const FORMULAS: &str = "formulas.md";
+
+/// Una nota de 1 300 líneas con fórmulas en párrafos largos y en bloques, y
+/// una zona de prueba en la línea [`FORMULAS_ZONE`]: el cursor va dentro de
+/// la fórmula con `aqui` y la línea de [`FORMULAS_BROKEN`] lleva fórmulas
+/// rotas hasta pasar del borde.
+pub const LONG_FORMULAS: &str = "formulas-larga.md";
+pub const FORMULAS_ZONE: usize = 1170;
+pub const FORMULAS_BROKEN: usize = FORMULAS_ZONE + 8;
+
 /// Lo que se busca con `space /`: solo está en [`NOTE`], que se busca en
 /// memoria y en orden. Con varias notas, los resultados llegan en el orden
 /// en que terminan los hilos y la captura no se repetiría.
@@ -56,6 +68,7 @@ const TOPICS: &[&str] = &[
 ];
 
 const STYLES: &str = include_str!("../../../metalmind-syntax/tests/fixtures/estilos.md");
+const SPIKE_FORMULAS: &str = include_str!("../../../metalmind-perf/fixtures/22-formulas.md");
 
 pub fn write(root: &Path) {
     let file = |path: &str, contents: &[u8]| {
@@ -105,7 +118,57 @@ pub fn write(root: &Path) {
         b"\xff\xd8\xff",
     );
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
+    file(FORMULAS, SPIKE_FORMULAS.as_bytes());
+    file(LONG_FORMULAS, long_formulas().as_bytes());
 }
+
+/// Párrafos de más de 250 caracteres con fórmulas en línea, un bloque de
+/// varias líneas y uno solo en su línea cada tanto, y la zona de prueba.
+fn long_formulas() -> String {
+    let mut text = String::new();
+    let mut line = 1;
+    while line <= 1300 {
+        if line == FORMULAS_ZONE {
+            text.push_str(FORMULAS_ZONE_TEXT);
+            text.push_str("Rotas:");
+            text.push_str(&" texto $\\frac{1}{$".repeat(24));
+            text.push('\n');
+            line += FORMULAS_BROKEN - FORMULAS_ZONE + 1;
+        } else if line % 50 == 0 {
+            writeln!(text, "## Sección {}", line / 50).expect("escribir");
+            line += 1;
+        } else if line % 50 == 17 && !(line..line + 4).contains(&FORMULAS_ZONE) {
+            write!(
+                text,
+                "$$\n\\begin{{aligned}} f_{{{line}}}(x) &= (x+1)^2 \\\\\n&= x^2 + 2x + 1 \\end{{aligned}}\n$$\n"
+            )
+            .expect("escribir");
+            line += 4;
+        } else if line % 50 == 33 {
+            writeln!(text, "$$\\int_0^{{{line}}} e^{{-t^2}}\\,dt$$").expect("escribir");
+            line += 1;
+        } else {
+            writeln!(
+                text,
+                "Párrafo {line}: la energía es $E_{{{line}}} = mc^2$ y el texto sigue con palabras y más palabras, luego $\\frac{{a_{{{line}}}}}{{b_{{{line}}}}} + \\sqrt{{{line}}}$ y continúa hasta pasar del borde de la ventana, con $\\sum_{{k=1}}^{{{line}}} k$ al final."
+            )
+            .expect("escribir");
+            line += 1;
+        }
+    }
+    text
+}
+
+/// Las líneas de la zona de prueba antes de la de fórmulas rotas.
+const FORMULAS_ZONE_TEXT: &str = "### Zona de prueba
+El cursor está dentro de $\\alpha_{aqui} + \\beta^2 = \\gamma$ y esa línea muestra la fuente; el párrafo sigue largo, con $\\sqrt{x_{1170}^2 + y^2}$ en medio y más texto que pasa del borde de la ventana.
+Un párrafo largo con $\\frac{\\partial f}{\\partial x}$, $\\sum_{k=1}^{n} k^2 = \\frac{n(n+1)(2n+1)}{6}$ y $e^{i\\theta}$, y texto que sigue y sigue hasta pasar del borde.
+$$
+\\begin{pmatrix} a & b \\\\
+c & d \\end{pmatrix} \\begin{pmatrix} x \\\\ y \\end{pmatrix} = \\begin{pmatrix} ax + by \\\\ cx + dy \\end{pmatrix}
+$$
+Otro párrafo con $\\int_0^1 x^2\\,dx = \\frac{1}{3}$ y $\\lim_{n \\to \\infty} (1 + 1/n)^n = e$ entre palabras que siguen hasta el borde.
+";
 
 fn note() -> String {
     let long_word = "palabrasinespaciosqueno".repeat(12);

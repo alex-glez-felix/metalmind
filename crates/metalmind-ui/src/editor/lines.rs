@@ -16,7 +16,7 @@ use super::markdown::runs;
 use super::replaced::{Part, parts};
 use super::rows::place;
 use super::text::{line_font, text_runs};
-use crate::math::{FormulaBox, Formulas, Geometry, ImageKey, Look, MathError};
+use crate::math::{FormulaBox, Formulas, Geometry, ImageKey, Look, MathError, half};
 use crate::theme::Theme;
 use crate::workspace::{PaneView, SourceLines};
 
@@ -333,7 +333,7 @@ impl Builder<'_, '_> {
 /// Centrada en `area`; si no cabe, desde el borde izquierdo, como el texto
 /// que pasa del borde.
 fn centered(area: Pixels, width: Pixels) -> Pixels {
-    ((area - width) / 2.0).max(px(0.))
+    px(half(f32::from(area - width))).max(px(0.))
 }
 
 /// La letra de un heading es más grande: su línea base baja con ella.

@@ -170,6 +170,9 @@ Theme {
                 size: 1.0,
                 line_height: 1.4,
             },
+            math: Factor(
+                1.21,
+            ),
             normal: Weight(
                 400,
             ),

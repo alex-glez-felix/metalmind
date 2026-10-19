@@ -53,8 +53,7 @@ pub struct Markdown {
     pub headings: [(f32, FontWeight); 6],
     /// El grosor del tachado.
     pub strike_thickness: Pixels,
-    /// Las fórmulas, veces la letra del editor: las de KaTeX miden 1.21 em
-    /// para verse del tamaño del texto que las rodea.
+    /// Las fórmulas, veces la letra del editor (`text.math`).
     pub math_size: f32,
 }
 
@@ -63,6 +62,7 @@ impl Markdown {
         syntax: &config::SyntaxColors,
         headings: &config::Headings,
         stroke: &config::Stroke,
+        text: &config::Text,
     ) -> Self {
         Self {
             heading: hsla(syntax.heading),
@@ -95,7 +95,7 @@ impl Markdown {
                 .0
                 .map(|heading| (heading.size, FontWeight(f32::from(heading.weight)))),
             strike_thickness: px(stroke.text_line.0),
-            math_size: 1.21,
+            math_size: text.math.0,
         }
     }
 }
@@ -340,7 +340,7 @@ impl Theme {
             tooltip_padding_x: px(layout.tooltip_padding_x.0),
             tooltip_padding_y: px(layout.tooltip_padding_y.0),
             gutter_mark_columns: usize::from(layout.gutter_mark_columns.0),
-            markdown: Markdown::new(syntax, headings, stroke),
+            markdown: Markdown::new(syntax, headings, stroke, text),
         }
     }
 

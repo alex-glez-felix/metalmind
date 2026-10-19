@@ -54,6 +54,12 @@ enum Step {
     HoverMark(MarkAt),
     /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
     SearchAfterCjk,
+    /// Lleva la línea de fórmulas rotas de [`vault::LONG_FORMULAS`] al
+    /// fondo de la ventana y el cursor a la fórmula de la zona de prueba.
+    FormulasZone,
+    /// Pone el ratón sobre la última fórmula rota que se ve: su mensaje
+    /// queda junto a los bordes derecho e inferior.
+    HoverBrokenFormula,
 }
 
 /// Sobre qué mark se deja el ratón.
@@ -119,6 +125,16 @@ const SCENES: &[(&str, &[Step])] = &[
         &[
             Step::Keys("<C-w>v<C-w>v<C-w>vGzt"),
             Step::HoverMark(MarkAt::RightmostPane),
+        ],
+    ),
+    ("formulas", &[Step::Keys("<Esc><C-w>o:e formulas.md<CR>")]),
+    ("formulas-bloque", &[Step::Keys("Gk")]),
+    (
+        "formulas-larga",
+        &[
+            Step::Keys(":e formulas-larga.md<CR>:set nornu<CR>"),
+            Step::FormulasZone,
+            Step::HoverBrokenFormula,
         ],
     ),
 ];
@@ -187,11 +203,25 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                         }
                     });
                 }
+                Step::FormulasZone => {
+                    window.type_keys(&format!(":{}<CR>zb?aqui<CR>", vault::FORMULAS_BROKEN));
+                }
+                Step::HoverBrokenFormula => {
+                    // Sin mover `seen`: si el ratón no muestra nada, la
+                    // captura no espera un frame que no va a llegar.
+                    settle(&window, &frames, seen);
+                    hover_broken_formula(&window, theme, rest);
+                }
             }
         }
         if !matches!(
             steps.last(),
-            Some(Step::RightClickRow(_) | Step::RightClickBottomRow | Step::HoverMark(_))
+            Some(
+                Step::RightClickRow(_)
+                    | Step::RightClickBottomRow
+                    | Step::HoverMark(_)
+                    | Step::HoverBrokenFormula
+            )
         ) {
             window.move_pointer(rest.0, rest.1);
         }
@@ -244,6 +274,37 @@ fn gutter_mark_color(theme: &str) -> [u8; 3] {
         .unwrap();
     let [_, red, green, blue] = loaded.value.ui.gutter_mark.rgb.to_be_bytes();
     [red, green, blue]
+}
+
+/// El ratón sobre el borde derecho de lo último que se ve pintado en el
+/// color de error del tema: la última fórmula rota visible. Primero lo
+/// aparta, porque sin movimiento la app no se entera.
+fn hover_broken_formula(window: &Window<'_>, theme: &str, rest: (i16, i16)) {
+    let error = Themes::builtin()
+        .load(&format!("metalmind-{theme}"))
+        .unwrap()
+        .value
+        .ui
+        .error
+        .rgb;
+    let [_, red, green, blue] = error.to_be_bytes();
+    let (width, _, rgb) = window.pixels();
+    let mut found: Option<(usize, usize)> = None;
+    for (index, pixel) in rgb.as_chunks::<3>().0.iter().enumerate() {
+        if *pixel == [red, green, blue] {
+            let (x, y) = (index % usize::from(width), index / usize::from(width));
+            if found.is_none_or(|(right, _)| x > right) {
+                found = Some((x, y));
+            }
+        }
+    }
+    // Sin fórmulas compuestas (las capturas de antes) no hay nada que señalar.
+    let Some((x, y)) = found else {
+        return;
+    };
+    window.move_pointer(rest.0, rest.1);
+    let at = |value: usize| i16::try_from(value).unwrap();
+    window.move_pointer(at(x) - 4, at(y));
 }
 
 fn out_dir() -> PathBuf {
