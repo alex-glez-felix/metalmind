@@ -59,24 +59,42 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .text_color(foreground)
         .border_t(theme.border_width)
         .border_color(theme.status_border)
-        .children(status.mode.map(mode_label))
+        .children(status.mode.map(|mode| fixed().child(mode_label(mode))))
         .when_some(status.recording, |bar, register| {
-            bar.child(format!("grabando @{register}"))
+            bar.child(fixed().child(format!("grabando @{register}")))
         })
+        .child(file_label(status.file, status.save, status.modified, theme))
+        .child(center.flex_grow_1().min_w_0().truncate())
+        .child(fixed().child(format!("{line}:{column}")))
+}
+
+/// Lo que nunca se recorta: modo, macro, indicador y posición.
+fn fixed() -> Div {
+    div().flex_shrink_0().whitespace_nowrap()
+}
+
+/// El nombre se recorta por el medio, para que se vean el principio y la
+/// extensión; el indicador o el `[+]` siempre se ven enteros. La barra es de
+/// una sola línea: cuando no alcanza, el nombre cede la mitad que el mensaje.
+fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme: &Theme) -> Div {
+    let mark = match save {
+        Some(state) => Some(save_label(state, theme)),
+        None => modified.then(|| fixed().text_color(theme.modified).child(" [+]")),
+    };
+    div()
+        .flex()
+        .flex_row()
+        .min_w_0()
+        .flex_shrink(0.5)
         .child(
             div()
-                .flex()
-                .flex_row()
-                .child(status.file)
-                .children(match status.save {
-                    Some(state) => Some(save_label(state, theme)),
-                    None => status
-                        .modified
-                        .then(|| div().text_color(theme.modified).child(" [+]")),
-                }),
+                .min_w_0()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis_middle()
+                .child(file),
         )
-        .child(center.flex_1().min_w_0().overflow_hidden())
-        .child(format!("{line}:{column}"))
+        .children(mark)
 }
 
 /// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
@@ -86,7 +104,7 @@ fn save_label(state: SaveState, theme: &Theme) -> Div {
         SaveState::Unsaved => (" · sin guardar", theme.modified),
         SaveState::ChangedOnDisk => (" · cambió en disco: :w! o :e!", theme.error),
     };
-    div().text_color(color).child(text)
+    fixed().text_color(color).child(text)
 }
 
 fn mode_label(mode: Mode) -> &'static str {
