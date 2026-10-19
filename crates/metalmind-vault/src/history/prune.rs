@@ -6,7 +6,7 @@ use std::time::SystemTime;
 
 use jiff::tz::TimeZone;
 
-use super::log::{DAMAGED, NoteLog};
+use super::log::{DAMAGED, Entry, NoteLog};
 use super::store::{IndexEntry, Lock};
 use super::{History, HistoryError, millis, retention, to_millis};
 
@@ -115,6 +115,18 @@ impl History {
         if removed == 0 && log.replaced() == 0 {
             return Ok(0);
         }
+        self.rewrite_log(lock, id, &log, &survivors)?;
+        Ok(removed)
+    }
+
+    /// Rehace el log `id` con solo las versiones `survivors` de `log`.
+    pub(super) fn rewrite_log(
+        &self,
+        lock: &Lock,
+        id: u64,
+        log: &NoteLog,
+        survivors: &[&Entry],
+    ) -> Result<(), HistoryError> {
         let records: Vec<usize> = survivors.iter().map(|entry| entry.record).collect();
         let mut fresh = NoteLog::default();
         let mut bytes = Vec::new();
@@ -127,7 +139,6 @@ impl History {
             Ok(())
         })
         .map_err(|corrupt| self.store.corrupt_log(id, corrupt))?;
-        self.store.replace_log(lock, id, &bytes)?;
-        Ok(removed)
+        self.store.replace_log(lock, id, &bytes)
     }
 }

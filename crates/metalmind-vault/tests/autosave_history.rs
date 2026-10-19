@@ -113,7 +113,8 @@ fn podar_quita_lo_que_ocupaban_las_reemplazadas() {
     let history = history(&dir);
     let note = path("a.md");
     let mut text = String::new();
-    for second in 0..200 {
+    // Menos de las que hacen compactar el log al registrar.
+    for second in 0..60 {
         writeln!(text, "línea {second} de la nota").unwrap();
         history.record_autosave(&note, &text, at(second)).unwrap();
     }
@@ -123,6 +124,34 @@ fn podar_quita_lo_que_ocupaban_las_reemplazadas() {
     assert_eq!(contents(&history, &note), [text]);
     let after = logs_size(&dir);
     assert!(after * 4 < before, "{after} de {before} bytes");
+}
+
+#[test]
+fn una_sesion_larga_no_hace_crecer_el_log() {
+    let dir = TempDir::new().unwrap();
+    let history = history(&dir);
+    let note = path("a.md");
+    let autosave = |tenths: u32| {
+        let text = format!("{tenths:06}\n");
+        let at = epoch() + Duration::from_millis(u64::from(tenths) * 100);
+        history.record_autosave(&note, &text, at).unwrap();
+    };
+    autosave(0);
+    let first = logs_size(&dir);
+    for tenths in 1..=10 {
+        autosave(tenths);
+    }
+    let each = (logs_size(&dir) - first) / 10;
+    // Mil autoguardadas en cien segundos: un solo grupo, una sola versión.
+    for tenths in 11..1000 {
+        autosave(tenths);
+    }
+    assert_eq!(contents(&history, &note), ["000999\n"]);
+    let size = logs_size(&dir);
+    assert!(
+        size < first + each * 100,
+        "{size} bytes, {each} por autoguardado"
+    );
 }
 
 fn logs_size(dir: &TempDir) -> u64 {

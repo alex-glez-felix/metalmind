@@ -9,6 +9,11 @@ use super::store::{Index, IndexEntry, Lock};
 use super::{History, HistoryError, Latest, VersionId, VersionKind, to_millis};
 use crate::path::VaultPath;
 
+/// Cuántas autoguardadas reemplazadas aguanta un log antes de rehacerlo.
+/// Sin esto, una sesión larga en una nota haría crecer su log, y lo que
+/// cuesta leerlo en cada autoguardado, hasta la poda al abrir el vault.
+const COMPACT_AFTER: usize = 64;
+
 impl History {
     /// Registra `text` como versión de `path`, de un guardado que alguien
     /// pidió. Devuelve `None` si es igual a la última y no hacía falta
@@ -133,6 +138,13 @@ impl History {
             .map_err(|corrupt| self.store.corrupt_log(entry.id, corrupt))?;
         if let Some((_, frames)) = &appended {
             self.store.append_log(lock, entry.id, valid_len, frames)?;
+        }
+        if log.replaced() >= COMPACT_AFTER {
+            let entries: Vec<_> = log.entries().iter().collect();
+            // La versión ya quedó escrita: si rehacer falla, lo hace la poda.
+            if let Err(error) = self.rewrite_log(lock, entry.id, &log, &entries) {
+                log::warn!("no se pudo compactar el historial de {path}: {error}");
+            }
         }
         if let Some(last) = log.entries().last() {
             *self.latest.lock().unwrap_or_else(PoisonError::into_inner) = Some(Latest {
