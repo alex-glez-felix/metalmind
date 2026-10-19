@@ -263,7 +263,8 @@ impl Command {
     /// Por qué no corre con un rango, que ningún comando del host admite.
     pub(crate) fn range_error(self, typed: &str) -> CommandError {
         match self {
-            Self::Save | Self::ForceSave | Self::SaveAndQuit => CommandError::PartialWrite,
+            // Con `!`, vim escribiría el tramo: Metalmind no escribe tramos.
+            Self::Save | Self::SaveAndQuit => CommandError::PartialWrite,
             Self::SaveAll | Self::QuitAll | Self::ForceQuitAll | Self::SaveAllAndQuit => {
                 CommandError::NoRangeAllowed
             }
