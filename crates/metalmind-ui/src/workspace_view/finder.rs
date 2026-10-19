@@ -10,13 +10,13 @@ use metalmind_vim::{Command, Invocation};
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::finder::{Note, VaultChanged, VaultSession};
-use crate::picker::{Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
+use crate::picker::{Fuzzy, Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
 use crate::workspace::{Axis, Message, Workspace, shown_path};
 
 /// El vault de la ventana visto por el finder y por el workspace, que
 /// sigue los links y los archivos de la jumplist con él.
 pub struct FinderVault {
-    session: Entity<VaultSession>,
+    pub(super) session: Entity<VaultSession>,
     /// La última nota que se marcó como reciente.
     touched: Option<PathBuf>,
     _changes: Subscription,
@@ -51,11 +51,12 @@ impl FinderVault {
     }
 }
 
+/// El picker de `space f`.
+pub type Finder = PickerView<Fuzzy<Note>>;
+
 fn options() -> PickerOptions {
     PickerOptions {
-        haystack: Haystack::Paths,
         placeholder: "Buscar una nota…".into(),
-        empty: "No hay notas".into(),
         splits: true,
     }
 }
@@ -63,7 +64,8 @@ fn options() -> PickerOptions {
 impl WorkspaceView {
     pub(super) fn open_finder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let state = PickerState::new(self.vault.session.read(cx).notes());
-        let picker = cx.new(|cx| PickerView::new(state, options(), cx));
+        let fuzzy = Fuzzy::new(state, Haystack::Paths, "No hay notas".into());
+        let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_finder_event);
         self.show(
             Overlay::Finder {
@@ -77,7 +79,7 @@ impl WorkspaceView {
 
     fn on_finder_event(
         &mut self,
-        picker: &Entity<PickerView<Note>>,
+        picker: &Entity<Finder>,
         event: &PickerEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -86,6 +88,7 @@ impl WorkspaceView {
             PickerEvent::Dismissed => None,
             PickerEvent::Chosen(chosen) => picker
                 .read(cx)
+                .delegate()
                 .items()
                 .get(chosen.item)
                 .map(|note| (note.clone(), chosen.open)),
@@ -136,7 +139,9 @@ impl WorkspaceView {
     fn refresh_finder(&mut self, cx: &mut Context<Self>) {
         let notes = self.vault.session.read(cx).notes();
         if let Some(Overlay::Finder { picker, .. }) = &self.overlay {
-            picker.update(cx, |picker, cx| picker.set_items(notes, cx));
+            picker.update(cx, |picker, cx| {
+                picker.update_delegate(cx, |fuzzy, cx| fuzzy.set_items(notes, cx));
+            });
         }
     }
 

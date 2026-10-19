@@ -1,28 +1,34 @@
-//! El picker que flota sobre los paneles: el finder, la paleta o las notas
-//! de un link que empata, uno a la vez, centrado arriba como en Zed.
+//! El picker que flota sobre los paneles: el finder, la búsqueda de texto,
+//! la paleta o las notas de un link que empata, uno a la vez, centrado
+//! arriba como en Zed.
 
 use gpui_kit::{
     AnyElement, App, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
     IntoElement as _, ParentElement as _, Styled as _, Subscription, div,
 };
 
-use crate::finder::Note;
-use crate::palette::Entry;
-use crate::picker::PickerView;
+use super::finder::Finder;
+use super::link_choice::LinkChoicePicker;
+use super::palette::Palette;
+use super::text_search::TextSearchPicker;
 use crate::theme::Theme;
 
 pub enum Overlay {
     Finder {
-        picker: Entity<PickerView<Note>>,
+        picker: Entity<Finder>,
+        _events: Subscription,
+    },
+    TextSearch {
+        picker: Entity<TextSearchPicker>,
         _events: Subscription,
     },
     Palette {
-        picker: Entity<PickerView<Entry>>,
+        picker: Entity<Palette>,
         _events: Subscription,
     },
     /// Las notas entre las que empata un link.
     LinkChoice {
-        picker: Entity<PickerView<Note>>,
+        picker: Entity<LinkChoicePicker>,
         _events: Subscription,
     },
 }
@@ -33,6 +39,7 @@ impl Overlay {
             Self::Finder { picker, .. } | Self::LinkChoice { picker, .. } => {
                 picker.focus_handle(cx)
             }
+            Self::TextSearch { picker, .. } => picker.focus_handle(cx),
             Self::Palette { picker, .. } => picker.focus_handle(cx),
         }
     }
@@ -43,6 +50,7 @@ impl Overlay {
             Self::Finder { picker, .. } | Self::LinkChoice { picker, .. } => {
                 picker.clone().into_any_element()
             }
+            Self::TextSearch { picker, .. } => picker.clone().into_any_element(),
             Self::Palette { picker, .. } => picker.clone().into_any_element(),
         };
         div()

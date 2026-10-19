@@ -10,7 +10,10 @@ use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::clipboard::SystemClipboard;
 use crate::palette::{self, Entry, Target};
-use crate::picker::{Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
+use crate::picker::{Fuzzy, Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
+
+/// La paleta de comandos.
+pub type Palette = PickerView<Fuzzy<Entry>>;
 
 impl WorkspaceView {
     /// Se llama con el foco en un editor: sus acciones son las que se listan.
@@ -18,12 +21,15 @@ impl WorkspaceView {
         let keymap = self.workspace.read(cx).keymap().clone();
         let entries: Arc<[Entry]> = palette::entries(window, &keymap, cx).into();
         let options = PickerOptions {
-            haystack: Haystack::Text,
             placeholder: "Ejecutar una acción…".into(),
-            empty: "No hay acciones".into(),
             splits: false,
         };
-        let picker = cx.new(|cx| PickerView::new(PickerState::new(entries), options, cx));
+        let fuzzy = Fuzzy::new(
+            PickerState::new(entries),
+            Haystack::Text,
+            "No hay acciones".into(),
+        );
+        let picker = cx.new(|cx| PickerView::new(fuzzy, options, cx));
         let events = cx.subscribe_in(&picker, window, Self::on_palette_event);
         self.show(
             Overlay::Palette {
@@ -37,7 +43,7 @@ impl WorkspaceView {
 
     fn on_palette_event(
         &mut self,
-        picker: &Entity<PickerView<Entry>>,
+        picker: &Entity<Palette>,
         event: &PickerEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -46,6 +52,7 @@ impl WorkspaceView {
             PickerEvent::Dismissed => None,
             PickerEvent::Chosen(chosen) => picker
                 .read(cx)
+                .delegate()
                 .items()
                 .get(chosen.item)
                 .map(|entry| entry.target),

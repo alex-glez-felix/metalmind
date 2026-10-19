@@ -58,6 +58,8 @@ bare_commands! {
     Only = pane::"only";
     /// Busca una nota del vault por su ruta.
     OpenFinder = workspace::"open_finder";
+    /// Busca texto en las notas del vault y abre la nota en esa línea.
+    OpenTextSearch = workspace::"open_text_search";
     /// Busca y ejecuta cualquier acción con nombre.
     OpenCommandPalette = workspace::"open_command_palette";
     /// Muestra el panel lateral en carpetas, o lo esconde si ya las muestra.
@@ -192,6 +194,7 @@ pub fn for_invocation(invocation: Invocation) -> Box<dyn Action> {
         Command::Only => Box::new(Only),
         Command::Set => Box::new(Set { options: argument }),
         Command::OpenFinder => Box::new(OpenFinder),
+        Command::OpenTextSearch => Box::new(OpenTextSearch),
         Command::OpenCommandPalette => Box::new(OpenCommandPalette),
         Command::ToggleFolders => Box::new(ToggleFolders),
         Command::ToggleTags => Box::new(ToggleTags),

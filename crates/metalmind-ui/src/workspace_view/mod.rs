@@ -3,12 +3,13 @@
 //! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
 //! workspace y en el panel; aquí solo se crean y sueltan editores y se
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
-//! abierto, el finder o la paleta.
+//! abierto, el finder, la búsqueda de texto o la paleta.
 
 mod finder;
 mod link_choice;
 mod overlay;
 mod palette;
+mod text_search;
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -23,9 +24,9 @@ use metalmind_vim::Invocation;
 
 use crate::actions::{
     CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, FollowLink,
-    ForceEdit, ForceQuit, ForceQuitAll, Only, OpenCommandPalette, OpenFinder, Quit, QuitAll, Save,
-    SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs, SaveAsAndQuit, Set, SplitDown, SplitRight,
-    ToggleFolders, ToggleTags,
+    ForceEdit, ForceQuit, ForceQuitAll, Only, OpenCommandPalette, OpenFinder, OpenTextSearch, Quit,
+    QuitAll, Save, SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs, SaveAsAndQuit, Set, SplitDown,
+    SplitRight, ToggleFolders, ToggleTags,
 };
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
@@ -150,6 +151,10 @@ impl WorkspaceView {
             Effect::OpenFinder => {
                 self.sync_editors(cx);
                 self.open_finder(window, cx);
+            }
+            Effect::OpenTextSearch => {
+                self.sync_editors(cx);
+                self.open_text_search(window, cx);
             }
             Effect::OpenCommandPalette => {
                 self.sync_editors(cx);
@@ -310,6 +315,7 @@ impl Render for WorkspaceView {
         element = on_command::<Only>(element, cx);
         element = on_command::<Set>(element, cx);
         element = on_command::<OpenFinder>(element, cx);
+        element = on_command::<OpenTextSearch>(element, cx);
         element = on_command::<OpenCommandPalette>(element, cx);
         element = on_command::<ToggleFolders>(element, cx);
         element = on_command::<ToggleTags>(element, cx);

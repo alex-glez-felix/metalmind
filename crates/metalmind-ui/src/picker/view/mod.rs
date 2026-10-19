@@ -1,58 +1,80 @@
-//! La vista de un picker: pinta [`PickerState`], le pasa teclas, texto y
-//! ratón, y corre cada búsqueda en el executor de fondo de GPUI. Lo que se
+//! La vista de un picker: el input, la lista virtual y las acciones
+//! `picker::`, iguales para cualquier picker. Qué se lista y cómo se busca
+//! lo decide su [`PickerDelegate`], como en el `Picker` de Zed. Lo que se
 //! elige sale como [`PickerEvent`]; qué hacer con eso lo decide quien lo
 //! abrió.
 
 mod input;
 mod render;
 
-use std::sync::Arc;
+use std::ops::Range;
 
 use gpui_kit::{
-    AppContext as _, Context, EventEmitter, FocusHandle, Focusable, KeyContext, ScrollStrategy,
-    SharedString, Task, UniformListScrollHandle, Window,
+    Context, EventEmitter, FocusHandle, Focusable, KeyContext, ScrollStrategy, SharedString,
+    UniformListScrollHandle, Window,
 };
-use metalmind_search::FuzzyMatcher;
 
 use super::actions::{
     Confirm, ConfirmSplitDown, ConfirmSplitRight, DeleteBackward, DeleteForward, DeleteToStart,
     DeleteWordBackward, Dismiss, MoveLeft, MoveRight, MoveToEnd, MoveToStart, PICKER_CONTEXT,
     SPLITS_CONTEXT, SelectNext, SelectPrevious,
 };
-use super::{Chosen, LineEdit, Matches, Open, PickerState, Step};
+use super::{Chosen, InputLine, LineEdit, Open};
 
-/// Lo que se puede elegir en un picker.
-pub trait PickerItem: AsRef<str> + Send + Sync + 'static {
-    /// Lo que va a la derecha de la fila, como el atajo de una acción.
-    fn detail(&self) -> Option<&str> {
+/// Lo que se lista y cómo se busca. Sus métodos que reciben el contexto de
+/// la vista pueden lanzar trabajo de fondo y avisar al volver con
+/// [`PickerView::update_delegate`].
+pub trait PickerDelegate: Sized + 'static {
+    fn line(&self) -> &InputLine;
+
+    /// Cuántas filas tiene la lista.
+    fn len(&self) -> usize;
+
+    fn selected(&self) -> usize;
+
+    /// Marca la fila `row`, si existe.
+    fn select(&mut self, row: usize);
+
+    /// Baja una fila; de la última vuelve a la primera.
+    fn select_next(&mut self);
+
+    /// Sube una fila; de la primera va a la última.
+    fn select_previous(&mut self);
+
+    /// Edita lo escrito y lanza la búsqueda que haga falta.
+    fn edit(&mut self, edit: LineEdit<'_>, cx: &mut Context<PickerView<Self>>);
+
+    /// Elige la fila marcada; `None` si no hay o si la elección espera a
+    /// resultados que el delegado avisará con [`PickerEvent::Chosen`].
+    fn choose(&mut self, open: Open, cx: &mut Context<PickerView<Self>>) -> Option<Chosen>;
+
+    /// Lo que se pinta en la fila `row`. Se pide solo para las visibles.
+    fn row(&mut self, row: usize) -> PickerRow;
+
+    /// Lo que dice la lista vacía.
+    fn empty(&self) -> SharedString;
+
+    /// Lo que va a la derecha del input, como cuántos resultados hay.
+    fn status(&self) -> Option<SharedString> {
         None
     }
 }
 
-/// Qué clase de texto se busca: cambia los bonus del fuzzy.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Haystack {
-    Paths,
-    Text,
-}
-
-impl Haystack {
-    fn matcher(self) -> FuzzyMatcher {
-        match self {
-            Self::Paths => FuzzyMatcher::paths(),
-            Self::Text => FuzzyMatcher::text(),
-        }
-    }
+/// Una fila de la lista.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PickerRow {
+    pub text: String,
+    /// Los bytes de `text` que coinciden, crecientes y sin solaparse.
+    pub highlights: Vec<Range<usize>>,
+    /// Lo que va a la derecha, apagado: el atajo de una acción o dónde está.
+    pub detail: Option<String>,
 }
 
 /// Cómo se ve y se comporta un picker.
 #[derive(Clone, Debug)]
 pub struct PickerOptions {
-    pub haystack: Haystack,
     /// Lo que dice el input vacío.
     pub placeholder: SharedString,
-    /// Lo que dice la lista si no hay ningún ítem, como mientras se indexa.
-    pub empty: SharedString,
     /// Si `ctrl-v` y `ctrl-s` eligen abriendo en un split.
     pub splits: bool,
 }
@@ -63,109 +85,73 @@ pub enum PickerEvent {
     Dismissed,
 }
 
-pub struct PickerView<T> {
-    state: PickerState<T>,
+pub struct PickerView<D> {
+    delegate: D,
     options: PickerOptions,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
-    /// Se presta a la búsqueda en curso y vuelve con sus resultados.
-    search_matcher: Option<FuzzyMatcher>,
-    /// Para lo que corre en el hilo de la UI: las posiciones de las filas
-    /// que se pintan y la búsqueda de un `enter` que no espera.
-    ui_matcher: FuzzyMatcher,
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
-    search: Option<Task<()>>,
 }
 
-impl<T: 'static> EventEmitter<PickerEvent> for PickerView<T> {}
+impl<D: 'static> EventEmitter<PickerEvent> for PickerView<D> {}
 
-impl<T: 'static> Focusable for PickerView<T> {
+impl<D: 'static> Focusable for PickerView<D> {
     fn focus_handle(&self, _cx: &gpui_kit::App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl<T: PickerItem> PickerView<T> {
-    pub fn new(state: PickerState<T>, options: PickerOptions, cx: &mut Context<Self>) -> Self {
+impl<D: PickerDelegate> PickerView<D> {
+    pub fn new(delegate: D, options: PickerOptions, cx: &mut Context<Self>) -> Self {
         Self {
-            state,
+            delegate,
+            options,
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
-            search_matcher: Some(options.haystack.matcher()),
-            ui_matcher: options.haystack.matcher(),
-            options,
             marked: None,
-            search: None,
         }
     }
 
     #[must_use]
-    pub fn items(&self) -> &Arc<[T]> {
-        self.state.items()
+    pub fn delegate(&self) -> &D {
+        &self.delegate
     }
 
-    /// Cambia los ítems y vuelve a filtrar con lo escrito.
-    pub fn set_items(&mut self, items: Arc<[T]>, cx: &mut Context<Self>) {
-        let step = self.state.set_items(items);
-        self.step(step, cx);
+    /// Corre `update` sobre el delegado y vuelve a pintar con la fila
+    /// marcada a la vista: es como vuelve el trabajo de fondo.
+    pub fn update_delegate<R>(
+        &mut self,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut D, &mut Context<Self>) -> R,
+    ) -> R {
+        let result = update(&mut self.delegate, cx);
+        self.changed(cx);
+        result
+    }
+
+    fn changed(&self, cx: &mut Context<Self>) {
+        self.scroll
+            .scroll_to_item(self.delegate.selected(), ScrollStrategy::Nearest);
+        cx.notify();
     }
 
     fn edit(&mut self, edit: LineEdit<'_>, cx: &mut Context<Self>) {
-        let step = self.state.edit(edit);
-        self.step(step, cx);
-    }
-
-    /// Corre la búsqueda que pidió el modelo y avisa si se eligió algo.
-    fn step(&mut self, step: Step<T>, cx: &mut Context<Self>) {
-        if let Some(job) = step.job {
-            let haystack = self.options.haystack;
-            let mut matcher = self
-                .search_matcher
-                .take()
-                .unwrap_or_else(|| haystack.matcher());
-            let running = cx.background_spawn(async move {
-                let found = job.run(&mut matcher);
-                (found, matcher)
-            });
-            self.search = Some(cx.spawn(async move |this, cx| {
-                let (found, matcher) = running.await;
-                // Si el picker ya se cerró, no hay nada que mostrar.
-                let _ = this.update(cx, |this, cx| this.finish(found, matcher, cx));
-            }));
-        }
-        if let Some(chosen) = step.chosen {
-            cx.emit(PickerEvent::Chosen(chosen));
-        }
-        self.reveal_selected();
-        cx.notify();
-    }
-
-    fn finish(&mut self, found: Matches, matcher: FuzzyMatcher, cx: &mut Context<Self>) {
-        self.search_matcher = Some(matcher);
-        let step = self.state.finish(found);
-        self.step(step, cx);
-    }
-
-    fn reveal_selected(&self) {
-        self.scroll
-            .scroll_to_item(self.state.selected(), ScrollStrategy::Nearest);
+        self.update_delegate(cx, |delegate, cx| delegate.edit(edit, cx));
     }
 
     fn select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
-        self.state.select_next();
-        self.reveal_selected();
-        cx.notify();
+        self.delegate.select_next();
+        self.changed(cx);
     }
 
     fn select_previous(&mut self, _: &SelectPrevious, _: &mut Window, cx: &mut Context<Self>) {
-        self.state.select_previous();
-        self.reveal_selected();
-        cx.notify();
+        self.delegate.select_previous();
+        self.changed(cx);
     }
 
     fn choose(&mut self, open: Open, cx: &mut Context<Self>) {
-        if let Some(chosen) = self.state.choose(open, &mut self.ui_matcher) {
+        if let Some(chosen) = self.update_delegate(cx, |delegate, cx| delegate.choose(open, cx)) {
             cx.emit(PickerEvent::Chosen(chosen));
         }
     }
@@ -192,7 +178,7 @@ impl<T: PickerItem> PickerView<T> {
     }
 
     fn click(&mut self, row: usize, cx: &mut Context<Self>) {
-        self.state.select(row);
+        self.delegate.select(row);
         self.choose(Open::Here, cx);
     }
 
@@ -209,7 +195,7 @@ impl<T: PickerItem> PickerView<T> {
 /// Una acción `picker::` que solo edita la línea.
 macro_rules! line_edits {
     ($($method:ident: $action:ident => $edit:expr;)*) => {
-        impl<T: PickerItem> PickerView<T> {
+        impl<D: PickerDelegate> PickerView<D> {
             $(
                 fn $method(&mut self, _: &$action, _: &mut Window, cx: &mut Context<Self>) {
                     self.edit($edit, cx);

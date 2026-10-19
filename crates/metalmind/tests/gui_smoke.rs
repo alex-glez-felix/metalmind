@@ -274,6 +274,26 @@ fn escape_cierra_el_finder() {
     assert_eq!(smoke.read("b.md"), "dos\n");
 }
 
+/// `space /`, un término y `enter`: abre la nota que lo tiene con el cursor
+/// en la coincidencia, como el live grep de Telescope. El `enter` llega antes
+/// que los resultados y elige el primero que llega.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_busqueda_de_texto_abre_la_nota_en_la_linea() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    smoke.write("b.md", "uno\ndos\ntres zafiro\ncuatro\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>/zafiro<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("ix<Esc>:wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("b.md"), "uno\ndos\ntres xzafiro\ncuatro\n");
+    assert_eq!(smoke.read("a.md"), "uno\n");
+    assert_eq!(smoke.files(), ["a.md", "b.md"]);
+}
+
 /// La paleta ejecuta una acción de la ventana (`editor: save`, con
 /// `ctrl-shift-p`) y una del motor (`vim: end of document`, con `space p`).
 #[test]

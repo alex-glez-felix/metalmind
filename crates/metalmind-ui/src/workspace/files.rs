@@ -5,9 +5,31 @@ use std::path::{Path, PathBuf};
 
 use metalmind_vault::{FileOpError, Vault, VaultPath};
 
+use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
+
 use super::pane_tree::Axis;
-use super::{DocumentId, Pane, PaneId, Workspace, WorkspaceError};
+use super::{DocumentId, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, entry_path};
+
+/// Una línea y una columna en bytes dentro de ella, las dos desde 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinePosition {
+    pub line: usize,
+    pub column: usize,
+}
+
+impl LinePosition {
+    /// El offset en `buffer`, dentro del texto y en frontera de carácter: el
+    /// archivo pudo cambiar desde que se buscó.
+    fn offset_in(self, buffer: &Buffer) -> ByteOffset {
+        let start = buffer.line_start(self.line);
+        let mut offset = (start + self.column).min(buffer.line_end(buffer.line_of(start)));
+        while !buffer.is_char_boundary(offset) {
+            offset = offset.saturating_sub(1);
+        }
+        offset
+    }
+}
 
 /// Dónde se abre un archivo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +59,44 @@ impl Workspace {
             Placement::Split(axis) => self.open_in_split(axis, path)?,
         }
         Ok(self.focused_document()?.is_file(path))
+    }
+
+    /// Como [`Workspace::open_file`], con el cursor en `at` si el panel
+    /// enfocado muestra `path`: lo que abre un resultado de `space /`. Es un
+    /// salto: abrir otra nota ya lo deja en la jumplist, y moverse dentro de
+    /// la que se ve también, como `:123`.
+    ///
+    /// # Errors
+    /// Solo si el estado está inconsistente, lo que sería un bug.
+    pub fn open_file_at(
+        &mut self,
+        path: &Path,
+        placement: Placement,
+        at: LinePosition,
+    ) -> Result<bool, WorkspaceError> {
+        let shown = placement == Placement::Current && self.focused_document()?.is_file(path);
+        if !self.open_file(path, placement)? {
+            return Ok(false);
+        }
+        if shown {
+            self.push_jump(self.focused())?;
+        }
+        self.edit_pane(self.focused(), |vim, buffer, selections| {
+            vim.cursor_moved();
+            let head = clamp_cursor(buffer, at.offset_in(buffer), vim.mode());
+            *selections = Selections::single(Selection::cursor(head));
+            Ok(())
+        })?;
+        Ok(true)
+    }
+
+    /// Los documentos con cambios sin guardar que tienen archivo: su texto
+    /// no es el del disco.
+    pub fn unsaved_files(&self) -> impl Iterator<Item = (&Path, &Buffer)> {
+        self.documents
+            .iter()
+            .filter(|(_, document)| document.is_modified())
+            .filter_map(|(_, document)| Some((document.path()?, document.buffer())))
     }
 
     /// Renombra o mueve `from` a `to` en `vault`; los documentos abiertos de

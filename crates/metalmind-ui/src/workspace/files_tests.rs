@@ -337,3 +337,105 @@ fn renombrar_un_enlace_lleva_su_buffer() {
         .unwrap();
     assert_eq!(shown(&session), file(&vault, "otro.md"));
 }
+
+fn at(line: usize, column: usize) -> LinePosition {
+    LinePosition { line, column }
+}
+
+/// Lo que abre `space /`: la nota con el cursor en la coincidencia.
+#[test]
+fn abrir_en_una_linea_pone_el_cursor_en_la_columna() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "b.md"), "uno\ndos\nuna idea\n").unwrap();
+    let opened = session
+        .workspace
+        .open_file_at(&file(&vault, "b.md"), Placement::Current, at(2, 4))
+        .unwrap();
+    assert!(opened);
+    assert_eq!(shown(&session), file(&vault, "b.md"));
+    assert_eq!(session.line(session.pane()), 3);
+    assert_eq!(session.cursor().get(), 12);
+    session.keys("x");
+    assert_eq!(session.text(), "uno\ndos\nuna dea");
+}
+
+#[test]
+fn abrir_en_una_linea_en_un_split_mueve_solo_el_panel_nuevo() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "notas/c.md"), "c\notra c\n").unwrap();
+    let first = session.pane();
+    let opened = session
+        .workspace
+        .open_file_at(
+            &file(&vault, "notas/c.md"),
+            Placement::Split(Axis::Row),
+            at(1, 5),
+        )
+        .unwrap();
+    assert!(opened);
+    assert_ne!(session.pane(), first);
+    assert_eq!(session.cursor().get(), 7);
+    assert_eq!(session.view(first).cursor().get(), 0);
+}
+
+/// El archivo pudo cambiar desde la búsqueda: el cursor queda en el texto,
+/// en frontera de carácter y nunca sobre el salto de línea.
+#[test]
+fn una_posicion_que_ya_no_existe_se_acerca_al_texto() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "b.md"), "año\ncorta\n").unwrap();
+    let b = file(&vault, "b.md");
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(0, 2))
+        .unwrap();
+    assert_eq!(session.cursor().get(), 1, "no parte la ñ");
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(1, 40))
+        .unwrap();
+    assert_eq!(session.cursor().get(), 9, "la última letra de la línea");
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(30, 0))
+        .unwrap();
+    assert_eq!(session.line(session.pane()), 2, "la última línea");
+}
+
+#[test]
+fn si_no_se_abre_el_cursor_no_se_mueve() {
+    let (_dir, vault, mut session) = vault();
+    session.keys("x");
+    let opened = session
+        .workspace
+        .open_file_at(&file(&vault, "b.md"), Placement::Current, at(0, 1))
+        .unwrap();
+    assert!(!opened);
+    assert_eq!(shown(&session), file(&vault, "a.md"));
+    assert_eq!(session.cursor().get(), 0);
+}
+
+/// Abrir un resultado de `space /` es un salto: `ctrl-o` vuelve.
+#[test]
+fn abrir_en_una_linea_queda_en_la_jumplist() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "b.md"), "uno\ndos\ntres\n").unwrap();
+    let b = file(&vault, "b.md");
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(2, 0))
+        .unwrap();
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(1, 1))
+        .unwrap();
+    assert_eq!(session.cursor().get(), 5);
+    session.keys("⌃o");
+    assert_eq!(session.line(session.pane()), 3, "dentro de la misma nota");
+    session.keys("⌃o");
+    assert_eq!(
+        shown(&session),
+        file(&vault, "a.md"),
+        "y a la nota de antes"
+    );
+}
