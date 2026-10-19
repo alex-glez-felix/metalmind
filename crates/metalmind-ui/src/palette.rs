@@ -1,16 +1,21 @@
-//! La paleta de comandos: un picker sobre todas las acciones con nombre,
-//! las de la ventana (las que GPUI tiene disponibles en el editor
-//! enfocado) y las del motor vim. Una acción nueva aparece sola.
+//! La paleta de comandos: un picker sobre todas las acciones con nombre:
+//! los comandos, las demás acciones de la ventana (las que GPUI tiene
+//! disponibles en el editor enfocado) y las del motor vim. Una acción nueva
+//! aparece sola.
 
-use gpui_kit::{App, Window};
+use gpui_kit::{Action, App, Window};
 use metalmind_vim::{Action as VimAction, Command, Key, Keymap};
 
+use crate::actions::RunCommand;
 use crate::picker::PickerItem;
 
 /// Quién ejecuta la acción.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Target {
-    /// Una acción de GPUI, por su nombre: se despacha en el editor.
+    /// Un comando, sin argumento: se despacha en el editor como
+    /// [`RunCommand`].
+    Command(Command),
+    /// Otra acción de GPUI, por su nombre: se despacha en el editor.
     Window(&'static str),
     /// Una acción del motor, sobre el panel enfocado.
     Vim(VimAction),
@@ -38,36 +43,60 @@ impl PickerItem for Entry {
 }
 
 /// Lo que lista la paleta abierta desde el elemento enfocado de `window`,
-/// por nombre. Las acciones de GPUI que piden argumentos (`editor::edit`)
-/// no se pueden construir sin ellos y quedan para `:`.
+/// por nombre. Las acciones de GPUI que piden argumentos no se pueden
+/// construir sin ellos y quedan para `:`.
 #[must_use]
 pub fn entries(window: &Window, keymap: &Keymap, cx: &App) -> Vec<Entry> {
-    let windowed = window.available_actions(cx).into_iter().map(|action| {
-        let name = action.name();
-        let keys = window
-            .highest_precedence_binding_for_action(action.as_ref())
-            .map(|binding| {
-                let strokes: Vec<String> = binding
-                    .keystrokes()
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect();
-                strokes.join(" ")
-            })
-            .or_else(|| {
-                let command = Command::from_name(name)?;
-                vim_keys(keymap, VimAction::Command(command))
-            });
-        Entry {
-            label: label(name),
-            target: Target::Window(name),
-            keys,
-        }
-    });
-    let mut entries: Vec<Entry> = windowed.chain(vim_entries(keymap)).collect();
+    let window_keys = |action: &dyn Action| {
+        let binding = window.highest_precedence_binding_for_action(action)?;
+        let strokes: Vec<String> = binding
+            .keystrokes()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        Some(strokes.join(" "))
+    };
+    let windowed = window
+        .available_actions(cx)
+        .into_iter()
+        .map(|action| Entry {
+            label: label(action.name()),
+            target: Target::Window(action.name()),
+            keys: window_keys(action.as_ref()),
+        });
+    let mut entries: Vec<Entry> = command_entries(keymap, window_keys)
+        .chain(windowed)
+        .chain(vim_entries(keymap))
+        .collect();
     entries.sort_by(|a, b| a.label.cmp(&b.label));
     entries.dedup_by(|a, b| a.label == b.label);
     entries
+}
+
+/// Los comandos que se corren sin argumento, con el atajo de la ventana o,
+/// si no tiene, el de vim.
+fn command_entries<'a>(
+    keymap: &'a Keymap,
+    window_keys: impl Fn(&dyn Action) -> Option<String> + 'a,
+) -> impl Iterator<Item = Entry> + 'a {
+    Command::ALL
+        .iter()
+        .filter(|&&command| !needs_argument_in_palette(command))
+        .map(move |&command| Entry {
+            label: label(command.name()),
+            target: Target::Command(command),
+            keys: window_keys(&RunCommand::from(command))
+                .or_else(|| vim_keys(keymap, VimAction::Command(command))),
+        })
+}
+
+/// Sin argumento, `:w!` pisa el disco, `:e` relee y `:e!` descarta los
+/// cambios, cosas que su nombre no avisa; `:set` se queja.
+fn needs_argument_in_palette(command: Command) -> bool {
+    matches!(
+        command,
+        Command::ForceSave | Command::Edit | Command::ForceEdit | Command::Set
+    )
 }
 
 /// Las acciones del motor que no son comandos: esos ya son acciones de la
@@ -141,5 +170,46 @@ mod tests {
         let keymap = Keymap::vim();
         let keys = vim_keys(&keymap, VimAction::Command(Command::OpenFinder));
         assert_eq!(keys.as_deref(), Some("space f"));
+    }
+
+    #[test]
+    fn lista_los_comandos_que_corren_sin_argumento() {
+        let keymap = Keymap::vim();
+        let listed: Vec<Target> = command_entries(&keymap, |_| None)
+            .map(|entry| entry.target)
+            .collect();
+        let typed_only = [
+            Command::ForceSave,
+            Command::Edit,
+            Command::ForceEdit,
+            Command::Set,
+        ];
+        let expected: Vec<Target> = Command::ALL
+            .iter()
+            .filter(|command| !typed_only.contains(command))
+            .map(|&command| Target::Command(command))
+            .collect();
+        assert_eq!(listed, expected);
+    }
+
+    #[test]
+    fn el_atajo_de_la_ventana_gana_al_de_vim() {
+        let keymap = Keymap::vim();
+        let palette = RunCommand::from(Command::OpenCommandPalette);
+        let entries: Vec<Entry> = command_entries(&keymap, |action| {
+            action
+                .partial_eq(&palette)
+                .then(|| "ctrl-shift-p".to_owned())
+        })
+        .collect();
+        let keys = |command| {
+            let entry = entries
+                .iter()
+                .find(|entry| entry.target == Target::Command(command))
+                .unwrap();
+            entry.keys.as_deref()
+        };
+        assert_eq!(keys(Command::OpenCommandPalette), Some("ctrl-shift-p"));
+        assert_eq!(keys(Command::OpenFinder), Some("space f"));
     }
 }

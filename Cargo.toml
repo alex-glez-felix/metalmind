@@ -32,6 +32,9 @@ env_logger = "0.11.11"
 # Fijado con `=`: gpui-pre cambia cada semana (04 §riesgo 9). Sin gpui-component
 # ni sus assets: el editor es propio y no usa el `Root` de gpui-kit (04 §riesgo 1).
 gpui-kit = { version = "=0.7.3", default-features = false }
+# El GPUI que trae gpui-kit, solo para el `TestAppContext` de los tests: la
+# feature `test-support` de gpui-kit arrastra gpui-fast y no resuelve.
+gpui-pre = "=0.3.9"
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
 grep-searcher = "0.1.17"

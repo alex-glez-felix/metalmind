@@ -8,6 +8,7 @@ use metalmind_vim::{Action as VimAction, KeyOutcome};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
+use crate::actions::RunCommand;
 use crate::clipboard::SystemClipboard;
 use crate::palette::{self, Entry, Target};
 use crate::picker::{Fuzzy, Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
@@ -59,6 +60,9 @@ impl WorkspaceView {
         };
         self.close_overlay(window, cx);
         match target {
+            Some(Target::Command(command)) => {
+                window.dispatch_action(Box::new(RunCommand::from(command)), cx);
+            }
             Some(Target::Window(name)) => match cx.build_action(name, None) {
                 Ok(action) => window.dispatch_action(action, cx),
                 Err(error) => log::error!("la paleta no pudo construir {name}: {error:#}"),

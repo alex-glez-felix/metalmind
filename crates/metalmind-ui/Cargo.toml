@@ -26,11 +26,13 @@ ratex-render.workspace = true
 ratex-types.workspace = true
 serde.workspace = true
 serde-saphyr = { workspace = true, features = ["serialize"] }
+serde_json.workspace = true
 thiserror.workspace = true
 unicode-segmentation.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
+gpui-pre = { workspace = true, features = ["test-support"] }
 metalmind-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
