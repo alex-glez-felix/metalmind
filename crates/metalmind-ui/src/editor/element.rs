@@ -2,9 +2,9 @@
 //! que el scroll solo da forma a las líneas que entran.
 
 use gpui_kit::{
-    App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, GlobalElementId, Hsla,
-    InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine, SharedString,
-    Style, TextAlign, TextRun, UnderlineStyle, Window, point, px, relative, size,
+    AnyElement, App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, GlobalElementId,
+    Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine,
+    SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px, relative, size,
 };
 use metalmind_vim::{Mode, Rows};
 
@@ -36,6 +36,8 @@ pub struct Prepainted {
     /// vertical, para que una fila a medio scroll no lo invada.
     clip: Bounds<Pixels>,
     gutter: Option<PaintedGutter>,
+    /// Las zonas de las marks del margen, con su tooltip.
+    mark_tooltips: Vec<AnyElement>,
     code_blocks: Vec<PaintQuad>,
     search: Vec<PaintQuad>,
     selection: Vec<PaintQuad>,
@@ -107,6 +109,12 @@ impl gpui_kit::Element for EditorElement {
         if let Err(error) = resized {
             log::error!("{error}");
         }
+        let marks = workspace
+            .read(cx)
+            .gutter_marks(pane)
+            .inspect_err(|error| log::error!("{error}"))
+            .ok()
+            .flatten();
         let vault_links = self.editor.update(cx, |editor, cx| editor.links(cx));
         let editor = self.editor.read(cx);
         let Some(view) = editor.view(cx) else {
@@ -118,6 +126,7 @@ impl gpui_kit::Element for EditorElement {
                     lines: Vec::new(),
                 },
                 gutter: None,
+                mark_tooltips: Vec::new(),
                 code_blocks: Vec::new(),
                 search: Vec::new(),
                 selection: Vec::new(),
@@ -128,7 +137,7 @@ impl gpui_kit::Element for EditorElement {
         let top = view.viewport.top();
         let scroll = editor.scroll.follow(top, editor.synced_top);
         let cell = em_width(&typeface, window);
-        let gutter = Gutter::new(&view, rows, cell);
+        let gutter = Gutter::new(&view, marks, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
         let lines = shape_visible_lines(
             &view,
@@ -159,10 +168,12 @@ impl gpui_kit::Element for EditorElement {
             editor.scroll = scroll;
             editor.synced_top = Some(top);
         });
+        let mark_tooltips = gutter.mark_tooltips(&layout, window, cx);
         Prepainted {
             layout,
             clip,
             gutter: painted_gutter,
+            mark_tooltips,
             code_blocks,
             search,
             selection,
@@ -194,6 +205,9 @@ impl gpui_kit::Element for EditorElement {
                 for label in &gutter.labels {
                     paint_line(&label.shaped, label.origin, label.height, window, cx);
                 }
+            }
+            for zone in &mut prepainted.mark_tooltips {
+                zone.paint(window, cx);
             }
             for quad in prepainted.code_blocks.drain(..) {
                 window.paint_quad(quad);

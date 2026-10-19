@@ -16,6 +16,7 @@ mod documents;
 mod editing;
 mod file_ids;
 mod files;
+mod gutter_marks;
 mod jumps;
 mod line_numbers;
 mod links;
@@ -38,6 +39,7 @@ pub use self::documents::DocumentId;
 use self::documents::Documents;
 use self::file_ids::FileIds;
 pub use self::files::{LinePosition, Placement, shown_path};
+pub use self::gutter_marks::{GutterMarks, MarkLabel};
 pub use self::line_numbers::LineNumbers;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
@@ -123,9 +125,22 @@ pub struct Workspace {
     scrolloff: usize,
     /// Las columnas hasta la siguiente parada de un tab, en cada panel.
     tabstop: usize,
+    /// El margen muestra las marks de cada línea.
+    gutter_marks: bool,
     message: Option<Message>,
     links: Option<VaultLinks>,
     link_choice: Option<LinkChoice>,
+}
+
+/// Lo que vale igual en todos los paneles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Options {
+    /// Las líneas que se dejan visibles alrededor del cursor.
+    pub scrolloff: usize,
+    /// Las columnas hasta la siguiente parada de un tab.
+    pub tabstop: usize,
+    /// El margen muestra las marks de cada línea.
+    pub gutter_marks: bool,
 }
 
 /// Un panel visto desde la UI.
@@ -170,7 +185,12 @@ impl Workspace {
     /// Un panel con `document` y los números `numbers`, avisando como vim
     /// al abrirlo.
     #[must_use]
-    pub fn new(document: Document, numbers: LineNumbers, scrolloff: usize, tabstop: usize) -> Self {
+    pub fn new(document: Document, numbers: LineNumbers, options: Options) -> Self {
+        let Options {
+            scrolloff,
+            tabstop,
+            gutter_marks,
+        } = options;
         let message = Message::opened(&document);
         let mut documents = Documents::default();
         let mut files = FileIds::default();
@@ -188,6 +208,7 @@ impl Workspace {
             vim,
             scrolloff,
             tabstop,
+            gutter_marks,
             message: Some(message),
             links: None,
             link_choice: None,

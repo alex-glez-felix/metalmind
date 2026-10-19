@@ -195,6 +195,8 @@ color_group! {
         gutter_foreground,
         /// El número de la línea del cursor.
         gutter_current,
+        /// La letra de una mark en el margen.
+        gutter_mark,
         status_background,
         status_foreground,
         /// La barra de estado de un panel sin foco.

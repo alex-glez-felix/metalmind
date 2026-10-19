@@ -28,6 +28,7 @@ Theme {
         gutter: #1c1f24,
         gutter_foreground: #4b5263,
         gutter_current: #d7dae0,
+        gutter_mark: #bb9af7,
         status_background: #16181d,
         status_foreground: #9aa0a6,
         status_unfocused_foreground: #5c6370,

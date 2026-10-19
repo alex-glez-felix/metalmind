@@ -16,7 +16,7 @@ use crate::picker;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
-use crate::workspace::{LineNumbers, Workspace};
+use crate::workspace::{LineNumbers, Options, Workspace};
 use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
@@ -88,11 +88,14 @@ pub fn open(
         absolute: editor.number,
         relative: editor.relativenumber,
     };
-    let scrolloff = usize::try_from(editor.scrolloff).unwrap_or(usize::MAX);
-    let tabstop = usize::from(editor.tabstop.get());
+    let workspace_options = Options {
+        scrolloff: usize::try_from(editor.scrolloff).unwrap_or(usize::MAX),
+        tabstop: usize::from(editor.tabstop.get()),
+        gutter_marks: editor.gutter_marks,
+    };
     let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {
-        let workspace = cx.new(|_| Workspace::new(document, numbers, scrolloff, tabstop));
+        let workspace = cx.new(|_| Workspace::new(document, numbers, workspace_options));
         let session = cx.new(|cx| VaultSession::new(prepared, cx));
         let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
         if let Some(file) = &file {

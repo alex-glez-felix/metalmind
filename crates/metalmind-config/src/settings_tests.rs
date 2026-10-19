@@ -14,6 +14,7 @@ font:
 editor:
   number: false
   relativenumber: false
+  gutter_marks: false
   scrolloff: 5
   tabstop: 2
   expandtab: false
@@ -57,6 +58,7 @@ fn every_setting() -> Settings {
         editor: Editor {
             number: false,
             relativenumber: false,
+            gutter_marks: false,
             scrolloff: 5,
             tabstop: TabStop(2),
             expandtab: false,
@@ -102,6 +104,7 @@ fn sin_archivo_todo_por_defecto() {
         editor.number && editor.relativenumber,
         "híbrido por defecto"
     );
+    assert!(editor.gutter_marks, "las marks se ven por defecto");
 }
 
 #[test]
@@ -134,6 +137,7 @@ fn la_misma_config_en_json_puro_carga_igual() {
   "editor": {
     "number": false,
     "relativenumber": false,
+    "gutter_marks": false,
     "scrolloff": 5,
     "tabstop": 2,
     "expandtab": false,

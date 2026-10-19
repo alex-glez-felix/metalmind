@@ -6,7 +6,7 @@ use metalmind_buffer::ByteOffset;
 use metalmind_vim::{Clipboard, Key, KeyOutcome, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
-use super::{Effect, LineNumbers, Message, PaneId, PaneView, Workspace};
+use super::{Effect, LineNumbers, Message, Options, PaneId, PaneView, Workspace};
 use crate::document::{Document, FileStats, SaveError};
 
 /// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
@@ -64,9 +64,29 @@ impl Session {
         Self::with(Document::open(path).unwrap(), 0, VIM_TABSTOP)
     }
 
+    pub fn without_gutter_marks(text: &str) -> Self {
+        Self::with_options(
+            Document::new(Path::new("prueba.md"), text),
+            Options {
+                scrolloff: 0,
+                tabstop: VIM_TABSTOP,
+                gutter_marks: false,
+            },
+        )
+    }
+
     fn with(document: Document, scrolloff: usize, tabstop: usize) -> Self {
+        let options = Options {
+            scrolloff,
+            tabstop,
+            gutter_marks: true,
+        };
+        Self::with_options(document, options)
+    }
+
+    fn with_options(document: Document, options: Options) -> Self {
         Self {
-            workspace: Workspace::new(document, LineNumbers::HYBRID, scrolloff, tabstop),
+            workspace: Workspace::new(document, LineNumbers::HYBRID, options),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }
