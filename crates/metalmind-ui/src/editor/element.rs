@@ -168,7 +168,11 @@ impl gpui_kit::Element for EditorElement {
             editor.scroll = scroll;
             editor.synced_top = Some(top);
         });
-        let mark_tooltips = gutter.mark_tooltips(&layout, window, cx);
+        // Recortadas como se pinta: una línea a medio scroll no asoma su zona.
+        let mark_tooltips = window
+            .with_content_mask(Some(ContentMask { bounds: clip }), |window| {
+                gutter.mark_tooltips(&layout, window, cx)
+            });
         Prepainted {
             layout,
             clip,
