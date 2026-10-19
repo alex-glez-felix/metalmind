@@ -127,6 +127,19 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::HoverMark(MarkAt::RightmostPane),
         ],
     ),
+    // Listas en una nota nueva: `Enter` las continúa (la casilla sin
+    // marcar, el número siguiente) y en un ítem vacío la termina; después
+    // la paleta marca la primera casilla.
+    (
+        "listas",
+        &[Step::Keys(
+            "<Esc><C-w>o:e listas.md<CR>:set rnu<CR>i- [ ] comprar pan<CR>leer el capitulo 3<CR><CR>1. uno<CR>dos<CR>tres<Esc>",
+        )],
+    ),
+    (
+        "listas-casilla",
+        &[Step::Keys("gg<C-S-p>toggle checkbox<CR>")],
+    ),
     ("formulas", &[Step::Keys("<Esc><C-w>o:e formulas.md<CR>")]),
     ("formulas-bloque", &[Step::Keys("Gk")]),
     (
