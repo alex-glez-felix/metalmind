@@ -42,7 +42,10 @@ impl Newline {
         if ends && item.is_empty() {
             return Self::End(item.numbering(columns));
         }
-        Self::Continue(item.sibling(item.next_marker()))
+        match item.next_marker() {
+            Some(marker) => Self::Continue(item.sibling(marker)),
+            None => Self::Plain,
+        }
     }
 }
 
@@ -60,7 +63,7 @@ pub(crate) fn opened_item(
         return None;
     }
     let marker = if below {
-        item.next_marker()
+        item.next_marker()?
     } else {
         item.marker
     };
@@ -92,7 +95,7 @@ pub(crate) fn renumber_items(
             After::Ended(numbering) => Some(numbering),
             After::Opened => ListItem::parse(&buffer.line_text(line))
                 .and_then(|item| item.numbering(columns))
-                .map(Numbering::next),
+                .and_then(Numbering::next),
         };
         let Some(numbering) = numbering else { continue };
         let (renumbered, siblings) = list::renumber(buffer, line, numbering, columns);

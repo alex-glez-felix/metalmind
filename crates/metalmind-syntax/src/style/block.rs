@@ -66,6 +66,10 @@ pub(crate) fn block_line(line: &str) -> BlockLine {
     BlockLine { quotes, kind }
 }
 
+pub(crate) fn is_rule(line: &str) -> bool {
+    rule(line, 0).is_some()
+}
+
 /// Tres o más `-`, `*` o `_` iguales, con espacios entre ellos si hace falta
 /// y hasta tres de sangría.
 fn rule(line: &str, from: usize) -> Option<Range<usize>> {

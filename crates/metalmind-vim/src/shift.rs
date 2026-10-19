@@ -114,7 +114,11 @@ impl Step {
 
 fn lines_of(buffer: &Buffer, target: &Target) -> RangeInclusive<usize> {
     match target.region {
-        Region::Chars(ref range) => buffer.line_of(range.start)..=buffer.line_of(range.end),
+        // El final es exclusivo: un `v$` que llega al salto termina en su línea.
+        Region::Chars(ref range) if range.end > range.start => {
+            buffer.line_of(range.start)..=buffer.line_of(buffer.prev_boundary(range.end))
+        }
+        Region::Chars(ref range) => buffer.line_of(range.start)..=buffer.line_of(range.start),
         Region::Lines { first, last } => first..=last,
     }
 }
