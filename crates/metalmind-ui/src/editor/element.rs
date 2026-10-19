@@ -359,7 +359,6 @@ fn attach_images(
     cx: &mut App,
 ) {
     formulas.update(cx, |formulas, cx| {
-        formulas.next_frame();
         for request in requests {
             let Image::Ready(image) = formulas.image(&request.key, cx) else {
                 continue;

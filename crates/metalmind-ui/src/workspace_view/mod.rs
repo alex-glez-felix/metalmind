@@ -303,6 +303,10 @@ fn on_command<A: CommandAction>(root: Div, cx: &mut Context<WorkspaceView>) -> D
 impl Render for WorkspaceView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         FrameClock::render_started(cx);
+        // Un frame de la ventana, no de cada panel: lo que pide cualquier
+        // panel en este frame no sale de la caché.
+        self.formulas
+            .update(cx, |formulas, _| formulas.next_frame());
         self.update_title(window, cx);
         let theme = Theme::get(cx).clone();
         let root = self.workspace.read(cx).tree().root().clone();

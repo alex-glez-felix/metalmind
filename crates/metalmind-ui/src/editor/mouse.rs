@@ -76,6 +76,9 @@ impl Editor {
             self.hover_formula(event.position, cx);
             return;
         };
+        if self.formula_error.take().is_some() {
+            cx.notify();
+        }
         let Some(head) = self.offset_at(event.position, cx) else {
             return;
         };

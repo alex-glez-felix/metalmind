@@ -55,6 +55,18 @@ impl MetricsCache {
         generations.current[kind].insert(latex.to_owned(), found.clone());
         found
     }
+
+    /// La fórmula se midió pero no se pudo pintar: se trata como una que
+    /// no compone.
+    pub fn fail(&self, latex: &str, display: bool, error: MathError) {
+        let mut generations = self
+            .generations
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let kind = usize::from(display);
+        generations.previous[kind].remove(latex);
+        generations.current[kind].insert(latex.to_owned(), Err(error));
+    }
 }
 
 /// Lo que el motor le pide a la vista: cuánto mide la línea de cada
@@ -99,6 +111,18 @@ mod tests {
         assert_eq!(cache.get("x^2", false), first);
         assert!(cache.get(r"\frac{", false).is_err());
         assert!(cache.get(r"\frac{", false).is_err());
+    }
+
+    #[test]
+    fn una_que_no_se_pudo_pintar_queda_como_error() {
+        let cache = MetricsCache::default();
+        assert!(cache.get("x", false).is_ok());
+        cache.fail("x", false, MathError::Render("muy grande".into()));
+        assert_eq!(
+            cache.get("x", false),
+            Err(MathError::Render("muy grande".into()))
+        );
+        assert!(cache.get("x", true).is_ok(), "la de bloque es otra");
     }
 
     #[test]
