@@ -4,7 +4,7 @@
 )]
 
 //! Ningún tamaño ni color fijo en la UI fuera del módulo de tokens
-//! (`src/theme.rs`): todo sale del tema (`docs/design.md`, "Tokens"). Los
+//! (`src/theme.rs` y sus submódulos en `src/theme/`): todo sale del tema (`docs/design.md`, "Tokens"). Los
 //! tests de cada archivo quedan fuera: miden con números a propósito.
 
 use std::fs;
@@ -12,8 +12,10 @@ use std::path::{Path, PathBuf};
 
 use regex::Regex;
 
-/// El módulo que traduce el tema a GPUI: el único que escribe números.
+/// El módulo que traduce el tema a GPUI, con sus submódulos: el único que
+/// escribe números.
 const TOKENS: &str = "src/theme.rs";
+const TOKENS_DIR: &str = "src/theme/";
 
 /// Lo que no puede aparecer, con por qué.
 const RULES: &[(&str, &str)] = &[
@@ -157,7 +159,7 @@ fn findings(root: &Path) -> Vec<Finding> {
             .unwrap()
             .to_string_lossy()
             .replace('\\', "/");
-        if file == TOKENS || is_test_file(&file) {
+        if file == TOKENS || file.starts_with(TOKENS_DIR) || is_test_file(&file) {
             continue;
         }
         let text = fs::read_to_string(&path).unwrap();

@@ -45,20 +45,20 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         (None, None) => div(),
     };
     let foreground = if status.mode.is_some() {
-        theme.status_foreground
+        theme.status.foreground
     } else {
-        theme.status_unfocused_foreground
+        theme.status.unfocused_foreground
     };
     div()
         .flex()
         .flex_row()
-        .gap(theme.status_gap)
-        .px(theme.status_padding_x)
-        .py(theme.status_padding_y)
-        .bg(theme.status_background)
+        .gap(theme.status.gap)
+        .px(theme.status.padding_x)
+        .py(theme.status.padding_y)
+        .bg(theme.status.background)
         .text_color(foreground)
         .border_t(theme.border_width)
-        .border_color(theme.status_border)
+        .border_color(theme.status.border)
         .children(status.mode.map(|mode| fixed().child(mode_label(mode))))
         .when_some(status.recording, |bar, register| {
             bar.child(fixed().child(format!("grabando @{register}")))
@@ -75,7 +75,8 @@ fn fixed() -> Div {
 
 /// El nombre se recorta por el medio, para que se vean el principio y la
 /// extensión; el indicador o el `[+]` siempre se ven enteros. La barra es de
-/// una sola línea: cuando no alcanza, el nombre cede la mitad que el mensaje.
+/// una sola línea: cuando no alcanza, el nombre cede frente al mensaje lo que
+/// diga el tema (`layout.status_file_shrink`).
 fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme: &Theme) -> Div {
     let mark = match save {
         Some(state) => Some(save_label(state, theme)),
@@ -85,7 +86,7 @@ fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme
         .flex()
         .flex_row()
         .min_w_0()
-        .flex_shrink(0.5)
+        .flex_shrink(theme.status.file_shrink)
         .child(
             div()
                 .min_w_0()
@@ -100,9 +101,12 @@ fn file_label(file: SharedString, save: Option<SaveState>, modified: bool, theme
 /// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
 fn save_label(state: SaveState, theme: &Theme) -> Div {
     let (text, color) = match state {
-        SaveState::Saved => (" · guardado", theme.status_unfocused_foreground),
-        SaveState::Unsaved => (" · sin guardar", theme.modified),
-        SaveState::ChangedOnDisk => (" · cambió en disco: :w! o :e!", theme.error),
+        SaveState::Saved => (" · guardado", theme.status.saved),
+        SaveState::Unsaved => (" · sin guardar", theme.status.unsaved),
+        SaveState::ChangedOnDisk => (
+            " · cambió en disco: :w! o :e!",
+            theme.status.changed_on_disk,
+        ),
     };
     fixed().text_color(color).child(text)
 }

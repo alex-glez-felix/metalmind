@@ -3,6 +3,10 @@
 use gpui_kit::{App, FontWeight, Global, Hsla, Pixels, SharedString, Styled, px, relative, rgb};
 use metalmind_config as config;
 
+mod status;
+
+pub use self::status::StatusBar;
+
 /// Familias monoespaciadas, en orden de preferencia. GPUI no resuelve alias
 /// de fontconfig como `monospace` y entra en pánico con una familia que no
 /// existe, así que se elige una instalada antes de pintar.
@@ -130,12 +134,9 @@ pub struct Theme {
     pub gutter_current: Hsla,
     /// La letra de una mark.
     pub gutter_mark: Hsla,
-    pub status_background: Hsla,
-    pub status_foreground: Hsla,
-    pub status_unfocused_foreground: Hsla,
-    pub status_border: Hsla,
     /// La línea entre dos paneles.
     pub pane_border: Hsla,
+    pub status: StatusBar,
     pub modified: Hsla,
     pub error: Hsla,
     pub picker_background: Hsla,
@@ -181,9 +182,6 @@ pub struct Theme {
     /// Entre el borde del panel y el texto, con los números de línea.
     pub text_padding_x: Pixels,
     pub text_padding_y: Pixels,
-    pub status_padding_x: Pixels,
-    pub status_padding_y: Pixels,
-    pub status_gap: Pixels,
     pub picker_width: Pixels,
     /// Del borde de arriba de la ventana al picker.
     pub picker_top: Pixels,
@@ -274,11 +272,8 @@ impl Theme {
             gutter_foreground: hsla(ui.gutter_foreground),
             gutter_current: hsla(ui.gutter_current),
             gutter_mark: hsla(ui.gutter_mark),
-            status_background: hsla(ui.status_background),
-            status_foreground: hsla(ui.status_foreground),
-            status_unfocused_foreground: hsla(ui.status_unfocused_foreground),
-            status_border: hsla(ui.status_border),
             pane_border: hsla(ui.pane_border),
+            status: StatusBar::new(ui, layout),
             modified: hsla(ui.modified),
             error: hsla(ui.error),
             picker_background: hsla(ui.picker_background),
@@ -316,9 +311,6 @@ impl Theme {
             pane_border_width: px(f32::from(settings.panes.border_width)),
             text_padding_x: px(f32::from(padding.horizontal)),
             text_padding_y: px(f32::from(padding.vertical)),
-            status_padding_x: px(layout.status_padding_x.0),
-            status_padding_y: px(layout.status_padding_y.0),
-            status_gap: px(layout.status_gap.0),
             picker_width: px(layout.picker_width.0),
             picker_top: px(layout.picker_top.0),
             picker_rows: layout.picker_rows.0,
