@@ -52,6 +52,11 @@ impl Anchors {
             .is_some()
     }
 
+    /// `false` si el ancla no es de este buffer.
+    pub fn clear(&mut self, anchor: LineAnchor) -> bool {
+        self.0.get_mut(anchor.0).map(|slot| *slot = None).is_some()
+    }
+
     pub fn get(&self, anchor: LineAnchor) -> Option<Point> {
         self.0.get(anchor.0).copied().flatten()
     }

@@ -28,6 +28,13 @@ impl MarkName {
     }
 }
 
+/// Una mark puesta, para mostrarla: su letra y su línea, desde 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlacedMark {
+    pub name: char,
+    pub line: usize,
+}
+
 /// Las marks de un buffer. Son anclas de ese buffer, así que quien edita
 /// varios con un solo [`Vim`](crate::Vim) le presta las del que edita con
 /// [`Vim::swap_marks`](crate::Vim::swap_marks), como vim, donde son de cada
@@ -80,6 +87,25 @@ impl Marks {
         Ok(())
     }
 
+    /// Borra la mark `a`–`z` de índice `letter`, como `:delm`: el undo de
+    /// un cambio de cuando estaba puesta la devuelve, como en vim.
+    pub(crate) fn delete(&mut self, buffer: &mut Buffer, letter: u8) -> Result<(), BufferError> {
+        match self.named[usize::from(letter)] {
+            Some(anchor) => buffer.clear_anchor(anchor),
+            None => Ok(()),
+        }
+    }
+
+    /// Las marks `a`–`z` puestas en `buffer`, en orden.
+    pub(crate) fn named<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+    ) -> impl Iterator<Item = (u8, ByteOffset)> + 'a {
+        (0..)
+            .zip(&self.named)
+            .filter_map(|(letter, anchor)| Some((letter, buffer.anchor_offset((*anchor)?)?)))
+    }
+
     /// `None` si no se puso o se borró su línea.
     pub(crate) fn get(&self, buffer: &Buffer, name: BufferMark) -> Option<ByteOffset> {
         let anchor = match name {
@@ -129,6 +155,18 @@ impl FileMarks {
 
     pub fn get(&self, letter: u8) -> Option<Jump> {
         self.0[usize::from(letter)]
+    }
+
+    pub fn delete(&mut self, letter: u8) {
+        self.0[usize::from(letter)] = None;
+    }
+
+    /// Las de `file`, en orden.
+    pub fn in_file(&self, file: FileId) -> impl Iterator<Item = (u8, Jump)> + '_ {
+        (0..)
+            .zip(&self.0)
+            .filter_map(move |(letter, jump)| Some((letter, (*jump)?)))
+            .filter(move |(_, jump)| jump.file == file)
     }
 
     pub fn adjust(&mut self, file: FileId, splices: &[Splice]) {

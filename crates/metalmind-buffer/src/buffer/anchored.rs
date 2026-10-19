@@ -34,6 +34,19 @@ impl Buffer {
         }
     }
 
+    /// Pierde `anchor` como si se hubiera borrado su línea, como `:delm`
+    /// de vim: el undo de un cambio de cuando existía lo devuelve.
+    ///
+    /// # Errors
+    /// Si el ancla es de otro buffer.
+    pub fn clear_anchor(&mut self, anchor: LineAnchor) -> Result<(), BufferError> {
+        if self.anchors.clear(anchor) {
+            Ok(())
+        } else {
+            Err(BufferError::UnknownAnchor(anchor))
+        }
+    }
+
     /// Dónde está `anchor`; `None` si se borró su línea. Si la línea quedó
     /// más corta que la columna guardada, el final de la línea.
     #[must_use]

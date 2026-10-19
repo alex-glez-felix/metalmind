@@ -4,12 +4,14 @@
 
 mod address;
 mod args;
+mod delmarks;
 mod global;
 mod join;
 mod sort;
 
 pub(crate) use address::{Address, Base, LineRange};
 pub(crate) use args::RegisterAndCount;
+pub(crate) use delmarks::DeleteMarks;
 pub(crate) use global::GlobalCommand;
 pub use global::GlobalMiss;
 pub(crate) use join::join;
@@ -63,6 +65,7 @@ pub(crate) enum ExCommand {
     Normal(String),
     Global(GlobalCommand),
     Sort(SortOptions),
+    DeleteMarks(DeleteMarks),
 }
 
 /// Los comandos que corre el motor, con cuántas letras bastan para
@@ -80,6 +83,7 @@ enum Name {
     Global,
     VGlobal,
     Sort,
+    DeleteMarks,
 }
 
 const NAMES: &[(&str, usize, Name)] = &[
@@ -95,6 +99,7 @@ const NAMES: &[(&str, usize, Name)] = &[
     ("global", 1, Name::Global),
     ("vglobal", 1, Name::VGlobal),
     ("sort", 3, Name::Sort),
+    ("delmarks", 4, Name::DeleteMarks),
 ];
 
 impl ParsedLine {
@@ -117,7 +122,11 @@ impl ParsedLine {
             }
             None => return Err(ranged_host_error(typed, rest)),
         };
-        if range.is_some() && command == ExCommand::ClearSearchHighlight {
+        let without_range = matches!(
+            command,
+            ExCommand::ClearSearchHighlight | ExCommand::DeleteMarks(_)
+        );
+        if range.is_some() && without_range {
             return Err(CommandError::NoRangeAllowed);
         }
         Ok(Some(Self::Engine(ExLine { range, command })))
@@ -181,6 +190,7 @@ fn parse_command(text: &str) -> Result<Option<ExCommand>, CommandError> {
         Name::Global => ExCommand::Global(GlobalCommand::parse(args, bang)?),
         Name::VGlobal => ExCommand::Global(GlobalCommand::parse(args, true)?),
         Name::Sort => ExCommand::Sort(SortOptions::parse(bang, args)?),
+        Name::DeleteMarks => ExCommand::DeleteMarks(DeleteMarks::parse(bang, skip_blanks(args))?),
     };
     Ok(Some(command))
 }

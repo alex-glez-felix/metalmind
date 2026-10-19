@@ -57,7 +57,7 @@ pub use jumplist::{FileId, Jump, JumpList, Landing};
 pub use key::Key;
 pub use keymap::{Binding, Context, Keymap};
 pub use layout::{BufferLines, Layout, Rows};
-pub use mark::Marks;
+pub use mark::{Marks, PlacedMark};
 pub use mode::{Mode, Prompt, VisualKind};
 pub use motion::Motion;
 pub use operator::Operator;

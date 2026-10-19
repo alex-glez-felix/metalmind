@@ -133,6 +133,10 @@ pub enum CommandError {
     UnsupportedReplacement(String),
     #[error("Metalmind no soporta el flag {0} de :sort")]
     UnsupportedSortFlag(char),
+    /// `'<` y `'>` son la última selección de Visual, que en Metalmind no se
+    /// borra de a un extremo.
+    #[error("Metalmind no borra la mark {0} con :delm")]
+    UnsupportedDeleteMark(char),
     /// En vim, el rango de `:q`, `:sp`, `:vs` y `:on` es un número de
     /// ventana o un alto, que Metalmind no tiene.
     #[error("Metalmind no admite un rango en :{0}")]
