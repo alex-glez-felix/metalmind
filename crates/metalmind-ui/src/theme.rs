@@ -238,10 +238,6 @@ impl Theme {
         Ok(Self::with_font(config, font_family))
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "una línea por token del tema; partirla no aclara nada"
-    )]
     fn with_font(config: &config::Config, font_family: SharedString) -> Self {
         let config::Theme {
             ui,
