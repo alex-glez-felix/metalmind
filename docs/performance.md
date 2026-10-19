@@ -29,6 +29,9 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Tecla en Insert, núcleo, 5 k / 50 k líneas | ≤ 1 ms | 1.7 / 3.8 µs | ✅ | `metalmind-vim` `tecla_en_insert` |
 | Backspace en Insert, 5 k / 50 k | ≤ 1 ms | 1.1 / 2.6 µs | ✅ | `metalmind-vim` `backspace_en_insert` |
 | `dd` / `ciw` / `.` / `u` en 5 k | ≤ 1 ms | 3.1 / 12.7 / 6.2 / 2.9 µs | ✅ | `metalmind-vim` |
+| `]]` con el estilo ya calculado (en el editor), 5 k / 50 k | ≤ 1 ms | 6.6 / 98 µs | ✅ | `metalmind-vim` `siguiente_heading` |
+| `Enter` al final de un ítem de lista (lo continúa), 5 k / 50 k | ≤ 1 ms | 33 / 184 µs | ✅ | `metalmind-vim` `enter_en_un_item` |
+| `]]` en un motor sin editor (calcula el estilo de cero), 5 k / 50 k | ≤ 16 / 160 ms | 5.4 / 58 ms | ✅ | `metalmind-vim` `siguiente_heading_sin_estilo` |
 | Macro de 7 teclas, `100@a`, en 5 k | ≤ 16 ms | 1.8 ms | ✅ | `metalmind-vim` `macro_100_veces` |
 | `:%s/nota/apunte/g` en 5 k (cada `nota` del texto) | ≤ 16 ms | 6.6 ms | ✅ | `metalmind-vim` `sustituir_todo` |
 | `u` de ese `:%s` | ≤ 16 ms | 2.9 ms | ✅ | `metalmind-vim` `deshacer_sustituir_todo` |

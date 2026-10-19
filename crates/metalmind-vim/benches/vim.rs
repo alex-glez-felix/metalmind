@@ -16,10 +16,21 @@ fn main() {
 
 /// Mide `keys` sobre la nota de `lines` líneas después de teclear `before`.
 fn keys(bencher: Bencher, lines: usize, before: &str, keys: &str) {
+    keys_in(bencher, lines, Session::new, before, keys);
+}
+
+/// Como [`keys`], con la sesión que arma `open`.
+fn keys_in(
+    bencher: Bencher,
+    lines: usize,
+    open: fn(&str, usize) -> Session,
+    before: &str,
+    keys: &str,
+) {
     let text = metalmind_perf::note(lines);
     bencher
         .with_inputs(|| {
-            let mut session = Session::new(&text, lines / 2);
+            let mut session = open(&text, lines / 2);
             session.feed(before).unwrap();
             session
         })
@@ -132,4 +143,22 @@ fn ordenar(bencher: Bencher, lines: usize) {
 #[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
 fn global_sustituir(bencher: Bencher, lines: usize) {
     keys(bencher, lines, "", &format!(":g/{WORD}/s/{WORD}/apunte/\n"));
+}
+
+/// `]]` con el estilo de la nota ya calculado, como en el editor.
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 200)]
+fn siguiente_heading(bencher: Bencher, lines: usize) {
+    keys_in(bencher, lines, Session::styled, "", "]]");
+}
+
+/// `]]` en un motor sin editor, que calcula el estilo de cero.
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 20)]
+fn siguiente_heading_sin_estilo(bencher: Bencher, lines: usize) {
+    keys(bencher, lines, "", "]]");
+}
+
+/// `Enter` al final de un ítem de lista: lo continúa.
+#[divan::bench(args = [5_000, 50_000], sample_size = 1, sample_count = 200)]
+fn enter_en_un_item(bencher: Bencher, lines: usize) {
+    keys_in(bencher, lines, Session::styled, "/tarea\nA", "\n");
 }
