@@ -67,7 +67,7 @@ struct Entry {
 }
 
 /// Las imágenes con su LRU: al pasar del tope se sacan las que hace más
-/// frames que nadie pide, nunca una del frame en curso.
+/// frames que nadie pide, nunca una de este frame o del anterior.
 #[derive(Debug)]
 pub struct Images {
     entries: HashMap<ImageKey, Entry>,
@@ -99,6 +99,9 @@ impl Images {
     /// Empieza un frame: lo que se pida desde ahora es lo visible.
     pub fn next_frame(&mut self) {
         self.frame += 1;
+        // Sin trabajos que terminen (un scroll por lo ya pintado) también se
+        // vuelve al tope; lo del frame anterior se queda, se va a pedir de nuevo.
+        self.evict();
     }
 
     /// Lo que hay de `key`, o `None` si hay que pintarla: entonces queda
@@ -143,12 +146,15 @@ impl Images {
         self.evict();
     }
 
+    /// Saca lo que hace más que nadie pide hasta volver al tope, nunca lo
+    /// pedido en este frame o en el anterior: se ve, o se va a volver a pedir.
     fn evict(&mut self) {
+        let keep = self.frame.saturating_sub(1);
         while self.bytes > self.budget {
             let oldest = self
                 .entries
                 .iter()
-                .filter(|(_, entry)| entry.used < self.frame && entry.bytes > 0)
+                .filter(|(_, entry)| entry.used < keep && entry.bytes > 0)
                 .min_by_key(|(_, entry)| entry.used)
                 .map(|(key, _)| key.clone());
             let Some(entry) = oldest.and_then(|key| self.entries.remove(&key)) else {
@@ -271,6 +277,23 @@ mod tests {
         images.finish(key("a"), paint(&key("a")));
         assert_eq!(images.take_evicted().len(), 0);
         assert!(matches!(images.get(&key("a")), Some(Image::Ready(_))));
+    }
+
+    #[test]
+    fn al_pasar_de_frame_vuelve_al_tope_sin_sacar_lo_recien_visto() {
+        let mut images = Images::with_budget(1);
+        ready(&mut images, "x_1");
+        images.next_frame();
+        ready(&mut images, "x_2");
+        assert_eq!(
+            images.take_evicted().len(),
+            0,
+            "x_1 se vio en el frame anterior"
+        );
+        images.next_frame();
+        assert_eq!(images.take_evicted().len(), 1, "x_1 ya no se ve");
+        assert!(matches!(images.get(&key("x_2")), Some(Image::Ready(_))));
+        assert!(images.get(&key("x_1")).is_none());
     }
 
     #[test]
