@@ -145,11 +145,11 @@ fn la_ruta_se_recorta_por_el_medio() {
     );
     assert_eq!(
         shown_detail("personajes/largo/vin.md:3", 11.0),
-        "…o/vin.md:3"
+        "…/vin.md:3"
     );
     assert_eq!(
         shown_detail("personajes/largo/vin.md:3", 12.0),
-        "…go/vin.md:3"
+        "…/vin.md:3"
     );
 }
 
@@ -157,11 +157,11 @@ fn la_ruta_se_recorta_por_el_medio() {
 fn el_nombre_de_la_ruta_queda_entero_si_cabe() {
     assert_eq!(
         shown_detail("personajes/equipo/historias/Vin con nombre largo.md", 34.0),
-        "…historias/Vin con nombre largo.md"
+        "…/Vin con nombre largo.md"
     );
     assert_eq!(
         shown_detail("personajes/equipo/historias/Vin con nombre largo.md", 40.0),
-        "…quipo/historias/Vin con nombre largo.md"
+        "…/historias/Vin con nombre largo.md"
     );
 }
 
@@ -283,7 +283,7 @@ fn una_ruta_muestra_lo_que_coincide_y_el_nombre() {
 #[test]
 fn una_ruta_con_la_coincidencia_en_el_nombre_se_recorta_por_el_medio() {
     let text = "personajes/equipo de Kelsier/historias largas/Vin.md";
-    assert_eq!(shown_path(text, "Vin", 20.0), "…orias largas/[Vin].md");
+    assert_eq!(shown_path(text, "Vin", 20.0), "…/[Vin].md");
 }
 
 const FOLDER: &str = "personajes/equipo de Kelsier/historias largas de la Última Imperio";
@@ -313,6 +313,24 @@ fn todas_las_filas_de_una_ruta_empiezan_igual() {
         assert!(shown.starts_with("…/[historias]"), "{shown}");
         assert!(shown.contains(&format!("/{name} ")), "{shown}");
     }
+}
+
+/// Con el nombre entero, la carpeta entra por carpetas enteras desde una
+/// `/`: nunca queda un pedazo como `…io/Vin.md`.
+#[test]
+fn una_ruta_no_deja_pedazos_de_carpeta() {
+    let vin = format!("{FOLDER}/Vin con un nombre de nota bastante largo para probar.md:1");
+    let name = "/Vin con un nombre de nota bastante largo para probar.md:1";
+    let name_width = width_of(name);
+    assert_eq!(shown_detail(&vin, name_width + 1.0), format!("…{name}"));
+    assert_eq!(shown_detail(&vin, name_width + 10.0), format!("…{name}"));
+    let imperio = format!("…/historias largas de la Última Imperio{name}");
+    assert_eq!(shown_detail(&vin, width_of(&imperio)), imperio);
+    assert_eq!(
+        shown_detail(&vin, width_of(&imperio) + 3.0),
+        imperio,
+        "sin lugar para la carpeta de antes entera, no entra un pedazo"
+    );
 }
 
 #[test]
@@ -424,3 +442,5 @@ proptest! {
         }
     }
 }
+                let start = kept.ranges.first().map_or(0, |range| range.start);
+                prop_assert!(start == 0 || slashes.contains(&start), "pedazo de carpeta desde {start}");
