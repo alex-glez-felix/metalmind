@@ -137,7 +137,7 @@ impl gpui_kit::Element for EditorElement {
         let top = view.viewport.top();
         let scroll = editor.scroll.follow(top, editor.synced_top);
         let cell = em_width(&typeface, window);
-        let gutter = Gutter::new(&view, marks, rows, cell);
+        let gutter = Gutter::new(&view, marks, self.theme.gutter_mark_columns, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
         let lines = shape_visible_lines(
             &view,

@@ -34,11 +34,6 @@ impl GutterMarks {
         Self(by_line)
     }
 
-    /// Las columnas que reserva el margen para las marks, haya o no, así el
-    /// ancho no cambia al poner la primera: la letra, el `+` de las demás y
-    /// un espacio, para que no se lea `a+1234` junto a un número ancho.
-    pub const COLUMNS: usize = 3;
-
     #[must_use]
     pub fn at(&self, line: usize) -> Option<MarkLabel<'_>> {
         let (&shown, others) = self.0.get(&line)?.split_first()?;

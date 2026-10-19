@@ -40,15 +40,16 @@ pub struct Label {
 
 impl Gutter {
     /// El margen de `view` en un panel de `rows` filas, con columnas de
-    /// `column_width`; con `marks`, les deja su columna aunque no haya
+    /// `column_width`; con `marks`, les deja `mark_columns` aunque no haya
     /// ninguna, para que el ancho no salte al poner la primera.
     pub fn new(
         view: &PaneView<'_>,
         marks: Option<GutterMarks>,
+        mark_columns: usize,
         rows: usize,
         column_width: Pixels,
     ) -> Self {
-        let mark_columns = marks.as_ref().map_or(0, |_| GutterMarks::COLUMNS);
+        let mark_columns = marks.as_ref().map_or(0, |_| mark_columns);
         let columns = view.numbers.width(view.buffer().line_count(), rows) + mark_columns;
         Self {
             columns,
