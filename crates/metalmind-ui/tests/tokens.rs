@@ -77,9 +77,9 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "geometría, no estilo: la mitad con que GPUI centra el texto en su línea y las fórmulas se centran",
     ),
     (
-        "src/editor/lines.rs",
-        "padding * 2.0",
-        "geometría, no estilo: el margen con que RaTeX pinta la imagen va a los dos lados",
+        "src/math/geometry.rs",
+        "value * 2.0",
+        "geometría, no estilo: el mismo margen a los dos lados",
     ),
     (
         "src/math/images.rs",

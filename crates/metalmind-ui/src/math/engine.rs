@@ -10,6 +10,8 @@ use ratex_layout::LayoutOptions;
 use ratex_render::RenderOptions;
 use ratex_types::{Color, DisplayList, MathStyle};
 
+use super::geometry::both_sides;
+
 /// Lo que mide una fórmula, en em de la letra con que se compone.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Metrics {
@@ -35,26 +37,24 @@ pub enum MathError {
 }
 
 /// Cómo se pinta: tamaño de la letra en píxeles lógicos, escala de la
-/// pantalla y color (RGBA de 0 a 1).
+/// pantalla, color (RGBA de 0 a 1) y el margen alrededor, en píxeles
+/// lógicos, donde cae el suavizado de los bordes.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Look {
     pub size: f32,
     pub scale: f32,
     pub color: [f32; 4],
+    pub padding: f32,
 }
 
 /// Los píxeles de una fórmula, en BGRA sin premultiplicar (lo que guarda el
-/// `RenderImage` de GPUI), con `PADDING` píxeles lógicos alrededor.
+/// `RenderImage` de GPUI), con [`Look::padding`] alrededor.
 #[derive(Clone, Debug)]
 pub struct Picture {
     pub width: u32,
     pub height: u32,
     pub bgra: Vec<u8>,
 }
-
-/// Lo que se deja alrededor de la fórmula al pintarla, en píxeles lógicos:
-/// el suavizado de los bordes cae ahí y no se recorta.
-pub const PADDING: f32 = 1.0;
 
 /// El lado más largo de una imagen, en píxeles de la pantalla: el que
 /// aceptan las texturas de casi cualquier GPU. Una fórmula más grande no se
@@ -80,7 +80,7 @@ pub fn render(latex: &str, display: bool, look: Look) -> Result<Picture, MathErr
     fits(metrics(&list), look)?;
     let options = RenderOptions {
         font_size: look.size,
-        padding: PADDING,
+        padding: look.padding,
         background_color: Color::new(0.0, 0.0, 0.0, 0.0),
         font_dir: String::new(),
         device_pixel_ratio: look.scale,
@@ -98,7 +98,7 @@ fn fits(metrics: Metrics, look: Look) -> Result<(), MathError> {
             look.size, look.scale
         )));
     }
-    let side = |em: f32| (em * look.size + 2.0 * PADDING) * look.scale;
+    let side = |em: f32| (em * look.size + both_sides(look.padding)) * look.scale;
     let (width, height) = (side(metrics.width), side(metrics.height + metrics.depth));
     if width.is_finite() && height.is_finite() && width <= MAX_SIDE && height <= MAX_SIDE {
         Ok(())
@@ -192,6 +192,7 @@ mod tests {
         size: 16.0,
         scale: 1.0,
         color: [1.0, 1.0, 1.0, 1.0],
+        padding: 1.0,
     };
 
     #[test]
@@ -225,7 +226,7 @@ mod tests {
     fn la_imagen_mide_la_formula_a_su_escala() {
         let metrics = measure("x^2", false).unwrap();
         let picture = render("x^2", false, Look { scale: 2.0, ..LOOK }).unwrap();
-        let expected = (metrics.width * LOOK.size + 2.0 * PADDING) * 2.0;
+        let expected = (metrics.width * LOOK.size + 2.0 * LOOK.padding) * 2.0;
         assert!(
             (f32::from(u16::try_from(picture.width).unwrap()) - expected).abs() <= 2.0,
             "{picture:?}"

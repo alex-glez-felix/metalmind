@@ -18,9 +18,9 @@
 | buscar-claro-1280 | 0 |
 | buscar-vacio-claro-1280 | 0 |
 | paleta-claro-1280 | 0 |
-| formulas-claro-1280 | 91037 (`diff-formulas-claro-1280.png`) |
-| formulas-bloque-claro-1280 | 96760 (`diff-formulas-bloque-claro-1280.png`) |
-| formulas-larga-claro-1280 | 213101 (`diff-formulas-larga-claro-1280.png`) |
+| formulas-claro-1280 | 90364 (`diff-formulas-claro-1280.png`) |
+| formulas-bloque-claro-1280 | 94028 (`diff-formulas-bloque-claro-1280.png`) |
+| formulas-larga-claro-1280 | 220307 (`diff-formulas-larga-claro-1280.png`) |
 | editor-claro-1920 | 0 |
 | editor-final-claro-1920 | 0 |
 | arbol-claro-1920 | 0 |
@@ -35,9 +35,9 @@
 | buscar-claro-1920 | 0 |
 | buscar-vacio-claro-1920 | 0 |
 | paleta-claro-1920 | 0 |
-| formulas-claro-1920 | 146488 (`diff-formulas-claro-1920.png`) |
-| formulas-bloque-claro-1920 | 148955 (`diff-formulas-bloque-claro-1920.png`) |
-| formulas-larga-claro-1920 | 536642 (`diff-formulas-larga-claro-1920.png`) |
+| formulas-claro-1920 | 143404 (`diff-formulas-claro-1920.png`) |
+| formulas-bloque-claro-1920 | 145118 (`diff-formulas-bloque-claro-1920.png`) |
+| formulas-larga-claro-1920 | 529677 (`diff-formulas-larga-claro-1920.png`) |
 | editor-oscuro-1280 | 0 |
 | editor-final-oscuro-1280 | 0 |
 | arbol-oscuro-1280 | 0 |
@@ -52,9 +52,9 @@
 | buscar-oscuro-1280 | 0 |
 | buscar-vacio-oscuro-1280 | 0 |
 | paleta-oscuro-1280 | 0 |
-| formulas-oscuro-1280 | 90478 (`diff-formulas-oscuro-1280.png`) |
-| formulas-bloque-oscuro-1280 | 96292 (`diff-formulas-bloque-oscuro-1280.png`) |
-| formulas-larga-oscuro-1280 | 220587 (`diff-formulas-larga-oscuro-1280.png`) |
+| formulas-oscuro-1280 | 90135 (`diff-formulas-oscuro-1280.png`) |
+| formulas-bloque-oscuro-1280 | 93778 (`diff-formulas-bloque-oscuro-1280.png`) |
+| formulas-larga-oscuro-1280 | 225836 (`diff-formulas-larga-oscuro-1280.png`) |
 | editor-oscuro-1920 | 0 |
 | editor-final-oscuro-1920 | 0 |
 | arbol-oscuro-1920 | 0 |
@@ -69,6 +69,6 @@
 | buscar-oscuro-1920 | 0 |
 | buscar-vacio-oscuro-1920 | 0 |
 | paleta-oscuro-1920 | 0 |
-| formulas-oscuro-1920 | 145746 (`diff-formulas-oscuro-1920.png`) |
-| formulas-bloque-oscuro-1920 | 148360 (`diff-formulas-bloque-oscuro-1920.png`) |
-| formulas-larga-oscuro-1920 | 534852 (`diff-formulas-larga-oscuro-1920.png`) |
+| formulas-oscuro-1920 | 142921 (`diff-formulas-oscuro-1920.png`) |
+| formulas-bloque-oscuro-1920 | 144750 (`diff-formulas-bloque-oscuro-1920.png`) |
+| formulas-larga-oscuro-1920 | 527925 (`diff-formulas-larga-oscuro-1920.png`) |

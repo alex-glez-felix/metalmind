@@ -184,3 +184,5 @@ layout:
   tooltip_padding_x: sm
   tooltip_padding_y: xs
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio
+  math_padding: 1
+  math_block_margin: xs

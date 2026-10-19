@@ -24,6 +24,7 @@ pub struct ImageKey {
     size: u32,
     scale: u32,
     color: [u32; 4],
+    padding: u32,
 }
 
 impl ImageKey {
@@ -34,6 +35,7 @@ impl ImageKey {
             size: look.size.to_bits(),
             scale: look.scale.to_bits(),
             color: look.color.map(f32::to_bits),
+            padding: look.padding.to_bits(),
         }
     }
 
@@ -42,6 +44,7 @@ impl ImageKey {
             size: f32::from_bits(self.size),
             scale: f32::from_bits(self.scale),
             color: self.color.map(f32::from_bits),
+            padding: f32::from_bits(self.padding),
         }
     }
 }
@@ -191,6 +194,7 @@ mod tests {
             size: 16.0,
             scale: 1.0,
             color: [1.0; 4],
+            padding: 1.0,
         };
         ImageKey::new(latex, false, look)
     }

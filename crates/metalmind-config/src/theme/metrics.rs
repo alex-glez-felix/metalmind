@@ -237,6 +237,11 @@ metric_group! {
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
         gutter_mark_columns: MarkColumns,
+        /// Alrededor de la imagen de una fórmula, donde cae el suavizado de
+        /// sus bordes.
+        math_padding: Length,
+        /// Arriba y abajo de una fórmula de bloque.
+        math_block_margin: Length,
     }
 }
 

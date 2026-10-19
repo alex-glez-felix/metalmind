@@ -68,6 +68,7 @@ fn pintar_las_22(bencher: Bencher, scale: f32) {
         size: 16.0 * 1.21,
         scale,
         color: [0.85, 0.85, 0.88, 1.0],
+        padding: 1.0,
     };
     bencher.bench_local(|| {
         for formula in FORMULAS {

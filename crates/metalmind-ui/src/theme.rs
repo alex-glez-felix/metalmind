@@ -55,6 +55,10 @@ pub struct Markdown {
     pub strike_thickness: Pixels,
     /// Las fórmulas, veces la letra del editor (`text.math`).
     pub math_size: f32,
+    /// Alrededor de la imagen de una fórmula (`layout.math_padding`).
+    pub math_padding: Pixels,
+    /// Arriba y abajo de una fórmula de bloque (`layout.math_block_margin`).
+    pub math_block_margin: Pixels,
 }
 
 impl Markdown {
@@ -63,6 +67,7 @@ impl Markdown {
         headings: &config::Headings,
         stroke: &config::Stroke,
         text: &config::Text,
+        layout: &config::Layout,
     ) -> Self {
         Self {
             heading: hsla(syntax.heading),
@@ -96,6 +101,8 @@ impl Markdown {
                 .map(|heading| (heading.size, FontWeight(f32::from(heading.weight)))),
             strike_thickness: px(stroke.text_line.0),
             math_size: text.math.0,
+            math_padding: px(layout.math_padding.0),
+            math_block_margin: px(layout.math_block_margin.0),
         }
     }
 }
@@ -340,7 +347,7 @@ impl Theme {
             tooltip_padding_x: px(layout.tooltip_padding_x.0),
             tooltip_padding_y: px(layout.tooltip_padding_y.0),
             gutter_mark_columns: usize::from(layout.gutter_mark_columns.0),
-            markdown: Markdown::new(syntax, headings, stroke, text),
+            markdown: Markdown::new(syntax, headings, stroke, text, layout),
         }
     }
 

@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, RenderImage, Window};
 
-pub use self::engine::{Look, MathError, Metrics, PADDING, Picture, measure, render};
+pub use self::engine::{Look, MathError, Metrics, Picture, measure, render};
 pub use self::geometry::{FormulaBox, Geometry, half};
 pub use self::images::{Image, ImageKey};
 use self::images::{Images, paint};

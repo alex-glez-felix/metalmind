@@ -336,17 +336,19 @@ fn geometry_of(
         line_height: f32::from(line_height),
         ascent: f32::from(text_system.ascent(font_id, typeface.size)).abs(),
         descent: f32::from(text_system.descent(font_id, typeface.size)).abs(),
+        block_margin: f32::from(theme.markdown.math_block_margin),
     }
 }
 
 /// Una fórmula se pinta con la letra de las fórmulas, la escala de la
-/// pantalla y el color del texto del tema.
+/// pantalla, el color del texto y el margen del tema.
 fn look_of(geometry: Geometry, theme: &Theme, window: &Window) -> Look {
     let color = theme.foreground.to_rgb();
     Look {
         size: geometry.size,
         scale: window.scale_factor(),
         color: [color.r, color.g, color.b, color.a],
+        padding: f32::from(theme.markdown.math_padding),
     }
 }
 
