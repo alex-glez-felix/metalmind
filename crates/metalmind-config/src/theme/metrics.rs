@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 
 use super::units::LengthRef;
-pub use super::units::{Count, Factor, Length, Px, TextStyle, Weight};
+pub use super::units::{Count, Factor, Length, MarkColumns, Px, TextStyle, Weight};
 use crate::diagnostic::Location;
 use crate::parse::Spanned;
 
@@ -38,7 +38,7 @@ macro_rules! plain_metric {
     )*};
 }
 
-plain_metric!(Px, Factor, Weight, Count, TextStyle);
+plain_metric!(Px, Factor, Weight, Count, MarkColumns, TextStyle);
 
 impl Metric for Length {
     type Raw = LengthRef;
@@ -230,7 +230,7 @@ metric_group! {
         tooltip_padding_y: Length,
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
-        gutter_mark_columns: Count,
+        gutter_mark_columns: MarkColumns,
     }
 }
 
