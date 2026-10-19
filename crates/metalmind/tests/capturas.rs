@@ -104,6 +104,16 @@ const SCENES: &[(&str, &[Step])] = &[
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("buscar-cjk", &[Step::SearchAfterCjk]),
     ("paleta", &[Step::Keys("<Esc><C-S-p>")]),
+    // `ctrl-p` desde la primera fila da la vuelta: el final de la lista.
+    ("paleta-final", &[Step::Keys("<C-p>")]),
+    // Filtrada, para ver cada comando con su atajo, el de la ventana
+    // (`ctrl-shift-p`) o el de vim (`space f`, `ctrl-w l`).
+    ("paleta-save", &[Step::Keys("save")]),
+    ("paleta-focus", &[Step::Keys("<C-u>focus")]),
+    ("paleta-workspace", &[Step::Keys("<C-u>workspace")]),
+    ("paleta-pane", &[Step::Keys("<C-u>pane:")]),
+    ("paleta-panel", &[Step::Keys("<C-u>panel:")]),
+    ("paleta-editor", &[Step::Keys("<C-u>editor:")]),
     // Al final, para que las marks no cambien las demás pantallas: tres en
     // una línea (la `b` y un `+`), una sobre un heading y el tooltip.
     (
