@@ -11,6 +11,7 @@ use super::super::test_session::Session;
 const ROWS: Rows = Rows {
     text: 20,
     headings: [48, 36, 28, 24, 20, 20],
+    formulas: None,
 };
 
 /// Diez líneas de texto.

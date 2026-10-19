@@ -87,11 +87,8 @@ impl EntityInputHandler for Editor {
         let layout = self.layout.as_ref()?;
         let (laid, column) = cursor_position(&view, layout)?;
         Some(Bounds::new(
-            point(
-                laid.origin.x + laid.shaped.x_for_index(column),
-                laid.origin.y,
-            ),
-            size(laid.height, laid.height),
+            point(laid.origin.x + laid.x_for_index(column), laid.origin.y),
+            size(laid.text_height, laid.text_height),
         ))
     }
 

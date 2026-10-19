@@ -297,6 +297,8 @@ color_group! {
         code_string,
         code_number,
         code_comment,
+        /// El LaTeX de una fórmula cuando se ve su fuente.
+        math,
         /// Los marcadores (`**`, `#`, `[[`) cuando se ven.
         markup,
     }

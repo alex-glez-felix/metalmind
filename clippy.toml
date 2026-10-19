@@ -1,2 +1,4 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+# Nombres propios que no son código.
+doc-valid-idents = ["RaTeX", "KaTeX", ".."]

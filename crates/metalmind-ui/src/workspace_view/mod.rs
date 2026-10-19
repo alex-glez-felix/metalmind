@@ -31,6 +31,7 @@ use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
 use crate::frames::FrameClock;
+use crate::math::Formulas;
 use crate::panel::PanelView;
 use crate::session::VaultState;
 use crate::sidebar::{self, Sidebar, SidebarEvent};
@@ -49,6 +50,8 @@ pub struct WorkspaceView {
     paths: Option<Paths>,
     vault: FinderVault,
     session: Entity<VaultSession>,
+    /// Las fórmulas, compartidas por los paneles de la ventana.
+    formulas: Entity<Formulas>,
     overlay: Option<Overlay>,
     _subscriptions: [Subscription; 2],
 }
@@ -67,7 +70,16 @@ impl WorkspaceView {
             view.on_sidebar_event(*event, window, cx);
         });
         let pane = workspace.read(cx).focused();
-        let first = cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, cx));
+        let formulas = cx.new(|_| Formulas::default());
+        let first = cx.new(|cx| {
+            Editor::new(
+                workspace.clone(),
+                session.clone(),
+                formulas.clone(),
+                pane,
+                cx,
+            )
+        });
         let vault = FinderVault::new(session.clone(), &workspace, cx);
         Self {
             workspace,
@@ -77,6 +89,7 @@ impl WorkspaceView {
             paths,
             vault,
             session,
+            formulas,
             overlay: None,
             _subscriptions: [repaint, events],
         }
@@ -207,9 +220,17 @@ impl WorkspaceView {
         let panes = self.workspace.read(cx).tree().panes();
         self.editors.retain(|pane, _| panes.contains(pane));
         for pane in panes {
-            let (workspace, session) = (&self.workspace, &self.session);
+            let (workspace, session, formulas) = (&self.workspace, &self.session, &self.formulas);
             self.editors.entry(pane).or_insert_with(|| {
-                cx.new(|cx| Editor::new(workspace.clone(), session.clone(), pane, cx))
+                cx.new(|cx| {
+                    Editor::new(
+                        workspace.clone(),
+                        session.clone(),
+                        formulas.clone(),
+                        pane,
+                        cx,
+                    )
+                })
             });
         }
         cx.notify();

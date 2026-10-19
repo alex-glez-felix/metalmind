@@ -10,6 +10,7 @@ mod file_tree;
 mod finder;
 mod frames;
 mod ime;
+pub mod math;
 mod palette;
 mod panel;
 pub mod picker;

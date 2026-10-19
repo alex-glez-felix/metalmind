@@ -69,6 +69,9 @@ pub fn text_runs(
 fn ink(run: &Run, kind: Option<LineKind>, theme: &Theme) -> Hsla {
     let markdown: &Markdown = &theme.markdown;
     let style = run.style;
+    if run.failed {
+        return theme.error;
+    }
     match style.role {
         Role::Text => match kind {
             Some(LineKind::Heading(_)) => markdown.heading,
@@ -98,5 +101,6 @@ fn ink(run: &Run, kind: Option<LineKind>, theme: &Theme) -> Hsla {
         Role::Token(Token::String) => markdown.code_string,
         Role::Token(Token::Number) => markdown.code_number,
         Role::Token(Token::Comment) => markdown.code_comment,
+        Role::Math => markdown.math,
     }
 }

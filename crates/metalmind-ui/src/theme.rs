@@ -47,11 +47,15 @@ pub struct Markdown {
     pub code_string: Hsla,
     pub code_number: Hsla,
     pub code_comment: Hsla,
+    pub math: Hsla,
     pub markup: Hsla,
     /// Cada nivel, del `#` al `######`: veces la fuente del editor y peso.
     pub headings: [(f32, FontWeight); 6],
     /// El grosor del tachado.
     pub strike_thickness: Pixels,
+    /// Las fórmulas, veces la letra del editor: las de KaTeX miden 1.21 em
+    /// para verse del tamaño del texto que las rodea.
+    pub math_size: f32,
 }
 
 impl Markdown {
@@ -85,11 +89,13 @@ impl Markdown {
             code_string: hsla(syntax.code_string),
             code_number: hsla(syntax.code_number),
             code_comment: hsla(syntax.code_comment),
+            math: hsla(syntax.math),
             markup: hsla(syntax.markup),
             headings: headings
                 .0
                 .map(|heading| (heading.size, FontWeight(f32::from(heading.weight)))),
             strike_thickness: px(stroke.text_line.0),
+            math_size: 1.21,
         }
     }
 }

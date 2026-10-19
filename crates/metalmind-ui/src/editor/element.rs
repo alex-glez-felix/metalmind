@@ -1,22 +1,26 @@
 //! Pinta solo las líneas visibles; GPUI cachea el shaping entre frames, así
 //! que el scroll solo da forma a las líneas que entran.
 
+use std::sync::Arc;
+
 use gpui_kit::{
-    AnyElement, App, Bounds, ContentMask, ElementId, ElementInputHandler, Entity, GlobalElementId,
+    AnyElement, App, Bounds, ContentMask, Corners, ElementId, ElementInputHandler, Entity,
+    GlobalElementId,
     Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine,
     SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px, relative, size,
 };
-use metalmind_vim::{Mode, Rows};
+use metalmind_vim::{FormulaRows, Mode, Rows};
 
 use super::Editor;
 use super::cursor::{Preedit, cursor_quad, em_width, preedit};
 use super::gutter::{Gutter, PaintedGutter};
 use super::highlight::{Cells, search_quads, selection_quads};
-use super::layout::{FrameLayout, Viewport};
+use super::layout::{FrameLayout, LaidLine, Viewport};
 pub use super::lines::Typeface;
-use super::lines::{code_block_quads, shape_visible_lines};
+use super::lines::{ImageRequest, MathFrame, Shaped, code_block_quads, shape_visible_lines};
 use super::scroll::Scroll;
 use crate::frames::FrameClock;
+use crate::math::{Formulas, Geometry, Image, Look};
 use crate::theme::Theme;
 
 pub struct EditorElement {
@@ -99,7 +103,10 @@ impl gpui_kit::Element for EditorElement {
         );
         let line_height = window.line_height();
         let rows = Viewport::new(content, line_height, Scroll::default()).full_rows();
-        let measures = rows_of(line_height, &self.theme);
+        let geometry = geometry_of(&typeface, line_height, &self.theme, window);
+        let formulas = self.editor.read(cx).formulas.clone();
+        let measure = formulas.update(cx, |formulas, _| formulas.measure(geometry));
+        let measures = rows_of(line_height, &self.theme, measure);
         let height = to_units(f32::from(content.size.height).floor());
         let (workspace, pane) = {
             let editor = self.editor.read(cx);
@@ -139,16 +146,23 @@ impl gpui_kit::Element for EditorElement {
         let cell = em_width(&typeface, window);
         let gutter = Gutter::new(&view, marks, self.theme.gutter_mark_columns, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
-        let lines = shape_visible_lines(
+        let math = MathFrame {
+            formulas: formulas.read(cx),
+            geometry,
+            look: look_of(geometry, &self.theme, window),
+            source: view.source_lines(),
+        };
+        let Shaped { lines, images } = shape_visible_lines(
             &view,
             &viewport,
             &typeface,
             &self.theme,
             &vault_links,
+            &math,
             window,
         );
         let code_blocks = code_block_quads(&lines, bounds.right(), &self.theme);
-        let layout = FrameLayout { viewport, lines };
+        let mut layout = FrameLayout { viewport, lines };
         let painted_gutter = (gutter.columns > 0)
             .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
         let cells = Cells {
@@ -163,6 +177,7 @@ impl gpui_kit::Element for EditorElement {
             .clone()
             .filter(|_| view.mode == Mode::Insert)
             .and_then(|text| preedit(&view, &layout, text, &typeface, &self.theme, window));
+        attach_images(&formulas, images, &mut layout.lines, cx);
         self.editor.update(cx, |editor, _| {
             editor.layout = Some(layout.clone());
             editor.scroll = scroll;
@@ -199,7 +214,11 @@ impl gpui_kit::Element for EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let focus_handle = self.editor.read(cx).focus_handle.clone();
+        let (focus_handle, formulas) = {
+            let editor = self.editor.read(cx);
+            (editor.focus_handle.clone(), editor.formulas.clone())
+        };
+        formulas.update(cx, |formulas, _| formulas.drop_evicted(window));
         window.handle_input(
             &focus_handle,
             ElementInputHandler::new(bounds, self.editor.clone()),
@@ -221,7 +240,9 @@ impl gpui_kit::Element for EditorElement {
             }
             // El fondo del código inline y del resaltado, bajo la selección.
             for laid in &prepainted.layout.lines {
-                paint_background(&laid.shaped, laid.origin, laid.height, window, cx);
+                for_each_text(laid, |shaped, origin| {
+                    paint_background(shaped, origin, laid.text_height, window, cx);
+                });
             }
             for quad in prepainted
                 .search
@@ -231,7 +252,10 @@ impl gpui_kit::Element for EditorElement {
                 window.paint_quad(quad);
             }
             for laid in &prepainted.layout.lines {
-                paint_line(&laid.shaped, laid.origin, laid.height, window, cx);
+                for_each_text(laid, |shaped, origin| {
+                    paint_line(shaped, origin, laid.text_height, window, cx);
+                });
+                paint_formulas(laid, window);
             }
             if let Some(cursor) = prepainted.cursor.take() {
                 window.paint_quad(cursor);
@@ -283,9 +307,10 @@ fn paint_background(
     }
 }
 
-/// Lo que mide una línea de texto y cada heading, en píxeles enteros: las
-/// mismas medidas para el motor, que mueve la ventana, y para la vista.
-fn rows_of(line_height: Pixels, theme: &Theme) -> Rows {
+/// Lo que mide una línea de texto, cada heading y cada fórmula, en píxeles
+/// enteros: las mismas medidas para el motor, que mueve la ventana, y para
+/// la vista.
+fn rows_of(line_height: Pixels, theme: &Theme, formulas: Arc<dyn FormulaRows>) -> Rows {
     let text = f32::from(line_height);
     Rows {
         text: to_units(text.round()),
@@ -293,6 +318,81 @@ fn rows_of(line_height: Pixels, theme: &Theme) -> Rows {
             .markdown
             .headings
             .map(|(scale, _)| to_units((text * scale).round())),
+        formulas: Some(formulas),
+    }
+}
+
+/// Las medidas de la letra del editor con que se componen las fórmulas.
+fn geometry_of(
+    typeface: &Typeface,
+    line_height: Pixels,
+    theme: &Theme,
+    window: &Window,
+) -> Geometry {
+    let text_system = window.text_system();
+    let font_id = text_system.resolve_font(&typeface.font);
+    Geometry {
+        size: f32::from(typeface.size) * theme.markdown.math_size,
+        line_height: f32::from(line_height),
+        ascent: f32::from(text_system.ascent(font_id, typeface.size)).abs(),
+        descent: f32::from(text_system.descent(font_id, typeface.size)).abs(),
+    }
+}
+
+/// Una fórmula se pinta con la letra de las fórmulas, la escala de la
+/// pantalla y el color del texto del tema.
+fn look_of(geometry: Geometry, theme: &Theme, window: &Window) -> Look {
+    let color = theme.foreground.to_rgb();
+    Look {
+        size: geometry.size,
+        scale: window.scale_factor(),
+        color: [color.r, color.g, color.b, color.a],
+    }
+}
+
+/// Las imágenes que esperan las fórmulas visibles: las que ya están se
+/// ponen en su lugar y las demás se mandan a pintar al fondo.
+fn attach_images(
+    formulas: &Entity<Formulas>,
+    requests: Vec<ImageRequest>,
+    lines: &mut [LaidLine],
+    cx: &mut App,
+) {
+    formulas.update(cx, |formulas, cx| {
+        formulas.next_frame();
+        for request in requests {
+            let Image::Ready(image) = formulas.image(&request.key, cx) else {
+                continue;
+            };
+            if let Some(placed) = lines
+                .get_mut(request.line)
+                .and_then(|laid| laid.formulas.get_mut(request.formula))
+            {
+                placed.image = Some(image);
+            }
+        }
+    });
+}
+
+/// Cada trozo de texto de la línea con su origen.
+fn for_each_text(laid: &LaidLine, mut paint: impl FnMut(&ShapedLine, Point<Pixels>)) {
+    for piece in &laid.pieces {
+        if let Some(text) = &piece.text {
+            paint(text, point(laid.origin.x + piece.x, laid.origin.y));
+        }
+    }
+}
+
+fn paint_formulas(laid: &LaidLine, window: &mut Window) {
+    for formula in &laid.formulas {
+        let Some(image) = formula.image.clone() else {
+            continue;
+        };
+        let bounds = formula.bounds;
+        if let Err(error) = window.paint_image(bounds, bounds, Corners::default(), image, 0, false)
+        {
+            log::error!("no se pudo pintar una fórmula: {error:#}");
+        }
     }
 }
 
