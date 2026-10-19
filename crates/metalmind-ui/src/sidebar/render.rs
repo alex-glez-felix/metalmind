@@ -4,19 +4,18 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Action, AnyElement, ClickEvent, Context, Div, HighlightStyle, InteractiveElement as _,
-    IntoElement, MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render,
-    SharedString, StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
+    AnyElement, ClickEvent, Context, Div, HighlightStyle, InteractiveElement as _, IntoElement,
+    MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
     prelude::FluentBuilder as _, uniform_list,
 };
 use metalmind_vault::{EntryKind, VaultPath};
 
-use super::actions::{
-    CONFIRM_CONTEXT, FocusEditor, INPUT_CONTEXT, MENU_CONTEXT, NewFolder, NewNote, TREE_CONTEXT,
-    ToggleView,
-};
+use metalmind_keymap::{Action, PanelAction, context};
+
 use super::menu::ContextMenu;
-use super::{Sidebar, SidebarEvent, icons};
+use super::{Sidebar, icons};
+use crate::actions::Dispatch;
 use crate::file_tree::Row;
 use crate::panel::{Fill, PanelView, Prompt, RowMarks};
 use crate::theme::Theme;
@@ -60,12 +59,12 @@ impl Render for Sidebar {
 impl Sidebar {
     fn key_context(&self) -> &'static str {
         if self.menu.is_some() {
-            return MENU_CONTEXT;
+            return context::FILE_TREE_MENU;
         }
         match self.panel.prompt() {
-            Some(Prompt::ConfirmDelete { .. }) => CONFIRM_CONTEXT,
-            Some(_) => INPUT_CONTEXT,
-            None => TREE_CONTEXT,
+            Some(Prompt::ConfirmDelete { .. }) => context::FILE_TREE_CONFIRM,
+            Some(_) => context::FILE_TREE_INPUT,
+            None => context::FILE_TREE,
         }
     }
 
@@ -74,30 +73,7 @@ impl Sidebar {
     }
 
     fn register_actions(root: Div, cx: &mut Context<Self>) -> Div {
-        root.on_action(cx.listener(Self::select_next))
-            .on_action(cx.listener(Self::select_previous))
-            .on_action(cx.listener(Self::select_first))
-            .on_action(cx.listener(Self::select_last))
-            .on_action(cx.listener(Self::collapse_or_parent))
-            .on_action(cx.listener(Self::expand_or_open))
-            .on_action(cx.listener(Self::open_selected))
-            .on_action(cx.listener(Self::open_split_right))
-            .on_action(cx.listener(Self::open_split_down))
-            .on_action(cx.listener(Self::filter))
-            .on_action(cx.listener(Self::new_note))
-            .on_action(cx.listener(Self::new_folder))
-            .on_action(cx.listener(Self::rename))
-            .on_action(cx.listener(Self::move_entry))
-            .on_action(cx.listener(Self::delete))
-            .on_action(cx.listener(Self::confirm))
-            .on_action(cx.listener(Self::cancel))
-            .on_action(cx.listener(Self::menu_next))
-            .on_action(cx.listener(Self::menu_previous))
-            .on_action(cx.listener(Self::toggle_view))
-            .on_action(cx.listener(Self::hide))
-            .on_action(cx.listener(|_, _: &FocusEditor, _, cx| {
-                cx.emit(SidebarEvent::FocusEditor);
-            }))
+        root.on_action(cx.listener(Self::on_dispatch))
     }
 
     fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -110,10 +86,22 @@ impl Sidebar {
             .gap(theme.panel_gap)
             .when(self.panel.view == PanelView::Folders, |buttons| {
                 buttons
-                    .child(button("new-note", "+nota", NewNote, theme, cx))
-                    .child(button("new-folder", "+carpeta", NewFolder, theme, cx))
+                    .child(button("new-note", "+nota", PanelAction::NewNote, theme, cx))
+                    .child(button(
+                        "new-folder",
+                        "+carpeta",
+                        PanelAction::NewFolder,
+                        theme,
+                        cx,
+                    ))
             })
-            .child(button("toggle-view", "T", ToggleView, theme, cx));
+            .child(button(
+                "toggle-view",
+                "T",
+                PanelAction::ToggleView,
+                theme,
+                cx,
+            ));
         div()
             .flex()
             .flex_none()
@@ -280,13 +268,14 @@ fn name(row: &Row, theme: &Theme) -> StyledText {
 }
 
 /// Un botón de texto que invoca `action` en el panel.
-pub(super) fn button<A: Action + Clone>(
+pub(super) fn button(
     id: &'static str,
     label: &'static str,
-    action: A,
+    action: impl Into<Action>,
     theme: &Theme,
     cx: &mut Context<Sidebar>,
 ) -> AnyElement {
+    let action: Action = action.into();
     div()
         .id(id)
         .px(theme.panel_button_padding_x)
@@ -299,7 +288,7 @@ pub(super) fn button<A: Action + Clone>(
         })
         .on_click(cx.listener(move |sidebar, _, window, cx| {
             sidebar.focus(window, cx);
-            window.dispatch_action(action.boxed_clone(), cx);
+            window.dispatch_action(Box::new(Dispatch(action.into())), cx);
         }))
         .child(label)
         .into_any_element()

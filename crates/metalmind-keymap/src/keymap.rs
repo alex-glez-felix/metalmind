@@ -1,18 +1,25 @@
-//! El keymap de la app: los atajos que se teclean en el editor, de vim y de
-//! la ventana, en una sola lista de la que sale la tabla del motor.
+//! El keymap de toda la app: los atajos del motor vim y los de cada vista,
+//! en una sola lista. De ella salen la tabla del motor y los atajos de la
+//! ventana.
 
 use metalmind_vim::{ActionName, Context as VimContext, Key, Target};
 
 use crate::command::ex_commands;
-use crate::{Action, defaults};
+use crate::{Action, Keystroke, View, defaults};
 
-/// En `context`, la secuencia `keys` invoca `action`. Las resuelve el
-/// motor vim, con su count, lo pendiente y la cancelación de vim (`d ctrl-w`
-/// cancela el `d`).
+/// Dónde vale un atajo y con qué teclas.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Keys {
+    /// Las resuelve el motor vim en ese modo, con su count, lo pendiente y
+    /// la cancelación de vim (`d ctrl-w` cancela el `d`).
+    Vim(VimContext, Vec<Key>),
+    /// Las resuelve la ventana con esa vista en el foco.
+    View(View, Vec<Keystroke>),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Binding {
-    pub context: VimContext,
-    pub keys: Vec<Key>,
+    pub keys: Keys,
     pub action: Action,
 }
 
@@ -20,7 +27,10 @@ impl Binding {
     /// Las teclas como se muestran junto a la acción: `ctrl-w v`, `g g`.
     #[must_use]
     pub fn label(&self) -> String {
-        let keys: Vec<String> = self.keys.iter().map(ToString::to_string).collect();
+        let keys: Vec<String> = match &self.keys {
+            Keys::Vim(_, keys) => keys.iter().map(ToString::to_string).collect(),
+            Keys::View(_, keys) => keys.iter().map(ToString::to_string).collect(),
+        };
         keys.join(" ")
     }
 }
@@ -42,8 +52,7 @@ impl Default for Keymap {
             .iter()
             .filter_map(|binding| match binding.target {
                 Target::Engine(action) => Some(Binding {
-                    context: binding.context,
-                    keys: binding.keys.clone(),
+                    keys: Keys::Vim(binding.context, binding.keys.clone()),
                     action: Action::Vim(action),
                 }),
                 Target::Host(_) => None,
@@ -64,37 +73,61 @@ impl Keymap {
     /// los comandos de `:` de la ventana.
     #[must_use]
     pub fn engine(&self) -> metalmind_vim::Keymap {
-        let bindings = self.bindings.iter().map(|binding| {
+        let bindings = self.bindings.iter().filter_map(|binding| {
+            let Keys::Vim(context, keys) = &binding.keys else {
+                return None;
+            };
             let target = match binding.action {
                 Action::Vim(action) => Target::Engine(action),
-                action @ Action::Command(_) => Target::Host(ActionName::new(action.name())),
+                action => Target::Host(ActionName::new(action.name())),
             };
-            metalmind_vim::Binding {
-                context: binding.context,
-                keys: binding.keys.clone(),
+            Some(metalmind_vim::Binding {
+                context: *context,
+                keys: keys.clone(),
                 target,
-            }
+            })
         });
         metalmind_vim::Keymap::new(bindings, ex_commands())
     }
 
-    /// Las teclas del primer atajo de `action`, para mostrarlas junto a su
-    /// nombre en la paleta.
-    #[must_use]
-    pub fn keys_for(&self, action: Action) -> Option<String> {
+    /// Los atajos que resuelve la ventana.
+    pub fn view_bindings(&self) -> impl Iterator<Item = (View, &[Keystroke], Action)> {
         self.bindings
             .iter()
-            .find(|binding| binding.action == action)
-            .map(Binding::label)
+            .filter_map(|binding| match &binding.keys {
+                Keys::View(view, keys) => Some((*view, keys.as_slice(), binding.action)),
+                Keys::Vim(..) => None,
+            })
+    }
+
+    /// El atajo que se muestra junto a `action`: el último de una vista en
+    /// `active`, que es el que gana, o si no el primero del motor.
+    #[must_use]
+    pub fn keys_for(&self, action: Action, active: impl Fn(View) -> bool) -> Option<String> {
+        let mine = self
+            .bindings
+            .iter()
+            .filter(|binding| binding.action == action);
+        let in_view = mine
+            .clone()
+            .filter(|binding| matches!(binding.keys, Keys::View(view, _) if active(view)))
+            .last();
+        let in_engine = || {
+            mine.clone()
+                .find(|binding| matches!(binding.keys, Keys::Vim(..)))
+        };
+        in_view.or_else(in_engine).map(Binding::label)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use metalmind_vim::{Mode, Operator, VisualKind};
 
     use super::*;
-    use crate::Command;
+    use crate::{Command, KeyName, PanelAction};
 
     const MODES: [Mode; 14] = [
         Mode::Normal,
@@ -140,6 +173,18 @@ mod tests {
         }
     }
 
+    #[test]
+    fn ningun_atajo_de_la_ventana_esta_dos_veces() {
+        let keymap = Keymap::default();
+        let mut seen = HashSet::new();
+        for (view, keys, action) in keymap.view_bindings() {
+            assert!(
+                seen.insert((view, keys.to_vec())),
+                "{keys:?} en {view:?}: {action:?}"
+            );
+        }
+    }
+
     /// Lo que no es del motor le llega por nombre; lo suyo, como acción.
     #[test]
     fn el_motor_recibe_las_acciones_ajenas_por_nombre() {
@@ -161,20 +206,73 @@ mod tests {
         );
     }
 
+    /// `space e` y `ctrl-w l` se declaran una vez y valen en el editor y en
+    /// el árbol.
     #[test]
-    fn keys_for_da_el_primer_atajo() {
+    fn space_e_y_ctrl_w_l_valen_en_el_editor_y_en_el_arbol() {
         let keymap = Keymap::default();
+        let space_e = |binding: &&Binding| match &binding.keys {
+            Keys::Vim(VimContext::Normal, keys) => keys == &[Key::Char(' '), Key::Char('e')],
+            Keys::View(View::FileTree, keys) => {
+                keys == &[
+                    Keystroke::plain(KeyName::Char(' ')),
+                    Keystroke::plain(KeyName::Char('e')),
+                ]
+            }
+            _ => false,
+        };
+        let toggles: Vec<Action> = keymap
+            .bindings()
+            .iter()
+            .filter(space_e)
+            .map(|b| b.action)
+            .collect();
         assert_eq!(
-            keymap.keys_for(Command::SplitRight.into()).as_deref(),
-            Some("ctrl-w v")
+            toggles,
+            [Command::ToggleFolders.into(), Command::ToggleFolders.into()]
+        );
+        let tree = |view| view == View::FileTree;
+        assert_eq!(
+            keymap
+                .keys_for(PanelAction::FocusEditor.into(), tree)
+                .as_deref(),
+            Some("ctrl-w ctrl-l")
         );
         assert_eq!(
-            keymap.keys_for(Command::OpenFinder.into()).as_deref(),
-            Some("space f")
+            keymap
+                .keys_for(Command::FocusRight.into(), |_| false)
+                .as_deref(),
+            Some("ctrl-w l")
         );
-        let start = metalmind_vim::Action::Motion(metalmind_vim::Motion::DocumentStart);
-        assert_eq!(keymap.keys_for(Action::Vim(start)).as_deref(), Some("g g"));
-        assert_eq!(keymap.keys_for(Command::Save.into()), None);
+    }
+
+    #[test]
+    fn el_atajo_de_la_vista_enfocada_gana_al_del_motor() {
+        let keymap = Keymap::default();
+        let palette = Command::OpenCommandPalette.into();
+        assert_eq!(
+            keymap
+                .keys_for(palette, |view| view == View::Editor)
+                .as_deref(),
+            Some("ctrl-shift-p")
+        );
+        assert_eq!(
+            keymap.keys_for(palette, |_| false).as_deref(),
+            Some("space p")
+        );
+        let last = metalmind_vim::Action::Motion(metalmind_vim::Motion::DocumentEnd);
+        assert_eq!(
+            keymap.keys_for(Action::Vim(last), |_| true).as_deref(),
+            Some("G")
+        );
+        assert_eq!(
+            keymap
+                .keys_for(PanelAction::SelectLast.into(), |view| view
+                    == View::FileTree)
+                .as_deref(),
+            Some("G")
+        );
+        assert_eq!(keymap.keys_for(Command::Save.into(), |_| true), None);
     }
 
     /// Cada acción de la ventana que se teclea en el editor tiene su

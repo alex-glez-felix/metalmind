@@ -10,16 +10,17 @@ use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::actions::{self, AppKeymap, Dispatch};
 use crate::clipboard::SystemClipboard;
-use crate::palette::{self, Entry, Target};
+use crate::palette::{self, Entry};
 use crate::picker::{Fuzzy, Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
 
 /// La paleta de comandos.
 pub type Palette = PickerView<Fuzzy<Entry>>;
 
 impl WorkspaceView {
-    /// Se llama con el foco en un editor: sus acciones son las que se listan.
+    /// Se llama con el foco donde se abrió: se listan las acciones que
+    /// atiende esa vista.
     pub(super) fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let entries: Arc<[Entry]> = palette::entries(window, AppKeymap::get(cx), cx).into();
+        let entries: Arc<[Entry]> = palette::entries(window, AppKeymap::get(cx)).into();
         let options = PickerOptions {
             placeholder: "Ejecutar una acción…".into(),
             splits: false,
@@ -48,25 +49,18 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let target = match event {
+        let chosen = match event {
             PickerEvent::Dismissed => None,
             PickerEvent::Chosen(chosen) => picker
                 .read(cx)
                 .delegate()
                 .items()
                 .get(chosen.item)
-                .map(|entry| entry.target),
+                .map(|entry| entry.action),
         };
         self.close_overlay(window, cx);
-        match target {
-            Some(Target::Registry(action)) => {
-                window.dispatch_action(Box::new(Dispatch(action.into())), cx);
-            }
-            Some(Target::Window(name)) => match cx.build_action(name, None) {
-                Ok(action) => window.dispatch_action(action, cx),
-                Err(error) => log::error!("la paleta no pudo construir {name}: {error:#}"),
-            },
-            None => {}
+        if let Some(action) = chosen {
+            window.dispatch_action(Box::new(Dispatch(action.into())), cx);
         }
     }
 

@@ -16,7 +16,6 @@ use crate::disk::VaultDisk;
 use crate::document::Document;
 use crate::finder::{Prepared, SessionError, VaultSession};
 use crate::frames::FrameClock;
-use crate::picker;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
@@ -71,7 +70,6 @@ pub fn open(
     cx.set_global(Theme::new(config, cx)?);
     cx.set_global(clock);
     actions::bind_keys(Keymap::default(), cx);
-    picker::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
             cx.quit();

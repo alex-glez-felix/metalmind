@@ -3,7 +3,7 @@
 
 use metalmind_vim::Action as VimAction;
 
-use crate::Command;
+use crate::{Command, EditorAction, PanelAction, PickerAction};
 
 /// Una acción con nombre, de cualquier parte de la app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,6 +11,19 @@ pub enum Action {
     /// Del motor, sobre el panel enfocado.
     Vim(VimAction),
     Command(Command),
+    Editor(EditorAction),
+    Panel(PanelAction),
+    Picker(PickerAction),
+}
+
+/// Quién atiende una acción: solo se puede invocar con su vista en el foco.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Owner {
+    /// La raíz de la ventana, que siempre está: los comandos y el motor.
+    Window,
+    Editor,
+    Panel,
+    Picker,
 }
 
 impl Action {
@@ -19,6 +32,9 @@ impl Action {
         match self {
             Self::Vim(action) => action.name(),
             Self::Command(command) => command.name(),
+            Self::Editor(action) => action.name(),
+            Self::Panel(action) => action.name(),
+            Self::Picker(action) => action.name(),
         }
     }
 
@@ -31,13 +47,44 @@ impl Action {
     pub fn all() -> impl Iterator<Item = Self> {
         let vim = VimAction::ALL.iter().copied().map(Self::Vim);
         let commands = Command::ALL.iter().copied().map(Self::Command);
-        vim.chain(commands)
+        let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
+        let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
+        let picker = PickerAction::ALL.iter().copied().map(Self::Picker);
+        vim.chain(commands).chain(editor).chain(panel).chain(picker)
+    }
+
+    #[must_use]
+    pub fn owner(self) -> Owner {
+        match self {
+            Self::Vim(_) | Self::Command(_) => Owner::Window,
+            Self::Editor(_) => Owner::Editor,
+            Self::Panel(_) => Owner::Panel,
+            Self::Picker(_) => Owner::Picker,
+        }
     }
 }
 
 impl From<Command> for Action {
     fn from(command: Command) -> Self {
         Self::Command(command)
+    }
+}
+
+impl From<EditorAction> for Action {
+    fn from(action: EditorAction) -> Self {
+        Self::Editor(action)
+    }
+}
+
+impl From<PanelAction> for Action {
+    fn from(action: PanelAction) -> Self {
+        Self::Panel(action)
+    }
+}
+
+impl From<PickerAction> for Action {
+    fn from(action: PickerAction) -> Self {
+        Self::Picker(action)
     }
 }
 
@@ -74,11 +121,20 @@ impl From<Action> for Invocation {
     }
 }
 
-impl From<Command> for Invocation {
-    fn from(command: Command) -> Self {
-        Action::from(command).into()
-    }
+/// Cada `enum` de acciones, sin argumento.
+macro_rules! invocations {
+    ($($action:ty),*) => {
+        $(
+            impl From<$action> for Invocation {
+                fn from(action: $action) -> Self {
+                    Action::from(action).into()
+                }
+            }
+        )*
+    };
 }
+
+invocations!(Command, EditorAction, PanelAction, PickerAction);
 
 impl TryFrom<metalmind_vim::Invocation> for Invocation {
     type Error = UnknownAction;

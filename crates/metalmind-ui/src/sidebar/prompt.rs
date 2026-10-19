@@ -5,10 +5,10 @@ use gpui_kit::{Context, Div, ParentElement as _, Styled as _, div, prelude::Flue
 use metalmind_vault::VaultPath;
 
 use super::Sidebar;
-use super::actions::{Cancel, Confirm};
 use super::render::button;
 use crate::panel::{LineInput, NewEntry, Prompt};
 use crate::theme::Theme;
+use metalmind_keymap::PanelAction;
 
 impl Sidebar {
     pub(super) fn prompt_view(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<Div> {
@@ -104,7 +104,19 @@ fn confirm_delete(
             div()
                 .flex()
                 .gap(theme.panel_gap)
-                .child(button("confirm-delete", "Borrar (y)", Confirm, theme, cx))
-                .child(button("cancel-delete", "Cancelar (n)", Cancel, theme, cx)),
+                .child(button(
+                    "confirm-delete",
+                    "Borrar (y)",
+                    PanelAction::Confirm,
+                    theme,
+                    cx,
+                ))
+                .child(button(
+                    "cancel-delete",
+                    "Cancelar (n)",
+                    PanelAction::Cancel,
+                    theme,
+                    cx,
+                )),
         )
 }

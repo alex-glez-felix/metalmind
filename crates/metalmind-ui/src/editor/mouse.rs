@@ -12,7 +12,6 @@ use super::Editor;
 use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
-use crate::actions::{Copy, Paste};
 use crate::clipboard::SystemClipboard;
 
 impl Editor {
@@ -132,7 +131,7 @@ impl Editor {
         self.paste_text(text, cx);
     }
 
-    pub(super) fn copy(&mut self, _: &Copy, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn copy(&mut self, cx: &mut Context<Self>) {
         let copied = self.update_workspace(cx, |workspace, pane, cx| {
             workspace.copy(pane, &mut SystemClipboard(cx))
         });
@@ -141,7 +140,7 @@ impl Editor {
         }
     }
 
-    pub(super) fn paste(&mut self, _: &Paste, _window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn paste(&mut self, cx: &mut Context<Self>) {
         let pasted = self.update_workspace(cx, |workspace, pane, cx| {
             workspace.paste_clipboard(pane, &mut SystemClipboard(cx))
         });

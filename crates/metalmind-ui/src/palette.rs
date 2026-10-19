@@ -1,29 +1,16 @@
-//! La paleta de comandos: un picker sobre todas las acciones con nombre:
-//! las del registro (el motor y los comandos) y las demás acciones de la
-//! ventana (las que GPUI tiene disponibles en el editor enfocado). Una
-//! acción nueva aparece sola.
+//! La paleta de comandos: un picker sobre las acciones del registro que
+//! atiende la vista enfocada, con su atajo. Una acción nueva aparece sola.
 
-use gpui_kit::{Action as GpuiAction, App, Window};
-use metalmind_keymap::{Action, Command, Keymap};
+use gpui_kit::{KeyBindingContextPredicate, KeyContext, Window};
+use metalmind_keymap::{Action, Command, Keymap, Owner, View};
 
-use crate::actions::Dispatch;
 use crate::picker::PickerItem;
-
-/// Quién ejecuta la acción.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Target {
-    /// Una acción del registro, sin argumento: se despacha en el editor como
-    /// [`Dispatch`].
-    Registry(Action),
-    /// Otra acción de GPUI, por su nombre: se despacha en el editor.
-    Window(&'static str),
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     /// `editor: save` para `editor::save`, como la paleta de Zed.
     pub label: String,
-    pub target: Target,
+    pub action: Action,
     /// Su atajo, si tiene.
     pub keys: Option<String>,
 }
@@ -41,48 +28,52 @@ impl PickerItem for Entry {
 }
 
 /// Lo que lista la paleta abierta desde el elemento enfocado de `window`,
-/// por nombre. Las acciones de GPUI que piden argumentos no se pueden
-/// construir sin ellos y quedan para `:`.
+/// por nombre.
 #[must_use]
-pub fn entries(window: &Window, keymap: &Keymap, cx: &App) -> Vec<Entry> {
-    let window_keys = |action: &dyn GpuiAction| {
-        let binding = window.highest_precedence_binding_for_action(action)?;
-        let strokes: Vec<String> = binding
-            .keystrokes()
-            .iter()
-            .map(ToString::to_string)
-            .collect();
-        Some(strokes.join(" "))
-    };
-    let windowed = window
-        .available_actions(cx)
-        .into_iter()
+pub fn entries(window: &Window, keymap: &Keymap) -> Vec<Entry> {
+    let stack = window.context_stack();
+    let active = |view: View| is_active(view, &stack);
+    let focused = |owner| owns_focus(owner, active);
+    listed(keymap, focused, active)
+}
+
+/// Las acciones de los dueños en `focused`, con el atajo que vale en las
+/// vistas `active`, en orden por nombre.
+fn listed(
+    keymap: &Keymap,
+    focused: impl Fn(Owner) -> bool,
+    active: impl Fn(View) -> bool,
+) -> Vec<Entry> {
+    let mut entries: Vec<Entry> = Action::all()
+        .filter(|&action| focused(action.owner()) && !needs_argument_in_palette(action))
         .map(|action| Entry {
             label: label(action.name()),
-            target: Target::Window(action.name()),
-            keys: window_keys(action.as_ref()),
-        });
-    let mut entries: Vec<Entry> = registry_entries(keymap, window_keys)
-        .chain(windowed)
+            action,
+            keys: keymap.keys_for(action, &active),
+        })
         .collect();
     entries.sort_by(|a, b| a.label.cmp(&b.label));
-    entries.dedup_by(|a, b| a.label == b.label);
     entries
 }
 
-/// Las acciones del registro que se corren sin argumento, con el atajo de
-/// la ventana o, si no tiene, el del motor.
-fn registry_entries<'a>(
-    keymap: &'a Keymap,
-    window_keys: impl Fn(&dyn GpuiAction) -> Option<String> + 'a,
-) -> impl Iterator<Item = Entry> + 'a {
-    Action::all()
-        .filter(|&action| !needs_argument_in_palette(action))
-        .map(move |action| Entry {
-            label: label(action.name()),
-            target: Target::Registry(action),
-            keys: window_keys(&Dispatch(action.into())).or_else(|| keymap.keys_for(action)),
-        })
+fn is_active(view: View, stack: &[KeyContext]) -> bool {
+    KeyBindingContextPredicate::parse(view.predicate()).is_ok_and(|predicate| predicate.eval(stack))
+}
+
+fn owns_focus(owner: Owner, active: impl Fn(View) -> bool) -> bool {
+    match owner {
+        Owner::Window => true,
+        Owner::Editor => active(View::Editor),
+        Owner::Panel => [
+            View::FileTree,
+            View::FileTreeInput,
+            View::FileTreeConfirm,
+            View::FileTreeMenu,
+        ]
+        .into_iter()
+        .any(active),
+        Owner::Picker => active(View::Picker),
+    }
 }
 
 /// Sin argumento, `:w!` pisa el disco, `:e` relee y `:e!` descarta los
@@ -110,6 +101,7 @@ pub fn label(name: &str) -> String {
 mod tests {
     use std::collections::HashSet;
 
+    use metalmind_keymap::{EditorAction, PanelAction};
     use metalmind_vim::{Action as VimAction, Motion};
 
     use super::*;
@@ -122,19 +114,29 @@ mod tests {
         assert_eq!(label("suelta"), "suelta");
     }
 
+    fn from_editor() -> Vec<Entry> {
+        let editor = |view| view == View::Editor;
+        listed(
+            &Keymap::default(),
+            |owner| owns_focus(owner, editor),
+            editor,
+        )
+    }
+
     fn entry(entries: &[Entry], action: impl Into<Action>) -> Option<&Entry> {
-        let target = Target::Registry(action.into());
-        entries.iter().find(|entry| entry.target == target)
+        let action = action.into();
+        entries.iter().find(|entry| entry.action == action)
     }
 
     #[test]
-    fn las_acciones_del_motor_llevan_su_atajo() {
-        let keymap = Keymap::default();
-        let entries: Vec<Entry> = registry_entries(&keymap, |_| None).collect();
+    fn desde_el_editor_lista_el_motor_los_comandos_y_el_editor() {
+        let entries = from_editor();
         let start = Action::Vim(VimAction::Motion(Motion::DocumentStart));
         let start = entry(&entries, start).unwrap();
         assert_eq!(start.label, "vim: start of document");
         assert_eq!(start.keys.as_deref(), Some("g g"));
+        let copy = entry(&entries, EditorAction::Copy).unwrap();
+        assert_eq!(copy.keys.as_deref(), Some("ctrl-shift-c"));
         assert_eq!(
             entry(&entries, Command::OpenFinder)
                 .unwrap()
@@ -142,6 +144,14 @@ mod tests {
                 .as_deref(),
             Some("space f")
         );
+        assert_eq!(
+            entry(&entries, Command::OpenCommandPalette)
+                .unwrap()
+                .keys
+                .as_deref(),
+            Some("ctrl-shift-p")
+        );
+        assert!(entry(&entries, PanelAction::SelectNext).is_none());
         let labels: HashSet<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
         assert_eq!(labels.len(), entries.len());
     }
@@ -150,8 +160,7 @@ mod tests {
     /// menos los que sin argumento hacen algo que su nombre no dice.
     #[test]
     fn lista_los_comandos_que_corren_sin_argumento() {
-        let keymap = Keymap::default();
-        let entries: Vec<Entry> = registry_entries(&keymap, |_| None).collect();
+        let entries = from_editor();
         let listed: Vec<Command> = Command::ALL
             .iter()
             .copied()
@@ -172,17 +181,18 @@ mod tests {
     }
 
     #[test]
-    fn el_atajo_de_la_ventana_gana_al_del_motor() {
-        let keymap = Keymap::default();
-        let palette = Dispatch(Command::OpenCommandPalette.into());
-        let entries: Vec<Entry> = registry_entries(&keymap, |action| {
-            action
-                .partial_eq(&palette)
-                .then(|| "ctrl-shift-p".to_owned())
-        })
-        .collect();
-        let keys = |command| entry(&entries, command).unwrap().keys.as_deref();
-        assert_eq!(keys(Command::OpenCommandPalette), Some("ctrl-shift-p"));
-        assert_eq!(keys(Command::OpenFinder), Some("space f"));
+    fn desde_el_arbol_lista_el_panel_con_sus_teclas() {
+        let tree = |view| view == View::FileTree;
+        let entries = listed(&Keymap::default(), |owner| owns_focus(owner, tree), tree);
+        let new_folder = entry(&entries, PanelAction::NewFolder).unwrap();
+        assert_eq!(new_folder.keys.as_deref(), Some("A"));
+        assert_eq!(
+            entry(&entries, Command::ToggleFolders)
+                .unwrap()
+                .keys
+                .as_deref(),
+            Some("space e")
+        );
+        assert!(entry(&entries, EditorAction::Copy).is_none());
     }
 }

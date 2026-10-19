@@ -2,14 +2,16 @@
 //! nombre: elegirla es lo mismo que su tecla en el árbol.
 
 use gpui_kit::{
-    Action, AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored,
-    deferred, div, prelude::FluentBuilder as _,
+    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
+    Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored, deferred, div,
+    prelude::FluentBuilder as _,
 };
 use metalmind_vault::{EntryKind, VaultChange, VaultPath};
 
+use metalmind_keymap::{Keymap, PanelAction, View};
+
 use super::Sidebar;
-use super::actions::{Delete, Move, NewFolder, NewNote, OpenSplitDown, OpenSplitRight, Rename};
+use crate::actions::{AppKeymap, Dispatch};
 use crate::theme::Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,27 +39,19 @@ impl MenuItem {
     }
 
     /// La tecla que hace lo mismo en el árbol.
-    fn key(self) -> &'static str {
-        match self {
-            Self::NewNote => "a",
-            Self::NewFolder => "A",
-            Self::OpenSplitRight => "ctrl-v",
-            Self::OpenSplitDown => "ctrl-s",
-            Self::Rename => "r",
-            Self::Move => "m",
-            Self::Delete => "d",
-        }
+    fn keys(self, keymap: &Keymap) -> Option<String> {
+        keymap.keys_for(self.action().into(), |view| view == View::FileTree)
     }
 
-    pub fn action(self) -> Box<dyn Action> {
+    pub fn action(self) -> PanelAction {
         match self {
-            Self::NewNote => Box::new(NewNote),
-            Self::NewFolder => Box::new(NewFolder),
-            Self::OpenSplitRight => Box::new(OpenSplitRight),
-            Self::OpenSplitDown => Box::new(OpenSplitDown),
-            Self::Rename => Box::new(Rename),
-            Self::Move => Box::new(Move),
-            Self::Delete => Box::new(Delete),
+            Self::NewNote => PanelAction::NewNote,
+            Self::NewFolder => PanelAction::NewFolder,
+            Self::OpenSplitRight => PanelAction::OpenSplitRight,
+            Self::OpenSplitDown => PanelAction::OpenSplitDown,
+            Self::Rename => PanelAction::Rename,
+            Self::Move => PanelAction::Move,
+            Self::Delete => PanelAction::Delete,
         }
     }
 
@@ -193,7 +187,7 @@ impl ContextMenu {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |sidebar, _, window, cx| {
                 sidebar.menu = None;
-                window.dispatch_action(item.action(), cx);
+                window.dispatch_action(Box::new(Dispatch(item.action().into())), cx);
                 cx.notify();
             }))
             .child(item.label())
@@ -201,7 +195,7 @@ impl ContextMenu {
                 div()
                     .map(|element| theme.ui_small_text(element))
                     .text_color(theme.panel_muted)
-                    .child(item.key()),
+                    .children(item.keys(AppKeymap::get(cx))),
             )
             .into_any_element()
     }
@@ -283,23 +277,17 @@ mod tests {
         assert_eq!(menu.selected_item(), Some(MenuItem::Delete));
     }
 
+    /// Cada entrada muestra la tecla que hace lo mismo en el árbol.
     #[test]
-    fn cada_entrada_invoca_la_accion_de_su_tecla() {
-        let names: Vec<&str> = ContextMenu::new(Point::default(), path("a.md"), EntryKind::Note)
-            .items()
-            .map(|item| item.action().name())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                "file_tree::new_note",
-                "file_tree::new_folder",
-                "file_tree::open_split_right",
-                "file_tree::open_split_down",
-                "file_tree::rename",
-                "file_tree::move",
-                "file_tree::delete",
-            ]
-        );
+    fn cada_entrada_muestra_la_tecla_de_su_accion() {
+        let keymap = Keymap::default();
+        let keys: Vec<Option<String>> =
+            ContextMenu::new(Point::default(), path("a.md"), EntryKind::Note)
+                .items()
+                .map(|item| item.keys(&keymap))
+                .collect();
+        let expected =
+            ["a", "A", "ctrl-v", "ctrl-s", "r", "m", "d"].map(|key| Some(key.to_owned()));
+        assert_eq!(keys, expected);
     }
 }

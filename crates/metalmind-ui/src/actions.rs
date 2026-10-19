@@ -1,14 +1,15 @@
-//! Acciones de la ventana que no son de vim. Los atajos, la paleta y `:`
-//! solo las invocan por su nombre.
+//! GPUI como transporte del registro de acciones: los atajos de la ventana
+//! salen del keymap de la app y todas las acciones viajan por el foco como
+//! [`Dispatch`]. Los atajos, la paleta y `:` solo las invocan por su nombre.
 
 use gpui_kit::{Action, App, Global, KeyBinding, Window};
-use metalmind_keymap::{Command, Invocation, Keymap, UnknownAction};
+use metalmind_keymap::{Invocation, KeyName, Keymap, Keystroke, UnknownAction, context};
 
 /// Contexto de teclas de la vista de editor.
-pub const EDITOR_CONTEXT: &str = "Editor";
+pub const EDITOR_CONTEXT: &str = context::EDITOR;
 
-/// El keymap de la app, del que salen la tabla del motor y las teclas que
-/// muestra la paleta.
+/// El keymap de la app, del que salen los atajos, la paleta y las teclas que
+/// muestran los menús.
 pub struct AppKeymap(Keymap);
 
 impl Global for AppKeymap {}
@@ -20,9 +21,9 @@ impl AppKeymap {
     }
 }
 
-/// Una acción del registro como acción de GPUI, que solo la transporta por
-/// el foco hasta la vista que la atiende. Se llama como la acción; no se
-/// registra por nombre porque los nombres son del registro.
+/// Cualquier acción del registro como acción de GPUI, que solo la
+/// transporta por el foco hasta la vista que la atiende. Se llama como la
+/// acción; no se registra por nombre porque los nombres son del registro.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Dispatch(pub Invocation);
 
@@ -66,41 +67,48 @@ pub fn dispatch(
     Ok(())
 }
 
-/// Copia la selección de Visual o del ratón, o la línea del cursor si no
-/// hay ninguna.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
-#[action(namespace = editor, name = "copy")]
-pub struct Copy;
-
-/// Pega en el cursor; en Visual, reemplaza la selección.
-#[derive(Clone, PartialEq, Eq, Default, Debug, Action)]
-#[action(namespace = editor, name = "paste")]
-pub struct Paste;
-
-/// `ctrl-shift-*` no lo usa vim, así que queda para el portapapeles del
-/// sistema y para la paleta, con el atajo de Zed. Deja `keymap` como el de
-/// la app.
+/// Le da a GPUI los atajos de las vistas de `keymap` y lo deja como el de
+/// la app. Los del editor que son de vim los resuelve el motor.
 pub fn bind_keys(keymap: Keymap, cx: &mut App) {
-    cx.bind_keys([
-        KeyBinding::new("ctrl-shift-c", Copy, Some(EDITOR_CONTEXT)),
-        KeyBinding::new("ctrl-shift-v", Paste, Some(EDITOR_CONTEXT)),
-        KeyBinding::new(
-            "ctrl-shift-p",
-            Dispatch(Command::OpenCommandPalette.into()),
-            Some(EDITOR_CONTEXT),
-        ),
-    ]);
-    crate::sidebar::bind_keys(cx);
+    let bindings: Vec<KeyBinding> = keymap
+        .view_bindings()
+        .map(|(view, keys, action)| {
+            let keys: Vec<String> = keys.iter().map(|&key| gpui_keystroke(key)).collect();
+            KeyBinding::new(
+                &keys.join(" "),
+                Dispatch(action.into()),
+                Some(view.predicate()),
+            )
+        })
+        .collect();
+    cx.bind_keys(bindings);
     cx.set_global(AppKeymap(keymap));
+}
+
+/// Como escribe GPUI una tecla: una mayúscula es `shift-` y su minúscula.
+fn gpui_keystroke(keystroke: Keystroke) -> String {
+    let mut text = String::new();
+    if keystroke.ctrl {
+        text.push_str("ctrl-");
+    }
+    let upper = matches!(keystroke.key, KeyName::Char(c) if c.is_ascii_uppercase());
+    if keystroke.shift || upper {
+        text.push_str("shift-");
+    }
+    match keystroke.key {
+        KeyName::Char(c) if upper => text.push(c.to_ascii_lowercase()),
+        key => text.push_str(&key.label()),
+    }
+    text
 }
 
 #[cfg(test)]
 mod tests {
     use gpui_kit::{
-        Context, FocusHandle, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-        TestAppContext, VisualTestContext, div,
+        Context, FocusHandle, InteractiveElement as _, IntoElement, KeyContext, ParentElement as _,
+        Render, TestAppContext, VisualTestContext, div,
     };
-    use metalmind_keymap::Action as AnyAction;
+    use metalmind_keymap::{Action as AnyAction, Command};
 
     use super::*;
 
@@ -109,12 +117,13 @@ mod tests {
     struct Probe {
         received: Vec<Invocation>,
         focus: FocusHandle,
+        context: KeyContext,
     }
 
     impl Render for Probe {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             div()
-                .key_context(EDITOR_CONTEXT)
+                .key_context(self.context.clone())
                 .track_focus(&self.focus)
                 .on_action(cx.listener(|probe, action: &Dispatch, _, _| {
                     probe.received.push(action.0.clone());
@@ -124,10 +133,21 @@ mod tests {
     }
 
     fn probe(cx: &mut TestAppContext) -> (gpui_kit::Entity<Probe>, &mut VisualTestContext) {
+        probe_in(cx, EDITOR_CONTEXT)
+    }
+
+    /// Una vista con los identificadores de `context` separados por espacio,
+    /// como `Picker splits`.
+    fn probe_in<'a>(
+        cx: &'a mut TestAppContext,
+        context: &str,
+    ) -> (gpui_kit::Entity<Probe>, &'a mut VisualTestContext) {
         cx.update(|cx| bind_keys(Keymap::default(), cx));
+        let context = KeyContext::parse(context).unwrap();
         let (probe, cx) = cx.add_window_view(|_, cx| Probe {
             received: Vec::new(),
             focus: cx.focus_handle(),
+            context,
         });
         cx.update(|window, cx| window.focus(&probe.read(cx).focus.clone(), cx));
         (probe, cx)
@@ -162,6 +182,36 @@ mod tests {
         cx.simulate_keystrokes("ctrl-shift-p");
         let received = probe.read_with(cx, |probe, _| probe.received.clone());
         assert_eq!(received, [Command::OpenCommandPalette.into()]);
+    }
+
+    /// Cada atajo de una vista, con las teclas como las escribe GPUI, llega
+    /// a esa vista como su acción.
+    #[test]
+    fn cada_atajo_de_una_vista_llega_como_su_accion() {
+        for (view, keys, action) in Keymap::default().view_bindings() {
+            let mut cx = TestAppContext::single();
+            let (probe, cx) = probe_in(&mut cx, &view.predicate().replace(" && ", " "));
+            let keys: Vec<String> = keys.iter().map(|&key| gpui_keystroke(key)).collect();
+            cx.simulate_keystrokes(&keys.join(" "));
+            let received = probe.read_with(cx, |probe, _| probe.received.clone());
+            assert_eq!(received, [action.into()], "{keys:?} en {view:?}");
+        }
+    }
+
+    #[test]
+    fn una_mayuscula_es_shift_y_su_minuscula() {
+        let cases = [
+            (Keystroke::plain(KeyName::Char('G')), "shift-g"),
+            (Keystroke::plain(KeyName::Char(' ')), "space"),
+            (Keystroke::plain(KeyName::Char('/')), "/"),
+            (Keystroke::ctrl(KeyName::Char('w')), "ctrl-w"),
+            (Keystroke::ctrl_shift(KeyName::Char('p')), "ctrl-shift-p"),
+            (Keystroke::ctrl(KeyName::Backspace), "ctrl-backspace"),
+            (Keystroke::plain(KeyName::Home), "home"),
+        ];
+        for (keystroke, text) in cases {
+            assert_eq!(gpui_keystroke(keystroke), text);
+        }
     }
 
     /// Los nombres son del registro: GPUI no construye ninguno.

@@ -18,7 +18,8 @@ Con GPUI:
 - `workspace_view.rs`: la raíz. La barra de botones, el panel lateral y un `Editor` por panel; mueve el foco entre ellos.
 - `editor/`: un panel de edición. Pinta solo lo visible y le pasa las teclas al motor vim.
 - `picker/`: la vista de un picker (`PickerView`), una sola para el finder, la paleta y `space /`; lo que cambia lo pone su `PickerDelegate`.
-- `sidebar/`: el panel lateral. El árbol en una `uniform_list` (solo se pintan las filas visibles), el menú del clic derecho, los botones y las acciones con nombre (`file_tree::*`, `panel::*`) con sus atajos.
+- `sidebar/`: el panel lateral. El árbol en una `uniform_list` (solo se pintan las filas visibles), el menú del clic derecho, los botones y lo que hace cada acción `file_tree::*` y `panel::*`; sus nombres y atajos son de `metalmind-keymap`.
+- `actions.rs`: GPUI como transporte del registro de `metalmind-keymap`. Los atajos de las vistas salen del keymap de la app y cada acción viaja como `Dispatch` por el foco; `dispatch(nombre, argumento)` es lo que hacen `:`, la paleta y los atajos que resuelve el motor.
 - `theme.rs`: todo color y tamaño de la UI sale de aquí.
 
 ## El panel lateral

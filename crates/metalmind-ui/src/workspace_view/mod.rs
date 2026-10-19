@@ -318,13 +318,14 @@ impl Render for WorkspaceView {
             .map(|element| theme.ui_text(element))
             .text_color(theme.foreground)
             .bg(theme.background)
-            // Las acciones del registro llegan aquí desde el editor
-            // enfocado, el panel lateral o la paleta.
+            // Los comandos y las acciones del motor llegan aquí desde
+            // cualquier vista; lo demás es de la vista que lo atiende.
             .on_action(
                 cx.listener(|view, Dispatch(invocation): &Dispatch, window, cx| {
                     match invocation.action {
                         Action::Command(_) => view.run(invocation, window, cx),
                         Action::Vim(action) => view.execute_vim(action, window, cx),
+                        _ => cx.propagate(),
                     }
                 }),
             );
