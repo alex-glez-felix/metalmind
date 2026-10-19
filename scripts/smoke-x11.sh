@@ -18,6 +18,13 @@ pause="${METALMIND_SMOKE_PAUSE:-0.4}"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+# Config, datos y estado propios, sin autoguardado: los casos prueban guardar
+# y salir como en vim, y nada toca la config ni el historial de quien lo corre.
+export HOME="$work/home"
+export XDG_CONFIG_HOME="$HOME/.config" XDG_DATA_HOME="$HOME/.local/share"
+export XDG_STATE_HOME="$HOME/.local/state" XDG_CACHE_HOME="$HOME/.cache"
+mkdir -p "$XDG_CONFIG_HOME/metalmind"
+printf 'editor:\n  autosave: false\n' >"$XDG_CONFIG_HOME/metalmind/config.yaml"
 failures=0
 
 fail() {

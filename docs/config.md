@@ -32,6 +32,8 @@ editor:
   padding:                # espacio entre el borde del panel y el texto, en píxeles (0–255)
     horizontal: 12        # a la izquierda, antes de los números, y a la derecha
     vertical: 8           # arriba y abajo
+  autosave: true          # guardar solo las notas con cambios (ver abajo)
+  autosave_delay_ms: 1000 # cuánto esperar sin editar antes de guardar (100–60000)
 
 panes:
   border_width: 2         # ancho de la línea entre paneles, en píxeles (0–255); el color es ui.pane_border
@@ -71,6 +73,14 @@ editor:
 
 Con `gutter_marks`, el margen muestra a la izquierda de los números la letra de cada mark que cae en la línea, como marks.nvim o vim-signature: las `a`–`z` del buffer y las `A`–`Z` de este archivo; las especiales (`''`, `'<`, `'>`) no se muestran. Si una línea tiene varias, se ve la primera (las minúsculas antes que las mayúsculas) seguida de un `+`, y el tooltip al pasar el ratón las lista todas. La columna se reserva aunque no haya ninguna mark, así el texto no se mueve al poner la primera; con `gutter_marks: false` no ocupa nada. Se actualiza con `m`, con las ediciones (una mark sigue a su línea) y con `:delm a`, `:delm a-d` o `:delm!` (todas las `a`–`z` del buffer). El color de la letra es `ui.gutter_mark`.
 
+Con `autosave` (el default), Metalmind guarda solo las notas que tienen archivo y cambios: cuando pasa `autosave_delay_ms` sin editar (moverse no cuenta), cuando un panel cambia de nota (`:e`, el árbol, el finder, `gd`, `ctrl-o`), cuando la ventana pierde el foco y antes de cerrarla. Un `[No Name]` no se autoguarda: `:w ruta` le da archivo. Así la protección de salida casi nunca salta: `:q` guarda antes y solo se niega si queda algo que no se pudo guardar. La barra de estado dice "guardado" o "sin guardar" junto al nombre, en lugar del `[+]` de vim; mientras escribes con pausas cortas sigue en "guardado", y pasa a "sin guardar" si los cambios llevan cinco veces el delay sin llegar al disco (o la nota no tiene archivo), así no cambia con cada guardado. Los colores son los del tema: `ui.status_unfocused_foreground`, `ui.modified` y `ui.error`.
+
+Si el archivo cambió fuera de Metalmind (git, Syncthing, otro editor) mientras la nota tiene cambios, no se pisa: la barra avisa con el `W12` de vim y dice "cambió en disco", y lo decides tú: `:w!` escribe tus cambios encima y `:e!` descarta los tuyos y trae lo de disco. Lo mismo vale para `:w`, que se niega con `WARNING: The file has been changed since reading it!!!`. Si el archivo se borró fuera, tampoco se vuelve a crear solo.
+
+Con `autosave: false`, guardar y salir son como en vim: nada se guarda sin `:w`, la barra muestra `[+]` y `:q` se niega con cambios sin guardar.
+
+Las versiones del autoguardado no llenan el historial: mientras sigues editando queda una cada cinco minutos, la última de cada tramo, y la última al terminar; un `:w` siempre deja la suya.
+
 La indentación marca qué clave va dentro de cuál: dos espacios por nivel, nunca tabs.
 
 El historial guarda una versión de la nota cada vez que se guarda o cambia desde fuera, fuera del vault, en la carpeta de datos de cada vault: `$XDG_DATA_HOME/metalmind/vaults/` en Linux (por default `~/.local/share/metalmind/vaults/`). De cada hora o día se queda la última versión, con las horas y los días de la zona horaria del sistema; la última versión de una nota se guarda siempre, y la diaria es para siempre salvo que se ponga `daily_days`.
@@ -79,7 +89,7 @@ El historial guarda una versión de la nota cada vez que se guarda o cambia desd
 
 Con `markdown`, `Enter` en Insert sobre `- algo`, `1. algo` o `- [ ] algo` abre otro ítem igual (el número siguiente, el checkbox sin marcar), renumera los de abajo y en un ítem vacío termina la lista; `o` y `O` hacen lo mismo. `>>` y `<<` sobre un ítem llevan consigo a sus hijos. Cada parte se apaga por separado: con `continue_lists: false`, `Enter` es solo un salto de línea; con `indent_list_children: false`, `>>` mueve solo la línea, como en vim.
 
-Hoy la app usa el tema, la fuente, los números de línea, `gutter_marks`, `editor.padding`, `panes`, `panel`, `scrolloff`, `tabstop`, `expandtab`, `markdown` y `vault`; `templates_folder`, `daily` y `history` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
+Hoy la app usa el tema, la fuente, los números de línea, `gutter_marks`, `editor.padding`, `editor.autosave`, `editor.autosave_delay_ms`, `panes`, `panel`, `scrolloff`, `tabstop`, `expandtab`, `markdown`, `history` y `vault`; `templates_folder` y `daily` ya los entiende el núcleo pero no la UI. El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 
 Dentro de Metalmind, una ruta relativa en `:e` o `:w` parte de la raíz del vault, se haya lanzado Metalmind desde donde se haya lanzado: `:w ideas/hoy.md` siempre deja la nota en el vault. `metalmind` sin argumentos elige el vault en este orden: la carpeta de la variable de entorno `METALMIND_VAULT` (si está puesta tiene que ser una carpeta; si no, Metalmind avisa y no abre), el último vault que abriste y, si no hay ninguno (o ya no existe), el de `vault:`. Un argumento gana a todo eso: `METALMIND_VAULT=~/Notas metalmind` y `metalmind ~/Notas` abren lo mismo, pero `metalmind ~/otra/` abre `~/otra/` aunque la variable esté puesta. Lo que Metalmind recuerda de cada vault (si el panel lateral se ve y qué carpetas estaban abiertas) no va en `config.yaml` sino en la carpeta de estado (`$XDG_STATE_HOME/metalmind/`, por defecto `~/.local/state/metalmind/`): no es configuración y se puede borrar sin perder nada.
 

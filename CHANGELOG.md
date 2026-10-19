@@ -169,6 +169,18 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   la ventana) se niega mientras alguna nota tenga cambios: muestra cuál con
   `E162` y la abre. `:wa` guarda todas, `:wqa`/`:xa` guardan y salen y
   `:qa!` sale sin guardar.
+- Autoguardado, encendido por defecto (`editor.autosave`): guarda las notas
+  con archivo y con cambios tras un segundo sin editar
+  (`editor.autosave_delay_ms`), al cambiar de nota en un panel, al perder el
+  foco y antes de cerrar, así que salir casi nunca se niega. La barra de
+  estado dice "guardado" o "sin guardar" sin cambiar con cada guardado. Si el
+  archivo cambió fuera de Metalmind, no se pisa: se avisa con `W12` y se
+  elige con `:w!` (nuevo: escribe igual, y `:w! ruta` pisa un archivo que
+  existe) o `:e!`. `:w` tampoco pisa un archivo que cambió en disco. Con
+  `autosave: false`, todo es como en vim.
+- Cada guardado de una nota deja su versión en el historial; las del
+  autoguardado se agrupan: una cada cinco minutos mientras se edita y la
+  última al terminar.
 
 #### Links (M3)
 

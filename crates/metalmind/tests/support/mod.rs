@@ -125,6 +125,31 @@ impl Smoke {
         self.dir.path().join("home")
     }
 
+    /// Escribe el `config.yaml` con el que se lanza `metalmind`.
+    pub fn config(&self, yaml: &str) {
+        let dir = self.home().join(".config/metalmind");
+        fs::create_dir_all(&dir).expect("crear la carpeta de config");
+        fs::write(dir.join("config.yaml"), yaml).expect("escribir la config");
+    }
+
+    /// Sin autoguardado: guardar y salir son como en vim.
+    pub fn without_autosave(&self) {
+        self.config("editor:\n  autosave: false\n");
+    }
+
+    /// Cuántas notas tienen historial en la carpeta de datos.
+    pub fn history_logs(&self) -> usize {
+        let vaults = self.home().join(".local/share/metalmind/vaults");
+        let Ok(vaults) = fs::read_dir(vaults) else {
+            return 0;
+        };
+        vaults
+            .map(|vault| vault.expect("leer la carpeta del vault").path())
+            .filter_map(|vault| fs::read_dir(vault.join("history/notes")).ok())
+            .map(Iterator::count)
+            .sum()
+    }
+
     /// Como `launch`, pero los loaders de Vulkan y de EGL no encuentran
     /// ningún driver: GPUI no tiene con qué dibujar la ventana.
     pub fn launch_without_gpu(&self, args: &[&str]) -> Metalmind<'_> {
