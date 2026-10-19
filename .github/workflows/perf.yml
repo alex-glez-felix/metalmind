@@ -9,11 +9,14 @@ name: Rendimiento
 on:
   push:
     branches: [main]
-    paths: &nucleo
+    paths: &medido
       - "crates/metalmind-buffer/**"
       - "crates/metalmind-vim/**"
       - "crates/metalmind-syntax/**"
       - "crates/metalmind-search/**"
+      - "crates/metalmind-vault/**"
+      - "crates/metalmind-config/**"
+      - "crates/metalmind-ui/**"
       - "crates/metalmind-perf/**"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -21,11 +24,13 @@ on:
       - ".github/workflows/perf.yml"
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths: *nucleo
+    paths: *medido
 
 env:
   CARGO_TERM_COLOR: always
   GUNGRAUN_VERSION: 0.20.0
+  # Los crates con un benchmark `instrucciones`.
+  PAQUETES: metalmind-perf metalmind-vault metalmind-ui
   # Una regresión de más de esto en instrucciones hace fallar el job.
   LIMITE: ir=5%
   # Con esta etiqueta, una regresión justificada se reporta sin fallar.
@@ -38,17 +43,24 @@ jobs:
       (github.event.action != 'labeled' && github.event.action != 'unlabeled')
       || github.event.label.name == 'rendimiento-aceptado'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
           # En una PR, HEAD es el merge con la base y HEAD^1 es la base.
           fetch-depth: 2
-      - run: sudo apt-get update && sudo apt-get install -y valgrind
+      # valgrind, lo que GPUI necesita para compilar y una fuente monoespaciada
+      # para el tema del editor (benchmark de metalmind-ui).
+      - uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: valgrind libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev fonts-dejavu-core
+          version: perf-1
+      - run: valgrind --version
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v2-perf
+          # v3: desde que mide metalmind-ui, el caché lleva GPUI en release.
+          prefix-key: v3-perf
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
@@ -59,17 +71,24 @@ jobs:
         id: base
         run: |
           git worktree add ../base HEAD^1
-          if [ ! -f ../base/crates/metalmind-perf/benches/instrucciones.rs ]; then
-            echo "::notice::La base no tiene los benchmarks de instrucciones; no hay contra qué comparar."
+          paquetes=()
+          for paquete in $PAQUETES; do
+            if [ -f "../base/crates/$paquete/benches/instrucciones.rs" ]; then
+              paquetes+=(-p "$paquete")
+            fi
+          done
+          if [ ${#paquetes[@]} -eq 0 ]; then
+            echo "::notice::La base no tiene benchmarks de instrucciones; no hay contra qué comparar."
             exit 0
           fi
           echo "medida=true" >> "$GITHUB_OUTPUT"
-          cd ../base
-          # Con el mismo target, cargo daría por fresco el binario de la base al
-          # medir la PR (mismas rutas relativas); la baseline sí va al de la PR.
-          CARGO_TARGET_DIR="$RUNNER_TEMP/target-base" \
-          GUNGRAUN_HOME="$GITHUB_WORKSPACE/target/gungraun" \
-            cargo bench -p metalmind-perf --bench instrucciones -- --save-baseline=base
+          # El mismo target que la PR: las dependencias se compilan una vez.
+          (cd ../base && CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" \
+            cargo bench "${paquetes[@]}" --bench instrucciones -- --save-baseline=base)
+          # Cargo decide si un crate del workspace está al día por fechas y con
+          # rutas relativas al crate: lo que cambia la PR tiene que quedar más
+          # nuevo que lo que compiló la base, o mediría el binario de la base.
+          git diff --name-only -z HEAD^1 HEAD | xargs -0 -r touch -c
 
       - name: Comparar contra la base
         if: steps.base.outputs.medida == 'true'
@@ -82,9 +101,14 @@ jobs:
           else
             limite=(--callgrind-limits="$LIMITE")
           fi
-          cargo bench -p metalmind-perf --bench instrucciones -- --baseline=base "${limite[@]}"
+          paquetes=()
+          for paquete in $PAQUETES; do paquetes+=(-p "$paquete"); done
+          cargo bench "${paquetes[@]}" --bench instrucciones -- --baseline=base "${limite[@]}"
 
       # En main y en una PR sin base medible: que los benchmarks corran.
       - name: Medir
         if: steps.base.outputs.medida != 'true'
-        run: cargo bench -p metalmind-perf --bench instrucciones
+        run: |
+          paquetes=()
+          for paquete in $PAQUETES; do paquetes+=(-p "$paquete"); done
+          cargo bench "${paquetes[@]}" --bench instrucciones
