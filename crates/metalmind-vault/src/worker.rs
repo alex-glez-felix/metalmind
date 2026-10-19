@@ -18,12 +18,14 @@ use crate::links::LinkIndex;
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::tags::Tags;
-use crate::vault::VaultUpdate;
+use crate::vault::{SaveKind, VaultUpdate};
 use crate::watch::{touched, touched_by_errors};
 
 pub(crate) enum Message {
     Disk(DebounceEventResult),
     Save(Save),
+    /// Avisa cuando ya se registraron los guardados que llegaron antes.
+    Flush(mpsc::Sender<()>),
     Stop,
 }
 
@@ -32,6 +34,7 @@ pub(crate) struct Save {
     pub path: VaultPath,
     pub text: String,
     pub at: SystemTime,
+    pub kind: SaveKind,
     pub done: mpsc::Sender<Result<Option<VersionId>, HistoryError>>,
 }
 
@@ -62,6 +65,8 @@ impl Worker {
             match message {
                 Message::Disk(first) => self.on_disk(&mut indexes, first, &mut inbox),
                 Message::Save(save) => self.record(&save),
+                // Quien espera puede haberse ido.
+                Message::Flush(done) => drop(done.send(())),
                 Message::Stop => return,
             }
         }
@@ -148,7 +153,10 @@ impl Worker {
         let Some(history) = &self.history else {
             return;
         };
-        let result = history.record(&save.path, &save.text, save.at);
+        let result = match save.kind {
+            SaveKind::Explicit => history.record(&save.path, &save.text, save.at),
+            SaveKind::Autosave => history.record_autosave(&save.path, &save.text, save.at),
+        };
         if let Err(error) = &result {
             log::warn!("{error}");
         }
@@ -373,6 +381,7 @@ mod tests {
                 path: a.clone(),
                 text: "dos".to_owned(),
                 at: SystemTime::now(),
+                kind: SaveKind::Explicit,
                 done,
             }))
             .unwrap();
@@ -403,6 +412,7 @@ mod tests {
                 path: b.clone(),
                 text: "dos".to_owned(),
                 at: SystemTime::now(),
+                kind: SaveKind::Explicit,
                 done,
             }))
             .unwrap();
@@ -462,6 +472,7 @@ mod tests {
                 path: note.clone(),
                 text: "vieja".to_owned(),
                 at: SystemTime::now(),
+                kind: SaveKind::Explicit,
                 done,
             }))
             .unwrap();

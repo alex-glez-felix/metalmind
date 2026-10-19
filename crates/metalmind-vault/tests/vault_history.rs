@@ -14,8 +14,8 @@ use std::time::SystemTime;
 
 use metalmind_config::{HistoryRetention, Paths};
 use metalmind_vault::{
-    History, HistoryOptions, Vault, VaultChange, VaultOptions, VaultPath, VaultUpdate, Version,
-    VersionError, VersionId,
+    History, HistoryOptions, SaveKind, Vault, VaultChange, VaultOptions, VaultPath, VaultUpdate,
+    Version, VersionError, VersionId, VersionKind,
 };
 use pretty_assertions::assert_eq;
 use support::history::{HOUR, contents, epoch, path};
@@ -43,7 +43,7 @@ fn wait_until_open(vault: &Vault) {
 /// Guarda desde el vault y espera a que se registre la versión.
 fn save(vault: &Vault, note: &VaultPath, text: &str) -> Option<VersionId> {
     vault
-        .save(note, text.to_owned())
+        .save(note, text.to_owned(), SaveKind::Explicit)
         .unwrap()
         .unwrap()
         .wait()
@@ -67,9 +67,58 @@ fn guardar_desde_el_vault_registra_la_version() {
         ["uno\n", "dos\n"]
     );
     assert!(
-        vault.save(&path("imagen.png"), "x".to_owned()).is_err(),
+        vault
+            .save(&path("imagen.png"), "x".to_owned(), SaveKind::Explicit)
+            .is_err(),
         "solo notas"
     );
+}
+
+/// Lo que guarda el autoguardado y lo que el watcher ve de esos guardados
+/// no suma una versión por guardado.
+#[test]
+fn el_autoguardado_del_vault_se_agrupa() {
+    let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let (vault, _updates) = open_vault(dir.path(), data.path());
+    let note = path("a.md");
+    let autosave = |text: &str| {
+        vault
+            .save(&note, text.to_owned(), SaveKind::Autosave)
+            .unwrap()
+            .unwrap()
+            .wait()
+            .unwrap()
+    };
+    autosave("uno");
+    autosave("dos");
+    assert_eq!(contents(vault.history().unwrap(), &note), ["dos"]);
+    save(&vault, &note, "dos");
+    autosave("tres");
+    let history = vault.history().unwrap();
+    assert_eq!(contents(history, &note), ["dos", "tres"]);
+    let kinds: Vec<VersionKind> = history
+        .versions(&note)
+        .unwrap()
+        .iter()
+        .map(|version| version.kind)
+        .collect();
+    assert_eq!(kinds, [VersionKind::Saved, VersionKind::Autosaved]);
+}
+
+#[test]
+fn se_puede_esperar_a_las_versiones_sin_cerrar_el_vault() {
+    let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let (vault, _updates) = open_vault(dir.path(), data.path());
+    let note = path("a.md");
+    for text in ["uno", "dos"] {
+        drop(
+            vault
+                .save(&note, text.to_owned(), SaveKind::Explicit)
+                .unwrap(),
+        );
+    }
+    vault.wait_for_versions();
+    assert_eq!(contents(vault.history().unwrap(), &note), ["uno", "dos"]);
 }
 
 #[test]
@@ -206,7 +255,11 @@ fn cerrar_el_vault_no_pierde_las_versiones_que_esperan() {
     {
         let (vault, _updates) = open_vault(dir.path(), data.path());
         for text in ["uno", "dos", "tres"] {
-            drop(vault.save(&note, text.to_owned()).unwrap());
+            drop(
+                vault
+                    .save(&note, text.to_owned(), SaveKind::Explicit)
+                    .unwrap(),
+            );
         }
     }
     let (vault, _updates) = open_vault(dir.path(), data.path());
@@ -223,7 +276,7 @@ fn si_el_historial_falla_la_nota_igual_se_guarda() {
     fs::write(&data, "").unwrap();
     let (vault, _updates) = open_vault(dir.path(), &data);
     let pending = vault
-        .save(&path("a.md"), "guardada".to_owned())
+        .save(&path("a.md"), "guardada".to_owned(), SaveKind::Explicit)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -424,7 +477,7 @@ fn sin_historial_en_las_opciones_guardar_igual_escribe() {
     assert!(vault.history().is_none());
     assert!(
         vault
-            .save(&path("a.md"), "uno".to_owned())
+            .save(&path("a.md"), "uno".to_owned(), SaveKind::Explicit)
             .unwrap()
             .is_none()
     );
@@ -484,9 +537,15 @@ fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
 
     let lock = lock_history(data.path(), dir.path());
     // El hilo se queda esperando el lock con este guardado, que el lote no toca.
-    let untouched = vault.save(&c, "c".to_owned()).unwrap().unwrap();
+    let untouched = vault
+        .save(&c, "c".to_owned(), SaveKind::Explicit)
+        .unwrap()
+        .unwrap();
     // Guardado en `a.md` antes del renombre: su mensaje va antes que el lote.
-    let before = vault.save(&a, "dos".to_owned()).unwrap().unwrap();
+    let before = vault
+        .save(&a, "dos".to_owned(), SaveKind::Explicit)
+        .unwrap()
+        .unwrap();
     // El renombre en otro lote que esa escritura, para que llegue como
     // renombre y no como borrar y crear.
     wait_for_changes(&witnessed, |changes| {
@@ -505,7 +564,10 @@ fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
     std::thread::sleep(std::time::Duration::from_millis(300));
     // Guardado en el destino después del renombre: su mensaje va después
     // del lote, y tiene que registrarse después de seguir el renombre.
-    let after = vault.save(&b, "tres".to_owned()).unwrap().unwrap();
+    let after = vault
+        .save(&b, "tres".to_owned(), SaveKind::Explicit)
+        .unwrap()
+        .unwrap();
     drop(lock);
 
     let after = after.wait().unwrap().unwrap();

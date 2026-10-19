@@ -97,7 +97,9 @@ impl History {
             .filter_map(|(entry, keep)| keep.then_some(entry))
             .collect();
         let removed = saved_at.len() - survivors.len();
-        if removed == 0 {
+        // Las autoguardadas reemplazadas ya no son versiones, pero sus
+        // registros ocupan lugar hasta rehacer el log.
+        if removed == 0 && log.replaced() == 0 {
             return Ok(0);
         }
         let records: Vec<usize> = survivors.iter().map(|entry| entry.record).collect();
@@ -107,7 +109,7 @@ impl History {
         let mut previous: Option<String> = None;
         log.for_each_content(&records, |text| {
             let entry = next.next().ok_or(DAMAGED)?;
-            bytes.extend(fresh.push_version(entry.seq, entry.at, text, previous.as_deref())?);
+            bytes.extend(fresh.push_version(entry, text, previous.as_deref())?);
             previous = Some(text.to_owned());
             Ok(())
         })
