@@ -56,6 +56,11 @@ pub struct Picture {
 /// el suavizado de los bordes cae ahí y no se recorta.
 pub const PADDING: f32 = 1.0;
 
+/// El lado más largo de una imagen, en píxeles de la pantalla: el que
+/// aceptan las texturas de casi cualquier GPU. Una fórmula más grande no se
+/// pinta y se ve como una que no compone.
+pub const MAX_SIDE: f32 = 8192.0;
+
 /// El layout de la fórmula, sin pintarla.
 ///
 /// # Errors
@@ -72,6 +77,7 @@ pub fn measure(latex: &str, display: bool) -> Result<Metrics, MathError> {
 pub fn render(latex: &str, display: bool, look: Look) -> Result<Picture, MathError> {
     let [r, g, b, a] = look.color;
     let list = compose(latex, display, Color::new(r, g, b, a))?;
+    fits(metrics(&list), look)?;
     let options = RenderOptions {
         font_size: look.size,
         padding: PADDING,
@@ -81,6 +87,26 @@ pub fn render(latex: &str, display: bool, look: Look) -> Result<Picture, MathErr
     };
     let png = contain(|| ratex_render::render_to_png(&list, &options).map_err(MathError::Render))?;
     decode(&png)
+}
+
+/// Que la imagen quepa antes de reservar sus píxeles.
+fn fits(metrics: Metrics, look: Look) -> Result<(), MathError> {
+    let valid = |value: f32| value.is_finite() && value > 0.0;
+    if !valid(look.size) || !valid(look.scale) {
+        return Err(MathError::Render(format!(
+            "tamaño {} y escala {} no sirven para pintar",
+            look.size, look.scale
+        )));
+    }
+    let side = |em: f32| (em * look.size + 2.0 * PADDING) * look.scale;
+    let (width, height) = (side(metrics.width), side(metrics.height + metrics.depth));
+    if width.is_finite() && height.is_finite() && width <= MAX_SIDE && height <= MAX_SIDE {
+        Ok(())
+    } else {
+        Err(MathError::Render(format!(
+            "la fórmula mide {width:.0}×{height:.0} píxeles; el tope es {MAX_SIDE:.0}"
+        )))
+    }
 }
 
 fn compose(latex: &str, display: bool, color: Color) -> Result<DisplayList, MathError> {
@@ -205,6 +231,14 @@ mod tests {
             picture.bgra.len(),
             (picture.width * picture.height * 4) as usize
         );
+    }
+
+    #[test]
+    fn una_formula_enorme_no_se_pinta() {
+        let error = render(r"\rule{2000em}{1em}", false, LOOK).unwrap_err();
+        assert!(matches!(error, MathError::Render(_)), "{error:?}");
+        assert!(measure(r"\rule{2000em}{1em}", false).is_ok(), "medirla sí");
+        assert!(render("x", false, Look { scale: 0.0, ..LOOK }).is_err());
     }
 
     #[test]

@@ -174,6 +174,9 @@ impl Styles {
         }
         self.settle_frontmatter(source);
         let through = through.min(self.lines.len() - 1);
+        // El texto no cambia durante la llamada: un párrafo leído vale para
+        // los tramos que siguen en él.
+        let mut paragraph = None;
         while self.valid <= through {
             let first = self.valid;
             let hard = self.frontier_hard || is_hard(&source.line(first), self.frontier);
@@ -182,7 +185,13 @@ impl Styles {
                 next,
                 next_hard,
                 ..
-            } = region::style(source, first, self.frontier, self.frontmatter.close);
+            } = region::style(
+                source,
+                first,
+                self.frontier,
+                self.frontmatter.close,
+                &mut paragraph,
+            );
             let count = lines.len().max(1);
             for (offset, style) in lines.into_iter().enumerate() {
                 if let Some(entry) = self.lines.get_mut(first + offset) {

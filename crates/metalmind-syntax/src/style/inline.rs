@@ -7,6 +7,7 @@ use std::ops::Range;
 use super::block::{BlockKind, BlockLine, block_line};
 use super::emphasis::{Delimiters, Styled};
 use super::flatten::{Layer, Layers};
+use super::paragraph::Paragraph;
 use super::pieces::Pieces;
 use super::{Conceal, LineKind, LineStyle, LinkSpot, MathPlace, MathSpot, Role};
 use crate::markdown_link::MarkdownLink;
@@ -73,26 +74,39 @@ pub(crate) fn line_ranges(text: &str) -> Vec<Range<usize>> {
     lines
 }
 
-/// Las `count` líneas de `text`, que puede terminar con el salto de la
-/// última.
-pub(crate) fn style_chunk(text: &str, entry: Entry, count: usize) -> Chunk {
+/// El tramo del párrafo que empieza en la línea `first` de la nota: sus
+/// líneas hasta donde se detuvo el scanner, que no lee más allá.
+pub(crate) fn style_chunk(paragraph: &mut Paragraph, first: usize, entry: Entry) -> Chunk {
+    let from = paragraph.index_of(first).unwrap_or_default();
+    let base = paragraph.lines[from].start;
+    let body = base + entry.body;
     let starts_line = entry.starts_line();
-    let (pieces, end) = scanner::region(text, entry.body, starts_line, Pieces::default());
-    let mut lines = line_ranges(text);
-    lines.truncate(count);
-    if let RegionEnd::InComment { line_end } | RegionEnd::InMath { line_end, .. } = end {
-        lines.retain(|line| line.start <= line_end);
-    }
+    let (pieces, end) = scanner::region(
+        &paragraph.text,
+        body,
+        starts_line,
+        Pieces::default(),
+        &mut paragraph.look,
+    );
+    let all = &paragraph.lines;
+    let last = match end {
+        RegionEnd::InComment { line_end } | RegionEnd::InMath { line_end, .. } => {
+            all.partition_point(|line| line.end < line_end)
+        }
+        RegionEnd::End => all.len() - 1,
+    };
+    let lines = &all[from..=last.max(from).min(all.len() - 1)];
+    let text = paragraph.text.as_str();
     let mut opaque = pieces.opaque();
     let mut layers = Layers::default();
     let mut formulas = vec![Vec::new(); lines.len()];
     match entry.lead {
         Lead::Line => {}
-        Lead::Comment => layers.push(0..entry.body, Layer::Role(Role::Comment)),
+        Lead::Comment => layers.push(base..body, Layer::Role(Role::Comment)),
         Lead::Math(block) => {
-            let close = entry.body - 2;
-            layers.push(0..close, Layer::Role(Role::Math));
-            hide(close..entry.body, &mut layers);
+            let close = body - 2;
+            layers.push(base..close, Layer::Role(Role::Math));
+            hide(close..body, &mut layers);
             if !block.latex.trim().is_empty() {
                 formulas[0].push(MathSpot {
                     range: 0..entry.body,
@@ -104,26 +118,20 @@ pub(crate) fn style_chunk(text: &str, entry: Entry, count: usize) -> Chunk {
         }
     }
     if !starts_line {
-        opaque.insert(0, 0..entry.body);
+        opaque.insert(0, base..body);
     }
     let mut out = vec![LineStyle::default(); lines.len()];
     let painter = Painter {
         text,
-        lines: &lines,
+        lines,
         opaque: &opaque,
     };
-    let blocks = painter.blocks(
-        entry.body,
-        starts_line,
-        &pieces.headings,
-        &mut layers,
-        &mut out,
-    );
+    let blocks = painter.blocks(body, starts_line, &pieces.headings, &mut layers, &mut out);
     painter.emphasis(&blocks, &pieces, &mut layers);
     let mut spots = vec![Vec::new(); lines.len()];
     painter.pieces(&pieces, &mut layers, &mut spots);
     painter.math(&pieces.math, &mut layers, &mut formulas);
-    let flat = layers.flatten(&lines);
+    let flat = layers.flatten(lines);
     for (((line, spans), spots), math) in out.iter_mut().zip(flat).zip(spots).zip(formulas) {
         line.spans = spans;
         line.links = spots;

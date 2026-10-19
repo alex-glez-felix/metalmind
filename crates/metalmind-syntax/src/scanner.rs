@@ -14,6 +14,14 @@ pub(crate) struct Scanner<'t, S> {
     /// al cierre de un comentario en medio de la línea.
     body_starts_line: bool,
     sink: S,
+    look: Lookahead,
+}
+
+/// Lo que el scanner indexa al mirar hacia adelante (cierres de código
+/// inline, de corchetes y de fórmulas). Depende solo del texto, así que
+/// los tramos que recorren el mismo texto pueden compartirlo.
+#[derive(Default)]
+pub(crate) struct Lookahead {
     code_spans: CodeSpans,
     brackets: Brackets,
     inline_math: InlineMath,
@@ -42,19 +50,23 @@ pub(crate) enum RegionEnd {
 
 impl<'t, S: Sink> Scanner<'t, S> {
     pub(crate) fn new(text: &'t str, body: usize, body_starts_line: bool, sink: S) -> Self {
+        Self::with_lookahead(text, body, body_starts_line, sink, Lookahead::default())
+    }
+
+    fn with_lookahead(
+        text: &'t str,
+        body: usize,
+        body_starts_line: bool,
+        sink: S,
+        look: Lookahead,
+    ) -> Self {
         Self {
             text,
             body,
             body_starts_line,
             sink,
-            code_spans: CodeSpans::default(),
-            brackets: Brackets::default(),
-            inline_math: InlineMath::default(),
+            look,
         }
-    }
-
-    pub(crate) fn into_sink(self) -> S {
-        self.sink
     }
 
     fn run(&mut self) {
@@ -134,7 +146,7 @@ impl<'t, S: Sink> Scanner<'t, S> {
     }
 
     fn code_span(&mut self, at: usize) -> usize {
-        let (end, closed) = self.code_spans.find(self.text, at);
+        let (end, closed) = self.look.code_spans.find(self.text, at);
         if closed {
             self.sink.code_span(at..end);
         }
@@ -147,7 +159,7 @@ impl<'t, S: Sink> Scanner<'t, S> {
         let found = if display {
             Some(math::display_at(self.text, at, self.text.len()))
         } else {
-            self.inline_math.at(self.text, at)
+            self.look.inline_math.at(self.text, at)
         };
         match found {
             Some(found) => {
@@ -178,8 +190,8 @@ impl<'t, S: Sink> Scanner<'t, S> {
         }
         let markdown = markdown_link::markdown_link_at(
             self.text,
-            &mut self.brackets,
-            &mut self.code_spans,
+            &mut self.look.brackets,
+            &mut self.look.code_spans,
             start,
             open,
         )?;
@@ -252,14 +264,17 @@ impl<'t, S: Sink> Scanner<'t, S> {
 }
 
 /// Recorre `text`, un tramo sin cercas, desde `from`; `starts_line` dice si
-/// `from` es el inicio de una línea.
+/// `from` es el inicio de una línea. `look` es lo ya indexado de `text`.
 pub(crate) fn region<S: Sink>(
     text: &str,
     from: usize,
     starts_line: bool,
     sink: S,
+    look: &mut Lookahead,
 ) -> (S, RegionEnd) {
-    let mut scanner = Scanner::new(text, from, starts_line, sink);
+    let taken = std::mem::take(look);
+    let mut scanner = Scanner::with_lookahead(text, from, starts_line, sink, taken);
     let end = scanner.run_region();
-    (scanner.into_sink(), end)
+    *look = scanner.look;
+    (scanner.sink, end)
 }

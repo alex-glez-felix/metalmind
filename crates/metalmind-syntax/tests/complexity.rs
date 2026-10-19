@@ -103,6 +103,17 @@ fn styling_formulas_is_linear() {
     assert_linear(2_000, math_note, |text| style_all(&text));
 }
 
+/// Bloques `$$` de varias líneas seguidos, sin una línea en blanco: tras
+/// cada cierre el estilo sigue en el mismo párrafo.
+#[test]
+fn styling_blocks_in_one_paragraph_is_linear() {
+    assert_linear(
+        2_000,
+        |blocks| "texto `a\n$$\nx\n$$ y\n".repeat(blocks),
+        |text| style_all(&text),
+    );
+}
+
 #[test]
 fn styling_unpaired_emphasis_is_linear() {
     assert_linear(10_000, emphasis_runs, |text| style_all(&text));

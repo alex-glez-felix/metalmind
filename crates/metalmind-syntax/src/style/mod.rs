@@ -14,6 +14,7 @@ mod fence;
 mod flatten;
 mod frontmatter;
 mod inline;
+mod paragraph;
 mod pieces;
 mod region;
 
