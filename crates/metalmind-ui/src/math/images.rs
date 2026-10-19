@@ -133,10 +133,9 @@ impl Images {
             Image::Ready(image) => image.as_bytes(0).map_or(0, <[u8]>::len),
             Image::Failed(_) | Image::Pending => key.latex.len(),
         };
-        let used = self
-            .entries
-            .get(&key)
-            .map_or(self.frame, |entry| entry.used);
+        // Cuenta como pedida ahora: la vista la va a pedir en el frame que
+        // provoca su llegada, y el LRU no tiene que sacarla antes.
+        let used = self.frame;
         if let Some(old) = self.entries.insert(key, Entry { image, bytes, used }) {
             self.release(old);
         }
@@ -261,6 +260,17 @@ mod tests {
         assert_eq!(images.take_evicted().len(), 1);
         assert!(images.get(&key("x_1")).is_none(), "salió la más vieja");
         assert!(matches!(images.get(&key("x_2")), Some(Image::Ready(_))));
+    }
+
+    #[test]
+    fn la_que_llega_tarde_no_sale_al_llegar() {
+        let mut images = Images::with_budget(1);
+        assert!(images.get(&key("a")).is_none());
+        images.next_frame();
+        images.next_frame();
+        images.finish(key("a"), paint(&key("a")));
+        assert_eq!(images.take_evicted().len(), 0);
+        assert!(matches!(images.get(&key("a")), Some(Image::Ready(_))));
     }
 
     #[test]
