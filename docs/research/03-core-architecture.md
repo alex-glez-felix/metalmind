@@ -92,7 +92,7 @@ El **mismo** scanner de la sintaxis de Metalmind (crate `metalmind-syntax`) debe
 | Frontmatter YAML | `tags` (M2.5); `cssclasses` | M3 |
 | Callouts | `> [!note] Título` y plegables `> [!tip]-` | M5 |
 | Highlight, comentarios | `==x==`, `%% x %%` | M4 |
-| Math | `$x$`, `$$...$$` | post-MVP |
+| Math | `$x$`, `$$...$$` | post-MVP (spike en [08](08-matematicas.md), pendiente de revisión) |
 | Block IDs | `^abc123` al final de párrafo | M3 (índice) |
 
 Resolución de wikilinks: por nombre de archivo sin extensión, case-insensitive, desempate por ruta más corta / misma carpeta. Las notas no tienen alias: solo los tags (05 §7). Documentarlo como tabla de casos en un test `insta` — es la spec.
