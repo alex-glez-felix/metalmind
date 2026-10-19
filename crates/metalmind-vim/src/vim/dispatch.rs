@@ -138,10 +138,6 @@ impl Vim {
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
             (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
             (Action::ToggleCheckbox, Mode::Normal) => self.toggle_checkbox(buffer, selections)?,
-            (Action::Command(command), Mode::Normal) => {
-                self.reset();
-                return Ok(KeyOutcome::Command(command.into()));
-            }
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))

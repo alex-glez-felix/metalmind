@@ -15,18 +15,43 @@
 mod support;
 
 use metalmind_vim::{
-    Action, CommandError, GlobalMiss, KeyOutcome, Mode, SearchError, Substitution, Vim,
+    Action, CommandError, GlobalMiss, KeyOutcome, Mode, SearchError, Substitution,
 };
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 use rstest_reuse::{self, apply, template};
 
-fn run(before: &str, keys: &str) -> (KeyOutcome, Vim, String) {
-    let (mut buffer, mut selections) = support::parse(before);
-    let mut vim = Vim::new();
-    let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
-    let text = support::render(&buffer, selections.iter().map(|s| s.head));
-    (last.unwrap(), vim, text)
+/// La pila del hilo principal, donde corre el motor en la app: los 200
+/// niveles de `:normal` de [`RECURSIVE`] no caben, sin optimizar, en los
+/// 2 MiB del hilo de un test.
+const MAIN_THREAD_STACK: usize = 8 << 20;
+
+/// En qué quedó el motor: el modo y lo escrito tras `:`.
+struct Left {
+    mode: Mode,
+    command_line: Option<String>,
+}
+
+fn run(before: &str, keys: &str) -> (KeyOutcome, Left, String) {
+    let run = || {
+        let (mut buffer, mut selections) = support::parse(before);
+        let mut vim = support::app_vim();
+        let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
+        let text = support::render(&buffer, selections.iter().map(|s| s.head));
+        let left = Left {
+            mode: vim.mode(),
+            command_line: vim.command_line().map(ToOwned::to_owned),
+        };
+        (last.unwrap(), left, text)
+    };
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(MAIN_THREAD_STACK)
+            .spawn_scoped(scope, run)
+            .unwrap()
+            .join()
+            .unwrap()
+    })
 }
 
 const TEXT: &str = "a|b\ncd\nab";
@@ -203,9 +228,9 @@ fn a_global_reports_every_substitution_together() {
 
 #[test]
 fn colon_in_visual_starts_with_the_selection() {
-    let (_, vim, _) = run(TEXT, "Vj:");
-    assert_eq!(vim.mode(), Mode::CommandLine);
-    assert_eq!(vim.command_line(), Some("'<,'>"));
+    let (_, left, _) = run(TEXT, "Vj:");
+    assert_eq!(left.mode, Mode::CommandLine);
+    assert_eq!(left.command_line.as_deref(), Some("'<,'>"));
 }
 
 /// Como vim: `@:` sin una línea anterior falla y corta la macro.

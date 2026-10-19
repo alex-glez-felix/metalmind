@@ -8,7 +8,7 @@ use metalmind_vim::{Action as VimAction, KeyOutcome};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::actions::RunCommand;
+use crate::actions::{self, AppKeymap, Dispatch};
 use crate::clipboard::SystemClipboard;
 use crate::palette::{self, Entry, Target};
 use crate::picker::{Fuzzy, Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
@@ -19,8 +19,7 @@ pub type Palette = PickerView<Fuzzy<Entry>>;
 impl WorkspaceView {
     /// Se llama con el foco en un editor: sus acciones son las que se listan.
     pub(super) fn open_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let keymap = self.workspace.read(cx).keymap().clone();
-        let entries: Arc<[Entry]> = palette::entries(window, &keymap, cx).into();
+        let entries: Arc<[Entry]> = palette::entries(window, AppKeymap::get(cx), cx).into();
         let options = PickerOptions {
             placeholder: "Ejecutar una acción…".into(),
             splits: false,
@@ -60,27 +59,37 @@ impl WorkspaceView {
         };
         self.close_overlay(window, cx);
         match target {
-            Some(Target::Command(command)) => {
-                window.dispatch_action(Box::new(RunCommand::from(command)), cx);
+            Some(Target::Registry(action)) => {
+                window.dispatch_action(Box::new(Dispatch(action.into())), cx);
             }
             Some(Target::Window(name)) => match cx.build_action(name, None) {
                 Ok(action) => window.dispatch_action(action, cx),
                 Err(error) => log::error!("la paleta no pudo construir {name}: {error:#}"),
             },
-            Some(Target::Vim(action)) => self.execute_vim(action, window, cx),
             None => {}
         }
     }
 
     /// Como si se tecleara el atajo de `action` en el panel enfocado.
-    fn execute_vim(&mut self, action: VimAction, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn execute_vim(
+        &mut self,
+        action: VimAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let outcome = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             let pane = workspace.focused();
             workspace.execute(pane, action, &mut SystemClipboard(cx))
         });
         match outcome {
-            Ok(KeyOutcome::Command(invocation)) => self.run(&invocation, window, cx),
+            Ok(KeyOutcome::Dispatch(invocation)) => {
+                let name = invocation.action.as_str();
+                if let Err(error) = actions::dispatch(name, invocation.argument, window, cx) {
+                    self.workspace
+                        .update(cx, |workspace, _| workspace.report(&error.into()));
+                }
+            }
             Ok(_) => {}
             Err(error) => self
                 .workspace

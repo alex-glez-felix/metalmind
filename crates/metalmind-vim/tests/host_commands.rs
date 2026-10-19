@@ -13,7 +13,7 @@
 )]
 mod support;
 
-use metalmind_vim::{Command, Invocation};
+use metalmind_keymap::Command;
 use pretty_assertions::assert_eq;
 
 /// Lo escrito, el comando de Metalmind y el nombre completo en nvim.
@@ -39,11 +39,11 @@ const CASES: &[(&str, Command, &str)] = &[
 #[test]
 fn metalmind_reconoce_cada_forma() {
     for &(line, command, _) in CASES {
-        assert_eq!(
-            Invocation::parse(line),
-            Ok(Some(Invocation::from(command))),
-            "{line:?}"
-        );
+        let (mut buffer, mut selections) = support::parse("|a");
+        let mut vim = support::app_vim();
+        let keys = format!(":{line}<CR>");
+        let outcome = support::feed(&mut vim, &mut buffer, &mut selections, &keys);
+        assert_eq!(outcome, Some(support::dispatched(command)), "{line:?}");
     }
 }
 

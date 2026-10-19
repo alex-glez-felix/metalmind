@@ -1,10 +1,11 @@
 use std::fs;
 
-use metalmind_vim::{Command, Key, KeyOutcome};
+use metalmind_keymap::Command;
+use metalmind_vim::{Key, KeyOutcome};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
-use super::test_session::Session;
+use super::test_session::{Session, dispatched};
 use super::*;
 use crate::document::FileStats;
 
@@ -124,21 +125,12 @@ fn dos_puntos_w_pide_guardar() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("nota.md");
     let mut session = Session::open(&path);
-    assert_eq!(
-        session.keys("iab⎋:w⏎"),
-        Some(KeyOutcome::Command(Command::Save.into()))
-    );
+    assert_eq!(session.keys("iab⎋:w⏎"), Some(dispatched(Command::Save)));
     assert_eq!(session.mode(), Mode::Normal);
     assert_eq!(fs::read_to_string(&path).unwrap(), "ab\n");
-    assert_eq!(
-        session.keys(":wq⏎"),
-        Some(KeyOutcome::Command(Command::SaveAndQuit.into()))
-    );
+    assert_eq!(session.keys(":wq⏎"), Some(dispatched(Command::SaveAndQuit)));
     assert_eq!(session.effect, Effect::CloseWindow);
-    assert_eq!(
-        session.keys(":qx⌫!⏎"),
-        Some(KeyOutcome::Command(Command::ForceQuit.into()))
-    );
+    assert_eq!(session.keys(":qx⌫!⏎"), Some(dispatched(Command::ForceQuit)));
 }
 
 #[test]

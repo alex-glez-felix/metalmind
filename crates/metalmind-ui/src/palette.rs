@@ -1,24 +1,22 @@
 //! La paleta de comandos: un picker sobre todas las acciones con nombre:
-//! los comandos, las demás acciones de la ventana (las que GPUI tiene
-//! disponibles en el editor enfocado) y las del motor vim. Una acción nueva
-//! aparece sola.
+//! las del registro (el motor y los comandos) y las demás acciones de la
+//! ventana (las que GPUI tiene disponibles en el editor enfocado). Una
+//! acción nueva aparece sola.
 
-use gpui_kit::{Action, App, Window};
-use metalmind_vim::{Action as VimAction, Command, Key, Keymap};
+use gpui_kit::{Action as GpuiAction, App, Window};
+use metalmind_keymap::{Action, Command, Keymap};
 
-use crate::actions::RunCommand;
+use crate::actions::Dispatch;
 use crate::picker::PickerItem;
 
 /// Quién ejecuta la acción.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Target {
-    /// Un comando, sin argumento: se despacha en el editor como
-    /// [`RunCommand`].
-    Command(Command),
+    /// Una acción del registro, sin argumento: se despacha en el editor como
+    /// [`Dispatch`].
+    Registry(Action),
     /// Otra acción de GPUI, por su nombre: se despacha en el editor.
     Window(&'static str),
-    /// Una acción del motor, sobre el panel enfocado.
-    Vim(VimAction),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,7 +45,7 @@ impl PickerItem for Entry {
 /// construir sin ellos y quedan para `:`.
 #[must_use]
 pub fn entries(window: &Window, keymap: &Keymap, cx: &App) -> Vec<Entry> {
-    let window_keys = |action: &dyn Action| {
+    let window_keys = |action: &dyn GpuiAction| {
         let binding = window.highest_precedence_binding_for_action(action)?;
         let strokes: Vec<String> = binding
             .keystrokes()
@@ -64,58 +62,36 @@ pub fn entries(window: &Window, keymap: &Keymap, cx: &App) -> Vec<Entry> {
             target: Target::Window(action.name()),
             keys: window_keys(action.as_ref()),
         });
-    let mut entries: Vec<Entry> = command_entries(keymap, window_keys)
+    let mut entries: Vec<Entry> = registry_entries(keymap, window_keys)
         .chain(windowed)
-        .chain(vim_entries(keymap))
         .collect();
     entries.sort_by(|a, b| a.label.cmp(&b.label));
     entries.dedup_by(|a, b| a.label == b.label);
     entries
 }
 
-/// Los comandos que se corren sin argumento, con el atajo de la ventana o,
-/// si no tiene, el de vim.
-fn command_entries<'a>(
+/// Las acciones del registro que se corren sin argumento, con el atajo de
+/// la ventana o, si no tiene, el del motor.
+fn registry_entries<'a>(
     keymap: &'a Keymap,
-    window_keys: impl Fn(&dyn Action) -> Option<String> + 'a,
+    window_keys: impl Fn(&dyn GpuiAction) -> Option<String> + 'a,
 ) -> impl Iterator<Item = Entry> + 'a {
-    Command::ALL
-        .iter()
-        .filter(|&&command| !needs_argument_in_palette(command))
-        .map(move |&command| Entry {
-            label: label(command.name()),
-            target: Target::Command(command),
-            keys: window_keys(&RunCommand::from(command))
-                .or_else(|| vim_keys(keymap, VimAction::Command(command))),
+    Action::all()
+        .filter(|&action| !needs_argument_in_palette(action))
+        .map(move |action| Entry {
+            label: label(action.name()),
+            target: Target::Registry(action),
+            keys: window_keys(&Dispatch(action.into())).or_else(|| keymap.keys_for(action)),
         })
 }
 
 /// Sin argumento, `:w!` pisa el disco, `:e` relee y `:e!` descarta los
 /// cambios, cosas que su nombre no avisa; `:set` se queja.
-fn needs_argument_in_palette(command: Command) -> bool {
+fn needs_argument_in_palette(action: Action) -> bool {
     matches!(
-        command,
-        Command::ForceSave | Command::Edit | Command::ForceEdit | Command::Set
+        action,
+        Action::Command(Command::ForceSave | Command::Edit | Command::ForceEdit | Command::Set)
     )
-}
-
-/// Las acciones del motor que no son comandos: esos ya son acciones de la
-/// ventana.
-fn vim_entries(keymap: &Keymap) -> impl Iterator<Item = Entry> + '_ {
-    VimAction::ALL
-        .iter()
-        .filter(|action| !matches!(action, VimAction::Command(_)))
-        .map(|&action| Entry {
-            label: label(action.name()),
-            target: Target::Vim(action),
-            keys: vim_keys(keymap, action),
-        })
-}
-
-fn vim_keys(keymap: &Keymap, action: VimAction) -> Option<String> {
-    let keys = keymap.keys_for(action)?;
-    let keys: Vec<String> = keys.iter().map(Key::to_string).collect();
-    Some(keys.join(" "))
 }
 
 /// `vim::next_word_start` → `vim: next word start`.
@@ -134,6 +110,8 @@ pub fn label(name: &str) -> String {
 mod tests {
     use std::collections::HashSet;
 
+    use metalmind_vim::{Action as VimAction, Motion};
+
     use super::*;
 
     #[test]
@@ -144,39 +122,40 @@ mod tests {
         assert_eq!(label("suelta"), "suelta");
     }
 
+    fn entry(entries: &[Entry], action: impl Into<Action>) -> Option<&Entry> {
+        let target = Target::Registry(action.into());
+        entries.iter().find(|entry| entry.target == target)
+    }
+
     #[test]
-    fn las_acciones_de_vim_llevan_su_atajo_y_no_repiten_comandos() {
-        let keymap = Keymap::vim();
-        let entries: Vec<Entry> = vim_entries(&keymap).collect();
-        let down = entries
-            .iter()
-            .find(|entry| {
-                entry.target == Target::Vim(VimAction::Motion(metalmind_vim::Motion::DocumentStart))
-            })
-            .unwrap();
-        assert_eq!(down.label, "vim: start of document");
-        assert_eq!(down.keys.as_deref(), Some("g g"));
-        assert!(
-            entries
-                .iter()
-                .all(|entry| !matches!(entry.target, Target::Vim(VimAction::Command(_))))
+    fn las_acciones_del_motor_llevan_su_atajo() {
+        let keymap = Keymap::default();
+        let entries: Vec<Entry> = registry_entries(&keymap, |_| None).collect();
+        let start = Action::Vim(VimAction::Motion(Motion::DocumentStart));
+        let start = entry(&entries, start).unwrap();
+        assert_eq!(start.label, "vim: start of document");
+        assert_eq!(start.keys.as_deref(), Some("g g"));
+        assert_eq!(
+            entry(&entries, Command::OpenFinder)
+                .unwrap()
+                .keys
+                .as_deref(),
+            Some("space f")
         );
         let labels: HashSet<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
         assert_eq!(labels.len(), entries.len());
     }
 
-    #[test]
-    fn el_atajo_de_un_comando_sale_del_keymap_de_vim() {
-        let keymap = Keymap::vim();
-        let keys = vim_keys(&keymap, VimAction::Command(Command::OpenFinder));
-        assert_eq!(keys.as_deref(), Some("space f"));
-    }
-
+    /// Como antes de que la paleta leyera el registro: todos los comandos
+    /// menos los que sin argumento hacen algo que su nombre no dice.
     #[test]
     fn lista_los_comandos_que_corren_sin_argumento() {
-        let keymap = Keymap::vim();
-        let listed: Vec<Target> = command_entries(&keymap, |_| None)
-            .map(|entry| entry.target)
+        let keymap = Keymap::default();
+        let entries: Vec<Entry> = registry_entries(&keymap, |_| None).collect();
+        let listed: Vec<Command> = Command::ALL
+            .iter()
+            .copied()
+            .filter(|&command| entry(&entries, command).is_some())
             .collect();
         let typed_only = [
             Command::ForceSave,
@@ -184,31 +163,25 @@ mod tests {
             Command::ForceEdit,
             Command::Set,
         ];
-        let expected: Vec<Target> = Command::ALL
+        let expected: Vec<Command> = Command::ALL
             .iter()
+            .copied()
             .filter(|command| !typed_only.contains(command))
-            .map(|&command| Target::Command(command))
             .collect();
         assert_eq!(listed, expected);
     }
 
     #[test]
-    fn el_atajo_de_la_ventana_gana_al_de_vim() {
-        let keymap = Keymap::vim();
-        let palette = RunCommand::from(Command::OpenCommandPalette);
-        let entries: Vec<Entry> = command_entries(&keymap, |action| {
+    fn el_atajo_de_la_ventana_gana_al_del_motor() {
+        let keymap = Keymap::default();
+        let palette = Dispatch(Command::OpenCommandPalette.into());
+        let entries: Vec<Entry> = registry_entries(&keymap, |action| {
             action
                 .partial_eq(&palette)
                 .then(|| "ctrl-shift-p".to_owned())
         })
         .collect();
-        let keys = |command| {
-            let entry = entries
-                .iter()
-                .find(|entry| entry.target == Target::Command(command))
-                .unwrap();
-            entry.keys.as_deref()
-        };
+        let keys = |command| entry(&entries, command).unwrap().keys.as_deref();
         assert_eq!(keys(Command::OpenCommandPalette), Some("ctrl-shift-p"));
         assert_eq!(keys(Command::OpenFinder), Some("space f"));
     }

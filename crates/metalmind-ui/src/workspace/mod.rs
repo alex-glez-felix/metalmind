@@ -33,9 +33,10 @@ use std::num::NonZeroUsize;
 use std::rc::Rc;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
+use metalmind_keymap::{Keymap, UnknownAction};
 use metalmind_vim::{
-    Action, FileId, Indent, JumpList, Keymap, Layout, Markdown, Mode, Pattern, Prompt, Uniform,
-    Viewport, Vim, VimError,
+    Action, FileId, Indent, JumpList, Layout, Markdown, Mode, Pattern, Prompt, Uniform, Viewport,
+    Vim, VimError,
 };
 
 pub use self::autosave::{Autosave, SaveState, SystemClock};
@@ -64,6 +65,8 @@ pub enum WorkspaceError {
     NoPane(PaneId),
     #[error("no existe el documento {0}")]
     NoDocument(DocumentId),
+    #[error(transparent)]
+    UnknownAction(#[from] UnknownAction),
 }
 
 /// `viewport` muestra `head` con `scrolloff` líneas alrededor, con lo que
@@ -213,7 +216,12 @@ impl Workspace {
     /// Un panel con `document` y los números `numbers`, avisando como vim
     /// al abrirlo.
     #[must_use]
-    pub fn new(document: Document, numbers: LineNumbers, options: Options) -> Self {
+    pub fn new(
+        document: Document,
+        numbers: LineNumbers,
+        options: Options,
+        keymap: &Keymap,
+    ) -> Self {
         let Options {
             scrolloff,
             tabstop,
@@ -227,7 +235,7 @@ impl Workspace {
         let file = files.of_document(&document);
         let id = documents.insert(document, file);
         let tree = PaneTree::new();
-        let mut vim = Vim::new();
+        let mut vim = Vim::with_keymap(keymap.engine());
         vim.set_scrolloff(scrolloff);
         vim.set_indent(Indent {
             shiftwidth: NonZeroUsize::MIN.saturating_add(tabstop.saturating_sub(1)),
@@ -275,12 +283,6 @@ impl Workspace {
 
     pub fn set_message(&mut self, message: Message) {
         self.message = Some(message);
-    }
-
-    /// Las teclas de vim, para mostrar el atajo de cada acción.
-    #[must_use]
-    pub fn keymap(&self) -> &Keymap {
-        self.vim.keymap()
     }
 
     pub fn report(&mut self, error: &WorkspaceError) {

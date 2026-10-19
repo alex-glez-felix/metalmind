@@ -3,8 +3,9 @@
 use std::path::Path;
 
 use metalmind_buffer::ByteOffset;
+use metalmind_keymap::{Command, Invocation, Keymap};
 use metalmind_vault::SaveKind;
-use metalmind_vim::{Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
+use metalmind_vim::{ActionName, Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
 use super::{Effect, LineNumbers, Message, Options, PaneId, PaneView, Workspace};
@@ -92,7 +93,7 @@ impl Session {
 
     fn with_options(document: Document, options: Options) -> Self {
         Self {
-            workspace: Workspace::new(document, LineNumbers::HYBRID, options),
+            workspace: Workspace::new(document, LineNumbers::HYBRID, options, &Keymap::default()),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }
@@ -121,8 +122,9 @@ impl Session {
                 .workspace
                 .feed(self.pane(), key, &mut self.clipboard)
                 .unwrap();
-            if let KeyOutcome::Command(invocation) = &outcome {
-                self.effect = self.workspace.run(invocation, &mut self.clipboard);
+            if let KeyOutcome::Dispatch(invocation) = &outcome {
+                let invocation = Invocation::try_from(invocation.clone()).unwrap();
+                self.effect = self.workspace.run(&invocation, &mut self.clipboard);
             }
             last = Some(outcome);
         }
@@ -295,4 +297,9 @@ fn vim_mode(mode: Mode) -> &'static str {
         Mode::Visual(metalmind_vim::VisualKind::Line) => "V",
         Mode::Visual(metalmind_vim::VisualKind::Block) => "\u{16}",
     }
+}
+
+/// Lo que devuelve el motor cuando se teclea `command` sin argumento.
+pub fn dispatched(command: Command) -> KeyOutcome {
+    KeyOutcome::Dispatch(ActionName::new(command.name()).into())
 }

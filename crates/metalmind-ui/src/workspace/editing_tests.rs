@@ -173,15 +173,6 @@ fn execute_corre_una_accion_del_motor_como_su_atajo() {
         KeyOutcome::Executed(Action::Motion(Motion::DocumentEnd))
     );
     assert_eq!(session.line(pane), 3);
-    let outcome = session
-        .workspace
-        .execute(
-            pane,
-            Action::Command(metalmind_vim::Command::SplitRight),
-            &mut session.clipboard,
-        )
-        .unwrap();
-    assert!(matches!(outcome, KeyOutcome::Command(_)));
 }
 
 #[test]

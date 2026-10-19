@@ -7,10 +7,11 @@ use std::sync::mpsc;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
 use metalmind_config::{Config, Paths};
+use metalmind_keymap::Keymap;
 use metalmind_vault::{Vault, VaultUpdate};
 use metalmind_vim::Markdown;
 
-use crate::actions;
+use crate::actions::{self, AppKeymap};
 use crate::disk::VaultDisk;
 use crate::document::Document;
 use crate::finder::{Prepared, SessionError, VaultSession};
@@ -69,7 +70,7 @@ pub fn open(
     }
     cx.set_global(Theme::new(config, cx)?);
     cx.set_global(clock);
-    actions::bind_keys(cx);
+    actions::bind_keys(Keymap::default(), cx);
     picker::bind_keys(cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
@@ -106,8 +107,9 @@ pub fn open(
     cx.open_window(options, move |window, cx| {
         let session = cx.new(|cx| VaultSession::new(prepared, cx));
         let disk = Rc::new(VaultDisk::new(session.read(cx).vault()));
-        let workspace = cx.new(|_| {
-            let mut workspace = Workspace::new(document, numbers, workspace_options);
+        let workspace = cx.new(|cx| {
+            let keymap = AppKeymap::get(cx);
+            let mut workspace = Workspace::new(document, numbers, workspace_options, keymap);
             workspace.set_disk(disk);
             workspace
                 .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));

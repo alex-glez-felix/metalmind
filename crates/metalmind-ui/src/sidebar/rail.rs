@@ -5,11 +5,11 @@ use gpui_kit::{
     Action, AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
 };
+use metalmind_keymap::Command;
 use metalmind_vault::EntryKind;
-use metalmind_vim::Command;
 
 use super::icons;
-use crate::actions::RunCommand;
+use crate::actions::Dispatch;
 use crate::panel::PanelView;
 use crate::theme::Theme;
 
@@ -31,14 +31,14 @@ pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
             "rail-folders",
             shown == Some(PanelView::Folders),
             icons::entry(EntryKind::Folder, theme),
-            RunCommand::from(Command::ToggleFolders),
+            Dispatch(Command::ToggleFolders.into()),
             theme,
         ))
         .child(rail_button(
             "rail-tags",
             shown == Some(PanelView::Tags),
             div().child("#"),
-            RunCommand::from(Command::ToggleTags),
+            Dispatch(Command::ToggleTags.into()),
             theme,
         ))
 }

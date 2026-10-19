@@ -20,9 +20,9 @@ use gpui_kit::{
     prelude::FluentBuilder as _,
 };
 use metalmind_config::Paths;
-use metalmind_vim::Invocation;
+use metalmind_keymap::{Action, Invocation};
 
-use crate::actions::RunCommand;
+use crate::actions::Dispatch;
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
@@ -183,6 +183,11 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.open_link_choice(window, cx);
             }
+            Effect::Dispatch(action) => {
+                self.sync_editors(cx);
+                self.focus(window, cx);
+                window.dispatch_action(Box::new(Dispatch(action.into())), cx);
+            }
         }
     }
 
@@ -313,11 +318,16 @@ impl Render for WorkspaceView {
             .map(|element| theme.ui_text(element))
             .text_color(theme.foreground)
             .bg(theme.background)
-            // Cada comando llega aquí desde el editor enfocado, el panel
-            // lateral o la paleta.
-            .on_action(cx.listener(|view, action: &RunCommand, window, cx| {
-                view.run(&action.0, window, cx);
-            }));
+            // Las acciones del registro llegan aquí desde el editor
+            // enfocado, el panel lateral o la paleta.
+            .on_action(
+                cx.listener(|view, Dispatch(invocation): &Dispatch, window, cx| {
+                    match invocation.action {
+                        Action::Command(_) => view.run(invocation, window, cx),
+                        Action::Vim(action) => view.execute_vim(action, window, cx),
+                    }
+                }),
+            );
         let sidebar = self.sidebar.read(cx);
         let shown = sidebar.shown();
         element

@@ -69,7 +69,7 @@ impl Workspace {
                     resumed => Ok(resumed),
                 });
             match resumed {
-                Ok(Some(KeyOutcome::Command(invocation))) => return Some(invocation),
+                Ok(Some(KeyOutcome::Dispatch(invocation))) => return Some(invocation),
                 Ok(Some(KeyOutcome::SwitchFile(_))) => {}
                 Ok(Some(outcome)) => {
                     self.note(&outcome);

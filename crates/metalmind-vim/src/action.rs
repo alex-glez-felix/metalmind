@@ -1,4 +1,4 @@
-use crate::{CharSearch, Command, Motion, Operator, Place, Scroll, TextObject, VisualKind};
+use crate::{CharSearch, Motion, Operator, Place, Scroll, TextObject, VisualKind};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -124,8 +124,6 @@ pub enum Action {
     /// Marca o desmarca el checkbox de un ítem de lista (`- [ ]` ↔
     /// `- [x]`), o le pone uno; con count, en tantas líneas.
     ToggleCheckbox,
-    /// Un comando que ejecuta quien aloja el editor, como los de `ctrl-w`.
-    Command(Command),
 }
 
 impl Action {
@@ -293,32 +291,6 @@ impl Action {
         Self::HistoryPrevious,
         Self::HistoryNext,
         Self::ToggleCheckbox,
-        Self::Command(Command::Save),
-        Self::Command(Command::ForceSave),
-        Self::Command(Command::Quit),
-        Self::Command(Command::ForceQuit),
-        Self::Command(Command::SaveAndQuit),
-        Self::Command(Command::SaveAll),
-        Self::Command(Command::QuitAll),
-        Self::Command(Command::ForceQuitAll),
-        Self::Command(Command::SaveAllAndQuit),
-        Self::Command(Command::Edit),
-        Self::Command(Command::ForceEdit),
-        Self::Command(Command::SplitRight),
-        Self::Command(Command::SplitDown),
-        Self::Command(Command::FocusLeft),
-        Self::Command(Command::FocusDown),
-        Self::Command(Command::FocusUp),
-        Self::Command(Command::FocusRight),
-        Self::Command(Command::FocusNext),
-        Self::Command(Command::Only),
-        Self::Command(Command::Set),
-        Self::Command(Command::OpenFinder),
-        Self::Command(Command::OpenTextSearch),
-        Self::Command(Command::OpenCommandPalette),
-        Self::Command(Command::ToggleFolders),
-        Self::Command(Command::ToggleTags),
-        Self::Command(Command::FollowLink),
     ];
 
     #[must_use]
@@ -388,7 +360,6 @@ impl Action {
             Self::HistoryPrevious => "vim::history_previous",
             Self::HistoryNext => "vim::history_next",
             Self::ToggleCheckbox => "editor::toggle_checkbox",
-            Self::Command(command) => command.name(),
         }
     }
 }
@@ -537,13 +508,13 @@ mod tests {
         }
     }
 
+    /// Lo que no está en [`Action::ALL`] no sale en la paleta.
     #[test]
-    fn every_command_is_an_action() {
-        for &command in Command::ALL {
-            assert!(
-                Action::ALL.contains(&Action::Command(command)),
-                "{command:?}"
-            );
+    fn every_bound_action_is_listed() {
+        for binding in crate::Keymap::vim().bindings() {
+            if let crate::Target::Engine(action) = binding.target {
+                assert!(Action::ALL.contains(&action), "{action:?}");
+            }
         }
     }
 
