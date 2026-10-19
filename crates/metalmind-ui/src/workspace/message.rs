@@ -49,16 +49,18 @@ impl Message {
 
     /// Un guardado que falló: la causa primero, para que un nombre largo no
     /// la tape al recortar la barra. `name` es el archivo, si no es el que
-    /// ya muestra la barra; los errores de vim van con su texto.
+    /// ya muestra la barra, y va al final; los errores de vim van con su
+    /// texto original.
     #[must_use]
     pub fn save_failed(name: Option<&str>, error: &SaveError) -> Self {
-        if error.is_vim() {
-            return Self::Error(error.to_string());
-        }
-        let cause = error.cause();
+        let text = if error.is_vim() {
+            error.to_string()
+        } else {
+            format!("no se pudo guardar: {}", error.cause())
+        };
         Self::Error(match name {
-            Some(name) => format!("no se pudo guardar: {cause} ({name})"),
-            None => format!("no se pudo guardar: {cause}"),
+            Some(name) => format!("{text} ({name})"),
+            None => text,
         })
     }
 
@@ -128,6 +130,13 @@ mod tests {
             Message::save_failed(None, &SaveError::Exists),
             Message::Error("E13: File exists (add ! to override)".to_owned()),
             "los de vim, con su texto"
+        );
+        assert_eq!(
+            Message::save_failed(Some("oculta.md"), &SaveError::ChangedOnDisk),
+            Message::Error(
+                "WARNING: The file has been changed since reading it!!! (oculta.md)".to_owned()
+            ),
+            "y con el nombre si no es la nota que se ve, como al fallar :wa"
         );
     }
 
