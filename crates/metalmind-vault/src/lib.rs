@@ -31,8 +31,8 @@ pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};
 pub use file::{FileError, create_atomic, read, write_atomic};
 pub use history::{
-    ChunkKind, ContentHash, DeletedId, DeletedNote, DiffChunk, History, HistoryError, Pruned,
-    RestoreEdit, RestorePlan, TextDiff, Version, VersionId,
+    AUTOSAVE_GROUP, ChunkKind, ContentHash, DeletedId, DeletedNote, DiffChunk, History,
+    HistoryError, Pruned, RestoreEdit, RestorePlan, TextDiff, Version, VersionId, VersionKind,
 };
 pub use index::{Entry, EntryKind, VaultIndex};
 pub use links::{
@@ -44,6 +44,6 @@ pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
 pub use scan::walk_notes;
 pub use vault::{
-    HistoryOptions, PendingVersion, SaveError, Vault, VaultError, VaultOptions, VaultRoot,
-    VaultUpdate, VersionError,
+    HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
+    VaultRoot, VaultUpdate, VersionError,
 };

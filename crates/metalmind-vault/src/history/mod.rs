@@ -1,5 +1,6 @@
 //! Historial de versiones de cada nota (06 §3): se guarda una versión cada
-//! vez que se guarda la nota, en el directorio de datos del vault, sin git.
+//! vez que se guarda la nota, en el directorio de datos del vault, sin git;
+//! las del autoguardado se agrupan (`kind.rs`).
 //! Las versiones van como deltas por línea sobre la anterior, con snapshots
 //! comprimidos cada tanto; el formato está en `log.rs` y la medición que lo
 //! justifica en 03 §4.
@@ -11,6 +12,7 @@ mod delta;
 mod diff;
 mod follow;
 mod frame;
+mod kind;
 mod log;
 mod prune;
 mod record;
@@ -27,6 +29,7 @@ use metalmind_config::HistoryRetention;
 
 pub use deleted::{DeletedId, DeletedNote};
 pub use diff::{ChunkKind, DiffChunk, RestoreEdit, RestorePlan, TextDiff};
+pub use kind::{AUTOSAVE_GROUP, VersionKind};
 pub use prune::Pruned;
 
 use crate::file::FileError;
@@ -90,6 +93,7 @@ pub struct Version {
     pub hash: ContentHash,
     /// Bytes del contenido.
     pub len: usize,
+    pub kind: VersionKind,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -255,6 +259,7 @@ fn version(entry: &Entry) -> Version {
         saved_at: from_millis(entry.at),
         hash: entry.hash,
         len: entry.len,
+        kind: entry.kind,
     }
 }
 

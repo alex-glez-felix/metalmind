@@ -6,13 +6,13 @@ use std::time::SystemTime;
 
 use super::log::NoteLog;
 use super::store::{Index, IndexEntry, Lock};
-use super::{History, HistoryError, Latest, VersionId, to_millis};
+use super::{History, HistoryError, Latest, VersionId, VersionKind, to_millis};
 use crate::path::VaultPath;
 
 impl History {
-    /// Registra `text` como versión de `path`. Devuelve `None` si es igual a
-    /// la última y no hacía falta guardar nada. Si la nota estaba borrada, su
-    /// historia sigue.
+    /// Registra `text` como versión de `path`, de un guardado que alguien
+    /// pidió. Devuelve `None` si es igual a la última y no hacía falta
+    /// guardar nada. Si la nota estaba borrada, su historia sigue.
     ///
     /// # Errors
     /// Si no se puede leer o escribir el historial.
@@ -22,17 +22,48 @@ impl History {
         text: &str,
         at: SystemTime,
     ) -> Result<Option<VersionId>, HistoryError> {
+        self.record_one(path, text, at, VersionKind::Saved)
+    }
+
+    /// Como [`History::record`], para un autoguardado: reemplaza a la última
+    /// versión si también fue autoguardada hace menos de
+    /// [`AUTOSAVE_GROUP`](super::AUTOSAVE_GROUP) desde que empezó su grupo.
+    ///
+    /// # Errors
+    /// Si no se puede leer o escribir el historial.
+    pub fn record_autosave(
+        &self,
+        path: &VaultPath,
+        text: &str,
+        at: SystemTime,
+    ) -> Result<Option<VersionId>, HistoryError> {
+        self.record_one(path, text, at, VersionKind::Autosaved)
+    }
+
+    fn record_one(
+        &self,
+        path: &VaultPath,
+        text: &str,
+        at: SystemTime,
+        kind: VersionKind,
+    ) -> Result<Option<VersionId>, HistoryError> {
         let lock = self.store.lock()?;
         let mut index = self.store.read_index()?;
-        let (recorded, index_changed) = self.record_in(&lock, &mut index, path, text, at)?;
+        let version = Change {
+            path,
+            text,
+            at,
+            kind,
+        };
+        let (recorded, index_changed) = self.record_in(&lock, &mut index, &version)?;
         if index_changed {
             self.store.write_index(&lock, &index)?;
         }
         Ok(recorded)
     }
 
-    /// Registra una versión de cada nota. Un log dañado no impide registrar
-    /// las demás: queda en el log de la app.
+    /// Registra una versión de cada nota, cambiada desde fuera. Un log dañado
+    /// no impide registrar las demás: queda en el log de la app.
     ///
     /// # Errors
     /// Si no se puede leer o escribir el índice, o escribir algún log.
@@ -49,7 +80,13 @@ impl History {
         let mut index = self.store.read_index()?;
         let mut index_changed = false;
         for (path, text) in notes {
-            match self.record_in(&lock, &mut index, &path, &text, at) {
+            let version = Change {
+                path: &path,
+                text: &text,
+                at,
+                kind: VersionKind::External,
+            };
+            match self.record_in(&lock, &mut index, &version) {
                 Ok((_, changed)) => index_changed |= changed,
                 Err(error @ HistoryError::Corrupt { .. }) => log::warn!("{error}"),
                 Err(error) => return Err(error),
@@ -67,9 +104,12 @@ impl History {
         &self,
         lock: &Lock,
         index: &mut Index,
-        path: &VaultPath,
-        text: &str,
-        at: SystemTime,
+        &Change {
+            path,
+            text,
+            at,
+            kind,
+        }: &Change<'_>,
     ) -> Result<(Option<VersionId>, bool), HistoryError> {
         let (entry, mut log, index_changed) = match index.notes.get(path) {
             Some(entry) => (
@@ -87,6 +127,7 @@ impl History {
             .append(
                 text,
                 to_millis(at),
+                kind,
                 cached.as_ref().map(|latest| latest.text.as_str()),
             )
             .map_err(|corrupt| self.store.corrupt_log(entry.id, corrupt))?;
@@ -125,4 +166,12 @@ impl History {
             other => other,
         }
     }
+}
+
+/// Una versión por registrar.
+struct Change<'a> {
+    path: &'a VaultPath,
+    text: &'a str,
+    at: SystemTime,
+    kind: VersionKind,
 }

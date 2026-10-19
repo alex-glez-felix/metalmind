@@ -6,7 +6,7 @@ fn write_all(versions: &[&str]) -> (NoteLog, Vec<u8>) {
     let mut log = NoteLog::default();
     let mut file = Vec::new();
     for (at, text) in (0..).zip(versions) {
-        if let Some((_, frames)) = log.append(text, at, None).unwrap() {
+        if let Some((_, frames)) = log.append(text, at, VersionKind::Saved, None).unwrap() {
             file.extend(frames);
         }
     }
@@ -127,6 +127,9 @@ fn version_frame_of(text: &str, seq: u64, len: usize, record: usize) -> Vec<u8> 
     payload.extend_from_slice(ContentHash::of(text).as_bytes());
     put_var(&mut payload, len as u64);
     put_var(&mut payload, record as u64);
+    payload.push(VersionKind::Saved.tag());
+    payload.extend_from_slice(&0_i64.to_le_bytes());
+    payload.push(0);
     let mut frame = Vec::new();
     push_frame(&mut frame, VERSION, &payload);
     frame
@@ -161,4 +164,49 @@ fn una_version_cuyo_hash_no_es_el_de_su_texto_no_se_lee() {
     };
     assert_eq!(log.version_text(good).unwrap(), "uno\n");
     assert!(log.version_text(bad).is_err());
+}
+
+const MINUTE: i64 = 60_000;
+
+fn autosave(log: &mut NoteLog, file: &mut Vec<u8>, text: &str, at: i64) {
+    if let Some((_, frames)) = log.append(text, at, VersionKind::Autosaved, None).unwrap() {
+        file.extend(frames);
+    }
+}
+
+#[test]
+fn las_autoguardadas_reemplazadas_tampoco_estan_al_releer() {
+    let mut log = NoteLog::default();
+    let mut file = Vec::new();
+    for (minute, text) in [(0, "a\n"), (1, "ab\n"), (2, "abc\n"), (6, "abcd\n")] {
+        autosave(&mut log, &mut file, text, minute * MINUTE);
+    }
+    let read = NoteLog::parse(&file).unwrap();
+    assert_eq!(read.entries(), log.entries());
+    let texts: Vec<String> = read
+        .entries()
+        .iter()
+        .map(|e| read.version_text(e).unwrap())
+        .collect();
+    assert_eq!(texts, ["abc\n", "abcd\n"]);
+    assert_eq!(read.replaced(), 2);
+    let groups: Vec<i64> = read.entries().iter().map(|e| e.group).collect();
+    assert_eq!(groups, [0, 6 * MINUTE]);
+}
+
+#[test]
+fn solo_se_reemplaza_una_version_autoguardada() {
+    let (_, file) = write_all(&["uno\n"]);
+    let mut payload = Vec::new();
+    put_var(&mut payload, 1);
+    payload.extend_from_slice(&0_i64.to_le_bytes());
+    payload.extend_from_slice(ContentHash::of("uno\n").as_bytes());
+    put_var(&mut payload, 4);
+    put_var(&mut payload, 0);
+    payload.push(VersionKind::Autosaved.tag());
+    payload.extend_from_slice(&0_i64.to_le_bytes());
+    payload.push(1);
+    let mut frame = Vec::new();
+    push_frame(&mut frame, VERSION, &payload);
+    assert!(NoteLog::parse(&[file, frame].concat()).is_err());
 }

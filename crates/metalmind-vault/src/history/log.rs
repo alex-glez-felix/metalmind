@@ -9,6 +9,7 @@ use super::bytes::{Reader, put_var};
 use super::codec::{self, Codec};
 use super::delta;
 use super::frame::{Frame, frame_at, push_frame};
+use super::kind::{Placement, VersionKind, place};
 
 mod contents;
 
@@ -32,6 +33,9 @@ pub(super) struct Entry {
     pub hash: ContentHash,
     pub len: usize,
     pub record: usize,
+    pub kind: VersionKind,
+    /// Cuándo empezó su grupo, si es autoguardada; si no, `at`.
+    pub group: i64,
 }
 
 struct Record {
@@ -52,6 +56,9 @@ struct Record {
 pub(super) struct NoteLog {
     records: Vec<Record>,
     entries: Vec<Entry>,
+    /// Versiones autoguardadas que otra reemplazó: sus registros siguen en
+    /// el archivo hasta la próxima poda.
+    replaced: usize,
     /// Hasta dónde el archivo es válido; lo que sigue es una cola cortada.
     valid_len: u64,
 }
@@ -114,6 +121,10 @@ impl NoteLog {
         self.valid_len
     }
 
+    pub(super) fn replaced(&self) -> usize {
+        self.replaced
+    }
+
     /// El contenido de la versión `entry`, si es el que dice su hash.
     pub(super) fn version_text(&self, entry: &Entry) -> Result<String, Corrupt> {
         let text = self.content(entry.record)?;
@@ -161,47 +172,64 @@ impl NoteLog {
         Ok(())
     }
 
-    /// Agrega `text` como versión nueva, salvo que sea igual a la última, y
-    /// devuelve su número y los bytes que hay que escribir en `valid_len`.
-    /// `latest`, si viene, es el contenido de la última versión: ahorra
-    /// reconstruirlo para calcular el delta.
+    /// Agrega `text` como versión nueva de tipo `kind`, salvo que sea igual
+    /// a la última, y devuelve su número y los bytes que hay que escribir en
+    /// `valid_len`. Una autoguardada puede reemplazar a la última (ver
+    /// [`place`]). `latest`, si viene, es el contenido de la última versión:
+    /// ahorra reconstruirlo para calcular el delta.
     pub(super) fn append(
         &mut self,
         text: &str,
         at: i64,
+        kind: VersionKind,
         latest: Option<&str>,
     ) -> Result<Option<(u64, Vec<u8>)>, Corrupt> {
         let hash = ContentHash::of(text);
-        if self.entries.last().is_some_and(|last| last.hash == hash) {
-            return Ok(None);
-        }
+        let (group, replaces) = match place(self.entries.last(), kind, hash, at) {
+            Placement::Skip => return Ok(None),
+            Placement::After { group } => (group, false),
+            Placement::Replaces { group } => (group, true),
+        };
         let seq = match self.entries.last() {
             Some(last) => last.seq.checked_add(1).ok_or(Corrupt("versión dañada"))?,
             None => 0,
         };
-        let frames = self.push(seq, at, hash, text, latest)?;
+        let version = NewVersion {
+            seq,
+            at,
+            hash,
+            kind,
+            group,
+            replaces,
+        };
+        let frames = self.push(&version, text, latest)?;
         Ok(Some((seq, frames)))
     }
 
-    /// Agrega una versión con número `seq` aunque sea igual a la anterior;
-    /// es lo que se usa para rehacer un historial al podar.
-    /// `previous` es el texto de la última versión agregada, para no
+    /// Agrega otra vez la versión `entry`, aunque sea igual a la anterior y
+    /// sin reemplazar ninguna; es lo que se usa para rehacer un historial al
+    /// podar. `previous` es el texto de la última versión agregada, para no
     /// reconstruirlo desde su snapshot en cada una.
     pub(super) fn push_version(
         &mut self,
-        seq: u64,
-        at: i64,
+        entry: &Entry,
         text: &str,
         previous: Option<&str>,
     ) -> Result<Vec<u8>, Corrupt> {
-        self.push(seq, at, ContentHash::of(text), text, previous)
+        let version = NewVersion {
+            seq: entry.seq,
+            at: entry.at,
+            hash: ContentHash::of(text),
+            kind: entry.kind,
+            group: entry.group,
+            replaces: false,
+        };
+        self.push(&version, text, previous)
     }
 
     fn push(
         &mut self,
-        seq: u64,
-        at: i64,
-        hash: ContentHash,
+        version: &NewVersion,
         text: &str,
         latest: Option<&str>,
     ) -> Result<Vec<u8>, Corrupt> {
@@ -211,7 +239,11 @@ impl NoteLog {
             Vec::new()
         };
         // Mismo contenido que una versión anterior: comparte su registro.
-        let shared = self.entries.iter().rev().find(|entry| entry.hash == hash);
+        let shared = self
+            .entries
+            .iter()
+            .rev()
+            .find(|entry| entry.hash == version.hash);
         let record = if let Some(same) = shared {
             same.record
         } else {
@@ -221,11 +253,14 @@ impl NoteLog {
             self.records.len() - 1
         };
         let mut payload = Vec::new();
-        put_var(&mut payload, seq);
-        payload.extend_from_slice(&at.to_le_bytes());
-        payload.extend_from_slice(hash.as_bytes());
+        put_var(&mut payload, version.seq);
+        payload.extend_from_slice(&version.at.to_le_bytes());
+        payload.extend_from_slice(version.hash.as_bytes());
         put_var(&mut payload, text.len() as u64);
         put_var(&mut payload, record as u64);
+        payload.push(version.kind.tag());
+        payload.extend_from_slice(&version.group.to_le_bytes());
+        payload.push(u8::from(version.replaces));
         push_frame(&mut out, VERSION, &payload);
         self.read_entry(&payload)?;
         self.valid_len += out.len() as u64;
@@ -307,6 +342,13 @@ impl NoteLog {
             hash: ContentHash(reader.array().ok_or(damaged)?),
             len: reader.usize().ok_or(damaged)?,
             record: reader.usize().ok_or(damaged)?,
+            kind: reader.u8().and_then(VersionKind::from_tag).ok_or(damaged)?,
+            group: i64::from_le_bytes(reader.array().ok_or(damaged)?),
+        };
+        let replaces = match reader.u8().ok_or(damaged)? {
+            0 => false,
+            1 => true,
+            _ => return Err(damaged),
         };
         let record = self.records.get(entry.record).ok_or(damaged)?;
         // Los números crecen y siempre cabe uno más; el largo es el del registro.
@@ -318,9 +360,26 @@ impl NoteLog {
         {
             return Err(damaged);
         }
+        if replaces {
+            // Solo se reemplaza una versión autoguardada.
+            match self.entries.pop() {
+                Some(last) if last.kind == VersionKind::Autosaved => self.replaced += 1,
+                _ => return Err(damaged),
+            }
+        }
         self.entries.push(entry);
         Ok(())
     }
+}
+
+/// Lo que dice el marco `VERSION` de una versión que se agrega.
+struct NewVersion {
+    seq: u64,
+    at: i64,
+    hash: ContentHash,
+    kind: VersionKind,
+    group: i64,
+    replaces: bool,
 }
 
 /// `[codec][base + 1, o 0 si es snapshot][largo sin comprimir][largo del texto][datos]`.

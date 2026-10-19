@@ -64,6 +64,14 @@ pub enum VersionError {
     Stopped,
 }
 
+/// Quién pidió un guardado: el historial agrupa las versiones del
+/// autoguardado y deja siempre la de un guardado pedido (06 §3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveKind {
+    Explicit,
+    Autosave,
+}
+
 /// La versión de un guardado, que se registra en el hilo del vault para no
 /// demorar el guardado. Se puede soltar sin esperarla: un error igual queda
 /// en el log.
@@ -297,9 +305,10 @@ impl Vault {
     }
 
     /// Guarda `text` en la nota `path` de forma atómica y registra la
-    /// versión: toda escritura de una nota del vault pasa por aquí (06 §3).
-    /// Vuelve en cuanto la nota está en disco; la versión se registra después,
-    /// en el hilo del vault. `None` si el vault no tiene historial.
+    /// versión, según `kind`: toda escritura de una nota del vault pasa por
+    /// aquí (06 §3). Vuelve en cuanto la nota está en disco; la versión se
+    /// registra después, en el hilo del vault. `None` si el vault no tiene
+    /// historial.
     ///
     /// # Errors
     /// Si `path` no es una nota o pasa por un enlace simbólico, o si falla la
@@ -308,6 +317,7 @@ impl Vault {
         &self,
         path: &VaultPath,
         text: String,
+        kind: SaveKind,
     ) -> Result<Option<PendingVersion>, SaveError> {
         let target = ops::note_target(&self.root, path)?;
         if self.history.is_none() {
@@ -323,9 +333,24 @@ impl Vault {
             path: path.clone(),
             text,
             at: SystemTime::now(),
+            kind,
             done,
         }));
         Ok(Some(PendingVersion(pending)))
+    }
+
+    /// Espera a que el hilo del vault registre las versiones de los
+    /// guardados que ya volvieron, para que lo guardado justo antes de
+    /// salir de la app no se quede sin versión.
+    pub fn wait_for_versions(&self) {
+        if self.history.is_none() {
+            return;
+        }
+        let (done, flushed) = mpsc::channel();
+        if self.messages.send(Message::Flush(done)).is_ok() {
+            // Si el hilo terminó, no queda nada que esperar.
+            let _ = flushed.recv();
+        }
     }
 
     /// Crea una nota vacía, con las carpetas que le falten. El índice se

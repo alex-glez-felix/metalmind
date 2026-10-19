@@ -10,7 +10,7 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
-use metalmind_vault::{FileOpError, SaveError, Vault, VaultPath};
+use metalmind_vault::{FileOpError, SaveError, SaveKind, Vault, VaultPath};
 use pretty_assertions::assert_eq;
 use support::{entries, make_tree, settle};
 use tempfile::TempDir;
@@ -210,7 +210,7 @@ fn guardar_no_sale_del_vault_por_una_nota_enlazada() {
     .unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert!(matches!(
-        vault.save(&path("enlace.md"), "pisada".to_owned()),
+        vault.save(&path("enlace.md"), "pisada".to_owned(), SaveKind::Explicit),
         Err(SaveError::Path(FileOpError::Symlink(_)))
     ));
     assert_eq!(read(outside.path(), "ajena.md"), "ajena.md");

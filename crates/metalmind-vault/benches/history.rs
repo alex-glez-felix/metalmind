@@ -13,7 +13,7 @@ use std::time::SystemTime;
 
 use divan::Bencher;
 use metalmind_config::{HistoryRetention, Paths};
-use metalmind_vault::{History, HistoryOptions, Vault, VaultOptions, VaultPath};
+use metalmind_vault::{History, HistoryOptions, SaveKind, Vault, VaultOptions, VaultPath};
 use tempfile::TempDir;
 
 const LINES: [usize; 2] = [5_000, 50_000];
@@ -68,7 +68,7 @@ fn guardar_desde_el_vault(bencher: Bencher, lines: usize) {
             edit.set(edit.get() + 1);
             edited(&note, edit.get())
         })
-        .bench_local_values(|text| vault.save(&path, text).unwrap());
+        .bench_local_values(|text| vault.save(&path, text, SaveKind::Explicit).unwrap());
 }
 
 #[divan::bench(args = LINES, sample_count = 20)]
