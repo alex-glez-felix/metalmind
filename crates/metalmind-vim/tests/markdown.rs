@@ -182,6 +182,8 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("# a\n|x", "yahP", "|# a\nx\n# a\nx")]
 #[case("# a\n## b\n|y\n# c", "vahd", "# a\n|# c")]
 #[case("# a\n## b\n|y\n# c", "vahahd", "|# c")]
+#[case("# a\nx\n|y\n# b", "Vah<Esc>", "# a\nx\n|y\n# b")]
+#[case("# a\nx\n|y\n# b", "Vkah<Esc>", "|# a\nx\ny\n# b")]
 #[case("# a\n|x", "d99999999999999999999999ah", "# a\n|x")]
 #[case("# a\n|x", "v99999999999999999999999ahd", "# a\n|")]
 #[case("# a\n```\n# no\n```\n|x\n# c", "dah", "|# c")]
