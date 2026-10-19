@@ -151,6 +151,13 @@ impl Session {
             .unwrap();
     }
 
+    pub fn click(&mut self, offset: ByteOffset) {
+        let pane = self.pane();
+        self.workspace
+            .click(pane, offset, &mut self.clipboard)
+            .unwrap();
+    }
+
     pub fn select(&mut self, anchor: ByteOffset, head: ByteOffset) {
         self.workspace.select(self.pane(), anchor, head).unwrap();
     }

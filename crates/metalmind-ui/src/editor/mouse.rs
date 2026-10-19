@@ -63,7 +63,12 @@ impl Editor {
             return;
         };
         self.drag_anchor = Some(offset);
-        self.select(offset, offset, cx);
+        let clicked = self.update_workspace(cx, |workspace, pane, cx| {
+            workspace.click(pane, offset, &mut SystemClipboard(cx))
+        });
+        if let Err(error) = clicked {
+            self.report(&error, cx);
+        }
     }
 
     pub(super) fn on_mouse_move(
