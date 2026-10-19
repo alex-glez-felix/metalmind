@@ -12,20 +12,15 @@ use super::PaneView;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceLines {
-    /// La línea del cursor o las de la selección de Visual.
+    /// La línea del cursor o las de la selección de Visual, con los bloques
+    /// `$$` de sus extremos enteros: siempre seguidas.
     lines: RangeInclusive<usize>,
-    /// El bloque `$$` donde está el cursor.
-    block: Option<RangeInclusive<usize>>,
 }
 
 impl SourceLines {
     #[must_use]
     pub fn contains(&self, line: usize) -> bool {
         self.lines.contains(&line)
-            || self
-                .block
-                .as_ref()
-                .is_some_and(|block| block.contains(&line))
     }
 }
 
@@ -34,17 +29,22 @@ impl PaneView<'_> {
     pub fn source_lines(&self) -> SourceLines {
         let buffer = self.buffer();
         let cursor = buffer.line_of(self.cursor());
-        let lines = if matches!(self.mode, Mode::Visual(_)) {
-            let anchor = buffer.line_of(self.selection.anchor);
-            anchor.min(cursor)..=anchor.max(cursor)
+        let anchor = if matches!(self.mode, Mode::Visual(_)) {
+            buffer.line_of(self.selection.anchor)
         } else {
-            cursor..=cursor
+            cursor
         };
-        let block = self
-            .document
-            .layout()
-            .map(Layout::styles)
-            .and_then(|styles| styles.math_block(cursor));
-        SourceLines { lines, block }
+        let (mut first, mut last) = (anchor.min(cursor), anchor.max(cursor));
+        if let Some(styles) = self.document.layout().map(Layout::styles) {
+            for end in [anchor, cursor] {
+                if let Some(block) = styles.math_block(end) {
+                    first = first.min(*block.start());
+                    last = last.max(*block.end());
+                }
+            }
+        }
+        SourceLines {
+            lines: first..=last,
+        }
     }
 }

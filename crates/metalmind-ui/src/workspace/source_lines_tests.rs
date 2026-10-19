@@ -84,6 +84,23 @@ fn en_visual_las_lineas_de_la_seleccion() {
 }
 
 #[test]
+fn una_seleccion_que_sale_de_un_bloque_lo_muestra_entero() {
+    let (mut session, pane) = session();
+    session.keys("4Gvkk");
+    assert_eq!(
+        sources(&session, pane),
+        [1, 2, 3, 4],
+        "el ancla en el bloque"
+    );
+    session.keys("⎋2Gvj");
+    assert_eq!(
+        sources(&session, pane),
+        [1, 2, 3, 4],
+        "el cursor en el bloque"
+    );
+}
+
+#[test]
 fn el_motor_no_se_entera_de_las_formulas() {
     let (mut session, pane) = session();
     session.keys("f$;");
