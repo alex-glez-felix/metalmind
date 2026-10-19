@@ -26,7 +26,7 @@ en una cerca: ```⏎$x$⏎```⏎⟦$y$⟧
   índice: []
 cerca dentro de un bloque: $$⏎```⏎⟦$$⟧^2⏎```
   índice: []
-bloque en una línea: ⟦$$x^2$$⟧
+bloque en una línea: ⟦$$x^2$$⟧solo
   índice: []
 bloque multilínea: $$⏎a⏎⏎b⏎⟦$$⟧^4 #fuera
   índice: ["#fuera"]

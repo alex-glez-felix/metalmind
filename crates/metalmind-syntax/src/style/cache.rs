@@ -6,6 +6,8 @@
 //! repinta hasta lo que se pida y, pasado lo editado, en cuanto un tramo
 //! empieza en el mismo estado que antes, lo de abajo vuelve a valer.
 
+use std::ops::RangeInclusive;
+
 use super::region::{self, Region, Start, is_delimiter};
 use super::{LineStyle, Lines};
 use crate::code::{is_blank, opening_fence};
@@ -98,6 +100,33 @@ impl Styles {
     #[must_use]
     pub fn line(&self, line: usize) -> Option<&LineStyle> {
         (line < self.valid).then(|| &self.lines[line].style)
+    }
+
+    /// Las líneas del bloque `$$` de varias líneas donde está `line`, de la
+    /// que lo abre a la que lo cierra (o a la última calculada, si no
+    /// cierra), si ya se calculó su estilo.
+    #[must_use]
+    pub fn math_block(&self, line: usize) -> Option<RangeInclusive<usize>> {
+        let inside = |line: usize| match self.line_start(line) {
+            Some(Start::Math(open)) => Some(open),
+            _ => None,
+        };
+        let first = match inside(line) {
+            Some(open) => line.checked_sub(open.opened)?,
+            None if inside(line + 1).is_some_and(|open| open.opened == 1) => line,
+            None => return None,
+        };
+        let mut last = line.max(first + 1);
+        while inside(last + 1).is_some_and(|open| open.opened == last + 1 - first) {
+            last += 1;
+        }
+        Some(first..=last)
+    }
+
+    fn line_start(&self, line: usize) -> Option<Start> {
+        (line < self.valid)
+            .then(|| self.lines[line].start)
+            .flatten()
     }
 
     /// Las líneas `first..first + removed` pasaron a ser `inserted` líneas.

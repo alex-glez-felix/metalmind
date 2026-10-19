@@ -8,7 +8,7 @@ use super::block::{BlockKind, BlockLine, block_line};
 use super::emphasis::{Delimiters, Styled};
 use super::flatten::{Layer, Layers};
 use super::pieces::Pieces;
-use super::{Conceal, LineKind, LineStyle, LinkSpot, MathSpot, Role};
+use super::{Conceal, LineKind, LineStyle, LinkSpot, MathPlace, MathSpot, Role};
 use crate::markdown_link::MarkdownLink;
 use crate::math::Math;
 use crate::scanner::{self, RegionEnd};
@@ -98,7 +98,7 @@ pub(crate) fn style_chunk(text: &str, entry: Entry, count: usize) -> Chunk {
                     range: 0..entry.body,
                     latex: block.latex,
                     display: true,
-                    above: block.above,
+                    place: MathPlace::Below { above: block.above },
                 });
             }
         }
@@ -412,12 +412,18 @@ impl Painter<'_> {
                 Layer::Conceal(Conceal::Math { display }),
             );
             let index = self.line_of(math.span.start);
-            let start = self.lines[index].start;
+            let line = self.lines[index].clone();
+            let alone = self.text[line.start..math.span.start].trim().is_empty()
+                && self.text[math.span.end..line.end].trim().is_empty();
             formulas[index].push(MathSpot {
-                range: math.span.start - start..math.span.end - start,
+                range: math.span.start - line.start..math.span.end - line.start,
                 latex: latex.to_owned(),
                 display,
-                above: 0,
+                place: if display && alone {
+                    MathPlace::Alone
+                } else {
+                    MathPlace::Inline
+                },
             });
         }
     }

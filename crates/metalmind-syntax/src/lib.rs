@@ -27,8 +27,8 @@ pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
 };
 pub use style::{
-    Conceal, Decorations, FencePart, LineKind, LineStyle, Lines, LinkSpot, MathSpot, Role, Span,
-    Style, Styles, TextLines, Token,
+    Conceal, Decorations, FencePart, LineKind, LineStyle, Lines, LinkSpot, MathPlace, MathSpot,
+    Role, Span, Style, Styles, TextLines, Token,
 };
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 

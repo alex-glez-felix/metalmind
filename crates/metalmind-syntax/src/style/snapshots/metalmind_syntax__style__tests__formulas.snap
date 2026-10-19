@@ -10,7 +10,7 @@ Text | [\]Markup~ [\]Markup~ [$]Markup~ [\$ = \text{dólar}]Math~Math { display:
 Text | [`]Markup~ [$x$]Code+code [`]Markup~ [``]Markup~ [$$]Code+code [``]Markup~
 Text | [$]Markup~ [\#a [[b]]]Math~Math { display: false } [$]Markup~ [#c]Tag [[[]Markup~ [d]Wikilink []]]Markup~ ->"d" $"\\#a [[b]]"@29..40
 Text |
-Text | [$$]Markup~ [\int_0^1 x\,dx = \frac{1}{2}]Math~Math { display: true } [$$]Markup~ $$"\\int_0^1 x\\,dx = \\frac{1}{2}"@0..32
+Text | [$$]Markup~ [\int_0^1 x\,dx = \frac{1}{2}]Math~Math { display: true } [$$]Markup~ $$"\\int_0^1 x\\,dx = \\frac{1}{2}"@0..32 solo
 Text | [$$]Markup~ [a^2]Math~Math { display: true } [$$]Markup~ $$"a^2"@12..19
 Text | [$$]Markup~
 Text | [\begin{aligned}]Math

@@ -207,18 +207,30 @@ pub struct MathSpot {
     pub range: Range<usize>,
     /// El LaTeX, sin los `$`; el de todas las líneas de un bloque.
     pub latex: String,
-    /// `$$…$$`: se compone como bloque, más grande.
+    /// `$$…$$`: se compone como bloque, con los operadores grandes.
     pub display: bool,
-    /// Cuántas líneas arriba abrió: 0 si está entera en esta línea. Si no,
-    /// la línea cierra un bloque y la fórmula va debajo de ella.
-    pub above: usize,
+    pub place: MathPlace,
+}
+
+/// Dónde va una fórmula compuesta.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MathPlace {
+    /// Reemplaza su tramo, alineada con el texto de la línea.
+    Inline,
+    /// Un bloque `$$…$$` que es lo único de su línea: la reemplaza entera,
+    /// centrado.
+    Alone,
+    /// Un bloque de varias líneas que abrió `above` líneas arriba: va
+    /// debajo de la línea que lo cierra, centrado, y su fuente se sigue
+    /// viendo.
+    Below { above: usize },
 }
 
 impl MathSpot {
     /// Si va debajo de la línea en vez de reemplazar su tramo.
     #[must_use]
     pub fn below(&self) -> bool {
-        self.above > 0
+        matches!(self.place, MathPlace::Below { .. })
     }
 }
 

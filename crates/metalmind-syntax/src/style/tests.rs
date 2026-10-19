@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 
-use super::{Conceal, Decorations, LineKind, LineStyle, Lines, Role, Styles, TextLines};
+use super::{Conceal, Decorations, LineKind, LineStyle, Lines, MathPlace, Role, Styles, TextLines};
 use crate::scan;
 
 fn styled(text: &str) -> Vec<LineStyle> {
@@ -49,8 +49,10 @@ fn render(text: &str) -> String {
         for math in &style.math {
             let kind = if math.display { "$$" } else { "$" };
             write!(out, " {kind}{:?}@{:?}", math.latex, math.range).unwrap();
-            if math.below() {
-                write!(out, "^{}", math.above).unwrap();
+            match math.place {
+                MathPlace::Inline => {}
+                MathPlace::Alone => out.push_str(" solo"),
+                MathPlace::Below { above } => write!(out, "^{above}").unwrap(),
             }
         }
         out.push('\n');
@@ -84,12 +86,39 @@ fn a_block_follows_its_lines_when_edited() {
     styles.edit(3, 0, 1);
     styles.ensure(usize::MAX, &lines);
     let closing = &styles.line(4).unwrap().math[0];
-    assert_eq!((closing.latex.as_str(), closing.above), ("\nx\ny\n", 3));
+    assert_eq!(
+        (closing.latex.as_str(), closing.place),
+        ("\nx\ny\n", MathPlace::Below { above: 3 })
+    );
     assert_eq!(
         (0..lines.line_count())
             .map(|line| styles.line(line).unwrap().clone())
             .collect::<Vec<_>>(),
         styled(&text)
+    );
+}
+
+#[test]
+fn a_line_knows_its_math_block() {
+    let text = "a\nx $$ b\nc\n\nd $$ e\nf\n$$ sin cerrar\ng";
+    let lines = TextLines::new(text);
+    let mut styles = Styles::new(lines.line_count());
+    styles.ensure(usize::MAX, &lines);
+    let blocks: Vec<_> = (0..lines.line_count())
+        .map(|line| styles.math_block(line))
+        .collect();
+    assert_eq!(
+        blocks,
+        [
+            None,
+            Some(1..=4),
+            Some(1..=4),
+            Some(1..=4),
+            Some(1..=4),
+            None,
+            Some(6..=7),
+            Some(6..=7)
+        ]
     );
 }
 
