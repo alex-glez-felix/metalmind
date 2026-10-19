@@ -226,10 +226,13 @@ impl TextSearchState {
 
     /// Elige la fila marcada. Si lo mostrado es de una búsqueda anterior
     /// (se tecleó y se dio `enter` enseguida), la elección espera al primer
-    /// resultado de lo escrito, y lo que se teclee mientras no cambia nada.
+    /// resultado de lo escrito, y lo que se teclee mientras no cambia nada;
+    /// con lo escrito inválido no espera: elegiría algo que no se vio.
     pub fn choose(&mut self, open: Open) -> Option<Chosen> {
         if self.stale && self.progress == Status::Searching {
-            self.pending_choice = Some(open);
+            if self.invalid.is_none() {
+                self.pending_choice = Some(open);
+            }
             return None;
         }
         self.chosen(open)
