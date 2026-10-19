@@ -143,7 +143,10 @@ impl Line<'_> {
             .iter()
             .map(|spot| {
                 let metrics = math.formulas.metrics(&spot.latex, spot.display);
-                (spot, metrics.map(|metrics| math.geometry.formula(metrics)))
+                (
+                    spot,
+                    metrics.and_then(|metrics| math.geometry.formula(metrics)),
+                )
             })
             .collect();
         // El alto sale de lo medido, como lo mide el motor; lo que no se
