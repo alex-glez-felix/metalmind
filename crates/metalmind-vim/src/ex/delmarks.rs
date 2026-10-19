@@ -148,6 +148,11 @@ mod tests {
         assert_eq!(parse(false, "a-"), (String::new(), at("a-")));
         assert_eq!(parse(false, "'"), (String::new(), at("'")));
         assert_eq!(
+            parse(false, "a\tb"),
+            ("a".to_owned(), at("\tb")),
+            "como nvim, solo el espacio separa"
+        );
+        assert_eq!(
             parse(false, "a<"),
             (
                 "a".to_owned(),
