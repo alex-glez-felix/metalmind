@@ -66,25 +66,29 @@ jobs:
         with:
           tool: gungraun-runner@${{ env.GUNGRAUN_VERSION }}
 
+      # Cada crate en su propio `cargo bench`: compilados juntos, las features
+      # de las dependencias compartidas se unifican con las dev-dependencies de
+      # los otros (las de GPUI de metalmind-ui), y el binario del núcleo de la
+      # PR no sería el mismo que el de la base aunque su código no cambie.
       - name: Medir la base
         if: github.event_name == 'pull_request'
         id: base
         run: |
           git worktree add ../base HEAD^1
-          paquetes=()
+          medidos=()
           for paquete in $PAQUETES; do
             if [ -f "../base/crates/$paquete/benches/instrucciones.rs" ]; then
-              paquetes+=(-p "$paquete")
+              # El mismo target que la PR: las dependencias se compilan una vez.
+              (cd ../base && CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" \
+                cargo bench -p "$paquete" --bench instrucciones -- --save-baseline=base)
+              medidos+=("$paquete")
             fi
           done
-          if [ ${#paquetes[@]} -eq 0 ]; then
+          if [ ${#medidos[@]} -eq 0 ]; then
             echo "::notice::La base no tiene benchmarks de instrucciones; no hay contra qué comparar."
             exit 0
           fi
           echo "medida=true" >> "$GITHUB_OUTPUT"
-          # El mismo target que la PR: las dependencias se compilan una vez.
-          (cd ../base && CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" \
-            cargo bench "${paquetes[@]}" --bench instrucciones -- --save-baseline=base)
           # Cargo decide si un crate del workspace está al día por fechas y con
           # rutas relativas al crate: lo que cambia la PR tiene que quedar más
           # nuevo que lo que compiló la base, o mediría el binario de la base.
@@ -101,14 +105,21 @@ jobs:
           else
             limite=(--callgrind-limits="$LIMITE")
           fi
-          paquetes=()
-          for paquete in $PAQUETES; do paquetes+=(-p "$paquete"); done
-          cargo bench "${paquetes[@]}" --bench instrucciones -- --baseline=base "${limite[@]}"
+          # Todos corren aunque uno falle, para ver cada regresión de una vez.
+          fallaron=()
+          for paquete in $PAQUETES; do
+            cargo bench -p "$paquete" --bench instrucciones -- --baseline=base "${limite[@]}" \
+              || fallaron+=("$paquete")
+          done
+          if [ ${#fallaron[@]} -gt 0 ]; then
+            echo "::error::Regresiones en: ${fallaron[*]}"
+            exit 1
+          fi
 
       # En main y en una PR sin base medible: que los benchmarks corran.
       - name: Medir
         if: steps.base.outputs.medida != 'true'
         run: |
-          paquetes=()
-          for paquete in $PAQUETES; do paquetes+=(-p "$paquete"); done
-          cargo bench "${paquetes[@]}" --bench instrucciones
+          for paquete in $PAQUETES; do
+            cargo bench -p "$paquete" --bench instrucciones
+          done
