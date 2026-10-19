@@ -18,8 +18,8 @@ pub use groups::{CursorColors, RoleColors, SyntaxColors, UiColors};
 pub use headings::{Heading, Headings};
 pub use loader::{LoadError, Themes};
 pub use metrics::{
-    Count, Factor, Layout, Length, MarkColumns, Metrics, Px, Radius, Rows, Spacing, Stroke, Text,
-    TextStyle, Weight,
+    Count, Factor, Fraction, Layout, Length, MarkColumns, Metrics, Px, Radius, Rows, Spacing,
+    Stroke, Text, TextStyle, Weight,
 };
 
 use color::Hex;

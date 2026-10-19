@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 
 use super::units::LengthRef;
-pub use super::units::{Count, Factor, Length, MarkColumns, Px, TextStyle, Weight};
+pub use super::units::{Count, Factor, Fraction, Length, MarkColumns, Px, TextStyle, Weight};
 use crate::diagnostic::Location;
 use crate::parse::Spanned;
 
@@ -38,7 +38,7 @@ macro_rules! plain_metric {
     )*};
 }
 
-plain_metric!(Px, Factor, Weight, Count, MarkColumns, TextStyle);
+plain_metric!(Px, Factor, Fraction, Weight, Count, MarkColumns, TextStyle);
 
 impl Metric for Length {
     type Raw = LengthRef;
@@ -208,6 +208,9 @@ metric_group! {
         picker_input_padding_y: Length,
         /// Entre el texto de una fila del picker y su detalle, y antes del contador.
         picker_gap: Length,
+        /// Lo mínimo de una fila del picker que se queda el detalle (la
+        /// ruta, el atajo) cuando el texto no cabe: una fracción de la fila.
+        picker_detail_share: Fraction,
         panel_padding_x: Length,
         panel_padding_y: Length,
         /// Entre el ícono y el nombre de una fila, y entre los botones.

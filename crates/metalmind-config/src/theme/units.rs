@@ -32,6 +32,19 @@ impl TryFrom<f32> for Factor {
     }
 }
 
+/// Una parte de un todo, de 0 a 1.
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+#[serde(try_from = "f32")]
+pub struct Fraction(pub f32);
+
+impl TryFrom<f32> for Fraction {
+    type Error = String;
+
+    fn try_from(value: f32) -> Result<Self, String> {
+        in_range(value, 0., 1., "una fracción").map(Self)
+    }
+}
+
 /// El grosor de una letra, de 100 a 900 de cien en cien (400 normal, 700 negrita).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(try_from = "u16")]

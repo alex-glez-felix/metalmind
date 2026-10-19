@@ -19,6 +19,9 @@ pub struct RowLine {
     row: PickerRow,
     matched: Hsla,
     muted: Hsla,
+    strong: FontWeight,
+    text_size: Pixels,
+    detail_size: Pixels,
     gap: Pixels,
     detail_share: f32,
 }
@@ -29,7 +32,10 @@ impl RowLine {
             row,
             matched: theme.picker_match,
             muted: theme.picker_muted,
-            gap: theme.status_gap,
+            strong: theme.weight_strong,
+            text_size: theme.ui_font_size,
+            detail_size: theme.ui_small_font_size,
+            gap: theme.picker_gap,
             detail_share: theme.picker_detail_share,
         }
     }
@@ -38,7 +44,6 @@ impl RowLine {
 pub struct Shaped {
     text: ShapedLine,
     detail: Option<ShapedLine>,
-    line_height: Pixels,
 }
 
 impl IntoElement for RowLine {
@@ -70,7 +75,7 @@ impl gpui_kit::Element for RowLine {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = Style::default();
         style.size.width = relative(1.).into();
-        style.size.height = window.line_height().into();
+        style.size.height = relative(1.).into();
         (window.request_layout(style, [], cx), ())
     }
 
@@ -86,8 +91,14 @@ impl gpui_kit::Element for RowLine {
         let text_style = window.text_style();
         let typeface = Typeface {
             font: text_style.font(),
-            size: text_style.font_size.to_pixels(window.rem_size()),
+            size: self.text_size,
             color: text_style.color,
+            strong: self.strong,
+        };
+        let detail_typeface = Typeface {
+            size: self.detail_size,
+            color: self.muted,
+            ..typeface.clone()
         };
         let text = Measured::new(
             fit::one_line(&self.row.text),
@@ -100,12 +111,14 @@ impl gpui_kit::Element for RowLine {
             Measured::new(
                 fit::one_line(detail),
                 &[],
-                &typeface.muted(self.muted),
+                &detail_typeface,
                 self.muted,
                 window,
             )
         });
         let ellipsis = f32::from(typeface.shape(fit::ELLIPSIS.into(), window).width());
+        let detail_ellipsis =
+            f32::from(detail_typeface.shape(fit::ELLIPSIS.into(), window).width());
         let (text_budget, detail_budget) = fit::split(
             f32::from(bounds.size.width),
             text.total(),
@@ -126,7 +139,6 @@ impl gpui_kit::Element for RowLine {
                 fit::path(&text.widths, &text.slashes(), focus, text_budget, ellipsis)
             }
         };
-        let muted = typeface.muted(self.muted);
         Shaped {
             text: text.render(&kept, &typeface, self.matched, window),
             detail: detail.map(|detail| {
@@ -135,11 +147,10 @@ impl gpui_kit::Element for RowLine {
                     &detail.slashes(),
                     None,
                     detail_budget,
-                    ellipsis,
+                    detail_ellipsis,
                 );
-                detail.render(&kept, &muted, self.muted, window)
+                detail.render(&kept, &detail_typeface, self.muted, window)
             }),
-            line_height: window.line_height(),
         }
     }
 
@@ -153,7 +164,8 @@ impl gpui_kit::Element for RowLine {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let top = bounds.top() + (bounds.size.height - shaped.line_height) / 2.;
+        // Cada línea se pinta centrada en todo el alto de la fila.
+        let line_height = bounds.size.height;
         let detail_width = shaped.detail.as_ref().map_or(px(0.), ShapedLine::width);
         let text_right = if shaped.detail.is_some() {
             bounds.right() - detail_width - self.gap
@@ -171,18 +183,12 @@ impl gpui_kit::Element for RowLine {
                 bounds: text_bounds,
             }),
             |window| {
-                paint_line(
-                    &shaped.text,
-                    point(bounds.left(), top),
-                    shaped.line_height,
-                    window,
-                    cx,
-                );
+                paint_line(&shaped.text, bounds.origin, line_height, window, cx);
             },
         );
         if let Some(detail) = &shaped.detail {
-            let origin = point(bounds.right() - detail_width, top);
-            paint_line(detail, origin, shaped.line_height, window, cx);
+            let origin = point(bounds.right() - detail_width, bounds.top());
+            paint_line(detail, origin, line_height, window, cx);
         }
     }
 }
@@ -199,21 +205,16 @@ fn paint_line(
     }
 }
 
+#[derive(Clone)]
 struct Typeface {
     font: Font,
     size: Pixels,
     color: Hsla,
+    /// El peso de lo que coincide.
+    strong: FontWeight,
 }
 
 impl Typeface {
-    fn muted(&self, color: Hsla) -> Self {
-        Self {
-            font: self.font.clone(),
-            size: self.size,
-            color,
-        }
-    }
-
     fn run(&self, len: usize) -> TextRun {
         TextRun {
             len,
@@ -227,14 +228,14 @@ impl Typeface {
 
     fn matched_run(&self, len: usize, color: Hsla) -> TextRun {
         let mut run = self.run(len);
-        run.font.weight = FontWeight::BOLD;
+        run.font.weight = self.strong;
         run.color = color;
         run
     }
 
     /// Los tramos de `len` bytes con estilo, con `highlights` resaltados.
     fn runs(&self, len: usize, highlights: &[Range<usize>], matched: Hsla) -> Vec<TextRun> {
-        let mut runs = Vec::with_capacity(highlights.len() * 2 + 1);
+        let mut runs = Vec::new();
         let mut at = 0;
         for range in highlights {
             if range.start > at {

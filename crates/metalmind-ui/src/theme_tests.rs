@@ -83,6 +83,12 @@ fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
     assert_eq!(theme.editor_font_size, px(15.));
 }
 
+#[test]
+fn la_parte_del_detalle_del_picker_sale_del_tema() {
+    let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
+    assert!((theme.picker_detail_share - 0.4).abs() < 1e-6);
+}
+
 /// Las medidas que la UI tenía fijas antes de leerlas del tema, con la fuente de 15.
 #[test]
 fn las_medidas_de_fabrica_son_las_de_antes() {
