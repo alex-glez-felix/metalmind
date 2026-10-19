@@ -24,6 +24,8 @@ pub(crate) enum Marker {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ListItem<'a> {
     line: &'a str,
+    /// Hasta dónde llegan los `>` de una cita: `> - a` es un ítem.
+    quote: usize,
     pub marker: Marker,
     /// El marcador: `-` o `12.`.
     marker_range: Range<usize>,
@@ -34,13 +36,15 @@ pub(crate) struct ListItem<'a> {
 }
 
 impl<'a> ListItem<'a> {
-    /// El ítem que empieza `line`, que no lleva su `\n`. El marcador va
-    /// seguido de un blanco: `-` solo o `-x` no son ítems.
+    /// El ítem que empieza `line`, que no lleva su `\n`, tras la sangría y
+    /// los `>` de una cita. El marcador va seguido de un blanco: `-` solo o
+    /// `-x` no son ítems.
     pub(crate) fn parse(line: &'a str) -> Option<Self> {
         if metalmind_syntax::is_thematic_break(line) {
             return None;
         }
-        let start = leading_blanks(line).len();
+        let quote = metalmind_syntax::quote_prefix_len(line);
+        let start = indent_of(line).len();
         let rest = &line[start..];
         let (marker, len) = marker(rest)?;
         let after = start + len;
@@ -50,6 +54,7 @@ impl<'a> ListItem<'a> {
         }
         let mut item = Self {
             line,
+            quote,
             marker,
             marker_range: start..after,
             checkbox: None,
@@ -78,6 +83,12 @@ impl<'a> ListItem<'a> {
         self.content += after + spacing;
     }
 
+    /// Los bytes de la cita que lo contiene: terminar la lista los deja.
+    pub(crate) fn quote(&self) -> usize {
+        self.quote
+    }
+
+    /// Lo que va antes del marcador: la cita y la sangría.
     pub(crate) fn indent(&self) -> &'a str {
         &self.line[..self.marker_range.start]
     }
@@ -139,6 +150,13 @@ impl<'a> ListItem<'a> {
             Marker::Bullet(_) => None,
         }
     }
+}
+
+/// La cita y la sangría al inicio de `line`, de las que sale el nivel de un
+/// ítem.
+pub(crate) fn indent_of(line: &str) -> &str {
+    let quote = metalmind_syntax::quote_prefix_len(line);
+    &line[..quote + leading_blanks(&line[quote..]).len()]
 }
 
 fn marker(text: &str) -> Option<(Marker, usize)> {
@@ -212,7 +230,7 @@ pub(crate) fn renumber(
         if value > MAX_NUMBER || text.chars().all(is_blank) {
             break;
         }
-        let level = columns.line_width(leading_blanks(&text));
+        let level = columns.line_width(indent_of(&text));
         if level > numbering.level {
             continue;
         }

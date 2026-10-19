@@ -154,21 +154,29 @@ impl Workspace {
         })
     }
 
-    /// Un clic en `offset`: lleva el cursor ahí y, si cae en la casilla de
-    /// una tarea (`- [ ]`) en Normal, la marca o desmarca, como en Obsidian.
+    /// El botón del ratón baja en `offset`: lleva el cursor ahí. Dice si
+    /// cayó en la casilla de una tarea (`- [ ]`) estando en Normal: soltarlo
+    /// ahí sin arrastrar la marca o desmarca ([`Workspace::toggle_checkbox`]),
+    /// como en Obsidian.
+    ///
+    /// # Errors
+    /// Si `pane` no existe.
+    pub fn press(&mut self, pane: PaneId, offset: ByteOffset) -> Result<bool, WorkspaceError> {
+        let normal = self.vim.mode() == Mode::Normal;
+        self.select(pane, offset, offset)?;
+        Ok(normal && self.on_checkbox(pane, offset)?)
+    }
+
+    /// `editor::toggle_checkbox` en la línea del cursor de `pane`.
     ///
     /// # Errors
     /// Si `pane` no existe o una edición resulta inválida, lo que sería un bug.
-    pub fn click(
+    pub fn toggle_checkbox(
         &mut self,
         pane: PaneId,
-        offset: ByteOffset,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
-        self.select(pane, offset, offset)?;
-        if self.vim.mode() == Mode::Normal && self.on_checkbox(pane, offset)? {
-            self.execute(pane, Action::ToggleCheckbox, clipboard)?;
-        }
+        self.execute(pane, Action::ToggleCheckbox, clipboard)?;
         Ok(())
     }
 

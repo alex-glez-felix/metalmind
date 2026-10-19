@@ -63,11 +63,10 @@ impl Editor {
             return;
         };
         self.drag_anchor = Some(offset);
-        let clicked = self.update_workspace(cx, |workspace, pane, cx| {
-            workspace.click(pane, offset, &mut SystemClipboard(cx))
-        });
-        if let Err(error) = clicked {
-            self.report(&error, cx);
+        let pressed = self.update_workspace(cx, |workspace, pane, _| workspace.press(pane, offset));
+        match pressed {
+            Ok(on_checkbox) => self.checkbox_pressed = on_checkbox,
+            Err(error) => self.report(&error, cx),
         }
     }
 
@@ -87,6 +86,9 @@ impl Editor {
         let Some(head) = self.offset_at(event.position, cx) else {
             return;
         };
+        if head != anchor {
+            self.checkbox_pressed = false;
+        }
         self.select(anchor, head, cx);
     }
 
@@ -97,6 +99,15 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         if self.drag_anchor.take().is_none() {
+            return;
+        }
+        if std::mem::take(&mut self.checkbox_pressed) {
+            let toggled = self.update_workspace(cx, |workspace, pane, cx| {
+                workspace.toggle_checkbox(pane, &mut SystemClipboard(cx))
+            });
+            if let Err(error) = toggled {
+                self.report(&error, cx);
+            }
             return;
         }
         let selected = self.workspace.read(cx).selected_text(self.pane);

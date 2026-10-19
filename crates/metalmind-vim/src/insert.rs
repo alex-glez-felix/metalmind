@@ -15,22 +15,32 @@ pub(crate) struct Typing {
     pub columns: Columns,
 }
 
+impl Typing {
+    /// Sin continuar listas si `list` es falso.
+    pub(crate) fn lists_if(self, list: bool) -> Self {
+        Self {
+            continue_lists: self.continue_lists && list,
+            ..self
+        }
+    }
+}
+
 /// Abre la transacción que dura todo el modo Insert, para que `u` la deshaga
-/// entera.
+/// entera. Dice también si `o` u `O` abrieron un ítem de lista.
 pub(crate) fn enter(
     buffer: &mut Buffer,
     selections: &Selections,
     at: InsertAt,
     typing: Typing,
     layout: Option<&mut Layout>,
-) -> Result<Selections, VimError> {
+) -> Result<(Selections, bool), VimError> {
     let points = insertion_points(buffer, selections, at);
     match at {
         InsertAt::LineBelow => open_line(buffer, selections, &points, true, typing, layout),
         InsertAt::LineAbove => open_line(buffer, selections, &points, false, typing, layout),
         _ => {
             buffer.begin_transaction(points.clone())?;
-            Ok(points)
+            Ok((points, false))
         }
     }
 }
@@ -56,7 +66,7 @@ pub(crate) fn insertion_points(
 }
 
 /// `o`/`O`: el undo vuelve al cursor original, no a la línea nueva. Sobre
-/// un ítem de lista, la línea nueva es otro ítem.
+/// un ítem de lista, la línea nueva es otro ítem; dice si abrió alguno.
 fn open_line(
     buffer: &mut Buffer,
     original: &Selections,
@@ -64,7 +74,7 @@ fn open_line(
     below: bool,
     typing: Typing,
     layout: Option<&mut Layout>,
-) -> Result<Selections, VimError> {
+) -> Result<(Selections, bool), VimError> {
     buffer.begin_transaction(original.clone())?;
     let outline = LazyOutline::new(layout);
     let opened = points.map_to(|point| {
@@ -94,23 +104,25 @@ fn open_line(
             map.map(*at, Bias::Before) + item.len()
         })
     });
+    let list = opened.iter().any(|(_, item)| !item.is_empty());
     let after = opened
         .iter()
         .map(|(_, item)| (!item.is_empty()).then_some(After::Opened));
-    renumber(buffer, cursors, after, typing.columns)
+    Ok((renumber(buffer, cursors, after, typing.columns)?, list))
 }
 
 /// Un salto de línea en cada cursor; con `continue_lists`, en un ítem de
 /// lista abre el siguiente. `ends` es si un ítem vacío termina la lista.
+/// Dice también si siguió o terminó alguna lista.
 pub(crate) fn newline(
     buffer: &mut Buffer,
     selections: &Selections,
     typing: Typing,
     ends: bool,
     mut layout: Option<&mut Layout>,
-) -> Result<Selections, VimError> {
+) -> Result<(Selections, bool), VimError> {
     if !typing.continue_lists {
-        return type_text(buffer, selections, "\n");
+        return Ok((type_text(buffer, selections, "\n")?, false));
     }
     // Lo tecleado antes en este Insert ya cambió el texto.
     if let Some(layout) = layout.as_deref_mut() {
@@ -131,9 +143,9 @@ pub(crate) fn newline(
         .map(|(head, line_start, plan)| match plan {
             Newline::Plain => Edit::insert(*head, "\n"),
             Newline::Continue(item) => Edit::insert(*head, format!("\n{item}")),
-            Newline::End(_) => {
+            &Newline::End { kept, .. } => {
                 let line = buffer.line_of(*head);
-                Edit::delete(*line_start..buffer.line_end(line))
+                Edit::delete(*line_start + kept..buffer.line_end(line))
             }
         })
         .collect();
@@ -143,16 +155,17 @@ pub(crate) fn newline(
     let map = buffer.apply(edits)?;
     let cursors = plans.to_selections(|(head, line_start, plan)| {
         Selection::cursor(match plan {
-            Newline::End(_) => map.map(*line_start, Bias::Before),
+            &Newline::End { kept, .. } => map.map(*line_start + kept, Bias::Before),
             Newline::Plain | Newline::Continue(_) => map.map(*head, Bias::After),
         })
     });
+    let list = plans.iter().any(|(_, _, plan)| *plan != Newline::Plain);
     let after = plans.iter().map(|(_, _, plan)| match plan {
         Newline::Continue(_) => Some(After::Opened),
-        Newline::End(numbering) => numbering.map(After::Ended),
+        Newline::End { numbering, .. } => numbering.map(After::Ended),
         Newline::Plain => None,
     });
-    renumber(buffer, cursors, after, typing.columns)
+    Ok((renumber(buffer, cursors, after, typing.columns)?, list))
 }
 
 /// Renumera las listas que siguen a la línea de cada cursor que abrió o
@@ -212,23 +225,32 @@ pub(crate) enum Typed {
     /// Texto tal cual, también lo pegado aunque traiga saltos de línea.
     Text(String),
     Backspace,
-    /// `Enter`: puede continuar una lista.
-    Newline,
+    /// `Enter`. `list`: si puede continuar o terminar una lista; lo
+    /// tecleado lo guarda solo si lo hizo, para que el count y `.` no
+    /// conviertan en ítem lo que no lo era.
+    Newline {
+        list: bool,
+    },
 }
 
 impl Typed {
+    /// Dónde quedan los cursores y lo tecleado tal como se repetirá.
     pub(crate) fn apply(
         &self,
         buffer: &mut Buffer,
         selections: &Selections,
         typing: Typing,
         layout: Option<&mut Layout>,
-    ) -> Result<Selections, VimError> {
-        match self {
-            Self::Text(text) => type_text(buffer, selections, text),
-            Self::Backspace => backspace(buffer, selections),
-            Self::Newline => newline(buffer, selections, typing, true, layout),
-        }
+    ) -> Result<(Selections, Self), VimError> {
+        Ok(match self {
+            Self::Text(text) => (type_text(buffer, selections, text)?, self.clone()),
+            Self::Backspace => (backspace(buffer, selections)?, Self::Backspace),
+            &Self::Newline { list } => {
+                let typing = typing.lists_if(list);
+                let (selections, list) = newline(buffer, selections, typing, true, layout)?;
+                (selections, Self::Newline { list })
+            }
+        })
     }
 }
 
@@ -253,7 +275,11 @@ impl Session {
 
     pub(crate) fn record(&mut self, typed: &Typed) {
         if self.cursor_moved {
-            self.dot = Dot::new(Change::Insert(InsertAt::Before), None, None);
+            let change = Change::Insert {
+                at: InsertAt::Before,
+                list: false,
+            };
+            self.dot = Dot::new(change, None, None);
             self.cursor_moved = false;
         }
         self.dot.record(typed);
@@ -275,19 +301,21 @@ impl Session {
         layout: &mut Option<Layout>,
     ) -> Result<Selections, VimError> {
         let mut selections = selections.clone();
-        let opens_line = match (&self.dot.change, self.cursor_moved) {
-            (&Change::Insert(at), false) => {
-                matches!(at, InsertAt::LineBelow | InsertAt::LineAbove)
-            }
-            (Change::Block(BlockChange::Insert { .. }, _), false) => false,
+        let (opens_line, list) = match (&self.dot.change, self.cursor_moved) {
+            (&Change::Insert { at, list }, false) => (
+                matches!(at, InsertAt::LineBelow | InsertAt::LineAbove),
+                list,
+            ),
+            (Change::Block(BlockChange::Insert { .. }, _), false) => (false, false),
             _ => return Ok(selections),
         };
+        let opening = typing.lists_if(list);
         for _ in 1..self.dot.count.unwrap_or(1) {
             if opens_line {
-                selections = newline(buffer, &selections, typing, false, layout.as_mut())?;
+                (selections, _) = newline(buffer, &selections, opening, false, layout.as_mut())?;
             }
             for typed in &self.dot.typed {
-                selections = typed.apply(buffer, &selections, typing, layout.as_mut())?;
+                (selections, _) = typed.apply(buffer, &selections, typing, layout.as_mut())?;
             }
         }
         Ok(selections)

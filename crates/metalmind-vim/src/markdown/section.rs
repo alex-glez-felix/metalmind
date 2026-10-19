@@ -18,7 +18,8 @@ pub(crate) fn section(
     count: usize,
     around: bool,
 ) -> Option<(usize, usize)> {
-    section_in(outline, buffer, line, count, around)
+    let index = ancestors(outline, line).nth(count.saturating_sub(1))?;
+    bounds(outline, buffer, index, around)
 }
 
 /// En Visual por líneas, si la selección ya abarca la sección, toma la que
@@ -31,9 +32,9 @@ pub(crate) fn select_section(
     count: usize,
     around: bool,
 ) -> Option<(usize, usize)> {
-    // Cada count más sube un nivel: no hay más que headings.
-    (count..=count + outline.headings.len())
-        .map(|count| section_in(outline, buffer, line, count, around))
+    ancestors(outline, line)
+        .skip(count.saturating_sub(1))
+        .map(|index| bounds(outline, buffer, index, around))
         .find(|found| match (found, selected) {
             (Some((first, last)), Some((from, to))) => *first < from || *last > to,
             _ => true,
@@ -41,21 +42,26 @@ pub(crate) fn select_section(
         .flatten()
 }
 
-fn section_in(
+/// El heading de la sección de `line` y los que la contienen, de adentro
+/// hacia afuera: a lo sumo uno por nivel.
+fn ancestors(outline: &Outline, line: usize) -> impl Iterator<Item = usize> + '_ {
+    let headings = &outline.headings;
+    let first = headings.iter().rposition(|heading| heading.line <= line);
+    std::iter::successors(first, move |&index| {
+        let level = headings[index].level;
+        headings[..index]
+            .iter()
+            .rposition(|heading| heading.level < level)
+    })
+}
+
+fn bounds(
     outline: &Outline,
     buffer: &Buffer,
-    line: usize,
-    count: usize,
+    index: usize,
     around: bool,
 ) -> Option<(usize, usize)> {
     let headings = &outline.headings;
-    let mut index = headings.iter().rposition(|heading| heading.line <= line)?;
-    for _ in 1..count {
-        let level = headings[index].level;
-        index = headings[..index]
-            .iter()
-            .rposition(|heading| heading.level < level)?;
-    }
     let heading = headings[index];
     let last = headings[index + 1..]
         .iter()

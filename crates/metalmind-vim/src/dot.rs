@@ -62,7 +62,12 @@ pub(crate) enum Change {
     /// `d` o `c` con su objeto; `x` es `dl`.
     Operate(Operator, Subject),
     Paste(PasteSide),
-    Insert(InsertAt),
+    /// `list`: si `o`/`O` abrió un ítem de lista. Si no, sus repeticiones
+    /// abren una línea simple, aunque el texto ya parezca una lista.
+    Insert {
+        at: InsertAt,
+        list: bool,
+    },
     /// `r` en Visual, sobre la misma cantidad de texto.
     Replace(char, VisualSize),
     /// Un cambio en Visual por bloque, sobre un bloque del mismo tamaño

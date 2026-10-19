@@ -18,7 +18,7 @@ use crate::layout::{BufferLines, Layout};
 
 pub(crate) use checkbox::toggle_checkboxes;
 pub(crate) use heading::{next_heading, previous_heading};
-pub(crate) use list::ListItem;
+pub(crate) use list::{ListItem, indent_of};
 pub(crate) use newline::{After, Newline, opened_item, renumber_items};
 pub(crate) use section::{section, select_section};
 
@@ -53,28 +53,30 @@ struct Heading {
 #[derive(Debug)]
 pub(crate) struct Outline {
     headings: Vec<Heading>,
-    /// Si cada línea es de un bloque de código cercado, cercas incluidas.
-    code: Vec<bool>,
+    /// Si cada línea es texto literal y no markdown: de un bloque de código
+    /// cercado (cercas incluidas) o del frontmatter.
+    literal: Vec<bool>,
 }
 
 impl Outline {
     fn of(styles: &Styles) -> Self {
         let mut headings = Vec::new();
-        let code = (0..styles.line_count())
+        let literal = (0..styles.line_count())
             .map(|line| match styles.line(line).map(|style| style.kind) {
                 Some(LineKind::Heading(level)) => {
                     headings.push(Heading { line, level });
                     false
                 }
-                Some(LineKind::Fence(_)) => true,
+                Some(LineKind::Fence(_) | LineKind::Frontmatter) => true,
                 _ => false,
             })
             .collect();
-        Self { headings, code }
+        Self { headings, literal }
     }
 
-    pub(crate) fn in_code(&self, line: usize) -> bool {
-        self.code.get(line).copied().unwrap_or(false)
+    /// Las listas no se editan ahí: un `- a` del frontmatter es YAML.
+    pub(crate) fn is_literal(&self, line: usize) -> bool {
+        self.literal.get(line).copied().unwrap_or(false)
     }
 }
 

@@ -6,7 +6,7 @@ use super::{LazyOutline, ListItem};
 
 /// Las ediciones que marcan o desmarcan el checkbox de cada ítem de `lines`.
 /// Un ítem sin checkbox recibe uno vacío; las líneas que no son ítems o
-/// están en un bloque de código no cambian.
+/// están en un bloque de código o en el frontmatter no cambian.
 pub(crate) fn toggle_checkboxes(
     buffer: &Buffer,
     lines: impl IntoIterator<Item = usize>,
@@ -17,7 +17,7 @@ pub(crate) fn toggle_checkboxes(
         .filter_map(|line| {
             let text = buffer.line_text(line);
             let item = ListItem::parse(&text)?;
-            if outline.get(buffer).in_code(line) {
+            if outline.get(buffer).is_literal(line) {
                 return None;
             }
             let start = buffer.line_start(line);

@@ -151,11 +151,14 @@ impl Session {
             .unwrap();
     }
 
+    /// Un clic sin arrastrar, como lo manda el editor.
     pub fn click(&mut self, offset: ByteOffset) {
         let pane = self.pane();
-        self.workspace
-            .click(pane, offset, &mut self.clipboard)
-            .unwrap();
+        if self.workspace.press(pane, offset).unwrap() {
+            self.workspace
+                .toggle_checkbox(pane, &mut self.clipboard)
+                .unwrap();
+        }
     }
 
     pub fn select(&mut self, anchor: ByteOffset, head: ByteOffset) {

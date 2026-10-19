@@ -228,3 +228,20 @@ fn en_insert_un_clic_en_la_casilla_no_la_cambia() {
     assert_eq!(session.text(), "- [ ] uno");
     assert_eq!(session.mode(), Mode::Insert);
 }
+
+#[test]
+fn en_visual_un_clic_en_la_casilla_solo_sale_de_visual() {
+    let mut session = Session::new("- [ ] uno\ndos");
+    session.keys("jv");
+    session.click(ByteOffset::new(3));
+    assert_eq!(session.text(), "- [ ] uno\ndos");
+    assert_eq!(session.mode(), Mode::Normal);
+}
+
+#[test]
+fn la_casilla_de_una_cita_se_marca() {
+    let mut session = Session::new("> - [ ] uno");
+    session.keys("0");
+    session.click(ByteOffset::new(5));
+    assert_eq!(session.text(), "> - [x] uno");
+}

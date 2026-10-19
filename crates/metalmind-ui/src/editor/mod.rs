@@ -66,6 +66,9 @@ pub struct Editor {
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
     drag_anchor: Option<ByteOffset>,
+    /// El botón bajó sobre una casilla en Normal: se marca si se suelta sin
+    /// arrastrar.
+    checkbox_pressed: bool,
     /// La primera línea del panel en el workspace la última vez que se
     /// leyó o se escribió (ver [`Scroll::follow`]); `None` tras una tecla,
     /// para que la vista quede alineada a las filas del motor.
@@ -102,6 +105,7 @@ impl Editor {
             layout: None,
             marked: None,
             drag_anchor: None,
+            checkbox_pressed: false,
             synced_top: None,
             mark_hover: None,
             _repaint: repaint,

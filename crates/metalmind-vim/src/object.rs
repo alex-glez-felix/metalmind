@@ -2,10 +2,9 @@ use metalmind_buffer::{Buffer, ByteOffset, Selection};
 
 use crate::columns::Columns;
 use crate::find::Find;
-use crate::indent::leading_blanks;
 use crate::lines::{first_non_blank, is_blank, last_char};
 use crate::mark;
-use crate::markdown::{LazyOutline, ListItem};
+use crate::markdown::{LazyOutline, ListItem, indent_of};
 use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
 use crate::span::{Missed, Region, Span, SpanKind, Target};
@@ -121,7 +120,7 @@ fn current_lines(
     })
 }
 
-/// Si la primera línea es un ítem de lista fuera de un bloque de código,
+/// Si la primera línea es un ítem de lista fuera de código y frontmatter,
 /// extiende las líneas hasta el último hijo de cada ítem: lo que sigue más
 /// indentado, con las líneas en blanco de en medio.
 fn with_children(
@@ -134,7 +133,7 @@ fn with_children(
         return target;
     };
     let item = ListItem::parse(&buffer.line_text(first)).is_some();
-    if !item || outline.get(buffer).in_code(first) {
+    if !item || outline.get(buffer).is_literal(first) {
         return target;
     }
     let last = (first..=last).fold(last, |end, line| end.max(last_child(buffer, line, columns)));
@@ -146,7 +145,7 @@ fn with_children(
 }
 
 fn last_child(buffer: &Buffer, line: usize, columns: Columns) -> usize {
-    let level_of = |line| columns.line_width(leading_blanks(&buffer.line_text(line)));
+    let level_of = |line| columns.line_width(indent_of(&buffer.line_text(line)));
     let level = level_of(line);
     let mut last = line;
     for next in line + 1..buffer.line_count() {

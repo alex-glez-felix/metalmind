@@ -48,7 +48,7 @@ impl Vim {
                 self.operate(operator, subject, buffer, selections, clipboard)?;
             }
             Change::Paste(side) => self.paste(side, buffer, selections, clipboard)?,
-            Change::Insert(at) => self.enter_insert(at, buffer, selections)?,
+            Change::Insert { at, list } => self.enter_insert(at, list, buffer, selections)?,
             Change::Replace(c, size) => self.replace_sized(c, size, buffer, selections)?,
             Change::Block(change, size) => {
                 self.repeat_block(change, size, buffer, selections, clipboard)?;

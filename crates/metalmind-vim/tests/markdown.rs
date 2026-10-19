@@ -144,6 +144,18 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("1. |a\n2. b", "2ox<Esc>", "1. a\n2. x\n3. |x\n4. b")]
 #[case("- |a", "ox<Esc>.", "- a\n- x\n- |x")]
 #[case("- |a", "o<Esc>u", "- |a")]
+// lo que `o` o `Enter` no hicieron lista, el count y `.` tampoco
+#[case("|a", "3o- x<Esc>", "a\n- x\n- x\n- |x")]
+#[case("|a", "o- x<Esc>.", "a\n- x\n- |x")]
+#[case("a|", "A<CR>- x<Esc>.", "a\n- x\n- |x")]
+// en una cita, el ítem sigue dentro de ella
+#[case("> - a|", "a<CR>", "> - a\n> - |")]
+#[case("> - a|", "a<CR><CR>", "> - a\n> |")]
+#[case("> 1. a|\n> 2. b", "a<CR>", "> 1. a\n> 2. |\n> 3. b")]
+#[case("> > - [x] a|", "o", "> > - [x] a\n> > - [ ] |")]
+// el frontmatter es YAML, no una lista
+#[case("---\ntags:\n  - a|\n---", "a<CR>", "---\ntags:\n  - a\n|\n---")]
+#[case("---\ntags:\n  - |a\n---", "o", "---\ntags:\n  - a\n|\n---")]
 // ]] [[ con count, en Visual y con operador
 #[case("|a\n# 1\n# 2\n# 3", "2]]", "a\n# 1\n|# 2\n# 3")]
 #[case("|a\n# 1\n# 2", "9]]", "a\n# 1\n|# 2")]
@@ -170,6 +182,8 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("# a\n|x", "yahP", "|# a\nx\n# a\nx")]
 #[case("# a\n## b\n|y\n# c", "vahd", "# a\n|# c")]
 #[case("# a\n## b\n|y\n# c", "vahahd", "|# c")]
+#[case("# a\n|x", "d99999999999999999999999ah", "# a\n|x")]
+#[case("# a\n|x", "v99999999999999999999999ahd", "# a\n|")]
 #[case("# a\n```\n# no\n```\n|x\n# c", "dah", "|# c")]
 #[case("# a\n|x\n# b\ny", ">ah", "|    # a\n    x\n# b\ny")]
 // >> << con los hijos de un ítem
@@ -196,6 +210,8 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("- |a", "<toggle>", "- |[ ] a")]
 #[case("1. a|b", "<toggle>", "1. [ ] a|b")]
 #[case("|a", "<toggle>", "|a")]
+#[case("> - [ ] |a", "<toggle>", "> - [x] |a")]
+#[case("---\ntags:\n  - |a\n---", "<toggle>", "---\ntags:\n  - |a\n---")]
 #[case("```\n|- [ ] a\n```", "<toggle>", "```\n|- [ ] a\n```")]
 #[case("|- [ ] a\n- [x] b\n- c", "3<toggle>", "|- [x] a\n- [ ] b\n- [ ] c")]
 #[case("|- [ ] a\n- [ ] b", "<toggle>j.", "- [x] a\n|- [x] b")]

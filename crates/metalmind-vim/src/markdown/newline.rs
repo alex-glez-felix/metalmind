@@ -15,9 +15,13 @@ pub(crate) enum Newline {
     Plain,
     /// En el texto de un ítem: la línea nueva empieza con este marcador.
     Continue(String),
-    /// En un ítem vacío: se borra el marcador y la lista termina ahí; los
-    /// ítems que le seguían toman su número.
-    End(Option<Numbering>),
+    /// En un ítem vacío: se borra la línea desde `kept` (lo que es de una
+    /// cita queda) y la lista termina ahí; los ítems que le seguían toman su
+    /// número.
+    End {
+        kept: usize,
+        numbering: Option<Numbering>,
+    },
 }
 
 impl Newline {
@@ -36,11 +40,14 @@ impl Newline {
         let Some(item) = ListItem::parse(&text).filter(|item| column >= item.content) else {
             return Self::Plain;
         };
-        if outline.get(buffer).in_code(line) {
+        if outline.get(buffer).is_literal(line) {
             return Self::Plain;
         }
         if ends && item.is_empty() {
-            return Self::End(item.numbering(columns));
+            return Self::End {
+                kept: item.quote(),
+                numbering: item.numbering(columns),
+            };
         }
         match item.next_marker() {
             Some(marker) => Self::Continue(item.sibling(marker)),
@@ -59,7 +66,7 @@ pub(crate) fn opened_item(
 ) -> Option<String> {
     let text = buffer.line_text(line);
     let item = ListItem::parse(&text)?;
-    if outline.get(buffer).in_code(line) {
+    if outline.get(buffer).is_literal(line) {
         return None;
     }
     let marker = if below {

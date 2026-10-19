@@ -41,6 +41,22 @@ fn is_space(b: u8) -> bool {
 }
 
 pub(crate) fn block_line(line: &str) -> BlockLine {
+    let (quotes, at) = quote_marks(line);
+    let kind = rule(line, at)
+        .map(BlockKind::Rule)
+        .or_else(|| item(line, at).map(BlockKind::Item))
+        .unwrap_or_default();
+    BlockLine { quotes, kind }
+}
+
+/// Dónde termina el prefijo de cita de `line` (sus `>` y el blanco que
+/// sigue a cada uno); 0 si no es una cita.
+pub(crate) fn quote_end(line: &str) -> usize {
+    quote_marks(line).1
+}
+
+/// Dónde está cada `>` de la cita y dónde termina el prefijo.
+fn quote_marks(line: &str) -> (Vec<usize>, usize) {
     let bytes = line.as_bytes();
     let mut quotes = Vec::new();
     let mut at = 0;
@@ -59,15 +75,11 @@ pub(crate) fn block_line(line: &str) -> BlockLine {
             at += 1;
         }
     }
-    let kind = rule(line, at)
-        .map(BlockKind::Rule)
-        .or_else(|| item(line, at).map(BlockKind::Item))
-        .unwrap_or_default();
-    BlockLine { quotes, kind }
+    (quotes, at)
 }
 
 pub(crate) fn is_rule(line: &str) -> bool {
-    rule(line, 0).is_some()
+    rule(line, quote_end(line)).is_some()
 }
 
 /// Tres o más `-`, `*` o `_` iguales, con espacios entre ellos si hace falta
