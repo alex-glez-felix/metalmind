@@ -1,6 +1,6 @@
 # Capturas de las fórmulas
 
-`scripts/capturas.sh` en la base (`main` con las pantallas nuevas) y en la rama, con `--antes`. Las 68 capturas que ya había no cambian; las de fórmulas, sí: antes se veía el LaTeX, ahora la fórmula compuesta. En `formulas-larga`, el ratón está sobre la última fórmula rota que se ve entera y la captura falla si su tooltip no aparece.
+`scripts/capturas.sh` en la base (`main` con las pantallas nuevas) y en la rama, con `--antes`. Las 72 capturas que ya había no cambian; las de fórmulas, sí: antes se veía el LaTeX, ahora la fórmula compuesta. En `formulas-larga`, el ratón está sobre la última fórmula rota que se ve entera y la captura falla si su tooltip no aparece.
 
 | Captura | Píxeles distintos |
 |---|---|
@@ -17,6 +17,7 @@
 | finder-vacio-claro-1280 | 0 |
 | buscar-claro-1280 | 0 |
 | buscar-vacio-claro-1280 | 0 |
+| buscar-cjk-claro-1280 | 0 |
 | paleta-claro-1280 | 0 |
 | marks-claro-1280 | 0 |
 | marks-nota-larga-claro-1280 | 0 |
@@ -37,6 +38,7 @@
 | finder-vacio-claro-1920 | 0 |
 | buscar-claro-1920 | 0 |
 | buscar-vacio-claro-1920 | 0 |
+| buscar-cjk-claro-1920 | 0 |
 | paleta-claro-1920 | 0 |
 | marks-claro-1920 | 0 |
 | marks-nota-larga-claro-1920 | 0 |
@@ -57,6 +59,7 @@
 | finder-vacio-oscuro-1280 | 0 |
 | buscar-oscuro-1280 | 0 |
 | buscar-vacio-oscuro-1280 | 0 |
+| buscar-cjk-oscuro-1280 | 0 |
 | paleta-oscuro-1280 | 0 |
 | marks-oscuro-1280 | 0 |
 | marks-nota-larga-oscuro-1280 | 0 |
@@ -77,6 +80,7 @@
 | finder-vacio-oscuro-1920 | 0 |
 | buscar-oscuro-1920 | 0 |
 | buscar-vacio-oscuro-1920 | 0 |
+| buscar-cjk-oscuro-1920 | 0 |
 | paleta-oscuro-1920 | 0 |
 | marks-oscuro-1920 | 0 |
 | marks-nota-larga-oscuro-1920 | 0 |
