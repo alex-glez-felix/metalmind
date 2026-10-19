@@ -26,8 +26,8 @@ use std::path::{Path, PathBuf};
 
 use gpui_kit::{
     App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement as _, Render, Styled as _, Subscription, Window, div,
-    prelude::FluentBuilder as _,
+    KeyDownEvent, MouseButton, ParentElement as _, Pixels, Point, Render, Styled as _,
+    Subscription, Window, div, prelude::FluentBuilder as _,
 };
 use metalmind_buffer::ByteOffset;
 use metalmind_vault::VaultPath;
@@ -55,8 +55,10 @@ pub struct Editor {
     session: Entity<VaultSession>,
     /// Las fórmulas de la ventana: su layout y sus imágenes.
     formulas: Entity<Formulas>,
-    /// El mensaje de la fórmula rota bajo el ratón.
-    formula_error: Option<formula_tooltip::Hover>,
+    /// Dónde está el ratón sobre el texto; `None` fuera o arrastrando. El
+    /// tooltip de una fórmula rota se busca ahí en cada frame, con lo que se
+    /// pinta en él: cambiar de nota sin mover el ratón no deja uno viejo.
+    pointer: Option<Point<Pixels>>,
     /// La ruta del documento en el vault, de la última vez que se miró.
     source: Option<(PathBuf, Option<VaultPath>)>,
     focus_handle: FocusHandle,
@@ -97,7 +99,7 @@ impl Editor {
             workspace,
             session,
             formulas,
-            formula_error: None,
+            pointer: None,
             source: None,
             pane,
             focus_handle: cx.focus_handle(),
