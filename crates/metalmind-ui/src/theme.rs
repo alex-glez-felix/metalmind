@@ -198,6 +198,8 @@ pub struct Theme {
     pub radius_lg: Pixels,
     pub menu_width: Pixels,
     pub menu_padding: Pixels,
+    pub menu_item_padding_x: Pixels,
+    /// Una entrada del menú; con el texto secundario más grande, mide por él.
     pub menu_row_height: Pixels,
     pub markdown: Markdown,
 }
@@ -231,6 +233,7 @@ impl Theme {
         let padding = settings.editor.padding;
         let font_size = settings.font.size.get();
         let ui_font = font_size * text.ui_md.size;
+        let ui_small_font = font_size * text.ui_sm.size;
         Self {
             background: hsla(ui.background),
             foreground: hsla(ui.foreground),
@@ -276,7 +279,7 @@ impl Theme {
             editor_line_height: text.editor.line_height,
             ui_font_size: px(ui_font),
             ui_line_height: text.ui_md.line_height,
-            ui_small_font_size: px(font_size * text.ui_sm.size),
+            ui_small_font_size: px(ui_small_font),
             ui_small_line_height: text.ui_sm.line_height,
             weight_normal: FontWeight(f32::from(text.normal.0)),
             weight_strong: FontWeight(f32::from(text.strong.0)),
@@ -311,7 +314,8 @@ impl Theme {
             radius_lg: px(radius.lg.0),
             menu_width: px(layout.menu_width.0),
             menu_padding: px(layout.menu_padding.0),
-            menu_row_height: px((ui_font * rows.menu.0).round()),
+            menu_item_padding_x: px(layout.menu_item_padding_x.0),
+            menu_row_height: px((ui_font.max(ui_small_font) * rows.menu.0).round()),
             markdown: Markdown::new(syntax, headings, stroke),
         }
     }
@@ -348,10 +352,12 @@ impl Theme {
         self.ui_font_size * self.ui_line_height
     }
 
-    /// Alto de una fila del picker: su línea de texto con aire arriba y abajo.
+    /// Alto de una fila del picker: su línea más alta (el texto o el detalle,
+    /// que va en `ui_sm`) con aire arriba y abajo.
     #[must_use]
     pub fn picker_row_height(&self) -> Pixels {
-        self.ui_line() + self.picker_row_padding_y * 2.
+        let detail = self.ui_small_font_size * self.ui_small_line_height;
+        self.ui_line().max(detail) + self.picker_row_padding_y * 2.
     }
 
     /// El lado corto de los íconos provisionales del panel, que no son
