@@ -5,7 +5,7 @@
 
 use std::ops::Range;
 
-use super::{Kept, around, around_within, middle, sum};
+use super::{Kept, Widths, around_all, around_within, middle_all, middle_within};
 
 /// Recorta la ruta de `widths` (el ancho de cada grafema) a `budget`. En
 /// `slashes` van los grafemas que son `/`; `focus`, si hay, es lo que
@@ -18,14 +18,15 @@ pub fn path(
     budget: f32,
     ellipsis: f32,
 ) -> Kept {
+    let widths = Widths::new(widths);
     let len = widths.len();
-    if sum(widths) <= budget {
+    if widths.total() <= budget {
         return Kept::whole(len);
     }
     let Some(&name_slash) = slashes.last() else {
         return match focus {
-            Some(focus) => around(widths, focus, budget, ellipsis),
-            None => middle(widths, budget, ellipsis),
+            Some(focus) => around_all(&widths, focus, budget, ellipsis),
+            None => middle_all(&widths, budget, ellipsis),
         };
     };
     let cut = Cut {
@@ -36,19 +37,19 @@ pub fn path(
     match focus {
         Some(focus) if !focus.is_empty() && focus.end <= name_slash => cut
             .folder_and_name(slashes, focus.clone(), budget)
-            .unwrap_or_else(|| around(widths, focus, budget, ellipsis)),
+            .unwrap_or_else(|| around_all(&cut.widths, focus, budget, ellipsis)),
         focus => cut.name_first(focus, budget),
     }
 }
 
-struct Cut<'a> {
-    widths: &'a [f32],
+struct Cut {
+    widths: Widths,
     /// La última `/`: desde ahí va el nombre.
     name_slash: usize,
     ellipsis: f32,
 }
 
-impl Cut<'_> {
+impl Cut {
     fn len(&self) -> usize {
         self.widths.len()
     }
@@ -60,8 +61,8 @@ impl Cut<'_> {
         let name = self.name_slash..len;
         let lead = self.gap_before(self.name_slash);
         let focus = focus.filter(|focus| !focus.is_empty());
-        let kept = if sum(&self.widths[name.clone()]) + lead <= budget {
-            let kept = around_within(self.widths, 0..len, &(0..len), name, budget, self.ellipsis);
+        let kept = if self.widths.sum(name.clone()) + lead <= budget {
+            let kept = around_within(&self.widths, 0..len, &(0..len), name, budget, self.ellipsis);
             Some(Kept::new(len, [kept]))
         } else {
             let in_name = focus.clone().filter(|focus| focus.start > self.name_slash);
@@ -70,8 +71,8 @@ impl Cut<'_> {
         };
         match (kept, focus) {
             (Some(kept), focus) if focus.as_ref().is_none_or(|focus| kept.shows(focus)) => kept,
-            (_, Some(focus)) => around(self.widths, focus, budget, self.ellipsis),
-            (_, None) => middle(self.widths, budget, self.ellipsis),
+            (_, Some(focus)) => around_all(&self.widths, focus, budget, self.ellipsis),
+            (_, None) => middle_all(&self.widths, budget, self.ellipsis),
         }
     }
 
@@ -96,14 +97,14 @@ impl Cut<'_> {
             Some(slash) if slash + 1 == focus.start => slash..focus.end,
             _ => focus,
         };
-        let folder_min = sum(&self.widths[focus.clone()])
+        let folder_min = self.widths.sum(focus.clone())
             + self.gap_before(focus.start)
             + self.gap(focus.end < self.name_slash);
         let name = self.name(budget - folder_min)?;
         let name_cost = self.cost(&name);
         let gaps = 0..self.name_slash;
         let folder = around_within(
-            self.widths,
+            &self.widths,
             start..end,
             &gaps,
             focus.clone(),
@@ -118,7 +119,7 @@ impl Cut<'_> {
     /// antes; `None` si no queda nada de él.
     fn name(&self, budget: f32) -> Option<Vec<Range<usize>>> {
         let len = self.len();
-        if sum(&self.widths[self.name_slash..]) <= budget {
+        if self.widths.sum(self.name_slash..len) <= budget {
             return Some(std::iter::once(self.name_slash..len).collect());
         }
         self.fitting_cut(None, budget)
@@ -137,21 +138,17 @@ impl Cut<'_> {
         let len = self.len();
         let slash = self.name_slash..self.name_slash + 1;
         let name = slash.end..len;
-        let budget = budget - self.widths[self.name_slash];
+        let budget = budget - self.widths.at(self.name_slash);
         let rest = match focus {
             Some(focus) => vec![around_within(
-                self.widths,
+                &self.widths,
                 name.clone(),
                 &name,
                 focus,
                 budget,
                 self.ellipsis,
             )],
-            None => middle(&self.widths[name.clone()], budget, self.ellipsis)
-                .ranges
-                .into_iter()
-                .map(|range| range.start + name.start..range.end + name.start)
-                .collect(),
+            None => middle_within(&self.widths, name, budget, self.ellipsis).to_vec(),
         };
         std::iter::once(slash).chain(rest).collect()
     }
@@ -161,7 +158,7 @@ impl Cut<'_> {
     fn cost(&self, ranges: &[Range<usize>]) -> f32 {
         let shown: f32 = ranges
             .iter()
-            .map(|range| sum(&self.widths[range.clone()]))
+            .map(|range| self.widths.sum(range.clone()))
             .sum();
         let inner = ranges
             .windows(2)

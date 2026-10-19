@@ -122,9 +122,10 @@ impl gpui_kit::Element for RowLine {
         let (text_budget, detail_budget) = fit::split(
             f32::from(bounds.size.width),
             text.total(),
-            detail.as_ref().map_or(0.0, Measured::total),
+            detail.as_ref().map(Measured::total),
             f32::from(self.gap),
             self.detail_share,
+            detail_ellipsis,
         );
         let focus = self
             .row
@@ -141,7 +142,7 @@ impl gpui_kit::Element for RowLine {
         };
         Shaped {
             text: text.render(&kept, &typeface, self.matched, window),
-            detail: detail.map(|detail| {
+            detail: detail.zip(detail_budget).map(|(detail, detail_budget)| {
                 let kept = fit::path(
                     &detail.widths,
                     &detail.slashes(),
@@ -188,7 +189,9 @@ impl gpui_kit::Element for RowLine {
         );
         if let Some(detail) = &shaped.detail {
             let origin = point(bounds.right() - detail_width, bounds.top());
-            paint_line(detail, origin, line_height, window, cx);
+            window.with_content_mask(Some(ContentMask { bounds }), |window| {
+                paint_line(detail, origin, line_height, window, cx);
+            });
         }
     }
 }
