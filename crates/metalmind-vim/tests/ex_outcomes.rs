@@ -59,6 +59,7 @@ const TEXT: &str = "a|b\ncd\nab";
 #[case(":g/a/w<CR>", CommandError::HostCommandInside("w".to_owned()))]
 #[case(":1,2w<CR>", CommandError::PartialWrite)]
 #[case("Vj:wq<CR>", CommandError::PartialWrite)]
+#[case(":1,2w!<CR>", CommandError::UnsupportedRange("w!".to_owned()))]
 #[case(":2q<CR>", CommandError::UnsupportedRange("q".to_owned()))]
 #[case(":'<lt>,'>vs<CR>", CommandError::UnsupportedRange("vs".to_owned()))]
 #[case(":delm<CR>", CommandError::ArgumentRequired)]
