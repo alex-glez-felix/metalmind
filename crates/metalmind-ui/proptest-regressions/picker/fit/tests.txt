@@ -1,0 +1,13 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ffa7a00c388701dc70903f3b163a12b5ea80e64ee6620c951c034b7072b872cc # shrinks to widths = [0.5, 2.0, 0.5, 2.0, 0.5, 0.5, 1.0, 0.5, 1.0, 0.5, 2.0, 0.5, 2.0, 1.0, 0.5, 2.0, 0.5], start = 0, span = 0, budget = 17.86806
+cc 215511aeede22786fac73b2e3b17d50dda4215b68d0d26a0a0c93129ff6349a6 # shrinks to widths = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], slashes = {0}, focus = None, budget = 0.0
+cc be462d7cf435654ef933eed9b130b51c3a007adb956e04d0350ea675ae85a7f8 # shrinks to widths = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 0.5, 1.0, 1.0, 2.0], slashes = {1}, focus = Some((51, 5)), budget = 7.7026978
+cc 5b990352d5c7f1e1c053c28439ee5957e8444f1d0de6d90429e60c504a935f43 # shrinks to widths = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 2.0, 0.5, 1.0, 1.0, 2.0, 2.0, 0.5, 1.0, 2.0, 2.0, 0.5, 0.5, 2.0, 2.0, 2.0, 0.5, 0.5, 1.0], slashes = {26}, focus = Some((22, 5)), budget = 26.84364
+cc b1b329826304632fdf8f1f9427868e66a27b26acb80a082f026f3ffe881496a1 # shrinks to widths = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 2.0, 2.0, 2.0, 2.0, 0.5, 2.0, 0.5, 2.0, 0.5, 1.0, 1.0, 0.5, 1.0, 2.0, 1.0, 2.0, 1.0, 0.5, 2.0, 0.5], slashes = {27}, focus = None, budget = 30.906954
+cc 9d10683ece986ffd9a1ce100010ec2c03af49862f5b867ad77e58298655a2a19 # shrinks to widths = [0.5], start = 1, span = 0, budget = 0.6264121
+cc d6b251ceb6dda74b00a2e0d050b5535dfec5d39399de987bfca90c5863a1f1a4 # shrinks to widths = [0.5, 2.0, 0.5], start = 0, span = 2, budget = 3.145998

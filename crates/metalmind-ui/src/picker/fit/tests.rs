@@ -32,10 +32,10 @@ fn shown_around(text: &str, focus: Range<usize>, budget: f32) -> String {
     shown(text, &around(&widths(text), focus, budget, 1.0))
 }
 
-fn shown_middle(text: &str, budget: f32) -> String {
+fn shown_detail(text: &str, budget: f32) -> String {
     shown(
         text,
-        &middle(&widths(text), budget, 1.0, name_graphemes(text)),
+        &path(&widths(text), &slashes(text), None, budget, 1.0),
     )
 }
 
@@ -43,13 +43,7 @@ fn shown_middle(text: &str, budget: f32) -> String {
 fn shown_path(text: &str, found: &str, budget: f32) -> String {
     let at = text.find(found).unwrap();
     let focus = text[..at].chars().count()..text[..at + found.len()].chars().count();
-    let kept = path(
-        &widths(text),
-        Some(focus),
-        budget,
-        1.0,
-        name_graphemes(text),
-    );
+    let kept = path(&widths(text), &slashes(text), Some(focus), budget, 1.0);
     let (mut shown, highlights) = render(
         text,
         &starts(text),
@@ -132,56 +126,56 @@ fn los_grafemas_anchos_cuentan_por_lo_que_miden() {
 #[test]
 fn sin_espacio_queda_una_sola_elipsis() {
     assert_eq!(shown_around("abcdef", 2..4, 0.5), "…");
-    assert_eq!(shown_middle("abcdef", 0.5), "…");
+    assert_eq!(shown_detail("abcdef", 0.5), "…");
 }
 
 #[test]
 fn la_ruta_se_recorta_por_el_medio() {
     assert_eq!(
-        shown_middle("notas/capitulo.md:3", 25.0),
+        shown_detail("notas/capitulo.md:3", 25.0),
         "notas/capitulo.md:3"
     );
     assert_eq!(
-        shown_middle("personajes-largo-vin.md:3", 11.0),
+        shown_detail("personajes-largo-vin.md:3", 11.0),
         "perso….md:3"
     );
     assert_eq!(
-        shown_middle("personajes-largo-vin.md:3", 12.0),
+        shown_detail("personajes-largo-vin.md:3", 12.0),
         "perso…n.md:3"
     );
     assert_eq!(
-        shown_middle("personajes/largo/vin.md:3", 11.0),
-        "p…/vin.md:3"
+        shown_detail("personajes/largo/vin.md:3", 11.0),
+        "…o/vin.md:3"
     );
     assert_eq!(
-        shown_middle("personajes/largo/vin.md:3", 12.0),
-        "p…o/vin.md:3"
+        shown_detail("personajes/largo/vin.md:3", 12.0),
+        "…go/vin.md:3"
     );
 }
 
 #[test]
 fn el_nombre_de_la_ruta_queda_entero_si_cabe() {
     assert_eq!(
-        shown_middle("personajes/equipo/historias/Vin con nombre largo.md", 34.0),
-        "perso…rias/Vin con nombre largo.md"
+        shown_detail("personajes/equipo/historias/Vin con nombre largo.md", 34.0),
+        "…historias/Vin con nombre largo.md"
     );
     assert_eq!(
-        shown_middle("personajes/equipo/historias/Vin con nombre largo.md", 40.0),
-        "personaj…storias/Vin con nombre largo.md"
+        shown_detail("personajes/equipo/historias/Vin con nombre largo.md", 40.0),
+        "…quipo/historias/Vin con nombre largo.md"
     );
 }
 
 #[test]
 fn un_nombre_que_no_cabe_se_recorta_por_el_medio() {
     assert_eq!(
-        shown_middle("a/un nombre de nota larguísimo.md", 12.0),
-        "a/un …imo.md"
+        shown_detail("a/un nombre de nota larguísimo.md", 12.0),
+        "…/un n…mo.md"
     );
 }
 
 #[test]
 fn la_ruta_con_grafemas_anchos_no_se_pasa() {
-    let shown = shown_middle("日本語漢字/日本語漢字.md:1", 9.0);
+    let shown = shown_detail("日本語漢字/日本語漢字.md:1", 9.0);
     assert!(width_of(&shown) <= 9.0, "{shown}");
     assert!(shown.ends_with(":1"), "{shown}");
 }
@@ -246,14 +240,43 @@ fn una_ruta_muestra_lo_que_coincide_y_el_nombre() {
     let text = "personajes/equipo de Kelsier/historias largas/Vin.md";
     assert_eq!(
         shown_path(text, "historias", 30.0),
-        "…elsier/[historias] larga…Vin.md"
+        "…/[historias] largas/Vin.md"
     );
 }
 
 #[test]
 fn una_ruta_con_la_coincidencia_en_el_nombre_se_recorta_por_el_medio() {
     let text = "personajes/equipo de Kelsier/historias largas/Vin.md";
-    assert_eq!(shown_path(text, "Vin", 20.0), "person…largas/[Vin].md");
+    assert_eq!(shown_path(text, "Vin", 20.0), "…orias largas/[Vin].md");
+}
+
+const FOLDER: &str = "personajes/equipo de Kelsier/historias largas de la Última Imperio";
+
+#[test]
+fn dos_rutas_que_solo_cambian_en_el_nombre_se_distinguen() {
+    let vin = format!("{FOLDER}/Vin con un nombre de nota bastante largo para probar.md:5");
+    let sazed = format!("{FOLDER}/Sazed con un nombre de nota bastante largo para probar.md:5");
+    assert_eq!(shown_detail(&vin, 26.0), "…/Vin con un … probar.md:5");
+    assert_eq!(shown_detail(&sazed, 26.0), "…/Sazed con u… probar.md:5");
+}
+
+#[test]
+fn con_la_coincidencia_en_la_carpeta_se_ve_tambien_el_nombre() {
+    let kelsier = format!("{FOLDER}/Kelsier con un nombre de nota bastante largo para probar.md");
+    assert_eq!(
+        shown_path(&kelsier, "historias", 40.0),
+        "…/[historias]…/Kelsier con u…ara probar.md"
+    );
+}
+
+#[test]
+fn todas_las_filas_de_una_ruta_empiezan_igual() {
+    for name in ["Vin", "Elend", "Sazed", "Kelsier"] {
+        let note = format!("{FOLDER}/{name} con un nombre de nota bastante largo para probar.md");
+        let shown = shown_path(&note, "historias", 50.0);
+        assert!(shown.starts_with("…/[historias]"), "{shown}");
+        assert!(shown.contains(&format!("/{name} ")), "{shown}");
+    }
 }
 
 #[test]
@@ -261,7 +284,7 @@ fn si_no_caben_la_coincidencia_y_el_nombre_gana_la_coincidencia() {
     let text = "personajes/equipo de Kelsier/historias/un nombre larguísimo.md";
     assert_eq!(
         shown_path(text, "historias", 20.0),
-        "…sier/[historias]/un …"
+        "…/[historias]/un …o.md"
     );
 }
 
@@ -333,24 +356,35 @@ proptest! {
     }
 
     #[test]
-    fn middle_nunca_se_pasa(widths in graphemes(), budget in 0.0_f32..40.0, keep in 0usize..70) {
-        let kept = middle(&widths, budget, 1.0, keep);
+    fn middle_nunca_se_pasa(widths in graphemes(), budget in 0.0_f32..40.0) {
+        let kept = middle(&widths, budget, 1.0);
         prop_assert!(kept.ranges.len() <= 2);
         prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
     }
 
     #[test]
-    fn path_nunca_se_pasa(
+    fn path_nunca_se_pasa_y_guarda_lo_que_importa(
         widths in graphemes(),
-        start in 0usize..60,
-        span in 1usize..8,
-        name in 0usize..30,
+        slashes in prop::collection::btree_set(0usize..60, 0..5),
+        focus in prop::option::of((0usize..60, 1usize..8)),
         budget in 0.0_f32..40.0,
     ) {
         let len = widths.len();
-        let focus = start.min(len)..(start + span).min(len);
-        let kept = path(&widths, Some(focus), budget, 1.0, name);
+        let slashes: Vec<usize> = slashes.into_iter().filter(|&slash| slash < len).collect();
+        let focus = focus.map(|(start, span)| start.min(len)..(start + span).min(len));
+        let kept = path(&widths, &slashes, focus.clone(), budget, 1.0);
         prop_assert!(used(&widths, &kept) <= budget || kept.ranges.is_empty());
         prop_assert!(kept.ranges.iter().all(|range| range.end <= len));
+        if let Some(focus) = focus.filter(|focus| !focus.is_empty()) {
+            let focus_width: f32 = widths[focus.clone()].iter().sum();
+            if focus_width + 2.0 <= budget {
+                prop_assert!(kept.shows(&focus));
+            }
+        } else if let Some(&name_slash) = slashes.last() {
+            let name: f32 = widths[name_slash..].iter().sum();
+            if name + 1.0 <= budget {
+                prop_assert!(kept.shows(&(name_slash..len)));
+            }
+        }
     }
 }
