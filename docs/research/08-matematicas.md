@@ -1,5 +1,7 @@
 # 08 — Fórmulas LaTeX
 
+> **Estado: implementado** (`feat/math`, 2026-10-19): lo que sigue el plan del §7 y lo que cambió al implementarlo está en el §10.
+
 > **Decisión** (Alex, 2026-10-19, en la PR #80): las fórmulas se componen con **RaTeX**. Es el único camino que compuso las 22 fórmulas de la prueba, y cuesta 3.1 MB de binario y 0.26 ms por fórmula, frente a los 45 MB de Typst. El resto del documento es el spike que sostiene la decisión; el §7 es el plan que sigue la implementación (`feat/math`). Si al implementar algo cambia, se corrige aquí en el mismo commit.
 
 > Spike del 2026-10-18; decisión del 2026-10-19 ([06](06-decisiones-de-fondo.md) §15). Versiones, fechas y licencias de la API de crates.io de ese día. Los números son míos, en release, en una máquina de escritorio x86_64 con Linux (la de [performance.md](../performance.md)). El código está en [`spikes/math/`](../../spikes/math/README.md), fuera del workspace: no toca el editor ni el binario.
@@ -11,8 +13,8 @@
 - **Decisión: RaTeX** (Alex, 2026-10-19, #80): `ratex-parser` + `ratex-layout` + `ratex-render`, con las fuentes de KaTeX embebidas. Es el único camino que compuso las 22 fórmulas de la prueba, diagrama conmutativo incluido. Tarda 0.26 ms por fórmula nueva (0.48 ms en HiDPI), no tiene arranque, ocupa ~1.4 MB de heap y suma 3.1 MB al binario. Su layout tarda **~9 µs** y da el alto y la profundidad antes de pintar, que es lo que necesita la vista para reservar el lugar de la fórmula.
 - **Descartado: mitex + Typst**. Compone bonito y rápido (0.29 ms, con 11.7 ms de arranque), pero suma 45 MB al binario y **mitex 0.2.4 no funciona tal cual con Typst 0.15**: 0 de 22. Con el paquete de Typst de upstream y un parche de tres líneas al convertidor pasan 21. mitex no publica en crates.io desde junio de 2024, aunque el repo sigue vivo.
 - **Descartado para pintar: MathML**. Sin navegador sí se puede: `formulary` compone MathML Core con la tabla MATH de una fuente. Pero `pulldown-latex` y `math-core` sacan MathML pensado para un navegador (entidades HTML, `<` sin escapar), que el parser XML estricto de `formulary` rechaza: 18 de 22 cada uno, y con peor tipografía.
-- **Hilo**: el layout (µs) en el hilo de la UI, para las líneas visibles; el rasterizado en el executor de fondo, con la fuente atenuada como placeholder del mismo alto.
-- **Caché**: el layout por `(LaTeX, modo, color)`, y la imagen por `(LaTeX, modo, tamaño, escala, color)`, con LRU por bytes.
+- **Hilo**: el layout (µs) en el hilo de la UI, para las líneas visibles; el rasterizado en el executor de fondo, con su lugar reservado (vacío) mientras llega (§10).
+- **Caché**: el layout por `(LaTeX, modo)`, y la imagen por `(LaTeX, modo, tamaño, escala, color)`, con LRU por bytes (§10).
 - **Vim**: igual que el resto del live preview: la línea del cursor muestra la fuente con estilo; las demás, la fórmula, así el motor no se entera. Encaja en el `Conceal` del estilo de las líneas (#76) como un caso más. Un bloque `$$…$$` de varias líneas se pinta debajo de su fuente; ocultar esas líneas queda para el paso 2 del live preview (§7).
 
 ---
@@ -163,7 +165,7 @@ El plan de `feat/math`. Lo que ya está resuelto va como regla; lo único abiert
 
 ### Núcleo: `metalmind-syntax`
 
-- El scanner reconoce `$…$` y `$$…$$` con las reglas de Obsidian (las de pandoc): `$` abre si lo sigue algo que no es espacio y cierra si lo precede algo que no es espacio y no lo sigue un dígito (`$5 y $10` no es fórmula), `\$` es un dólar, y `$$` abre un bloque que puede cruzar líneas hasta el siguiente `$$`. Dentro de una fórmula no hay tags ni links: `$\#x$` y `$a_{[[b]]}$` no son un tag ni un link, igual que en el código inline. Esto vale también para el índice (mismo scanner, [03](03-core-architecture.md) §2), así que **es una restricción desde ya**: el día que llegue, un `#` dentro de un `$…$` deja de ser tag.
+- El scanner reconoce `$…$` y `$$…$$` con las reglas de Obsidian (las de pandoc): `$` abre si lo sigue algo que no es espacio y cierra si lo precede algo que no es espacio y no lo sigue un dígito (`$5 y $10` no es fórmula), `\$` es un dólar, y `$$` abre un bloque que puede cruzar líneas hasta el siguiente `$$`. Una fórmula en línea no cruza líneas; un bloque sin cerrar llega hasta el final de la nota, como un comentario `%%` o una cerca, y es LaTeX que no se compone. Dentro de una fórmula no hay tags ni links: `$\#x$` y `$a_{[[b]]}$` no son un tag ni un link, igual que en el código inline. Esto vale también para el índice (mismo scanner, [03](03-core-architecture.md) §2), así que **es una restricción desde ya**: el día que llegue, un `#` dentro de un `$…$` deja de ser tag.
 - Un `$$` abierto es un estado que cruza líneas, como un comentario `%%` o una cerca: en el modelo de tramos de `style/` es un `Start` más (`Start::Math`, junto a `Document`, `Body`, `Comment` y `Fence`), con su línea dura en el `$$` que cierra.
 - El estilo de la línea (#76) gana un `Role::Math` para el contenido y marca los `$`/`$$` como sintaxis. El contenido entero de una fórmula es un tramo con `Conceal::Math { display: bool }`: a diferencia de `Hide`, que quita los caracteres, este **reemplaza** el tramo por una imagen. Encaja en el `DisplayLine` del plan del paso 2 como un segmento "reemplazado" más, igual que `Bullet` o `Checkbox`.
 - Ningún crate del núcleo depende de RaTeX: el núcleo solo dice dónde hay una fórmula y cuál es su texto. Por eso el índice y la CLI ignoran las fórmulas sin pintarlas.
@@ -202,3 +204,22 @@ export CARGO_BUILD_JOBS=3
 cargo run --release --bin galeria -- ../../docs/research/img/matematicas-galeria.png 1.5
 cargo run --release --example tres_formulas
 ```
+
+## 10. Implementación (`feat/math`, 2026-10-19)
+
+Sigue el §7; lo que cambió al implementarlo:
+
+- **Versiones**: `ratex-parser`, `ratex-layout`, `ratex-render` (con `embed-fonts`) y `ratex-types` 0.1.15 (2026-10-16, MIT), fijados con `=` en el `Cargo.toml` del workspace, solo para `metalmind-ui`. Sus dependencias nuevas son MIT o Apache-2.0. `png` 0.17 decodifica lo que pinta `ratex-render` y `image` 0.25 lleva los píxeles a GPUI: las dos ya las traía GPUI o RaTeX.
+- **Scanner** (`metalmind-syntax/src/math.rs`): los `$` que pueden cerrar una fórmula en línea se indexan una vez por línea, así una línea llena de precios sigue siendo lineal (prueba de complejidad y benchmark `dolares_sin_cerrar`). Dentro de una fórmula un `\` seguido de puntuación se salta entero (`\$`, `\\`). Lo que abre primero gana: un `$` dentro de código no abre, y un `` ` `` dentro de una fórmula no es código.
+- **Estado del bloque**: `Start::Math` lleva cuántas líneas arriba abrió el bloque, la columna donde empieza su LaTeX y un hash de lo escrito hasta ahí. La línea que cierra lleva el LaTeX de todas; sin el hash, cambiar una línea de en medio no repintaba el cierre (lo encontró el proptest de incremental contra de cero).
+- **`MathSpot`** dice dónde va cada fórmula: `Inline` (alineada con el texto), `Alone` (un `$$…$$` que es lo único de su línea: la reemplaza, centrado) o `Below` (el cierre de un bloque de varias líneas: va debajo). `Styles::math_block` da las líneas del bloque donde está el cursor.
+- **Qué muestra la fuente** (`SourceLines`, en el `Workspace`): la línea del cursor de cada panel, las de Visual y, con el cursor en un bloque de varias líneas, el bloque entero (afecta a las fórmulas en línea de sus líneas de apertura y cierre). La fórmula de un bloque de varias líneas se sigue viendo debajo mientras se edita, como la vista previa de Obsidian: ocultar sus líneas sigue pendiente (§7).
+- **Alto**: el motor mide con `Rows::formulas`, un `FormulaRows` que le presta la UI (`metalmind-vim` no sabe de RaTeX). El alto no depende de dónde esté el cursor: con la fuente a la vista, la línea conserva el alto de su fórmula, así entrar y salir de una línea no mueve nada. Una fórmula en línea agranda su línea lo justo para caber con el interlineado del texto, con su línea base en la del texto que GPUI centra; un bloque suma su alto más un interlineado arriba y abajo.
+- **Caché**: el layout se guarda por `(LaTeX, modo)` en em, sin color (lo que mide no depende del color), en dos generaciones de 4 096 para que escribir dentro de un bloque no la haga crecer sin tope. El trabajo del fondo vuelve a componer con el color antes de pintar (µs, frente a los ms de pintar). Las imágenes van por `(LaTeX, modo, tamaño, escala, color)` con LRU de 32 MB que nunca saca una del frame en curso y suelta del atlas de GPUI lo que sale.
+- **Mientras llega la imagen** el lugar queda reservado y vacío, no con la fuente atenuada: la fuente casi nunca mide lo mismo que la fórmula y se encimaría con el texto de al lado.
+- **Color**: la fórmula se compone en `ui.foreground`, el color del texto del tema; una que no compone muestra su fuente en `ui.error` y el mensaje de RaTeX en un tooltip. `syntax.math` es el color del LaTeX cuando se ve la fuente. No hizo falta `syntax.math_error`.
+- **Tamaño**: las fórmulas miden 1.21 veces la letra del editor, como en KaTeX: a la misma letra, junto a la monoespaciada, se veían chicas.
+- **Pánicos**: parsear, componer y pintar corren dentro de `catch_unwind`; un pánico de RaTeX (tiene ~240 `unwrap`/`expect`/`panic!`) se ve como el error de una fórmula mal escrita. Antes de convertir el layout a `DisplayList` se valida con `validate_layout`, el tope de RaTeX contra fórmulas gigantes.
+- **Números**: en [performance.md](../performance.md) ("Fórmulas").
+
+Capturas: [`docs/capturas/formulas-oscuro.png`](../capturas/formulas-oscuro.png) y [`formulas-claro.png`](../capturas/formulas-claro.png), con las 22 fórmulas del §2 (`scripts/capturas-formulas.sh`).
