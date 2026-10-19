@@ -122,7 +122,7 @@ impl Workspace {
     fn save(&mut self, path: Option<&Path>, force: bool) -> Result<bool, WorkspaceError> {
         let id = self.pane(self.focused())?.document;
         if let Some(path) = path
-            && self.loaded_elsewhere(id, path)
+            && self.loaded_elsewhere(id, path, force)
         {
             self.message = Some(Message::loaded_elsewhere());
             return Ok(false);
@@ -181,13 +181,14 @@ impl Workspace {
         Ok(self.quit(false))
     }
 
-    /// Otro documento abierto es de `path`, que todavía no existe en
-    /// disco: escribirlo dejaría dos buffers sobre el mismo archivo. Si ya
-    /// existe, gana el E13 de `save_to`, como en vim.
-    fn loaded_elsewhere(&self, id: DocumentId, path: &Path) -> bool {
+    /// Otro documento abierto es de `path`: escribirlo dejaría dos buffers
+    /// sobre el mismo archivo o pisaría el de otro. Sin `!`, si el archivo ya
+    /// existe gana el E13 de `save_to`; con `!` (`:w! ruta`) es E139 igual,
+    /// como en nvim 0.12.6.
+    fn loaded_elsewhere(&self, id: DocumentId, path: &Path, force: bool) -> bool {
         self.documents
             .find(path)
-            .is_some_and(|other| other != id && path.symlink_metadata().is_err())
+            .is_some_and(|other| other != id && (force || path.symlink_metadata().is_err()))
     }
 
     /// `:q` cierra el panel; el último cierra la ventana. Con `!`, como en
