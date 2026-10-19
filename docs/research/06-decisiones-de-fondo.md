@@ -239,7 +239,7 @@ Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR 
 
 **Decisión** (Alex, 2026-10-19, en la PR #80). Las fórmulas `$…$` y `$$…$$` se componen con RaTeX (`ratex-parser`, `ratex-layout`, `ratex-render`), con las fuentes de KaTeX embebidas. Documentos LaTeX completos, no.
 
-**Por qué.** En el spike ([08](08-matematicas.md)) fue el único camino que compuso las 22 fórmulas de prueba, diagrama conmutativo incluido. Suma 3.1 MB al binario y tarda 0.25 ms por fórmula; mitex + Typst sumaba 45 MB y necesita un mitex parcheado. Su layout da el alto de la fórmula en µs, antes de pintarla.
+**Por qué.** En el spike ([08](08-matematicas.md)) fue el único camino que compuso las 22 fórmulas de prueba, diagrama conmutativo incluido. Suma 3.1 MB al binario y tarda 0.26 ms por fórmula; mitex + Typst sumaba 45 MB y necesita un mitex parcheado. Su layout da el alto de la fórmula en µs, antes de pintarla.
 
 **Restricciones desde ya:**
 

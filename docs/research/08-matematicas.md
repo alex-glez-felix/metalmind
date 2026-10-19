@@ -1,6 +1,6 @@
 # 08 — Fórmulas LaTeX
 
-> **Decisión** (Alex, 2026-10-19, en la PR #80): las fórmulas se componen con **RaTeX**. Es el único camino que compuso las 22 fórmulas de la prueba, y cuesta 3.1 MB de binario y 0.25 ms por fórmula, frente a los 45 MB de Typst. El resto del documento es el spike que sostiene la decisión; el §7 es el plan que sigue la implementación (`feat/math`). Si al implementar algo cambia, se corrige aquí en el mismo commit.
+> **Decisión** (Alex, 2026-10-19, en la PR #80): las fórmulas se componen con **RaTeX**. Es el único camino que compuso las 22 fórmulas de la prueba, y cuesta 3.1 MB de binario y 0.26 ms por fórmula, frente a los 45 MB de Typst. El resto del documento es el spike que sostiene la decisión; el §7 es el plan que sigue la implementación (`feat/math`). Si al implementar algo cambia, se corrige aquí en el mismo commit.
 
 > Spike del 2026-10-18; decisión del 2026-10-19 ([06](06-decisiones-de-fondo.md) §15). Versiones, fechas y licencias de la API de crates.io de ese día. Los números son míos, en release, en una máquina de escritorio x86_64 con Linux (la de [performance.md](../performance.md)). El código está en [`spikes/math/`](../../spikes/math/README.md), fuera del workspace: no toca el editor ni el binario.
 > Construye sobre [03](03-core-architecture.md) §2 (el scanner de `metalmind-syntax` y el plan del live preview) y el estilo del markdown que entró con la PR #76 (03 §2, "Estilo en el editor" y "Plan del paso 2"), que deja marcado en el estilo de cada línea lo que el live preview va a ocultar.
@@ -8,8 +8,8 @@
 ## TL;DR
 
 - **Objetivo**: `$…$` en línea y `$$…$$` en bloque dentro de las notas, como en Obsidian. Documentos LaTeX completos, no.
-- **Decisión: RaTeX** (Alex, 2026-10-19, #80): `ratex-parser` + `ratex-layout` + `ratex-render`, con las fuentes de KaTeX embebidas. Es el único camino que compuso las 22 fórmulas de la prueba, diagrama conmutativo incluido. Tarda 0.25 ms por fórmula nueva (0.51 ms en HiDPI), no tiene arranque, ocupa ~1.4 MB de heap y suma 3.1 MB al binario. Su layout tarda **9 µs** y da el alto y la profundidad antes de pintar, que es lo que necesita la vista para reservar el lugar de la fórmula.
-- **Descartado: mitex + Typst**. Compone bonito y rápido (0.29 ms, con 11.6 ms de arranque), pero suma 45 MB al binario y **mitex 0.2.4 no funciona tal cual con Typst 0.15**: 0 de 22. Con el paquete de Typst de upstream y un parche de tres líneas al convertidor pasan 21. mitex no publica en crates.io desde junio de 2024, aunque el repo sigue vivo.
+- **Decisión: RaTeX** (Alex, 2026-10-19, #80): `ratex-parser` + `ratex-layout` + `ratex-render`, con las fuentes de KaTeX embebidas. Es el único camino que compuso las 22 fórmulas de la prueba, diagrama conmutativo incluido. Tarda 0.26 ms por fórmula nueva (0.48 ms en HiDPI), no tiene arranque, ocupa ~1.4 MB de heap y suma 3.1 MB al binario. Su layout tarda **~9 µs** y da el alto y la profundidad antes de pintar, que es lo que necesita la vista para reservar el lugar de la fórmula.
+- **Descartado: mitex + Typst**. Compone bonito y rápido (0.29 ms, con 11.7 ms de arranque), pero suma 45 MB al binario y **mitex 0.2.4 no funciona tal cual con Typst 0.15**: 0 de 22. Con el paquete de Typst de upstream y un parche de tres líneas al convertidor pasan 21. mitex no publica en crates.io desde junio de 2024, aunque el repo sigue vivo.
 - **Descartado para pintar: MathML**. Sin navegador sí se puede: `formulary` compone MathML Core con la tabla MATH de una fuente. Pero `pulldown-latex` y `math-core` sacan MathML pensado para un navegador (entidades HTML, `<` sin escapar), que el parser XML estricto de `formulary` rechaza: 18 de 22 cada uno, y con peor tipografía.
 - **Hilo**: el layout (µs) en el hilo de la UI, para las líneas visibles; el rasterizado en el executor de fondo, con la fuente atenuada como placeholder del mismo alto.
 - **Caché**: el layout por `(LaTeX, modo, color)`, y la imagen por `(LaTeX, modo, tamaño, escala, color)`, con LRU por bytes.
@@ -94,18 +94,18 @@ Tiene una ventaja que los otros no: el mismo MathML sirve para exportar a HTML (
 
 ## 5. Números
 
-Medido con `spikes/math/medir.sh` (7 procesos por motor y escala, mediana de cada campo), fuente de 16 px, en release.
+Medido con `spikes/math/medir.sh` (7 procesos por motor y escala; en cada proceso, la mediana de las fórmulas, y entre procesos, la mediana de cada campo), fuente de 16 px, en release.
 
 ### Tiempo
 
 | | Typst | RaTeX | MathML (`pulldown-latex`) | MathML (`math-core`) |
 |---|---|---|---|---|
-| Arranque del motor (fuentes, biblioteca, scope y spec de mitex) | **11.6 ms** | 0 | 1.0 ms¹ | 0.9 ms¹ |
-| Primera fórmula (incluye cargar fuentes perezosas) | 0.79 ms | 0.73 ms | 0.51 ms | 0.49 ms |
-| Fórmula nueva, motor caliente: mediana / p90 / máx. | 0.29 / 0.42 / 0.75 ms | **0.25 / 0.33 / 0.59 ms** | 0.28 / 0.36 / 0.62 ms | 0.31 / 0.37 / 0.39 ms |
-| — convertir / componer / pintar (medianas) | 0.013 / 0.197 / 0.075 ms | 0.017 / **0.009** / 0.218² ms | 0.005 / 0.076 / 0.200 ms | 0.007 / 0.080 / 0.219 ms |
-| La misma fórmula otra vez | 0.03 ms (memo de `comemo`) | 0.10 ms | 0.27 ms | 0.27 ms |
-| Fórmula nueva en HiDPI (escala 2): mediana / máx. | 0.37 / 0.84 ms | 0.51 / 1.46 ms | 0.43 / 0.98 ms | 0.40 / 0.52 ms |
+| Arranque del motor (fuentes, biblioteca, scope y spec de mitex) | **11.7 ms** | 0 | 0.9 ms¹ | 0.9 ms¹ |
+| Primera fórmula (incluye cargar fuentes perezosas) | 0.77 ms | 0.68 ms | 0.44 ms | 0.44 ms |
+| Fórmula nueva, motor caliente: mediana / p90 / máx. | 0.29 / 0.42 / 0.74 ms | **0.26 / 0.32 / 0.59 ms** | 0.28 / 0.35 / 0.60 ms | 0.28 / 0.35 / 0.36 ms |
+| — convertir / componer / pintar (medianas) | 0.012 / 0.192 / 0.074 ms | 0.016 / **0.008** / 0.215² ms | 0.005 / 0.073 / 0.196 ms | 0.006 / 0.078 / 0.199 ms |
+| La misma fórmula otra vez | 0.03 ms (memo de `comemo`) | 0.11 ms | 0.26 ms | 0.27 ms |
+| Fórmula nueva en HiDPI (escala 2): mediana / máx. | 0.33 / 0.77 ms | 0.48 / 1.38 ms | 0.38 / 0.88 ms | 0.38 / 0.47 ms |
 
 ¹ Casi todo es buscar la fuente matemática entre las de `typst-assets`; con una fuente embebida sola sería ~0.
 ² Una fórmula nueva paga la primera carga de sus glifos. Ya cargados, pintar cuesta ~56 µs, y de eso decodificar el PNG que devuelve `ratex-render` (su API pública no da los píxeles; `ratex-gpui` hace lo mismo) son ~7 µs. Un rasterizador propio de la `DisplayList` o un `render_to_pixmap` público en RaTeX quitarían además la codificación.
@@ -117,7 +117,7 @@ Para el [presupuesto](../performance.md): una nota que abre con 20 fórmulas a l
 
 | | Typst | RaTeX | MathML |
 |---|---|---|---|
-| RSS al arrancar el motor / tras 22 fórmulas (desde 7.6 MB del proceso vacío) | 25.6 / 30.2 MB | 7.8 / 12.9 MB | 13.1 / 15.9 MB³ |
+| RSS al arrancar el motor / tras 22 fórmulas (desde 7.6 MB del proceso vacío) | 25.6 / 30.2 MB | 7.7 / 12.7 MB | 12.9 / 15.9 MB³ |
 | Heap vivo tras arrancar / tras 22 / tras 200 fórmulas distintas | 2.9 / 4.2 / **9.3 MB** | 0 / 1.2 / 1.4 MB | 0 / 0.2 / 0.2 MB |
 | Heap tras `comemo::evict(0)` | 4.0 MB | — | — |
 | Imágenes de las fórmulas que compone (RGBA, escala 1 / 2) | 0.6 / 2.3 MB | 0.6 / 2.5 MB | 0.5 / 2.1 MB |
@@ -142,8 +142,8 @@ De los 45 MB de Typst, 9.6 MB son las fuentes de `typst-assets`; con solo las qu
 Decidido por Alex el 2026-10-19 en la PR #80: **RaTeX**, con `ratex-parser`, `ratex-layout`, `ratex-render` (feature `embed-fonts`) y `ratex-types`, todos fijados con `=0.1.15`. Los píxeles salen de `render_to_png` y se decodifican (~7 µs, §5). Un rasterizador propio de la `DisplayList` solo entra si `feat/math` mide que hace falta. Por qué:
 
 - **Cobertura**: es KaTeX, el dialecto que Obsidian (MathJax) y casi cualquier nota de matemáticas ya usa; compuso las 22, con `CD`, `cases`, `aligned` y `\oiint`. Typst y MathML pierden fórmulas por problemas de otros (mitex sin publicar, MathML con entidades de HTML).
-- **El layout separado del pintado** es lo que pide la vista: en 9 µs da ancho, alto y profundidad en em, sin pintar nada. La vista sabe cuánto mide la fórmula (el alto de la línea de un `$$…$$`, el ancho de un `$…$`) en el mismo frame, y la imagen llega después.
-- **Peso**: 3.1 MB de binario (un 9 % más), ~1.4 MB de heap que no crece, sin arranque, y comparte tiny-skia 0.11 con GPUI. Typst cuesta 45 MB (más que todo Metalmind hoy), 11.6 ms de arranque, una caché que hay que vaciar a mano y un tiny-skia y un resvg duplicados.
+- **El layout separado del pintado** es lo que pide la vista: en ~9 µs da ancho, alto y profundidad en em, sin pintar nada. La vista sabe cuánto mide la fórmula (el alto de la línea de un `$$…$$`, el ancho de un `$…$`) en el mismo frame, y la imagen llega después.
+- **Peso**: 3.1 MB de binario (un 9 % más), ~1.4 MB de heap que no crece, sin arranque, y comparte tiny-skia 0.11 con GPUI. Typst cuesta 45 MB (más que todo Metalmind hoy), 11.7 ms de arranque, una caché que hay que vaciar a mano y un tiny-skia y un resvg duplicados.
 - **Riesgo**: RaTeX es joven (0.1.x, marzo de 2026) y depende sobre todo de una persona. Lo mitiga que es MIT, que su modelo es el de KaTeX (si se abandona, la `DisplayList` y el parser se pueden mantener), y que Metalmind usa solo cuatro crates, sin estado global raro. Se fija con `=` como gpui-kit.
 
 Lo que se pierde frente a Typst: su tipografía es un poco mejor en casos finos (el espaciado de Typst es más cuidado con operadores grandes), y Typst abriría la puerta a escribir math en sintaxis de Typst. Nada de eso es el objetivo: el objetivo es `$…$` de Obsidian.
