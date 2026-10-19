@@ -1,6 +1,6 @@
 # Capturas de las fórmulas
 
-`scripts/capturas.sh` en la base (`main` con las pantallas nuevas) y en la rama, con `--antes`. Las 56 capturas que ya había no cambian; las de fórmulas, sí: antes se veía el LaTeX, ahora la fórmula compuesta.
+`scripts/capturas.sh` en la base (`main` con las pantallas nuevas) y en la rama, con `--antes`. Las 68 capturas que ya había no cambian; las de fórmulas, sí: antes se veía el LaTeX, ahora la fórmula compuesta.
 
 | Captura | Píxeles distintos |
 |---|---|
@@ -18,9 +18,12 @@
 | buscar-claro-1280 | 0 |
 | buscar-vacio-claro-1280 | 0 |
 | paleta-claro-1280 | 0 |
-| formulas-claro-1280 | 90364 (`diff-formulas-claro-1280.png`) |
-| formulas-bloque-claro-1280 | 94028 (`diff-formulas-bloque-claro-1280.png`) |
-| formulas-larga-claro-1280 | 220307 (`diff-formulas-larga-claro-1280.png`) |
+| marks-claro-1280 | 0 |
+| marks-nota-larga-claro-1280 | 0 |
+| marks-borde-derecho-claro-1280 | 0 |
+| formulas-claro-1280 | 89774 (`diff-formulas-claro-1280.png`) |
+| formulas-bloque-claro-1280 | 92786 (`diff-formulas-bloque-claro-1280.png`) |
+| formulas-larga-claro-1280 | 214358 (`diff-formulas-larga-claro-1280.png`) |
 | editor-claro-1920 | 0 |
 | editor-final-claro-1920 | 0 |
 | arbol-claro-1920 | 0 |
@@ -35,9 +38,12 @@
 | buscar-claro-1920 | 0 |
 | buscar-vacio-claro-1920 | 0 |
 | paleta-claro-1920 | 0 |
-| formulas-claro-1920 | 143404 (`diff-formulas-claro-1920.png`) |
-| formulas-bloque-claro-1920 | 145118 (`diff-formulas-bloque-claro-1920.png`) |
-| formulas-larga-claro-1920 | 529677 (`diff-formulas-larga-claro-1920.png`) |
+| marks-claro-1920 | 0 |
+| marks-nota-larga-claro-1920 | 0 |
+| marks-borde-derecho-claro-1920 | 0 |
+| formulas-claro-1920 | 143745 (`diff-formulas-claro-1920.png`) |
+| formulas-bloque-claro-1920 | 145575 (`diff-formulas-bloque-claro-1920.png`) |
+| formulas-larga-claro-1920 | 528962 (`diff-formulas-larga-claro-1920.png`) |
 | editor-oscuro-1280 | 0 |
 | editor-final-oscuro-1280 | 0 |
 | arbol-oscuro-1280 | 0 |
@@ -52,9 +58,12 @@
 | buscar-oscuro-1280 | 0 |
 | buscar-vacio-oscuro-1280 | 0 |
 | paleta-oscuro-1280 | 0 |
-| formulas-oscuro-1280 | 90135 (`diff-formulas-oscuro-1280.png`) |
-| formulas-bloque-oscuro-1280 | 93778 (`diff-formulas-bloque-oscuro-1280.png`) |
-| formulas-larga-oscuro-1280 | 225836 (`diff-formulas-larga-oscuro-1280.png`) |
+| marks-oscuro-1280 | 0 |
+| marks-nota-larga-oscuro-1280 | 0 |
+| marks-borde-derecho-oscuro-1280 | 0 |
+| formulas-oscuro-1280 | 89510 (`diff-formulas-oscuro-1280.png`) |
+| formulas-bloque-oscuro-1280 | 92646 (`diff-formulas-bloque-oscuro-1280.png`) |
+| formulas-larga-oscuro-1280 | 219925 (`diff-formulas-larga-oscuro-1280.png`) |
 | editor-oscuro-1920 | 0 |
 | editor-final-oscuro-1920 | 0 |
 | arbol-oscuro-1920 | 0 |
@@ -69,6 +78,9 @@
 | buscar-oscuro-1920 | 0 |
 | buscar-vacio-oscuro-1920 | 0 |
 | paleta-oscuro-1920 | 0 |
-| formulas-oscuro-1920 | 142921 (`diff-formulas-oscuro-1920.png`) |
-| formulas-bloque-oscuro-1920 | 144750 (`diff-formulas-bloque-oscuro-1920.png`) |
-| formulas-larga-oscuro-1920 | 527925 (`diff-formulas-larga-oscuro-1920.png`) |
+| marks-oscuro-1920 | 0 |
+| marks-nota-larga-oscuro-1920 | 0 |
+| marks-borde-derecho-oscuro-1920 | 0 |
+| formulas-oscuro-1920 | 143143 (`diff-formulas-oscuro-1920.png`) |
+| formulas-bloque-oscuro-1920 | 145086 (`diff-formulas-bloque-oscuro-1920.png`) |
+| formulas-larga-oscuro-1920 | 538020 (`diff-formulas-larga-oscuro-1920.png`) |
