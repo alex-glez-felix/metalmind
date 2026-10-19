@@ -98,13 +98,19 @@ fn pixel_index(width: u32, x: u32, y: u32) -> usize {
     usize::try_from((u64::from(y) * u64::from(width) + u64::from(x)) * 4).unwrap_or(usize::MAX)
 }
 
-/// `source` sobre `target`, con alfa sin premultiplicar.
+/// `source` sobre `target` ("over" de Porter-Duff), con alfa sin
+/// premultiplicar: cada color pesa por su cobertura.
 fn blend(target: &mut [u8], source: &[u8]) {
-    let alpha = u32::from(source[3]);
-    for channel in 0..3 {
-        let over = u32::from(source[channel]) * alpha + u32::from(target[channel]) * (255 - alpha);
-        target[channel] = u8::try_from(over / 255).unwrap_or(u8::MAX);
+    let source_alpha = u32::from(source[3]);
+    let target_weight = u32::from(target[3]) * (255 - source_alpha);
+    let covered = source_alpha * 255 + target_weight;
+    if covered == 0 {
+        return;
     }
-    let covered = alpha + u32::from(target[3]) * (255 - alpha) / 255;
-    target[3] = u8::try_from(covered).unwrap_or(u8::MAX);
+    for channel in 0..3 {
+        let over = u32::from(source[channel]) * source_alpha * 255
+            + u32::from(target[channel]) * target_weight;
+        target[channel] = u8::try_from((over + covered / 2) / covered).unwrap_or(u8::MAX);
+    }
+    target[3] = u8::try_from((covered + 127) / 255).unwrap_or(u8::MAX);
 }
