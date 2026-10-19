@@ -119,6 +119,14 @@ impl Images {
         None
     }
 
+    /// Por qué falló pintar `key`, sin contarlo como pedido en este frame.
+    pub fn failure(&self, key: &ImageKey) -> Option<&MathError> {
+        match self.entries.get(key).map(|entry| &entry.image) {
+            Some(Image::Failed(error)) => Some(error),
+            _ => None,
+        }
+    }
+
     /// Llegó lo pintado en el fondo.
     pub fn finish(&mut self, key: ImageKey, image: Image) {
         let bytes = match &image {
@@ -222,6 +230,20 @@ mod tests {
             images.get(&key(r"\frac{")),
             Some(Image::Failed(MathError::Parse(_)))
         ));
+    }
+
+    #[test]
+    fn un_fallo_al_pintar_es_de_su_letra_escala_y_color() {
+        let mut images = Images::default();
+        let mut huge = key("x");
+        huge.size = 1.0e6_f32.to_bits();
+        assert!(images.get(&huge).is_none());
+        images.finish(huge.clone(), paint(&huge));
+        assert!(matches!(images.failure(&huge), Some(MathError::Render(_))));
+        assert!(
+            images.failure(&key("x")).is_none(),
+            "a otro tamaño se pinta"
+        );
     }
 
     #[test]

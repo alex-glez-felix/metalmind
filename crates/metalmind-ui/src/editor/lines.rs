@@ -146,6 +146,10 @@ impl Line<'_> {
                 (spot, metrics.map(|metrics| math.geometry.formula(metrics)))
             })
             .collect();
+        // El alto sale de lo medido, como lo mide el motor; lo que no se
+        // pudo pintar se ve después como una fórmula que no compone.
+        let text_height = self.text_height(&measured, math.geometry);
+        let measured = with_render_errors(measured, math);
         let kind = self.style.map(|style| style.kind);
         let (font_size, weight) = line_font(kind, typeface.size, theme);
         let failed = self.failed(&measured);
@@ -172,7 +176,7 @@ impl Line<'_> {
                 line: self.number,
                 origin: self.origin,
                 height: self.height,
-                text_height: self.text_height(&measured, math.geometry),
+                text_height,
                 font_size,
                 pieces: Vec::with_capacity(split.len()),
                 formulas: Vec::new(),
@@ -183,9 +187,10 @@ impl Line<'_> {
             x: px(0.),
             baseline: scaled(math.geometry, font_size / typeface.size),
         };
+        let mut slicer = RunSlicer::new(&runs);
         for part in split {
             match part {
-                Part::Text(range) => builder.text(range, &runs, window),
+                Part::Text(range) => builder.text(range, &mut slicer, window),
                 Part::Formula { spot, source } => {
                     if let Some((spot, Ok(formula))) = measured.get(spot) {
                         builder.formula(spot, *formula, source);
@@ -262,9 +267,9 @@ struct Builder<'l, 'm> {
 }
 
 impl Builder<'_, '_> {
-    fn text(&mut self, range: Range<usize>, runs: &[TextRun], window: &Window) {
+    fn text(&mut self, range: Range<usize>, runs: &mut RunSlicer<'_>, window: &Window) {
         let text = SharedString::from(self.line.text[range.clone()].to_owned());
-        let runs = slice_runs(runs, range.clone());
+        let runs = runs.take(range.clone());
         let shaped = window
             .text_system()
             .shape_line(text, self.laid.font_size, &runs, None);
@@ -344,22 +349,63 @@ fn scaled(geometry: Geometry, factor: f32) -> Geometry {
     }
 }
 
-/// Los `runs` que caen en `range`, recortados a él.
-fn slice_runs(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
-    let mut out = Vec::new();
-    let mut at = 0;
-    for run in runs {
-        let (start, end) = (at, at + run.len);
-        at = end;
-        let (from, to) = (start.max(range.start), end.min(range.end));
-        if from < to {
-            out.push(TextRun {
-                len: to - from,
-                ..run.clone()
-            });
+/// Las fórmulas que se midieron pero no se pudieron pintar con este
+/// aspecto, como las que no componen.
+fn with_render_errors<'s>(measured: Vec<Measured<'s>>, math: &MathFrame<'_>) -> Vec<Measured<'s>> {
+    measured
+        .into_iter()
+        .map(|(spot, formula)| {
+            let key = || ImageKey::new(&spot.latex, spot.display, math.look);
+            match formula {
+                Ok(_) => match math.formulas.render_error(&key()) {
+                    Some(error) => (spot, Err(error)),
+                    None => (spot, formula),
+                },
+                Err(_) => (spot, formula),
+            }
+        })
+        .collect()
+}
+
+/// Los tramos de estilo de una línea, recortados a trozos que van de
+/// izquierda a derecha: cada tramo se mira una sola vez por línea.
+struct RunSlicer<'r> {
+    runs: &'r [TextRun],
+    /// El primer tramo que puede tocar el próximo trozo, y dónde empieza.
+    next: usize,
+    start: usize,
+}
+
+impl<'r> RunSlicer<'r> {
+    fn new(runs: &'r [TextRun]) -> Self {
+        Self {
+            runs,
+            next: 0,
+            start: 0,
         }
     }
-    out
+
+    /// Los tramos que caen en `range`, recortados a él. `range` empieza
+    /// donde terminó el anterior o después.
+    fn take(&mut self, range: Range<usize>) -> Vec<TextRun> {
+        let mut out = Vec::new();
+        while let Some(run) = self.runs.get(self.next) {
+            let end = self.start + run.len;
+            let (from, to) = (self.start.max(range.start), end.min(range.end));
+            if from < to {
+                out.push(TextRun {
+                    len: to - from,
+                    ..run.clone()
+                });
+            }
+            if end > range.end {
+                break;
+            }
+            self.next += 1;
+            self.start = end;
+        }
+        out
+    }
 }
 
 /// El fondo de cada línea de un bloque de código, hasta `right`.
@@ -378,10 +424,32 @@ pub fn code_block_quads(lines: &[LaidLine], right: Pixels, theme: &Theme) -> Vec
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::px;
+    use gpui_kit::{Font, TextRun, px};
     use pretty_assertions::assert_eq;
 
-    use super::centered;
+    use super::{RunSlicer, centered};
+
+    fn run(len: usize) -> TextRun {
+        TextRun {
+            len,
+            font: Font::default(),
+            color: gpui_kit::Hsla::default(),
+            background_color: None,
+            underline: None,
+            strikethrough: None,
+        }
+    }
+
+    #[test]
+    fn los_trozos_se_recortan_de_los_tramos_en_orden() {
+        let runs = [run(3), run(4), run(5)];
+        let mut slicer = RunSlicer::new(&runs);
+        let lens = |runs: Vec<TextRun>| runs.iter().map(|run| run.len).collect::<Vec<_>>();
+        assert_eq!(lens(slicer.take(0..2)), [2]);
+        assert_eq!(lens(slicer.take(5..9)), [2, 2]);
+        assert_eq!(lens(slicer.take(9..12)), [3]);
+        assert_eq!(lens(slicer.take(12..12)), Vec::<usize>::new());
+    }
 
     #[test]
     fn una_formula_mas_ancha_que_el_area_empieza_en_el_borde() {

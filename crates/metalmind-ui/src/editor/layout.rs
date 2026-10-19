@@ -124,15 +124,11 @@ impl LaidLine {
         }
     }
 
-    /// El byte más cercano a `x`; sobre una fórmula, su principio.
+    /// El byte más cercano a `x`; sobre una fórmula, su principio, y a la
+    /// derecha de todo, el final de la línea.
     pub fn closest_index_for_x(&self, x: Pixels) -> usize {
-        let Some(piece) = self
-            .pieces
-            .iter()
-            .find(|piece| x < piece.x + piece.width)
-            .or(self.pieces.last())
-        else {
-            return 0;
+        let Some(piece) = self.pieces.iter().find(|piece| x < piece.x + piece.width) else {
+            return self.len();
         };
         match &piece.text {
             Some(text) => piece.source.start + text.closest_index_for_x(x - piece.x),
@@ -261,7 +257,7 @@ mod tests {
 
     #[test]
     fn una_formula_ocupa_su_ancho_y_un_clic_va_a_su_principio() {
-        let laid = with_formula();
+        let mut laid = with_formula();
         assert_eq!((laid.len(), laid.width()), (8, px(60.)));
         assert_eq!(laid.x_for_index(2), px(20.));
         assert_eq!(laid.x_for_index(4), px(20.), "dentro: el borde izquierdo");
@@ -273,7 +269,13 @@ mod tests {
         );
         assert_eq!(laid.x_for_end(2), px(20.));
         assert_eq!(laid.closest_index_for_x(px(35.)), 2);
-        assert_eq!(laid.closest_index_for_x(px(500.)), 7);
+        assert_eq!(laid.closest_index_for_x(px(500.)), 8);
+        laid.pieces.pop();
+        assert_eq!(
+            laid.closest_index_for_x(px(500.)),
+            7,
+            "a la derecha de una fórmula que cierra la línea, su final"
+        );
     }
 
     #[test]

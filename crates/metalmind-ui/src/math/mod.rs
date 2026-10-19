@@ -49,6 +49,13 @@ impl Formulas {
         self.metrics.get(latex, display)
     }
 
+    /// Por qué no se pudo pintar la fórmula de `key`, si se intentó y falló.
+    /// Es de esa letra, escala y color: con otros se vuelve a intentar.
+    #[must_use]
+    pub fn render_error(&self, key: &ImageKey) -> Option<MathError> {
+        self.images.failure(key).cloned()
+    }
+
     /// Empieza un frame de la ventana: las imágenes que pida cualquier
     /// panel desde ahora no salen de la caché hasta el siguiente.
     pub fn next_frame(&mut self) {
@@ -71,12 +78,7 @@ impl Formulas {
             // Si la ventana ya se cerró, no hay a quién dársela.
             let _ = this.update(cx, |formulas, cx| {
                 if let Image::Failed(error) = &image {
-                    // Compuso al medirla y falló al pintarla: desde ahora se ve
-                    // como una que no compone, con su fuente y su mensaje.
                     log::error!("no se pudo pintar la fórmula {:?}: {error}", key.latex);
-                    formulas
-                        .metrics
-                        .fail(&key.latex, key.display, error.clone());
                 }
                 formulas.images.finish(key, image);
                 cx.notify();
