@@ -105,10 +105,10 @@ impl Workspace {
         }
     }
 
-    /// El archivo de `id` cambió en disco. Si no tiene cambios, se relee
-    /// como con `autoread` ([`Workspace::refresh`]), se vea o esté oculto:
-    /// no se edita texto viejo y un `:w` no pisa lo de fuera. Si tiene
-    /// cambios, queda anotado si ya no es lo que se leyó o escribió, para no
+    /// El archivo de `id` cambió en disco. Si no tiene cambios ni un Insert
+    /// abierto, se relee como con `autoread` ([`Workspace::refresh`]), se
+    /// vea o esté oculto: no se edita texto viejo y un `:w` no pisa lo de
+    /// fuera. Si no, queda anotado si ya no es lo que se leyó o escribió, para no
     /// pisarlo al guardar, y se avisa como el `W12` de vim. El propio
     /// guardado también llega aquí, pero el disco tiene justo lo que se
     /// escribió.
@@ -116,7 +116,10 @@ impl Workspace {
         let Some(document) = self.documents.get_mut(id) else {
             return;
         };
-        if !document.is_modified() {
+        // A mitad de un Insert el motor tiene una transacción abierta en el
+        // buffer: releerlo se la quitaría.
+        let editing = document.buffer().has_open_transaction();
+        if !document.is_modified() && !editing {
             if let Err(error) = self.refresh(id) {
                 self.report(&error);
             }
@@ -124,7 +127,7 @@ impl Workspace {
         }
         let noticed = document.changed_on_disk();
         match document.check_disk() {
-            Ok(true) if !noticed && document.is_modified() => {
+            Ok(true) if !noticed => {
                 self.message = Some(Message::changed_on_disk(document));
             }
             Ok(_) => {}
