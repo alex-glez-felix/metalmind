@@ -120,6 +120,12 @@ mod tests {
         ));
         disk.create(&dir.path().join("c.md"), "tres\n", SaveKind::Explicit)
             .unwrap();
+        assert!(
+            disk.write(&dir.path().join("falta/d.md"), "x\n", SaveKind::Autosave)
+                .is_err(),
+            "no crea carpetas"
+        );
+        assert!(!dir.path().join("falta").exists());
         disk.write(&outside.path().join("b.md"), "dos\n", SaveKind::Explicit)
             .unwrap();
         assert_eq!(fs::read_to_string(&note).unwrap(), "uno\n");

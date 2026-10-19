@@ -339,3 +339,31 @@ fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
     assert_eq!(autosaving.read("falta/a.md"), "hola\n");
     assert_eq!(autosaving.session.workspace.autosave_deadline(), None);
 }
+
+#[test]
+fn si_el_archivo_vuelve_a_lo_leido_se_autoguarda_otra_vez() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n")]);
+    autosaving.session.keys("Ax⎋");
+    fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.state(), Some(SaveState::ChangedOnDisk));
+    // Vuelve a lo que se leyó, sin que el watcher avise.
+    fs::write(autosaving.path("a.md"), "uno\n").unwrap();
+    autosaving.session.keys("Ay⎋");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.read("a.md"), "unoxy\n");
+}
+
+#[test]
+fn una_nota_a_la_vista_sin_cambios_se_relee_si_cambia_fuera() {
+    let mut autosaving = Autosaving::new(&[("a.md", "uno\n")]);
+    fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
+    autosaving.modified_on_disk("a.md");
+    assert_eq!(autosaving.session.text(), "de fuera");
+    autosaving.session.keys("Ax⎋");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.read("a.md"), "de fuerax\n");
+}

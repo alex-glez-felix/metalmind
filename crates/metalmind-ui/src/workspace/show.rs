@@ -108,10 +108,10 @@ impl Workspace {
         Ok(pane)
     }
 
-    /// Un documento oculto sin cambios pasa a tener lo que dice el disco,
-    /// como con `autoread` de nvim: al volver o cuando avisa el watcher. Un
-    /// cambio de fuera mientras no se veía (git, Syncthing) no deja texto
-    /// viejo, y un archivo que apareció se carga. Si no cambió, conserva su
+    /// Un documento sin cambios pasa a tener lo que dice el disco, como con
+    /// `autoread` de nvim: al volver a uno oculto o cuando avisa el watcher,
+    /// se vea o no. Un cambio de fuera (git, Syncthing) no deja texto viejo,
+    /// y un archivo que apareció se carga. Si no cambió, conserva su
     /// historial; las marks y el cursor guardado siguen a su línea. Si ya
     /// no se puede leer o lo borraron, se queda como estaba: el buffer es
     /// la única copia.
