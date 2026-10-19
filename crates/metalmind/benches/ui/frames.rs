@@ -62,6 +62,24 @@ pub fn wait_for_keys(log: &Path, total: usize, timeout: Duration) -> Frame {
     })
 }
 
+/// Espera a que pasen `quiet` sin frames nuevos y devuelve el último: lo
+/// que llegó del fondo (las imágenes de las fórmulas) ya se pintó.
+pub fn wait_settled(log: &Path, quiet: Duration, timeout: Duration) -> Frame {
+    let mut last = None;
+    let mut since = std::time::Instant::now();
+    wait::until("que dejen de llegar frames", timeout, || {
+        let now = read(log).last().copied();
+        if now != last {
+            last = now;
+            since = std::time::Instant::now();
+        }
+        match last {
+            Some(frame) if since.elapsed() >= quiet => Ok(frame),
+            _ => Err(format!("el último frame es {last:?}")),
+        }
+    })
+}
+
 /// Espera el primer frame.
 pub fn wait_first(log: &Path, timeout: Duration) -> Frame {
     wait::until("el primer frame", timeout, || {

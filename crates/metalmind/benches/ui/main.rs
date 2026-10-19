@@ -36,6 +36,9 @@ const KEYS: usize = 60;
 const BURST: usize = 200;
 const BIG_NOTE: usize = 50_000;
 const VAULT: usize = 5_000;
+const FORMULAS: usize = 200;
+/// Sin frames por este tiempo, ya llegaron todas las imágenes pedidas.
+const SETTLED: Duration = Duration::from_millis(500);
 const FRAME_TIMEOUT: Duration = Duration::from_secs(15);
 /// Lo que tarda la primera ventana: lavapipe tarda en levantar.
 const WINDOW_TIMEOUT: Duration = Duration::from_mins(1);
@@ -50,6 +53,7 @@ fn main() {
     });
     finder_in_vault();
     keys_on_big_note();
+    formulas();
 }
 
 /// Un Xvfb y un `HOME` vacío para varios arranques, y el registro de frames
@@ -163,7 +167,7 @@ fn keys_on_big_note() {
         .map(|c| press(&window, &log, &c.to_string()))
         .collect();
     press(&window, &log, "<Esc>");
-    key_rows("en Insert", &typed);
+    key_rows("en Insert, 50 k líneas", &typed);
 
     let motions = ["j", "w", "j", "b", "k", "e"];
     let normal: Vec<Frame> = motions
@@ -172,13 +176,67 @@ fn keys_on_big_note() {
         .take(KEYS)
         .map(|key| press(&window, &log, key))
         .collect();
-    key_rows("en Normal (`j w b k e`)", &normal);
+    key_rows("en Normal (`j w b k e`), 50 k líneas", &normal);
 
     press(&window, &log, "gg");
     let scroll: Vec<Frame> = (0..KEYS).map(|_| press(&window, &log, "<C-d>")).collect();
-    key_rows("`ctrl-d`", &scroll);
+    key_rows("`ctrl-d`, 50 k líneas", &scroll);
 
     burst(&window, &log);
+    quit(metalmind, window);
+}
+
+/// Una nota con 200 fórmulas distintas (`metalmind_perf::math_note`). Cada
+/// arranque empieza con las cachés vacías: el primer frame reserva el lugar
+/// de las fórmulas y sus imágenes llegan del fondo en los frames que
+/// siguen. El scroll pasa dos veces por la nota: la primera mide cada
+/// fórmula y la manda a pintar (caché fría), la segunda ya tiene todo.
+fn formulas() {
+    let run = Run::new(|smoke| smoke.write("a.md", &metalmind_perf::math_note(FORMULAS)));
+    run.warm_up();
+    let mut firsts = Vec::new();
+    let mut settled = Vec::new();
+    for _ in 0..LAUNCHES {
+        let (metalmind, window, first) = run.launch();
+        firsts.push(first.t);
+        settled.push(frames::wait_settled(&run.log(), SETTLED, FRAME_TIMEOUT).t);
+        quit(metalmind, window);
+    }
+    startup_row("200 fórmulas", firsts);
+    startup_row("200 fórmulas, hasta pintar las visibles", settled);
+
+    let (metalmind, window, _) = run.launch();
+    let log = run.log();
+    frames::wait_settled(&log, SETTLED, FRAME_TIMEOUT);
+    let cold: Vec<Frame> = (0..KEYS).map(|_| press(&window, &log, "<C-d>")).collect();
+    key_rows("`ctrl-d`, 200 fórmulas, caché fría", &cold);
+    press(&window, &log, "gg");
+    frames::wait_settled(&log, SETTLED, FRAME_TIMEOUT);
+    let warm: Vec<Frame> = (0..KEYS).map(|_| press(&window, &log, "<C-d>")).collect();
+    key_rows("`ctrl-d`, 200 fórmulas, caché caliente", &warm);
+
+    // Una línea de texto entre fórmulas: la tecla no toca ninguna.
+    press(&window, &log, "gg/100,<CR>A");
+    let typed: Vec<Frame> = "abcdefghij"
+        .chars()
+        .cycle()
+        .take(KEYS)
+        .map(|c| press(&window, &log, &c.to_string()))
+        .collect();
+    press(&window, &log, "<Esc>");
+    key_rows("en Insert junto a fórmulas, caché caliente", &typed);
+
+    // Dentro de un bloque de varias líneas: cada tecla es LaTeX nuevo, que
+    // se mide en la tecla y se pinta en el fondo.
+    press(&window, &log, "gg/(11)<CR>I");
+    let block: Vec<Frame> = "abcdefghij"
+        .chars()
+        .cycle()
+        .take(KEYS)
+        .map(|c| press(&window, &log, &c.to_string()))
+        .collect();
+    press(&window, &log, "<Esc>");
+    key_rows("en Insert dentro de un bloque, caché fría", &block);
     quit(metalmind, window);
 }
 
@@ -193,13 +251,13 @@ fn press(window: &Window<'_>, log: &Path, keys: &str) -> Frame {
 fn key_rows(what: &str, samples: &[Frame]) {
     let input = samples.iter().filter_map(|frame| frame.input);
     row(
-        &format!("Tecla {what}, 50 k líneas: de la tecla al frame"),
+        &format!("Tecla {what}: de la tecla al frame"),
         &Summary::of_micros(input.collect::<Vec<_>>()),
         samples.len(),
     );
     let cpu = samples.iter().filter_map(|frame| frame.cpu);
     row(
-        &format!("Tecla {what}, 50 k líneas: CPU del frame (render → paint)"),
+        &format!("Tecla {what}: CPU del frame (render → paint)"),
         &Summary::of_micros(cpu.collect::<Vec<_>>()),
         samples.len(),
     );
