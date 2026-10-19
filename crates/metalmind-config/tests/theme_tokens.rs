@@ -149,3 +149,25 @@ fn el_ejemplo_de_la_documentacion_carga() {
     assert_eq!(theme.metrics.layout.picker_padding_x, Length(10.));
     assert_eq!(theme.metrics.radius.lg, Px(0.));
 }
+
+#[test]
+fn un_rol_que_falta_se_nombra_como_rol() {
+    let yaml = include_str!("../themes/metalmind-oscuro.yaml").replace("  accent: blue\n", "");
+    let error = load(&yaml).unwrap_err();
+    assert!(
+        error
+            .message
+            .starts_with("el rol `accent` no está definido"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
+fn un_rol_no_nombra_otro_rol() {
+    let error = load("extends: metalmind-oscuro\nroles:\n  surface: background\n").unwrap_err();
+    assert_eq!(
+        error.message,
+        "`background` no está en la paleta (en roles.surface): un rol nombra la paleta o un hex"
+    );
+}
