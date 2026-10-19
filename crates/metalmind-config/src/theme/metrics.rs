@@ -204,6 +204,10 @@ metric_group! {
         /// Cuánto cede el nombre de la nota frente al mensaje cuando la barra
         /// de estado no alcanza: 0.5 es la mitad.
         status_file_shrink: Fraction,
+        /// Lo que se le deja como mínimo al mensaje de la barra de estado,
+        /// si hay uno, antes de recortar el nombre de la nota: menos que esto
+        /// no se lee.
+        status_message_min_width: Length,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,

@@ -40,9 +40,11 @@ pub struct CommandLine {
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let center = match (status.command_line, status.message) {
-        (Some(line), _) => command_line(line, theme),
-        (None, Some(message)) => message_line(message, theme),
-        (None, None) => div(),
+        // Con algo que decir, un mínimo legible: el nombre cede antes que el
+        // mensaje quede en un `…` suelto.
+        (Some(line), _) => command_line(line, theme).min_w(theme.status.message_min_width),
+        (None, Some(message)) => message_line(message, theme).min_w(theme.status.message_min_width),
+        (None, None) => div().min_w_0(),
     };
     let foreground = if status.mode.is_some() {
         theme.status.foreground
@@ -52,6 +54,8 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
     div()
         .flex()
         .flex_row()
+        // En un panel más angosto que lo mínimo, se recorta el final sin salirse.
+        .overflow_hidden()
         .gap(theme.status.gap)
         .px(theme.status.padding_x)
         .py(theme.status.padding_y)
@@ -64,7 +68,7 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
             bar.child(fixed().child(format!("grabando @{register}")))
         })
         .child(file_label(status.file, status.save, status.modified, theme))
-        .child(center.flex_grow_1().min_w_0().truncate())
+        .child(center.flex_grow_1().truncate())
         .child(fixed().child(format!("{line}:{column}")))
 }
 
