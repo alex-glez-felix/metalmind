@@ -18,6 +18,38 @@ use rstest::rstest;
 use support::wait::{self, TIMEOUT};
 use support::{Area, Smoke};
 
+/// Con la config por defecto, lo escrito llega al disco tras un segundo sin
+/// teclear, sin `:w`, deja su versión en el historial y `:q` sale.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_autoguardado_escribe_sin_w() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("ix<Esc>");
+    smoke.wait_contents("a.md", "xuno\n");
+    assert!(metalmind.is_running());
+    window.type_keys(":q<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.files(), ["a.md"]);
+    assert_eq!(smoke.history_logs(), 1);
+}
+
+/// Con autoguardado, `:q` justo después de escribir guarda antes de salir:
+/// la protección de salida no salta.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn q_guarda_antes_de_salir() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys("ix<Esc>:q<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "xuno\n");
+    assert_eq!(smoke.files(), ["a.md"]);
+}
+
 /// Teclea `keys` sobre una nota que dice `before` y espera que salga limpio
 /// con la nota diciendo `after`, sin temporales al lado.
 #[rstest]
@@ -69,11 +101,13 @@ fn wq_crea_un_archivo_nuevo() {
     assert_eq!(smoke.files(), ["nueva.md"]);
 }
 
-/// Si `:q` hubiera cerrado, el `:w` que lo sigue nunca llegaría al disco.
+/// Sin autoguardado, como en vim: si `:q` hubiera cerrado, el `:w` que lo
+/// sigue nunca llegaría al disco.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn q_con_cambios_se_niega() {
     let smoke = Smoke::new();
+    smoke.without_autosave();
     smoke.write("a.md", "uno\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
@@ -89,6 +123,7 @@ fn q_con_cambios_se_niega() {
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn el_cierre_del_gestor_de_ventanas_se_niega_con_cambios() {
     let smoke = Smoke::new();
+    smoke.without_autosave();
     smoke.write("a.md", "uno\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
@@ -123,6 +158,7 @@ fn w_conserva_los_permisos() {
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn q_bang_sale_sin_guardar() {
     let smoke = Smoke::new();
+    smoke.without_autosave();
     smoke.write("a.md", "uno\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
@@ -381,6 +417,7 @@ fn tree_row(row: i16) -> (i16, i16) {
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn cambiar_de_nota_desde_el_arbol_conserva_los_cambios() {
     let smoke = Smoke::new();
+    smoke.without_autosave();
     smoke.write("a.md", "uno\n");
     smoke.write("b.md", "dos\n");
     let mut metalmind = smoke.launch(&["a.md"]);
@@ -450,6 +487,7 @@ fn space_e_le_da_el_foco_al_arbol() {
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn renombra_desde_el_arbol_y_el_buffer_la_sigue() {
     let smoke = Smoke::new();
+    smoke.without_autosave();
     smoke.write("a.md", "uno\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();

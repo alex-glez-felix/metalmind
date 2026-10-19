@@ -66,7 +66,7 @@ Las teclas van en la notación de vim: `<Esc>`, `<CR>`, `<BS>`, `<Tab>`, `<Space
 
 Para lo demás, un `#[test]` con `#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]` y la API de `support/`:
 
-- `Smoke::new()`: un Xvfb y una carpeta de notas vacía. `write`, `read`, `set_mode`, `mode`, `files` (para ver que no quedan temporales), `wait_files` (que la carpeta tenga justo esos archivos, por ejemplo tras renombrar desde el árbol) y `wait_contents` trabajan sobre esa carpeta.
+- `Smoke::new()`: un Xvfb y una carpeta de notas vacía. `write`, `read`, `set_mode`, `mode`, `files` (para ver que no quedan temporales), `wait_files` (que la carpeta tenga justo esos archivos, por ejemplo tras renombrar desde el árbol) y `wait_contents` trabajan sobre esa carpeta. `config(yaml)` escribe el `config.yaml` con el que se lanza; `without_autosave()` apaga el autoguardado para los casos que prueban guardar y salir como en vim, y `history_logs()` cuenta las notas con historial en la carpeta de datos del test.
 - `smoke.launch(&["a.md", …])`: lanza `metalmind` con esos argumentos desde la carpeta de notas, que es también el vault (con `&["."]`, sin archivo y con el foco en el árbol). Devuelve un `Metalmind`.
 - `smoke.launch_without_gpu(&["a.md"])`: igual, pero sin ningún driver de Vulkan ni EGL a la vista, para probar que `metalmind` sale con error cuando no puede dibujar.
 - `metalmind.window()` espera la primera ventana; `metalmind.windows()` da todas las que tiene abiertas ahora, sin asumir una sola. `metalmind.wait_exit()` espera la salida y devuelve el `ExitStatus`; `metalmind.is_running()` no espera.
