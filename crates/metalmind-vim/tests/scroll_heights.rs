@@ -128,3 +128,20 @@ fn page_scrolls_by_whole_lines(
     let column = before.len() - before.rfind('\n').map_or(0, |i| i + 1);
     assert_eq!(((line, column), first + 1), (after, top));
 }
+
+/// Un `#` de tres filas bajo una línea al principio de la nota: con
+/// `scrolloff` 2 quedan visibles solo una fila bajo él, como en nvim, que
+/// tampoco puede mover la ventana más arriba de la primera línea.
+#[rstest]
+#[case("jk")]
+#[case("k")]
+#[case("jjkk")]
+#[case("<C-e><C-y>")]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn a_tall_heading_at_the_top_keeps_what_nvim_keeps(#[case] keys: &str) {
+    let text = format!("001\n|# {}\n003\n004\n005\n006\n007\n008", "h".repeat(200));
+    let screen = screen(5, 2, 1);
+    let (engine, engine_top) = support::run_engine_on(&text, keys, Some(screen));
+    let (nvim, nvim_top) = support::nvim::run_on(&text, keys, Some(screen));
+    assert_eq!((engine.text, engine_top), (nvim.text, nvim_top));
+}
