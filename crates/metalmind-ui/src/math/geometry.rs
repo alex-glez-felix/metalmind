@@ -21,6 +21,8 @@ pub struct Geometry {
     pub line_height: f32,
     pub ascent: f32,
     pub descent: f32,
+    /// Arriba y abajo de una fórmula de bloque.
+    pub block_margin: f32,
 }
 
 /// Una fórmula ya medida, en píxeles lógicos.
@@ -64,12 +66,14 @@ impl Geometry {
             MathPlace::Inline => {
                 // Con la línea base centrada como la del texto, lo que pide
                 // la parte de arriba y lo que pide la de abajo.
-                let above = 2.0 * (formula.height + leading) - self.ascent + self.descent;
-                let below = 2.0 * (formula.depth + leading) + self.ascent - self.descent;
+                let above = both_sides(formula.height + leading) - self.ascent + self.descent;
+                let below = both_sides(formula.depth + leading) + self.ascent - self.descent;
                 above.max(below).max(self.line_height)
             }
-            MathPlace::Alone => (formula.total() + 4.0 * leading).max(self.line_height),
-            MathPlace::Below { .. } => formula.total() + 4.0 * leading,
+            MathPlace::Alone => {
+                (formula.total() + both_sides(self.block_margin)).max(self.line_height)
+            }
+            MathPlace::Below { .. } => formula.total() + both_sides(self.block_margin),
         };
         to_rows(needed)
     }
@@ -100,6 +104,13 @@ pub fn half(value: f32) -> f32 {
     value / 2.0
 }
 
+/// Lo mismo a los dos lados: arriba y abajo, o a la izquierda y a la
+/// derecha.
+#[must_use]
+pub fn both_sides(value: f32) -> f32 {
+    value * 2.0
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -122,6 +133,7 @@ mod tests {
         line_height: 24.0,
         ascent: 12.0,
         descent: 4.0,
+        block_margin: 8.0,
     };
 
     fn formula(height: f32, depth: f32) -> FormulaBox {

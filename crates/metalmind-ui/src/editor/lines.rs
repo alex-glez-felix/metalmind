@@ -230,21 +230,19 @@ impl Line<'_> {
     }
 
     /// Dónde va la imagen de una fórmula con su borde izquierdo en `left` y
-    /// el de arriba en `top`, desde el origen de la línea, contando el
-    /// margen con que RaTeX la pinta.
-    fn place_formula(&self, formula: FormulaBox, left: Pixels, top: Pixels) -> PlacedFormula {
-        let padding = px(crate::math::PADDING);
+    /// el de arriba en `top`, desde el origen de la línea, con el margen
+    /// `padding` con que se pinta alrededor.
+    fn place_formula(
+        &self,
+        formula: FormulaBox,
+        left: Pixels,
+        top: Pixels,
+        padding: Pixels,
+    ) -> PlacedFormula {
+        let origin = point(self.origin.x + left, self.origin.y + top);
+        let area = size(px(formula.width), px(formula.total()));
         PlacedFormula {
-            bounds: Bounds::new(
-                point(
-                    self.origin.x + left - padding,
-                    self.origin.y + top - padding,
-                ),
-                size(
-                    px(formula.width) + padding * 2.0,
-                    px(formula.total()) + padding * 2.0,
-                ),
-            ),
+            bounds: Bounds::new(origin, area).dilate(padding),
             image: None,
         }
     }
@@ -312,7 +310,8 @@ impl Builder<'_, '_> {
     fn place(&mut self, spot: &MathSpot, formula: FormulaBox, left: Pixels, top: Pixels) {
         let key = ImageKey::new(&spot.latex, spot.display, self.math.look);
         self.keys.push((self.laid.formulas.len(), key));
-        let placed = self.line.place_formula(formula, left, top);
+        let padding = px(self.math.look.padding);
+        let placed = self.line.place_formula(formula, left, top, padding);
         self.laid.formulas.push(placed);
     }
 

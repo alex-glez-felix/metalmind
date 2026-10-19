@@ -264,6 +264,12 @@ Theme {
             gutter_mark_columns: MarkColumns(
                 3,
             ),
+            math_padding: Length(
+                1.0,
+            ),
+            math_block_margin: Length(
+                4.0,
+            ),
         },
     },
 }
