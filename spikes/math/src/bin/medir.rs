@@ -104,13 +104,13 @@ fn run(kind: Kind, look: Look) -> Result<(), MathError> {
             |error| format!("error: {error}"),
             |time| format!("{:.2}", ms(time))
         ),
-        ms(percentile(fresh.iter().map(Phases::total), 50)),
+        ms(median(fresh.iter().map(Phases::total))),
         ms(percentile(fresh.iter().map(Phases::total), 90)),
         ms(percentile(fresh.iter().map(Phases::total), 100)),
-        ms(percentile(fresh.iter().map(|p| p.convert), 50)),
-        ms(percentile(fresh.iter().map(|p| p.layout), 50)),
-        ms(percentile(fresh.iter().map(|p| p.raster), 50)),
-        ms(percentile(again.iter().map(Phases::total), 50)),
+        ms(median(fresh.iter().map(|p| p.convert))),
+        ms(median(fresh.iter().map(|p| p.layout))),
+        ms(median(fresh.iter().map(|p| p.raster))),
+        ms(median(again.iter().map(Phases::total))),
         ms(growth),
         before.rss,
         after_start.rss,
@@ -175,7 +175,7 @@ fn unique_formulas(engine: &mut dyn Engine, look: &Look) -> Duration {
                 .ok()
                 .map(|r| r.phases.total())
         });
-    percentile(times, 50)
+    median(times)
 }
 
 fn print_row(label: &str, formula: &Formula, phases: &Phases) {
@@ -187,6 +187,18 @@ fn print_row(label: &str, formula: &Formula, phases: &Phases) {
         ms(phases.raster),
         ms(phases.total()),
     );
+}
+
+/// Con una cantidad par, el promedio de los dos del centro.
+fn median(times: impl Iterator<Item = Duration>) -> Duration {
+    let mut times: Vec<Duration> = times.collect();
+    times.sort_unstable();
+    let middle = times.len() / 2;
+    match times.len() {
+        0 => Duration::ZERO,
+        n if n % 2 == 0 => (times[middle - 1] + times[middle]) / 2,
+        _ => times[middle],
+    }
 }
 
 fn percentile(times: impl Iterator<Item = Duration>, percent: usize) -> Duration {

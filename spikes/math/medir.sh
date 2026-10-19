@@ -28,7 +28,9 @@ for motor in typst ratex mathml mathcore; do
             sorted[b + 1] = v
           }
         }
-        printf "%s=%s\t", key[i], sorted[int((n + 1) / 2)]
+        if (n % 2 == 0 && sorted[1] ~ /^[0-9.]+$/) value = (sorted[n / 2] + sorted[n / 2 + 1]) / 2
+        else value = sorted[int((n + 1) / 2)]
+        printf "%s=%s\t", key[i], value
         delete sorted
       }
       print ""
