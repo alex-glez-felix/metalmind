@@ -11,7 +11,7 @@ mod worker;
 
 use metalmind_buffer::Snapshot;
 use metalmind_search::LineMatch;
-use metalmind_vault::VaultPath;
+use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 pub use self::context::{RowText, row_text};
 pub(crate) use self::delegate::TextSearch;
@@ -39,4 +39,43 @@ impl Hit {
 pub struct OpenNote {
     pub path: VaultPath,
     pub text: Snapshot,
+}
+
+/// Si una nota abierta con cambios se busca en memoria: las notas del índice,
+/// que son las que recorre la búsqueda en disco, y las nuevas que todavía no
+/// se guardaron. Lo que está en disco y el índice no tiene (oculto o
+/// ignorado) o no es una nota, no.
+#[must_use]
+pub fn searchable(index: &VaultIndex, path: &VaultPath, on_disk: bool) -> bool {
+    match index.kind(path) {
+        Some(kind) => kind == EntryKind::Note,
+        None => !on_disk && EntryKind::of_file(path) == EntryKind::Note,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use metalmind_vault::Vault;
+
+    use super::*;
+
+    #[test]
+    fn se_buscan_las_notas_del_indice_y_las_nuevas_sin_guardar() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.md"), "").unwrap();
+        fs::write(dir.path().join("datos.txt"), "").unwrap();
+        fs::write(dir.path().join(".gitignore"), "ignorada.md\n").unwrap();
+        fs::write(dir.path().join("ignorada.md"), "").unwrap();
+        let (vault, _updates) = Vault::open(dir.path()).unwrap();
+        let index = vault.snapshot();
+        let path = |text: &str| VaultPath::new(text).unwrap();
+        assert!(searchable(&index, &path("a.md"), true));
+        assert!(searchable(&index, &path("nueva.md"), false), "sin guardar");
+        assert!(searchable(&index, &path("d/Nueva.MD"), false));
+        assert!(!searchable(&index, &path("datos.txt"), true));
+        assert!(!searchable(&index, &path("nuevo.txt"), false));
+        assert!(!searchable(&index, &path("ignorada.md"), true), "ignorada");
+    }
 }
