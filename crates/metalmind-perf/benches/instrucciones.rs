@@ -123,6 +123,8 @@ fn run(mut session: Session, keys: &str) -> Session {
 #[bench::titulos_sin_cerrar(args = (5_000), setup = metalmind_perf::unclosed_link_titles)]
 #[bench::rachas_de_backticks(args = (2_000), setup = metalmind_perf::backtick_runs)]
 #[bench::linea_de_1_mb(args = (1_000_000), setup = metalmind_perf::huge_line)]
+#[bench::dolares_sin_cerrar(args = (5_000), setup = metalmind_perf::dollar_runs)]
+#[bench::nota_con_200_formulas(args = (200), setup = metalmind_perf::math_note)]
 fn syntax_scan(text: String) -> Scan {
     black_box(metalmind_syntax::scan(black_box(&text)))
 }

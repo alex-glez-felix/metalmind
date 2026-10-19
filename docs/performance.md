@@ -44,10 +44,16 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Scan de `metalmind-syntax`, nota de 5 k | ≤ 8 ms | 1.3 ms | ✅ | `metalmind-syntax` `nota` |
 | Scan, nota de 50 k | ≤ 50 ms | 11.7 ms | ✅ | `metalmind-syntax` `nota` |
 | Scan patológico: línea de 1 MB / 5 k rachas de `#` / 5 k `[[` sin cerrar / 5 k títulos `(` sin cerrar / rachas de 1 a 2 000 backticks | ≤ 16 ms y lineal | 3.2 / 0.5 / 0.2 / 0.3 / 1.4 ms | ✅ | `metalmind-syntax` |
+| Scan de una nota con 200 fórmulas / una línea con 5 k `$` sin cerrar (precios) | ≤ 8 ms y lineal | 25 / 65 µs | ✅ | `metalmind-syntax` `nota_con_200_formulas`, `dolares_sin_cerrar` |
+| Estilo de las líneas de una nota con 200 fórmulas, de cero | ≤ 16 ms | 0.17 ms | ✅ | `metalmind-syntax` `estilo_de_200_formulas` |
 | Estilo de las líneas tras una tecla en un párrafo (repintar el tramo y la ventana), nota de 5 k / 50 k | ≤ 1 ms | 8.8 / 38 µs | ✅ | `metalmind-syntax` `tecla_en_un_parrafo` |
 | Estilo tras abrir una cerca sin cierre arriba (todo lo de abajo pasa a ser código; se pinta la ventana), 5 k / 50 k | ≤ 1 ms | 22 / 375 µs | ✅ | `metalmind-syntax` `abrir_una_cerca_arriba` |
 | Estilo de todas las líneas de cero (abrir e ir al final), 5 k / 50 k | ≤ 16 / 160 ms | 3.9 / 39 ms | ✅ | `metalmind-syntax` `estilo_de_cero` |
 | Estilo tras una tecla en un párrafo de 5 k líneas sin ninguna en blanco (repinta el párrafo) | ≤ 16 ms y lineal | 5.9 ms | ✅ | `metalmind-syntax` `tecla_en_un_parrafo_de_5k` |
+| Layout de las 200 fórmulas de esa nota en el hilo de la UI: caché fría (cada una nueva) / caliente | ≤ 16 ms / ≤ 1 ms | 6.6 ms / 6 µs | ✅ | `metalmind-ui` `medir_200_en_frio`, `medir_200_en_caliente` |
+| Pintar las 22 fórmulas del spike, escala 1 / 2 (en el fondo) | segundo plano | 2.6 / 5.5 ms (0.12 / 0.25 ms cada una) | ✅ | `metalmind-ui` `pintar_las_22` |
+| Nota con 200 fórmulas: primer frame / hasta pintar las visibles (cachés frías) | ≤ 300 ms | p50 111 / 134 ms (lavapipe) | ✅ | `metalmind` `ui` |
+| Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 38.7 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 479 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `metalmind-vault` `indexar_links`, `indexar_links_nombres_unicos` |
@@ -108,6 +114,7 @@ Las filas de la UI se miden con lavapipe (abajo), que no es la máquina de prueb
 
 - Arranque al primer frame con una nota chica, una de 50 k líneas y una nota dentro de un vault de 5 k notas: 7 arranques por caso en el mismo Xvfb, tras uno que se descarta (el primero de cada Xvfb sale a veces varias veces más lento y a veces no). Antes de medir se hace `sync`, para que la escritura diferida de las notas generadas no caiga encima.
 - El primer `space f` en ese vault: se teclea la ruta de una nota y `enter`, y se mide hasta que el título la muestra, desde el benchmark (sondeo de 10 ms).
+- Sobre una nota con 200 fórmulas (abajo, "Fórmulas"): el arranque al primer frame y hasta que dejan de llegar frames (las imágenes visibles ya están), 60 `ctrl-d` con las cachés frías y otros 60 con todo en caché, y 60 teclas en Insert en una línea junto a fórmulas y dentro de un bloque de varias líneas.
 - Sobre la nota de 50 k líneas, desde la mitad: 60 teclas en Insert, 60 motions en Normal (`j w b k e`) y 60 `ctrl-d`, de a una, cada una con su frame; y una ráfaga de 200 `ctrl-d` mandadas de golpe, como una tecla sostenida.
 
 **Lavapipe no es una GPU.** Sin GPU, el Vulkan de mesa raspa en la CPU, en los mismos núcleos que la app: `present` y el arranque incluyen trabajo que una GPU hace aparte, y el tiempo de fondo (abrir el vault) compite con el render. Los números de esta sección sirven como **referencia relativa** para ver una regresión entre dos corridas en la misma máquina, no como el número contra el presupuesto, que sigue siendo el de la máquina de pruebas con GPU. `cpu` es lo que menos cambia con el driver: es trabajo de la app en el hilo de la UI.
@@ -154,17 +161,38 @@ El picker (`metalmind-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla
 
 `space /` lanza una búsqueda de `metalmind-search` en cada tecla, y empezar una cancela la anterior **esperando a sus hilos**. Hecho en el hilo de la UI no cabía: con la búsqueda de una palabra que está en casi todas las notas corriendo y una nota abierta de 5 k líneas con cambios, la tecla tardaba 5.6 / 7.5 ms de mediana con 5 k / 50 k notas, con picos de 30 ms (medido el 2026-10-18, la misma máquina de escritorio x86_64). Por eso la UI solo valida el patrón y lo manda a un hilo propio, que cancela, busca en las notas abiertas y lanza la nueva; si llegan varias teclas mientras cancela, salta a la última. Los resultados vuelven versionados y lo viejo se descarta, como en el picker difuso. Así, los 8 ms son un tope de latencia hasta que la búsqueda nueva arranca, no de bloqueo: la UI nunca espera a la búsqueda.
 
+## Fórmulas
+
+Las fórmulas (08 §10) se miden con `metalmind_perf::math_note(200)`: 200 fórmulas distintas, cada una con su número, dos de cada tres en línea y el resto en bloque, una de cada cuatro partida en varias líneas. Medido el 2026-10-19 en la misma máquina de escritorio x86_64; las filas de la ventana, con lavapipe en un Xvfb (carga de 4 a 6 por otros procesos) y en la misma corrida que las de la nota de 50 k líneas, que quedaron como antes de las fórmulas.
+
+| Medición (200 fórmulas) | p50 | p95 |
+|---|---|---|
+| Arranque al primer frame | 111 ms | 112 ms |
+| Arranque hasta pintar las fórmulas visibles | 134 ms | 156 ms |
+| `ctrl-d`, caché fría: de la tecla al frame / CPU | 0.94 / 0.58 ms | 1.54 / 0.99 ms |
+| `ctrl-d`, caché caliente: de la tecla al frame / CPU | 0.73 / 0.63 ms | 1.09 / 0.96 ms |
+| Tecla en Insert en una línea junto a fórmulas: de la tecla al frame / CPU | 0.82 / 0.69 ms | 1.05 / 0.84 ms |
+| Tecla en Insert dentro de un bloque de varias líneas: de la tecla al frame / CPU | 0.73 / 0.52 ms | 0.91 / 0.61 ms |
+
+Lo que encontró:
+
+- **El primer frame no espera ninguna imagen**: cuesta lo mismo que el de una nota chica (111 contra 107 ms). Mide las fórmulas que se ven (~33 µs cada una la primera vez: parsear, componer y validar con RaTeX) y reserva su lugar; las imágenes llegan del fondo en los frames que siguen, y a los 134 ms están todas las visibles.
+- **El scroll no paga el pintado**: con la caché fría, cada `ctrl-d` mide las fórmulas que entran y manda a pintar sus imágenes al fondo; la tecla queda bajo 1 ms de p50, como con la caché caliente. La CPU por frame de la caché fría sale incluso menor: con la imagen todavía en camino, ese frame pinta un hueco.
+- **Escribir dentro de un bloque** cambia su LaTeX en cada tecla: se mide de nuevo (µs) y se pinta otra vez en el fondo; la tecla no lo espera. Una tecla en una línea junto a fórmulas no toca ninguna.
+- **Memoria**: el layout se guarda en em, sin color, en dos generaciones de 4 096 fórmulas; las imágenes, con tope de 32 MB (una fórmula ocupa ~29 KB a escala 1 y ~115 KB a escala 2, 08 §5), y lo que sale de la caché se suelta del atlas de GPUI.
+- El rasterizador propio de la `DisplayList` que dejaba abierto 08 §7 no hizo falta: pintar va en el fondo y cuesta 0.12 ms por fórmula.
+
 ## Tres capas contra regresiones
 
 ### 1. Benchmarks de tiempo (`divan`, local)
 
-`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo los modelos, sin ventana: `--bench file_tree`, `--bench picker` y `--bench text_search`). Son los números de la tabla, salvo las filas de la ventana, que salen del [benchmark de la UI](#benchmark-de-la-ui). Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
+`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo los modelos, sin ventana: `--bench file_tree`, `--bench picker`, `--bench text_search` y `--bench formulas`). Son los números de la tabla, salvo las filas de la ventana, que salen del [benchmark de la UI](#benchmark-de-la-ui). Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
 
 No sirven para CI: en los runners de GitHub el tiempo de pared varía más que las regresiones que se quieren atrapar.
 
 ### 2. Conteo de instrucciones en cada PR (`gungraun`, CI)
 
-`crates/metalmind-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal y patológico), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
+`crates/metalmind-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal, patológico y con fórmulas), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
 
 `gungraun` 0.20 y no `iai-callgrind`: es el mismo proyecto renombrado; `iai-callgrind` se quedó en 0.16.1 (julio de 2025) y `gungraun` sigue publicando (0.20.0, septiembre de 2026).
 
