@@ -271,6 +271,7 @@ fn si_el_historial_falla_la_nota_igual_se_guarda() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn una_version_con_una_linea_cambiada_es_lineal() {
     let setup = |lines: usize| {
         let note = metalmind_perf::note(lines);

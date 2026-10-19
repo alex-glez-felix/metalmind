@@ -376,34 +376,21 @@ fn singular_field_names_are_not_read() {
     );
 }
 
-/// Una línea de `[a](b (` sin cerrar: si el título de cada intento buscara
-/// su `)` hasta el fin de la línea, el scan sería cuadrático.
+/// Una línea de `[a](b (` sin cerrar no tiene links. Que el scan siga lineal
+/// lo vigila `unclosed_link_titles_scan_in_linear_time` (`tests/complexity.rs`).
 #[test]
-fn unclosed_paren_titles_stay_linear() {
+fn unclosed_paren_titles_are_not_links() {
     let text = "[a](b (".repeat(100_000);
-    let start = std::time::Instant::now();
     assert_eq!(scan(&text).links, []);
-    assert!(
-        start.elapsed() < std::time::Duration::from_secs(5),
-        "{:?}",
-        start.elapsed()
-    );
 }
 
-/// Rachas sin pareja de largos 1, 2, …, k en un párrafo: buscar el cierre de
-/// cada una recorriendo el resto sería cuadrático (millones de bytes por
-/// racha); con el índice por largo son milisegundos.
+/// Rachas sin pareja de largos 1, 2, …, k en un párrafo no tapan el link de
+/// después. Que el scan siga lineal lo vigila `backtick_runs_scan_in_linear_time`.
 #[test]
-fn unclosed_backtick_runs_of_many_lengths_stay_linear() {
+fn unclosed_backtick_runs_of_many_lengths_leave_the_link() {
     let text: String = (1..=2000).map(|len| "`".repeat(len) + " ").collect();
-    let start = std::time::Instant::now();
     let scan = scan(&format!("{text}[[a]]"));
     assert_eq!(scan.links.len(), 1);
-    assert!(
-        start.elapsed() < std::time::Duration::from_secs(5),
-        "{:?}",
-        start.elapsed()
-    );
 }
 
 #[rstest]

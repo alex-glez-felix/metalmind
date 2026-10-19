@@ -12,7 +12,6 @@ use std::io::Write as _;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::time::{Duration, Instant};
 
 use pretty_assertions::assert_eq;
 use serde_json::Value;
@@ -481,22 +480,16 @@ fn la_ayuda_de_un_subcomando_no_abre_nada() {
     assert!(stdout(&output).contains("uso: metalmind add"), "{output:?}");
 }
 
-/// Un subcomando no arranca la GUI: termina en lo que tarda leer el vault,
-/// aun en un build de debug y en una máquina de CI cargada.
+/// En un vault de 500 notas los subcomandos terminan sin pantalla (ver
+/// arriba): no arrancan la GUI. Lo que cuesta leer el vault lo cuentan los
+/// benchmarks de instrucciones de `metalmind-vault` (docs/performance.md).
 #[test]
-fn add_y_search_terminan_rapido() {
+fn add_y_search_terminan_en_un_vault_de_500_notas() {
     let sandbox = Sandbox::new();
     for i in 0..500 {
         fs::write(sandbox.vault.join(format!("nota-{i}.md")), "x\n").unwrap();
     }
     for args in [&["add", "rápida"][..], &["search", "nota 42"]] {
-        let started = Instant::now();
-        let output = run(&mut sandbox.metalmind(), args);
-        let elapsed = started.elapsed();
-        assert_ok(&output);
-        assert!(
-            elapsed < Duration::from_millis(500),
-            "{args:?} tardó {elapsed:?}"
-        );
+        assert_ok(&run(&mut sandbox.metalmind(), args));
     }
 }

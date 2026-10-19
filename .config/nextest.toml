@@ -1,13 +1,13 @@
 [profile.default]
-# Una prueba de complejidad que se volvió cuadrática puede tardar minutos en
-# fallar por tiempo; aquí falla al minuto. La más lenta hoy tarda ~20 s.
+# Un test que se cuelga falla al minuto.
 slow-timeout = { period = "30s", terminate-after = 2 }
 
-# Miden tiempo: si corren varias a la vez y son más que los núcleos, se
-# reparten la CPU y la proporción N contra 16N sale inflada (docs/performance.md).
-[test-groups]
-complexity = { max-threads = 1 }
-
+# Las pruebas de complejidad cuentan instrucciones con callgrind, que corre
+# ~50 veces más lento, en dos procesos a la vez (N y 16N): ocupan dos hilos.
+# Corren en paralelo porque contar no depende de la CPU que queda
+# (docs/performance.md). Una que se volvió cuadrática falla por tiempo a los
+# 10 min, ×16 lo que tarda hoy la más lenta en el CI.
 [[profile.default.overrides]]
-filter = 'binary(complexity) | test(/::complexity::|_es_lineal$|^growth::tests::/)'
-test-group = 'complexity'
+filter = 'binary(complexity) | test(/::complexity::|_lineal$|^growth::tests::/)'
+threads-required = 2
+slow-timeout = { period = "120s", terminate-after = 5 }

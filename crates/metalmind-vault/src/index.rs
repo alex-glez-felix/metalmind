@@ -243,11 +243,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
     fn indexar_es_lineal() {
         metalmind_perf::assert_linear(1_000, vault_entries, VaultIndex::from_entries);
     }
 
     #[test]
+    #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
     fn quitar_todo_el_contenido_es_lineal() {
         metalmind_perf::assert_linear(
             2_000,
