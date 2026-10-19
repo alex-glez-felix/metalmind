@@ -3,6 +3,7 @@
 //! como `space f`.
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
+use metalmind_vault::EntryKind;
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
@@ -17,14 +18,17 @@ impl WorkspaceView {
     pub(super) fn open_text_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
         let root = session.root().to_owned();
+        // Solo las que la búsqueda en disco recorre: las notas del índice.
+        let index = session.vault().snapshot();
         let open: Vec<OpenNote> = self
             .workspace
             .read(cx)
             .unsaved_files()
             .filter_map(|(path, buffer)| {
-                Some(OpenNote {
-                    path: session.vault_path(path)?,
-                    text: buffer.to_string(),
+                let path = session.vault_path(path)?;
+                (index.kind(&path) == Some(EntryKind::Note)).then(|| OpenNote {
+                    path,
+                    text: buffer.snapshot(),
                 })
             })
             .collect();

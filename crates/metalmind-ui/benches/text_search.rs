@@ -11,6 +11,7 @@
 )]
 
 use divan::Bencher;
+use metalmind_buffer::Buffer;
 use metalmind_perf::WORD;
 use metalmind_search::{NoteMatches, TextSearcher};
 use metalmind_ui::picker::LineEdit;
@@ -33,9 +34,10 @@ fn vault(notes: usize) -> TempDir {
 }
 
 fn open_note() -> Vec<OpenNote> {
+    let buffer = Buffer::from(metalmind_perf::note(5_000).as_str());
     vec![OpenNote {
         path: VaultPath::new("abierta.md").unwrap(),
-        text: metalmind_perf::note(5_000),
+        text: buffer.snapshot(),
     }]
 }
 

@@ -67,7 +67,7 @@ fn las_notas_llegan_en_orden_de_llegada_y_las_viejas_se_descartan() {
     let old = typed(&mut state, "ide").version;
     let current = typed(&mut state, "a").version;
     let ignored = state.receive(old, vec![note("vieja.md", &[(0, "idea")])]);
-    assert_eq!(ignored, Received::default());
+    assert_eq!(ignored, None);
     assert!(state.is_empty());
     let _ = state.receive(current, vec![note("b.md", &[(2, "una idea"), (7, "idea")])]);
     let _ = state.receive(current, vec![note("a.md", &[(0, "idea")])]);
@@ -149,7 +149,7 @@ fn enter_antes_de_los_resultados_elige_el_primero_que_llega() {
         item: 0,
         open: Open::SplitRight,
     };
-    assert_eq!(received.chosen, Some(chosen));
+    assert_eq!(received, Some(chosen));
     assert_eq!(rows(&state), ["b.md:2"]);
     assert_eq!(state.line().text(), "idea");
 }
@@ -188,16 +188,27 @@ fn con_demasiadas_lineas_se_corta_la_busqueda() {
     let mut state = TextSearchState::new();
     let version = typed(&mut state, "idea").version;
     let lines: Vec<(usize, &str)> = (0..MAX_HITS - 1).map(|line| (line, "idea")).collect();
-    let received = state.receive(version, vec![note("a.md", &lines)]);
-    assert!(!received.stop);
-    let received = state.receive(version, vec![note("b.md", &[(0, "idea"), (1, "idea")])]);
-    assert!(received.stop);
+    let _ = state.receive(version, vec![note("a.md", &lines)]);
+    assert_eq!(state.status(), Status::Searching);
+    let _ = state.receive(version, vec![note("b.md", &[(0, "idea"), (1, "idea")])]);
     assert_eq!(state.len(), MAX_HITS);
     assert_eq!(state.status(), Status::Truncated);
     let _ = state.receive(version, vec![note("c.md", &[(0, "idea")])]);
     state.finished(version);
     assert_eq!(state.len(), MAX_HITS);
     assert_eq!(state.status(), Status::Truncated);
+}
+
+/// Justo el tope no es cortar: no se perdió ninguna línea.
+#[test]
+fn justo_el_tope_de_lineas_no_se_corta() {
+    let mut state = TextSearchState::new();
+    let version = typed(&mut state, "idea").version;
+    let lines: Vec<(usize, &str)> = (0..MAX_HITS).map(|line| (line, "idea")).collect();
+    let _ = state.receive(version, vec![note("a.md", &lines)]);
+    state.finished(version);
+    assert_eq!(state.len(), MAX_HITS);
+    assert_eq!(state.status(), Status::Done);
 }
 
 #[test]
@@ -207,6 +218,21 @@ fn si_no_se_puede_buscar_lo_dice() {
     state.failed(version, "sin hilos".to_owned());
     assert_eq!(state.status(), Status::Failed("sin hilos".to_owned()));
     assert_eq!(state.choose(Open::Here), None);
+}
+
+/// Lo que ya llegó de la búsqueda (las notas abiertas) sigue siendo cierto
+/// aunque el disco falle; lo de una búsqueda anterior, no.
+#[test]
+fn un_error_conserva_lo_que_ya_llego_de_la_misma_busqueda() {
+    let mut state = TextSearchState::new();
+    let first = typed(&mut state, "idea").version;
+    let _ = state.receive(first, vec![note("abierta.md", &[(0, "idea")])]);
+    state.failed(first, "sin hilos".to_owned());
+    assert_eq!(rows(&state), ["abierta.md:1"]);
+    assert_eq!(state.status(), Status::Failed("sin hilos".to_owned()));
+    let second = typed(&mut state, "s").version;
+    state.failed(second, "sin hilos".to_owned());
+    assert!(state.is_empty());
 }
 
 /// El modelo con el motor de verdad: lo que pide es lo que el motor busca.

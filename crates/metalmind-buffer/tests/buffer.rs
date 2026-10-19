@@ -630,3 +630,12 @@ fn marked_lines_follow_edits_and_undo() {
     buffer.clear_marked_lines();
     assert_eq!(buffer.pop_marked_line(), None);
 }
+
+#[test]
+fn a_snapshot_keeps_the_text_it_was_taken_with() {
+    let mut buffer = Buffer::from("uno\ndos");
+    let snapshot = buffer.snapshot();
+    edit(&mut buffer, vec![Edit::insert(at(0), "x")]);
+    assert_eq!(snapshot.to_string(), "uno\ndos");
+    assert_eq!(buffer.to_string(), "xuno\ndos");
+}

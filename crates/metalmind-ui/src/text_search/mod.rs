@@ -9,12 +9,13 @@ mod delegate;
 mod model;
 mod worker;
 
+use metalmind_buffer::Snapshot;
 use metalmind_search::LineMatch;
 use metalmind_vault::VaultPath;
 
 pub use self::context::{RowText, row_text};
 pub(crate) use self::delegate::TextSearch;
-pub use self::model::{MAX_HITS, Received, Search, Status, TextSearchState};
+pub use self::model::{MAX_HITS, Search, Status, TextSearchState};
 pub use self::worker::{Event, SearchWorker};
 
 /// Una línea que coincide, en su nota.
@@ -34,8 +35,8 @@ impl Hit {
 
 /// Una nota abierta con cambios sin guardar: se busca su texto en memoria,
 /// que es el que se ve, y no el del disco.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct OpenNote {
     pub path: VaultPath,
-    pub text: String,
+    pub text: Snapshot,
 }

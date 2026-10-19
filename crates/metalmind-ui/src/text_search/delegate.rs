@@ -60,11 +60,7 @@ impl TextSearch {
     fn handle(&mut self, event: Event, cx: &mut Context<PickerView<Self>>) {
         match event {
             Event::Found { version, notes } => {
-                let received = self.state.receive(version, notes);
-                if let (true, Ok(worker)) = (received.stop, &self.worker) {
-                    worker.cancel();
-                }
-                if let Some(chosen) = received.chosen {
+                if let Some(chosen) = self.state.receive(version, notes) {
                     cx.emit(PickerEvent::Chosen(chosen));
                 }
             }
