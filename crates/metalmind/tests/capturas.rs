@@ -45,6 +45,9 @@ enum Step {
     Keys(&'static str),
     /// Clic derecho en la fila `n` del árbol.
     RightClickRow(i16),
+    /// Clic derecho en la última fila del árbol, cerca de su borde derecho:
+    /// el menú no cabe hacia abajo.
+    RightClickBottomRow,
     /// Escribe [`vault::SEARCHED`].
     Search,
 }
@@ -52,8 +55,13 @@ enum Step {
 /// Cada pantalla parte de cómo dejó la ventana la anterior.
 const SCENES: &[(&str, &[Step])] = &[
     ("editor", &[]),
-    ("arbol", &[Step::Keys("<Space>ejjj")]),
+    ("editor-final", &[Step::Keys("G")]),
+    ("arbol", &[Step::Keys("gg<Space>ejjj")]),
     ("menu", &[Step::RightClickRow(2)]),
+    (
+        "menu-borde",
+        &[Step::Keys("<Esc>"), Step::RightClickBottomRow],
+    ),
     ("split", &[Step::Keys("<Esc><C-w>l<C-w>v")]),
     (
         "linea-de-comandos",
@@ -63,6 +71,7 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("finder", &[Step::Keys("<Esc><Space>f")]),
     ("finder-filtrado", &[Step::Keys("idea")]),
+    ("finder-ruta-larga", &[Step::Keys("<C-u>honda")]),
     ("finder-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
@@ -73,6 +82,7 @@ const SCENES: &[(&str, &[Step])] = &[
 /// con la fuente por defecto: para hacer clic sobre una fila.
 const TREE_ROW: i16 = 26;
 const TREE_LEFT: i16 = 36;
+const TREE_WIDTH: i16 = 260;
 
 #[rstest]
 #[case::oscuro_1920("oscuro", 1920, 1080)]
@@ -104,9 +114,15 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 Step::RightClickRow(row) => {
                     window.right_click(TREE_LEFT + 80, TREE_ROW * (row + 1) + TREE_ROW / 2);
                 }
+                Step::RightClickBottomRow => {
+                    window.right_click(TREE_LEFT + TREE_WIDTH - 8, rest.1 - TREE_ROW / 2);
+                }
             }
         }
-        if !matches!(steps.last(), Some(Step::RightClickRow(_))) {
+        if !matches!(
+            steps.last(),
+            Some(Step::RightClickRow(_) | Step::RightClickBottomRow)
+        ) {
             window.move_pointer(rest.0, rest.1);
         }
         let image = settle(&window, &frames, seen);
