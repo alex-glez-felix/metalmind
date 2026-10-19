@@ -40,6 +40,18 @@ fn abrir_una_cerca_arriba(bencher: Bencher, lines: usize) {
         .bench_local_refs(StyledNote::open_a_fence_at_the_top);
 }
 
+/// El estilo de una nota con 200 fórmulas, de cero: lo que se paga al
+/// abrirla.
+#[divan::bench]
+fn estilo_de_200_formulas(bencher: Bencher) {
+    let note = NoteLines::new(&metalmind_perf::math_note(200));
+    bencher.bench(|| {
+        let mut styles = Styles::new(note.line_count());
+        styles.ensure(usize::MAX, &note);
+        styles
+    });
+}
+
 /// Un párrafo de 5 k líneas sin ninguna en blanco: una tecla repinta todo
 /// el párrafo, porque el código inline de una línea puede cerrar en otra.
 #[divan::bench]

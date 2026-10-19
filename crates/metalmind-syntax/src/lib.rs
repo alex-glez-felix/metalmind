@@ -1,9 +1,9 @@
 //! La sintaxis de Metalmind sobre el texto de una nota: wikilinks, embeds, tags,
-//! links markdown a notas locales, headings, `^bloques` y frontmatter YAML. Todo
-//! rango es en bytes sobre el texto escaneado.
+//! links markdown a notas locales, headings, `^bloques`, fórmulas `$…$` y
+//! frontmatter YAML. Todo rango es en bytes sobre el texto escaneado.
 //!
 //! Es un scanner a mano, sin árbol de markdown: solo sabe lo necesario para
-//! no ver links ni tags dentro de código o comentarios. El mismo scanner sirve
+//! no ver links ni tags dentro de código, comentarios o fórmulas. El mismo scanner sirve
 //! al editor y al índice, para que nunca discrepen sobre qué es un link.
 
 mod anchor;
@@ -11,6 +11,7 @@ mod code;
 mod frontmatter;
 mod link;
 mod markdown_link;
+mod math;
 mod resolve;
 mod scanner;
 mod sink;
@@ -26,8 +27,8 @@ pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
 };
 pub use style::{
-    Conceal, Decorations, FencePart, LineKind, LineStyle, Lines, LinkSpot, Role, Span, Style,
-    Styles, TextLines, Token,
+    Conceal, Decorations, FencePart, LineKind, LineStyle, Lines, LinkSpot, MathSpot, Role, Span,
+    Style, Styles, TextLines, Token,
 };
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 

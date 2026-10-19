@@ -30,7 +30,7 @@ fn priority(role: Role) -> u8 {
         Role::FrontmatterKey => 5,
         Role::Checkbox | Role::ListMarker | Role::BlockId => 6,
         Role::Link | Role::Url | Role::Wikilink | Role::Embed | Role::Tag => 7,
-        Role::Code | Role::Token(_) | Role::FenceInfo => 8,
+        Role::Code | Role::Token(_) | Role::FenceInfo | Role::Math => 8,
         Role::Comment => 9,
         Role::Markup => 10,
     }

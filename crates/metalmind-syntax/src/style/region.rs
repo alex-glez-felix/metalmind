@@ -5,10 +5,13 @@
 //! una línea en blanco ni de una cerca, y un comentario que sigue en otra
 //! línea es un estado.
 
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
+
 use super::fence::{Lang, OpenFence, highlight};
-use super::inline::{Entry, style_chunk};
+use super::inline::{BlockEnd, Entry, Lead, style_chunk};
 use super::{Conceal, FencePart, LineKind, LineStyle, Lines, Role, Span, Style};
 use crate::code::{self, closes, fence, opening_fence};
+use crate::math;
 use crate::scanner::RegionEnd;
 
 /// El estado al empezar una línea.
@@ -21,6 +24,48 @@ pub(crate) enum Start {
     /// Dentro de un comentario `%%`.
     Comment,
     Fence(OpenFence),
+    /// Dentro de un bloque `$$`.
+    Math(OpenMath),
+}
+
+/// Un bloque `$$` que sigue abierto. Se cuenta desde la línea que lo abrió
+/// y no con su número, así una línea insertada arriba no cambia el estado
+/// de las de abajo. La línea que lo cierra lleva el LaTeX de todas: el
+/// estado resume lo que lleva escrito, para que cambiar una línea del
+/// bloque no deje de repintar el cierre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct OpenMath {
+    /// Cuántas líneas arriba abrió.
+    pub opened: usize,
+    /// Dónde empieza el LaTeX en la línea que lo abrió.
+    pub column: usize,
+    /// Un hash del LaTeX hasta la línea de antes.
+    pub digest: u64,
+}
+
+impl OpenMath {
+    fn new(column: usize, first: &str) -> Self {
+        Self {
+            opened: 1,
+            column,
+            digest: fold(0, first),
+        }
+    }
+
+    fn next(self, line: &str) -> Self {
+        Self {
+            opened: self.opened + 1,
+            digest: fold(self.digest, line),
+            ..self
+        }
+    }
+}
+
+fn fold(digest: u64, line: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    digest.hash(&mut hasher);
+    line.hash(&mut hasher);
+    hasher.finish()
 }
 
 pub(crate) struct Region {
@@ -42,16 +87,10 @@ pub(crate) fn style(
 ) -> Region {
     match start {
         Start::Document => document(source, close),
-        Start::Body => body(
-            source,
-            first,
-            Entry {
-                body: 0,
-                starts_line: true,
-            },
-        ),
+        Start::Body => body(source, first, Entry::line(0)),
         Start::Comment => comment(source, first),
         Start::Fence(open) => fenced(&source.line(first), open),
+        Start::Math(open) => math_block(source, first, open),
     }
 }
 
@@ -71,14 +110,7 @@ fn document(source: &impl Lines, close: Option<usize>) -> Region {
             next_hard: true,
         };
     }
-    body(
-        source,
-        0,
-        Entry {
-            body: bom,
-            starts_line: true,
-        },
-    )
+    body(source, 0, Entry::line(bom))
 }
 
 /// Si la primera línea abre un frontmatter (falta que algo lo cierre).
@@ -93,7 +125,7 @@ pub(crate) fn is_delimiter(line: &str) -> bool {
 fn body(source: &impl Lines, first: usize, entry: Entry) -> Region {
     let line = source.line(first);
     let after = &line[entry.body..];
-    if entry.starts_line
+    if entry.starts_line()
         && let Some((fence, info)) = opening_fence(after).and_then(|_| fence(after))
     {
         let open = OpenFence {
@@ -110,6 +142,11 @@ fn body(source: &impl Lines, first: usize, entry: Entry) -> Region {
     let chunk = style_chunk(&text, entry, count);
     let next = match chunk.end {
         RegionEnd::InComment { .. } => Start::Comment,
+        RegionEnd::InMath { line_end, column } => {
+            let start = code::line_start(&text, line_end);
+            let first = text.get(start + column..line_end).unwrap_or_default();
+            Start::Math(OpenMath::new(column, first))
+        }
         RegionEnd::End => Start::Body,
     };
     Region {
@@ -127,7 +164,7 @@ fn comment(source: &impl Lines, first: usize) -> Region {
             first,
             Entry {
                 body: at + 2,
-                starts_line: false,
+                lead: Lead::Comment,
             },
         ),
         None => Region {
@@ -136,6 +173,51 @@ fn comment(source: &impl Lines, first: usize) -> Region {
             next_hard: false,
         },
     }
+}
+
+/// Una línea dentro de un bloque `$$`: si lo cierra, lo que sigue al `$$`
+/// es cuerpo y la línea lleva la fórmula entera.
+fn math_block(source: &impl Lines, first: usize, open: OpenMath) -> Region {
+    let line = source.line(first);
+    let Some(close) = math::display_close(&line, 0, line.len()) else {
+        return Region {
+            lines: vec![whole(&line, Role::Math, LineKind::Text)],
+            next: Start::Math(open.next(&line)),
+            next_hard: false,
+        };
+    };
+    let block = BlockEnd {
+        latex: block_latex(source, first, open, &line[..close]),
+        above: open.opened,
+    };
+    body(
+        source,
+        first,
+        Entry {
+            body: close + 2,
+            lead: Lead::Math(block),
+        },
+    )
+}
+
+/// El LaTeX de un bloque que cierra en la línea `last`, donde termina
+/// con `tail`. Las líneas de arriba no cambiaron desde que se abrió: si
+/// cambiaran, el tramo empezaría antes.
+fn block_latex(source: &impl Lines, last: usize, open: OpenMath, tail: &str) -> String {
+    let first = last.saturating_sub(open.opened);
+    let mut latex = String::new();
+    for index in first..last {
+        let line = source.line(index);
+        let part = if index == first {
+            line.get(open.column..).unwrap_or_default()
+        } else {
+            &line
+        };
+        latex.push_str(part);
+        latex.push('\n');
+    }
+    latex.push_str(tail);
+    latex
 }
 
 /// El texto desde la línea `first` (que ya se leyó: `line`) hasta antes de

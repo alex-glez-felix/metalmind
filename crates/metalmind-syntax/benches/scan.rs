@@ -43,3 +43,13 @@ fn rachas_de_backticks(bencher: Bencher) {
 fn linea_de_1_mb(bencher: Bencher) {
     scan(bencher, &metalmind_perf::huge_line(1_000_000));
 }
+
+#[divan::bench]
+fn dolares_sin_cerrar(bencher: Bencher) {
+    scan(bencher, &metalmind_perf::dollar_runs(5_000));
+}
+
+#[divan::bench]
+fn nota_con_200_formulas(bencher: Bencher) {
+    scan(bencher, &metalmind_perf::math_note(200));
+}

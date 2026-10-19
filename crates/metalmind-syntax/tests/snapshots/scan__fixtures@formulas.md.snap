@@ -1,0 +1,9 @@
+---
+source: crates/metalmind-syntax/tests/scan.rs
+expression: "support::render(&text, &scan(&text))"
+input_file: crates/metalmind-syntax/tests/fixtures/formulas.md
+---
+wikilink 403..408 "[[d]]"
+    target 405..406 "d"
+tag 400..402 "#c" name "c"
+tag 576..580 "#tag" name "tag"

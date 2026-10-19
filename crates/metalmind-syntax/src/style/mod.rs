@@ -70,6 +70,8 @@ pub struct LineStyle {
     /// Los links de la línea, para pintar distinto los que no llevan a
     /// ninguna nota. Un [`Span`] apunta aquí con [`Span::link`].
     pub links: Vec<LinkSpot>,
+    /// Las fórmulas que se componen en esta línea, en orden.
+    pub math: Vec<MathSpot>,
 }
 
 /// Lo que cambia la línea entera: su alto, su fondo.
@@ -166,6 +168,8 @@ pub enum Role {
     FenceInfo,
     /// Dentro de un bloque de código de un lenguaje conocido.
     Token(Token),
+    /// El LaTeX de una fórmula, sin sus `$`.
+    Math,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -189,6 +193,33 @@ pub enum Conceal {
     QuoteBar,
     /// Una regla horizontal se ve como una línea.
     Rule,
+    /// El LaTeX de una fórmula de una sola línea: el tramo, con sus `$`,
+    /// se reemplaza por la fórmula compuesta ([`MathSpot`]). Un bloque de
+    /// varias líneas no se reemplaza: su fórmula va debajo de su cierre.
+    Math { display: bool },
+}
+
+/// Una fórmula que se compone en una línea.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MathSpot {
+    /// Lo que ocupa en la línea, con sus `$`. En la línea que cierra un
+    /// bloque de varias líneas, hasta su `$$`.
+    pub range: Range<usize>,
+    /// El LaTeX, sin los `$`; el de todas las líneas de un bloque.
+    pub latex: String,
+    /// `$$…$$`: se compone como bloque, más grande.
+    pub display: bool,
+    /// Cuántas líneas arriba abrió: 0 si está entera en esta línea. Si no,
+    /// la línea cierra un bloque y la fórmula va debajo de ella.
+    pub above: usize,
+}
+
+impl MathSpot {
+    /// Si va debajo de la línea en vez de reemplazar su tramo.
+    #[must_use]
+    pub fn below(&self) -> bool {
+        self.above > 0
+    }
 }
 
 /// Un link de una línea: dónde está y a qué apunta.

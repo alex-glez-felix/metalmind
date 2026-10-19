@@ -7,6 +7,7 @@
 
 mod growth;
 mod links;
+mod math;
 mod session;
 mod tags;
 mod text;
@@ -14,6 +15,7 @@ mod vault;
 
 pub use growth::{FACTOR, MAX_FLAT_GROWTH, MAX_LINEAR_GROWTH, assert_flat, assert_linear, growth};
 pub use links::{NoteNames, linked_vault};
+pub use math::{FORMULAS, Formula, dollar_runs, formulas_note, math_note};
 pub use session::Session;
 pub use tags::{tagged_vault, write_files};
 pub use text::{
