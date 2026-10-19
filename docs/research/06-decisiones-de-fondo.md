@@ -21,6 +21,7 @@
 | 12 | Publicar a la web: fuera de alcance | — |
 | 13 | Metalmind es una GUI con navegación estilo vim, no una TUI | Toda función se usa desde la UI además del teclado; nadie edita config ni metadata a mano por necesidad |
 | 14 | Nunca habrá un panel de vista previa aparte | El markdown se ve con estilo en el mismo editor (live preview, 03 §2); nada del estilo depende de una segunda vista |
+| 15 | Fórmulas `$…$` y `$$…$$` con RaTeX | Solo `metalmind-ui` depende de RaTeX; dentro de una fórmula no hay tags ni links, también para el índice |
 
 ---
 
@@ -233,6 +234,18 @@ Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR 
 - El estilo del markdown vive en el editor: sale de `metalmind-syntax` y lo pinta la misma vista que edita (03 §2, "Estilo en el editor"). Nada se calcula pensando en un render aparte.
 - Lo que hoy se atenúa (`**`, `[[`, `#`) queda marcado en el modelo como ocultable, para que el live preview (paso 2) lo esconda en la misma vista.
 - Exportar a HTML o PDF (03 §8, post-MVP) es otra cosa: un archivo que sale de Metalmind, no una vista que acompaña a la nota.
+
+## 15. Fórmulas con RaTeX
+
+**Decisión** (Alex, 2026-10-19, en la PR #80). Las fórmulas `$…$` y `$$…$$` se componen con RaTeX (`ratex-parser`, `ratex-layout`, `ratex-render`), con las fuentes de KaTeX embebidas. Documentos LaTeX completos, no.
+
+**Por qué.** En el spike ([08](08-matematicas.md)) fue el único camino que compuso las 22 fórmulas de prueba, diagrama conmutativo incluido. Suma 3.1 MB al binario y tarda 0.25 ms por fórmula; mitex + Typst sumaba 45 MB y necesita un mitex parcheado. Su layout da el alto de la fórmula en µs, antes de pintarla.
+
+**Restricciones desde ya:**
+
+- Solo `metalmind-ui` depende de RaTeX. El núcleo dice dónde hay una fórmula y cuál es su texto, nada más.
+- Dentro de `$…$` y `$$…$$` no hay tags ni links, igual que en el código inline. Es el mismo scanner para el editor y el índice, así que cuando llegue, un `#` dentro de una fórmula deja de ser tag.
+- La línea del cursor muestra la fuente, como en el resto del live preview: el motor de vim trabaja siempre sobre el texto (08 §7).
 
 ## Dónde entra en el roadmap
 
