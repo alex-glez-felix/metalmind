@@ -36,7 +36,7 @@ impl Workspace {
         }
         Ok(self
             .resume_macro(clipboard)
-            .map_or(outcome, KeyOutcome::Command))
+            .map_or(outcome, KeyOutcome::Dispatch))
     }
 
     /// `pane` pasa al archivo de `landing` y el motor pone el cursor. Si

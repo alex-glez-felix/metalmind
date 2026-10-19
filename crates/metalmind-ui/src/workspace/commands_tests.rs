@@ -616,8 +616,8 @@ fn abrir_desde_un_modo_a_medias_es_como_nvim_tras_ctrl_c(
             "vsplit"
         }
         Opened::Edit => {
-            let edit = metalmind_vim::Invocation {
-                command: metalmind_vim::Command::Edit,
+            let edit = metalmind_keymap::Invocation {
+                action: metalmind_keymap::Command::Edit.into(),
                 argument: Some(target.display().to_string()),
             };
             session.effect = session.workspace.run(&edit, &mut session.clipboard);

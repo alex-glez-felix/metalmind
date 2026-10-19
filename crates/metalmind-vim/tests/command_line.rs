@@ -14,14 +14,17 @@
 )]
 mod support;
 
-use metalmind_vim::{Action, Command, CommandError, Invocation, KeyOutcome, Mode, Vim, VisualKind};
+use metalmind_keymap::Command;
+use metalmind_vim::{
+    Action, ActionName, CommandError, Invocation, KeyOutcome, Mode, Vim, VisualKind,
+};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
 /// Corre `keys` y devuelve lo que pasó con la última tecla.
 fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
     let (mut buffer, mut selections) = support::parse("ab|c");
-    let mut vim = Vim::new();
+    let mut vim = support::app_vim();
     let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
     let text = support::render(&buffer, [selections.primary().head]);
     (last.unwrap(), vim, text)
@@ -54,9 +57,16 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case("<C-w>q", Command::Quit)]
 #[case("<C-w>o", Command::Only)]
 #[case("3<C-w>v", Command::SplitRight)]
+#[case(" f", Command::OpenFinder)]
+#[case(" /", Command::OpenTextSearch)]
+#[case(" p", Command::OpenCommandPalette)]
+#[case(" e", Command::ToggleFolders)]
+#[case(" t", Command::ToggleTags)]
+#[case("gd", Command::FollowLink)]
+#[case("<CR>", Command::FollowLink)]
 fn envia_el_comando(#[case] keys: &str, #[case] command: Command) {
     let (outcome, vim, _) = submit(keys);
-    assert_eq!(outcome, KeyOutcome::Command(command.into()));
+    assert_eq!(outcome, support::dispatched(command));
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(vim.command_line(), None);
 }
@@ -66,8 +76,8 @@ fn e_lleva_la_ruta() {
     let (outcome, _, text) = submit(":e notas/otra nota.md<CR>");
     assert_eq!(
         outcome,
-        KeyOutcome::Command(Invocation {
-            command: Command::Edit,
+        KeyOutcome::Dispatch(Invocation {
+            action: ActionName::new(Command::Edit.name()),
             argument: Some("notas/otra nota.md".to_owned()),
         })
     );
@@ -82,6 +92,13 @@ fn ctrl_w_cancela_un_operador_pendiente() {
     assert_eq!(vim.mode(), Mode::Normal);
     assert_eq!(text, "ab|c");
     let (_, vim, _) = submit("d<C-w>v");
+    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
+}
+
+#[test]
+fn el_leader_solo_es_de_normal() {
+    let (outcome, vim, _) = submit("v ");
+    assert_eq!(outcome, KeyOutcome::Unbound);
     assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
 }
 

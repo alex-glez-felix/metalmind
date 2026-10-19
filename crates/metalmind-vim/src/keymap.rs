@@ -1,6 +1,6 @@
 use crate::{
-    Action, CharSearch, Command, InsertAt, Key, Mode, Motion, Operator, PasteSide, Place, Scroll,
-    TextObject, VisualKind,
+    Action, ActionName, CharSearch, HostCommand, InsertAt, Key, Mode, Motion, Operator, PasteSide,
+    Place, Scroll, TextObject, VisualKind,
 };
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
@@ -36,64 +36,72 @@ impl Context {
     }
 }
 
-/// En `context`, la secuencia `keys` invoca `action`.
+/// En `context`, la secuencia `keys` invoca `target`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Binding {
     pub context: Context,
     pub keys: Vec<Key>,
-    pub action: Action,
+    pub target: Target,
+}
+
+/// Lo que invoca un binding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Target {
+    Engine(Action),
+    /// Una acción ajena: el motor devuelve su nombre a quien lo aloja, como
+    /// los paneles de `ctrl-w`, que así comparten prefijo, count y
+    /// cancelación con el resto de Normal.
+    Host(ActionName),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Lookup {
-    Action(Action),
+    Action(Target),
     /// Las teclas son el inicio de algún binding.
     Pending,
     Unbound,
 }
 
 /// Bindings en orden; ante dos iguales gana el último, así una config de
-/// usuario puede sobreescribir los defaults.
+/// usuario puede sobreescribir los defaults. Lleva también los comandos de
+/// `:` ajenos al motor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Keymap {
     bindings: Vec<Binding>,
+    commands: Vec<HostCommand>,
 }
 
 impl Keymap {
     #[must_use]
-    pub fn new(bindings: impl IntoIterator<Item = Binding>) -> Self {
+    pub fn new(
+        bindings: impl IntoIterator<Item = Binding>,
+        commands: impl IntoIterator<Item = HostCommand>,
+    ) -> Self {
         Self {
             bindings: bindings.into_iter().collect(),
+            commands: commands.into_iter().collect(),
         }
     }
 
-    /// El keymap de vim por defecto.
+    /// Las teclas de vim por defecto, solo las de edición: los atajos y los
+    /// comandos de `:` ajenos los agrega quien aloja el editor.
     #[must_use]
     pub fn vim() -> Self {
-        let panes = PANES
-            .iter()
-            .flatten()
-            .map(|(c, k, a)| (*c, k.as_slice(), *a));
-        Self::new(
-            VIM.iter()
-                .copied()
-                .chain(panes)
-                .map(|(context, keys, action)| Binding {
-                    context,
-                    keys: keys.to_vec(),
-                    action,
-                }),
-        )
+        let bindings = VIM.iter().map(|&(context, keys, action)| Binding {
+            context,
+            keys: keys.to_vec(),
+            target: Target::Engine(action),
+        });
+        Self::new(bindings, [])
     }
 
-    /// Las teclas del primer binding que invoca `action`, para mostrarlas
-    /// junto a su nombre en la paleta.
     #[must_use]
-    pub fn keys_for(&self, action: Action) -> Option<&[Key]> {
-        self.bindings
-            .iter()
-            .find(|binding| binding.action == action)
-            .map(|binding| binding.keys.as_slice())
+    pub fn bindings(&self) -> &[Binding] {
+        &self.bindings
+    }
+
+    pub(crate) fn commands(&self) -> &[HostCommand] {
+        &self.commands
     }
 
     pub(crate) fn lookup(&self, mode: Mode, keys: &[Key]) -> Lookup {
@@ -105,7 +113,7 @@ impl Keymap {
             if binding.keys.len() > keys.len() {
                 return Lookup::Pending;
             }
-            exact.get_or_insert(binding.action);
+            exact.get_or_insert(binding.target);
         }
         exact.map_or(Lookup::Unbound, Lookup::Action)
     }
@@ -164,31 +172,6 @@ const fn reposition(place: Place, first_non_blank: bool) -> Action {
 const fn operator(operator: Operator) -> Action {
     Action::Operator(operator)
 }
-
-const CTRL_W: Key = Key::Ctrl('w');
-
-/// `ctrl-w` seguido de `key` o de `ctrl-key`, como acepta vim.
-const fn pane(key: char, command: Command) -> [(Context, [Key; 2], Action); 2] {
-    let action = Action::Command(command);
-    [
-        (Context::Normal, [CTRL_W, Key::Char(key)], action),
-        (Context::Normal, [CTRL_W, Key::Ctrl(key)], action),
-    ]
-}
-
-/// Los paneles van en el keymap de vim porque `ctrl-w` comparte prefijo,
-/// count y cancelación con el resto de Normal.
-const PANES: &[[(Context, [Key; 2], Action); 2]] = &[
-    pane('v', Command::SplitRight),
-    pane('s', Command::SplitDown),
-    pane('h', Command::FocusLeft),
-    pane('j', Command::FocusDown),
-    pane('k', Command::FocusUp),
-    pane('l', Command::FocusRight),
-    pane('w', Command::FocusNext),
-    pane('q', Command::Quit),
-    pane('o', Command::Only),
-];
 
 const DELETE: Context = Context::Operator(Operator::Delete);
 const CHANGE: Context = Context::Operator(Operator::Change);
@@ -260,12 +243,6 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Normal, &[Key::Ctrl('o')], Action::JumpOlder),
         (Normal, &[Key::Ctrl('i')], Action::JumpNewer),
         (Normal, &[Key::Tab], Action::JumpNewer),
-        (
-            Normal,
-            &[ch('g'), ch('d')],
-            Action::Command(Command::FollowLink),
-        ),
-        (Normal, &[Key::Enter], Action::Command(Command::FollowLink)),
         (Control, &[Key::Escape], Action::NormalMode),
         (Normal, &[ch('d')], operator(Operator::Delete)),
         (Normal, &[ch('c')], operator(Operator::Change)),
@@ -410,32 +387,6 @@ const VIM: &[(Context, &[Key], Action)] = {
             &[ch('z'), ch('-')],
             reposition(Place::Bottom, true),
         ),
-        // Leader: lo que abre una vista de la UI (03 §3).
-        (
-            Normal,
-            &[ch(' '), ch('f')],
-            Action::Command(Command::OpenFinder),
-        ),
-        (
-            Normal,
-            &[ch(' '), ch('/')],
-            Action::Command(Command::OpenTextSearch),
-        ),
-        (
-            Normal,
-            &[ch(' '), ch('p')],
-            Action::Command(Command::OpenCommandPalette),
-        ),
-        (
-            Normal,
-            &[ch(' '), ch('e')],
-            Action::Command(Command::ToggleFolders),
-        ),
-        (
-            Normal,
-            &[ch(' '), ch('t')],
-            Action::Command(Command::ToggleTags),
-        ),
     ]
 };
 
@@ -470,10 +421,10 @@ mod tests {
     fn default_keymap_is_unambiguous() {
         let bindings = Keymap::vim().bindings;
         for (i, binding) in bindings.iter().enumerate() {
-            let (context, keys, action) = (binding.context, &binding.keys, binding.action);
+            let (context, keys, action) = (binding.context, &binding.keys, binding.target);
             for other in &bindings[i + 1..] {
                 let (other_context, other_keys, other_action) =
-                    (other.context, &other.keys, other.action);
+                    (other.context, &other.keys, other.target);
                 if !overlap(context, other_context) {
                     continue;
                 }
@@ -496,47 +447,10 @@ mod tests {
         assert_eq!(keymap.lookup(Mode::Normal, &[ch('g')]), Lookup::Pending);
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('g'), ch('g')]),
-            Lookup::Action(motion(Motion::DocumentStart))
+            Lookup::Action(Target::Engine(motion(Motion::DocumentStart)))
         );
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('g'), ch('x')]),
-            Lookup::Unbound
-        );
-    }
-
-    #[test]
-    fn ctrl_w_takes_the_next_key_with_or_without_ctrl() {
-        let keymap = Keymap::vim();
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[Key::Ctrl('w')]),
-            Lookup::Pending
-        );
-        for next in [ch('v'), Key::Ctrl('v')] {
-            assert_eq!(
-                keymap.lookup(Mode::Normal, &[Key::Ctrl('w'), next]),
-                Lookup::Action(Action::Command(Command::SplitRight))
-            );
-        }
-        assert_eq!(
-            keymap.lookup(Mode::Insert, &[Key::Ctrl('w')]),
-            Lookup::Unbound
-        );
-    }
-
-    #[test]
-    fn space_opens_the_side_panel() {
-        let keymap = Keymap::vim();
-        assert_eq!(keymap.lookup(Mode::Normal, &[ch(' ')]), Lookup::Pending);
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[ch(' '), ch('e')]),
-            Lookup::Action(Action::Command(Command::ToggleFolders))
-        );
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[ch(' '), ch('t')]),
-            Lookup::Action(Action::Command(Command::ToggleTags))
-        );
-        assert_eq!(
-            keymap.lookup(Mode::Visual(VisualKind::Char), &[ch(' ')]),
             Lookup::Unbound
         );
     }
@@ -547,7 +461,7 @@ mod tests {
         let pending = Mode::OperatorPending;
         assert_eq!(
             keymap.lookup(pending(Operator::Delete), &[ch('d')]),
-            Lookup::Action(Action::CurrentLine)
+            Lookup::Action(Target::Engine(Action::CurrentLine))
         );
         assert_eq!(
             keymap.lookup(pending(Operator::Yank), &[ch('d')]),
@@ -556,54 +470,20 @@ mod tests {
     }
 
     #[test]
-    fn space_opens_the_finder_the_text_search_and_the_palette_from_normal() {
-        let keymap = Keymap::vim();
-        let finder = Action::Command(Command::OpenFinder);
-        let text_search = Action::Command(Command::OpenTextSearch);
-        let palette = Action::Command(Command::OpenCommandPalette);
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[ch(' '), ch('f')]),
-            Lookup::Action(finder)
-        );
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[ch(' '), ch('/')]),
-            Lookup::Action(text_search)
-        );
-        assert_eq!(
-            keymap.lookup(Mode::Normal, &[ch(' '), ch('p')]),
-            Lookup::Action(palette)
-        );
-        assert_eq!(
-            keymap.lookup(Mode::Visual(VisualKind::Char), &[ch(' ')]),
-            Lookup::Unbound
-        );
-    }
-
-    #[test]
-    fn keys_for_gives_the_first_binding() {
-        let keymap = Keymap::vim();
-        assert_eq!(
-            keymap.keys_for(Action::Command(Command::SplitRight)),
-            Some([CTRL_W, ch('v')].as_slice())
-        );
-        assert_eq!(
-            keymap.keys_for(motion(Motion::DocumentStart)),
-            Some([ch('g'), ch('g')].as_slice())
-        );
-        assert_eq!(keymap.keys_for(Action::Command(Command::Save)), None);
-    }
-
-    #[test]
     fn later_bindings_win() {
-        let binding = |action| Binding {
+        let binding = |target| Binding {
             context: Context::Normal,
             keys: vec![ch('x')],
-            action,
+            target,
         };
-        let keymap = Keymap::new([binding(Action::DeleteRight), binding(Action::Undo)]);
+        let open = Target::Host(ActionName::new("workspace::open_finder"));
+        let keymap = Keymap::new(
+            [binding(Target::Engine(Action::DeleteRight)), binding(open)],
+            [],
+        );
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('x')]),
-            Lookup::Action(Action::Undo)
+            Lookup::Action(open)
         );
     }
 }

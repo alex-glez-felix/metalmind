@@ -7,8 +7,9 @@ use std::path::Path;
 use std::rc::Rc;
 
 use metalmind_buffer::Selection;
+use metalmind_keymap::{Action, Command, Invocation};
 use metalmind_vault::SaveKind;
-use metalmind_vim::{Clipboard, Command, Invocation, Mode};
+use metalmind_vim::{Clipboard, Mode};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
@@ -33,6 +34,9 @@ pub enum Effect {
     /// `gd` o `enter` sobre un link cuyo nombre empata entre varias notas:
     /// la ventana muestra [`Workspace::link_choice`] para elegir una.
     ChooseLink,
+    /// Una acción que no es un comando, como las del motor: la atiende la
+    /// vista que la tenga.
+    Dispatch(Action),
 }
 
 impl Workspace {
@@ -43,23 +47,33 @@ impl Workspace {
     pub fn run(&mut self, invocation: &Invocation, clipboard: &mut dyn Clipboard) -> Effect {
         let mut invocation = invocation.clone();
         loop {
-            let effect = self.run_one(&invocation);
+            let effect = match invocation.action {
+                Action::Command(command) => self.run_one(command, invocation.argument.as_deref()),
+                action @ Action::Vim(_) => Effect::Dispatch(action),
+            };
             if effect != Effect::Stay {
                 // Lo que quede de la macro no tiene a dónde ir: la ventana
-                // se cierra o el picker se lleva las teclas.
+                // se cierra o otra vista se lleva las teclas.
                 self.vim.abort_macro();
                 return effect;
             }
-            match self.resume_macro(clipboard) {
-                Some(next) => invocation = next,
-                None => return effect,
+            let Some(next) = self.resume_macro(clipboard) else {
+                return effect;
+            };
+            match Invocation::try_from(next) {
+                Ok(next) => invocation = next,
+                Err(error) => {
+                    self.vim.abort_macro();
+                    self.report(&error.into());
+                    return Effect::Stay;
+                }
             }
         }
     }
 
-    fn run_one(&mut self, invocation: &Invocation) -> Effect {
+    fn run_one(&mut self, command: Command, argument: Option<&str>) -> Effect {
         let before = self.message.take();
-        let effect = self.try_run(invocation).unwrap_or_else(|error| {
+        let effect = self.try_run(command, argument).unwrap_or_else(|error| {
             self.report(&error);
             Effect::Stay
         });
@@ -71,9 +85,13 @@ impl Workspace {
         effect
     }
 
-    fn try_run(&mut self, invocation: &Invocation) -> Result<Effect, WorkspaceError> {
-        let path = invocation.argument.as_deref().map(Path::new);
-        match invocation.command {
+    fn try_run(
+        &mut self,
+        command: Command,
+        argument: Option<&str>,
+    ) -> Result<Effect, WorkspaceError> {
+        let path = argument.map(Path::new);
+        match command {
             Command::Save => self.save(path, false).map(|_| Effect::Stay),
             Command::ForceSave => self.save(path, true).map(|_| Effect::Stay),
             Command::Quit => Ok(self.quit(false)),
@@ -106,7 +124,7 @@ impl Workspace {
                 self.only();
                 Ok(Effect::Stay)
             }
-            Command::Set => self.set_options(invocation.argument.as_deref()),
+            Command::Set => self.set_options(argument),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),

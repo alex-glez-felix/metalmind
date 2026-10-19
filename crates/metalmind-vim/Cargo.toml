@@ -17,6 +17,9 @@ unicode-width.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
+# Las teclas y los `:` de la app, para compararlos con nvim. Solo lo usan
+# los tests de `tests/`, que enlazan este mismo crate.
+metalmind-keymap.workspace = true
 metalmind-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true

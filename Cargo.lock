@@ -3966,6 +3966,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "metalmind-keymap"
+version = "0.0.0"
+dependencies = [
+ "metalmind-buffer",
+ "metalmind-vim",
+ "pretty_assertions",
+ "rstest",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "metalmind-perf"
 version = "0.0.0"
 dependencies = [
@@ -4040,6 +4052,7 @@ dependencies = [
  "log",
  "metalmind-buffer",
  "metalmind-config",
+ "metalmind-keymap",
  "metalmind-perf",
  "metalmind-search",
  "metalmind-syntax",
@@ -4098,6 +4111,7 @@ version = "0.0.0"
 dependencies = [
  "divan",
  "metalmind-buffer",
+ "metalmind-keymap",
  "metalmind-perf",
  "metalmind-syntax",
  "pretty_assertions",

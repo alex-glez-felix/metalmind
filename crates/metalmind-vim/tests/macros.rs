@@ -12,7 +12,8 @@
 )]
 mod support;
 
-use metalmind_vim::{Clipboard, Command, KeyOutcome, SystemRegister, Vim};
+use metalmind_keymap::Command;
+use metalmind_vim::{Clipboard, SystemRegister, Vim};
 use pretty_assertions::assert_eq;
 
 /// Un sistema sin portapapeles: `"+` y `"*` siempre vacíos.
@@ -28,7 +29,7 @@ impl Clipboard for NoClipboard {
 
 fn engine(marked: &str) -> (Vim, metalmind_buffer::Buffer, metalmind_buffer::Selections) {
     let (buffer, selections) = support::parse(marked);
-    (Vim::new(), buffer, selections)
+    (support::app_vim(), buffer, selections)
 }
 
 #[test]
@@ -45,10 +46,10 @@ fn reports_the_register_being_recorded() {
 fn a_macro_hands_its_commands_to_the_host() {
     let (mut vim, mut buffer, mut selections) = engine("|ab");
     let typed = support::feed(&mut vim, &mut buffer, &mut selections, "qax:w<CR>");
-    assert_eq!(typed, Some(KeyOutcome::Command(Command::Save.into())));
+    assert_eq!(typed, Some(support::dispatched(Command::Save)));
     support::feed(&mut vim, &mut buffer, &mut selections, "q");
     let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
-    assert_eq!(played, Some(KeyOutcome::Command(Command::Save.into())));
+    assert_eq!(played, Some(support::dispatched(Command::Save)));
     assert_eq!(buffer.to_string(), "");
 }
 
@@ -90,10 +91,7 @@ fn a_macro_pauses_on_a_host_command_until_resumed() {
     support::feed(&mut vim, &mut buffer, &mut selections, "qa<C-w>lxq");
     assert_eq!(buffer.to_string(), "bc");
     let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
-    assert_eq!(
-        played,
-        Some(KeyOutcome::Command(Command::FocusRight.into()))
-    );
+    assert_eq!(played, Some(support::dispatched(Command::FocusRight)));
     assert_eq!(buffer.to_string(), "bc", "la x espera al otro panel");
     let (mut other, mut other_selections) = support::parse("|xyz");
     let resumed = vim

@@ -76,14 +76,14 @@ impl Vim {
         selections: &mut Selections,
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, VimError> {
-        let parsed = match ParsedLine::parse(line) {
+        let parsed = match ParsedLine::parse(line, self.keymap.commands()) {
             Ok(Some(ParsedLine::Engine(parsed))) => parsed,
             Ok(Some(ParsedLine::Host(_))) if self.ex_depth > 0 => {
                 let typed = line.trim_matches([' ', ':']).to_owned();
                 let error = CommandError::HostCommandInside(typed);
                 return Ok(KeyOutcome::InvalidCommand(error));
             }
-            Ok(Some(ParsedLine::Host(invocation))) => return Ok(KeyOutcome::Command(invocation)),
+            Ok(Some(ParsedLine::Host(invocation))) => return Ok(KeyOutcome::Dispatch(invocation)),
             Ok(None) => return Ok(done()),
             Err(error) => return Ok(KeyOutcome::InvalidCommand(error)),
         };

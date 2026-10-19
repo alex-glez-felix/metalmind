@@ -3,9 +3,9 @@
 
 use gpui_kit::{Action, App, KeyBinding};
 
-use metalmind_vim::Command;
+use metalmind_keymap::Command;
 
-use crate::actions::RunCommand;
+use crate::actions::Dispatch;
 
 /// Contexto de teclas del árbol con el foco.
 pub const TREE_CONTEXT: &str = "FileTree";
@@ -87,8 +87,8 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("m", Move, tree),
         KeyBinding::new("d", Delete, tree),
         KeyBinding::new("shift-t", ToggleView, tree),
-        KeyBinding::new("space e", RunCommand::from(Command::ToggleFolders), tree),
-        KeyBinding::new("space t", RunCommand::from(Command::ToggleTags), tree),
+        KeyBinding::new("space e", Dispatch(Command::ToggleFolders.into()), tree),
+        KeyBinding::new("space t", Dispatch(Command::ToggleTags.into()), tree),
         KeyBinding::new("q", Hide, tree),
         KeyBinding::new("ctrl-w l", FocusEditor, tree),
         KeyBinding::new("ctrl-w ctrl-l", FocusEditor, tree),

@@ -2,12 +2,13 @@
 //!
 //! Las teclas pasan por un [`Keymap`] declarativo que las traduce a
 //! [`Action`]s con nombre; [`Vim`] las ejecuta sobre un
-//! [`metalmind_buffer::Buffer`] y sus selecciones. La paleta y `:` podrán invocar
-//! las mismas acciones con [`Vim::execute`]. Los [`Command`]s de `:` y de
-//! `ctrl-w` que hacen I/O o tocan los paneles (guardar, abrir, cerrar,
-//! dividir) se devuelven a quien aloja el editor; `:s` y la búsqueda (`/`,
-//! `n`, `*`) los resuelve el motor, que deja el patrón activo en
-//! [`Vim::search_highlight`] para que la UI lo resalte.
+//! [`metalmind_buffer::Buffer`] y sus selecciones. La paleta invoca las
+//! mismas acciones con [`Vim::execute`]. El motor solo conoce sus acciones de
+//! edición: los atajos y los comandos de `:` que quien lo aloja le agrega al
+//! keymap (guardar, abrir, los paneles) vuelven como un [`ActionName`] en
+//! [`KeyOutcome::Dispatch`]. `:s` y la búsqueda (`/`, `n`, `*`) los resuelve
+//! el motor, que deja el patrón activo en [`Vim::search_highlight`] para que
+//! la UI lo resalte.
 
 mod action;
 mod block;
@@ -50,14 +51,14 @@ mod word;
 
 pub use action::{Action, InsertAt, PasteSide};
 pub use block::VisualBlock;
-pub use command::{Command, CommandError, Invocation};
+pub use command::{ActionName, CommandError, HostCommand, Invocation, RangeRule};
 pub use error::VimError;
 pub use ex::GlobalMiss;
 pub use find::CharSearch;
 pub use indent::Indent;
 pub use jumplist::{FileId, Jump, JumpList, Landing};
 pub use key::Key;
-pub use keymap::{Binding, Context, Keymap};
+pub use keymap::{Binding, Context, Keymap, Target};
 pub use layout::{BufferLines, FormulaRows, Layout, Rows};
 pub use mark::{Marks, PlacedMark};
 pub use markdown::Markdown;

@@ -18,6 +18,7 @@ pub(crate) use join::join;
 pub(crate) use sort::{SortOptions, sort};
 
 use self::address::skip_blanks;
+use crate::command::{self, HostCommand};
 use crate::indent::Shift;
 use crate::substitute::SubstituteCommand;
 use crate::{CommandError, Invocation};
@@ -107,7 +108,7 @@ impl ParsedLine {
     ///
     /// # Errors
     /// Si no es un comando conocido o su rango o sus argumentos no valen.
-    pub fn parse(line: &str) -> Result<Option<Self>, CommandError> {
+    pub fn parse(line: &str, commands: &[HostCommand]) -> Result<Option<Self>, CommandError> {
         let typed = line.trim_start_matches([' ', ':']);
         if typed.trim_end().is_empty() {
             return Ok(None);
@@ -118,9 +119,10 @@ impl ParsedLine {
             Some(command) => command,
             None if rest.trim_end().is_empty() => ExCommand::GoTo,
             None if range.is_none() => {
-                return Invocation::parse(line).map(|host| host.map(Self::Host));
+                let host = command::parse(line, commands)?;
+                return Ok(host.map(|host| Self::Host(host.invocation())));
             }
-            None => return Err(ranged_host_error(typed, rest)),
+            None => return Err(ranged_host_error(typed, rest, commands)),
         };
         let without_range = matches!(
             command,
@@ -197,8 +199,8 @@ fn parse_command(text: &str) -> Result<Option<ExCommand>, CommandError> {
 
 /// Un comando de quien aloja el editor con rango, como `:'<,'>w` tras `:` en
 /// Visual. Si no existe, el error lleva lo escrito con el rango, como vim.
-fn ranged_host_error(typed: &str, rest: &str) -> CommandError {
-    match Invocation::parse(rest) {
+fn ranged_host_error(typed: &str, rest: &str, commands: &[HostCommand]) -> CommandError {
+    match command::parse(rest, commands) {
         Ok(Some(host)) => host.command.range_error(rest.trim_end()),
         Ok(None) | Err(CommandError::Unknown(_)) => {
             CommandError::Unknown(typed.trim_end().to_owned())
@@ -237,10 +239,33 @@ fn destination(bang: bool, args: &str) -> Result<Address, CommandError> {
 mod tests {
     use super::address::Term;
     use super::*;
-    use crate::Command;
+    use crate::ActionName;
+    use crate::command::RangeRule;
+
+    const fn host(
+        name: &'static str,
+        min: usize,
+        action: &'static str,
+        with_range: RangeRule,
+    ) -> HostCommand {
+        HostCommand {
+            name,
+            min,
+            action: ActionName::new(action),
+            takes_argument: false,
+            with_range,
+        }
+    }
+
+    const HOST: &[HostCommand] = &[
+        host("write", 1, "editor::save", RangeRule::PartialWrite),
+        host("wq", 2, "editor::save_and_quit", RangeRule::PartialWrite),
+        host("split", 2, "pane::split_down", RangeRule::Unsupported),
+        host("vsplit", 2, "pane::split_right", RangeRule::Unsupported),
+    ];
 
     fn parse(line: &str) -> Result<Option<ParsedLine>, CommandError> {
-        ParsedLine::parse(line)
+        ParsedLine::parse(line, HOST)
     }
 
     fn command(line: &str) -> Result<ExCommand, CommandError> {
@@ -289,10 +314,10 @@ mod tests {
                 "{line:?}: {parsed:?}"
             );
         }
-        let host = |command: Command| Ok(Some(ParsedLine::Host(command.into())));
-        assert_eq!(parse("wq"), host(Command::SaveAndQuit));
-        assert_eq!(parse("sp"), host(Command::SplitDown));
-        assert_eq!(parse("vs"), host(Command::SplitRight));
+        let host = |name| Ok(Some(ParsedLine::Host(ActionName::new(name).into())));
+        assert_eq!(parse("wq"), host("editor::save_and_quit"));
+        assert_eq!(parse("sp"), host("pane::split_down"));
+        assert_eq!(parse("vs"), host("pane::split_right"));
         assert_eq!(parse("  "), Ok(None));
     }
 

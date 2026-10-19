@@ -15,8 +15,8 @@ pub enum KeyOutcome {
     /// Ningún binding la usa; la capa de arriba puede probar otro keymap.
     Unbound,
     /// Se envió la línea de comandos, o se tecleó un atajo como `ctrl-w v`,
-    /// con un comando que ejecuta quien aloja el editor.
-    Command(Invocation),
+    /// con una acción que ejecuta quien aloja el editor.
+    Dispatch(Invocation),
     /// Un salto a otro archivo: quien aloja el editor cambia el buffer del
     /// panel y llama a [`Vim::land`](crate::Vim::land). Una macro se pausa
     /// aquí, como con un comando.

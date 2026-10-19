@@ -1,0 +1,21 @@
+[package]
+name = "metalmind-keymap"
+description = "El registro de acciones de Metalmind: sus nombres y los atajos de todos los contextos."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+metalmind-vim.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+metalmind-buffer.workspace = true
+pretty_assertions.workspace = true
+rstest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

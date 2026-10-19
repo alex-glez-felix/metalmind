@@ -15,6 +15,7 @@ image.workspace = true
 log.workspace = true
 metalmind-buffer.workspace = true
 metalmind-config.workspace = true
+metalmind-keymap.workspace = true
 metalmind-search.workspace = true
 metalmind-syntax.workspace = true
 metalmind-vault.workspace = true

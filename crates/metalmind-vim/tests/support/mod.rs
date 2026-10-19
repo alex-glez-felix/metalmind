@@ -19,6 +19,16 @@ pub struct State {
 
 const ANCHOR: char = '¦';
 
+/// El motor con los atajos y los `:` de la app, como lo usa la ventana.
+pub fn app_vim() -> Vim {
+    Vim::with_keymap(metalmind_keymap::Keymap::default().engine())
+}
+
+/// Lo que devuelve el motor cuando se invoca `command` sin argumento.
+pub fn dispatched(command: metalmind_keymap::Command) -> KeyOutcome {
+    KeyOutcome::Dispatch(metalmind_vim::ActionName::new(command.name()).into())
+}
+
 pub fn parse(marked: &str) -> (Buffer, Selections) {
     let mut text = String::new();
     let mut cursors = Vec::new();

@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 metalmind-buffer = { path = "crates/metalmind-buffer" }
 metalmind-config = { path = "crates/metalmind-config" }
+metalmind-keymap = { path = "crates/metalmind-keymap" }
 metalmind-perf = { path = "crates/metalmind-perf" }
 metalmind-search = { path = "crates/metalmind-search" }
 metalmind-syntax = { path = "crates/metalmind-syntax" }

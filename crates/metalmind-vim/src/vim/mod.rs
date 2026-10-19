@@ -34,7 +34,7 @@ use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
 use crate::jumplist::{FileId, JumpList};
-use crate::keymap::Lookup;
+use crate::keymap::{Lookup, Target};
 use crate::mark::{FileMarks, Marks};
 use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, Reselect};
@@ -274,9 +274,13 @@ impl Vim {
         self.pending.push(key);
         match self.keymap.lookup(self.mode, &self.pending) {
             Lookup::Pending => Ok(KeyOutcome::Pending),
-            Lookup::Action(action) => {
+            Lookup::Action(Target::Engine(action)) => {
                 self.pending.clear();
                 self.run(action, buffer, selections, clipboard)
+            }
+            Lookup::Action(Target::Host(action)) => {
+                self.reset();
+                Ok(KeyOutcome::Dispatch(action.into()))
             }
             Lookup::Unbound => self.unbound(buffer, selections),
         }

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, Entity, Subscription, Window};
-use metalmind_vim::{Command, Invocation};
+use metalmind_keymap::{Command, Invocation};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
@@ -130,7 +130,7 @@ impl WorkspaceView {
             return;
         };
         let edit = Invocation {
-            command: Command::Edit,
+            action: Command::Edit.into(),
             argument: Some(argument),
         };
         self.run(&edit, window, cx);

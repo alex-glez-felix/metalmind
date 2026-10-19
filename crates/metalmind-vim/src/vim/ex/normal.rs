@@ -75,8 +75,8 @@ impl Vim {
         }
         self.failed = false;
         Ok(notice.map(|notice| match notice {
-            KeyOutcome::Command(invocation) => KeyOutcome::InvalidCommand(
-                CommandError::HostCommandInside(invocation.command.name().to_owned()),
+            KeyOutcome::Dispatch(invocation) => KeyOutcome::InvalidCommand(
+                CommandError::HostCommandInside(invocation.action.to_string()),
             ),
             KeyOutcome::SwitchFile(_) => KeyOutcome::InvalidCommand(CommandError::FileSwitchInside),
             notice => notice,
