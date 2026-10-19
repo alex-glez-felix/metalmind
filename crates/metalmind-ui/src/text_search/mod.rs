@@ -9,6 +9,9 @@ mod delegate;
 mod model;
 mod worker;
 
+use std::fs;
+use std::path::Path;
+
 use metalmind_buffer::Snapshot;
 use metalmind_search::LineMatch;
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
@@ -41,41 +44,45 @@ pub struct OpenNote {
     pub text: Snapshot,
 }
 
-/// Si una nota abierta con cambios se busca en memoria: las notas del índice,
-/// que son las que recorre la búsqueda en disco, y las nuevas que todavía no
-/// se guardaron. Lo que está en disco y el índice no tiene (oculto o
-/// ignorado) o no es una nota, no.
+/// Si una nota abierta con cambios, la de `path` en el vault y `file` en el
+/// disco, se busca en memoria: las notas del índice, que son las que recorre
+/// la búsqueda en disco, y las que no están en el disco ahora (nuevas sin
+/// guardar, o borradas o movidas desde fuera). Lo que está en disco y el
+/// índice no tiene (oculto o ignorado) o no es una nota, no.
 #[must_use]
-pub fn searchable(index: &VaultIndex, path: &VaultPath, on_disk: bool) -> bool {
+pub fn searchable(index: &VaultIndex, path: &VaultPath, file: &Path) -> bool {
     match index.kind(path) {
         Some(kind) => kind == EntryKind::Note,
-        None => !on_disk && EntryKind::of_file(path) == EntryKind::Note,
+        None => EntryKind::of_file(path) == EntryKind::Note && fs::symlink_metadata(file).is_err(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use metalmind_vault::Vault;
 
     use super::*;
 
     #[test]
-    fn se_buscan_las_notas_del_indice_y_las_nuevas_sin_guardar() {
+    fn se_buscan_las_notas_del_indice_y_las_que_no_estan_en_disco() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("a.md"), "").unwrap();
-        fs::write(dir.path().join("datos.txt"), "").unwrap();
+        for name in ["a.md", "datos.txt", "ignorada.md", "borrada.md"] {
+            fs::write(dir.path().join(name), "").unwrap();
+        }
         fs::write(dir.path().join(".gitignore"), "ignorada.md\n").unwrap();
-        fs::write(dir.path().join("ignorada.md"), "").unwrap();
+        fs::remove_file(dir.path().join("borrada.md")).unwrap();
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
         let index = vault.snapshot();
-        let path = |text: &str| VaultPath::new(text).unwrap();
-        assert!(searchable(&index, &path("a.md"), true));
-        assert!(searchable(&index, &path("nueva.md"), false), "sin guardar");
-        assert!(searchable(&index, &path("d/Nueva.MD"), false));
-        assert!(!searchable(&index, &path("datos.txt"), true));
-        assert!(!searchable(&index, &path("nuevo.txt"), false));
-        assert!(!searchable(&index, &path("ignorada.md"), true), "ignorada");
+        let searchable = |name: &str| {
+            let path = VaultPath::new(name).unwrap();
+            searchable(&index, &path, &dir.path().join(name))
+        };
+        assert!(searchable("a.md"));
+        assert!(searchable("nueva.md"), "sin guardar");
+        assert!(searchable("d/Nueva.MD"));
+        assert!(searchable("borrada.md"), "borrada desde fuera");
+        assert!(!searchable("datos.txt"));
+        assert!(!searchable("nuevo.txt"));
+        assert!(!searchable("ignorada.md"), "ignorada");
     }
 }

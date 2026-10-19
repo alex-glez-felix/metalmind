@@ -22,9 +22,9 @@ impl WorkspaceView {
             .workspace
             .read(cx)
             .unsaved_files()
-            .filter_map(|(path, document)| {
-                let path = session.vault_path(path)?;
-                searchable(&index, &path, document.exists_on_disk()).then(|| OpenNote {
+            .filter_map(|(file, document)| {
+                let path = session.vault_path(file)?;
+                searchable(&index, &path, file).then(|| OpenNote {
                     path,
                     text: document.buffer().snapshot(),
                 })
