@@ -25,3 +25,16 @@ pub fn until<T>(what: &str, timeout: Duration, mut probe: impl FnMut() -> Result
         }
     }
 }
+
+/// Que `probe` siga dando `Ok` durante `during`; si da `Err`, falla con lo que
+/// se vio. Para lo que no tiene que pasar, mirando tanto como tardó en pasar
+/// algo parecido que sí tenía que pasar, no un tiempo adivinado.
+pub fn stays(what: &str, during: Duration, mut probe: impl FnMut() -> Result<(), String>) {
+    let deadline = Instant::now() + during;
+    while Instant::now() < deadline {
+        if let Err(seen) = probe() {
+            panic!("dejó de cumplirse {what}: {seen}");
+        }
+        thread::sleep(POLL);
+    }
+}

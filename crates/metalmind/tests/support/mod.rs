@@ -1,6 +1,7 @@
 //! Harness de punta a punta: el binario `metalmind` de verdad, en un Xvfb propio,
 //! con `XTest` tecleando. Se comprueba el efecto en disco y cómo termina el
-//! proceso, no los píxeles. Cómo agregar un caso: `docs/testing.md`.
+//! proceso; los píxeles solo para ver si algo aparece (un tooltip), nunca
+//! contra una imagen guardada. Cómo agregar un caso: `docs/testing.md`.
 
 pub mod keys;
 pub mod wait;
@@ -11,6 +12,8 @@ use std::fs::{self, File};
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::thread;
+use std::time::Duration;
 
 use tempfile::TempDir;
 
@@ -231,6 +234,19 @@ impl Drop for Metalmind<'_> {
     }
 }
 
+/// Un rectángulo de la ventana, en píxeles desde su esquina.
+#[derive(Clone, Copy, Debug)]
+pub struct Area {
+    pub x: i16,
+    pub y: i16,
+    pub width: u16,
+    pub height: u16,
+}
+
+/// Lo que tiene que quedar igual la ventana para darla por quieta: más que
+/// un frame aun con lavapipe.
+const STILL: Duration = Duration::from_millis(200);
+
 #[derive(Clone, Copy)]
 pub struct Window<'a> {
     id: x11rb::protocol::xproto::Window,
@@ -279,6 +295,52 @@ impl Window<'_> {
     /// Lo que se ve en la ventana ahora: ancho, alto y píxeles en RGB.
     pub fn pixels(&self) -> (u16, u16, Vec<u8>) {
         self.display.pixels(self.id)
+    }
+
+    /// Una muesca de la rueda hacia abajo (el botón 5 de X) en `(x, y)`.
+    pub fn scroll_down(&self, x: i16, y: i16) {
+        self.display.click(self.id, 5, x, y);
+    }
+
+    /// Los píxeles de un rectángulo de la ventana, en RGB: para ver si algo
+    /// apareció (un tooltip), no para comparar con una imagen guardada.
+    pub fn area_pixels(&self, area: Area) -> Vec<u8> {
+        let (width, _, rgb) = self.pixels();
+        let row = usize::from(width) * 3;
+        let (x, y) = (usize::try_from(area.x).unwrap(), usize::try_from(area.y).unwrap());
+        rgb.chunks(row)
+            .skip(y)
+            .take(usize::from(area.height))
+            .flat_map(|line| &line[x * 3..(x + usize::from(area.width)) * 3])
+            .copied()
+            .collect()
+    }
+
+    /// Espera a que `area` deje de verse como `before`: que la app ya pintó
+    /// lo que se esperaba (`what`).
+    pub fn wait_change(&self, what: &str, area: Area, before: &[u8]) {
+        wait::until(what, TIMEOUT, || {
+            if self.area_pixels(area) == before {
+                Err("la ventana sigue igual".to_owned())
+            } else {
+                Ok(())
+            }
+        });
+    }
+
+    /// Espera a que `area` deje de cambiar, como tras un scroll.
+    pub fn wait_still(&self, area: Area) -> Vec<u8> {
+        let mut last = self.area_pixels(area);
+        wait::until("que la ventana deje de cambiar", TIMEOUT, || {
+            thread::sleep(STILL);
+            let now = self.area_pixels(area);
+            if now == last {
+                Ok(now)
+            } else {
+                last = now;
+                Err("cambió".to_owned())
+            }
+        })
     }
 
     /// Pide el cierre como lo haría el gestor de ventanas.

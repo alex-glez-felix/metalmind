@@ -12,8 +12,11 @@
 #[allow(dead_code, reason = "el smoke usa solo una parte del harness")]
 mod support;
 
+use std::time::Instant;
+
 use rstest::rstest;
-use support::Smoke;
+use support::wait::{self, TIMEOUT};
+use support::{Area, Smoke};
 
 /// Teclea `keys` sobre una nota que dice `before` y espera que salga limpio
 /// con la nota diciendo `after`, sin temporales al lado.
@@ -498,4 +501,72 @@ fn keys_shown(lines: &[String]) -> u32 {
         .iter()
         .filter_map(|line| line.split_once(" keys=")?.1.parse::<u32>().ok())
         .sum()
+}
+
+/// Con la config por defecto: la barra de botones (36) y el panel lateral
+/// (260), y `editor.padding` (12 a los lados, 8 arriba).
+const EDITOR_LEFT: i16 = 296;
+const TEXT_TOP: i16 = 8;
+/// La columna de las marks, la primera del margen.
+const MARK_X: i16 = EDITOR_LEFT + 12 + 4;
+/// Donde puede salir el tooltip de una mark de la primera línea visible.
+const TOP_OF_EDITOR: Area = Area {
+    x: EDITOR_LEFT,
+    y: 0,
+    width: 500,
+    height: 120,
+};
+
+/// La zona del tooltip de una mark se recorta como el texto. Con un heading
+/// marcado asomando arriba a medio scroll, el ratón sobre lo que se ve de él
+/// abre el tooltip; sobre el margen de encima, donde está la parte que no se
+/// ve, no.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
+    let smoke = Smoke::new();
+    smoke.write(
+        "a.md",
+        &format!("uno\ndos\n# Titulo\n{}", "linea\n".repeat(40)),
+    );
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let unmarked = window.wait_still(TOP_OF_EDITOR);
+    window.type_keys("jjma");
+    window.wait_change("la mark en el margen", TOP_OF_EDITOR, &unmarked);
+    // Una muesca son tres líneas de texto: pasan `uno`, `dos` y lo que mide
+    // una línea de texto del heading, que mide más, así que asoma recortado.
+    let marked = window.wait_still(TOP_OF_EDITOR);
+    let away = (EDITOR_LEFT + 300, 300);
+    window.scroll_down(away.0, away.1);
+    window.wait_change("el scroll", TOP_OF_EDITOR, &marked);
+    let quiet = window.wait_still(TOP_OF_EDITOR);
+    let unchanged = || {
+        if window.area_pixels(TOP_OF_EDITOR) == quiet {
+            Ok(())
+        } else {
+            Err("apareció algo".to_owned())
+        }
+    };
+
+    let hovered = Instant::now();
+    window.move_pointer(MARK_X, TEXT_TOP + 6);
+    wait::until(
+        "el tooltip sobre lo que se ve del heading",
+        TIMEOUT,
+        || match unchanged() {
+            Ok(()) => Err("sin tooltip".to_owned()),
+            Err(_) => Ok(()),
+        },
+    );
+    let shows_in = hovered.elapsed();
+    window.move_pointer(away.0, away.1);
+    wait::until("que el tooltip se vaya", TIMEOUT, unchanged);
+
+    window.move_pointer(MARK_X, TEXT_TOP / 2);
+    wait::stays(
+        "sin tooltip sobre el margen de arriba",
+        shows_in * 2,
+        unchanged,
+    );
 }
