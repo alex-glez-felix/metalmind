@@ -1,20 +1,19 @@
-# 08 — Fórmulas LaTeX: spike
+# 08 — Fórmulas LaTeX
 
-> [!WARNING]
-> **Estado: pendiente de revisión de Alex.** Es un spike: nada de aquí está decidido ni entra al roadmap. La recomendación está marcada **(propuesta)** y la decisión final la toma Alex. No implementes nada de este documento hasta que se quite este aviso.
+> **Decisión** (Alex, 2026-10-19, en la PR #80): las fórmulas se componen con **RaTeX**. Es el único camino que compuso las 22 fórmulas de la prueba, y cuesta 3.1 MB de binario y 0.25 ms por fórmula, frente a los 45 MB de Typst. El resto del documento es el spike que sostiene la decisión; el §7 es el plan que sigue la implementación (`feat/math`). Si al implementar algo cambia, se corrige aquí en el mismo commit.
 
-> Spike del 2026-10-18. Versiones, fechas y licencias de la API de crates.io de ese día. Los números son míos, en release, en una máquina de escritorio x86_64 con Linux (la de [performance.md](../performance.md)). El código está en [`spikes/math/`](../../spikes/math/README.md), fuera del workspace: no toca el editor ni el binario.
+> Spike del 2026-10-18; decisión del 2026-10-19 ([06](06-decisiones-de-fondo.md) §15). Versiones, fechas y licencias de la API de crates.io de ese día. Los números son míos, en release, en una máquina de escritorio x86_64 con Linux (la de [performance.md](../performance.md)). El código está en [`spikes/math/`](../../spikes/math/README.md), fuera del workspace: no toca el editor ni el binario.
 > Construye sobre [03](03-core-architecture.md) §2 (el scanner de `metalmind-syntax` y el plan del live preview) y el estilo del markdown que entró con la PR #76 (03 §2, "Estilo en el editor" y "Plan del paso 2"), que deja marcado en el estilo de cada línea lo que el live preview va a ocultar.
 
 ## TL;DR
 
 - **Objetivo**: `$…$` en línea y `$$…$$` en bloque dentro de las notas, como en Obsidian. Documentos LaTeX completos, no.
-- **Recomendación (propuesta): RaTeX** (`ratex-parser` + `ratex-layout` + `ratex-render`, con las fuentes de KaTeX embebidas). Es el único camino que compuso las 22 fórmulas de la prueba, diagrama conmutativo incluido. Tarda 0.25 ms por fórmula nueva (0.51 ms en HiDPI), no tiene arranque, ocupa ~1.4 MB de heap y suma 3.1 MB al binario. Su layout tarda **9 µs** y da el alto y la profundidad antes de pintar, que es lo que necesita la vista para reservar el lugar de la fórmula.
-- **mitex + Typst** compone bonito y rápido (0.29 ms, con 11.6 ms de arranque), pero suma 45 MB al binario y **mitex 0.2.4 no funciona tal cual con Typst 0.15**: 0 de 22. Con el paquete de Typst de upstream y un parche de tres líneas al convertidor pasan 21. mitex no publica en crates.io desde junio de 2024, aunque el repo sigue vivo.
-- **MathML sin navegador sí se puede**: `formulary` compone MathML Core con la tabla MATH de una fuente. Pero `pulldown-latex` y `math-core` sacan MathML pensado para un navegador (entidades HTML, `<` sin escapar), que el parser XML estricto de `formulary` rechaza: 18 de 22 cada uno, y con peor tipografía.
+- **Decisión: RaTeX** (Alex, 2026-10-19, #80): `ratex-parser` + `ratex-layout` + `ratex-render`, con las fuentes de KaTeX embebidas. Es el único camino que compuso las 22 fórmulas de la prueba, diagrama conmutativo incluido. Tarda 0.25 ms por fórmula nueva (0.51 ms en HiDPI), no tiene arranque, ocupa ~1.4 MB de heap y suma 3.1 MB al binario. Su layout tarda **9 µs** y da el alto y la profundidad antes de pintar, que es lo que necesita la vista para reservar el lugar de la fórmula.
+- **Descartado: mitex + Typst**. Compone bonito y rápido (0.29 ms, con 11.6 ms de arranque), pero suma 45 MB al binario y **mitex 0.2.4 no funciona tal cual con Typst 0.15**: 0 de 22. Con el paquete de Typst de upstream y un parche de tres líneas al convertidor pasan 21. mitex no publica en crates.io desde junio de 2024, aunque el repo sigue vivo.
+- **Descartado para pintar: MathML**. Sin navegador sí se puede: `formulary` compone MathML Core con la tabla MATH de una fuente. Pero `pulldown-latex` y `math-core` sacan MathML pensado para un navegador (entidades HTML, `<` sin escapar), que el parser XML estricto de `formulary` rechaza: 18 de 22 cada uno, y con peor tipografía.
 - **Hilo**: el layout (µs) en el hilo de la UI, para las líneas visibles; el rasterizado en el executor de fondo, con la fuente atenuada como placeholder del mismo alto.
-- **Caché**: el layout por `(LaTeX, modo)`, y la imagen por `(LaTeX, modo, tamaño, escala, color)`, con LRU por bytes.
-- **Vim**: igual que el resto del live preview: la línea del cursor (o todo el bloque `$$…$$` donde esté) muestra la fuente con estilo; las demás, la fórmula. Encaja en el `Conceal` del estilo de las líneas (#76) como un caso más.
+- **Caché**: el layout por `(LaTeX, modo, color)`, y la imagen por `(LaTeX, modo, tamaño, escala, color)`, con LRU por bytes.
+- **Vim**: igual que el resto del live preview: la línea del cursor muestra la fuente con estilo; las demás, la fórmula, así el motor no se entera. Encaja en el `Conceal` del estilo de las líneas (#76) como un caso más. Un bloque `$$…$$` de varias líneas se pinta debajo de su fuente; ocultar esas líneas queda para el paso 2 del live preview (§7).
 
 ---
 
@@ -138,47 +137,54 @@ Medido sobre el binario real: `metalmind` de `main` compilado en release y sin s
 
 De los 45 MB de Typst, 9.6 MB son las fuentes de `typst-assets`; con solo las que usa la math (New Computer Modern Math y la de texto, ~3.4 MB) serían ~6 MB menos. El resto es Typst entero: la biblioteca estándar, los datos de ICU para cortar texto, los diccionarios de guiones y las sintaxis de los bloques de código, que la math no usa pero el compilador trae.
 
-## 6. Recomendación (propuesta)
+## 6. Decisión: RaTeX
 
-**RaTeX**, con sus tres crates (`ratex-parser`, `ratex-layout`, `ratex-render` con `embed-fonts`) y un rasterizador propio de la `DisplayList` cuando haga falta quitar el PNG. Por qué:
+Decidido por Alex el 2026-10-19 en la PR #80: **RaTeX**, con `ratex-parser`, `ratex-layout`, `ratex-render` (feature `embed-fonts`) y `ratex-types`, todos fijados con `=0.1.15`. Los píxeles salen de `render_to_png` y se decodifican (~7 µs, §5). Un rasterizador propio de la `DisplayList` solo entra si `feat/math` mide que hace falta. Por qué:
 
 - **Cobertura**: es KaTeX, el dialecto que Obsidian (MathJax) y casi cualquier nota de matemáticas ya usa; compuso las 22, con `CD`, `cases`, `aligned` y `\oiint`. Typst y MathML pierden fórmulas por problemas de otros (mitex sin publicar, MathML con entidades de HTML).
 - **El layout separado del pintado** es lo que pide la vista: en 9 µs da ancho, alto y profundidad en em, sin pintar nada. La vista sabe cuánto mide la fórmula (el alto de la línea de un `$$…$$`, el ancho de un `$…$`) en el mismo frame, y la imagen llega después.
 - **Peso**: 3.1 MB de binario (un 9 % más), ~1.4 MB de heap que no crece, sin arranque, y comparte tiny-skia 0.11 con GPUI. Typst cuesta 45 MB (más que todo Metalmind hoy), 11.6 ms de arranque, una caché que hay que vaciar a mano y un tiny-skia y un resvg duplicados.
-- **Riesgo**: RaTeX es joven (0.1.x, marzo de 2026) y depende sobre todo de una persona. Lo mitiga que es MIT, que su modelo es el de KaTeX (si se abandona, la `DisplayList` y el parser se pueden mantener), y que Metalmind usaría solo tres crates sin estado global raro. Se fija con `=` como gpui-kit.
+- **Riesgo**: RaTeX es joven (0.1.x, marzo de 2026) y depende sobre todo de una persona. Lo mitiga que es MIT, que su modelo es el de KaTeX (si se abandona, la `DisplayList` y el parser se pueden mantener), y que Metalmind usa solo cuatro crates, sin estado global raro. Se fija con `=` como gpui-kit.
 
 Lo que se pierde frente a Typst: su tipografía es un poco mejor en casos finos (el espaciado de Typst es más cuidado con operadores grandes), y Typst abriría la puerta a escribir math en sintaxis de Typst. Nada de eso es el objetivo: el objetivo es `$…$` de Obsidian.
 
-La alternativa razonable, si RaTeX se estanca: Typst con mitex, solo si upstream publica el arreglo del §3. MathML queda para exportar a HTML (`math-core`), no para pintar en el editor.
+**Descartados**:
 
-## 7. Cómo entraría (propuesta)
+- **mitex + Typst**: 45 MB de binario y un mitex sin publicar desde 2024, con un bug que obliga a parchearlo (§3). Si RaTeX se abandona, se vuelve a evaluar entonces; no queda un plan B en el código.
+- **MathML para pintar** (`pulldown-latex` o `math-core` con `formulary`): 18 de 22 y peor tipografía (§4). `math-core` sigue siendo candidato para el export a HTML (post-MVP), que es otra cosa.
+
+## 7. Cómo entra
+
+El plan de `feat/math`. Lo que ya está resuelto va como regla; lo único abierto es cómo ocultar un bloque de varias líneas, y está marcado.
+
+### Dependencias
+
+- `ratex-parser`, `ratex-layout`, `ratex-render` (con `embed-fonts`) y `ratex-types`, `=0.1.15`, **solo en `metalmind-ui`**. Comparten tiny-skia 0.11 y `png` con GPUI. `ratex-gpui` no: es una referencia, no una dependencia.
 
 ### Núcleo: `metalmind-syntax`
 
 - El scanner reconoce `$…$` y `$$…$$` con las reglas de Obsidian (las de pandoc): `$` abre si lo sigue algo que no es espacio y cierra si lo precede algo que no es espacio y no lo sigue un dígito (`$5 y $10` no es fórmula), `\$` es un dólar, y `$$` abre un bloque que puede cruzar líneas hasta el siguiente `$$`. Dentro de una fórmula no hay tags ni links: `$\#x$` y `$a_{[[b]]}$` no son un tag ni un link, igual que en el código inline. Esto vale también para el índice (mismo scanner, [03](03-core-architecture.md) §2), así que **es una restricción desde ya**: el día que llegue, un `#` dentro de un `$…$` deja de ser tag.
 - Un `$$` abierto es un estado que cruza líneas, como un comentario `%%` o una cerca: en el modelo de tramos de `style/` es un `Start` más (`Start::Math`, junto a `Document`, `Body`, `Comment` y `Fence`), con su línea dura en el `$$` que cierra.
 - El estilo de la línea (#76) gana un `Role::Math` para el contenido y marca los `$`/`$$` como sintaxis. El contenido entero de una fórmula es un tramo con `Conceal::Math { display: bool }`: a diferencia de `Hide`, que quita los caracteres, este **reemplaza** el tramo por una imagen. Encaja en el `DisplayLine` del plan del paso 2 como un segmento "reemplazado" más, igual que `Bullet` o `Checkbox`.
-- Ningún crate del núcleo depende de RaTeX: el núcleo solo dice dónde hay una fórmula y cuál es su texto.
+- Ningún crate del núcleo depende de RaTeX: el núcleo solo dice dónde hay una fórmula y cuál es su texto. Por eso el índice y la CLI ignoran las fórmulas sin pintarlas.
 
 ### UI: `metalmind-ui`
 
-- **Qué muestra la fuente** (el plan del paso 2, 03 §2): la línea del cursor de cada panel, las de una selección de Visual y, si el cursor está dentro de un bloque `$$…$$`, el bloque entero (como las dos cercas de un bloque de código). Ahí se ve el LaTeX con el estilo de `Role::Math`. En las demás líneas, la fórmula.
+- **Qué muestra la fuente** (el plan del paso 2, 03 §2): la línea del cursor de cada panel y las de una selección de Visual. Ahí se ve el LaTeX con el estilo de `Role::Math`; en las demás líneas, la fórmula. Un bloque de varias líneas muestra siempre su fuente (abajo).
 - **El motor de vim no se entera**, por la misma razón que en el resto del live preview: el cursor nunca está en una línea que muestra la fórmula, así que motions, operadores, búsquedas y `.` siguen sobre la fuente en bytes. Escribir dentro de `$…$` es editar texto normal; al salir de la línea, la fórmula se vuelve a pintar.
-- **Alto**: una fórmula en línea alta (una fracción) agranda su línea; eso ya es "líneas de distinta altura", que #76 resolvió para los headings: el `LineHeights` del motor mide la línea con el alto de la fórmula, que el layout de RaTeX da sin pintar. Un bloque `$$…$$` de varias líneas es otra cosa, porque el modelo de hoy es **una línea de la fuente = una fila de la vista** (`Layout` de `metalmind-vim` y `editor/lines.rs`), y `Conceal` solo cambia tramos dentro de una línea. Hay dos maneras de mostrar el bloque como una sola fórmula, y ninguna sale gratis:
-  - **Seguir por líneas**: la primera línea del bloque mide el alto de la fórmula y pinta la imagen, y las demás miden **cero**. Así `LineHeights`, el scroll (`ctrl-e`, `zt`, `H`/`L`), los números del margen y los clics siguen indexados por línea, pero todos tienen que aceptar y saltarse líneas de alto cero, como `conceal_lines` de nvim. El cursor nunca cae en una de ellas, porque entrar al bloque lo muestra entero.
-  - **Un mapa de filas**: un modelo explícito de filas visibles ↔ rangos de líneas de la fuente, como los pliegues (`zf`, que Metalmind tampoco tiene). Es más general y serviría para los pliegues, pero toca el `Viewport`, el scroll, la selección y el ratón.
-  - Cuál de las dos es diseño del paso 2 del live preview, no de las fórmulas. Hasta decidirlo, un bloque se puede pintar **debajo de su fuente** sin ocultarla (como el preview de bloques de Obsidian en modo fuente) sin tocar nada del motor. Al entrar el cursor en el bloque el alto cambia, como cambia el ancho de una línea con `**` ocultos.
+- **Alto de una fórmula en línea**: una fórmula alta (una fracción) agranda su línea. Eso ya es "líneas de distinta altura", que #76 resolvió para los headings: el `LineHeights` del motor mide la línea con el alto que da el layout de RaTeX, sin pintar.
+- **Un bloque `$$…$$` en una sola línea** (`$$ x^2 $$`) es igual: la línea mide el alto de la fórmula y, sin el cursor, muestra solo la fórmula, centrada.
+- **Un bloque de varias líneas**: el modelo de hoy es **una línea de la fuente = una fila de la vista** (`Layout` de `metalmind-vim` y `editor/lines.rs`), y `Conceal` solo cambia tramos dentro de una línea. En `feat/math` el bloque **se pinta debajo de su fuente**: la línea del `$$` que cierra mide su alto más el de la fórmula, y la imagen va en ese espacio, centrada. Así entra en `LineHeights` sin tocar el motor. Las líneas de la fuente se siguen viendo, con el estilo de `Role::Math`.
+- **Ocultar esas líneas queda pendiente** (lo decide Alex con el paso 2 del live preview, porque sirve igual para otras cosas): o líneas de alto cero que `LineHeights`, el scroll, el margen y los clics se salten (como `conceal_lines` de nvim), o un mapa explícito de filas ↔ líneas, como los pliegues, que Metalmind tampoco tiene. Ninguna de las dos depende de RaTeX.
 - **Línea base**: una fórmula en línea se coloca con su profundidad (`DisplayList::depth`) bajo la línea base del texto. Su ancho es el de la imagen; los clics sobre ella van al principio de la fórmula en la fuente (con el mapa del `DisplayLine`).
 - **Hilos**: el layout (µs) va en el hilo de la UI, solo para las líneas visibles y las de `scrolloff`, porque el alto se necesita en el mismo frame. El rasterizado va al executor de fondo de GPUI con la versión del buffer, como el picker ([performance.md](../performance.md), "El finder y la paleta"): lo que vuelve viejo se descarta. Mientras tanto, la línea muestra la fuente atenuada en el lugar ya reservado, sin saltos.
-- **Caché**: dos niveles, en la UI y por ventana. El `DisplayList` por `(LaTeX, modo)`, que está en em y sirve para cualquier tamaño. La imagen (`Arc<RenderImage>`) por `(LaTeX, modo, tamaño de la fuente, escala de la pantalla, color)`: el color sale del tema (un token nuevo, `syntax.math`) y la escala de la pantalla, así que cambiar de tema o de monitor vuelve a pintar. LRU con tope en bytes (unos 32 MB: una fórmula ocupa ~29 KB a escala 1 y ~115 KB a escala 2); al sacar una imagen hay que soltarla del atlas de GPUI. Nada se guarda en disco: pintar es más barato que leer un archivo.
-- **Errores**: una fórmula que no compone se muestra como su fuente con `syntax.math_error` y el mensaje del parser al pasar el ratón, como Obsidian. Nunca rompe la línea.
+- **Caché**: dos niveles, en la UI y por ventana. El `DisplayList` por `(LaTeX, modo, color)`: está en em, así que sirve para cualquier tamaño y escala, y el color va en el layout (`LayoutOptions::color`) para que `\color{…}` siga funcionando. La imagen (`Arc<RenderImage>`) por `(LaTeX, modo, tamaño de la fuente, escala de la pantalla, color)`: el color sale del tema (un token nuevo, `syntax.math`) y la escala de la pantalla, así que cambiar de tema o de monitor vuelve a pintar. LRU con tope en bytes (unos 32 MB: una fórmula ocupa ~29 KB a escala 1 y ~115 KB a escala 2); al sacar una imagen hay que soltarla del atlas de GPUI. Nada se guarda en disco: pintar es más barato que leer un archivo.
+- **Errores**: una fórmula que RaTeX no entiende (`ParseError`) se muestra como su fuente con `syntax.math_error` y el mensaje del parser al pasar el ratón, como Obsidian. Nunca rompe la línea. Los tokens `syntax.math` y `syntax.math_error` van en los dos temas de fábrica.
 - **Acciones**: el live preview ya tendrá su toggle (fuente / live / lectura, 03 §8, M4); las fórmulas lo siguen. Copiar una fórmula copia su LaTeX. Lo demás (un selector de símbolos, un editor visual como el de `ratex-gpui`) es otra conversación.
 
-### Lo que falta medir antes de implementar
+### Lo que mide `feat/math`
 
-- El rasterizador propio de la `DisplayList` (para quitar el PNG) y su tiempo.
-- Una nota real con cientos de fórmulas: memoria de la caché e imágenes en el atlas de GPUI.
-- La fuente: KaTeX (la de RaTeX) contra la del editor; en un tema oscuro se ve bien (captura del §8), falta compararla al lado del texto de la UI.
+Sus filas en el [presupuesto](../performance.md): el scan con fórmulas (el scanner sigue siendo lineal: prueba de complejidad), el layout de las fórmulas visibles tras una tecla (≤ 1 ms) y una nota con cientos de fórmulas (rasterizado en el fondo, memoria de la caché y de las imágenes en el atlas de GPUI). Si el rasterizado no cabe, entra el rasterizador propio de la `DisplayList`. Y capturas de los dos temas, como las del markdown, para ver la fuente de KaTeX junto al texto de la UI.
 
 ## 8. Prototipo
 
