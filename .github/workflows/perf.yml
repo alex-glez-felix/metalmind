@@ -89,6 +89,7 @@ jobs:
             exit 0
           fi
           echo "medida=true" >> "$GITHUB_OUTPUT"
+          echo "paquetes=${medidos[*]}" >> "$GITHUB_OUTPUT"
           # Cargo decide si un crate del workspace está al día por fechas y con
           # rutas relativas al crate: lo que cambia la PR tiene que quedar más
           # nuevo que lo que compiló la base, o mediría el binario de la base.
@@ -98,6 +99,7 @@ jobs:
         if: steps.base.outputs.medida == 'true'
         env:
           ACEPTADA: ${{ contains(github.event.pull_request.labels.*.name, 'rendimiento-aceptado') }}
+          MEDIDOS: ${{ steps.base.outputs.paquetes }}
         run: |
           limite=()
           if [ "$ACEPTADA" = "true" ]; then
@@ -106,9 +108,14 @@ jobs:
             limite=(--callgrind-limits="$LIMITE")
           fi
           # Todos corren aunque uno falle, para ver cada regresión de una vez.
+          # Un crate cuyo benchmark la base no tiene solo se corre.
           fallaron=()
           for paquete in $PAQUETES; do
-            cargo bench -p "$paquete" --bench instrucciones -- --baseline=base "${limite[@]}" \
+            comparar=()
+            if [[ " $MEDIDOS " == *" $paquete "* ]]; then
+              comparar=(--baseline=base "${limite[@]}")
+            fi
+            cargo bench -p "$paquete" --bench instrucciones -- "${comparar[@]}" \
               || fallaron+=("$paquete")
           done
           if [ ${#fallaron[@]} -gt 0 ]; then
