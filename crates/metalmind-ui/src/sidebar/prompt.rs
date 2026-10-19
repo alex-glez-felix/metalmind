@@ -17,7 +17,7 @@ impl Sidebar {
             .flex()
             .flex_col()
             .flex_none()
-            .gap(theme.panel_padding_y)
+            .gap(theme.panel_gap)
             .px(theme.panel_padding_x)
             .py(theme.panel_padding_y)
             .border_b(theme.border_width)
@@ -68,14 +68,14 @@ fn input_field(input: &LineInput, theme: &Theme) -> Div {
         .bg(theme.background)
         .border(theme.border_width)
         .border_color(theme.panel_border)
-        .rounded(theme.radius)
+        .rounded(theme.radius_md)
         .whitespace_nowrap()
         .overflow_hidden()
         .child(before.to_owned())
         .child(
             div()
                 .w(theme.caret_width)
-                .h(theme.font_size)
+                .h(theme.ui_font_size)
                 .flex_none()
                 .bg(theme.caret),
         )
@@ -91,7 +91,7 @@ fn confirm_delete(
     div()
         .flex()
         .flex_col()
-        .gap(theme.panel_padding_y)
+        .gap(theme.panel_gap)
         .child(format!("¿Mandar «{path}» a la papelera del vault?"))
         .when(unsaved, |question| {
             question.child(

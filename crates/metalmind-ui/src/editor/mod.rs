@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use gpui_kit::{
     App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
     KeyDownEvent, MouseButton, ParentElement as _, Render, Styled as _, Subscription, Window, div,
+    prelude::FluentBuilder as _,
 };
 use metalmind_buffer::ByteOffset;
 use metalmind_vault::VaultPath;
@@ -273,6 +274,7 @@ impl Render for Editor {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
+                    .map(|element| theme.editor_text(element))
                     .cursor(CursorStyle::IBeam)
                     .on_scroll_wheel(cx.listener(Self::on_scroll))
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::on_left_down))

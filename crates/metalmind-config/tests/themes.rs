@@ -210,12 +210,26 @@ fn sin_extends_le_faltan_colores() {
     assert!(
         error
             .message
-            .starts_with("al tema `a` le faltan claves: ui.foreground, ui.selection"),
+            .starts_with("al tema `a` le faltan claves: roles.background, roles.surface"),
         "{}",
         error.message
     );
-    assert!(error.message.contains("cursor.normal") && error.message.contains("syntax.markup"));
-    assert!(error.message.ends_with("headings.h6"), "{}", error.message);
+    for key in [
+        "ui.foreground, ui.selection",
+        "cursor.normal",
+        "syntax.markup",
+        "headings.h6",
+        "spacing.xs",
+        "text.editor",
+        "rows.tree",
+    ] {
+        assert!(error.message.contains(key), "{key}: {}", error.message);
+    }
+    assert!(
+        error.message.ends_with("layout.menu_padding"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]
@@ -287,7 +301,7 @@ fn nombre_de_paleta_desconocido_con_posicion() {
         .error;
     assert_eq!(
         error.message,
-        "`azull` no está en la paleta (en cursor.insert)"
+        "`azull` no está en la paleta ni es un rol (en cursor.insert)"
     );
     assert_eq!(
         error.location,

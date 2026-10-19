@@ -15,7 +15,7 @@ pub fn line_font(kind: Option<LineKind>, size: Pixels, theme: &Theme) -> (Pixels
             let (scale, weight) = theme.markdown.headings[index];
             (size * scale, weight)
         }
-        _ => (size, FontWeight::NORMAL),
+        _ => (size, theme.weight_normal),
     }
 }
 
@@ -42,8 +42,8 @@ pub fn text_runs(
             TextRun {
                 len: run.len,
                 font: Font {
-                    weight: if has(Decorations::STRONG) && weight.0 < FontWeight::BOLD.0 {
-                        FontWeight::BOLD
+                    weight: if has(Decorations::STRONG) && weight.0 < theme.weight_strong.0 {
+                        theme.weight_strong
                     } else {
                         weight
                     },

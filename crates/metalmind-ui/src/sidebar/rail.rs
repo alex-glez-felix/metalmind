@@ -55,7 +55,7 @@ fn rail_button<A: Action + Clone>(
         .flex()
         .items_center()
         .justify_center()
-        .rounded(theme.radius)
+        .rounded(theme.radius_md)
         .text_color(theme.panel_muted)
         .when(active, |button| {
             button

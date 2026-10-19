@@ -3912,6 +3912,7 @@ dependencies = [
  "metalmind-vim",
  "pretty_assertions",
  "proptest",
+ "regex",
  "rstest",
  "serde",
  "serde-saphyr",

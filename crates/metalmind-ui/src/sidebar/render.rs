@@ -289,8 +289,8 @@ pub(super) fn button<A: Action + Clone>(
 ) -> AnyElement {
     div()
         .id(id)
-        .px(theme.menu_padding)
-        .rounded(theme.radius)
+        .px(theme.panel_button_padding_x)
+        .rounded(theme.radius_md)
         .text_color(theme.panel_muted)
         .hover(|button| {
             button

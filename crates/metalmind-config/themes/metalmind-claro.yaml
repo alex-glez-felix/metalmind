@@ -17,43 +17,59 @@ palette:
   red: "#c4304f"
   comment: "#8a909a"
 
-ui:
+# Los colores por su papel; `ui`, `cursor` y `syntax` los nombran como a un
+# color de la paleta.
+roles:
   background: bg
-  foreground: fg
-  selection: { color: blue, alpha: 0.2 }
+  surface: bg_dark
+  raised: bg_highlight
+  text: fg
+  text_muted: fg_dim
+  text_faint: fg_faint
+  text_inactive: comment
+  accent: blue
+  border_subtle: border
+  border_strong: comment
+  danger: red
+  warning: yellow
+
+ui:
+  background: background
+  foreground: text
+  selection: { color: accent, alpha: 0.2 }
   search: { color: yellow, alpha: 0.3 }
   search_current: { color: orange, alpha: 0.5 }
-  current_line: bg_highlight
-  gutter: bg
-  gutter_foreground: fg_faint
-  gutter_current: fg
-  status_background: bg_dark
-  status_foreground: fg_dim
-  status_unfocused_foreground: comment
-  status_border: border
-  pane_border: comment
-  modified: yellow
-  error: red
-  picker_background: bg_dark
-  picker_border: border
-  picker_selected: { color: blue, alpha: 0.12 }
-  picker_hover: { color: fg, alpha: 0.05 }
-  picker_match: blue
-  picker_muted: fg_dim
-  panel_background: bg_dark
-  panel_foreground: fg
-  panel_muted: fg_dim
-  panel_selection: { color: blue, alpha: 0.2 }
-  panel_selection_unfocused: { color: fg_dim, alpha: 0.6 }
-  panel_active: { color: fg, alpha: 0.07 }
-  panel_hover: bg_highlight
-  panel_border: border
-  panel_folder: blue
-  panel_note: fg_dim
+  current_line: raised
+  gutter: background
+  gutter_foreground: text_faint
+  gutter_current: text
+  status_background: surface
+  status_foreground: text_muted
+  status_unfocused_foreground: text_inactive
+  status_border: border_subtle
+  pane_border: border_strong
+  modified: warning
+  error: danger
+  picker_background: surface
+  picker_border: border_subtle
+  picker_selected: { color: accent, alpha: 0.12 }
+  picker_hover: { color: text, alpha: 0.05 }
+  picker_match: accent
+  picker_muted: text_muted
+  panel_background: surface
+  panel_foreground: text
+  panel_muted: text_muted
+  panel_selection: { color: accent, alpha: 0.2 }
+  panel_selection_unfocused: { color: text_muted, alpha: 0.6 }
+  panel_active: { color: text, alpha: 0.07 }
+  panel_hover: raised
+  panel_border: border_subtle
+  panel_folder: accent
+  panel_note: text_muted
   panel_match: orange
-  menu_background: bg
-  menu_border: border
-  menu_hover: { color: blue, alpha: 0.15 }
+  menu_background: background
+  menu_border: border_subtle
+  menu_hover: { color: accent, alpha: 0.15 }
 
 cursor:
   normal: { color: blue, alpha: 0.4 }
@@ -96,3 +112,56 @@ headings:
   h4: { size: 1.1, weight: 700 }
   h5: { size: 1.0, weight: 700 }
   h6: { size: 1.0, weight: 600 }
+
+# Escala de espaciado, en píxeles (base 4). `rows` y `layout` usan estos
+# nombres o un número de píxeles.
+spacing:
+  xs: 4
+  sm: 8
+  md: 12
+  lg: 16
+
+radius:
+  sm: 2
+  md: 4
+  lg: 8
+
+# Anchos de línea, en píxeles.
+stroke:
+  border: 1
+  caret: 2
+  text_line: 1
+
+# Tamaño (veces `font.size` de config.yaml) e interlineado (veces el tamaño).
+text:
+  editor: { size: 1.0, line_height: 1.4 }
+  ui_md: { size: 1.0, line_height: 1.4 }
+  ui_sm: { size: 1.0, line_height: 1.4 }
+  normal: 400
+  strong: 700
+
+rows:
+  tree: 1.7            # veces la fuente, redondeado
+  menu: 1.7
+  picker_padding: 6    # arriba y abajo de la línea de texto
+
+layout:
+  status_padding_x: 10
+  status_padding_y: 3
+  status_gap: lg
+  picker_width: 640
+  picker_top: 64
+  picker_rows: 12
+  picker_padding_x: md
+  picker_input_padding_y: md
+  picker_gap: lg
+  panel_padding_x: sm
+  panel_padding_y: 6
+  panel_gap: 6
+  panel_indent: 14
+  panel_button_padding_x: xs
+  icon_size: 0.8       # veces la fuente, redondeado
+  rail_width: 36
+  rail_button_size: 28
+  menu_width: 240
+  menu_padding: xs

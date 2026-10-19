@@ -1,6 +1,6 @@
 //! Tokens de tema: todo color y tamaño de la UI sale de aquí.
 
-use gpui_kit::{App, FontWeight, Global, Hsla, Pixels, SharedString, px, rgb};
+use gpui_kit::{App, FontWeight, Global, Hsla, Pixels, SharedString, Styled, px, relative, rgb};
 use metalmind_config as config;
 
 /// Familias monoespaciadas, en orden de preferencia. GPUI no resuelve alias
@@ -55,7 +55,11 @@ pub struct Markdown {
 }
 
 impl Markdown {
-    fn new(syntax: &config::SyntaxColors, headings: &config::Headings) -> Self {
+    fn new(
+        syntax: &config::SyntaxColors,
+        headings: &config::Headings,
+        stroke: &config::Stroke,
+    ) -> Self {
         Self {
             heading: hsla(syntax.heading),
             bold: hsla(syntax.bold),
@@ -85,7 +89,7 @@ impl Markdown {
             headings: headings
                 .0
                 .map(|heading| (heading.size, FontWeight(f32::from(heading.weight)))),
-            strike_thickness: px(1.),
+            strike_thickness: px(stroke.text_line.0),
         }
     }
 }
@@ -142,9 +146,19 @@ pub struct Theme {
     pub menu_border: Hsla,
     pub menu_hover: Hsla,
     pub font_family: SharedString,
-    pub font_size: Pixels,
-    /// Alto de línea relativo al tamaño de la fuente.
-    pub line_height: f32,
+    /// El texto de las notas (`text.editor`).
+    pub editor_font_size: Pixels,
+    /// Alto de línea del editor, relativo a su tamaño de letra.
+    pub editor_line_height: f32,
+    /// El texto de la interfaz (`text.ui_md`).
+    pub ui_font_size: Pixels,
+    pub ui_line_height: f32,
+    /// Lo secundario de la interfaz (`text.ui_sm`): atajos, detalles y contadores.
+    pub ui_small_font_size: Pixels,
+    pub ui_small_line_height: f32,
+    pub weight_normal: FontWeight,
+    /// La negrita del markdown y las letras que coinciden en el picker.
+    pub weight_strong: FontWeight,
     pub caret_width: Pixels,
     pub underline_thickness: Pixels,
     pub border_width: Pixels,
@@ -161,8 +175,11 @@ pub struct Theme {
     /// Cuántas filas se ven antes de hacer scroll.
     pub picker_rows: u8,
     pub picker_padding_x: Pixels,
-    pub picker_padding_y: Pixels,
-    pub picker_radius: Pixels,
+    /// Arriba y abajo de la línea de texto de una fila.
+    pub picker_row_padding_y: Pixels,
+    pub picker_input_padding_y: Pixels,
+    /// Entre el texto de una fila y su detalle, y antes del contador del input.
+    pub picker_gap: Pixels,
     pub panel_width: Pixels,
     /// Alto de cada fila del árbol: todas iguales, para virtualizarlo.
     pub panel_row_height: Pixels,
@@ -171,13 +188,17 @@ pub struct Theme {
     pub panel_padding_x: Pixels,
     pub panel_padding_y: Pixels,
     pub panel_gap: Pixels,
+    pub panel_button_padding_x: Pixels,
     pub icon_size: Pixels,
     /// La barra de botones a la izquierda del panel.
     pub rail_width: Pixels,
     pub rail_button_size: Pixels,
-    pub radius: Pixels,
+    pub radius_sm: Pixels,
+    pub radius_md: Pixels,
+    pub radius_lg: Pixels,
     pub menu_width: Pixels,
     pub menu_padding: Pixels,
+    pub menu_row_height: Pixels,
     pub markdown: Markdown,
 }
 
@@ -201,10 +222,15 @@ impl Theme {
             cursor,
             syntax,
             headings,
+            metrics,
             ..
         } = &config.theme;
+        let (radius, stroke, text) = (&metrics.radius, &metrics.stroke, &metrics.text);
+        let (rows, layout) = (&metrics.rows, &metrics.layout);
         let settings = &config.settings;
         let padding = settings.editor.padding;
+        let font_size = settings.font.size.get();
+        let ui_font = font_size * text.ui_md.size;
         Self {
             background: hsla(ui.background),
             foreground: hsla(ui.foreground),
@@ -246,36 +272,47 @@ impl Theme {
             menu_border: hsla(ui.menu_border),
             menu_hover: hsla(ui.menu_hover),
             font_family,
-            font_size: px(settings.font.size.get()),
-            line_height: 1.4,
-            caret_width: px(2.),
-            underline_thickness: px(1.),
-            border_width: px(1.),
+            editor_font_size: px(font_size * text.editor.size),
+            editor_line_height: text.editor.line_height,
+            ui_font_size: px(ui_font),
+            ui_line_height: text.ui_md.line_height,
+            ui_small_font_size: px(font_size * text.ui_sm.size),
+            ui_small_line_height: text.ui_sm.line_height,
+            weight_normal: FontWeight(f32::from(text.normal.0)),
+            weight_strong: FontWeight(f32::from(text.strong.0)),
+            caret_width: px(stroke.caret.0),
+            underline_thickness: px(stroke.text_line.0),
+            border_width: px(stroke.border.0),
             pane_border_width: px(f32::from(settings.panes.border_width)),
             text_padding_x: px(f32::from(padding.horizontal)),
             text_padding_y: px(f32::from(padding.vertical)),
-            status_padding_x: px(10.),
-            status_padding_y: px(3.),
-            status_gap: px(16.),
-            picker_width: px(640.),
-            picker_top: px(64.),
-            picker_rows: 12,
-            picker_padding_x: px(12.),
-            picker_padding_y: px(6.),
-            picker_radius: px(8.),
+            status_padding_x: px(layout.status_padding_x.0),
+            status_padding_y: px(layout.status_padding_y.0),
+            status_gap: px(layout.status_gap.0),
+            picker_width: px(layout.picker_width.0),
+            picker_top: px(layout.picker_top.0),
+            picker_rows: layout.picker_rows.0,
+            picker_padding_x: px(layout.picker_padding_x.0),
+            picker_row_padding_y: px(rows.picker_padding.0),
+            picker_input_padding_y: px(layout.picker_input_padding_y.0),
+            picker_gap: px(layout.picker_gap.0),
             panel_width: px(f32::from(settings.panel.width.get())),
-            panel_row_height: px((settings.font.size.get() * 1.7).round()),
-            panel_indent: px(14.),
-            panel_padding_x: px(8.),
-            panel_padding_y: px(6.),
-            panel_gap: px(6.),
-            icon_size: px((settings.font.size.get() * 0.8).round()),
-            rail_width: px(36.),
-            rail_button_size: px(28.),
-            radius: px(4.),
-            menu_width: px(240.),
-            menu_padding: px(4.),
-            markdown: Markdown::new(syntax, headings),
+            panel_row_height: px((ui_font * rows.tree.0).round()),
+            panel_indent: px(layout.panel_indent.0),
+            panel_padding_x: px(layout.panel_padding_x.0),
+            panel_padding_y: px(layout.panel_padding_y.0),
+            panel_gap: px(layout.panel_gap.0),
+            panel_button_padding_x: px(layout.panel_button_padding_x.0),
+            icon_size: px((ui_font * layout.icon_size.0).round()),
+            rail_width: px(layout.rail_width.0),
+            rail_button_size: px(layout.rail_button_size.0),
+            radius_sm: px(radius.sm.0),
+            radius_md: px(radius.md.0),
+            radius_lg: px(radius.lg.0),
+            menu_width: px(layout.menu_width.0),
+            menu_padding: px(layout.menu_padding.0),
+            menu_row_height: px((ui_font * rows.menu.0).round()),
+            markdown: Markdown::new(syntax, headings, stroke),
         }
     }
 
@@ -283,7 +320,50 @@ impl Theme {
     pub fn get(cx: &App) -> &Self {
         cx.global::<Self>()
     }
+
+    /// `element` con la letra de las notas.
+    pub fn editor_text<E: Styled>(&self, element: E) -> E {
+        element
+            .text_size(self.editor_font_size)
+            .line_height(relative(self.editor_line_height))
+    }
+
+    /// `element` con la letra de la interfaz.
+    pub fn ui_text<E: Styled>(&self, element: E) -> E {
+        element
+            .text_size(self.ui_font_size)
+            .line_height(relative(self.ui_line_height))
+    }
+
+    /// `element` con la letra de lo secundario: atajos, detalles y contadores.
+    pub fn ui_small_text<E: Styled>(&self, element: E) -> E {
+        element
+            .text_size(self.ui_small_font_size)
+            .line_height(relative(self.ui_small_line_height))
+    }
+
+    /// Alto de una línea de texto de la interfaz.
+    #[must_use]
+    pub fn ui_line(&self) -> Pixels {
+        self.ui_font_size * self.ui_line_height
+    }
+
+    /// Alto de una fila del picker: su línea de texto con aire arriba y abajo.
+    #[must_use]
+    pub fn picker_row_height(&self) -> Pixels {
+        self.ui_line() + self.picker_row_padding_y * 2.
+    }
+
+    /// El lado corto de los íconos provisionales del panel, que no son
+    /// cuadrados; se van con los de Tabler (#41).
+    #[must_use]
+    pub fn icon_short_side(&self) -> Pixels {
+        self.icon_size * ICON_SHAPE_RATIO
+    }
 }
+
+/// Proporción de las formas de carpeta y nota mientras no hay íconos (#41).
+const ICON_SHAPE_RATIO: f32 = 0.75;
 
 fn hsla(color: config::Color) -> Hsla {
     Hsla::from(rgb(color.rgb)).opacity(color.alpha)
@@ -307,120 +387,5 @@ fn first_installed(candidates: &[&str], installed: &[String]) -> Option<SharedSt
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn installed(names: &[&str]) -> Vec<String> {
-        names.iter().map(|&name| name.to_owned()).collect()
-    }
-
-    #[test]
-    fn elige_la_primera_candidata_instalada() {
-        let fonts = installed(&["Cantarell", "Liberation Mono", "DejaVu Sans Mono"]);
-        assert_eq!(
-            first_installed(MONO_FONTS, &fonts).as_deref(),
-            Some("DejaVu Sans Mono")
-        );
-    }
-
-    #[test]
-    fn la_fuente_de_la_config_si_esta_instalada() {
-        let fonts = installed(&["Iosevka", "DejaVu Sans Mono"]);
-        assert_eq!(pick_font(Some("Iosevka"), &fonts).unwrap(), "Iosevka");
-        assert_eq!(
-            pick_font(Some("No Existe"), &fonts).unwrap(),
-            "DejaVu Sans Mono"
-        );
-        assert_eq!(pick_font(None, &fonts).unwrap(), "DejaVu Sans Mono");
-    }
-
-    /// Los valores que `metalmind-ui` tenía fijos antes de leer temas, y los de paneles.
-    /// El borde entre paneles es `comment`, con contraste 3:1: con `border` no se veía.
-    #[test]
-    fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
-        let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
-        let blue = Hsla::from(rgb(0x7a_a2_f7));
-        let expected: [(&str, Hsla, Hsla); 16] = [
-            ("background", theme.background, rgb(0x1c_1f_24).into()),
-            ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
-            ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
-            ("block_cursor", theme.block_cursor, blue.opacity(0.5)),
-            (
-                "visual_cursor",
-                theme.visual_cursor,
-                Hsla::from(rgb(0xbb_9a_f7)).opacity(0.5),
-            ),
-            (
-                "unfocused_cursor",
-                theme.unfocused_cursor,
-                Hsla::from(rgb(0x9a_a0_a6)).opacity(0.35),
-            ),
-            ("selection", theme.selection, blue.opacity(0.3)),
-            (
-                "search",
-                theme.search,
-                Hsla::from(rgb(0xe0_af_68)).opacity(0.3),
-            ),
-            (
-                "search_current",
-                theme.search_current,
-                Hsla::from(rgb(0x00ff_9e64)).opacity(0.6),
-            ),
-            (
-                "status_background",
-                theme.status_background,
-                rgb(0x16_18_1d).into(),
-            ),
-            (
-                "status_foreground",
-                theme.status_foreground,
-                rgb(0x9a_a0_a6).into(),
-            ),
-            (
-                "status_unfocused_foreground",
-                theme.status_unfocused_foreground,
-                rgb(0x5c_63_70).into(),
-            ),
-            ("status_border", theme.status_border, rgb(0x2a_2e_36).into()),
-            ("pane_border", theme.pane_border, rgb(0x5c_63_70).into()),
-            ("modified", theme.modified, rgb(0xe0_af_68).into()),
-            ("error", theme.error, rgb(0xf7_76_8e).into()),
-        ];
-        for (name, actual, before) in expected {
-            assert_eq!(actual, before, "{name}");
-        }
-        assert_eq!(theme.font_size, px(15.));
-    }
-
-    #[test]
-    fn el_margen_del_texto_sale_de_la_config() {
-        let mut config = config::Config::defaults().unwrap();
-        config.settings.editor.padding = config::Padding {
-            horizontal: 20,
-            vertical: 0,
-        };
-        let theme = Theme::with_font(&config, "Mono".into());
-        assert_eq!(
-            (theme.text_padding_x, theme.text_padding_y),
-            (px(20.), px(0.))
-        );
-    }
-
-    #[test]
-    fn el_ancho_del_borde_entre_paneles_sale_de_la_config() {
-        let mut config = config::Config::defaults().unwrap();
-        let width =
-            |config: &config::Config| Theme::with_font(config, "Mono".into()).pane_border_width;
-        assert_eq!(width(&config), px(2.));
-        config.settings.panes.border_width = 5;
-        assert_eq!(width(&config), px(5.));
-    }
-
-    #[test]
-    fn sin_ninguna_candidata_no_hay_fuente() {
-        assert_eq!(
-            first_installed(MONO_FONTS, &installed(&["Cantarell"])),
-            None
-        );
-    }
-}
+#[path = "theme_tests.rs"]
+mod tests;

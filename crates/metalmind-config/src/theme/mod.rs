@@ -6,19 +6,26 @@ mod color;
 mod groups;
 mod headings;
 mod loader;
+mod metrics;
+mod units;
 
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
 pub use color::Color;
-pub use groups::{CursorColors, SyntaxColors, UiColors};
+pub use groups::{CursorColors, RoleColors, SyntaxColors, UiColors};
 pub use headings::{Heading, Headings};
 pub use loader::{LoadError, Themes};
+pub use metrics::{
+    Count, Factor, Layout, Length, Metrics, Px, Radius, Rows, Spacing, Stroke, Text, TextStyle,
+    Weight,
+};
 
 use color::Hex;
-use groups::{RawCursor, RawSyntax, RawUi};
+use groups::{RawCursor, RawRoles, RawSyntax, RawUi};
 use headings::RawHeadings;
+use metrics::{RawLayout, RawMetrics, RawRadius, RawRows, RawSpacing, RawStroke, RawText};
 
 use crate::parse::Spanned;
 
@@ -40,10 +47,12 @@ pub const BUILTIN_THEMES: &[(&str, &str)] = &[
 #[derive(Clone, Debug, PartialEq)]
 pub struct Theme {
     pub name: String,
+    pub roles: RoleColors,
     pub ui: UiColors,
     pub cursor: CursorColors,
     pub syntax: SyntaxColors,
     pub headings: Headings,
+    pub metrics: Metrics,
 }
 
 /// Un archivo de tema tal como se escribe.
@@ -52,8 +61,28 @@ pub struct Theme {
 struct ThemeFile {
     extends: Option<Spanned<String>>,
     palette: BTreeMap<String, Hex>,
+    roles: RawRoles,
     ui: RawUi,
     cursor: RawCursor,
     syntax: RawSyntax,
     headings: RawHeadings,
+    spacing: RawSpacing,
+    radius: RawRadius,
+    stroke: RawStroke,
+    text: RawText,
+    rows: RawRows,
+    layout: RawLayout,
+}
+
+impl ThemeFile {
+    fn metrics(&self) -> RawMetrics<'_> {
+        RawMetrics {
+            spacing: &self.spacing,
+            radius: &self.radius,
+            stroke: &self.stroke,
+            text: &self.text,
+            rows: &self.rows,
+            layout: &self.layout,
+        }
+    }
 }

@@ -137,7 +137,7 @@ impl ContextMenu {
             .bg(theme.menu_background)
             .border(theme.border_width)
             .border_color(theme.menu_border)
-            .rounded(theme.radius)
+            .rounded(theme.radius_md)
             .on_mouse_down_out(cx.listener(|sidebar, _, _, cx| {
                 sidebar.menu = None;
                 cx.notify();
@@ -184,9 +184,9 @@ impl ContextMenu {
             .flex()
             .justify_between()
             .px(theme.panel_padding_x)
-            .h(theme.panel_row_height)
+            .h(theme.menu_row_height)
             .items_center()
-            .rounded(theme.radius)
+            .rounded(theme.radius_md)
             .text_color(color)
             .when(index == self.selected, |row| row.bg(theme.menu_hover))
             .hover(|row| row.bg(theme.menu_hover))
@@ -197,7 +197,12 @@ impl ContextMenu {
                 cx.notify();
             }))
             .child(item.label())
-            .child(div().text_color(theme.panel_muted).child(item.key()))
+            .child(
+                div()
+                    .map(|element| theme.ui_small_text(element))
+                    .text_color(theme.panel_muted)
+                    .child(item.key()),
+            )
             .into_any_element()
     }
 }

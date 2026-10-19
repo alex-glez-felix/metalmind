@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, ElementInputHandler, FontWeight, HighlightStyle, InteractiveElement as _, IntoElement,
+    Context, ElementInputHandler, HighlightStyle, InteractiveElement as _, IntoElement,
     ParentElement as _, Pixels, Render, StatefulInteractiveElement as _, Styled as _, StyledText,
     Window, canvas, div, prelude::FluentBuilder as _, relative, uniform_list,
 };
@@ -15,7 +15,7 @@ use crate::theme::Theme;
 impl<D: PickerDelegate> Render for PickerView<D> {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let row_height = theme.font_size * theme.line_height + theme.picker_padding_y * 2.;
+        let row_height = theme.picker_row_height();
         let rows = u8::try_from(self.delegate.len()).unwrap_or(u8::MAX);
         let visible = rows.clamp(1, theme.picker_rows);
         div()
@@ -44,7 +44,7 @@ impl<D: PickerDelegate> Render for PickerView<D> {
             .bg(theme.picker_background)
             .border(theme.border_width)
             .border_color(theme.picker_border)
-            .rounded(theme.picker_radius)
+            .rounded(theme.radius_lg)
             .child(self.render_input(&theme, cx))
             .child(
                 div()
@@ -64,13 +64,13 @@ impl<D: PickerDelegate> PickerView<D> {
         let empty = line.text().is_empty() && marked.is_empty();
         let entity = cx.entity();
         let focus = self.focus_handle.clone();
-        let caret_height = theme.font_size * theme.line_height;
+        let caret_height = theme.ui_line();
         div()
             .relative()
             .flex()
             .items_center()
             .px(theme.picker_padding_x)
-            .py(theme.picker_padding_y * 2.)
+            .py(theme.picker_input_padding_y)
             .child(div().child(before.to_owned()))
             .when(!marked.is_empty(), |input| {
                 input.child(div().underline().child(marked))
@@ -87,8 +87,9 @@ impl<D: PickerDelegate> PickerView<D> {
             .children(self.delegate.status().map(|status| {
                 div()
                     .ml_auto()
-                    .pl(theme.status_gap)
+                    .pl(theme.picker_gap)
                     .flex_none()
+                    .map(|element| theme.ui_small_text(element))
                     .text_color(theme.picker_muted)
                     .child(status)
             }))
@@ -147,7 +148,7 @@ impl<D: PickerDelegate> PickerView<D> {
         } = self.delegate.row(row);
         let highlight = HighlightStyle {
             color: Some(theme.picker_match),
-            font_weight: Some(FontWeight::BOLD),
+            font_weight: Some(theme.weight_strong),
             ..HighlightStyle::default()
         };
         let highlights = highlights.into_iter().map(|range| (range, highlight));
@@ -160,9 +161,9 @@ impl<D: PickerDelegate> PickerView<D> {
             .flex()
             .items_center()
             .justify_between()
-            .gap(theme.status_gap)
+            .gap(theme.picker_gap)
             .px(theme.picker_padding_x)
-            .py(theme.picker_padding_y)
+            .py(theme.picker_row_padding_y)
             .when(selected, |row| row.bg(theme.picker_selected))
             .when(!selected, |row| row.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
@@ -170,6 +171,7 @@ impl<D: PickerDelegate> PickerView<D> {
             .children(detail.map(|detail| {
                 div()
                     .flex_none()
+                    .map(|element| theme.ui_small_text(element))
                     .text_color(theme.picker_muted)
                     .child(detail)
             }))
