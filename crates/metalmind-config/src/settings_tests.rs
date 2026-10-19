@@ -21,6 +21,8 @@ editor:
   padding:
     horizontal: 20
     vertical: 0
+  autosave: false
+  autosave_delay_ms: 2500
 
 panes:
   border_width: 4
@@ -70,6 +72,8 @@ fn every_setting() -> Settings {
                 horizontal: 20,
                 vertical: 0,
             },
+            autosave: false,
+            autosave_delay_ms: AutosaveDelay(2_500),
         },
         panes: Panes { border_width: 4 },
         panel: Panel {
@@ -149,7 +153,9 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "scrolloff": 5,
     "tabstop": 2,
     "expandtab": false,
-    "padding": { "horizontal": 20, "vertical": 0 }
+    "padding": { "horizontal": 20, "vertical": 0 },
+    "autosave": false,
+    "autosave_delay_ms": 2500
   },
   "panes": { "border_width": 4 },
   "panel": { "width": 320 },
@@ -274,6 +280,8 @@ fn valor_fuera_de_rango_es_error() {
         ("font:\n  size: 0", 2),
         ("font:\n  size: 900", 2),
         ("editor:\n  tabstop: 0", 2),
+        ("editor:\n  autosave_delay_ms: 99", 2),
+        ("editor:\n  autosave_delay_ms: 60001", 2),
         ("editor:\n  padding:\n    vertical: 300", 3),
         ("editor:\n  padding:\n    horizontal: -1", 3),
     ] {

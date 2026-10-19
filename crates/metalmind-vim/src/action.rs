@@ -294,6 +294,7 @@ impl Action {
         Self::HistoryNext,
         Self::ToggleCheckbox,
         Self::Command(Command::Save),
+        Self::Command(Command::ForceSave),
         Self::Command(Command::Quit),
         Self::Command(Command::ForceQuit),
         Self::Command(Command::SaveAndQuit),
