@@ -8,7 +8,7 @@ use gpui_kit::{AppContext as _, Context, SharedString, Task};
 use metalmind_search::FuzzyMatcher;
 
 use super::highlight::match_ranges;
-use super::view::{PickerDelegate, PickerRow, PickerView};
+use super::view::{Overflow, PickerDelegate, PickerRow, PickerView};
 use super::{Chosen, InputLine, LineEdit, Matches, Open, PickerState, Step};
 
 /// Lo que se puede elegir en un picker difuso.
@@ -31,6 +31,13 @@ impl Haystack {
         match self {
             Self::Paths => FuzzyMatcher::paths(),
             Self::Text => FuzzyMatcher::text(),
+        }
+    }
+
+    fn overflow(self) -> Overflow {
+        match self {
+            Self::Paths => Overflow::Middle,
+            Self::Text => Overflow::Around,
         }
     }
 }
@@ -152,6 +159,7 @@ impl<T: PickerItem> PickerDelegate for Fuzzy<T> {
         PickerRow {
             highlights: match_ranges(&text, &positions),
             text,
+            overflow: self.haystack.overflow(),
             detail: item.detail().map(str::to_owned),
         }
     }

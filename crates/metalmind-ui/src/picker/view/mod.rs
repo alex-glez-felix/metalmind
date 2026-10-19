@@ -6,6 +6,7 @@
 
 mod input;
 mod render;
+mod row_line;
 
 use std::ops::Range;
 
@@ -60,14 +61,28 @@ pub trait PickerDelegate: Sized + 'static {
     }
 }
 
-/// Una fila de la lista.
+/// Una fila de la lista. Siempre ocupa una línea: lo que no cabe se
+/// recorta con elipsis.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PickerRow {
     pub text: String,
     /// Los bytes de `text` que coinciden, crecientes y sin solaparse.
     pub highlights: Vec<Range<usize>>,
+    /// Cómo se recorta `text` si no cabe.
+    pub overflow: Overflow,
     /// Lo que va a la derecha, apagado: el atajo de una acción o dónde está.
+    /// Si no cabe, se recorta por el medio.
     pub detail: Option<String>,
+}
+
+/// Cómo se recorta el texto de una fila que no cabe.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Overflow {
+    /// Alrededor del primer resaltado, que queda a la vista y centrado.
+    #[default]
+    Around,
+    /// Por el medio, como una ruta: quedan su principio y su nombre.
+    Middle,
 }
 
 /// Cómo se ve y se comporta un picker.

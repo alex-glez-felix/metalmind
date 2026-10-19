@@ -303,6 +303,31 @@ fn la_busqueda_de_texto_abre_la_nota_en_la_linea() {
     assert_eq!(smoke.files(), ["a.md", "b.md"]);
 }
 
+/// Con nombres más largos que el picker, cada fila sigue siendo una línea:
+/// `ctrl-j` baja más allá de las filas que se ven, `ctrl-k` desde la primera
+/// da la vuelta a la última y `enter` abre la que quedó marcada. Sin nada
+/// escrito, el finder lista la nota abierta y después las demás en orden.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_finder_elige_bien_con_filas_mas_largas_que_el_picker() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let long = "con un nombre mucho más largo que el ancho del picker, que no cabe en una fila";
+    for n in 1..=20 {
+        smoke.write(&format!("nota {n:02} {long}.md"), "\n");
+    }
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(&format!("<Space>f{}<CR>", "<C-j>".repeat(15)));
+    window.wait_title("de la nota 15", |title| title.starts_with("nota 15 "));
+    window.type_keys("i15<Esc>:w<CR><Space>f<C-k><CR>");
+    window.wait_title("de la nota 20", |title| title.starts_with("nota 20 "));
+    window.type_keys("i20<Esc>:wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read(&format!("nota 15 {long}.md")), "15\n");
+    assert_eq!(smoke.read(&format!("nota 20 {long}.md")), "20\n");
+}
+
 /// La paleta ejecuta una acción de la ventana (`editor: save`, con
 /// `ctrl-shift-p`) y una del motor (`vim: end of document`, con `space p`).
 #[test]

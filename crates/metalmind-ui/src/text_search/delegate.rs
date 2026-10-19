@@ -11,7 +11,7 @@ use super::model::{MAX_HITS, Status, TextSearchState};
 use super::worker::{Event, SearchWorker};
 use super::{Hit, OpenNote};
 use crate::picker::{
-    Chosen, InputLine, LineEdit, Open, PickerDelegate, PickerEvent, PickerRow, PickerView,
+    Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerEvent, PickerRow, PickerView,
 };
 
 pub struct TextSearch {
@@ -117,6 +117,7 @@ impl PickerDelegate for TextSearch {
         PickerRow {
             text: shown.text,
             highlights: shown.highlights,
+            overflow: Overflow::Around,
             detail: Some(format!("{}:{}", hit.path, hit.line.line + 1)),
         }
     }
