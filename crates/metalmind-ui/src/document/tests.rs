@@ -1,11 +1,13 @@
 use std::fs;
 use std::path::Path;
 
+use metalmind_vault::SaveKind;
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 use tempfile::TempDir;
 
 use super::*;
+use crate::disk::Files;
 
 #[test]
 fn abrir_un_archivo_que_no_existe_da_un_buffer_vacio() {
@@ -55,7 +57,7 @@ fn el_salto_final_no_entra_al_buffer(
     fs::write(&path, on_disk).unwrap();
     let mut document = Document::open(&path).unwrap();
     assert_eq!(document.buffer().to_string(), buffer);
-    let stats = document.save().unwrap();
+    let stats = document.save(&Files, SaveKind::Explicit).unwrap();
     assert_eq!(fs::read_to_string(&path).unwrap(), saved);
     assert_eq!(stats.bytes, saved.len());
     assert_eq!(stats.lines, saved.lines().count());
@@ -105,7 +107,7 @@ fn al_abrir_avisa_lo_que_hay_en_disco(
     let mut document = Document::open(&path).unwrap();
     assert_eq!(document.noeol(), noeol);
     assert_eq!(document.opened_stats(), stats);
-    document.save().unwrap();
+    document.save(&Files, SaveKind::Explicit).unwrap();
     assert!(!document.noeol(), "guardar pone el \\n que faltaba");
 }
 
@@ -115,7 +117,10 @@ fn un_buffer_sin_nombre_no_se_guarda() {
     assert_eq!(document.path(), None);
     assert_eq!(document.display_name(), "[No Name]");
     assert!(!document.is_file(Path::new("a.md")));
-    assert!(matches!(document.save(), Err(SaveError::NoFileName)));
+    assert!(matches!(
+        document.save(&Files, SaveKind::Explicit),
+        Err(SaveError::NoFileName)
+    ));
     assert_eq!(SaveError::NoFileName.to_string(), "E32: No file name");
 }
 
@@ -124,7 +129,7 @@ fn w_con_ruta_le_da_archivo_a_un_buffer_sin_nombre() {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("nueva.md");
     let mut document = Document::with_path(None, "hola");
-    document.save_to(&path).unwrap();
+    document.save_to(&path, &Files, false).unwrap();
     assert_eq!(fs::read_to_string(&path).unwrap(), "hola\n");
     assert_eq!(document.path(), Some(path.as_path()));
     assert!(!document.is_modified());
@@ -138,10 +143,10 @@ fn w_con_otra_ruta_escribe_una_copia_sin_pisar_nada() {
     fs::write(dir.path().join("ocupado.md"), "no\n").unwrap();
     let mut document = Document::open(&path).unwrap();
     let copy = dir.path().join("copia.md");
-    document.save_to(&copy).unwrap();
+    document.save_to(&copy, &Files, false).unwrap();
     assert_eq!(fs::read_to_string(&copy).unwrap(), "a\n");
     assert_eq!(document.path(), Some(path.as_path()), "sigue en el suyo");
-    let taken = document.save_to(&dir.path().join("ocupado.md"));
+    let taken = document.save_to(&dir.path().join("ocupado.md"), &Files, false);
     assert!(matches!(taken, Err(SaveError::Exists)));
     assert_eq!(
         SaveError::Exists.to_string(),
@@ -151,5 +156,55 @@ fn w_con_otra_ruta_escribe_una_copia_sin_pisar_nada() {
         fs::read_to_string(dir.path().join("ocupado.md")).unwrap(),
         "no\n"
     );
-    assert!(Document::unnamed().save_to(&path).is_err());
+    assert!(Document::unnamed().save_to(&path, &Files, false).is_err());
+}
+
+#[test]
+fn guardar_no_pisa_un_cambio_de_fuera_y_sobrescribir_si() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("a.md");
+    fs::write(&path, "uno\n").unwrap();
+    let mut document = Document::open(&path).unwrap();
+    fs::write(&path, "de fuera\n").unwrap();
+    assert!(matches!(
+        document.save(&Files, SaveKind::Explicit),
+        Err(SaveError::ChangedOnDisk)
+    ));
+    assert!(document.changed_on_disk());
+    assert_eq!(fs::read_to_string(&path).unwrap(), "de fuera\n");
+    document.overwrite(&Files, SaveKind::Explicit).unwrap();
+    assert!(!document.changed_on_disk());
+    assert_eq!(fs::read_to_string(&path).unwrap(), "uno\n");
+    document.save(&Files, SaveKind::Explicit).unwrap();
+}
+
+#[test]
+fn volver_a_lo_que_se_leyo_quita_el_aviso() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("a.md");
+    fs::write(&path, "uno\n").unwrap();
+    let mut document = Document::open(&path).unwrap();
+    fs::write(&path, "dos\n").unwrap();
+    assert!(document.check_disk().unwrap());
+    fs::write(&path, "uno\n").unwrap();
+    assert!(!document.check_disk().unwrap());
+    fs::remove_file(&path).unwrap();
+    assert!(
+        document.check_disk().unwrap(),
+        "borrarlo también es un cambio"
+    );
+}
+
+#[test]
+fn w_bang_con_ruta_pisa_un_archivo_que_existe() {
+    let dir = TempDir::new().unwrap();
+    let taken = dir.path().join("ocupado.md");
+    fs::write(&taken, "viejo\n").unwrap();
+    let mut document = Document::new(&dir.path().join("a.md"), "nuevo");
+    assert!(matches!(
+        document.save_to(&taken, &Files, false),
+        Err(SaveError::Exists)
+    ));
+    document.save_to(&taken, &Files, true).unwrap();
+    assert_eq!(fs::read_to_string(&taken).unwrap(), "nuevo\n");
 }

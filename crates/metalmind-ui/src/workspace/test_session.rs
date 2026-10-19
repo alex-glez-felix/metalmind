@@ -3,10 +3,12 @@
 use std::path::Path;
 
 use metalmind_buffer::ByteOffset;
+use metalmind_vault::SaveKind;
 use metalmind_vim::{Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
 use super::{Effect, LineNumbers, Message, Options, PaneId, PaneView, Workspace};
+use crate::disk::Files;
 use crate::document::{Document, FileStats, SaveError};
 
 /// Guarda lo que se escribe en `"+`; `"*` siempre está vacío.
@@ -274,7 +276,11 @@ impl Session {
     /// Guarda directo, sin pasar por `:w`, para probar a mitad de un Insert.
     pub fn save(&mut self) -> Result<FileStats, SaveError> {
         let id = self.workspace.panes[&self.pane()].document;
-        self.workspace.documents.get_mut(id).unwrap().save()
+        self.workspace
+            .documents
+            .get_mut(id)
+            .unwrap()
+            .save(&Files, SaveKind::Explicit)
     }
 }
 

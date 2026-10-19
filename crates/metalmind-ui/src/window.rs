@@ -2,6 +2,7 @@
 //! paneles como raíz, sin el `Root` de gpui-kit, que se queda con `tab`,
 //! `shift-tab` y `ctrl-c` (04 §riesgo 1).
 
+use std::rc::Rc;
 use std::sync::mpsc;
 
 use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
@@ -10,6 +11,7 @@ use metalmind_vault::{Vault, VaultUpdate};
 use metalmind_vim::Markdown;
 
 use crate::actions;
+use crate::disk::VaultDisk;
 use crate::document::Document;
 use crate::finder::{Prepared, SessionError, VaultSession};
 use crate::frames::FrameClock;
@@ -17,7 +19,7 @@ use crate::picker;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
-use crate::workspace::{LineNumbers, Options, Workspace};
+use crate::workspace::{Autosave, LineNumbers, Options, SystemClock, Workspace};
 use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
@@ -99,10 +101,18 @@ pub fn open(
             indent_list_children: config.settings.markdown.indent_list_children,
         },
     };
+    let autosave = editor.autosave.then_some(editor.autosave_delay_ms.get());
     let file = document.path().map(ToOwned::to_owned);
     cx.open_window(options, move |window, cx| {
-        let workspace = cx.new(|_| Workspace::new(document, numbers, workspace_options));
         let session = cx.new(|cx| VaultSession::new(prepared, cx));
+        let disk = Rc::new(VaultDisk::new(session.read(cx).vault()));
+        let workspace = cx.new(|_| {
+            let mut workspace = Workspace::new(document, numbers, workspace_options);
+            workspace.set_disk(disk);
+            workspace
+                .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));
+            workspace
+        });
         let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
         if let Some(file) = &file {
             sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));

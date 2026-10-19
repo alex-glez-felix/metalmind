@@ -10,6 +10,7 @@
 //! Como vim con `hidden`, el default de nvim, un documento que ningún panel
 //! muestra queda oculto, con sus cambios, su historial y su cursor.
 
+mod autosave;
 mod buffers;
 mod commands;
 mod documents;
@@ -29,6 +30,7 @@ mod source_lines;
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
+use std::rc::Rc;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_vim::{
@@ -36,6 +38,7 @@ use metalmind_vim::{
     Viewport, Vim, VimError,
 };
 
+pub use self::autosave::{Autosave, SaveState, SystemClock};
 pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
@@ -48,6 +51,7 @@ use self::links::VaultLinks;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
+use crate::disk::{Disk, Files};
 use crate::document::{Document, Editable};
 
 #[derive(Debug, thiserror::Error)]
@@ -133,6 +137,10 @@ pub struct Workspace {
     message: Option<Message>,
     links: Option<VaultLinks>,
     link_choice: Option<LinkChoice>,
+    /// Donde se escriben los documentos.
+    disk: Rc<dyn Disk>,
+    /// `None` si `editor.autosave` está apagado: todo es como en vim.
+    autosave: Option<Autosave>,
 }
 
 /// Lo que vale igual en todos los paneles.
@@ -168,6 +176,8 @@ pub struct PaneView<'a> {
     /// El patrón a resaltar, en todos los paneles como `hlsearch`, hasta
     /// un `:noh`.
     pub search: Option<&'a Pattern>,
+    /// El indicador del autoguardado; `None` si está apagado.
+    pub save: Option<SaveState>,
 }
 
 /// Lo que se está escribiendo tras `:`, `/` o `?`.
@@ -178,6 +188,16 @@ pub struct CommandLine<'a> {
 }
 
 impl PaneView<'_> {
+    /// Si hay que avisar de cambios sin guardar: el `[+]` de vim o, con
+    /// autoguardado, lo que diga el indicador.
+    #[must_use]
+    pub fn unsaved(&self) -> bool {
+        match self.save {
+            Some(state) => state != SaveState::Saved,
+            None => self.document.is_modified(),
+        }
+    }
+
     #[must_use]
     pub fn buffer(&self) -> &Buffer {
         self.document.buffer()
@@ -227,7 +247,15 @@ impl Workspace {
             message: Some(message),
             links: None,
             link_choice: None,
+            disk: Rc::new(Files),
+            autosave: None,
         }
+    }
+
+    /// Donde se escriben los documentos: el vault de la ventana, para que
+    /// cada guardado deje su versión en el historial.
+    pub fn set_disk(&mut self, disk: Rc<dyn Disk>) {
+        self.disk = disk;
     }
 
     #[must_use]
@@ -265,8 +293,10 @@ impl Workspace {
     pub fn view(&self, pane: PaneId) -> Result<PaneView<'_>, WorkspaceError> {
         let state = self.pane(pane)?;
         let focused = pane == self.focused();
+        let document = self.document(state.document)?;
         Ok(PaneView {
-            document: self.document(state.document)?,
+            document,
+            save: self.save_state(state.document, document),
             selection: *state.selections.primary(),
             viewport: state.viewport,
             focused,
@@ -401,7 +431,11 @@ impl Workspace {
             scrolloff,
         );
         let splices = buffer.take_splices();
+        document.settle();
         self.follow(pane, id, file, &splices)?;
+        if !splices.is_empty() {
+            self.edited(id);
+        }
         result
     }
 
@@ -487,6 +521,7 @@ impl Workspace {
     fn forget(&mut self, id: DocumentId) {
         self.documents.remove(id);
         self.hidden.remove(&id);
+        self.saved(id);
     }
 }
 

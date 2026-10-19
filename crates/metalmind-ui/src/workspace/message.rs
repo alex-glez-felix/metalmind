@@ -70,6 +70,15 @@ impl Message {
         ))
     }
 
+    /// El archivo de `document`, que tiene cambios, cambió fuera de Metalmind.
+    #[must_use]
+    pub fn changed_on_disk(document: &Document) -> Self {
+        let path = document.display_name();
+        Self::Error(format!(
+            "W12: Warning: File \"{path}\" has changed and the buffer was changed in Vim as well"
+        ))
+    }
+
     /// `:wa` con un buffer sin archivo.
     #[must_use]
     pub fn no_file_name_for(id: DocumentId) -> Self {

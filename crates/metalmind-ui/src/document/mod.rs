@@ -2,11 +2,13 @@
 //! archivo donde se guarda. Los cursores son de cada panel y el estado de
 //! vim es uno solo para todos (ver [`Workspace`](crate::workspace::Workspace)).
 
+mod save;
+
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use metalmind_buffer::{Buffer, BufferError, HistorySeq};
-use metalmind_vault::FileError;
+use metalmind_vault::{ContentHash, FileError};
 use metalmind_vim::{Layout, Marks, Rows};
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
@@ -22,8 +24,13 @@ pub enum SaveError {
     NoFileName,
     #[error("E13: File exists (add ! to override)")]
     Exists,
+    /// Vim lo pregunta; aquí se niega y `:w!` escribe igual.
+    #[error("WARNING: The file has been changed since reading it!!!")]
+    ChangedOnDisk,
     #[error(transparent)]
     File(#[from] FileError),
+    #[error(transparent)]
+    Write(#[from] metalmind_vault::SaveError),
 }
 
 /// Tamaño del archivo, para avisarlo como vim (`"a.md" 3L, 20B`).
@@ -60,7 +67,13 @@ pub struct Document {
     /// Estado del historial que coincide con el disco; `None` si se guardó
     /// a mitad de una transacción y ningún estado coincide.
     saved: Option<HistorySeq>,
-    exists_on_disk: bool,
+    /// [`Buffer::version`] cuando se leyó o se escribió por última vez.
+    written: u64,
+    /// Lo que hay en disco según lo último que se leyó o escribió: el hash
+    /// del archivo, o `None` si no existía.
+    on_disk: Option<ContentHash>,
+    /// El archivo cambió fuera de Metalmind desde entonces.
+    changed_on_disk: bool,
     /// El archivo era una sola línea vacía. Vim distingue "sin líneas" de
     /// "una línea vacía", y el buffer vacío no: sin esto, `:w` lo vaciaría.
     blank_line: bool,
@@ -76,11 +89,11 @@ impl Document {
     /// Si existe pero no se puede leer como texto.
     pub fn open(path: &Path) -> Result<Self, FileError> {
         let text = metalmind_vault::read(path)?;
-        let exists_on_disk = text.is_some();
+        let on_disk = text.as_deref().map(ContentHash::of);
         let text = text.unwrap_or_default();
         let lines = text.strip_suffix(EOL);
         let mut document = Self::new(path, lines.unwrap_or(&text));
-        document.exists_on_disk = exists_on_disk;
+        document.on_disk = on_disk;
         document.blank_line = text == EOL;
         document.noeol = lines.is_none() && !text.is_empty();
         Ok(document)
@@ -102,10 +115,12 @@ impl Document {
         Self {
             path,
             saved: Some(buffer.history_seq()),
+            written: buffer.version(),
+            on_disk: None,
+            changed_on_disk: false,
             marks: Marks::default(),
             layout: Some(Layout::new(&buffer)),
             buffer,
-            exists_on_disk: false,
             blank_line: false,
             noeol: false,
         }
@@ -153,14 +168,14 @@ impl Document {
 
     #[must_use]
     pub fn exists_on_disk(&self) -> bool {
-        self.exists_on_disk
+        self.on_disk.is_some()
     }
 
     /// Representa el mismo archivo en disco que `other`: si existe, su texto
     /// y sus saltos de línea finales, que el texto del buffer no distingue.
     #[must_use]
     pub fn same_on_disk(&self, other: &Self) -> bool {
-        self.exists_on_disk == other.exists_on_disk
+        self.exists_on_disk() == other.exists_on_disk()
             && self.blank_line == other.blank_line
             && self.noeol == other.noeol
             && self.buffer.to_string() == other.buffer.to_string()
@@ -215,54 +230,6 @@ impl Document {
     #[must_use]
     pub fn is_modified(&self) -> bool {
         self.buffer.has_uncommitted_edits() || self.saved != Some(self.buffer.history_seq())
-    }
-
-    /// Escribe el buffer con un `\n` al final, aunque el archivo no lo tuviera.
-    ///
-    /// # Errors
-    /// Si no tiene archivo o no se pudo escribir; el archivo en disco queda
-    /// como estaba.
-    pub fn save(&mut self) -> Result<FileStats, SaveError> {
-        let path = self.path.as_deref().ok_or(SaveError::NoFileName)?;
-        let eol = self.final_eol();
-        metalmind_vault::write_atomic(path, |out| write!(out, "{}{eol}", self.buffer))?;
-        Ok(self.mark_saved())
-    }
-
-    /// El disco ya tiene lo que tiene el buffer.
-    fn mark_saved(&mut self) -> FileStats {
-        self.saved = (!self.buffer.has_uncommitted_edits()).then(|| self.buffer.history_seq());
-        // Ahora el archivo es lo que se escribió: una sola línea vacía solo
-        // si el buffer sigue vacío.
-        self.blank_line &= self.buffer.is_empty();
-        self.exists_on_disk = true;
-        self.noeol = false;
-        self.stats()
-    }
-
-    /// `:w ruta`, como en vim: si es su archivo, lo guarda; un documento
-    /// sin archivo pasa a tener ese, y uno con otro archivo escribe una
-    /// copia y sigue en el suyo. Nunca pisa un archivo que ya existe.
-    ///
-    /// # Errors
-    /// Si `path` ya existe, aunque aparezca mientras se escribe, o no se
-    /// pudo escribir.
-    pub fn save_to(&mut self, path: &Path) -> Result<FileStats, SaveError> {
-        if self.is_file(path) {
-            return self.save();
-        }
-        let eol = self.final_eol();
-        metalmind_vault::create_atomic(path, |out| write!(out, "{}{eol}", self.buffer)).map_err(
-            |error| match error {
-                FileError::Exists { .. } => SaveError::Exists,
-                error => SaveError::File(error),
-            },
-        )?;
-        if self.path.is_none() {
-            self.path = Some(path.to_owned());
-            return Ok(self.mark_saved());
-        }
-        Ok(self.stats())
     }
 
     #[must_use]
@@ -339,5 +306,4 @@ pub(crate) fn entry_path(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-#[path = "document_tests.rs"]
 mod tests;
