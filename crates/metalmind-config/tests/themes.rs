@@ -226,7 +226,7 @@ fn sin_extends_le_faltan_colores() {
         assert!(error.message.contains(key), "{key}: {}", error.message);
     }
     assert!(
-        error.message.ends_with("layout.menu_item_padding_x"),
+        error.message.ends_with("layout.gutter_mark_columns"),
         "{}",
         error.message
     );

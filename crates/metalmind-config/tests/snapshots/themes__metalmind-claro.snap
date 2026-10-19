@@ -248,6 +248,15 @@ Theme {
             menu_item_padding_x: Length(
                 8.0,
             ),
+            tooltip_padding_x: Length(
+                8.0,
+            ),
+            tooltip_padding_y: Length(
+                4.0,
+            ),
+            gutter_mark_columns: Count(
+                3,
+            ),
         },
     },
 }

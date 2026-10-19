@@ -50,6 +50,9 @@ enum Step {
     RightClickBottomRow,
     /// Escribe [`vault::SEARCHED`].
     Search,
+    /// Deja el ratón en la columna de las marks, sobre la línea `n` del
+    /// principio de la nota, hasta que sale el tooltip.
+    HoverMark(i16),
 }
 
 /// Cada pantalla parte de cómo dejó la ventana la anterior.
@@ -76,6 +79,12 @@ const SCENES: &[(&str, &[Step])] = &[
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("paleta", &[Step::Keys("<Esc><C-S-p>")]),
+    // Al final, para que las marks no cambien las demás pantallas: tres en
+    // una línea (la `b` y un `+`), una sobre un heading y el tooltip.
+    (
+        "marks",
+        &[Step::Keys("<Esc>ggmajmbmcmBjjmA"), Step::HoverMark(1)],
+    ),
 ];
 
 /// Alto de una fila del árbol y del encabezado, y dónde empieza el panel,
@@ -83,6 +92,11 @@ const SCENES: &[(&str, &[Step])] = &[
 const TREE_ROW: i16 = 26;
 const TREE_LEFT: i16 = 36;
 const TREE_WIDTH: i16 = 260;
+/// Con `editor.padding` por defecto (12 a los lados, 8 arriba) y líneas de
+/// texto de 21: la columna de las marks y el centro de cada línea sin heading.
+const MARK_X: i16 = TREE_LEFT + TREE_WIDTH + 12 + 4;
+const TEXT_TOP: i16 = 8;
+const TEXT_LINE: i16 = 21;
 
 #[rstest]
 #[case::oscuro_1920("oscuro", 1920, 1080)]
@@ -117,11 +131,25 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 Step::RightClickBottomRow => {
                     window.right_click(TREE_LEFT + TREE_WIDTH - 8, rest.1 - TREE_ROW / 2);
                 }
+                Step::HoverMark(line) => {
+                    // El tooltip sale tras una demora con el ratón quieto, más
+                    // larga que la quietud de `settle`: se espera a verlo.
+                    let still = settle(&window, &frames, seen);
+                    seen = frame_count(&frames);
+                    window.move_pointer(MARK_X, TEXT_TOP + TEXT_LINE * line + TEXT_LINE / 2);
+                    wait::until("el tooltip de la mark", TIMEOUT, || {
+                        if window.pixels().2 == still.rgb {
+                            Err("sin tooltip".to_owned())
+                        } else {
+                            Ok(())
+                        }
+                    });
+                }
             }
         }
         if !matches!(
             steps.last(),
-            Some(Step::RightClickRow(_) | Step::RightClickBottomRow)
+            Some(Step::RightClickRow(_) | Step::RightClickBottomRow | Step::HoverMark(_))
         ) {
             window.move_pointer(rest.0, rest.1);
         }

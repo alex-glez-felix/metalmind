@@ -1,7 +1,7 @@
 //! Harness de punta a punta: el binario `metalmind` de verdad, en un Xvfb propio,
 //! con `XTest` tecleando. Se comprueba el efecto en disco y cómo termina el
-//! proceso; los píxeles solo para ver si algo aparece (un tooltip), nunca
-//! contra una imagen guardada. Cómo agregar un caso: `docs/testing.md`.
+//! proceso; los píxeles, para las capturas (`tests/capturas.rs`) y para ver si
+//! algo aparece, como un tooltip. Cómo agregar un caso: `docs/testing.md`.
 
 pub mod keys;
 pub mod wait;
@@ -307,7 +307,10 @@ impl Window<'_> {
     pub fn area_pixels(&self, area: Area) -> Vec<u8> {
         let (width, _, rgb) = self.pixels();
         let row = usize::from(width) * 3;
-        let (x, y) = (usize::try_from(area.x).unwrap(), usize::try_from(area.y).unwrap());
+        let (x, y) = (
+            usize::try_from(area.x).unwrap(),
+            usize::try_from(area.y).unwrap(),
+        );
         rgb.chunks(row)
             .skip(y)
             .take(usize::from(area.height))
