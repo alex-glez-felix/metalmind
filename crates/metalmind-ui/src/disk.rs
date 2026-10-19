@@ -60,7 +60,10 @@ impl fmt::Debug for VaultDisk {
 }
 
 impl VaultDisk {
-    /// La nota del vault que es `path`, si lo es.
+    /// La nota del vault que es `path`, si lo es. Los enlaces se resuelven
+    /// como al guardar un archivo a secas: un `:w` escribe donde apunta el
+    /// enlace, como en vim, y la versión va a la nota real. Lo que queda fuera
+    /// del vault se escribe a secas, igual que un `:w /otra/ruta.md`.
     fn note(&self, path: &Path) -> Option<VaultPath> {
         canonical(path)
             .and_then(|path| relative_to(self.0.root(), &path))
@@ -150,5 +153,59 @@ mod tests {
             VersionKind::Saved,
             "`:w ruta` deja su versión"
         );
+    }
+
+    /// Guardar por un enlace escribe donde apunta, como `write_atomic` y vim:
+    /// dentro del vault es la nota real, con su versión; fuera, el archivo de
+    /// fuera, igual que un `:w` con una ruta de fuera.
+    #[test]
+    fn guardar_por_un_enlace_escribe_donde_apunta() {
+        use std::os::unix::fs::symlink;
+
+        let (dir, data, outside) = (
+            TempDir::new().unwrap(),
+            TempDir::new().unwrap(),
+            TempDir::new().unwrap(),
+        );
+        fs::write(dir.path().join("real.md"), "viejo\n").unwrap();
+        symlink(dir.path().join("real.md"), dir.path().join("enlace.md")).unwrap();
+        symlink(outside.path(), dir.path().join("fuera")).unwrap();
+        let options = VaultOptions {
+            history: Some(HistoryOptions {
+                paths: Paths::under(data.path()),
+                retention: HistoryRetention::default(),
+            }),
+            ..VaultOptions::default()
+        };
+        let (vault, _updates) = Vault::open_with(dir.path(), options).unwrap();
+        let root = vault.root().to_owned();
+        let disk = VaultDisk::new(Rc::new(vault));
+        disk.write(&dir.path().join("enlace.md"), "nuevo\n", SaveKind::Explicit)
+            .unwrap();
+        disk.write(&dir.path().join("fuera/b.md"), "b\n", SaveKind::Explicit)
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("real.md")).unwrap(),
+            "nuevo\n"
+        );
+        assert!(
+            fs::symlink_metadata(dir.path().join("enlace.md"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read_to_string(outside.path().join("b.md")).unwrap(),
+            "b\n"
+        );
+        drop(disk);
+        let history = History::new(
+            Paths::under(data.path()).vault_data(&root).join("history"),
+            HistoryRetention::default(),
+        );
+        let real = history
+            .versions(&VaultPath::new("real.md").unwrap())
+            .unwrap();
+        assert_eq!(real.len(), 1, "la versión va a la nota real");
     }
 }
