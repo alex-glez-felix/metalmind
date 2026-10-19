@@ -200,6 +200,10 @@ impl Workspace {
         if document.changed_on_disk() {
             return Some(SaveState::ChangedOnDisk);
         }
+        // Un reintento en camino no es un guardado: lo último que pasó es que falló.
+        if autosave.failing.contains(&id) {
+            return Some(SaveState::Unsaved);
+        }
         let quiet = autosave.delay * QUIET_DELAYS;
         let coming = autosave.deadline.is_some() && document.path().is_some();
         let fresh = autosave
