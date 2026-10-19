@@ -50,8 +50,12 @@ pub const EXPANDED: &[&str] = &[
 ];
 
 const DEEP_FOLDER_1: &str = "Proyectos/Metalmind/Diseño/una carpeta más honda";
-const DEEP_FOLDER_2: &str =
+pub const DEEP_FOLDER_2: &str =
     "Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo";
+
+/// La nota de la ruta más larga, en [`DEEP_FOLDER_2`]: la del indicador del
+/// autoguardado.
+pub const DEEP_NOTE: &str = "la nota al fondo del árbol, con un nombre que tampoco cabe.md";
 
 /// Líneas de la nota de más que las de estilos: una nota larga de verdad.
 const LONG_NOTE_LINES: usize = 1200;
@@ -106,7 +110,7 @@ pub fn write(root: &Path) {
         b"Una idea suelta.\n",
     );
     file(
-        &format!("{DEEP_FOLDER_2}/la nota al fondo del árbol, con un nombre que tampoco cabe.md"),
+        &format!("{DEEP_FOLDER_2}/{DEEP_NOTE}"),
         b"Una idea muy honda.\n",
     );
     file(

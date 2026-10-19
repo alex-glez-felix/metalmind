@@ -1,12 +1,68 @@
-guardado-oscuro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md — Metalmind
-sin-guardar-oscuro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-cambio-en-disco-oscuro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-guardado-oscuro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md — Metalmind
-sin-guardar-oscuro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-cambio-en-disco-oscuro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-guardado-claro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md — Metalmind
-sin-guardar-claro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-cambio-en-disco-claro-1920x1080: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-guardado-claro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md — Metalmind
-sin-guardar-claro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
-cambio-en-disco-claro-1280x720: notas de la reunión trimestral con el equipo de diseño y producto.md [+] — Metalmind
+editor-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+editor-final-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+arbol-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-borde-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+split-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+linea-de-comandos-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-filtrado-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-ruta-larga-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-vacio-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-vacio-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+paleta-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+autoguardado-guardado-claro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md — Metalmind
+autoguardado-sin-guardar-claro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+autoguardado-cambio-en-disco-claro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+editor-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+editor-final-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+arbol-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-borde-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+split-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+linea-de-comandos-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-filtrado-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-ruta-larga-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-vacio-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-vacio-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+paleta-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+autoguardado-guardado-claro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md — Metalmind
+autoguardado-sin-guardar-claro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+autoguardado-cambio-en-disco-claro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+editor-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+editor-final-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+arbol-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-borde-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+split-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+linea-de-comandos-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-filtrado-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-ruta-larga-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-vacio-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-vacio-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+paleta-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+autoguardado-guardado-oscuro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md — Metalmind
+autoguardado-sin-guardar-oscuro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+autoguardado-cambio-en-disco-oscuro-1280: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+editor-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+editor-final-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+arbol-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+menu-borde-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+split-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+linea-de-comandos-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-filtrado-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-ruta-larga-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+finder-vacio-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+buscar-vacio-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+paleta-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+autoguardado-guardado-oscuro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md — Metalmind
+autoguardado-sin-guardar-oscuro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
+autoguardado-cambio-en-disco-oscuro-1920: Proyectos/Metalmind/Diseño/una carpeta más honda/y otra todavía más honda, con nombre largo/la nota al fondo del árbol, con un nombre que tampoco cabe.md [+] — Metalmind
