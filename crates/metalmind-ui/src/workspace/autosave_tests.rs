@@ -485,3 +485,19 @@ fn wa_dice_que_nota_oculta_cambio_en_disco() {
     assert_eq!(autosaving.message(), Some(&Message::Error(expected)));
     assert_eq!(autosaving.read("a.md"), "de fuera\n");
 }
+
+/// Lo que nunca se escribió no dice "guardado": ni un `[No Name]` ni una
+/// nota nueva, hasta que se guarda.
+#[test]
+fn lo_que_no_esta_en_disco_no_dice_guardado() {
+    let dir = TempDir::new().unwrap();
+    let unnamed = Autosaving::with(TempDir::new().unwrap(), Session::unnamed());
+    assert_eq!(unnamed.state(), None);
+    let new = dir.path().join("nueva.md");
+    let mut autosaving = Autosaving::with(dir, Session::open(&new));
+    assert_eq!(autosaving.state(), None);
+    autosaving.session.keys("ihola⎋");
+    autosaving.wait(SECOND);
+    assert!(autosaving.tick());
+    assert_eq!(autosaving.state(), Some(SaveState::Saved));
+}

@@ -197,7 +197,9 @@ impl Workspace {
     pub(super) fn save_state(&self, id: DocumentId, document: &Document) -> Option<SaveState> {
         let autosave = self.autosave.as_ref()?;
         if !document.is_modified() {
-            return Some(SaveState::Saved);
+            // Sin archivo escrito (un `[No Name]`, una nota nueva) no hay nada
+            // guardado que decir: la barra queda como en vim.
+            return document.exists_on_disk().then_some(SaveState::Saved);
         }
         if document.changed_on_disk() {
             return Some(SaveState::ChangedOnDisk);
