@@ -26,8 +26,16 @@ use std::ops::Range;
 
 pub use cache::Styles;
 
-/// Si `line` es una regla horizontal (`---`, `* * *`, `- - -`), que no es
-/// un ítem de lista aunque empiece con `-` o `*`.
+/// Dónde termina el prefijo de cita de `line` (`> `, `> > `), como lo ve
+/// el estilo; 0 si no es una cita.
+#[must_use]
+pub fn quote_prefix_len(line: &str) -> usize {
+    block::quote_end(line)
+}
+
+/// Si `line` es una regla horizontal (`---`, `* * *`, `- - -`, también
+/// dentro de una cita), que no es un ítem de lista aunque empiece con `-`
+/// o `*`.
 #[must_use]
 pub fn is_thematic_break(line: &str) -> bool {
     block::is_rule(line)

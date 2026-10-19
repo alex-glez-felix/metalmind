@@ -123,7 +123,9 @@ impl Vim {
             }
             (Action::Visual(kind), Mode::Normal) => self.enter_visual(kind, buffer, selections),
             (Action::RestoreVisual, Mode::Normal) => self.restore_visual(buffer, selections),
-            (Action::Insert(at), Mode::Normal) => self.enter_insert(at, buffer, selections)?,
+            (Action::Insert(at), Mode::Normal) => {
+                self.enter_insert(at, true, buffer, selections)?;
+            }
             (Action::Paste(side), Mode::Normal) => {
                 self.paste(side, buffer, selections, clipboard)?;
             }
@@ -155,7 +157,9 @@ impl Vim {
             Action::NormalMode => self.finish_insert(buffer, selections)?,
             Action::Interrupt => self.leave_insert(buffer, selections)?,
             Action::Backspace => self.type_in_insert(&Typed::Backspace, buffer, selections)?,
-            Action::Newline => self.type_in_insert(&Typed::Newline, buffer, selections)?,
+            Action::Newline => {
+                self.type_in_insert(&Typed::Newline { list: true }, buffer, selections)?;
+            }
             _ => self.reset(),
         }
         Ok(())

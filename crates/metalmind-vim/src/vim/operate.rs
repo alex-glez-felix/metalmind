@@ -222,7 +222,8 @@ impl Vim {
         // A diferencia de un `a` tecleado, `u` vuelve a donde se tecleó `".p`.
         buffer.begin_transaction(selections.clone())?;
         *selections = insert::insertion_points(buffer, selections, at);
-        self.start_insert(Dot::new(Change::Insert(at), None, None));
+        let change = Change::Insert { at, list: false };
+        self.start_insert(Dot::new(change, None, None));
         for _ in 0..count.unwrap_or(1) {
             for piece in &typed {
                 self.type_in_insert(piece, buffer, selections)?;

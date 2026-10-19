@@ -48,17 +48,21 @@ impl Vim {
         Ok(KeyOutcome::Inserted)
     }
 
+    /// `list` es si `o` y `O` pueden abrir un ítem de lista: `.` no lo hace
+    /// si el cambio que repite no lo hizo.
     pub(super) fn enter_insert(
         &mut self,
         at: InsertAt,
+        list: bool,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         let count = self.count.take();
         self.reset();
-        let typing = self.typing();
-        *selections = insert::enter(buffer, selections, at, typing, self.layout.as_mut())?;
-        self.start_insert(Dot::new(Change::Insert(at), count, None));
+        let typing = self.typing().lists_if(list);
+        let (entered, list) = insert::enter(buffer, selections, at, typing, self.layout.as_mut())?;
+        *selections = entered;
+        self.start_insert(Dot::new(Change::Insert { at, list }, count, None));
         Ok(())
     }
 
@@ -82,9 +86,10 @@ impl Vim {
         selections: &mut Selections,
     ) -> Result<(), VimError> {
         let typing = self.typing();
-        *selections = typed.apply(buffer, selections, typing, self.layout.as_mut())?;
+        let (typed_now, done) = typed.apply(buffer, selections, typing, self.layout.as_mut())?;
+        *selections = typed_now;
         if let Some(session) = &mut self.insert {
-            session.record(typed);
+            session.record(&done);
         }
         Ok(())
     }
