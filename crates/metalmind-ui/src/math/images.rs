@@ -64,6 +64,8 @@ struct Entry {
     bytes: usize,
     /// El último frame que la pidió.
     used: u64,
+    /// Si ya se está pintando: una pendiente espera su turno.
+    started: bool,
 }
 
 /// Las imágenes con su LRU: al pasar del tope se sacan las que hace más
@@ -99,13 +101,39 @@ impl Images {
     /// Empieza un frame: lo que se pida desde ahora es lo visible.
     pub fn next_frame(&mut self) {
         self.frame += 1;
+        // Lo que esperaba turno y ya nadie pide (pasó de largo en un scroll)
+        // no se pinta; si vuelve a verse, se vuelve a pedir.
+        let keep = self.keep();
+        self.entries.retain(|_, entry| {
+            entry.started || !matches!(entry.image, Image::Pending) || entry.used >= keep
+        });
         // Sin trabajos que terminen (un scroll por lo ya pintado) también se
         // vuelve al tope; lo del frame anterior se queda, se va a pedir de nuevo.
         self.evict();
     }
 
+    /// Lo pedido desde este frame se ve, o se va a volver a pedir.
+    fn keep(&self) -> u64 {
+        self.frame.saturating_sub(1)
+    }
+
+    /// La próxima pendiente que hay que pintar, la pedida más tarde, que
+    /// queda como empezada.
+    pub fn next_job(&mut self) -> Option<ImageKey> {
+        let keep = self.keep();
+        let (key, entry) = self
+            .entries
+            .iter_mut()
+            .filter(|(_, entry)| {
+                !entry.started && matches!(entry.image, Image::Pending) && entry.used >= keep
+            })
+            .max_by_key(|(_, entry)| entry.used)?;
+        entry.started = true;
+        Some(key.clone())
+    }
+
     /// Lo que hay de `key`, o `None` si hay que pintarla: entonces queda
-    /// pendiente y quien llama lanza el trabajo.
+    /// pendiente hasta que [`Images::next_job`] le dé turno.
     pub fn get(&mut self, key: &ImageKey) -> Option<Image> {
         if let Some(entry) = self.entries.get_mut(key) {
             entry.used = self.frame;
@@ -117,6 +145,7 @@ impl Images {
                 image: Image::Pending,
                 bytes: 0,
                 used: self.frame,
+                started: false,
             },
         );
         None
@@ -139,7 +168,13 @@ impl Images {
         // Cuenta como pedida ahora: la vista la va a pedir en el frame que
         // provoca su llegada, y el LRU no tiene que sacarla antes.
         let used = self.frame;
-        if let Some(old) = self.entries.insert(key, Entry { image, bytes, used }) {
+        let entry = Entry {
+            image,
+            bytes,
+            used,
+            started: true,
+        };
+        if let Some(old) = self.entries.insert(key, entry) {
             self.release(old);
         }
         self.bytes += bytes;
@@ -149,7 +184,7 @@ impl Images {
     /// Saca lo que hace más que nadie pide hasta volver al tope, nunca lo
     /// pedido en este frame o en el anterior: se ve, o se va a volver a pedir.
     fn evict(&mut self) {
-        let keep = self.frame.saturating_sub(1);
+        let keep = self.keep();
         while self.bytes > self.budget {
             let oldest = self
                 .entries
@@ -214,6 +249,7 @@ mod tests {
 
     fn ready(images: &mut Images, latex: &str) {
         assert!(images.get(&key(latex)).is_none());
+        assert_eq!(images.next_job(), Some(key(latex)));
         images.finish(key(latex), paint(&key(latex)));
     }
 
@@ -294,6 +330,23 @@ mod tests {
         assert_eq!(images.take_evicted().len(), 1, "x_1 ya no se ve");
         assert!(matches!(images.get(&key("x_2")), Some(Image::Ready(_))));
         assert!(images.get(&key("x_1")).is_none());
+    }
+
+    #[test]
+    fn se_pinta_primero_lo_ultimo_pedido_y_no_lo_que_ya_no_se_ve() {
+        let mut images = Images::default();
+        assert!(images.get(&key("a")).is_none());
+        images.next_frame();
+        assert!(images.get(&key("b")).is_none());
+        assert_eq!(images.next_job(), Some(key("b")));
+        assert_eq!(images.next_job(), Some(key("a")));
+        assert_eq!(images.next_job(), None, "ya empezadas");
+        assert!(images.get(&key("c")).is_none());
+        images.next_frame();
+        images.next_frame();
+        assert_eq!(images.next_job(), None, "c pasó de largo");
+        assert!(images.get(&key("c")).is_none(), "se vuelve a pedir");
+        assert_eq!(images.next_job(), Some(key("c")));
     }
 
     #[test]
