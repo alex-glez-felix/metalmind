@@ -52,7 +52,7 @@ impl Geometry {
 
     /// Lo que sobra de una línea de texto arriba y abajo de la letra.
     fn leading(&self) -> f32 {
-        ((self.line_height - self.ascent - self.descent) / 2.0).max(0.0)
+        half(self.line_height - self.ascent - self.descent).max(0.0)
     }
 
     /// Lo que tiene que medir la línea de la fórmula o, si va debajo de un
@@ -78,7 +78,7 @@ impl Geometry {
     /// texto que GPUI centra en ella.
     #[must_use]
     pub fn baseline(&self, height: f32) -> f32 {
-        (height + self.ascent - self.descent) / 2.0
+        half(height + self.ascent - self.descent)
     }
 
     /// Desde arriba de su lugar (la línea, o el espacio que se suma debajo
@@ -88,9 +88,16 @@ impl Geometry {
     pub fn top(&self, formula: FormulaBox, place: MathPlace, height: f32) -> f32 {
         match place {
             MathPlace::Inline => self.baseline(height) - formula.height,
-            MathPlace::Alone | MathPlace::Below { .. } => (height - formula.total()) / 2.0,
+            MathPlace::Alone | MathPlace::Below { .. } => half(height - formula.total()),
         }
     }
+}
+
+/// La mitad: GPUI centra el texto en el alto de su línea, y las fórmulas
+/// se centran igual, en su línea o en el ancho del área.
+#[must_use]
+pub fn half(value: f32) -> f32 {
+    value / 2.0
 }
 
 #[expect(

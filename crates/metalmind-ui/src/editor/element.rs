@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use gpui_kit::{
     AnyElement, App, Bounds, ContentMask, Corners, ElementId, ElementInputHandler, Entity,
-    GlobalElementId,
-    Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point, ShapedLine,
-    SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px, relative, size,
+    GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point,
+    ShapedLine, SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px,
+    relative, size,
 };
 use metalmind_vim::{FormulaRows, Mode, Rows};
 

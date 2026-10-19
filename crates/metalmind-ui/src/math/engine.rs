@@ -160,7 +160,10 @@ fn decode(png: &[u8]) -> Result<Picture, MathError> {
     let mut reader = png::Decoder::new(std::io::Cursor::new(png))
         .read_info()
         .map_err(failed)?;
-    let mut pixels = vec![0; reader.output_buffer_size()];
+    let size = reader
+        .output_buffer_size()
+        .ok_or_else(|| MathError::Render("la imagen no cabe en memoria".into()))?;
+    let mut pixels = vec![0; size];
     let info = reader.next_frame(&mut pixels).map_err(failed)?;
     if info.color_type != png::ColorType::Rgba || info.bit_depth != png::BitDepth::Eight {
         return Err(MathError::Render(format!(

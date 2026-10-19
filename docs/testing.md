@@ -80,8 +80,6 @@ Cada espera tiene tope (`support/wait.rs`): 1 min para la primera ventana, 15 s 
 
 Lo que se ve no lo comprueba el smoke: se mira, y se compara. `scripts/capturas.sh [salida] [--antes carpeta]` corre el test `capturas` de `metalmind` (`--run-ignored only`) con el mismo harness: un Xvfb propio por caso, `HOME` y `XDG_*` en una carpeta temporal y un vault de fixtures que estresa el layout. Toma cada pantalla (editor con markdown, árbol, menú, split, línea de comandos, finder, búsqueda de texto y paleta) en los dos temas y en ventanas de 1920x1080 y 1280x720, y deja los PNG en `target/capturas/`. Espera a que la app deje de pintar (el registro de `--frame-log` quieto 400 ms) y lee los píxeles de la ventana: dos corridas en la misma máquina dan los mismos píxeles. Con `--antes` compara contra otra corrida y falla si cambió alguno. Cuándo se usan: [diseño, "Proceso"](design.md#proceso).
 
-`scripts/capturas-formulas.sh [binario]` hace lo mismo con las fórmulas, en los dos temas y a 1920x1080 y 1280x720 (`docs/capturas/formulas-<escena>-<tema>-<tamaño>.png`), en tres escenas: las 22 fórmulas del spike (`crates/metalmind-perf/fixtures/22-formulas.md`, que un test mantiene igual a `metalmind_perf::formulas_note`) desde arriba, la misma nota con el cursor en su bloque de varias líneas, y una nota de 1 300 líneas que arma el script, con números de 4 dígitos, el cursor dentro de una fórmula y el ratón sobre una que no compone en la esquina de abajo a la derecha. Si cambia cómo se ven las fórmulas, se rehacen en la misma PR.
-
 ### Lo que encontró
 
 - Metalmind no tenía el `fixeol` de vim: `ihola<Esc>:wq` escribía `hola` sin `\n`, y en `uno\ndos\n`, `"ayyjdd"ap` dejaba `uno\n\nuno` por la línea vacía de más al final. Arreglado; los dos casos quedan en el smoke.

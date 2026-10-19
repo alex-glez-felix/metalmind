@@ -72,6 +72,21 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "la capacidad de un Vec (dos tramos por span y uno más), no una medida",
     ),
     (
+        "src/math/geometry.rs",
+        "value / 2.0",
+        "geometría, no estilo: la mitad con que GPUI centra el texto en su línea y las fórmulas se centran",
+    ),
+    (
+        "src/editor/lines.rs",
+        "padding * 2.0",
+        "geometría, no estilo: el margen con que RaTeX pinta la imagen va a los dos lados",
+    ),
+    (
+        "src/math/images.rs",
+        "32 * 1024 * 1024",
+        "el tope de la caché en bytes de memoria, no una medida de la UI",
+    ),
+    (
         "src/picker/view/render.rs",
         "relative(0.9)",
         "tope del picker en una ventana angosta, como fracción de la ventana; es una pregunta abierta de la auditoría",

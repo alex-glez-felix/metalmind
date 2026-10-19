@@ -173,6 +173,9 @@ metric_group! {
         ui_md: TextStyle,
         /// Lo secundario de la interfaz: atajos, detalles y contadores.
         ui_sm: TextStyle,
+        /// Las fórmulas, en veces el texto de las notas: las de KaTeX miden
+        /// 1.21 para verse del tamaño del texto que las rodea.
+        math: Factor,
         normal: Weight,
         /// La negrita del markdown y las letras que coinciden en el picker.
         strong: Weight,

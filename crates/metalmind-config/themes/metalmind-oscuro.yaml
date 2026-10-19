@@ -150,6 +150,7 @@ text:
   editor: { size: 1.0, line_height: 1.4 }
   ui_md: { size: 1.0, line_height: 1.4 }
   ui_sm: { size: 1.0, line_height: 1.4 }
+  math: 1.21           # las fórmulas, veces el texto de las notas
   normal: 400
   strong: 700
 

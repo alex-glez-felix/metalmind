@@ -33,7 +33,7 @@ pub fn tooltip(hover: &Hover, theme: &Theme) -> AnyElement {
                 .bg(theme.menu_background)
                 .border(theme.border_width)
                 .border_color(theme.menu_border)
-                .rounded(theme.radius)
+                .rounded(theme.radius_md)
                 .text_color(theme.error)
                 .child(hover.message.clone()),
         ),
