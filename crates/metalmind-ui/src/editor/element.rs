@@ -13,6 +13,7 @@ use metalmind_vim::{FormulaRows, Mode, Rows};
 
 use super::Editor;
 use super::cursor::{Preedit, cursor_quad, em_width, preedit};
+use super::formula_tooltip;
 use super::gutter::{Gutter, PaintedGutter};
 use super::highlight::{Cells, search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
@@ -30,6 +31,26 @@ pub struct EditorElement {
 }
 
 impl EditorElement {
+    /// El tooltip de la mark o de la fórmula rota bajo el ratón, dentro del
+    /// área del editor.
+    fn show_tooltips(
+        &self,
+        gutter: &Gutter,
+        layout: &FrameLayout,
+        clip: Bounds<Pixels>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let editor = self.editor.read(cx);
+        let (mark, formula) = (editor.shown_mark_tooltip(), editor.formula_error.clone());
+        if let Some(line) = mark {
+            gutter.mark_tooltip(line, layout, clip, &self.theme, window, cx);
+        }
+        if let Some(hover) = formula {
+            formula_tooltip::show(&hover, clip, &self.theme, window, cx);
+        }
+    }
+
     pub fn new(editor: Entity<Editor>, theme: Theme) -> Self {
         Self { editor, theme }
     }
@@ -207,9 +228,7 @@ impl gpui_kit::Element for EditorElement {
             .with_content_mask(Some(ContentMask { bounds: clip }), |window| {
                 gutter.mark_zones(&layout, &self.editor, window, cx)
             });
-        if let Some(line) = self.editor.read(cx).shown_mark_tooltip() {
-            gutter.mark_tooltip(line, &layout, clip, &self.theme, window, cx);
-        }
+        self.show_tooltips(&gutter, &layout, clip, window, cx);
         Prepainted {
             layout,
             clip,

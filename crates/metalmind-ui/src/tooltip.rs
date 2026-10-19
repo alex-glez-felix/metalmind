@@ -9,12 +9,19 @@ use crate::theme::Theme;
 
 pub struct Tooltip {
     text: SharedString,
+    /// Un error: el texto va en `ui.error`.
+    error: bool,
 }
 
 impl Tooltip {
     /// Para `tooltip` de GPUI, que pide la vista cada vez que se muestra.
     pub fn view(text: SharedString, cx: &mut App) -> AnyView {
-        cx.new(|_| Self { text }).into()
+        cx.new(|_| Self { text, error: false }).into()
+    }
+
+    /// Como [`Tooltip::view`], con el texto en el color de error.
+    pub fn error_view(text: SharedString, cx: &mut App) -> AnyView {
+        cx.new(|_| Self { text, error: true }).into()
     }
 }
 
@@ -32,7 +39,11 @@ impl Render for Tooltip {
             .border(theme.border_width)
             .border_color(theme.menu_border)
             .rounded(theme.radius_md)
-            .text_color(theme.foreground)
+            .text_color(if self.error {
+                theme.error
+            } else {
+                theme.foreground
+            })
             .child(self.text.clone())
     }
 }

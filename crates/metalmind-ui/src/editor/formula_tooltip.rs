@@ -1,48 +1,59 @@
 //! El mensaje de RaTeX sobre una fórmula que no compone, al pasar el ratón,
-//! como en Obsidian: un tooltip como los demás (`crate::tooltip`), con el
-//! texto en el color de error.
+//! como en Obsidian: un tooltip como el de las marks, con el texto en el
+//! color de error, debajo de la fórmula o arriba si abajo no cabe en el
+//! editor.
+
+use std::rc::Rc;
 
 use gpui_kit::{
-    AnyElement, IntoElement as _, ParentElement as _, Pixels, Point, SharedString, Styled as _,
-    anchored, deferred, div, point, relative,
+    AnyTooltip, App, AvailableSpace, Bounds, IntoElement as _, Pixels, SharedString, Window, point,
 };
 
+use super::gutter::{Row, tooltip_origin};
 use super::layout::FormulaError;
 use crate::theme::Theme;
+use crate::tooltip::Tooltip;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Hover {
     message: SharedString,
-    /// Debajo de la fórmula, donde no tapa lo que se está leyendo.
-    position: Point<Pixels>,
+    /// La fila de la fórmula, desde su principio: el tooltip no la tapa y
+    /// no se mueve con el ratón.
+    row: Row,
 }
 
 impl Hover {
-    pub fn new(error: &FormulaError, mouse: Point<Pixels>) -> Self {
+    pub fn new(error: &FormulaError) -> Self {
         Self {
             message: error.message.clone(),
-            position: point(mouse.x, error.bounds.bottom()),
+            row: Row {
+                top: error.bounds.top(),
+                bottom: error.bounds.bottom(),
+                text_left: error.bounds.left(),
+            },
         }
     }
 }
 
-pub fn tooltip(hover: &Hover, theme: &Theme) -> AnyElement {
-    deferred(
-        anchored().position(hover.position).snap_to_window().child(
-            div()
-                .font_family(theme.font_family.clone())
-                .text_size(theme.ui_font_size)
-                .line_height(relative(theme.ui_line_height))
-                .px(theme.tooltip_padding_x)
-                .py(theme.tooltip_padding_y)
-                .bg(theme.menu_background)
-                .border(theme.border_width)
-                .border_color(theme.menu_border)
-                .rounded(theme.radius_md)
-                .text_color(theme.error)
-                .child(hover.message.clone()),
-        ),
-    )
-    .with_priority(1)
-    .into_any_element()
+/// Muestra el tooltip de `hover` dentro de `clip`, el área del editor: no
+/// tapa la barra de estado ni sale de la ventana.
+pub fn show(hover: &Hover, clip: Bounds<Pixels>, theme: &Theme, window: &mut Window, cx: &mut App) {
+    let view = Tooltip::error_view(hover.message.clone(), cx);
+    let measured =
+        view.clone()
+            .into_any_element()
+            .layout_as_root(AvailableSpace::min_size(), window, cx);
+    let origin = tooltip_origin(
+        hover.row,
+        measured,
+        clip.bottom(),
+        window.viewport_size().width,
+    );
+    // GPUI corre el tooltip un píxel del ancla, el grosor del borde.
+    let gap = theme.border_width;
+    window.set_tooltip(AnyTooltip {
+        view,
+        mouse_position: origin - point(gap, gap),
+        check_visible_and_update: Rc::new(|_, _, _| true),
+    });
 }

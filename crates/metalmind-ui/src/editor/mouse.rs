@@ -140,7 +140,7 @@ impl Editor {
             .layout
             .as_ref()
             .and_then(|layout| layout.error_at(position))
-            .map(|error| Hover::new(error, position));
+            .map(Hover::new);
         if hover != self.formula_error {
             self.formula_error = hover;
             cx.notify();
