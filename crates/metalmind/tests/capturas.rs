@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use image::Image;
-use metalmind_config::Paths;
+use metalmind_config::{Paths, Themes};
 use rstest::rstest;
 use support::wait::{self, TIMEOUT};
 use support::{Smoke, Window};
@@ -50,9 +50,22 @@ enum Step {
     RightClickBottomRow,
     /// Escribe [`vault::SEARCHED`].
     Search,
-    /// Deja el ratón en la columna de las marks, sobre la línea `n` del
-    /// principio de la nota, hasta que sale el tooltip.
-    HoverMark(i16),
+    /// Deja el ratón sobre una mark hasta que sale su tooltip.
+    HoverMark(MarkAt),
+}
+
+/// Sobre qué mark se deja el ratón.
+#[derive(Clone, Copy)]
+enum MarkAt {
+    /// En el panel de la izquierda, la línea `n` desde arriba, sin headings
+    /// antes.
+    Line(i16),
+    /// La más baja del panel de la izquierda: el tooltip junto al borde de
+    /// abajo.
+    Lowest,
+    /// La primera línea del último de cuatro paneles lado a lado: el tooltip
+    /// junto al borde derecho.
+    RightmostPane,
 }
 
 /// Cada pantalla parte de cómo dejó la ventana la anterior.
@@ -83,7 +96,27 @@ const SCENES: &[(&str, &[Step])] = &[
     // una línea (la `b` y un `+`), una sobre un heading y el tooltip.
     (
         "marks",
-        &[Step::Keys("<Esc>ggmajmbmcmBjjmA"), Step::HoverMark(1)],
+        &[
+            Step::Keys("<Esc>ggmajmbmcmBjjmA"),
+            Step::HoverMark(MarkAt::Line(1)),
+        ],
+    ),
+    // La nota larga: marks en líneas de cuatro cifras, la última con once
+    // (`a`–`h` y `A`–`C`: un tooltip largo) y, con `zb`, el tooltip junto al
+    // borde de abajo. La última línea es más larga que la ventana.
+    (
+        "marks-nota-larga",
+        &[
+            Step::Keys("GmambmcmdmemfmgmhmAmBmCkkkmzkkkkkmyGzb"),
+            Step::HoverMark(MarkAt::Lowest),
+        ],
+    ),
+    (
+        "marks-borde-derecho",
+        &[
+            Step::Keys("<C-w>v<C-w>v<C-w>vGzt"),
+            Step::HoverMark(MarkAt::RightmostPane),
+        ],
     ),
 ];
 
@@ -94,7 +127,8 @@ const TREE_LEFT: i16 = 36;
 const TREE_WIDTH: i16 = 260;
 /// Con `editor.padding` por defecto (12 a los lados, 8 arriba) y líneas de
 /// texto de 21: la columna de las marks y el centro de cada línea sin heading.
-const MARK_X: i16 = TREE_LEFT + TREE_WIDTH + 12 + 4;
+const EDITOR_LEFT: i16 = TREE_LEFT + TREE_WIDTH;
+const MARK_X: i16 = EDITOR_LEFT + 12 + 4;
 const TEXT_TOP: i16 = 8;
 const TEXT_LINE: i16 = 21;
 
@@ -118,6 +152,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
         i16::try_from(height).unwrap() - 2,
     );
     let mut seen = frame_count(&frames);
+    let mark_color = gutter_mark_color(theme);
     window.resize(width.into(), height.into());
     let mut report = Vec::new();
     for (scene, steps) in SCENES {
@@ -131,12 +166,13 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 Step::RightClickBottomRow => {
                     window.right_click(TREE_LEFT + TREE_WIDTH - 8, rest.1 - TREE_ROW / 2);
                 }
-                Step::HoverMark(line) => {
+                Step::HoverMark(at) => {
                     // El tooltip sale tras una demora con el ratón quieto, más
                     // larga que la quietud de `settle`: se espera a verlo.
                     let still = settle(&window, &frames, seen);
                     seen = frame_count(&frames);
-                    window.move_pointer(MARK_X, TEXT_TOP + TEXT_LINE * line + TEXT_LINE / 2);
+                    let (x, y) = mark_position(*at, &still, mark_color);
+                    window.move_pointer(x, y);
                     wait::until("el tooltip de la mark", TIMEOUT, || {
                         if window.pixels().2 == still.rgb {
                             Err("sin tooltip".to_owned())
@@ -162,6 +198,46 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     }
     drop(metalmind);
     finish(&out, &format!("{theme}-{width}"), &report);
+}
+
+/// Dónde dejar el ratón para ver el tooltip de una mark en `image`.
+fn mark_position(at: MarkAt, image: &Image, mark_color: [u8; 3]) -> (i16, i16) {
+    match at {
+        MarkAt::Line(line) => (MARK_X, TEXT_TOP + TEXT_LINE * line + TEXT_LINE / 2),
+        MarkAt::Lowest => (MARK_X, lowest_mark(image, MARK_X, mark_color)),
+        MarkAt::RightmostPane => {
+            let editors = i16::try_from(image.width).unwrap() - EDITOR_LEFT;
+            let pane_left = EDITOR_LEFT + editors * 3 / 4;
+            (pane_left + MARK_X - EDITOR_LEFT, TEXT_TOP + TEXT_LINE / 2)
+        }
+    }
+}
+
+/// La fila más baja con la letra de una mark en la columna de `x`: se busca
+/// su color en la imagen, porque dónde termina el texto depende de la ventana.
+fn lowest_mark(image: &Image, x: i16, mark_color: [u8; 3]) -> i16 {
+    let width = usize::from(image.width);
+    let columns = usize::try_from(x - 4).unwrap()..usize::try_from(x + 6).unwrap();
+    (0..usize::from(image.height))
+        .rev()
+        .find(|&row| {
+            columns.clone().any(|column| {
+                let at = (row * width + column) * 3;
+                image.rgb[at..at + 3] == mark_color
+            })
+        })
+        .map(|row| i16::try_from(row).unwrap() - 4)
+        .expect("ninguna mark en la columna")
+}
+
+/// El color de `ui.gutter_mark` en el tema de fábrica `theme`.
+fn gutter_mark_color(theme: &str) -> [u8; 3] {
+    let dir = tempfile::tempdir().unwrap();
+    let loaded = Themes::new(dir.path().to_owned())
+        .load(&format!("metalmind-{theme}"))
+        .unwrap();
+    let [_, red, green, blue] = loaded.value.ui.gutter_mark.rgb.to_be_bytes();
+    [red, green, blue]
 }
 
 fn out_dir() -> PathBuf {
