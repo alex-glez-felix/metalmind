@@ -39,7 +39,7 @@ use self::layout::FrameLayout;
 use self::links::Links;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
-use crate::actions::{self, EDITOR_CONTEXT};
+use crate::actions::{EDITOR_CONTEXT, RunCommand};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -232,7 +232,7 @@ impl Editor {
     ) {
         match outcome {
             Ok(KeyOutcome::Command(invocation)) => {
-                window.dispatch_action(actions::for_invocation(invocation), cx);
+                window.dispatch_action(Box::new(RunCommand(invocation)), cx);
             }
             Ok(_) => {}
             Err(error) => self.report(&error, cx),

@@ -15,19 +15,14 @@ mod text_search;
 use std::collections::HashMap;
 
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, Div, Entity, InteractiveElement as _, IntoElement,
+    AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Render, Styled as _, Subscription, Window, div,
     prelude::FluentBuilder as _,
 };
 use metalmind_config::Paths;
 use metalmind_vim::Invocation;
 
-use crate::actions::{
-    CommandAction, Edit, FocusDown, FocusLeft, FocusNext, FocusRight, FocusUp, FollowLink,
-    ForceEdit, ForceQuit, ForceQuitAll, ForceSave, Only, OpenCommandPalette, OpenFinder,
-    OpenTextSearch, Quit, QuitAll, Save, SaveAll, SaveAllAndQuit, SaveAndQuit, SaveAs,
-    SaveAsAndQuit, Set, SplitDown, SplitRight, ToggleFolders, ToggleTags,
-};
+use crate::actions::RunCommand;
 use crate::clipboard::SystemClipboard;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
@@ -302,13 +297,6 @@ impl WorkspaceView {
     }
 }
 
-/// Cada comando con nombre llega aquí desde el editor enfocado.
-fn on_command<A: CommandAction>(root: Div, cx: &mut Context<WorkspaceView>) -> Div {
-    root.on_action(cx.listener(|view, action: &A, window, cx| {
-        view.run(&action.invocation(), window, cx);
-    }))
-}
-
 impl Render for WorkspaceView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         FrameClock::render_started(cx);
@@ -319,40 +307,17 @@ impl Render for WorkspaceView {
         self.update_title(window, cx);
         let theme = Theme::get(cx).clone();
         let root = self.workspace.read(cx).tree().root().clone();
-        let mut element = div()
+        let element = div()
             .size_full()
             .font_family(theme.font_family.clone())
             .map(|element| theme.ui_text(element))
             .text_color(theme.foreground)
-            .bg(theme.background);
-        element = on_command::<Save>(element, cx);
-        element = on_command::<ForceSave>(element, cx);
-        element = on_command::<Quit>(element, cx);
-        element = on_command::<ForceQuit>(element, cx);
-        element = on_command::<SaveAndQuit>(element, cx);
-        element = on_command::<SaveAs>(element, cx);
-        element = on_command::<SaveAsAndQuit>(element, cx);
-        element = on_command::<SaveAll>(element, cx);
-        element = on_command::<QuitAll>(element, cx);
-        element = on_command::<ForceQuitAll>(element, cx);
-        element = on_command::<SaveAllAndQuit>(element, cx);
-        element = on_command::<Edit>(element, cx);
-        element = on_command::<ForceEdit>(element, cx);
-        element = on_command::<SplitRight>(element, cx);
-        element = on_command::<SplitDown>(element, cx);
-        element = on_command::<FocusLeft>(element, cx);
-        element = on_command::<FocusDown>(element, cx);
-        element = on_command::<FocusUp>(element, cx);
-        element = on_command::<FocusRight>(element, cx);
-        element = on_command::<FocusNext>(element, cx);
-        element = on_command::<Only>(element, cx);
-        element = on_command::<Set>(element, cx);
-        element = on_command::<OpenFinder>(element, cx);
-        element = on_command::<OpenTextSearch>(element, cx);
-        element = on_command::<OpenCommandPalette>(element, cx);
-        element = on_command::<ToggleFolders>(element, cx);
-        element = on_command::<ToggleTags>(element, cx);
-        element = on_command::<FollowLink>(element, cx);
+            .bg(theme.background)
+            // Cada comando llega aquí desde el editor enfocado, el panel
+            // lateral o la paleta.
+            .on_action(cx.listener(|view, action: &RunCommand, window, cx| {
+                view.run(&action.0, window, cx);
+            }));
         let sidebar = self.sidebar.read(cx);
         let shown = sidebar.shown();
         element

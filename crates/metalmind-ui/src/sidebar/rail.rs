@@ -6,9 +6,10 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
 };
 use metalmind_vault::EntryKind;
+use metalmind_vim::Command;
 
 use super::icons;
-use crate::actions::{ToggleFolders, ToggleTags};
+use crate::actions::RunCommand;
 use crate::panel::PanelView;
 use crate::theme::Theme;
 
@@ -30,14 +31,14 @@ pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
             "rail-folders",
             shown == Some(PanelView::Folders),
             icons::entry(EntryKind::Folder, theme),
-            ToggleFolders,
+            RunCommand::from(Command::ToggleFolders),
             theme,
         ))
         .child(rail_button(
             "rail-tags",
             shown == Some(PanelView::Tags),
             div().child("#"),
-            ToggleTags,
+            RunCommand::from(Command::ToggleTags),
             theme,
         ))
 }
