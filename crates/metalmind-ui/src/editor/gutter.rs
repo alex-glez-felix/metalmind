@@ -221,7 +221,7 @@ fn shape_mark(
 
 /// La fila de una línea con marks: dónde empieza y termina, y dónde empieza
 /// su texto.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Row {
     pub top: Pixels,
     pub bottom: Pixels,

@@ -207,10 +207,17 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                     window.type_keys(&format!(":{}<CR>zb?aqui<CR>", vault::FORMULAS_BROKEN));
                 }
                 Step::HoverBrokenFormula => {
-                    // Sin mover `seen`: si el ratón no muestra nada, la
-                    // captura no espera un frame que no va a llegar.
-                    settle(&window, &frames, seen);
-                    hover_broken_formula(&window, theme, rest);
+                    let still = settle(&window, &frames, seen);
+                    if hover_broken_formula(&window, &still, theme, rest) {
+                        seen = frame_count(&frames);
+                        wait::until("el tooltip de la fórmula rota", TIMEOUT, || {
+                            if window.pixels().2 == still.rgb {
+                                Err("sin tooltip".to_owned())
+                            } else {
+                                Ok(())
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -276,10 +283,15 @@ fn gutter_mark_color(theme: &str) -> [u8; 3] {
     [red, green, blue]
 }
 
-/// El ratón sobre el borde derecho de lo último que se ve pintado en el
-/// color de error del tema: la última fórmula rota visible. Primero lo
-/// aparta, porque sin movimiento la app no se entera.
-fn hover_broken_formula(window: &Window<'_>, theme: &str, rest: (i16, i16)) {
+/// Distancia en píxeles entre dos tramos del color de error que ya no son
+/// la misma fórmula rota: entre una y otra va la palabra `texto`.
+const FORMULA_GAP: usize = 24;
+
+/// Pone el ratón sobre la última fórmula rota que se ve entera en `image`
+/// (la de más a la derecha puede estar cortada por el borde, y una cortada
+/// no dice nada). Devuelve si había alguna: en las capturas de antes, sin
+/// fórmulas compuestas, no hay nada que señalar.
+fn hover_broken_formula(window: &Window<'_>, image: &Image, theme: &str, rest: (i16, i16)) -> bool {
     let error = Themes::builtin()
         .load(&format!("metalmind-{theme}"))
         .unwrap()
@@ -288,23 +300,43 @@ fn hover_broken_formula(window: &Window<'_>, theme: &str, rest: (i16, i16)) {
         .error
         .rgb;
     let [_, red, green, blue] = error.to_be_bytes();
-    let (width, _, rgb) = window.pixels();
-    let mut found: Option<(usize, usize)> = None;
-    for (index, pixel) in rgb.as_chunks::<3>().0.iter().enumerate() {
-        if *pixel == [red, green, blue] {
-            let (x, y) = (index % usize::from(width), index / usize::from(width));
-            if found.is_none_or(|(right, _)| x > right) {
-                found = Some((x, y));
-            }
+    let width = usize::from(image.width);
+    let pixels: Vec<(usize, usize)> = image
+        .rgb
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .enumerate()
+        .filter(|(_, pixel)| **pixel == [red, green, blue])
+        .map(|(index, _)| (index % width, index / width))
+        .collect();
+    let Some(&(_, lowest)) = pixels.iter().max_by_key(|(_, y)| *y) else {
+        return false;
+    };
+    // La línea de las fórmulas rotas, de izquierda a derecha.
+    let mut columns: Vec<usize> = pixels
+        .iter()
+        .filter(|(_, y)| lowest - y < FORMULA_GAP)
+        .map(|(x, _)| *x)
+        .collect();
+    columns.sort_unstable();
+    columns.dedup();
+    let mut formulas: Vec<(usize, usize)> = Vec::new();
+    for x in columns {
+        match formulas.last_mut() {
+            Some((_, right)) if x - *right < FORMULA_GAP => *right = x,
+            _ => formulas.push((x, x)),
         }
     }
-    // Sin fórmulas compuestas (las capturas de antes) no hay nada que señalar.
-    let Some((x, y)) = found else {
-        return;
-    };
+    let &(left, right) = formulas
+        .iter()
+        .rev()
+        .find(|(_, right)| right + FORMULA_GAP < width)
+        .expect("una fórmula rota que se vea entera");
     window.move_pointer(rest.0, rest.1);
     let at = |value: usize| i16::try_from(value).unwrap();
-    window.move_pointer(at(x) - 4, at(y));
+    window.move_pointer(at(usize::midpoint(left, right)), at(lowest) - 4);
+    true
 }
 
 fn out_dir() -> PathBuf {

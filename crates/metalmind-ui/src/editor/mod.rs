@@ -303,10 +303,5 @@ impl Render for Editor {
                     .child(EditorElement::new(cx.entity(), theme.clone())),
             )
             .children(status)
-            .children(
-                self.formula_error
-                    .as_ref()
-                    .map(|hover| formula_tooltip::tooltip(hover, &theme)),
-            )
     }
 }
