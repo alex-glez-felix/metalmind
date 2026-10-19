@@ -9,6 +9,7 @@ use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 
 use super::fence::{Lang, OpenFence, highlight};
 use super::inline::{BlockEnd, Entry, Lead, style_chunk};
+pub(crate) use super::paragraph::Paragraph;
 use super::{Conceal, FencePart, LineKind, LineStyle, Lines, Role, Span, Style};
 use crate::code::{self, closes, fence, opening_fence};
 use crate::math;
@@ -78,23 +79,34 @@ pub(crate) struct Region {
 }
 
 /// El tramo que empieza en la línea `first` con el estado `start`. `close`
-/// es la línea que cierra el frontmatter, si lo hay.
+/// es la línea que cierra el frontmatter, si lo hay. `paragraph` es el
+/// último párrafo leído del mismo texto: si `first` es una de sus líneas,
+/// no se vuelve a leer.
 pub(crate) fn style(
     source: &impl Lines,
     first: usize,
     start: Start,
     close: Option<usize>,
+    paragraph: &mut Option<Paragraph>,
 ) -> Region {
+    let mut read = Reader { source, paragraph };
     match start {
-        Start::Document => document(source, close),
-        Start::Body => body(source, first, Entry::line(0)),
-        Start::Comment => comment(source, first),
+        Start::Document => document(&mut read, close),
+        Start::Body => body(&mut read, first, Entry::line(0)),
+        Start::Comment => comment(&mut read, first),
         Start::Fence(open) => fenced(&source.line(first), open),
-        Start::Math(open) => math_block(source, first, open),
+        Start::Math(open) => math_block(&mut read, first, open),
     }
 }
 
-fn document(source: &impl Lines, close: Option<usize>) -> Region {
+/// Las líneas de la nota y el párrafo que se está recorriendo.
+struct Reader<'a, L> {
+    source: &'a L,
+    paragraph: &'a mut Option<Paragraph>,
+}
+
+fn document<L: Lines>(read: &mut Reader<'_, L>, close: Option<usize>) -> Region {
+    let source = read.source;
     let first = source.line(0);
     let bom = if first.starts_with('\u{FEFF}') {
         '\u{FEFF}'.len_utf8()
@@ -110,7 +122,7 @@ fn document(source: &impl Lines, close: Option<usize>) -> Region {
             next_hard: true,
         };
     }
-    body(source, 0, Entry::line(bom))
+    body(read, 0, Entry::line(bom))
 }
 
 /// Si la primera línea abre un frontmatter (falta que algo lo cierre).
@@ -122,8 +134,8 @@ pub(crate) fn is_delimiter(line: &str) -> bool {
     line.trim_end() == "---"
 }
 
-fn body(source: &impl Lines, first: usize, entry: Entry) -> Region {
-    let line = source.line(first);
+fn body<L: Lines>(read: &mut Reader<'_, L>, first: usize, entry: Entry) -> Region {
+    let line = read.source.line(first);
     let after = &line[entry.body..];
     if entry.starts_line()
         && let Some((fence, info)) = opening_fence(after).and_then(|_| fence(after))
@@ -138,12 +150,22 @@ fn body(source: &impl Lines, first: usize, entry: Entry) -> Region {
             next_hard: true,
         };
     }
-    let (text, count) = paragraph(source, first, &line);
-    let chunk = style_chunk(&text, entry, count);
+    if read
+        .paragraph
+        .as_ref()
+        .is_some_and(|paragraph| paragraph.index_of(first).is_none())
+    {
+        *read.paragraph = None;
+    }
+    let paragraph = read
+        .paragraph
+        .get_or_insert_with(|| Paragraph::read(read.source, first, &line));
+    let chunk = style_chunk(paragraph, first, entry);
     let next = match chunk.end {
         RegionEnd::InComment { .. } => Start::Comment,
         RegionEnd::InMath { line_end, column } => {
-            let start = code::line_start(&text, line_end);
+            let text = &paragraph.text;
+            let start = code::line_start(text, line_end);
             let first = text.get(start + column..line_end).unwrap_or_default();
             Start::Math(OpenMath::new(column, first))
         }
@@ -156,11 +178,11 @@ fn body(source: &impl Lines, first: usize, entry: Entry) -> Region {
     }
 }
 
-fn comment(source: &impl Lines, first: usize) -> Region {
-    let line = source.line(first);
+fn comment<L: Lines>(read: &mut Reader<'_, L>, first: usize) -> Region {
+    let line = read.source.line(first);
     match line.find("%%") {
         Some(at) => body(
-            source,
+            read,
             first,
             Entry {
                 body: at + 2,
@@ -177,8 +199,8 @@ fn comment(source: &impl Lines, first: usize) -> Region {
 
 /// Una línea dentro de un bloque `$$`: si lo cierra, lo que sigue al `$$`
 /// es cuerpo y la línea lleva la fórmula entera.
-fn math_block(source: &impl Lines, first: usize, open: OpenMath) -> Region {
-    let line = source.line(first);
+fn math_block<L: Lines>(read: &mut Reader<'_, L>, first: usize, open: OpenMath) -> Region {
+    let line = read.source.line(first);
     let Some(close) = math::display_close(&line, 0, line.len()) else {
         return Region {
             lines: vec![whole(&line, Role::Math, LineKind::Text)],
@@ -187,11 +209,11 @@ fn math_block(source: &impl Lines, first: usize, open: OpenMath) -> Region {
         };
     };
     let block = BlockEnd {
-        latex: block_latex(source, first, open, &line[..close]),
+        latex: block_latex(read.source, first, open, &line[..close]),
         above: open.opened,
     };
     body(
-        source,
+        read,
         first,
         Entry {
             body: close + 2,
@@ -218,25 +240,6 @@ fn block_latex(source: &impl Lines, last: usize, open: OpenMath, tail: &str) -> 
     }
     latex.push_str(tail);
     latex
-}
-
-/// El texto desde la línea `first` (que ya se leyó: `line`) hasta antes de
-/// la primera que está en blanco o abre una cerca, que es hasta donde mira
-/// el código inline, y cuántas líneas son. Si sigue otra línea, termina
-/// con su salto, como en la nota.
-fn paragraph(source: &impl Lines, first: usize, line: &str) -> (String, usize) {
-    let mut text = line.to_owned();
-    let mut count = 1;
-    for index in first + 1..source.line_count() {
-        text.push('\n');
-        let next = source.line(index);
-        if code::is_blank(&next) || opening_fence(&next).is_some() {
-            return (text, count);
-        }
-        text.push_str(&next);
-        count += 1;
-    }
-    (text, count)
 }
 
 /// Las líneas unidas por `\n`.

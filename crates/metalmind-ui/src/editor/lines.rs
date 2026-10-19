@@ -287,7 +287,7 @@ impl Builder<'_, '_> {
         let row = f32::from(self.laid.text_height);
         let (left, top) = if spot.place == MathPlace::Alone {
             let top = self.math.geometry.top(formula, spot.place, row);
-            ((self.line.width - width) / 2.0, top)
+            (centered(self.line.width, width), top)
         } else {
             (self.x, self.baseline.baseline(row) - formula.height)
         };
@@ -305,7 +305,7 @@ impl Builder<'_, '_> {
     fn below(&mut self, spot: &MathSpot, formula: FormulaBox) {
         let space = f32::from(self.laid.height - self.laid.text_height);
         let top = self.laid.text_height + px(self.math.geometry.top(formula, spot.place, space));
-        let left = (self.line.width - px(formula.width)) / 2.0;
+        let left = centered(self.line.width, px(formula.width));
         self.place(spot, formula, left, top);
     }
 
@@ -328,6 +328,12 @@ impl Builder<'_, '_> {
             message: error.to_string().into(),
         });
     }
+}
+
+/// Centrada en `area`; si no cabe, desde el borde izquierdo, como el texto
+/// que pasa del borde.
+fn centered(area: Pixels, width: Pixels) -> Pixels {
+    ((area - width) / 2.0).max(px(0.))
 }
 
 /// La letra de un heading es más grande: su línea base baja con ella.
@@ -369,4 +375,18 @@ pub fn code_block_quads(lines: &[LaidLine], right: Pixels, theme: &Theme) -> Vec
             )
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::px;
+    use pretty_assertions::assert_eq;
+
+    use super::centered;
+
+    #[test]
+    fn una_formula_mas_ancha_que_el_area_empieza_en_el_borde() {
+        assert_eq!(centered(px(100.), px(40.)), px(30.));
+        assert_eq!(centered(px(100.), px(300.)), px(0.));
+    }
 }
