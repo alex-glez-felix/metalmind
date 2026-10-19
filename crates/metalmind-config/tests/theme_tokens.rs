@@ -115,6 +115,10 @@ fn medidas_fuera_de_rango_son_error() {
             "un tamaño relativo a la fuente va de 0.5 a 4",
         ),
         (
+            "layout:\n  picker_detail_share: 1.5\n",
+            "una fracción va de 0 a 1",
+        ),
+        (
             "text:\n  ui_md: { size: 1.0, line_height: 0.5 }\n",
             "un interlineado va de 1 a 3",
         ),

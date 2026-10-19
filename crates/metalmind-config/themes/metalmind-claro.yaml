@@ -156,6 +156,7 @@ layout:
   picker_padding_x: md
   picker_input_padding_y: md
   picker_gap: lg
+  picker_detail_share: 0.4  # fracción de la fila que se queda el detalle si el texto no cabe
   panel_padding_x: sm
   panel_padding_y: 6
   panel_gap: 6

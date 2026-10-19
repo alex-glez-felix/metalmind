@@ -215,6 +215,9 @@ Theme {
             picker_gap: Length(
                 16.0,
             ),
+            picker_detail_share: Fraction(
+                0.4,
+            ),
             panel_padding_x: Length(
                 8.0,
             ),
