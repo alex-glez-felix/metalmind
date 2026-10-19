@@ -290,6 +290,17 @@ fn de_derecha_a_izquierda_cada_glifo_es_de_su_grafema() {
 }
 
 #[test]
+fn una_ligadura_reparte_su_ancho_entre_los_grafemas_que_junta() {
+    // "fi" en un solo glifo de 8 y una "x" de 6.
+    let starts = [0, 1, 2, 3];
+    let glyphs = [(0, 0.0), (2, 8.0)];
+    let found = grapheme_widths(&starts, &glyphs, 14.0);
+    for (found, expected) in found.into_iter().zip([4.0, 4.0, 6.0]) {
+        assert_close(found, expected);
+    }
+}
+
+#[test]
 fn una_fila_es_una_sola_linea() {
     assert_eq!(one_line("a\nb\tc\r"), "a b c ");
     assert_eq!(one_line("niño").len(), "niño".len());
