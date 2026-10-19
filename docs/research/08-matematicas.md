@@ -222,6 +222,6 @@ Sigue el §7; lo que cambió al implementarlo:
 - **Pánicos**: parsear, componer y pintar corren dentro de `catch_unwind`; un pánico de RaTeX (tiene ~240 `unwrap`/`expect`/`panic!`) se ve como el error de una fórmula mal escrita. Antes de convertir el layout a `DisplayList` se valida con `validate_layout`, el tope de RaTeX contra fórmulas gigantes.
 - **Números**: en [performance.md](../performance.md) ("Fórmulas").
 
-Capturas: [`docs/capturas/formulas-oscuro.png`](../capturas/formulas-oscuro.png) y [`formulas-claro.png`](../capturas/formulas-claro.png), con las 22 fórmulas del §2 (`scripts/capturas-formulas.sh`). Una fórmula que no compone, con el ratón encima:
+Capturas (`scripts/capturas-formulas.sh`, en `docs/capturas/formulas-<escena>-<tema>-<tamaño>.png`): las 22 fórmulas del §2 y una nota de 1 300 líneas con párrafos largos, bloques de varias líneas, el cursor dentro de una fórmula y una que no compone junto a los bordes, en los dos temas, a 1920x1080 y 1280x720. Metalmind todavía no parte las líneas largas (03 §3), así que un párrafo largo se corta en el borde, con sus fórmulas. Una fórmula que no compone, con el ratón encima:
 
 ![El mensaje de RaTeX sobre una fórmula mal escrita](img/matematicas-error.png)
