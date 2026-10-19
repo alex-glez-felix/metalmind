@@ -191,6 +191,7 @@ pub struct Screen {
 pub const TALL_HEADINGS: Rows = Rows {
     text: 1,
     headings: [3, 2, 1, 1, 1, 1],
+    formulas: None,
 };
 
 pub fn run_engine(before: &str, keys: &str) -> State {

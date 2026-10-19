@@ -11,7 +11,8 @@ use std::fmt::Write as _;
 use std::fs;
 
 use metalmind_syntax::{
-    Lines, LinkSyntax, Problem, Resolution, Styles, Subpath, TagPlace, TextLines, resolve, scan,
+    Lines, LinkSyntax, MathPlace, Problem, Resolution, Styles, Subpath, TagPlace, TextLines,
+    resolve, scan,
 };
 use pretty_assertions::assert_eq;
 use rstest::rstest;
@@ -76,7 +77,7 @@ fn tags(#[case] text: &str, #[case] expected: &[&str]) {
 }
 
 /// Cada caso con sus fórmulas entre `⟦ ⟧` (las que se componen; `⟦$$…⟧^n`
-/// si van debajo de un bloque de `n` líneas) y lo que el índice ve fuera.
+/// si van debajo de un bloque de `n` líneas, `solo` si ocupan su línea) y lo que el índice ve fuera.
 fn formulas(text: &str) -> String {
     let lines = TextLines::new(text);
     let mut styles = Styles::new(lines.line_count());
@@ -91,8 +92,10 @@ fn formulas(text: &str) -> String {
             out.push('⟦');
             out.push_str(&line[math.range.clone()]);
             out.push('⟧');
-            if math.below() {
-                write!(out, "^{}", math.above).unwrap();
+            match math.place {
+                MathPlace::Inline => {}
+                MathPlace::Alone => out.push_str("solo"),
+                MathPlace::Below { above } => write!(out, "^{above}").unwrap(),
             }
             at = math.range.end;
         }
