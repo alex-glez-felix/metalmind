@@ -110,12 +110,13 @@ impl Document {
         if force {
             disk.write(path, &text, kind)?;
         } else {
-            metalmind_vault::create_atomic(path, |out| out.write_all(text.as_bytes())).map_err(
-                |error| match error {
-                    FileError::Exists { .. } => SaveError::Exists,
-                    error => SaveError::File(error),
-                },
-            )?;
+            disk.create(path, &text, kind)
+                .map_err(|error| match error {
+                    metalmind_vault::SaveError::Write(FileError::Exists { .. }) => {
+                        SaveError::Exists
+                    }
+                    error => SaveError::Write(error),
+                })?;
         }
         if self.path.is_none() {
             self.path = Some(path.to_owned());

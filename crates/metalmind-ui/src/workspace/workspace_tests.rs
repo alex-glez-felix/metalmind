@@ -247,13 +247,18 @@ fn el_mismo_texto_por_otra_edicion_sigue_modificado() {
 }
 
 #[test]
-fn guardar_a_mitad_del_insert_no_coincide_con_ningun_estado() {
+fn guardar_a_mitad_del_insert_queda_limpio_hasta_la_siguiente_edicion() {
     let dir = TempDir::new().unwrap();
     let mut session = Session::open(&dir.path().join("nota.md"));
     session.keys("ix");
     session.save().unwrap();
+    assert!(!session.is_modified());
+    session.keys("y");
     assert!(session.is_modified());
-    session.keys("⎋u");
+    session.save().unwrap();
+    session.keys("⎋");
+    assert!(!session.is_modified());
+    session.keys("u");
     assert_eq!(session.text(), "");
     assert!(session.is_modified());
 }

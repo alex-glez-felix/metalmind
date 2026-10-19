@@ -229,6 +229,11 @@ impl Document {
     /// otra edición no.
     #[must_use]
     pub fn is_modified(&self) -> bool {
+        // Sin ediciones desde que se leyó o se escribió, el disco tiene lo
+        // mismo: también a mitad de un Insert guardado.
+        if self.buffer.version() == self.written {
+            return false;
+        }
         self.buffer.has_uncommitted_edits() || self.saved != Some(self.buffer.history_seq())
     }
 
