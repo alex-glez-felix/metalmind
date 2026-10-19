@@ -52,6 +52,8 @@ enum Step {
     Search,
     /// Deja el ratón sobre una mark hasta que sale su tooltip.
     HoverMark(MarkAt),
+    /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
+    SearchAfterCjk,
 }
 
 /// Sobre qué mark se deja el ratón.
@@ -91,6 +93,7 @@ const SCENES: &[(&str, &[Step])] = &[
     ("finder-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    ("buscar-cjk", &[Step::SearchAfterCjk]),
     ("paleta", &[Step::Keys("<Esc><C-S-p>")]),
     // Al final, para que las marks no cambien las demás pantallas: tres en
     // una línea (la `b` y un `+`), una sobre un heading y el tooltip.
@@ -160,6 +163,9 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
             match step {
                 Step::Keys(keys) => window.type_keys(keys),
                 Step::Search => window.type_keys(vault::SEARCHED),
+                Step::SearchAfterCjk => {
+                    window.type_keys(&format!("<C-u>{}", vault::SEARCHED_AFTER_CJK));
+                }
                 Step::RightClickRow(row) => {
                     window.right_click(TREE_LEFT + 80, TREE_ROW * (row + 1) + TREE_ROW / 2);
                 }

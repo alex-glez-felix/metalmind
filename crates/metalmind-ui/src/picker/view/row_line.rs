@@ -15,6 +15,9 @@ use super::{Overflow, PickerRow};
 use crate::picker::fit;
 use crate::theme::Theme;
 
+/// Un texto que la fuente del tema siempre tiene: de él sale la línea base.
+const REFERENCE_PROBE: &str = "x";
+
 pub struct RowLine {
     row: PickerRow,
     matched: Hsla,
@@ -44,6 +47,8 @@ impl RowLine {
 pub struct Shaped {
     text: ShapedLine,
     detail: Option<ShapedLine>,
+    /// El ascent y el descent de la fuente del tema: la línea base común.
+    reference: (f32, f32),
 }
 
 impl IntoElement for RowLine {
@@ -140,7 +145,12 @@ impl gpui_kit::Element for RowLine {
                 fit::path(&text.widths, &text.slashes(), focus, text_budget, ellipsis)
             }
         };
+        // Una línea con la fuente del tema y sin respaldo: mide como medirían
+        // las filas sin CJK, que así quedan donde las pondría GPUI.
+        let probe = typeface.shape(REFERENCE_PROBE.into(), window);
+        let reference = (f32::from(probe.ascent), f32::from(probe.descent));
         Shaped {
+            reference,
             text: text.render(&kept, &typeface, self.matched, window),
             detail: detail.zip(detail_budget).map(|(detail, detail_budget)| {
                 let kept = fit::path(
@@ -165,8 +175,18 @@ impl gpui_kit::Element for RowLine {
         window: &mut Window,
         cx: &mut App,
     ) {
-        // Cada línea se pinta centrada en todo el alto de la fila.
+        // GPUI centra cada línea en el alto de la fila según su propio ascent
+        // y descent, que crecen si entra una fuente de respaldo (CJK): se
+        // corren para que las dos se apoyen en la línea base de la fuente del tema.
         let line_height = bounds.size.height;
+        let top = |line: &ShapedLine| {
+            let shift = fit::baseline_shift(
+                shaped.reference,
+                f32::from(line.ascent),
+                f32::from(line.descent),
+            );
+            bounds.top() + px(shift)
+        };
         let detail_width = shaped.detail.as_ref().map_or(px(0.), ShapedLine::width);
         let text_right = if shaped.detail.is_some() {
             bounds.right() - detail_width - self.gap
@@ -184,11 +204,12 @@ impl gpui_kit::Element for RowLine {
                 bounds: text_bounds,
             }),
             |window| {
-                paint_line(&shaped.text, bounds.origin, line_height, window, cx);
+                let origin = point(bounds.left(), top(&shaped.text));
+                paint_line(&shaped.text, origin, line_height, window, cx);
             },
         );
         if let Some(detail) = &shaped.detail {
-            let origin = point(bounds.right() - detail_width, bounds.top());
+            let origin = point(bounds.right() - detail_width, top(detail));
             window.with_content_mask(Some(ContentMask { bounds }), |window| {
                 paint_line(detail, origin, line_height, window, cx);
             });

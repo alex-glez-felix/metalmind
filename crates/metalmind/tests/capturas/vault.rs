@@ -17,6 +17,15 @@ pub const NOTE: &str = "estrés del layout — una nota con un nombre bastante l
 /// en que terminan los hilos y la captura no se repetiría.
 pub const SEARCHED: &str = "zeta";
 
+/// Lo que se busca en la escena `buscar-cjk`: va justo detrás de un texto
+/// en japonés, así que la fila lo recorta con una elipsis delante del CJK,
+/// que entra con su fuente de respaldo.
+pub const SEARCHED_AFTER_CJK: &str = "kanji";
+
+/// Las últimas líneas con [`SEARCHED`], cada una con un texto en japonés de
+/// otro largo delante: la elipsis cae en un carácter distinto en cada fila.
+const CJK_LINES: std::ops::RangeInclusive<usize> = 28..=30;
+
 /// Carpetas abiertas en el árbol, como las dejaría el usuario.
 pub const EXPANDED: &[&str] = &[
     "Ideas",
@@ -112,6 +121,19 @@ fn note() -> String {
     }
     let mut searched = String::new();
     for line in 1..=30 {
+        if CJK_LINES.contains(&line) {
+            let cjk: String = "ヴィンとケルシエはルサデルの霧の中を歩き、長い夜を過ごした。"
+                .chars()
+                .cycle()
+                .take(40 + 7 * (line - CJK_LINES.start()))
+                .collect();
+            writeln!(
+                searched,
+                "{cjk}{SEARCHED_AFTER_CJK} · {SEARCHED} {line}: ñandú 🦀"
+            )
+            .expect("escribir");
+            continue;
+        }
         let filler = "una coincidencia en una línea más larga que el picker ".repeat(line % 4);
         writeln!(searched, "{SEARCHED} {line}: {filler} ñandú 日本語 🦀").expect("escribir");
     }
