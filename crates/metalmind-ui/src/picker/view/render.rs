@@ -4,20 +4,26 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, ElementInputHandler, HighlightStyle, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, StatefulInteractiveElement as _, Styled as _, StyledText,
-    Window, canvas, div, prelude::FluentBuilder as _, relative, uniform_list,
+    Context, ElementInputHandler, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
+    Render, StatefulInteractiveElement as _, Styled as _, Window, canvas, div,
+    prelude::FluentBuilder as _, px, relative, uniform_list,
 };
 
-use super::{PickerDelegate, PickerEvent, PickerRow, PickerView};
+use super::row_line::RowLine;
+use super::{PickerDelegate, PickerEvent, PickerView};
+use crate::picker::fit;
 use crate::theme::Theme;
 
 impl<D: PickerDelegate> Render for PickerView<D> {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let row_height = theme.picker_row_height();
-        let rows = u8::try_from(self.delegate.len()).unwrap_or(u8::MAX);
-        let visible = rows.clamp(1, theme.picker_rows);
+        let list_height = fit::list_height(
+            self.delegate.len(),
+            theme.picker_rows,
+            f32::from(row_height),
+            f32::from(theme.border_width),
+        );
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
@@ -48,7 +54,7 @@ impl<D: PickerDelegate> Render for PickerView<D> {
             .child(self.render_input(&theme, cx))
             .child(
                 div()
-                    .h(row_height * f32::from(visible))
+                    .h(px(list_height))
                     .border_t(theme.border_width)
                     .border_color(theme.picker_border)
                     .child(self.render_list(&theme, row_height, cx)),
@@ -126,8 +132,11 @@ impl<D: PickerDelegate> PickerView<D> {
             "picker-rows",
             self.delegate.len(),
             cx.processor(move |this, rows: Range<usize>, _window, cx| {
-                rows.map(|row| this.render_row(row, &theme, cx).into_any_element())
-                    .collect()
+                rows.map(|row| {
+                    this.render_row(row, &theme, row_height, cx)
+                        .into_any_element()
+                })
+                .collect()
             }),
         )
         .track_scroll(&self.scroll)
@@ -139,41 +148,22 @@ impl<D: PickerDelegate> PickerView<D> {
         &mut self,
         row: usize,
         theme: &Theme,
+        row_height: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let PickerRow {
-            text,
-            highlights,
-            detail,
-        } = self.delegate.row(row);
-        let highlight = HighlightStyle {
-            color: Some(theme.picker_match),
-            font_weight: Some(theme.weight_strong),
-            ..HighlightStyle::default()
-        };
-        let highlights = highlights.into_iter().map(|range| (range, highlight));
-        let label = StyledText::new(text).with_highlights(highlights);
         let selected = row == self.delegate.selected();
         let hover = theme.picker_hover;
+        let line = RowLine::new(self.delegate.row(row), theme);
         div()
             .id(row)
             .w_full()
+            .h(row_height)
             .flex()
             .items_center()
-            .justify_between()
-            .gap(theme.picker_gap)
             .px(theme.picker_padding_x)
-            .py(theme.picker_row_padding_y)
             .when(selected, |row| row.bg(theme.picker_selected))
             .when(!selected, |row| row.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
-            .child(div().min_w_0().overflow_hidden().child(label))
-            .children(detail.map(|detail| {
-                div()
-                    .flex_none()
-                    .map(|element| theme.ui_small_text(element))
-                    .text_color(theme.picker_muted)
-                    .child(detail)
-            }))
+            .child(line)
     }
 }

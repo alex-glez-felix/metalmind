@@ -4,6 +4,7 @@
 //! [`PickerState`], sin GPUI.
 
 mod actions;
+mod fit;
 mod fuzzy;
 mod highlight;
 mod input_line;
@@ -14,4 +15,6 @@ pub(crate) use self::actions::bind_keys;
 pub(crate) use self::fuzzy::{Fuzzy, Haystack, PickerItem};
 pub use self::input_line::{InputLine, LineEdit};
 pub use self::model::{Chosen, Job, Matches, Open, PickerState, Step};
-pub(crate) use self::view::{PickerDelegate, PickerEvent, PickerOptions, PickerRow, PickerView};
+pub(crate) use self::view::{
+    Overflow, PickerDelegate, PickerEvent, PickerOptions, PickerRow, PickerView,
+};

@@ -1,16 +1,17 @@
 //! El contexto de una línea que coincide, como se pinta en su fila: sin la
-//! sangría que no coincide, con la primera coincidencia cerca del inicio y cortado a un
-//! largo que se puede pintar aunque la línea tenga un megabyte.
+//! sangría que no coincide y cortado alrededor de la primera coincidencia a
+//! un largo que se puede pintar aunque la línea tenga un megabyte. Lo que
+//! cabe en la fila lo recorta después el picker, por ancho y centrado en la
+//! coincidencia.
 
 use std::ops::Range;
 
 use metalmind_search::LineMatch;
 use unicode_segmentation::UnicodeSegmentation as _;
 
-/// Grafemas que se dejan antes de la primera coincidencia.
-const BEFORE: usize = 24;
-/// Grafemas que se muestran como mucho.
-const WIDTH: usize = 160;
+/// Grafemas que se dejan a cada lado de la primera coincidencia: más de los
+/// que caben en la fila más ancha, para que el picker pueda centrarla.
+const CONTEXT: usize = 160;
 const ELLIPSIS: &str = "…";
 
 /// El texto de la fila y los bytes que se resaltan en él.
@@ -25,8 +26,8 @@ pub fn row_text(line: &LineMatch) -> RowText {
     let first = line.matches.first().map_or(0, |found| found.start);
     let indent = line.text.len() - line.text.trim_start().len();
     let kept = indent.min(first);
-    let start = kept.max(start_before(&line.text[..first], BEFORE));
-    let end = end_after(&line.text, start, WIDTH);
+    let start = kept.max(start_before(&line.text[..first], CONTEXT));
+    let end = end_after(&line.text, first, 2 * CONTEXT);
     let prefix = if start > kept { ELLIPSIS } else { "" };
     let suffix = if end < line.text.trim_end().len() {
         ELLIPSIS
@@ -103,12 +104,26 @@ mod tests {
     }
 
     #[test]
-    fn la_primera_coincidencia_queda_cerca_del_inicio() {
+    fn se_corta_alrededor_de_la_primera_coincidencia() {
+        let text = format!("{}idea{}", "x".repeat(500), "y".repeat(500));
+        let found = row_text(&line(&text, &[(500, 504)]));
+        assert_eq!(
+            marked(&found),
+            format!(
+                "…{}[idea]{}…",
+                "x".repeat(CONTEXT),
+                "y".repeat(2 * CONTEXT - 4)
+            )
+        );
+    }
+
+    #[test]
+    fn lo_que_cabe_entre_los_cortes_va_entero() {
         let text = format!("{}idea al final", "x".repeat(100));
         let found = row_text(&line(&text, &[(100, 104)]));
         assert_eq!(
             marked(&found),
-            format!("…{}[idea] al final", "x".repeat(BEFORE))
+            format!("{}[idea] al final", "x".repeat(100))
         );
     }
 
@@ -116,17 +131,25 @@ mod tests {
     fn una_linea_enorme_se_corta_y_lo_de_fuera_no_se_resalta() {
         let text = format!("idea {}idea", "y".repeat(1 << 20));
         let found = row_text(&line(&text, &[(0, 4), (text.len() - 4, text.len())]));
-        assert_eq!(found.text.chars().count(), WIDTH + 1);
+        assert_eq!(found.text.chars().count(), 2 * CONTEXT + 1);
         assert!(found.text.ends_with(ELLIPSIS));
         assert_eq!(marked(&found)[..6], *"[idea]");
         assert_eq!(found.highlights.len(), 1);
     }
 
     #[test]
+    fn una_coincidencia_enorme_tambien_se_corta() {
+        let text = "z".repeat(1 << 20);
+        let found = row_text(&line(&text, &[(0, text.len())]));
+        assert_eq!(found.text.chars().count(), 2 * CONTEXT + 1);
+        assert_eq!(marked(&found), format!("[{}]…", "z".repeat(2 * CONTEXT)));
+    }
+
+    #[test]
     fn corta_por_grafemas_y_no_por_bytes() {
-        let text = format!("{}niño", "é".repeat(40));
+        let text = format!("{}niño", "é".repeat(CONTEXT + 40));
         let start = text.len() - "niño".len();
         let found = row_text(&line(&text, &[(start, text.len())]));
-        assert_eq!(marked(&found), format!("…{}[niño]", "é".repeat(BEFORE)));
+        assert_eq!(marked(&found), format!("…{}[niño]", "é".repeat(CONTEXT)));
     }
 }

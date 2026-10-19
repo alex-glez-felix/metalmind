@@ -176,6 +176,9 @@ pub struct Theme {
     pub picker_top: Pixels,
     /// Cuántas filas se ven antes de hacer scroll.
     pub picker_rows: u8,
+    /// Lo mínimo de una fila del picker que se queda el detalle de la
+    /// derecha cuando el texto no cabe.
+    pub picker_detail_share: f32,
     pub picker_padding_x: Pixels,
     /// Arriba y abajo de la línea de texto de una fila.
     pub picker_row_padding_y: Pixels,
@@ -306,6 +309,7 @@ impl Theme {
             picker_width: px(layout.picker_width.0),
             picker_top: px(layout.picker_top.0),
             picker_rows: layout.picker_rows.0,
+            picker_detail_share: layout.picker_detail_share.0,
             picker_padding_x: px(layout.picker_padding_x.0),
             picker_row_padding_y: px(rows.picker_padding.0),
             picker_input_padding_y: px(layout.picker_input_padding_y.0),
