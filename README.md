@@ -20,7 +20,7 @@ M0 y M1 hechos; M2 en curso: `metalmind carpeta/` abre la carpeta como vault, co
 - `crates/metalmind-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
 - `crates/metalmind-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico.
 - `crates/metalmind-search`: búsqueda difusa para el finder y la paleta, y de texto completo en las notas (esta, sin interfaz todavía).
-- `crates/metalmind-ui` y `crates/metalmind`: el editor, el panel lateral con el árbol de carpetas (`space e`), el finder (`space f`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI ([`metalmind-ui`](crates/metalmind-ui/README.md)).
+- `crates/metalmind-ui` y `crates/metalmind`: el editor, el panel lateral con el árbol de carpetas (`space e`), el finder (`space f`), la búsqueda de texto (`space /`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI ([`metalmind-ui`](crates/metalmind-ui/README.md)).
 
 ```sh
 cargo run --release -p metalmind -- ~/Notas      # o un archivo: abre el vault de su carpeta

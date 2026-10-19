@@ -9,13 +9,14 @@ use gpui_kit::{AppContext as _, Context, Entity, Window};
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::finder::Note;
-use crate::picker::{Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
+use crate::picker::{Fuzzy, Haystack, PickerEvent, PickerOptions, PickerState, PickerView};
+
+/// El picker de las notas entre las que empata un link.
+pub type LinkChoicePicker = PickerView<Fuzzy<Note>>;
 
 fn options() -> PickerOptions {
     PickerOptions {
-        haystack: Haystack::Paths,
         placeholder: "El link empata: elegir la nota…".into(),
-        empty: "Ninguna nota".into(),
         splits: false,
     }
 }
@@ -26,7 +27,12 @@ impl WorkspaceView {
             return;
         };
         let notes: Arc<[Note]> = choice.candidates.iter().cloned().map(Note).collect();
-        let picker = cx.new(|cx| PickerView::new(PickerState::new(notes), options(), cx));
+        let fuzzy = Fuzzy::new(
+            PickerState::new(notes),
+            Haystack::Paths,
+            "Ninguna nota".into(),
+        );
+        let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_link_choice_event);
         self.show(
             Overlay::LinkChoice {
@@ -40,7 +46,7 @@ impl WorkspaceView {
 
     fn on_link_choice_event(
         &mut self,
-        _: &Entity<PickerView<Note>>,
+        _: &Entity<LinkChoicePicker>,
         event: &PickerEvent,
         window: &mut Window,
         cx: &mut Context<Self>,

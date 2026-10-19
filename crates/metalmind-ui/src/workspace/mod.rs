@@ -37,7 +37,7 @@ pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
 use self::file_ids::FileIds;
-pub use self::files::{Placement, shown_path};
+pub use self::files::{LinePosition, Placement, shown_path};
 pub use self::line_numbers::LineNumbers;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;

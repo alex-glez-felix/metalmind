@@ -21,6 +21,7 @@ pub enum Effect {
     Stay,
     CloseWindow,
     OpenFinder,
+    OpenTextSearch,
     OpenCommandPalette,
     /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
     TogglePanel(PanelView),
@@ -104,6 +105,7 @@ impl Workspace {
             }
             Command::Set => self.set_options(invocation.argument.as_deref()),
             Command::OpenFinder => Ok(Effect::OpenFinder),
+            Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),

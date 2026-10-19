@@ -1,23 +1,22 @@
 //! Cómo se ve un picker: el input con su cursor y la lista virtual, con
-//! las letras que coinciden resaltadas solo en las filas visibles.
+//! lo que coincide resaltado solo en las filas visibles.
 
 use std::ops::Range;
 
 use gpui_kit::{
     Context, ElementInputHandler, FontWeight, HighlightStyle, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledText, Window, canvas, div, prelude::FluentBuilder as _, relative, uniform_list,
+    ParentElement as _, Pixels, Render, StatefulInteractiveElement as _, Styled as _, StyledText,
+    Window, canvas, div, prelude::FluentBuilder as _, relative, uniform_list,
 };
 
-use super::{PickerEvent, PickerItem, PickerView};
-use crate::picker::highlight::match_ranges;
+use super::{PickerDelegate, PickerEvent, PickerRow, PickerView};
 use crate::theme::Theme;
 
-impl<T: PickerItem> Render for PickerView<T> {
+impl<D: PickerDelegate> Render for PickerView<D> {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let row_height = theme.font_size * theme.line_height + theme.picker_padding_y * 2.;
-        let rows = u8::try_from(self.state.len()).unwrap_or(u8::MAX);
+        let rows = u8::try_from(self.delegate.len()).unwrap_or(u8::MAX);
         let visible = rows.clamp(1, theme.picker_rows);
         div()
             .key_context(self.key_context())
@@ -57,9 +56,9 @@ impl<T: PickerItem> Render for PickerView<T> {
     }
 }
 
-impl<T: PickerItem> PickerView<T> {
+impl<D: PickerDelegate> PickerView<D> {
     fn render_input(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        let line = self.state.line();
+        let line = self.delegate.line();
         let marked = self.marked.clone().unwrap_or_default();
         let (before, after) = line.text().split_at(line.cursor());
         let empty = line.text().is_empty() && marked.is_empty();
@@ -85,6 +84,14 @@ impl<T: PickerItem> PickerView<T> {
                 )
             })
             .child(div().child(after.to_owned()))
+            .children(self.delegate.status().map(|status| {
+                div()
+                    .ml_auto()
+                    .pl(theme.status_gap)
+                    .flex_none()
+                    .text_color(theme.picker_muted)
+                    .child(status)
+            }))
             .child(
                 canvas(
                     |_, _, _| (),
@@ -103,25 +110,20 @@ impl<T: PickerItem> PickerView<T> {
         row_height: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        if self.state.is_empty() {
-            let message = if self.state.items().is_empty() {
-                self.options.empty.clone()
-            } else {
-                SharedString::new_static("Sin resultados")
-            };
+        if self.delegate.len() == 0 {
             return div()
                 .h(row_height)
                 .px(theme.picker_padding_x)
                 .flex()
                 .items_center()
                 .text_color(theme.picker_muted)
-                .child(message)
+                .child(self.delegate.empty())
                 .into_any_element();
         }
         let theme = theme.clone();
         uniform_list(
             "picker-rows",
-            self.state.len(),
+            self.delegate.len(),
             cx.processor(move |this, rows: Range<usize>, _window, cx| {
                 rows.map(|row| this.render_row(row, &theme, cx).into_any_element())
                     .collect()
@@ -138,22 +140,19 @@ impl<T: PickerItem> PickerView<T> {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let positions = self.state.positions(row, &mut self.ui_matcher);
-        let item = self.state.item(row);
-        let text = item
-            .map(|item| item.as_ref().to_owned())
-            .unwrap_or_default();
-        let detail = item.and_then(|item| item.detail()).map(str::to_owned);
+        let PickerRow {
+            text,
+            highlights,
+            detail,
+        } = self.delegate.row(row);
         let highlight = HighlightStyle {
             color: Some(theme.picker_match),
             font_weight: Some(FontWeight::BOLD),
             ..HighlightStyle::default()
         };
-        let highlights = match_ranges(&text, &positions)
-            .into_iter()
-            .map(|range| (range, highlight));
+        let highlights = highlights.into_iter().map(|range| (range, highlight));
         let label = StyledText::new(text).with_highlights(highlights);
-        let selected = row == self.state.selected();
+        let selected = row == self.delegate.selected();
         let hover = theme.picker_hover;
         div()
             .id(row)

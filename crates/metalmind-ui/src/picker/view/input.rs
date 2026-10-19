@@ -5,21 +5,21 @@ use std::ops::Range;
 
 use gpui_kit::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window};
 
-use super::{PickerItem, PickerView};
+use super::{PickerDelegate, PickerView};
 use crate::ime::ImeLine;
 use crate::picker::LineEdit;
 use crate::utf16;
 
-impl<T: PickerItem> PickerView<T> {
+impl<D: PickerDelegate> PickerView<D> {
     /// La línea del input como la ve el IME.
     fn ime_line(&self) -> ImeLine {
-        let line = self.state.line();
+        let line = self.delegate.line();
         let marked = self.marked.as_deref().unwrap_or("");
         ImeLine::new(line.text().to_owned(), line.cursor(), marked)
     }
 }
 
-impl<T: PickerItem> EntityInputHandler for PickerView<T> {
+impl<D: PickerDelegate> EntityInputHandler for PickerView<D> {
     fn text_for_range(
         &mut self,
         range: Range<usize>,
@@ -67,7 +67,7 @@ impl<T: PickerItem> EntityInputHandler for PickerView<T> {
         cx: &mut Context<Self>,
     ) {
         let had_preedit = self.marked.take().is_some();
-        let edit = commit(self.state.line().text(), had_preedit, range, text);
+        let edit = commit(self.delegate.line().text(), had_preedit, range, text);
         self.edit(edit, cx);
     }
 

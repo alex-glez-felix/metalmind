@@ -305,6 +305,7 @@ impl Action {
         Self::Command(Command::Only),
         Self::Command(Command::Set),
         Self::Command(Command::OpenFinder),
+        Self::Command(Command::OpenTextSearch),
         Self::Command(Command::OpenCommandPalette),
         Self::Command(Command::ToggleFolders),
         Self::Command(Command::ToggleTags),

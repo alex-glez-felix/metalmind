@@ -9,12 +9,15 @@ Sin GPUI:
 - `file_tree/`: el árbol de carpetas del panel lateral sobre el `VaultIndex`: filas visibles, carpetas abiertas, selección, filtro difuso y los cambios del watcher. Benchmark en `benches/file_tree.rs`.
 - `panel/`: el panel lateral entero (si se ve, en qué vista) y lo que le pregunta al usuario: un nombre, el filtro o confirmar un borrado. Confirmar da un `Request` con la operación de archivo.
 - `session.rs`: lo que se recuerda entre sesiones en el directorio de estado: el último vault y, por vault, el panel.
+- `picker/model.rs`: el estado del picker difuso (`PickerState`) del finder y la paleta. Benchmark en `benches/picker.rs`.
+- `text_search/`: `space /`. El estado (`TextSearchState`: lo escrito, los resultados y sus versiones), el hilo que cancela y lanza cada búsqueda (`SearchWorker`) y el contexto de cada fila. Benchmark en `benches/text_search.rs`.
 
 Con GPUI:
 
 - `window.rs`: abre la ventana con un `Startup` (el vault, su watcher y el primer documento).
 - `workspace_view.rs`: la raíz. La barra de botones, el panel lateral y un `Editor` por panel; mueve el foco entre ellos.
 - `editor/`: un panel de edición. Pinta solo lo visible y le pasa las teclas al motor vim.
+- `picker/`: la vista de un picker (`PickerView`), una sola para el finder, la paleta y `space /`; lo que cambia lo pone su `PickerDelegate`.
 - `sidebar/`: el panel lateral. El árbol en una `uniform_list` (solo se pintan las filas visibles), el menú del clic derecho, los botones y las acciones con nombre (`file_tree::*`, `panel::*`) con sus atajos.
 - `theme.rs`: todo color y tamaño de la UI sale de aquí.
 

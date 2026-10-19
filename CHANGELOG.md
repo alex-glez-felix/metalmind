@@ -196,6 +196,22 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
   con las claves `ui.panel_*` y `ui.menu_*` del tema.
 
+#### Búsqueda de texto (M6)
+
+- `space /` busca texto en todas las notas del vault, como el live grep de
+  Telescope. Cada resultado es una línea con su contexto y lo que coincide
+  resaltado, y a la derecha la nota y el número de línea. `Enter` abre la nota
+  en esa línea, con el cursor en la coincidencia; `ctrl-v` y `ctrl-s`, en un
+  split, como en `space f`.
+- El patrón es un regex, y distingue mayúsculas solo si las lleva. Uno a medio
+  escribir no borra los resultados: dice "patrón inválido" hasta que se arregla.
+- Las notas abiertas con cambios sin guardar se buscan en lo que se ve, no en
+  lo que hay en disco.
+- La búsqueda corre en segundo plano y cada tecla cancela la anterior: la
+  ventana nunca se traba, aunque el vault tenga 50 000 notas. Con más de
+  10 000 líneas se corta y lo dice.
+- También desde la paleta (`workspace: open text search`).
+
 #### Configuración
 
 - `config.yaml` en el directorio de configuración del usuario

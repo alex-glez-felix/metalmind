@@ -406,6 +406,11 @@ const VIM: &[(Context, &[Key], Action)] = {
         ),
         (
             Normal,
+            &[ch(' '), ch('/')],
+            Action::Command(Command::OpenTextSearch),
+        ),
+        (
+            Normal,
             &[ch(' '), ch('p')],
             Action::Command(Command::OpenCommandPalette),
         ),
@@ -539,13 +544,18 @@ mod tests {
     }
 
     #[test]
-    fn space_opens_the_finder_and_the_palette_from_normal() {
+    fn space_opens_the_finder_the_text_search_and_the_palette_from_normal() {
         let keymap = Keymap::vim();
         let finder = Action::Command(Command::OpenFinder);
+        let text_search = Action::Command(Command::OpenTextSearch);
         let palette = Action::Command(Command::OpenCommandPalette);
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch(' '), ch('f')]),
             Lookup::Action(finder)
+        );
+        assert_eq!(
+            keymap.lookup(Mode::Normal, &[ch(' '), ch('/')]),
+            Lookup::Action(text_search)
         );
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch(' '), ch('p')]),

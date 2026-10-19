@@ -81,6 +81,9 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Texto completo, regex sin literal que la acelere, 5 k / 50 k | ≤ 100 ms / ≤ 1 s | 12 / 49 ms | ✅ | `metalmind-search` `regex_de_fecha` |
 | Empezar una búsqueda de texto, recibir la primera nota y cancelarla, 5 k / 50 k | ≤ 8 ms | 1.3 / 1.4 ms | ✅ | `metalmind-search` `empezar_y_cancelar` |
 | Texto completo en una nota abierta de 5 k líneas: palabra frecuente / sin resultado | ≤ 8 ms | 0.95 ms / 18 µs | ✅ | `metalmind-search` `nota_en_memoria` |
+| `space /`, una tecla en el hilo de la UI con la búsqueda anterior corriendo (validar el patrón y mandarlo al hilo), 5 k / 50 k notas | ≤ 8 ms | 38 / 36 µs | ✅ | `metalmind-ui` `tecla_con_una_busqueda_corriendo` |
+| `space /`, de la tecla al primer resultado (cancelar la anterior, buscar en una nota abierta de 5 k líneas y lanzar la nueva, en el hilo de la búsqueda), 5 k / 50 k | ≤ 100 ms | 2.5 / 2.4 ms | ✅ | `metalmind-ui` `de_la_tecla_al_primer_resultado` |
+| `space /`, recibir un lote de 50 notas y preparar las 12 filas visibles | ≤ 8 ms | 31 µs | ✅ | `metalmind-ui` `recibir_un_lote_y_preparar_las_filas` |
 | Buffer: insertar / borrar un carácter en 50 k | ≤ 0.1 ms | 5.2 / 2.8 µs | ✅ | `metalmind-buffer` |
 | Buffer: undo + redo de una edición en 50 k | ≤ 0.1 ms | 2.0 µs | ✅ | `metalmind-buffer` |
 | Buffer: una edición por línea en un lote, 5 k / 50 k | ≤ 16 / 160 ms | 4.4 / 60 ms | ✅ | `metalmind-buffer` `una_edicion_por_linea` |
@@ -99,11 +102,15 @@ El estilo de las líneas del editor (03 §2, "Estilo en el editor"), medido el 2
 
 El picker (`metalmind-ui/src/picker/`) no filtra en el hilo de la UI: cada tecla manda la búsqueda al executor de fondo de GPUI, de a una a la vez y con la consulta versionada. Lo que vuelve de una versión vieja se descarta, y si se teclea mientras corre una, al terminar se busca solo lo último. Así los 8 ms del prompt son un tope de latencia, no de bloqueo: con 50 k rutas la UI sigue respondiendo aunque la búsqueda tarde. Lo único que corre en el hilo de la UI es la búsqueda de un `enter` que llega antes que los resultados (la que se está esperando) y las posiciones de las letras que coinciden, solo para las filas visibles de la lista virtual (`FuzzyMatcher::positions`). Guardar las notas recientes va en un hilo propio; el vault lo abre el arranque, antes de la ventana (fila "Abrir el vault").
 
+## La búsqueda de texto
+
+`space /` lanza una búsqueda de `metalmind-search` en cada tecla, y empezar una cancela la anterior **esperando a sus hilos**. Hecho en el hilo de la UI no cabía: con la búsqueda de una palabra que está en casi todas las notas corriendo y una nota abierta de 5 k líneas con cambios, la tecla tardaba 5.6 / 7.5 ms de mediana con 5 k / 50 k notas, con picos de 30 ms (medido el 2026-10-18, la misma máquina de escritorio x86_64). Por eso la UI solo valida el patrón y lo manda a un hilo propio, que cancela, busca en las notas abiertas y lanza la nueva; si llegan varias teclas mientras cancela, salta a la última. Los resultados vuelven versionados y lo viejo se descarta, como en el picker difuso. Así, los 8 ms son un tope de latencia hasta que la búsqueda nueva arranca, no de bloqueo: la UI nunca espera a la búsqueda.
+
 ## Tres capas contra regresiones
 
 ### 1. Benchmarks de tiempo (`divan`, local)
 
-`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo el modelo del árbol, sin ventana: `--bench file_tree`). Son los números de la tabla. Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
+`cargo bench -p <crate>` en `metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-vault` y `metalmind-ui` (solo los modelos, sin ventana: `--bench file_tree`, `--bench picker` y `--bench text_search`). Son los números de la tabla. Se sigue con `divan` (elegido en M2, 03 §6): menos dependencias que `criterion` y sin harness que configurar. Lo que muta el estado (teclas de vim, ediciones) arma una nota nueva antes de cada iteración (`with_inputs`, fuera de la medición) y corre una iteración por muestra.
 
 No sirven para CI: en los runners de GitHub el tiempo de pared varía más que las regresiones que se quieren atrapar.
 

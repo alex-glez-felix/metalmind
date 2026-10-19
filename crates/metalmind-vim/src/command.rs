@@ -52,6 +52,8 @@ pub enum Command {
     Set,
     /// `space f`: el finder de notas.
     OpenFinder,
+    /// `space /`: la búsqueda de texto en las notas del vault.
+    OpenTextSearch,
     /// `space p`: la paleta de comandos.
     OpenCommandPalette,
     /// `space e`: muestra el panel lateral en la vista de carpetas, o lo
@@ -189,6 +191,7 @@ impl Command {
         Self::Only,
         Self::Set,
         Self::OpenFinder,
+        Self::OpenTextSearch,
         Self::OpenCommandPalette,
         Self::ToggleFolders,
         Self::ToggleTags,
@@ -218,6 +221,7 @@ impl Command {
             Self::Only => "pane::only",
             Self::Set => "editor::set",
             Self::OpenFinder => "workspace::open_finder",
+            Self::OpenTextSearch => "workspace::open_text_search",
             Self::OpenCommandPalette => "workspace::open_command_palette",
             Self::ToggleFolders => "panel::toggle_folders",
             Self::ToggleTags => "panel::toggle_tags",

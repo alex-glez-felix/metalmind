@@ -14,6 +14,7 @@ mod panel;
 pub mod picker;
 mod session;
 mod sidebar;
+pub mod text_search;
 mod theme;
 mod utf16;
 mod window;
