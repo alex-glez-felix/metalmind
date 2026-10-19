@@ -778,3 +778,34 @@ fn w_desde_un_buffer_sin_nombre_a_una_nota_abierta_da_e139() {
     );
     assert_eq!(session.view(session.pane()).document.path(), None);
 }
+
+/// nvim 0.12.6: `:w! b.md` con `b.md` abierta en otro buffer da E139, desde
+/// un `[No Name]` y desde otra nota, y no toca el archivo.
+#[test]
+fn w_bang_a_la_ruta_de_otro_buffer_abierto_da_e139() {
+    let (dir, mut session) = two_files();
+    let b = path(&dir, "b.md");
+    let before = fs::read_to_string(&b).unwrap();
+    edit(&mut session, "e", &b);
+    session.keys("ix⎋");
+    edit(&mut session, "e!", &path(&dir, "a.md"));
+    session.keys("iy⎋");
+    edit(&mut session, "w!", &b);
+    assert_eq!(
+        error(&session),
+        Some("E139: File is loaded in another buffer")
+    );
+    assert_eq!(fs::read_to_string(&b).unwrap(), before);
+
+    let mut unnamed = Session::unnamed();
+    unnamed.keys("ihola⎋⌃wv");
+    edit(&mut unnamed, "e", &b);
+    unnamed.keys("⌃wh");
+    edit(&mut unnamed, "w!", &b);
+    assert_eq!(
+        error(&unnamed),
+        Some("E139: File is loaded in another buffer")
+    );
+    assert_eq!(unnamed.view(unnamed.pane()).document.path(), None);
+    assert_eq!(fs::read_to_string(&b).unwrap(), before);
+}
