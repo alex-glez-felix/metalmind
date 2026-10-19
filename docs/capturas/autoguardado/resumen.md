@@ -18,9 +18,11 @@
 | marks-claro-1280 | 468 (`diff-marks-claro-1280.png`) |
 | marks-nota-larga-claro-1280 | 468 (`diff-marks-nota-larga-claro-1280.png`) |
 | marks-borde-derecho-claro-1280 | 5211 (`diff-marks-borde-derecho-claro-1280.png`) |
-| formulas-claro-1280 | 2208 (`diff-formulas-claro-1280.png`) |
-| formulas-bloque-claro-1280 | 2208 (`diff-formulas-bloque-claro-1280.png`) |
-| formulas-larga-claro-1280 | 468 (`diff-formulas-larga-claro-1280.png`) |
+| listas-claro-1280 | 34335 (`diff-listas-claro-1280.png`) |
+| listas-casilla-claro-1280 | 34335 (`diff-listas-casilla-claro-1280.png`) |
+| formulas-claro-1280 | 42158 (`diff-formulas-claro-1280.png`) |
+| formulas-bloque-claro-1280 | 42158 (`diff-formulas-bloque-claro-1280.png`) |
+| formulas-larga-claro-1280 | 39976 (`diff-formulas-larga-claro-1280.png`) |
 | autoguardado-guardado-claro-1280 | no hay captura de antes |
 | autoguardado-sin-guardar-claro-1280 | no hay captura de antes |
 | autoguardado-cambio-en-disco-claro-1280 | no hay captura de antes |
@@ -42,9 +44,11 @@
 | marks-claro-1920 | 468 (`diff-marks-claro-1920.png`) |
 | marks-nota-larga-claro-1920 | 468 (`diff-marks-nota-larga-claro-1920.png`) |
 | marks-borde-derecho-claro-1920 | 6990 (`diff-marks-borde-derecho-claro-1920.png`) |
-| formulas-claro-1920 | 2208 (`diff-formulas-claro-1920.png`) |
-| formulas-bloque-claro-1920 | 2208 (`diff-formulas-bloque-claro-1920.png`) |
-| formulas-larga-claro-1920 | 468 (`diff-formulas-larga-claro-1920.png`) |
+| listas-claro-1920 | 46748 (`diff-listas-claro-1920.png`) |
+| listas-casilla-claro-1920 | 46748 (`diff-listas-casilla-claro-1920.png`) |
+| formulas-claro-1920 | 54571 (`diff-formulas-claro-1920.png`) |
+| formulas-bloque-claro-1920 | 54571 (`diff-formulas-bloque-claro-1920.png`) |
+| formulas-larga-claro-1920 | 52389 (`diff-formulas-larga-claro-1920.png`) |
 | autoguardado-guardado-claro-1920 | no hay captura de antes |
 | autoguardado-sin-guardar-claro-1920 | no hay captura de antes |
 | autoguardado-cambio-en-disco-claro-1920 | no hay captura de antes |
@@ -66,9 +70,11 @@
 | marks-oscuro-1280 | 468 (`diff-marks-oscuro-1280.png`) |
 | marks-nota-larga-oscuro-1280 | 468 (`diff-marks-nota-larga-oscuro-1280.png`) |
 | marks-borde-derecho-oscuro-1280 | 5208 (`diff-marks-borde-derecho-oscuro-1280.png`) |
-| formulas-oscuro-1280 | 2208 (`diff-formulas-oscuro-1280.png`) |
-| formulas-bloque-oscuro-1280 | 2208 (`diff-formulas-bloque-oscuro-1280.png`) |
-| formulas-larga-oscuro-1280 | 468 (`diff-formulas-larga-oscuro-1280.png`) |
+| listas-oscuro-1280 | 34338 (`diff-listas-oscuro-1280.png`) |
+| listas-casilla-oscuro-1280 | 34338 (`diff-listas-casilla-oscuro-1280.png`) |
+| formulas-oscuro-1280 | 42162 (`diff-formulas-oscuro-1280.png`) |
+| formulas-bloque-oscuro-1280 | 42162 (`diff-formulas-bloque-oscuro-1280.png`) |
+| formulas-larga-oscuro-1280 | 39980 (`diff-formulas-larga-oscuro-1280.png`) |
 | autoguardado-guardado-oscuro-1280 | no hay captura de antes |
 | autoguardado-sin-guardar-oscuro-1280 | no hay captura de antes |
 | autoguardado-cambio-en-disco-oscuro-1280 | no hay captura de antes |
@@ -90,9 +96,11 @@
 | marks-oscuro-1920 | 468 (`diff-marks-oscuro-1920.png`) |
 | marks-nota-larga-oscuro-1920 | 468 (`diff-marks-nota-larga-oscuro-1920.png`) |
 | marks-borde-derecho-oscuro-1920 | 6989 (`diff-marks-borde-derecho-oscuro-1920.png`) |
-| formulas-oscuro-1920 | 2208 (`diff-formulas-oscuro-1920.png`) |
-| formulas-bloque-oscuro-1920 | 2208 (`diff-formulas-bloque-oscuro-1920.png`) |
-| formulas-larga-oscuro-1920 | 468 (`diff-formulas-larga-oscuro-1920.png`) |
+| listas-oscuro-1920 | 46757 (`diff-listas-oscuro-1920.png`) |
+| listas-casilla-oscuro-1920 | 46757 (`diff-listas-casilla-oscuro-1920.png`) |
+| formulas-oscuro-1920 | 54581 (`diff-formulas-oscuro-1920.png`) |
+| formulas-bloque-oscuro-1920 | 54581 (`diff-formulas-bloque-oscuro-1920.png`) |
+| formulas-larga-oscuro-1920 | 52399 (`diff-formulas-larga-oscuro-1920.png`) |
 | autoguardado-guardado-oscuro-1920 | no hay captura de antes |
 | autoguardado-sin-guardar-oscuro-1920 | no hay captura de antes |
 | autoguardado-cambio-en-disco-oscuro-1920 | no hay captura de antes |

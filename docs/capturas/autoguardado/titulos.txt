@@ -16,6 +16,8 @@ paleta-claro-1280: estrés del layout — una nota con un nombre bastante largo 
 marks-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-nota-larga-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-borde-derecho-claro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+listas-claro-1280: listas.md — Metalmind
+listas-casilla-claro-1280: listas.md — Metalmind
 formulas-claro-1280: formulas.md — Metalmind
 formulas-bloque-claro-1280: formulas.md — Metalmind
 formulas-larga-claro-1280: formulas-larga.md — Metalmind
@@ -40,6 +42,8 @@ paleta-claro-1920: estrés del layout — una nota con un nombre bastante largo 
 marks-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-nota-larga-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-borde-derecho-claro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+listas-claro-1920: listas.md — Metalmind
+listas-casilla-claro-1920: listas.md — Metalmind
 formulas-claro-1920: formulas.md — Metalmind
 formulas-bloque-claro-1920: formulas.md — Metalmind
 formulas-larga-claro-1920: formulas-larga.md — Metalmind
@@ -64,6 +68,8 @@ paleta-oscuro-1280: estrés del layout — una nota con un nombre bastante largo
 marks-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-nota-larga-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-borde-derecho-oscuro-1280: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+listas-oscuro-1280: listas.md — Metalmind
+listas-casilla-oscuro-1280: listas.md — Metalmind
 formulas-oscuro-1280: formulas.md — Metalmind
 formulas-bloque-oscuro-1280: formulas.md — Metalmind
 formulas-larga-oscuro-1280: formulas-larga.md — Metalmind
@@ -88,6 +94,8 @@ paleta-oscuro-1920: estrés del layout — una nota con un nombre bastante largo
 marks-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-nota-larga-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
 marks-borde-derecho-oscuro-1920: estrés del layout — una nota con un nombre bastante largo 🦀.md — Metalmind
+listas-oscuro-1920: listas.md — Metalmind
+listas-casilla-oscuro-1920: listas.md — Metalmind
 formulas-oscuro-1920: formulas.md — Metalmind
 formulas-bloque-oscuro-1920: formulas.md — Metalmind
 formulas-larga-oscuro-1920: formulas-larga.md — Metalmind
