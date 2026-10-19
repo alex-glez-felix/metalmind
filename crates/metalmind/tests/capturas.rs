@@ -23,6 +23,7 @@ mod vault;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -50,6 +51,8 @@ enum Step {
     RightClickBottomRow,
     /// Escribe [`vault::SEARCHED`].
     Search,
+    /// Cambia algo en el disco del vault, como otro programa.
+    Files(fn(&Path)),
     /// Deja el ratón sobre una mark hasta que sale su tooltip.
     HoverMark(MarkAt),
     /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
@@ -150,7 +153,45 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::HoverBrokenFormula,
         ],
     ),
+    // El indicador del autoguardado, con la nota de la ruta más larga.
+    (
+        "autoguardado-guardado",
+        &[Step::Keys("<Esc><C-w>o<Space>ffondo<CR>")],
+    ),
+    (
+        "autoguardado-sin-guardar",
+        &[
+            Step::Files(read_only),
+            Step::Keys("iAgregar al acta: <Esc>"),
+        ],
+    ),
+    (
+        "autoguardado-cambio-en-disco",
+        &[Step::Files(changed_outside)],
+    ),
 ];
+
+/// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
+fn read_only(notes: &Path) {
+    set_writable(&notes.join(vault::DEEP_FOLDER_2), false);
+}
+
+/// Otro programa cambia la nota, que tiene cambios sin guardar. Se escribe
+/// antes de devolver el permiso: así ningún reintento la guarda entremedio.
+fn changed_outside(notes: &Path) {
+    let folder = notes.join(vault::DEEP_FOLDER_2);
+    fs::write(
+        folder.join(vault::DEEP_NOTE),
+        "Editada desde otro equipo.\n",
+    )
+    .unwrap();
+    set_writable(&folder, true);
+}
+
+fn set_writable(folder: &Path, writable: bool) {
+    let mode = if writable { 0o755 } else { 0o555 };
+    fs::set_permissions(folder, fs::Permissions::from_mode(mode)).unwrap();
+}
 
 /// Alto de una fila del árbol y del encabezado, y dónde empieza el panel,
 /// con la fuente por defecto: para hacer clic sobre una fila.
@@ -187,6 +228,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let mark_color = gutter_mark_color(theme);
     window.resize(width.into(), height.into());
     let mut report = Vec::new();
+    let mut titles = String::new();
     for (scene, steps) in SCENES {
         for step in *steps {
             match step {
@@ -232,6 +274,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                         });
                     }
                 }
+                Step::Files(change) => change(&smoke.notes()),
             }
         }
         if !matches!(
@@ -251,8 +294,11 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
         let name = format!("{scene}-{theme}-{width}");
         image.save(&out.join(format!("{name}.png")));
         report.push(compare(&out, &name, &image));
+        writeln!(titles, "{name}: {}", window.title()).unwrap();
     }
     drop(metalmind);
+    // El título no sale en la captura: sin gestor de ventanas no hay barra de título.
+    fs::write(out.join(format!("titulos-{theme}-{width}.txt")), titles).unwrap();
     finish(&out, &format!("{theme}-{width}"), &report);
 }
 
@@ -369,7 +415,8 @@ fn prepare(smoke: &Smoke, theme: &str) {
     fs::create_dir_all(&config).unwrap();
     fs::write(
         config.join("config.yaml"),
-        format!("theme: metalmind-{theme}\n"),
+        // Un delay corto: el autoguardado actúa antes de que la ventana se calme.
+        format!("theme: metalmind-{theme}\neditor:\n  autosave_delay_ms: 100\n"),
     )
     .unwrap();
     let paths = Paths::from_xdg(|_| None, &home);
