@@ -213,7 +213,7 @@ const TEXT_LINE: i16 = 21;
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let out = out_dir();
-    let smoke = Smoke::with_screen("1920x1080");
+    let smoke = Smoke::with_screen_at("1920x1080", &format!("metalmind-capturas-{theme}-{width}"));
     prepare(&smoke, theme);
     let logs = tempfile::tempdir().unwrap();
     let frames = logs.path().join("frames.log");
