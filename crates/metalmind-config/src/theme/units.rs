@@ -68,6 +68,27 @@ impl TryFrom<u8> for Count {
     }
 }
 
+/// Las columnas de las marks en el margen, de 3 a 8: la letra, el `+` de
+/// las demás y al menos un espacio antes de los números, que con menos se
+/// enciman; más que 8 solo deja un margen vacío.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u8")]
+pub struct MarkColumns(pub u8);
+
+impl TryFrom<u8> for MarkColumns {
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, String> {
+        if (3..=8).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(format!(
+                "las columnas de las marks van de 3 a 8 (la letra, el + y un espacio), no {value}"
+            ))
+        }
+    }
+}
+
 /// Un tamaño de letra: veces `font.size` y el interlineado, veces el tamaño.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(try_from = "RawTextStyle")]

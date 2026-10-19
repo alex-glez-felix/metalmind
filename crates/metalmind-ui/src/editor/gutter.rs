@@ -1,11 +1,14 @@
 //! El margen a la izquierda del texto: las marks y los números de línea.
 
+use std::rc::Rc;
+
 use gpui_kit::{
-    AnyElement, App, AvailableSpace, Bounds, InteractiveElement as _, IntoElement, PaintQuad,
-    Pixels, Point, ShapedLine, SharedString, StatefulInteractiveElement as _, Styled as _, TextRun,
-    Window, div, fill, point, px, size,
+    AnyElement, AnyTooltip, App, AvailableSpace, Bounds, Entity, InteractiveElement as _,
+    IntoElement, PaintQuad, Pixels, Point, ShapedLine, Size, StatefulInteractiveElement as _,
+    Styled as _, TextRun, Window, div, fill, point, px, size,
 };
 
+use super::Editor;
 use super::element::{Typeface, shape};
 use super::layout::FrameLayout;
 use crate::theme::Theme;
@@ -115,11 +118,12 @@ impl Gutter {
         PaintedGutter { background, labels }
     }
 
-    /// Una zona por mark pintada, con el tooltip que las lista todas. Van
-    /// encima del texto, así que se piden tras pintar sus líneas.
-    pub fn mark_tooltips(
+    /// Una zona por mark pintada: avisan a `editor` cuando el ratón entra o
+    /// sale, para que muestre el tooltip ([`Gutter::mark_tooltip`]).
+    pub fn mark_zones(
         &self,
         layout: &FrameLayout,
+        editor: &Entity<Editor>,
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<AnyElement> {
@@ -128,19 +132,59 @@ impl Gutter {
         layout
             .lines
             .iter()
-            .filter_map(|laid| {
-                let text = SharedString::from(self.mark_at(laid.line)?.describe());
+            .filter(|laid| self.mark_at(laid.line).is_some())
+            .map(|laid| {
+                let (editor, line) = (editor.clone(), laid.line);
                 let mut zone = div()
-                    .id(("gutter-mark", laid.line))
+                    .id(("gutter-mark", line))
                     .w(width)
                     .h(laid.height)
-                    .tooltip(move |_, cx| Tooltip::view(text.clone(), cx))
+                    .on_hover(move |hovered, _, cx| {
+                        editor.update(cx, |editor, cx| editor.hover_mark(line, *hovered, cx));
+                    })
                     .into_any_element();
                 let space = size(width, laid.height).map(AvailableSpace::Definite);
                 zone.prepaint_as_root(point(left, laid.origin.y), space, window, cx);
-                Some(zone)
+                zone
             })
             .collect()
+    }
+
+    /// El tooltip con las marks de `line`, si se ve: en la fila de abajo,
+    /// desde donde empieza el texto, para no tapar la línea que describe.
+    pub fn mark_tooltip(
+        &self,
+        line: usize,
+        layout: &FrameLayout,
+        clip: Bounds<Pixels>,
+        theme: &Theme,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(mark) = self.mark_at(line) else {
+            return;
+        };
+        let Some(laid) = layout.lines.iter().find(|laid| laid.line == line) else {
+            return;
+        };
+        let view = Tooltip::view(mark.describe().into(), cx);
+        let measured =
+            view.clone()
+                .into_any_element()
+                .layout_as_root(AvailableSpace::min_size(), window, cx);
+        let row = Row {
+            top: laid.origin.y,
+            bottom: laid.origin.y + laid.height,
+            text_left: layout.viewport.bounds.left(),
+        };
+        let origin = tooltip_origin(row, measured, clip.bottom(), window.viewport_size().width);
+        // GPUI corre el tooltip un píxel del ancla, el grosor del borde.
+        let gap = theme.border_width;
+        window.set_tooltip(AnyTooltip {
+            view,
+            mouse_position: origin - point(gap, gap),
+            check_visible_and_update: Rc::new(|_, _, _| true),
+        });
     }
 
     fn mark_at(&self, line: usize) -> Option<MarkLabel<'_>> {
@@ -175,6 +219,73 @@ fn shape_mark(
         .shape_line(text.into(), typeface.size, &runs, None)
 }
 
+/// La fila de una línea con marks: dónde empieza y termina, y dónde empieza
+/// su texto.
+#[derive(Clone, Copy, Debug)]
+pub struct Row {
+    pub top: Pixels,
+    pub bottom: Pixels,
+    pub text_left: Pixels,
+}
+
+/// Dónde va un tooltip de `size` para la línea `row`: debajo de ella y
+/// desde su texto, sin tapar la línea, su mark ni su número; arriba si
+/// abajo pasaría de `bottom` (el texto del panel) y corrido a la izquierda
+/// si pasaría de `right` (la ventana).
+pub fn tooltip_origin(
+    row: Row,
+    size: Size<Pixels>,
+    bottom: Pixels,
+    right: Pixels,
+) -> Point<Pixels> {
+    let y = if row.bottom + size.height <= bottom {
+        row.bottom
+    } else {
+        row.top - size.height
+    };
+    let x = row.text_left.min(right - size.width).max(Pixels::ZERO);
+    point(x, y.max(Pixels::ZERO))
+}
+
 fn cells(width: Pixels, columns: usize) -> Pixels {
     width * f32::from(u16::try_from(columns).unwrap_or(u16::MAX))
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::px;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    const ROW: Row = Row {
+        top: px(100.),
+        bottom: px(121.),
+        text_left: px(350.),
+    };
+    const TOOLTIP: Size<Pixels> = Size {
+        width: px(200.),
+        height: px(30.),
+    };
+
+    #[test]
+    fn va_en_la_fila_de_abajo_desde_el_texto() {
+        let origin = tooltip_origin(ROW, TOOLTIP, px(700.), px(1280.));
+        assert_eq!(origin, point(px(350.), px(121.)));
+    }
+
+    #[test]
+    fn junto_al_borde_de_abajo_sube_a_la_fila_de_arriba() {
+        let origin = tooltip_origin(ROW, TOOLTIP, px(140.), px(1280.));
+        assert_eq!(origin, point(px(350.), px(70.)));
+        assert!(origin.y + TOOLTIP.height <= ROW.top, "no tapa la línea");
+    }
+
+    #[test]
+    fn junto_al_borde_derecho_se_corre_a_la_izquierda() {
+        let origin = tooltip_origin(ROW, TOOLTIP, px(700.), px(500.));
+        assert_eq!(origin, point(px(300.), px(121.)));
+        let narrow = tooltip_origin(ROW, TOOLTIP, px(700.), px(150.));
+        assert_eq!(narrow.x, px(0.), "nunca sale por la izquierda");
+    }
 }

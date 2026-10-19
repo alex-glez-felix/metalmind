@@ -254,7 +254,7 @@ Theme {
             tooltip_padding_y: Length(
                 4.0,
             ),
-            gutter_mark_columns: Count(
+            gutter_mark_columns: MarkColumns(
                 3,
             ),
         },

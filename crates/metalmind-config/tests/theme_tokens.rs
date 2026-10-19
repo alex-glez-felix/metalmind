@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::Path;
 
-use metalmind_config::{Color, Length, Location, Px, Theme, Themes};
+use metalmind_config::{Color, Length, Location, MarkColumns, Px, Theme, Themes};
 use pretty_assertions::assert_eq;
 
 fn load(text: &str) -> Result<Theme, metalmind_config::Diagnostic> {
@@ -123,6 +123,14 @@ fn medidas_fuera_de_rango_son_error() {
             "layout:\n  picker_rows: 0\n",
             "una cantidad de filas va de 1 a 100",
         ),
+        (
+            "layout:\n  gutter_mark_columns: 2\n",
+            "las columnas de las marks van de 3 a 8",
+        ),
+        (
+            "layout:\n  gutter_mark_columns: 9\n",
+            "las columnas de las marks van de 3 a 8",
+        ),
     ];
     for (yaml, expected) in cases {
         let error = load(&format!("extends: metalmind-oscuro\n{yaml}")).unwrap_err();
@@ -170,4 +178,19 @@ fn un_rol_no_nombra_otro_rol() {
         error.message,
         "`background` no está en la paleta (en roles.surface): un rol nombra la paleta o un hex"
     );
+}
+
+/// Con 3 columnas cabe la letra, el `+` y el espacio antes de los números.
+#[test]
+fn las_columnas_de_las_marks_aceptan_de_3_a_8() {
+    for columns in [3, 8] {
+        let theme = load(&format!(
+            "extends: metalmind-oscuro\nlayout:\n  gutter_mark_columns: {columns}\n"
+        ))
+        .unwrap();
+        assert_eq!(
+            theme.metrics.layout.gutter_mark_columns,
+            MarkColumns(columns)
+        );
+    }
 }

@@ -10,6 +10,7 @@ mod keys;
 mod layout;
 mod lines;
 mod links;
+mod mark_hover;
 mod markdown;
 mod mouse;
 mod rows;
@@ -62,6 +63,8 @@ pub struct Editor {
     /// leyó o se escribió (ver [`Scroll::follow`]); `None` tras una tecla,
     /// para que la vista quede alineada a las filas del motor.
     synced_top: Option<usize>,
+    /// La línea con marks bajo el ratón, para su tooltip.
+    mark_hover: Option<self::mark_hover::MarkHover>,
     _repaint: Subscription,
     _vault_changed: Subscription,
 }
@@ -87,6 +90,7 @@ impl Editor {
             marked: None,
             drag_anchor: None,
             synced_top: None,
+            mark_hover: None,
             _repaint: repaint,
             _vault_changed: vault_changed,
         }
