@@ -13,7 +13,9 @@ Reglas para agentes que trabajen en este repo.
 - `cargo clippy -- -D warnings` y `cargo nextest run` en verde antes de cada commit.
 - Commits en español, estilo conventional commits.
 - Toda acción del usuario es una acción con nombre, en snake_case con espacio de nombres (`vim::next_word_start`, `editor::delete_line`); atajos, paleta y `:` solo las invocan (base para plugins, ver `docs/IDEAS.md`).
-- Ningún color ni tamaño hardcodeado en la UI: todo sale de tokens del tema.
+- Ningún color ni tamaño hardcodeado en la UI: todo sale de tokens del tema (`tests/tokens.rs` de `metalmind-ui` lo vigila).
+- **UI nueva**: sigue los principios de `docs/design.md` (sobria y densa, nada brinca, cada acción con ratón muestra su tecla, todo del tema, rápido antes que bonito).
+- **PR que cambia algo visible**: lleva en la descripción capturas de `scripts/capturas.sh` (Xvfb, 1920x1080 y 1280x720, tema oscuro y claro, contenido que estresa el layout), y antes y después si arregla algo visual. Sin capturas no se mergea; detalles en `docs/design.md`, "Proceso".
 - Metalmind no tiene usuarios todavía: los cambios de formato, API o nombres de archivo son directos. Nada de compatibilidad hacia atrás, migraciones, avisos de formatos viejos ni alias "por si acaso". Esto se revisa cuando haya un release público.
 
 ## Calidad de código
