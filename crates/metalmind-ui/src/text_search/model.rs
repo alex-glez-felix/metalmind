@@ -101,6 +101,13 @@ impl TextSearchState {
         self.selected
     }
 
+    /// Lo mostrado es de una búsqueda anterior a lo escrito: todavía no
+    /// llegó nada de la actual.
+    #[must_use]
+    pub fn is_stale(&self) -> bool {
+        self.stale
+    }
+
     #[must_use]
     pub fn status(&self) -> Status {
         match &self.invalid {

@@ -79,6 +79,8 @@ impl Workspace {
             return Ok(false);
         }
         if shown {
+            // Como al cambiar de nota: lo que estuviera a medias termina.
+            self.interrupt(self.focused())?;
             self.push_jump(self.focused())?;
         }
         self.edit_pane(self.focused(), |vim, buffer, selections| {

@@ -458,3 +458,26 @@ fn abrir_en_una_linea_queda_en_la_jumplist() {
         "y a la nota de antes"
     );
 }
+
+/// Saltar dentro de la nota que se ve termina lo que estuviera a medias, como
+/// `:e` y el split (la paleta puede abrir `space /` desde Insert o Visual).
+#[test]
+fn abrir_en_la_nota_que_se_ve_termina_insert_y_visual() {
+    let (_dir, vault, mut session) = vault();
+    fs::write(file(&vault, "b.md"), "uno\ndos\n").unwrap();
+    let b = file(&vault, "b.md");
+    session
+        .workspace
+        .open_file_at(&b, Placement::Current, at(0, 0))
+        .unwrap();
+    for keys in ["i", "v"] {
+        session.keys(keys);
+        assert_ne!(session.mode(), metalmind_vim::Mode::Normal);
+        session
+            .workspace
+            .open_file_at(&b, Placement::Current, at(1, 1))
+            .unwrap();
+        assert_eq!(session.mode(), metalmind_vim::Mode::Normal, "tras {keys}");
+        assert_eq!(session.cursor().get(), 5);
+    }
+}
