@@ -33,6 +33,25 @@ pub enum SaveError {
     Write(#[from] metalmind_vault::SaveError),
 }
 
+impl SaveError {
+    /// Por qué no se guardó, sin la ruta del archivo; los errores de vim van
+    /// con su texto.
+    #[must_use]
+    pub fn cause(&self) -> String {
+        match self {
+            Self::File(error) => error.cause(),
+            Self::Write(error) => error.cause(),
+            Self::NoFileName | Self::Exists | Self::ChangedOnDisk => self.to_string(),
+        }
+    }
+
+    /// Es un error de vim, que se avisa con su texto original.
+    #[must_use]
+    pub fn is_vim(&self) -> bool {
+        matches!(self, Self::NoFileName | Self::Exists | Self::ChangedOnDisk)
+    }
+}
+
 /// Tamaño del archivo, para avisarlo como vim (`"a.md" 3L, 20B`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileStats {

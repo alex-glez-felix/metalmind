@@ -159,8 +159,10 @@ impl Workspace {
                     .as_mut()
                     .is_some_and(|autosave| autosave.failing.insert(id));
                 if first {
-                    log::error!("autoguardado de {}: {error}", document.display_name());
-                    self.message = Some(Message::Error(error.to_string()));
+                    let name = document.display_name();
+                    log::error!("autoguardado de {name}: {error}");
+                    let hidden = !self.in_focus(id);
+                    self.message = Some(Message::save_failed(hidden.then_some(&*name), &error));
                 }
                 Autosaved::Failed
             }

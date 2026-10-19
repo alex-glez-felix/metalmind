@@ -28,6 +28,13 @@ impl Workspace {
         false
     }
 
+    /// `id` es el documento del panel enfocado, cuyo nombre ya muestra la barra.
+    pub(super) fn in_focus(&self, id: DocumentId) -> bool {
+        self.panes
+            .get(&self.focused())
+            .is_some_and(|pane| pane.document == id)
+    }
+
     /// En el orden de vim: el del panel enfocado, los de los paneles y los
     /// ocultos, del más viejo al más nuevo.
     fn first_unsaved(&self) -> Option<DocumentId> {
@@ -86,8 +93,10 @@ impl Workspace {
                 }
                 Err(SaveError::NoFileName) => Message::no_file_name_for(id),
                 Err(error) => {
-                    log::error!("{error}");
-                    Message::Error(error.to_string())
+                    let name = document.display_name();
+                    log::error!("{name}: {error}");
+                    let hidden = !self.in_focus(id);
+                    Message::save_failed(hidden.then_some(&*name), &error)
                 }
             };
             if matches!(message, Message::Error(_)) {
