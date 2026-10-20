@@ -2,9 +2,9 @@
 //! nombre: elegirla es lo mismo que su tecla en el árbol.
 
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
-    Pixels, Point, StatefulInteractiveElement as _, Styled as _, anchored, deferred, div,
-    prelude::FluentBuilder as _,
+    AnyElement, Context, Div, InteractiveElement as _, IntoElement, MouseButton,
+    ParentElement as _, Pixels, Point, Stateful, StatefulInteractiveElement as _, Styled as _,
+    anchored, deferred, div, prelude::FluentBuilder as _,
 };
 use metalmind_vault::{EntryKind, VaultChange, VaultPath};
 
@@ -123,19 +123,46 @@ impl ContextMenu {
     }
 
     pub fn render(&self, theme: &Theme, cx: &mut Context<Sidebar>) -> AnyElement {
+        let list = self
+            .list(theme, cx, |item, row, cx| {
+                row.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(move |sidebar, _, window, cx| {
+                        sidebar.menu = None;
+                        window.dispatch_action(Box::new(Dispatch(item.action().into())), cx);
+                        cx.notify();
+                    }))
+            })
+            .on_mouse_down_out(cx.listener(|sidebar, _, _, cx| {
+                sidebar.menu = None;
+                cx.notify();
+            }));
+        deferred(
+            anchored()
+                .position(self.position)
+                .snap_to_window()
+                .child(list),
+        )
+        .with_priority(1)
+        .into_any_element()
+    }
+
+    /// Las entradas con sus separadores; `wire` le pone a cada fila lo que
+    /// hace al elegirla.
+    fn list<V: 'static>(
+        &self,
+        theme: &Theme,
+        cx: &mut Context<V>,
+        wire: impl Fn(MenuItem, Stateful<Div>, &mut Context<V>) -> Stateful<Div>,
+    ) -> Div {
         let mut list = div()
-            .w(theme.layout.menu_width)
+            .min_w(theme.layout.menu_min_width)
             .p(theme.layout.menu_padding)
             .flex()
             .flex_col()
             .bg(theme.ui.menu_background)
             .border(theme.stroke.border)
             .border_color(theme.ui.menu_border)
-            .rounded(theme.radius.md)
-            .on_mouse_down_out(cx.listener(|sidebar, _, _, cx| {
-                sidebar.menu = None;
-                cx.notify();
-            }));
+            .rounded(theme.radius.md);
         let mut index = 0;
         for (group_index, group) in self.groups.iter().enumerate() {
             if group_index > 0 {
@@ -147,27 +174,22 @@ impl ContextMenu {
                 );
             }
             for &item in *group {
-                list = list.child(self.item(item, index, theme, cx));
+                let keys = item.keys(AppKeymap::get(cx));
+                let row = self.item(item, keys, index, theme);
+                list = list.child(wire(item, row, cx));
                 index += 1;
             }
         }
-        deferred(
-            anchored()
-                .position(self.position)
-                .snap_to_window()
-                .child(list),
-        )
-        .with_priority(1)
-        .into_any_element()
+        list
     }
 
     fn item(
         &self,
         item: MenuItem,
+        keys: Option<String>,
         index: usize,
         theme: &Theme,
-        cx: &mut Context<Sidebar>,
-    ) -> AnyElement {
+    ) -> Stateful<Div> {
         let color = if item == MenuItem::Delete {
             theme.ui.error
         } else {
@@ -175,8 +197,10 @@ impl ContextMenu {
         };
         div()
             .id(("menu-item", index))
+            .debug_selector(|| format!("{item:?}"))
             .flex()
             .justify_between()
+            .gap(theme.layout.menu_gap)
             .px(theme.layout.menu_item_padding_x)
             .h(theme.menu_row_height)
             .items_center()
@@ -184,26 +208,28 @@ impl ContextMenu {
             .text_color(color)
             .when(index == self.selected, |row| row.bg(theme.ui.menu_hover))
             .hover(|row| row.bg(theme.ui.menu_hover))
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .on_click(cx.listener(move |sidebar, _, window, cx| {
-                sidebar.menu = None;
-                window.dispatch_action(Box::new(Dispatch(item.action().into())), cx);
-                cx.notify();
-            }))
-            .child(item.label())
             .child(
                 div()
+                    .debug_selector(|| format!("{item:?}-label"))
+                    .child(item.label()),
+            )
+            .child(
+                div()
+                    .debug_selector(|| format!("{item:?}-keys"))
                     .map(|element| theme.ui_small_text(element))
                     .text_color(theme.ui.panel_muted)
-                    .children(item.keys(AppKeymap::get(cx))),
+                    .children(keys),
             )
-            .into_any_element()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use gpui_kit::{Render, TestAppContext, Window};
+    use metalmind_config::Config;
+
     use super::*;
+    use crate::actions::bind_keys;
 
     fn path(path: &str) -> VaultPath {
         VaultPath::new(path).unwrap()
@@ -289,5 +315,48 @@ mod tests {
         let expected =
             ["a", "A", "ctrl-v", "ctrl-s", "r", "m", "d"].map(|key| Some(key.to_owned()));
         assert_eq!(keys, expected);
+    }
+
+    struct MenuProbe(ContextMenu);
+
+    impl Render for MenuProbe {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
+            anchored().child(self.0.list(&theme, cx, |_, row, _| row))
+        }
+    }
+
+    /// Entre la etiqueta y la tecla de cada entrada queda el hueco del tema,
+    /// y el menú es tan ancho como su fila más larga: «Abrir a la derecha»
+    /// con `ctrl-v`, que no cabe en el ancho mínimo.
+    #[test]
+    fn la_etiqueta_no_choca_con_su_tecla() {
+        let mut cx = TestAppContext::single();
+        cx.update(|cx| bind_keys(Keymap::default(), cx));
+        let menu = menu_on("a.md");
+        let items: Vec<MenuItem> = menu.items().collect();
+        let (_, cx) = cx.add_window_view(|_, _| MenuProbe(menu));
+        cx.run_until_parked();
+        let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
+        let mut bounds = |item: MenuItem, part: &str| {
+            let selector: &'static str = format!("{item:?}{part}").leak();
+            cx.debug_bounds(selector).unwrap()
+        };
+        for &item in &items {
+            let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
+            assert!(
+                keys.left() - label.right() >= theme.layout.menu_gap,
+                "{item:?}: {label:?} y {keys:?}"
+            );
+        }
+        let item = MenuItem::OpenSplitRight;
+        let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
+        let padding = theme.layout.menu_item_padding_x;
+        let needed = padding + label.size.width + theme.layout.menu_gap + keys.size.width + padding;
+        assert!(
+            needed > theme.layout.menu_min_width,
+            "no cabe en el ancho mínimo"
+        );
+        assert_eq!(bounds(item, "").size.width, needed);
     }
 }

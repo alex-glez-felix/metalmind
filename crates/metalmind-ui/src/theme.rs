@@ -75,7 +75,7 @@ impl Theme {
         Ok(Self::with_font(config, font_family))
     }
 
-    fn with_font(config: &config::Config, font_family: SharedString) -> Self {
+    pub(crate) fn with_font(config: &config::Config, font_family: SharedString) -> Self {
         let config::Theme {
             ui,
             cursor,
