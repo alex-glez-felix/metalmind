@@ -182,6 +182,20 @@ fn cambiar_el_gitignore_relee_su_carpeta() {
 }
 
 #[test]
+fn marcar_una_carpeta_como_cache_la_saca_del_vault() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a.md", "target/debug/b.md"]);
+    let (vault, updates) = open(dir.path());
+    fs::write(
+        dir.path().join("target/CACHEDIR.TAG"),
+        "Signature: 8a477f597d28d172789f06886806bc55",
+    )
+    .unwrap();
+    settle(&vault, &updates, &["a.md (nota)"]);
+    assert_eq!(inotify_watches(), 1, "solo la raíz");
+}
+
+#[test]
 fn lo_oculto_no_genera_cambios() {
     let dir = TempDir::new().unwrap();
     let (vault, updates) = open(dir.path());

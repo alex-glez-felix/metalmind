@@ -1,5 +1,6 @@
 //! Recorrer el disco con `ignore`. El walk completo y el parcial del watcher
 //! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
+//! Este módulo es el único que sabe qué es del vault y qué archivos lo deciden.
 //! Los dos pueden avisar de cada carpeta antes de leerla, para que el
 //! watcher la vigile.
 
@@ -16,8 +17,38 @@ use crate::index::{EntryKind, VaultIndex};
 use crate::path::{VaultPath, is_hidden_name};
 
 const NODE_MODULES: &str = "node_modules";
-const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
-const CACHEDIR_SIGNATURE: &[u8; 43] = b"Signature: 8a477f597d28d172789f06886806bc55";
+pub(crate) const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
+pub(crate) const CACHEDIR_SIGNATURE: &[u8; 43] = b"Signature: 8a477f597d28d172789f06886806bc55";
+
+/// Los archivos que deciden qué de su carpeta es del vault.
+const FOLDER_RULES: [&str; 3] = [".gitignore", ".ignore", CACHEDIR_TAG];
+
+/// Las reglas que valen para todo el vault.
+const VAULT_RULES: &str = ".git/info/exclude";
+
+/// La parte del vault que decide `path` si es un archivo de reglas: su
+/// carpeta, o todo el vault. Cuando cambia, hay que releer esa parte.
+pub(crate) fn ruled_by(root: &Path, path: &Path) -> Option<VaultPath> {
+    let relative = path.strip_prefix(root).ok()?;
+    if relative == Path::new(VAULT_RULES) {
+        return Some(VaultPath::root());
+    }
+    let name = relative.file_name()?.to_str()?;
+    if FOLDER_RULES.contains(&name) {
+        return VaultPath::from_fs(root, path.parent()?);
+    }
+    None
+}
+
+/// Las carpetas de las reglas de todo el vault. El walk no entra (son
+/// ocultas), pero quien vigile el vault tiene que ver si aparecen o cambian.
+pub(crate) fn vault_rule_dirs(root: &Path) -> impl Iterator<Item = PathBuf> {
+    Path::new(VAULT_RULES)
+        .ancestors()
+        .skip(1)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map(|dir| root.join(dir))
+}
 
 /// Lo que se hace con cada carpeta del vault que el walk va a leer, antes de
 /// leerla.

@@ -1,5 +1,6 @@
-//! Qué vigila un vault abierto: la raíz y cada carpeta del índice, una por
-//! una y sin recursión. Así lo que el vault ignora (`node_modules`, `.git`,
+//! Qué vigila un vault abierto: la raíz, cada carpeta del índice y las de las
+//! reglas de todo el vault, una por una y sin recursión. Qué carpetas son del
+//! vault lo decide `scan`; así lo que el vault ignora (`node_modules`, `.git`,
 //! lo de un `.gitignore`) no gasta watches de inotify. El walk vigila cada
 //! carpeta antes de leerla, así que lo que cambie después da evento.
 
@@ -13,11 +14,7 @@ use notify_debouncer_full::{Debouncer, RecommendedCache};
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
-use crate::scan::BeforeReading;
-
-/// Las carpetas de git que se vigilan aunque estén ocultas: tocar
-/// `.git/info/exclude` relee el vault, y `.git/info` puede aparecer después.
-const GIT_DIRS: [&str; 2] = [".git", ".git/info"];
+use crate::scan::{BeforeReading, vault_rule_dirs};
 
 /// Por qué un vault abierto no ve los cambios que se hacen fuera de Metalmind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -60,7 +57,7 @@ pub(crate) struct FolderWatch<W> {
 }
 
 impl<W: Watches> FolderWatch<W> {
-    /// Vigila `root` y sus carpetas de git, antes del walk. Si no quedan
+    /// Vigila `root` y las carpetas de sus reglas, antes del walk. Si no quedan
     /// watches, el vault abre igual, sin vigilancia, y `lost` dice por qué.
     ///
     /// # Errors
@@ -88,7 +85,7 @@ impl<W: Watches> FolderWatch<W> {
             watched: HashSet::from([root.to_owned()]),
             lost,
         };
-        watch.git_dirs();
+        watch.rule_dirs();
         Ok(watch)
     }
 
@@ -113,8 +110,8 @@ impl<W: Watches> FolderWatch<W> {
     }
 
     /// Después de releer: suelta las carpetas que salieron del índice y
-    /// vigila las de git que aparecieron. `true` si hay que releer todo el
-    /// vault, porque un `.git/info/exclude` de antes no dio evento.
+    /// vigila las de reglas que aparecieron. `true` si hay que releer todo el
+    /// vault, porque sus reglas pudieron llegar sin evento.
     pub(crate) fn follow(&mut self, index: &VaultIndex) -> bool {
         let Some(watches) = &mut self.watches else {
             return false;
@@ -123,7 +120,7 @@ impl<W: Watches> FolderWatch<W> {
         let left: Vec<PathBuf> = self
             .watched
             .iter()
-            .filter(|dir| !is_git_dir(root, dir) && !is_folder_in(root, dir, index))
+            .filter(|dir| !is_rule_dir(root, dir) && !is_folder_in(root, dir, index))
             .cloned()
             .collect();
         for dir in left {
@@ -137,8 +134,8 @@ impl<W: Watches> FolderWatch<W> {
             }
         }
         self.watched
-            .retain(|dir| !is_git_dir(root, dir) || is_dir(dir));
-        self.git_dirs()
+            .retain(|dir| !is_rule_dir(root, dir) || is_dir(dir));
+        self.rule_dirs()
     }
 
     /// Si se perdió la vigilancia.
@@ -152,11 +149,12 @@ impl<W: Watches> FolderWatch<W> {
         }
     }
 
-    /// Vigila las carpetas de git que existen y no se vigilaban; `true` si
-    /// vigiló alguna.
-    fn git_dirs(&mut self) -> bool {
+    /// Vigila las carpetas de reglas que existen y no se vigilaban; `true`
+    /// si vigiló alguna.
+    fn rule_dirs(&mut self) -> bool {
         let mut new = false;
-        for dir in GIT_DIRS.map(|dir| self.root.join(dir)) {
+        let dirs: Vec<PathBuf> = vault_rule_dirs(&self.root).collect();
+        for dir in dirs {
             if !self.watched.contains(&dir) && is_dir(&dir) {
                 self.folder(&dir);
                 new |= self.watched.contains(&dir);
@@ -200,8 +198,8 @@ fn give_up<W: Watches>(lost: &OnceLock<Unwatched>, root: &Path, watches: W) {
     );
 }
 
-fn is_git_dir(root: &Path, dir: &Path) -> bool {
-    GIT_DIRS.iter().any(|git| dir == root.join(git))
+fn is_rule_dir(root: &Path, dir: &Path) -> bool {
+    vault_rule_dirs(root).any(|rules| dir == rules)
 }
 
 fn is_folder_in(root: &Path, dir: &Path, index: &VaultIndex) -> bool {
