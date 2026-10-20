@@ -263,6 +263,13 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab cd ef", "vlx.", "|d ef")]
 #[case("|abc\ndef\nghi", "vjdu.", "|ef\nghi")]
 #[case("|abcdef", "vldu.", "|cdef")]
+// tras `v$` en una línea, vim suma MAXCOL a la columna del cursor y se
+// desborda a la columna 0 si el cursor no está en las dos primeras
+#[case("0123456\nab|cdef", "v$dk$.", "|\nab")]
+#[case("0123456\nab|cdef", "v$dk0l.", "0|ab")]
+#[case("ab|c\nabcdef\nxy", "v$rXjll.", "abX\n|XXXXXf\nxy")]
+#[case("ab|c\nabcdef\nxy", "v$~jll.", "abC\n|ABCDEf\nxy")]
+#[case("|abc\nabcdef\nxy", "v$~jl.", "ABC\na|BCDEF\nxy")]
 // gv
 #[case("a|bcdef", "vll<Esc>0gvd", "a|ef")]
 #[case("a|bcdef", "vlly$gvd", "a|ef")]
