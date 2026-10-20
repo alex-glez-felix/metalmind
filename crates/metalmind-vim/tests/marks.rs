@@ -41,7 +41,8 @@ fn marks_follow_edits_made_outside_the_engine() {
 }
 
 /// Lo de fuera también lo siguen las marks `A`–`Z`: el motor sabe qué
-/// reemplazos del buffer ya siguió, aunque nadie se lo diga.
+/// reemplazos del buffer ya siguió, aunque nadie se lo diga. Solo los que
+/// siguen en el buffer: los que alguien saca antes con `take_splices` no los ve.
 #[test]
 fn file_marks_follow_edits_made_outside_the_engine() {
     let mut editor = support::Editor::new("ab\nc|d");
