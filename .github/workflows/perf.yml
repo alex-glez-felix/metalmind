@@ -28,6 +28,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Las líneas base de la base (medida desde ../base) y de la PR en un solo
+  # lugar, sin depender de cómo deduce gungraun su carpeta.
+  GUNGRAUN_HOME: ${{ github.workspace }}/target/gungraun
   GUNGRAUN_VERSION: 0.20.0
   # Los crates con un benchmark `instrucciones`.
   PAQUETES: metalmind-perf metalmind-vault metalmind-ui

@@ -15,7 +15,8 @@ sudo pacman -S --needed valgrind          # Arch
 sudo apt-get install -y valgrind          # Debian/Ubuntu
 
 cargo nextest run --workspace                                   # las incluye, en paralelo
-cargo nextest run --workspace -E 'binary(complexity)' --success-output final   # solo ellas, con sus conteos
+cargo nextest run --workspace --success-output final \
+  -E 'binary(complexity) | test(/::complexity::|_lineal$|^growth::tests::/)'   # solo ellas (el filtro de .config/nextest.toml), con sus conteos
 ```
 
 Tras instalar valgrind hay que recompilar (`cargo clean -p <crate>` o tocar su `build.rs`) para que el `build.rs` lo vea. Cada prueba corre su operación con N y 16N en dos procesos bajo callgrind y falla si crece más de ×32 (lineal) o ×4 (lo que no debería depender del tamaño); la salida dice los dos conteos y la proporción. Bajo callgrind todo va ~50 veces más lento: unos 2 min para todas en una máquina de escritorio. Si una falla, se reproduce sola con `-E 'test(nombre)'` y se busca dónde crece con `callgrind_annotate` (detalles y umbrales en [rendimiento](performance.md#3-pruebas-de-complejidad-cargo-nextest-en-cada-pr)). La del render del editor (`metalmind-ui`) abre la ventana en la plataforma de pruebas de GPUI, sin display: además de valgrind pide una fuente monoespaciada instalada.
