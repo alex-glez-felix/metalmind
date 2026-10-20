@@ -2,7 +2,8 @@
 //! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
 
 use std::collections::HashSet;
-use std::io;
+use std::fs::File;
+use std::io::{self, Read as _};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
@@ -11,6 +12,10 @@ use ignore::{DirEntry, WalkBuilder, WalkState};
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::{VaultPath, is_hidden_name};
+
+const NODE_MODULES: &str = "node_modules";
+const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
+const CACHEDIR_SIGNATURE: &[u8; 43] = b"Signature: 8a477f597d28d172789f06886806bc55";
 
 /// Recorre en paralelo las notas (`.md`) de `root` con las reglas del índice,
 /// para quien lea el disco por su cuenta (la búsqueda de texto). Cada hilo
@@ -43,7 +48,7 @@ where
 
 fn walker(root: &Path) -> WalkBuilder {
     let mut builder = rules(root);
-    builder.filter_entry(is_visible);
+    builder.filter_entry(in_vault);
     builder
 }
 
@@ -66,8 +71,26 @@ fn rules(root: &Path) -> WalkBuilder {
     builder
 }
 
-fn is_visible(entry: &DirEntry) -> bool {
-    entry.depth() == 0 || !entry.file_name().to_str().is_some_and(is_hidden_name)
+/// Lo que nunca es del vault aunque no lo ignore ningún `.gitignore`: lo
+/// oculto, las dependencias de Node y las carpetas de caché.
+fn in_vault(entry: &DirEntry) -> bool {
+    if entry.depth() == 0 {
+        return true;
+    }
+    let name = entry.file_name().to_str();
+    if name.is_some_and(is_hidden_name) {
+        return false;
+    }
+    let is_dir = entry.file_type().is_some_and(|kind| kind.is_dir());
+    !(is_dir && (name == Some(NODE_MODULES) || is_cache_dir(entry.path())))
+}
+
+/// Ver <https://bford.info/cachedir/>: el `target` de cargo lo lleva.
+fn is_cache_dir(dir: &Path) -> bool {
+    let mut signature = [0; CACHEDIR_SIGNATURE.len()];
+    File::open(dir.join(CACHEDIR_TAG))
+        .and_then(|mut tag| tag.read_exact(&mut signature))
+        .is_ok_and(|()| signature == *CACHEDIR_SIGNATURE)
 }
 
 /// La ruta y el tipo de una entrada del walk, como los guarda el índice: nada
@@ -138,7 +161,7 @@ pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Partial {
     let mut found = Partial::default();
     let walk = rules(root)
         .filter_entry(move |entry| {
-            is_visible(entry)
+            in_vault(entry)
                 && VaultPath::from_fs(&root_owned, entry.path())
                     .is_some_and(|path| filter_scope.allows(&path))
         })

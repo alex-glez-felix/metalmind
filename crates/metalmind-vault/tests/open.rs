@@ -57,6 +57,42 @@ fn ignora_siempre_obsidian_git_trash_y_ocultos() {
     assert_eq!(listing(&vault.snapshot()), ["sub/", "a.md (nota)"]);
 }
 
+/// #97: ni `node_modules` ni lo que se marca como caché (el `target` de
+/// cargo) son notas, y vigilarlos gasta watches de inotify.
+#[test]
+fn ignora_node_modules_y_las_carpetas_de_cache() {
+    let dir = TempDir::new().unwrap();
+    make_tree(
+        dir.path(),
+        &[
+            "a.md",
+            "node_modules/react/README.md",
+            "app/node_modules/x/y.md",
+            "target/debug/build/x.md",
+            "cache/z.md",
+            "target-sin-marca/target/b.md",
+            "otro/CACHEDIR.TAG",
+        ],
+    );
+    let signature = "Signature: 8a477f597d28d172789f06886806bc55\n# cargo\n";
+    fs::write(dir.path().join("target/CACHEDIR.TAG"), signature).unwrap();
+    fs::write(dir.path().join("cache/CACHEDIR.TAG"), signature).unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    assert_eq!(
+        listing(&vault.snapshot()),
+        [
+            "app/",
+            "otro/",
+            "otro/CACHEDIR.TAG (adjunto)",
+            "target-sin-marca/",
+            "target-sin-marca/target/",
+            "target-sin-marca/target/b.md (nota)",
+            "a.md (nota)",
+        ],
+        "sin la firma, CACHEDIR.TAG es un archivo más"
+    );
+}
+
 #[test]
 fn respeta_gitignore_e_ignore_aunque_no_sea_un_repo() {
     let dir = TempDir::new().unwrap();
