@@ -1,14 +1,16 @@
 //! Las medidas de un tema: la escala de espaciado, radios, anchos de línea,
 //! tipografía, alto de las filas y las medidas de cada parte de la UI. Como
 //! los colores, cada grupo existe como se escribe (`Raw*`), resuelto pero
-//! quizá incompleto (`Partial*`, para `extends`) y completo; las medidas de
-//! `rows` y `layout` pueden nombrar un paso de `spacing`.
+//! quizá incompleto (`Partial*`, para `extends`) y completo, en las unidades
+//! de quien lo usa (ver [`Represent`]); las medidas de `rows` y `layout`
+//! pueden nombrar un paso de `spacing`.
 
 use std::fmt;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 
+use super::represent::{Plain, Represent, Units};
 use super::units::LengthRef;
 pub use super::units::{Count, Factor, Fraction, Length, MarkColumns, Px, TextStyle, Weight};
 use crate::diagnostic::Location;
@@ -69,8 +71,16 @@ macro_rules! metric_group {
     ) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct $name {
-            $($(#[$field_meta])* pub $field: $ty,)*
+        pub struct $name<U: Units = Plain> {
+            $($(#[$field_meta])* pub $field: <U as Represent<$ty>>::Value,)*
+        }
+
+        impl $name {
+            /// El grupo en las unidades de `U`.
+            #[must_use]
+            pub fn convert<U: Units>(self) -> $name<U> {
+                $name { $($field: <U as Represent<$ty>>::represent(self.$field),)* }
+            }
         }
 
         #[derive(Debug, Default, Deserialize)]

@@ -7,6 +7,7 @@ mod groups;
 mod headings;
 mod loader;
 mod metrics;
+mod represent;
 mod units;
 
 use std::collections::BTreeMap;
@@ -21,6 +22,7 @@ pub use metrics::{
     Count, Factor, Fraction, Layout, Length, MarkColumns, Metrics, Px, Radius, Rows, Spacing,
     Stroke, Text, TextStyle, Weight,
 };
+pub use represent::{Plain, Represent, Units};
 
 use color::Hex;
 use groups::{RawCursor, RawRoles, RawSyntax, RawUi};
