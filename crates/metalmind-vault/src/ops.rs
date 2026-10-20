@@ -5,6 +5,7 @@ use std::fs::{self, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use metalmind_syntax::note_name;
 use rustix::fs::{CWD, RenameFlags, renameat_with};
 
 use crate::index::EntryKind;
@@ -15,7 +16,7 @@ const TRASH: &str = ".trash";
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileOpError {
-    #[error("{0} no es una nota: tiene que terminar en .md")]
+    #[error("{0} no es una nota: tiene que terminar en {ext}", ext = note_name::EXTENSION)]
     NotANote(VaultPath),
     #[error("la raíz del vault no se puede mover ni borrar")]
     Root,

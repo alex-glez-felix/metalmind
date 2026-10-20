@@ -3,9 +3,8 @@
 
 use std::fmt::Write as _;
 
-use metalmind_syntax::LinkSyntax;
+use metalmind_syntax::{LinkSyntax, note_name};
 
-use crate::index::EntryKind;
 use crate::links::IndexedLink;
 use crate::links::note::subpath;
 use crate::path::VaultPath;
@@ -20,14 +19,9 @@ pub(in crate::links) fn candidates(
 ) -> Vec<String> {
     let original = original.trim();
     let full = target.as_str();
-    let without_md = EntryKind::of_file(target) == EntryKind::Note
-        && !last_component(original).to_lowercase().ends_with(".md");
-    let mut paths = vec![full];
-    if without_md {
-        paths.insert(0, &full[..full.len() - ".md".len()]);
-    }
+    let without_md = note_name::strip_extension(full).filter(|_| !note_name::is_note(original));
     let mut forms = Vec::new();
-    for path in paths {
+    for path in without_md.into_iter().chain([full]) {
         if original.starts_with("./") || original.starts_with("../") {
             forms.push(relative(source, path));
         } else if original.starts_with('/') {
@@ -40,10 +34,6 @@ pub(in crate::links) fn candidates(
     }
     forms.push(format!("/{full}"));
     forms
-}
-
-fn last_component(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or_default()
 }
 
 /// `path` desde la carpeta de `source`, siempre con `./` o `../` delante.

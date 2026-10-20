@@ -1,5 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 
+use metalmind_syntax::note_name;
+
 use crate::path::VaultPath;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize)]
@@ -13,14 +15,10 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
-    /// Por la extensión: `.md`, sin distinguir mayúsculas, es una nota.
+    /// Por el nombre: ver [`note_name`].
     #[must_use]
     pub fn of_file(path: &VaultPath) -> Self {
-        let is_markdown = path
-            .name()
-            .rsplit_once('.')
-            .is_some_and(|(stem, ext)| !stem.is_empty() && ext.eq_ignore_ascii_case("md"));
-        if is_markdown {
+        if note_name::is_note(path.name()) {
             Self::Note
         } else {
             Self::Attachment

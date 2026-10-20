@@ -2,6 +2,7 @@
 //! alias, padres y plantilla. Se escribe en el frontmatter de su página tocando solo
 //! ese campo, y si el tag no tiene página, Metalmind la crea.
 
+use metalmind_syntax::note_name;
 use unicode_normalization::UnicodeNormalization as _;
 
 use crate::changes::{Changes, NewFile};
@@ -107,7 +108,7 @@ impl Tags {
     /// `tags/<name>.md`, con el nombre en NFC (05 §1).
     pub(crate) fn page_file(&self, name: &str) -> Option<VaultPath> {
         let name: String = name.nfc().collect();
-        self.folder.join(&format!("{name}.md")).ok()
+        self.folder.join(&note_name::with_extension(&name)).ok()
     }
 
     fn create_page(&self, key: &TagKey, tag: &str, text: String) -> Result<TagPlan, PlanError> {
