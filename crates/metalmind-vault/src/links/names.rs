@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Bound;
 
 use metalmind_syntax::{
-    Resolution, TargetKey, path_keys, path_parent_key, resolve_from, target_key,
+    Resolution, TargetKey, note_name, path_keys, path_parent_key, resolve_from, target_key,
 };
 
 use super::LinkTarget;
@@ -248,15 +248,7 @@ impl Tied {
 /// nombre y, si termina en `.md` (en cualquier caso), sin la extensión.
 fn spellings(path: &VaultPath) -> impl Iterator<Item = &str> {
     let name = path.name();
-    let stem = name
-        .len()
-        .checked_sub(".md".len())
-        .filter(|&at| {
-            name.get(at..)
-                .is_some_and(|ext| ext.eq_ignore_ascii_case(".md"))
-        })
-        .map(|at| &name[..at]);
-    std::iter::once(name).chain(stem)
+    std::iter::once(name).chain(note_name::strip_extension(name))
 }
 
 fn folder(path: &VaultPath) -> &str {

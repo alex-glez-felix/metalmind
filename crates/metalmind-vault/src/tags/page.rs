@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use metalmind_syntax::{Frontmatter, Value};
+use metalmind_syntax::{Frontmatter, Value, note_name};
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
 use crate::path::VaultPath;
@@ -185,7 +185,7 @@ impl TagIcon {
 /// alrededor, que el frontmatter recorta al leer.
 #[must_use]
 pub fn parse_template(text: &str) -> Option<String> {
-    let valid = text.trim() == text && VaultPath::new(&format!("{text}.md")).is_ok();
+    let valid = text.trim() == text && VaultPath::new(&note_name::with_extension(text)).is_ok();
     valid.then(|| text.to_owned())
 }
 

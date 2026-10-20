@@ -23,15 +23,9 @@ fn vault(notes: usize, names: NoteNames) -> Files {
     linked_vault(notes, names)
         .into_iter()
         .map(|(path, text)| {
-            let kind = if std::path::Path::new(&path)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
-            {
-                EntryKind::Note
-            } else {
-                EntryKind::Attachment
-            };
-            (VaultPath::new(&path).unwrap(), (kind, text))
+            let path = VaultPath::new(&path).unwrap();
+            let kind = EntryKind::of_file(&path);
+            (path, (kind, text))
         })
         .collect()
 }

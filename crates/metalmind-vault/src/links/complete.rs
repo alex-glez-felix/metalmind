@@ -1,8 +1,9 @@
 //! Cómo nombrar un archivo desde una nota, para el autocompletado de `[[`.
 
+use metalmind_syntax::note_name;
+
 use super::rename::form;
 use super::{LinkIndex, LinkTarget};
-use crate::index::EntryKind;
 use crate::path::VaultPath;
 
 impl LinkIndex {
@@ -31,10 +32,7 @@ pub(super) fn shortest_target(
 ) -> Option<String> {
     let resolved = LinkTarget::Resolved(target.clone());
     let name = target.name();
-    let shape = match EntryKind::of_file(target) {
-        EntryKind::Note => &name[..name.len() - ".md".len()],
-        _ => name,
-    };
+    let shape = note_name::strip_extension(name).unwrap_or(name);
     form::candidates(shape, source, target)
         .into_iter()
         .find(|candidate| resolve(candidate) == resolved && writable(candidate))
@@ -57,6 +55,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
+    use crate::index::EntryKind;
 
     fn path(path: &str) -> VaultPath {
         VaultPath::new(path).unwrap()

@@ -4,6 +4,8 @@
 
 use std::io;
 
+use metalmind_syntax::note_name;
+
 use crate::file::FileError;
 use crate::ops::FileOpError;
 use crate::vault::SaveError;
@@ -24,7 +26,10 @@ impl FileOpError {
     pub fn cause(&self) -> String {
         match self {
             Self::Io { source, .. } => io_cause(source),
-            Self::NotANote(_) => "no es una nota: tiene que terminar en .md".to_owned(),
+            Self::NotANote(_) => format!(
+                "no es una nota: tiene que terminar en {}",
+                note_name::EXTENSION
+            ),
             Self::Symlink(_) => "pasa por un enlace simbólico".to_owned(),
             Self::NotAFolder(dir) => format!("{dir} es un archivo, no una carpeta"),
             Self::AlreadyExists(_) => "ya existe".to_owned(),

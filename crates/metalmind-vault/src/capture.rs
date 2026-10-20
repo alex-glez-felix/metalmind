@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use jiff::civil::DateTime;
+use metalmind_syntax::note_name;
 
 use crate::file::{FileError, create_atomic};
 use crate::path::{InvalidPath, VaultPath, is_word_char};
@@ -189,9 +190,9 @@ fn slug(line: &str) -> String {
 fn create_unique(root: &Path, stem: &str, contents: &str) -> Result<VaultPath, CaptureError> {
     for attempt in 1..=MAX_ATTEMPT {
         let name = if attempt == 1 {
-            format!("{stem}.md")
+            note_name::with_extension(stem)
         } else {
-            format!("{stem}-{attempt}.md")
+            note_name::with_extension(&format!("{stem}-{attempt}"))
         };
         let path = VaultPath::root().join(&name)?;
         let write = |out: &mut dyn std::io::Write| out.write_all(contents.as_bytes());
@@ -201,7 +202,7 @@ fn create_unique(root: &Path, stem: &str, contents: &str) -> Result<VaultPath, C
             Err(error) => return Err(CaptureError::Write(error)),
         }
     }
-    Err(CaptureError::NameTaken(format!("{stem}.md")))
+    Err(CaptureError::NameTaken(note_name::with_extension(stem)))
 }
 
 #[cfg(test)]

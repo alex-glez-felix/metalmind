@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use metalmind_syntax::{Frontmatter, Value};
+use metalmind_syntax::{Frontmatter, Value, note_name};
 
 use crate::path::VaultPath;
 use crate::tags::key::{TagKey, tag_name};
@@ -168,10 +168,7 @@ pub(crate) fn page_name<'p>(
     if path.parent().as_ref() != Some(folder) {
         return None;
     }
-    let (stem, ext) = path.name().rsplit_once('.')?;
-    if !ext.eq_ignore_ascii_case("md") || stem.is_empty() {
-        return None;
-    }
+    let stem = note_name::strip_extension(path.name())?;
     Some(
         tag_name(stem)
             .filter(|name| name.len() == stem.len())
