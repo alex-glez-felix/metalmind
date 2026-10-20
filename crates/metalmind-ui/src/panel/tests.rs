@@ -96,6 +96,17 @@ fn crear_dentro_de_la_carpeta_o_junto_al_archivo() {
 }
 
 #[test]
+fn una_extension_sin_nombre_no_es_una_nota() {
+    for name in [".md", "x/.MD"] {
+        let mut panel = panel();
+        panel.start_create(NewEntry::Note);
+        type_text(&mut panel, name);
+        assert_eq!(panel.confirm(), None, "{name}");
+        assert!(panel.error().unwrap().contains("oculto"), "{name}");
+    }
+}
+
+#[test]
 fn un_nombre_invalido_deja_la_pregunta_abierta_con_el_error() {
     let mut panel = panel();
     panel.start_create(NewEntry::Note);
