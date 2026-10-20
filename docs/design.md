@@ -39,6 +39,8 @@ Lo que hay hoy, con los valores de los temas de fábrica:
 
 De `config.yaml` y no del tema, porque son preferencias de quien usa la app y no del estilo: `font` (familia y tamaño base), `editor.padding`, `panes.border_width` y `panel.width`.
 
+En el código, `Theme` (`metalmind-ui`) guarda los grupos del tema ya en tipos de GPUI y con los nombres del YAML: `syntax.heading` es `theme.syntax.heading` (`Hsla`), `layout.picker_gap` es `theme.layout.picker_gap` (`Pixels`) y `text.strong`, `theme.text.strong` (`FontWeight`). Los grupos de `metalmind-config` son genéricos en sus unidades y la UI los convierte una vez (`convert::<Gpui>()`). `Theme` solo tiene a mano lo que se calcula (las letras multiplicadas por `font.size`, el alto de las filas del árbol y del menú, el tamaño de los íconos) y lo que sale de `config.yaml`. Un token nuevo se escribe en los dos temas de fábrica y en su grupo (`color_group!` o `metric_group!` en `metalmind-config`), y la vista ya lo lee: `theme.rs` no cambia.
+
 De dónde sale cada valor, qué se repite con otro número y las preguntas abiertas: [auditoría](design/auditoria.md).
 
 ## Componentes
