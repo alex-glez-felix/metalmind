@@ -31,6 +31,8 @@ pub struct Buffer {
 struct Changes {
     /// Desde el último [`Buffer::take_splices`].
     splices: Vec<Splice>,
+    /// Los que ya se sacaron con [`Buffer::take_splices`].
+    taken: usize,
     /// Lo mismo por líneas, desde el último [`Buffer::take_line_edits`].
     lines: Vec<LineEdit>,
 }
@@ -53,7 +55,9 @@ impl Buffer {
     /// cursor de otro panel) las mueve con [`Splice::map_all`] y lo llama
     /// tras cada cambio para que la lista no crezca.
     pub fn take_splices(&mut self) -> Vec<Splice> {
-        std::mem::take(&mut self.changes.splices)
+        let splices = std::mem::take(&mut self.changes.splices);
+        self.changes.taken += splices.len();
+        splices
     }
 
     /// Los reemplazos desde la última llamada, por líneas y en orden. Es
@@ -69,6 +73,24 @@ impl Buffer {
     #[must_use]
     pub fn splices(&self) -> &[Splice] {
         &self.changes.splices
+    }
+
+    /// Cuántos reemplazos se hicieron desde que existe el buffer, también
+    /// los ya sacados con [`Buffer::take_splices`]. Para quien sigue los
+    /// reemplazos sin sacarlos, como el motor vim con las posiciones que
+    /// guarda: anota este número y luego pide [`Buffer::splices_since`].
+    #[must_use]
+    pub fn splice_count(&self) -> usize {
+        self.changes.taken + self.changes.splices.len()
+    }
+
+    /// Los reemplazos hechos desde que [`Buffer::splice_count`] era
+    /// `count`, en orden y sin sacarlos. Los que ya sacó
+    /// [`Buffer::take_splices`] no vuelven.
+    #[must_use]
+    pub fn splices_since(&self, count: usize) -> &[Splice] {
+        let start = count.saturating_sub(self.changes.taken);
+        self.changes.splices.get(start..).unwrap_or(&[])
     }
 
     /// Estado del historial en el que está el texto.
