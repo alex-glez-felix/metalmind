@@ -1,6 +1,6 @@
 //! Qué líneas muestran su fuente según dónde esté el cursor.
 
-use metalmind_vim::Rows;
+use metalmind_syntax::Rows;
 use pretty_assertions::assert_eq;
 
 use super::PaneId;

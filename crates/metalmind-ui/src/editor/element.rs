@@ -9,7 +9,8 @@ use gpui_kit::{
     ShapedLine, SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px,
     relative, size,
 };
-use metalmind_vim::{FormulaRows, Mode, Rows};
+use metalmind_syntax::{FormulaRows, Rows};
+use metalmind_vim::Mode;
 
 use super::Editor;
 use super::cursor::{Preedit, cursor_quad, em_width, preedit};

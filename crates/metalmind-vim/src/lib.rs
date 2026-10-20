@@ -59,7 +59,7 @@ pub use indent::Indent;
 pub use jumplist::{FileId, Jump, JumpList, Landing};
 pub use key::Key;
 pub use keymap::{Binding, Context, Keymap, Target};
-pub use layout::{BufferLines, FormulaRows, Layout, Rows};
+pub use layout::{BufferLines, Layout};
 pub use mark::{Marks, PlacedMark};
 pub use markdown::Markdown;
 pub use mode::{Mode, Prompt, VisualKind};

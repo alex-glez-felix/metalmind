@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
 
-use metalmind_vim::{FileId, Rows};
+use metalmind_syntax::Rows;
+use metalmind_vim::FileId;
 
 use crate::document::Document;
 

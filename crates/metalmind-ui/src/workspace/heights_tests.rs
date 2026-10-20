@@ -1,7 +1,8 @@
 //! La ventana con headings más altos que el texto, como la mide la vista:
 //! en píxeles, con una línea de texto de 20 y un `#` de 48.
 
-use metalmind_vim::{LineHeights, Rows};
+use metalmind_syntax::Rows;
+use metalmind_vim::LineHeights;
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 

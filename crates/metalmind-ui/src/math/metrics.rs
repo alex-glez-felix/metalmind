@@ -5,8 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use metalmind_syntax::MathSpot;
-use metalmind_vim::FormulaRows;
+use metalmind_syntax::{FormulaRows, MathSpot};
 
 use super::engine::{self, MathError, Metrics};
 use super::geometry::Geometry;
