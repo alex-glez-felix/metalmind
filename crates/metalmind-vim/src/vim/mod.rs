@@ -322,24 +322,12 @@ impl Vim {
         Ok(outcome)
     }
 
-    /// `action` con `"+` o `"*`, como si se tecleara el registro y luego la
-    /// acción, pero antes descarta lo pendiente (un count, `r`, `f`, otro
-    /// registro) para no completarlo. Así copia y pega la UI con su
-    /// portapapeles en Visual (`"+y`, `"+P`).
-    ///
-    /// # Errors
-    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn execute_with_system_register(
-        &mut self,
-        register: SystemRegister,
-        action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
+    /// Lo siguiente usa `"+` o `"*`, como teclear `"+`, pero antes descarta
+    /// lo pendiente (un count, `r`, `f`, otro registro) para no completarlo.
+    /// Así copia y pega la UI con su portapapeles en Visual (`"+y`, `"+P`).
+    pub fn use_register(&mut self, register: SystemRegister) {
         self.reset();
         self.selected = Some(RegisterName::System(register));
-        self.execute_with_clipboard(action, buffer, selections, clipboard)
     }
 
     fn with_detached<T>(&mut self, run: impl FnOnce(&mut Self, &mut Detached) -> T) -> T {

@@ -277,13 +277,8 @@ impl Workspace {
     ) -> Result<(), WorkspaceError> {
         self.focus(pane)?;
         let outcome = self.edit_pane(pane, |vim, buffer, selections| {
-            Ok(vim.execute_with_system_register(
-                SystemRegister::Clipboard,
-                action,
-                buffer,
-                selections,
-                clipboard,
-            )?)
+            vim.use_register(SystemRegister::Clipboard);
+            Ok(vim.execute_with_clipboard(action, buffer, selections, clipboard)?)
         })?;
         self.note(&outcome);
         Ok(())
