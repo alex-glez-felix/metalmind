@@ -241,11 +241,14 @@ metric_group! {
         /// La barra de botones a la izquierda del panel.
         rail_width: Length,
         rail_button_size: Length,
-        menu_width: Length,
+        /// Lo más angosto del menú contextual; crece hasta su fila más larga.
+        menu_min_width: Length,
         /// Alrededor de las entradas del menú y de sus separadores.
         menu_padding: Length,
         /// A los lados del texto de cada entrada del menú.
         menu_item_padding_x: Length,
+        /// Lo mínimo entre la etiqueta de una entrada del menú y su tecla.
+        menu_gap: Length,
         tooltip_padding_x: Length,
         tooltip_padding_y: Length,
         /// Las columnas de las marks en el margen: la letra, el `+` de las
