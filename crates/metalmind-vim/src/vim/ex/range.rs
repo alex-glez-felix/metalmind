@@ -7,6 +7,7 @@ use metalmind_buffer::{Buffer, Selections};
 
 use super::Failure;
 use super::lines::keep_column;
+use crate::Target;
 use crate::ex::{Address, Base, LineRange};
 use crate::mark::MarkName;
 use crate::search::Query;
@@ -94,10 +95,9 @@ impl Vim {
         &mut self,
         range: Option<&LineRange>,
         default: DefaultRange,
-        buffer: &Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<Resolved, Failure> {
-        let mut cursor = buffer.line_of(selections.primary().head) + 1;
+        let mut cursor = t.buffer.line_of(t.selections.primary().head) + 1;
         let steps = match (range, default) {
             (None, DefaultRange::CurrentLine) => {
                 return Ok(Resolved {
@@ -109,7 +109,7 @@ impl Vim {
             (None, DefaultRange::Whole) | (Some(LineRange::Whole), _) => {
                 return Ok(Resolved {
                     first: 1,
-                    last: buffer.line_count(),
+                    last: t.buffer.line_count(),
                     given: usize::from(range.is_some()) * 2,
                 });
             }
@@ -119,15 +119,15 @@ impl Vim {
         for step in steps {
             first = last;
             last = match &step.address {
-                Some(address) => self.resolve_address(address, cursor, buffer)?,
+                Some(address) => self.resolve_address(address, cursor, t)?,
                 None => cursor,
             };
             if step.moves_cursor {
-                cursor = last.clamp(1, buffer.line_count());
-                *selections = Selections::single(keep_column(
-                    buffer,
-                    self.viewport.columns(),
-                    selections.primary(),
+                cursor = last.clamp(1, t.buffer.line_count());
+                *t.selections = Selections::single(keep_column(
+                    t.buffer,
+                    t.pane.viewport.columns(),
+                    t.selections.primary(),
                     cursor - 1,
                 ));
             }
@@ -146,12 +146,11 @@ impl Vim {
     pub(super) fn resolve_destination(
         &mut self,
         address: &Address,
-        buffer: &Buffer,
-        selections: &Selections,
+        t: &Target<'_>,
     ) -> Result<usize, Failure> {
-        let cursor = buffer.line_of(selections.primary().head) + 1;
-        let below = self.resolve_address(address, cursor, buffer)?;
-        if below > buffer.line_count() {
+        let cursor = t.buffer.line_of(t.selections.primary().head) + 1;
+        let below = self.resolve_address(address, cursor, t)?;
+        if below > t.buffer.line_count() {
             return Err(CommandError::InvalidRange.into());
         }
         Ok(below)
@@ -162,15 +161,16 @@ impl Vim {
         &mut self,
         address: &Address,
         cursor: usize,
-        buffer: &Buffer,
+        t: &Target<'_>,
     ) -> Result<usize, Failure> {
+        let buffer: &Buffer = t.buffer;
         let mut line = cursor;
         for term in &address.terms {
             let base = match &term.base {
                 Base::Current => cursor,
                 Base::Last => buffer.line_count(),
                 Base::Number(number) => *number,
-                Base::Mark(mark) => self.mark_line(*mark, buffer)? + 1,
+                Base::Mark(mark) => self.mark_line(*mark, t)? + 1,
                 Base::Search { pattern, backward } => {
                     self.search_line(pattern, *backward, line, buffer)? + 1
                 }
@@ -184,7 +184,8 @@ impl Vim {
 
     /// `'a`–`'z`, `'A`–`'Z` de este archivo, `''` y `'<`, `'>` de la última
     /// selección Visual; desde 0.
-    fn mark_line(&self, mark: char, buffer: &Buffer) -> Result<usize, CommandError> {
+    fn mark_line(&self, mark: char, t: &Target<'_>) -> Result<usize, CommandError> {
+        let buffer: &Buffer = t.buffer;
         let line = match mark {
             '<' | '>' => self
                 .last_visual
@@ -192,7 +193,7 @@ impl Vim {
                 .and_then(|visual| visual.lines(buffer))
                 .map(|(start, end)| if mark == '<' { start } else { end }),
             _ => MarkName::parse(mark)
-                .and_then(|name| self.mark_offset(name, buffer))
+                .and_then(|name| self.mark_offset(name, t))
                 .map(|offset| buffer.line_of(offset)),
         };
         line.ok_or(CommandError::MarkNotSet)

@@ -29,11 +29,10 @@ impl LineHeights for Uniform {
     }
 }
 
-/// La primera línea visible de un panel y cuánto alto tiene. Quien aloja
-/// el motor guarda uno por panel, le da su alto en cada layout
-/// ([`Viewport::resize`]) y se lo presta al motor mientras edita en ese
-/// panel ([`crate::Vim::swap_viewport`]); el motor lo deja donde quedó tras
-/// cada tecla, y la UI pinta desde [`Viewport::top`].
+/// La primera línea visible de un panel y cuánto alto tiene. Va en el
+/// [`crate::PaneState`] de cada panel: la UI le da su alto en cada layout
+/// ([`Viewport::resize`]), el motor lo deja donde quedó tras cada tecla y la
+/// UI pinta desde [`Viewport::top`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Viewport {
     top: usize,

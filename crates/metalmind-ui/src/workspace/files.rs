@@ -83,10 +83,10 @@ impl Workspace {
             self.interrupt(self.focused())?;
             self.push_jump(self.focused())?;
         }
-        self.edit_pane(self.focused(), |vim, buffer, selections| {
+        self.edit_pane(self.focused(), None, |vim, target| {
             vim.cursor_moved();
-            let head = clamp_cursor(buffer, at.offset_in(buffer), vim.mode());
-            *selections = Selections::single(Selection::cursor(head));
+            let head = clamp_cursor(target.buffer, at.offset_in(target.buffer), vim.mode());
+            *target.selections = Selections::single(Selection::cursor(head));
             Ok(())
         })?;
         Ok(true)
@@ -172,9 +172,9 @@ impl Workspace {
                 self.close(pane);
             } else if let Some(numbers) = self.panes.get(&pane).map(|state| state.numbers) {
                 let id = self.insert_document(Document::unnamed());
-                let jumps = self.panes.get(&pane).map(|state| state.jumps.clone());
+                let jumps = self.panes.get(&pane).map(|state| state.state.jumps.clone());
                 let mut state = Pane::at_start(id, numbers, self.tabstop);
-                state.jumps = jumps.unwrap_or_default();
+                state.state.jumps = jumps.unwrap_or_default();
                 self.panes.insert(pane, state);
             }
         }

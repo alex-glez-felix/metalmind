@@ -4,6 +4,8 @@
 use metalmind_buffer::{Buffer, PerSelection, Selections};
 
 use super::Vim;
+use super::block::put_block;
+use crate::Target;
 use crate::dot::{Change, Dot, MarkJump, Subject};
 use crate::insert;
 use crate::markdown::LazyOutline;
@@ -27,17 +29,15 @@ impl Vim {
         &mut self,
         operator: Operator,
         subject: Subject,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
-        let object = self.object_of(&subject, buffer);
-        self.operate_on(operator, subject, object, buffer, selections, clipboard)
+        let object = self.object_of(&subject, t);
+        self.operate_on(operator, subject, object, t)
     }
 
     /// Sobre qué actúa un operador; `None` si no hay `;` o `n` que repetir o
     /// la mark no existe.
-    pub(super) fn object_of(&self, subject: &Subject, buffer: &Buffer) -> Option<Object> {
+    pub(super) fn object_of(&self, subject: &Subject, t: &Target<'_>) -> Option<Object> {
         match *subject {
             Subject::Object(ref object) => Some(object.clone()),
             Subject::RepeatFind { reversed } => self
@@ -50,7 +50,7 @@ impl Vim {
                 })
             }),
             Subject::Mark(MarkJump { name, exact }) => {
-                let offset = self.mark_offset(name, buffer)?;
+                let offset = self.mark_offset(name, t)?;
                 Some(Object::Mark { offset, exact })
             }
         }
@@ -62,9 +62,7 @@ impl Vim {
         operator: Operator,
         subject: Subject,
         object: Option<Object>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let count = self.take_count();
         let register = self.selected.take();
@@ -74,10 +72,17 @@ impl Vim {
             return Ok(());
         };
         let operands = {
-            let outline = LazyOutline::new(self.layout.as_mut());
-            selections.map_to(|selection| Operand {
+            let outline = LazyOutline::new(t.doc.styles_mut());
+            t.selections.map_to(|selection| Operand {
                 selection: *selection,
-                target: object.target(buffer, selection, operator, count, &self.viewport, &outline),
+                target: object.target(
+                    t.buffer,
+                    selection,
+                    operator,
+                    count,
+                    &t.pane.viewport,
+                    &outline,
+                ),
             })
         };
         let operation = Operation {
@@ -86,7 +91,7 @@ impl Vim {
             count,
             register,
         };
-        self.finish_operator(operation, &operands, buffer, selections, clipboard)
+        self.finish_operator(operation, &operands, t)
     }
 
     /// Aplica el operador sobre lo ya resuelto, guarda lo copiado o borrado
@@ -95,9 +100,7 @@ impl Vim {
         &mut self,
         operation: Operation,
         operands: &PerSelection<Operand>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let Operation {
             operator,
@@ -118,15 +121,15 @@ impl Vim {
             _ => 1,
         };
         let outcome = operator.apply(
-            buffer,
+            t.buffer,
             operands,
-            self.viewport.columns(),
+            t.pane.viewport.columns(),
             levels,
             self.indent,
         )?;
         let (applied, written, spans_lines) = match outcome {
             Outcome::Missed(moved) => {
-                *selections = moved;
+                *t.selections = moved;
                 self.fail();
                 return Ok(());
             }
@@ -136,7 +139,7 @@ impl Vim {
                 spans_lines,
             } => (selections, register, spans_lines),
         };
-        *selections = applied;
+        *t.selections = applied;
         if let Some(written) = written {
             // Solo `y`, `d` y `c` copian lo que abarcan.
             let write = match operator {
@@ -146,7 +149,8 @@ impl Vim {
                     always_numbered,
                 },
             };
-            self.registers.write(register, written, write, clipboard);
+            self.registers
+                .write(register, written, write, t.clipboard.as_deref_mut());
         }
         let dot = Dot::new(Change::Operate(operator, subject), count, register);
         match operator {
@@ -157,32 +161,26 @@ impl Vim {
         Ok(())
     }
 
-    pub(super) fn paste(
-        &mut self,
-        side: PasteSide,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<(), VimError> {
+    pub(super) fn paste(&mut self, side: PasteSide, t: &mut Target<'_>) -> Result<(), VimError> {
         let count = self.take_count();
         let register = self.selected.take();
         self.reset();
         if register == Some(RegisterName::LastInsert) {
-            return self.reinsert(side, count, buffer, selections);
+            return self.reinsert(side, count, t);
         }
         // Como en vim, `.` repite un `p` aunque el registro estuviera vacío.
         self.last_change = Some(Dot::new(Change::Paste(side), count, register));
         let times = count.unwrap_or(1);
-        let Some(content) = self.read_register(register, clipboard) else {
+        let Some(content) = self.read_register(register, t.clipboard.as_deref_mut()) else {
             self.fail();
             return Ok(());
         };
         match content.shape {
             Shape::Block { width } => {
-                self.put_block(&content, width, side, times, buffer, selections)?;
+                put_block(&content, width, side, times, t)?;
             }
             Shape::Chars | Shape::Lines => {
-                *selections = paste::paste(buffer, selections, &content, side, times)?;
+                *t.selections = paste::paste(t.buffer, t.selections, &content, side, times)?;
             }
         }
         Ok(())
@@ -192,7 +190,7 @@ impl Vim {
     pub(super) fn read_register(
         &self,
         name: Option<RegisterName>,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) -> Option<Register> {
         if name != Some(RegisterName::LastSearch) {
             return self.registers.read(name, clipboard);
@@ -208,8 +206,7 @@ impl Vim {
         &mut self,
         side: PasteSide,
         count: Option<usize>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let Some(typed) = self.last_insert.clone() else {
             self.fail();
@@ -220,28 +217,23 @@ impl Vim {
             PasteSide::Before => InsertAt::Before,
         };
         // A diferencia de un `a` tecleado, `u` vuelve a donde se tecleó `".p`.
-        buffer.begin_transaction(selections.clone())?;
-        *selections = insert::insertion_points(buffer, selections, at);
+        t.buffer.begin_transaction(t.selections.clone())?;
+        *t.selections = insert::insertion_points(t.buffer, t.selections, at);
         let change = Change::Insert { at, list: false };
         self.start_insert(Dot::new(change, None, None));
         for _ in 0..count.unwrap_or(1) {
             for piece in &typed {
-                self.type_in_insert(piece, buffer, selections)?;
+                self.type_in_insert(piece, t)?;
             }
         }
-        self.leave_insert(buffer, selections)
+        self.leave_insert(t)
     }
 
-    pub(super) fn travel(
-        &mut self,
-        travel: Travel,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
+    pub(super) fn travel(&mut self, travel: Travel, t: &mut Target<'_>) -> Result<(), VimError> {
         let times = self.count.take().unwrap_or(1);
         self.reset();
-        match travel.run(buffer, times)? {
-            Some(restored) => *selections = restored,
+        match travel.run(t.buffer, times)? {
+            Some(restored) => *t.selections = restored,
             None => self.fail(),
         }
         Ok(())

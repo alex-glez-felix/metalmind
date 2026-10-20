@@ -13,7 +13,7 @@
 )]
 mod support;
 
-use metalmind_vim::{CommandError, KeyOutcome, Vim};
+use metalmind_vim::{CommandError, KeyOutcome};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 use rstest_reuse::{self, apply, template};
@@ -129,9 +129,8 @@ fn nvim_oracle(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
 #[case("d'Q")]
 #[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
 fn una_mark_sin_poner_es_e20(#[case] keys: &str) {
-    let (mut buffer, mut selections) = support::parse(LINES);
-    let mut vim = Vim::new();
-    let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
+    let mut editor = support::Editor::new(LINES);
+    let last = editor.keys(keys);
     let error = CommandError::MarkNotSet;
     assert_eq!(last.unwrap(), KeyOutcome::InvalidCommand(error.clone()));
     assert_eq!(support::nvim::message(LINES, keys), error.to_string());

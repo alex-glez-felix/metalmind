@@ -959,11 +959,10 @@ fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &st
 
 #[test]
 fn reports_what_each_key_did() {
-    use metalmind_vim::{Action, InsertAt, Key, KeyOutcome, Motion, Vim};
+    use metalmind_vim::{Action, InsertAt, Key, KeyOutcome, Motion};
 
-    let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new();
-    let mut feed = |key| vim.feed(key, &mut buffer, &mut selections).unwrap();
+    let mut editor = support::Editor::new("|ab");
+    let mut feed = |key| editor.key(key);
     assert_eq!(feed(Key::Char('g')), KeyOutcome::Pending);
     assert_eq!(
         feed(Key::Char('g')),
@@ -980,61 +979,55 @@ fn reports_what_each_key_did() {
 
 #[test]
 fn actions_run_by_name() {
-    use metalmind_vim::{Action, Vim};
+    use metalmind_vim::Action;
 
-    let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new();
+    let mut editor = support::Editor::new("|ab");
     let delete_right = Action::from_name("vim::delete_right").unwrap();
-    vim.execute(delete_right, &mut buffer, &mut selections)
-        .unwrap();
-    assert_eq!(support::render(&buffer, [selections.primary().head]), "|b");
+    editor.run(|vim, t| vim.execute(delete_right, t)).unwrap();
+    assert_eq!(
+        support::render(&editor.buffer, [editor.selections.primary().head]),
+        "|b"
+    );
 }
 
 #[test]
 fn operators_wait_in_their_own_mode() {
-    use metalmind_vim::{Key, Mode, Operator, Vim};
+    use metalmind_vim::{Key, Mode, Operator};
 
-    let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new();
-    vim.feed(Key::Char('d'), &mut buffer, &mut selections)
-        .unwrap();
-    assert_eq!(vim.mode(), Mode::OperatorPending(Operator::Delete));
-    vim.feed(Key::Escape, &mut buffer, &mut selections).unwrap();
-    assert_eq!(vim.mode(), Mode::Normal);
-    assert_eq!(buffer.to_string(), "ab");
+    let mut editor = support::Editor::new("|ab");
+    editor.run(|vim, t| vim.feed(Key::Char('d'), t)).unwrap();
+    assert_eq!(editor.vim.mode(), Mode::OperatorPending(Operator::Delete));
+    editor.key(Key::Escape);
+    assert_eq!(editor.vim.mode(), Mode::Normal);
+    assert_eq!(editor.buffer.to_string(), "ab");
 }
 
 #[test]
 fn find_by_name_waits_for_the_char() {
-    use metalmind_vim::{Action, CharSearch, Key, KeyOutcome, Vim};
+    use metalmind_vim::{Action, CharSearch, Key, KeyOutcome};
 
-    let (mut buffer, mut selections) = support::parse("|abc");
-    let mut vim = Vim::new();
+    let mut editor = support::Editor::new("|abc");
     let find = Action::from_name("vim::find_forward").unwrap();
-    vim.execute(find, &mut buffer, &mut selections).unwrap();
-    let outcome = vim
-        .feed(Key::Char('c'), &mut buffer, &mut selections)
-        .unwrap();
+    editor.execute(find);
+    let outcome = editor.key(Key::Char('c'));
     let search = CharSearch {
         backward: false,
         till: false,
     };
     assert_eq!(outcome, KeyOutcome::Executed(Action::FindChar(search)));
     assert_eq!(
-        support::render(&buffer, [selections.primary().head]),
+        support::render(&editor.buffer, [editor.selections.primary().head]),
         "ab|c"
     );
 }
 
 #[test]
 fn esc_cancels_a_pending_find() {
-    use metalmind_vim::{Action, Key, KeyOutcome, Vim};
+    use metalmind_vim::{Action, Key, KeyOutcome};
 
-    let (mut buffer, mut selections) = support::parse("|abc");
-    let mut vim = Vim::new();
-    vim.feed(Key::Char('f'), &mut buffer, &mut selections)
-        .unwrap();
-    let outcome = vim.feed(Key::Escape, &mut buffer, &mut selections).unwrap();
+    let mut editor = support::Editor::new("|abc");
+    editor.run(|vim, t| vim.feed(Key::Char('f'), t)).unwrap();
+    let outcome = editor.key(Key::Escape);
     assert_eq!(outcome, KeyOutcome::Executed(Action::NormalMode));
 }
 
@@ -1046,29 +1039,30 @@ fn esc_cancels_a_pending_find() {
 #[case("g")]
 fn moving_the_cursor_cancels_what_was_pending(#[case] pending: &str) {
     use metalmind_buffer::{ByteOffset, Selection, Selections};
-    use metalmind_vim::{Mode, Vim};
+    use metalmind_vim::Mode;
 
-    let (mut buffer, mut selections) = support::parse("|abc def");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, pending);
-    selections = Selections::single(Selection::cursor(ByteOffset::new(4)));
-    vim.cursor_moved();
-    support::feed(&mut vim, &mut buffer, &mut selections, "x");
-    assert_eq!(vim.mode(), Mode::Normal);
-    let heads = selections.iter().map(|s| s.head);
-    assert_eq!(support::render(&buffer, heads), "abc |ef");
+    let mut editor = support::Editor::new("|abc def");
+    editor.keys(pending);
+    editor.selections = Selections::single(Selection::cursor(ByteOffset::new(4)));
+    editor.vim.cursor_moved();
+    editor.keys("x");
+    assert_eq!(editor.vim.mode(), Mode::Normal);
+    let heads = editor.selections.iter().map(|s| s.head);
+    assert_eq!(support::render(&editor.buffer, heads), "abc |ef");
 }
 
 #[test]
 fn repeat_change_runs_by_name() {
-    use metalmind_vim::{Action, Vim};
+    use metalmind_vim::Action;
 
-    let (mut buffer, mut selections) = support::parse("|abc");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "x");
+    let mut editor = support::Editor::new("|abc");
+    editor.keys("x");
     let repeat = Action::from_name("vim::repeat_change").unwrap();
-    vim.execute(repeat, &mut buffer, &mut selections).unwrap();
-    assert_eq!(support::render(&buffer, [selections.primary().head]), "|c");
+    editor.execute(repeat);
+    assert_eq!(
+        support::render(&editor.buffer, [editor.selections.primary().head]),
+        "|c"
+    );
 }
 
 /// Como un clic en Normal en vim: cancela lo pendiente, pero `.` sigue
@@ -1076,14 +1070,12 @@ fn repeat_change_runs_by_name() {
 #[test]
 fn moving_the_cursor_in_normal_keeps_the_last_change() {
     use metalmind_buffer::{ByteOffset, Selection, Selections};
-    use metalmind_vim::Vim;
 
-    let (mut buffer, mut selections) = support::parse("|abc def");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "x");
-    selections = Selections::single(Selection::cursor(ByteOffset::new(3)));
-    vim.cursor_moved();
-    support::feed(&mut vim, &mut buffer, &mut selections, ".");
-    let heads = selections.iter().map(|s| s.head);
-    assert_eq!(support::render(&buffer, heads), "bc |ef");
+    let mut editor = support::Editor::new("|abc def");
+    editor.keys("x");
+    editor.selections = Selections::single(Selection::cursor(ByteOffset::new(3)));
+    editor.vim.cursor_moved();
+    editor.keys(".");
+    let heads = editor.selections.iter().map(|s| s.head);
+    assert_eq!(support::render(&editor.buffer, heads), "bc |ef");
 }

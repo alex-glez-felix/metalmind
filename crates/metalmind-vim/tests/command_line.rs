@@ -23,11 +23,10 @@ use rstest::rstest;
 
 /// Corre `keys` y devuelve lo que pasó con la última tecla.
 fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
-    let (mut buffer, mut selections) = support::parse("ab|c");
-    let mut vim = support::app_vim();
-    let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
-    let text = support::render(&buffer, [selections.primary().head]);
-    (last.unwrap(), vim, text)
+    let mut editor = support::Editor::app("ab|c");
+    let last = editor.keys(keys);
+    let text = support::render(&editor.buffer, [editor.selections.primary().head]);
+    (last.unwrap(), editor.vim, text)
 }
 
 #[rstest]

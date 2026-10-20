@@ -448,27 +448,24 @@ fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &st
 
 #[test]
 fn reports_the_block_mode() {
-    use metalmind_vim::{Key, Mode, Vim, VisualKind};
+    use metalmind_vim::{Key, Mode, VisualKind};
 
-    let (mut buffer, mut selections) = support::parse("|ab\ncd");
-    let mut vim = Vim::new();
-    let mut feed = |vim: &mut Vim, key| vim.feed(key, &mut buffer, &mut selections).unwrap();
-    feed(&mut vim, Key::Ctrl('v'));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Block));
-    feed(&mut vim, Key::Char('v'));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
-    feed(&mut vim, Key::Ctrl('v'));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Block));
-    feed(&mut vim, Key::Ctrl('v'));
-    assert_eq!(vim.mode(), Mode::Normal);
+    let mut editor = support::Editor::new("|ab\ncd");
+    editor.key(Key::Ctrl('v'));
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Block));
+    editor.key(Key::Char('v'));
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Char));
+    editor.key(Key::Ctrl('v'));
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Block));
+    editor.key(Key::Ctrl('v'));
+    assert_eq!(editor.vim.mode(), Mode::Normal);
 }
 
 #[test]
 fn block_actions_run_by_name() {
-    use metalmind_vim::{Action, Vim};
+    use metalmind_vim::Action;
 
-    let (mut buffer, mut selections) = support::parse("|ab\ncd");
-    let mut vim = Vim::new();
+    let mut editor = support::Editor::new("|ab\ncd");
     let names = [
         "vim::toggle_visual_block",
         "vim::down",
@@ -476,12 +473,12 @@ fn block_actions_run_by_name() {
     ];
     for name in names {
         let action = Action::from_name(name).unwrap();
-        vim.execute(action, &mut buffer, &mut selections).unwrap();
+        editor.execute(action);
     }
-    vim.paste_text("X", &mut buffer, &mut selections).unwrap();
+    editor.run(|vim, t| vim.paste_text("X", t)).unwrap();
     let escape = Action::from_name("vim::normal_mode").unwrap();
-    vim.execute(escape, &mut buffer, &mut selections).unwrap();
-    assert_eq!(buffer.to_string(), "aXb\ncXd");
+    editor.execute(escape);
+    assert_eq!(editor.buffer.to_string(), "aXb\ncXd");
 }
 
 /// Un clic termina la selección como `<Esc>`: el `$` que `o` dejó valiendo
@@ -489,56 +486,55 @@ fn block_actions_run_by_name() {
 #[test]
 fn a_click_ends_the_line_end_left_by_o() {
     use metalmind_buffer::{ByteOffset, Selection, Selections};
-    use metalmind_vim::Vim;
 
-    let (mut buffer, mut selections) = support::parse("a|bc\ndefgh\nijklmn");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "<C-v>j$o");
-    vim.cursor_moved();
-    selections = Selections::single(Selection::cursor(ByteOffset::new(2)));
-    support::feed(&mut vim, &mut buffer, &mut selections, "$<C-v>jjd");
-    assert_eq!(buffer.to_string(), "ab\nde\nij");
+    let mut editor = support::Editor::new("a|bc\ndefgh\nijklmn");
+    editor.keys("<C-v>j$o");
+    editor.vim.cursor_moved();
+    editor.selections = Selections::single(Selection::cursor(ByteOffset::new(2)));
+    editor.keys("$<C-v>jjd");
+    assert_eq!(editor.buffer.to_string(), "ab\nde\nij");
 }
 
 /// El `tabstop` es el de la ventana que presta quien aloja el motor.
 #[test]
 fn the_block_measures_tabs_with_the_viewport_tabstop() {
-    use metalmind_vim::{Viewport, Vim};
+    use metalmind_vim::Viewport;
 
-    let (mut buffer, mut selections) = support::parse("a\tb|c\nxyzwvutsrqp");
-    let mut vim = Vim::new();
-    let mut viewport = Viewport::new(10);
-    viewport.set_tabstop(4);
-    vim.swap_viewport(&mut viewport);
-    support::feed(&mut vim, &mut buffer, &mut selections, "<C-v>jd");
-    assert_eq!(buffer.to_string(), "a\tb\nxyzwvtsrqp");
+    let mut editor = support::Editor::new("a\tb|c\nxyzwvutsrqp");
+    editor.pane.viewport = Viewport::new(10);
+    editor.pane.viewport.set_tabstop(4);
+    editor.keys("<C-v>jd");
+    assert_eq!(editor.buffer.to_string(), "a\tb\nxyzwvtsrqp");
 }
 
 /// Lo que la UI necesita para pintar el bloque.
 #[test]
 fn the_visual_block_tells_what_to_paint() {
     use metalmind_buffer::ByteOffset;
-    use metalmind_vim::{Viewport, Vim, VisualBlock};
+    use metalmind_vim::{Viewport, VisualBlock};
 
-    let (mut buffer, mut selections) = support::parse("|abcd\na\tb\nxy");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "<C-v>jjll");
+    let mut editor = support::Editor::new("|abcd\na\tb\nxy");
+    editor.keys("<C-v>jjll");
     assert_eq!(
-        support::render(&buffer, [selections.primary().head]),
+        support::render(&editor.buffer, [editor.selections.primary().head]),
         "abcd\na\tb\nxy|"
     );
-    let block = VisualBlock::new(&buffer, selections.primary(), &Viewport::default());
+    let block = VisualBlock::new(
+        &editor.buffer,
+        editor.selections.primary(),
+        &Viewport::default(),
+    );
     assert_eq!(block.lines(), 0..=2);
     assert_eq!(block.columns(), 0..=2);
     assert!(!block.to_line_end());
     let bytes = |line| {
-        let range = block.bytes_on(&buffer, line);
-        let start = buffer.line_start(line);
+        let range = block.bytes_on(&editor.buffer, line);
+        let start = editor.buffer.line_start(line);
         range.start.get() - start.get()..range.end.get() - start.get()
     };
     assert_eq!([bytes(0), bytes(1), bytes(2)], [0..3, 0..2, 0..2]);
     assert_eq!(
-        block.bytes_on(&buffer, 2).end,
-        ByteOffset::new(buffer.len().get())
+        block.bytes_on(&editor.buffer, 2).end,
+        ByteOffset::new(editor.buffer.len().get())
     );
 }

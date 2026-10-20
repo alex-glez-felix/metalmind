@@ -1,4 +1,4 @@
-use super::{Clipboard, Register, RegisterName};
+use super::{Clipboard, Detached, Register, RegisterName};
 
 /// Qué operador escribe en los registros, para saber a cuáles va.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,7 +13,7 @@ pub(crate) enum Write {
 }
 
 /// Todos los registros que guarda el motor. `"+` y `"*` los guarda quien
-/// lo aloja.
+/// lo aloja, si da un portapapeles.
 #[derive(Debug, Default)]
 pub(crate) struct Registers {
     /// Copia de lo último que se escribió, como el `y_previous` de vim.
@@ -22,6 +22,8 @@ pub(crate) struct Registers {
     yank: Option<Register>,
     numbered: [Option<Register>; 9],
     small_delete: Option<Register>,
+    /// `"+` y `"*` cuando quien aloja el motor no da un portapapeles.
+    detached: Detached,
 }
 
 impl Registers {
@@ -35,7 +37,7 @@ impl Registers {
         name: Option<RegisterName>,
         register: Register,
         write: Write,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) {
         if name.is_some_and(|name| name == RegisterName::BlackHole || !name.is_writable()) {
             return;
@@ -85,7 +87,7 @@ impl Registers {
     pub fn read(
         &self,
         name: Option<RegisterName>,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) -> Option<Register> {
         let Some(name) = name else {
             return self.unnamed.clone();
@@ -98,9 +100,11 @@ impl Registers {
             RegisterName::Yank => self.yank.clone(),
             RegisterName::Numbered(n) => self.numbered[usize::from(n - 1)].clone(),
             RegisterName::SmallDelete => self.small_delete.clone(),
-            RegisterName::System(system) => {
-                clipboard.read(system).and_then(Register::from_clipboard)
+            RegisterName::System(system) => match clipboard {
+                Some(clipboard) => clipboard.read(system),
+                None => self.detached.get(system),
             }
+            .and_then(Register::from_clipboard),
             // `".` se pega volviendo a teclearlo y `"/` lo guarda la búsqueda.
             RegisterName::BlackHole | RegisterName::LastInsert | RegisterName::LastSearch => None,
         }
@@ -112,7 +116,7 @@ impl Registers {
         &mut self,
         name: RegisterName,
         register: Register,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) -> Register {
         let slot = match name {
             RegisterName::Named(letter) => &mut self.named[usize::from(letter)],
@@ -129,7 +133,10 @@ impl Registers {
             RegisterName::Numbered(n) => &mut self.numbered[usize::from(n - 1)],
             RegisterName::SmallDelete => &mut self.small_delete,
             RegisterName::System(system) => {
-                clipboard.write(system, register.to_clipboard());
+                match clipboard {
+                    Some(clipboard) => clipboard.write(system, register.to_clipboard()),
+                    None => self.detached.set(system, register.to_clipboard()),
+                }
                 return register;
             }
             RegisterName::BlackHole | RegisterName::LastInsert | RegisterName::LastSearch => {

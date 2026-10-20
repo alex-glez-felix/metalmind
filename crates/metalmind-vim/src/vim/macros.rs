@@ -3,9 +3,8 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use metalmind_buffer::{Buffer, Selections};
-
 use super::Vim;
+use crate::Target;
 use crate::register::{Clipboard, RegisterName};
 use crate::{CommandError, Key, KeyOutcome, VimError, macros};
 
@@ -131,7 +130,7 @@ impl Vim {
     pub(super) fn play_macro(
         &mut self,
         c: char,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) -> Option<CommandError> {
         let times = self.take_count().unwrap_or(1);
         self.reset();
@@ -154,7 +153,11 @@ impl Vim {
     }
 
     /// Como vim, `@:` teclea otra vez `:`, la línea y `<CR>`.
-    fn replayed_keys(&self, replay: Replay, clipboard: &mut dyn Clipboard) -> Option<Vec<Key>> {
+    fn replayed_keys(
+        &self,
+        replay: Replay,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
+    ) -> Option<Vec<Key>> {
         match replay {
             Replay::Register(letter) => {
                 let register = self
@@ -180,13 +183,11 @@ impl Vim {
     pub(super) fn play_isolated(
         &mut self,
         keys: &[Key],
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let outer = std::mem::take(&mut self.playback);
         self.playback.push_front(keys.to_vec(), 1);
-        let played = self.play(buffer, selections, clipboard);
+        let played = self.play(t);
         self.playback = outer;
         played
     }
@@ -197,18 +198,13 @@ impl Vim {
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn resume_macro(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<Option<KeyOutcome>, VimError> {
+    pub fn resume_macro(&mut self, t: &mut Target<'_>) -> Result<Option<KeyOutcome>, VimError> {
         if self.playback.is_empty() {
             return Ok(None);
         }
-        buffer.begin_undo_group();
-        let played = self.play(buffer, selections, clipboard);
-        buffer.end_undo_group();
+        t.buffer.begin_undo_group();
+        let played = self.play(t);
+        t.buffer.end_undo_group();
         played
     }
 
@@ -226,29 +222,22 @@ impl Vim {
     pub(super) fn play_queued(
         &mut self,
         typed: KeyOutcome,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         if self.playback.is_empty() {
             return Ok(typed);
         }
         self.playback.played = 0;
-        buffer.begin_undo_group();
-        let played = self.play(buffer, selections, clipboard);
-        buffer.end_undo_group();
+        t.buffer.begin_undo_group();
+        let played = self.play(t);
+        t.buffer.end_undo_group();
         Ok(played?.unwrap_or(typed))
     }
 
-    fn play(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<Option<KeyOutcome>, VimError> {
+    fn play(&mut self, t: &mut Target<'_>) -> Result<Option<KeyOutcome>, VimError> {
         let mut for_host = None;
         while let Some(key) = self.playback.pop_front() {
-            let outcome = self.process(key, buffer, selections, clipboard)?;
+            let outcome = self.process(key, t)?;
             if self.playback.played >= MAX_PLAYED_KEYS {
                 self.playback.clear();
             }

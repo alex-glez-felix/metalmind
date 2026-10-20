@@ -13,52 +13,36 @@
 mod support;
 
 use metalmind_keymap::Command;
-use metalmind_vim::{Clipboard, SystemRegister, Vim};
+use metalmind_vim::Vim;
 use pretty_assertions::assert_eq;
-
-/// Un sistema sin portapapeles: `"+` y `"*` siempre vacíos.
-struct NoClipboard;
-
-impl Clipboard for NoClipboard {
-    fn read(&mut self, _: SystemRegister) -> Option<String> {
-        None
-    }
-
-    fn write(&mut self, _: SystemRegister, _: String) {}
-}
-
-fn engine(marked: &str) -> (Vim, metalmind_buffer::Buffer, metalmind_buffer::Selections) {
-    let (buffer, selections) = support::parse(marked);
-    (support::app_vim(), buffer, selections)
-}
 
 #[test]
 fn reports_the_register_being_recorded() {
-    let (mut vim, mut buffer, mut selections) = engine("|ab");
-    assert_eq!(vim.recording(), None);
-    support::feed(&mut vim, &mut buffer, &mut selections, "qBx");
-    assert_eq!(vim.recording(), Some('b'));
-    support::feed(&mut vim, &mut buffer, &mut selections, "q");
-    assert_eq!(vim.recording(), None);
+    let mut editor = support::Editor::app("|ab");
+    assert_eq!(editor.vim.recording(), None);
+    editor.keys("qBx");
+    assert_eq!(editor.vim.recording(), Some('b'));
+    editor.keys("q");
+    assert_eq!(editor.vim.recording(), None);
 }
 
 #[test]
 fn a_macro_hands_its_commands_to_the_host() {
-    let (mut vim, mut buffer, mut selections) = engine("|ab");
-    let typed = support::feed(&mut vim, &mut buffer, &mut selections, "qax:w<CR>");
+    let mut editor = support::Editor::app("|ab");
+    let typed = editor.keys("qax:w<CR>");
     assert_eq!(typed, Some(support::dispatched(Command::Save)));
-    support::feed(&mut vim, &mut buffer, &mut selections, "q");
-    let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
+    editor.keys("q");
+    let played = editor.keys("@a");
     assert_eq!(played, Some(support::dispatched(Command::Save)));
-    assert_eq!(buffer.to_string(), "");
+    assert_eq!(editor.text(), "");
 }
 
 #[test]
 fn text_pasted_while_recording_is_part_of_the_macro() {
-    let (mut vim, mut buffer, mut selections) = engine("|ab\ncd");
+    let mut editor = support::Editor::app("|ab\ncd");
     let keys = "qaI<PasteStart>ñ!<PasteEnd><Esc>jq@a";
-    support::feed(&mut vim, &mut buffer, &mut selections, keys);
-    assert_eq!(buffer.to_string(), "ñ!ab\nñ!cd");
+    editor.keys(keys);
+    assert_eq!(editor.text(), "ñ!ab\nñ!cd");
 }
 
 #[test]
@@ -70,11 +54,11 @@ fn a_macro_runs_on_every_cursor() {
 /// Vim la corta con `ctrl-c`; aquí no hay cómo, así que tiene un tope.
 #[test]
 fn a_macro_that_never_fails_stops_eventually() {
-    let (mut vim, mut buffer, mut selections) = engine("|ab");
-    support::feed(&mut vim, &mut buffer, &mut selections, "qaq");
-    support::feed(&mut vim, &mut buffer, &mut selections, "qa0@aq@a");
-    support::feed(&mut vim, &mut buffer, &mut selections, "x");
-    assert_eq!(buffer.to_string(), "b");
+    let mut editor = support::Editor::app("|ab");
+    editor.keys("qaq");
+    editor.keys("qa0@aq@a");
+    editor.keys("x");
+    assert_eq!(editor.text(), "b");
 }
 
 /// Las repeticiones no se copian a la cola: un count enorme no reserva
@@ -87,32 +71,26 @@ fn a_huge_count_does_not_queue_every_repetition() {
 
 #[test]
 fn a_macro_pauses_on_a_host_command_until_resumed() {
-    let (mut vim, mut buffer, mut selections) = engine("|abc");
-    support::feed(&mut vim, &mut buffer, &mut selections, "qa<C-w>lxq");
-    assert_eq!(buffer.to_string(), "bc");
-    let played = support::feed(&mut vim, &mut buffer, &mut selections, "@a");
+    let mut editor = support::Editor::app("|abc");
+    editor.keys("qa<C-w>lxq");
+    assert_eq!(editor.text(), "bc");
+    let played = editor.keys("@a");
     assert_eq!(played, Some(support::dispatched(Command::FocusRight)));
-    assert_eq!(buffer.to_string(), "bc", "la x espera al otro panel");
-    let (mut other, mut other_selections) = support::parse("|xyz");
-    let resumed = vim
-        .resume_macro(&mut other, &mut other_selections, &mut NoClipboard)
-        .unwrap();
+    assert_eq!(editor.text(), "bc", "la x espera al otro panel");
+    let mut other = support::Editor::new("|xyz");
+    std::mem::swap(&mut editor.vim, &mut other.vim);
+    let resumed = other.run(Vim::resume_macro).unwrap();
     assert_eq!(resumed, None);
-    assert_eq!(other.to_string(), "yz");
-    assert_eq!(
-        vim.resume_macro(&mut buffer, &mut selections, &mut NoClipboard)
-            .unwrap(),
-        None
-    );
+    assert_eq!(other.text(), "yz");
+    std::mem::swap(&mut editor.vim, &mut other.vim);
+    assert_eq!(editor.run(Vim::resume_macro).unwrap(), None);
 }
 
 #[test]
 fn aborting_drops_the_rest_of_the_macro() {
-    let (mut vim, mut buffer, mut selections) = engine("|abc");
-    support::feed(&mut vim, &mut buffer, &mut selections, "qa<C-w>lxq@a");
-    vim.abort_macro();
-    let resumed = vim
-        .resume_macro(&mut buffer, &mut selections, &mut NoClipboard)
-        .unwrap();
-    assert_eq!((resumed, buffer.to_string().as_str()), (None, "bc"));
+    let mut editor = support::Editor::app("|abc");
+    editor.keys("qa<C-w>lxq@a");
+    editor.vim.abort_macro();
+    let resumed = editor.run(Vim::resume_macro).unwrap();
+    assert_eq!((resumed, editor.text().as_str()), (None, "bc"));
 }

@@ -14,7 +14,7 @@ use std::cell::{OnceCell, RefCell};
 use metalmind_buffer::Buffer;
 use metalmind_syntax::{LineKind, Styles};
 
-use crate::layout::{BufferLines, Layout};
+use crate::doc::BufferLines;
 
 pub(crate) use checkbox::toggle_checkboxes;
 pub(crate) use heading::{next_heading, previous_heading};
@@ -80,22 +80,22 @@ impl Outline {
     }
 }
 
-/// El [`Outline`], calculado la primera vez que se pide. Con el [`Layout`]
-/// del documento usa su estilo, que ya está calculado para lo que se ve y
-/// se rehace solo en lo editado; sin él (un motor sin UI), lo calcula de
-/// cero.
+/// El [`Outline`], calculado la primera vez que se pide. Con el estilo del
+/// documento que se pinta ([`crate::DocState`]) usa ese, que ya está
+/// calculado para lo que se ve y se rehace solo en lo editado; sin él (un
+/// motor sin UI), lo calcula de cero.
 pub(crate) struct LazyOutline<'a> {
-    layout: RefCell<Option<&'a mut Layout>>,
+    styles: RefCell<Option<&'a mut Styles>>,
     outline: OnceCell<Outline>,
 }
 
 impl<'a> LazyOutline<'a> {
-    /// `layout` ya siguió lo editado en el buffer (`Layout::sync`): lo hace
-    /// `Vim::run` antes de cada acción, y quien edita a mitad de una antes
-    /// de pedir otro.
-    pub(crate) fn new(layout: Option<&'a mut Layout>) -> Self {
+    /// `styles` ya siguió lo editado en el buffer (`DocState::sync`): lo
+    /// hace `Vim::run` antes de cada acción, y quien edita a mitad de una
+    /// antes de pedir otro.
+    pub(crate) fn new(styles: Option<&'a mut Styles>) -> Self {
         Self {
-            layout: RefCell::new(layout),
+            styles: RefCell::new(styles),
             outline: OnceCell::new(),
         }
     }
@@ -103,9 +103,9 @@ impl<'a> LazyOutline<'a> {
     pub(crate) fn get(&self, buffer: &Buffer) -> &Outline {
         self.outline.get_or_init(|| {
             let last = buffer.last_line();
-            if let Some(layout) = self.layout.borrow_mut().as_deref_mut() {
-                layout.ensure(buffer, last);
-                return Outline::of(layout.styles());
+            if let Some(styles) = self.styles.borrow_mut().as_deref_mut() {
+                styles.ensure(last, &BufferLines(buffer));
+                return Outline::of(styles);
             }
             let mut styles = Styles::new(buffer.line_count());
             styles.ensure(last, &BufferLines(buffer));

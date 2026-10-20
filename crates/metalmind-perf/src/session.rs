@@ -1,13 +1,16 @@
 //! Una nota abierta en el motor vim, para medir teclas como las recibe el editor.
 
 use metalmind_buffer::{Buffer, Selection, Selections};
-use metalmind_vim::{Key, KeyOutcome, Layout, Vim, VimError};
+use metalmind_syntax::Rows;
+use metalmind_vim::{DocState, FileId, Key, KeyOutcome, PaneState, Target, Vim, VimError};
 
 /// En [`Session::feed`], `\x1b` es Esc, `\n` es Enter y `\x08` es Backspace.
 pub struct Session {
     pub vim: Vim,
     pub buffer: Buffer,
     pub selections: Selections,
+    pub doc: DocState,
+    pub pane: PaneState,
 }
 
 impl Session {
@@ -20,18 +23,20 @@ impl Session {
             vim: Vim::new(),
             buffer,
             selections: Selections::single(Selection::cursor(cursor)),
+            doc: DocState::default(),
+            pane: PaneState::default(),
         }
     }
 
     /// Como [`Session::new`], con el estilo de todas las líneas ya calculado
-    /// en el [`Layout`] del motor, como lo deja el editor tras pintar la nota
-    /// entera.
+    /// en el [`DocState`], como lo deja el editor tras pintar la nota entera.
     #[must_use]
     pub fn styled(text: &str, line: usize) -> Self {
         let mut session = Self::new(text, line);
-        let mut layout = Layout::new(&session.buffer);
-        layout.ensure(&session.buffer, session.buffer.last_line());
-        session.vim.swap_layout(&mut Some(layout));
+        session.doc = DocState::painted(&session.buffer, Rows::uniform(1));
+        session
+            .doc
+            .ensure(&session.buffer, session.buffer.last_line());
         session
     }
 
@@ -48,7 +53,15 @@ impl Session {
                 '\x08' => Key::Backspace,
                 c => Key::Char(c),
             };
-            last = Some(self.vim.feed(key, &mut self.buffer, &mut self.selections)?);
+            let mut target = Target {
+                buffer: &mut self.buffer,
+                selections: &mut self.selections,
+                doc: &mut self.doc,
+                pane: &mut self.pane,
+                file: FileId::default(),
+                clipboard: None,
+            };
+            last = Some(self.vim.feed(key, &mut target)?);
         }
         Ok(last)
     }

@@ -39,10 +39,9 @@ const CASES: &[(&str, Command, &str)] = &[
 #[test]
 fn metalmind_reconoce_cada_forma() {
     for &(line, command, _) in CASES {
-        let (mut buffer, mut selections) = support::parse("|a");
-        let mut vim = support::app_vim();
+        let mut editor = support::Editor::app("|a");
         let keys = format!(":{line}<CR>");
-        let outcome = support::feed(&mut vim, &mut buffer, &mut selections, &keys);
+        let outcome = editor.keys(&keys);
         assert_eq!(outcome, Some(support::dispatched(command)), "{line:?}");
     }
 }

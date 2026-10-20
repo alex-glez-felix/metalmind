@@ -14,9 +14,7 @@ impl Workspace {
     /// Antes de que `pane` muestre otra cosa, su cursor queda en su
     /// jumplist y como la mark de `''`.
     pub(super) fn push_jump(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
-        self.edit_pane(pane, |vim, buffer, selections| {
-            Ok(vim.push_jump(buffer, selections)?)
-        })
+        self.edit_pane(pane, None, |vim, target| Ok(vim.push_jump(target)?))
     }
 
     /// Lo que devolvió el motor tras una tecla: si es un salto a otro
@@ -60,8 +58,8 @@ impl Workspace {
             },
         };
         if shown {
-            self.edit_pane(pane, |vim, buffer, selections| {
-                vim.land(landing, buffer, selections);
+            self.edit_pane(pane, None, |vim, target| {
+                vim.land(landing, target);
                 Ok(())
             })?;
         }

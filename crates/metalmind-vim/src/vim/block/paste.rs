@@ -3,12 +3,13 @@
 
 use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, PerSelection, Selection, Selections};
 
-use super::{Vim, cursors_at, deletion, primary_size};
+use super::{Vim, at_corners, corners, cursors_at, deletion, primary_size, yank_blocks};
+use crate::Target;
 use crate::block::{self, Plan};
 use crate::dot::{BlockChange, Change, Dot};
 use crate::lines::clamp_normal;
 use crate::operator::{content, union};
-use crate::register::{Clipboard, Register, RegisterName, Shape};
+use crate::register::{Register, RegisterName, Shape};
 use crate::span::Extent;
 use crate::{Operator, PasteSide, VimError, paste};
 
@@ -41,29 +42,32 @@ impl Vim {
     pub(in crate::vim) fn paste_over_block(
         &mut self,
         side: PasteSide,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let times = self.take_count().unwrap_or(1);
         let register = self.selected.take();
-        let heads: Vec<ByteOffset> = selections.iter().map(|selection| selection.head).collect();
-        let blocks = self.finish_block(buffer, selections);
-        let content = self.read_register(register, clipboard);
-        let deleted = self.yank_blocks(&blocks, buffer);
-        let corners = self.corners(&blocks, buffer);
+        let heads: Vec<ByteOffset> = t
+            .selections
+            .iter()
+            .map(|selection| selection.head)
+            .collect();
+        let blocks = self.finish_block(t);
+        let content = self.read_register(register, t.clipboard.as_deref_mut());
+        let deleted = yank_blocks(&blocks, t.buffer, t.pane.viewport.columns());
+        let block_corners = corners(&blocks, t.buffer, t.pane.viewport.columns());
         let plans: Vec<_> = blocks
             .iter()
-            .map(|block| block::delete(buffer, block, self.columns()))
+            .map(|block| block::delete(t.buffer, block, t.pane.viewport.columns()))
             .collect();
-        buffer.begin_transaction(self.at_corners(&blocks, buffer))?;
-        let (cursors, map) = block::apply(buffer, &plans)?;
+        t.buffer
+            .begin_transaction(at_corners(&blocks, t.buffer, t.pane.viewport.columns()))?;
+        let (cursors, map) = block::apply(t.buffer, &plans)?;
         let landings: Vec<Landing> = cursors
             .into_iter()
-            .zip(corners.into_iter().zip(heads))
+            .zip(block_corners.into_iter().zip(heads))
             .zip(blocks.iter())
             .map(|((cursor, (corner, head)), block)| {
-                let cursor = clamp_normal(buffer, cursor);
+                let cursor = clamp_normal(t.buffer, cursor);
                 let side = if cursor < map.map(corner, Bias::Before) {
                     PasteSide::After
                 } else {
@@ -84,21 +88,21 @@ impl Vim {
                     side,
                     times,
                 };
-                self.put_over_blocks(&put, &landings, buffer)?
+                put_over_blocks(&put, &landings, t)?
             }
             None => cursors_at(
-                buffer,
+                t.buffer,
                 landings.iter().map(|landing| landing.cursor).collect(),
             ),
         };
         if let Some(after) = after {
-            *selections = after;
+            *t.selections = after;
         }
-        buffer.commit_transaction(selections.clone())?;
+        t.buffer.commit_transaction(t.selections.clone())?;
         let repeated_register = match side {
             PasteSide::After => {
                 self.registers
-                    .write(None, deleted, deletion(&blocks), clipboard);
+                    .write(None, deleted, deletion(&blocks), t.clipboard.as_deref_mut());
                 None
             }
             PasteSide::Before => Some(RegisterName::BlackHole),
@@ -109,116 +113,6 @@ impl Vim {
         );
         self.last_change = Some(Dot::new(change, None, repeated_register));
         Ok(())
-    }
-
-    /// `p` en Normal con un registro por bloque.
-    pub(in crate::vim) fn put_block(
-        &mut self,
-        content: &Register,
-        width: usize,
-        side: PasteSide,
-        times: usize,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
-        let lines: Vec<&str> = content.text.split('\n').collect();
-        let columns = self.columns();
-        let plans: Vec<_> = selections
-            .iter()
-            .map(|selection| {
-                block::put(buffer, selection.head, &lines, width, side, times, columns)
-            })
-            .collect();
-        buffer.begin_transaction(selections.clone())?;
-        let (cursors, _) = block::apply(buffer, &plans)?;
-        if let Some(after) = cursors_at(buffer, cursors) {
-            *selections = after;
-        }
-        buffer.commit_transaction(selections.clone())?;
-        Ok(())
-    }
-
-    /// `p` en Visual por caracteres con un registro por bloque: borra lo
-    /// seleccionado y pega el bloque donde quedó el cursor; tras el último
-    /// carácter si el borrado llegó al fin de línea.
-    pub(in crate::vim) fn put_block_over_chars(
-        &self,
-        targets: &PerSelection<Extent>,
-        register: &Register,
-        width: usize,
-        times: usize,
-        buffer: &mut Buffer,
-    ) -> Result<Selections, VimError> {
-        let lines: Vec<&str> = register.text.split('\n').collect();
-        let columns = self.columns();
-        let ranges: Vec<_> = targets
-            .iter()
-            .map(|target| content(buffer, &target.region))
-            .collect();
-        let before = targets.to_selections(|target| Selection::cursor(target.start));
-        buffer.begin_transaction(before.clone())?;
-        let deletions = union(ranges.iter().cloned());
-        let map = buffer.apply(deletions.into_iter().map(Edit::delete).collect())?;
-        let plans: Vec<_> = ranges
-            .iter()
-            .map(|range| {
-                let start = map.map(range.start, Bias::Before);
-                let cursor = clamp_normal(buffer, start);
-                let side = if cursor < start {
-                    PasteSide::After
-                } else {
-                    PasteSide::Before
-                };
-                block::put(buffer, cursor, &lines, width, side, times, columns)
-            })
-            .collect();
-        let (cursors, _) = block::apply(buffer, &plans)?;
-        let after = cursors_at(buffer, cursors).unwrap_or(before);
-        buffer.commit_transaction(after.clone())?;
-        Ok(after)
-    }
-
-    /// Pega `put` donde quedó cada bloque borrado.
-    fn put_over_blocks(
-        &self,
-        put: &Put<'_>,
-        landings: &[Landing],
-        buffer: &mut Buffer,
-    ) -> Result<Option<Selections>, VimError> {
-        let columns = self.columns();
-        let content = put.content;
-        let plans: Vec<Plan> = match content.shape {
-            Shape::Block { width } => {
-                let lines: Vec<&str> = content.text.split('\n').collect();
-                landings
-                    .iter()
-                    .map(|landing| {
-                        let (cursor, side) = (landing.cursor, landing.side);
-                        block::put(buffer, cursor, &lines, width, side, put.times, columns)
-                    })
-                    .collect()
-            }
-            Shape::Chars if !content.text.contains('\n') => landings
-                .iter()
-                .map(|landing| {
-                    let Landing {
-                        cursor, side, last, ..
-                    } = *landing;
-                    block::put_in_each_line(
-                        buffer,
-                        cursor,
-                        last,
-                        &content.text,
-                        side,
-                        put.times,
-                        columns,
-                    )
-                })
-                .collect(),
-            Shape::Chars | Shape::Lines => return put_text(put, landings, buffer),
-        };
-        let (cursors, _) = block::apply(buffer, &plans)?;
-        Ok(cursors_at(buffer, cursors))
     }
 }
 
@@ -253,4 +147,121 @@ fn put_text(
             .map_or(PasteSide::Before, |&(_, side)| side)
     };
     paste::put(buffer, &at, put.content, side_of, put.times).map(Some)
+}
+
+/// `p` en Normal con un registro por bloque.
+pub(in crate::vim) fn put_block(
+    content: &Register,
+    width: usize,
+    side: PasteSide,
+    times: usize,
+    t: &mut Target<'_>,
+) -> Result<(), VimError> {
+    let lines: Vec<&str> = content.text.split('\n').collect();
+    let columns = t.pane.viewport.columns();
+    let plans: Vec<_> = t
+        .selections
+        .iter()
+        .map(|selection| {
+            block::put(
+                t.buffer,
+                selection.head,
+                &lines,
+                width,
+                side,
+                times,
+                columns,
+            )
+        })
+        .collect();
+    t.buffer.begin_transaction(t.selections.clone())?;
+    let (cursors, _) = block::apply(t.buffer, &plans)?;
+    if let Some(after) = cursors_at(t.buffer, cursors) {
+        *t.selections = after;
+    }
+    t.buffer.commit_transaction(t.selections.clone())?;
+    Ok(())
+}
+
+/// `p` en Visual por caracteres con un registro por bloque: borra lo
+/// seleccionado y pega el bloque donde quedó el cursor; tras el último
+/// carácter si el borrado llegó al fin de línea.
+pub(in crate::vim) fn put_block_over_chars(
+    targets: &PerSelection<Extent>,
+    register: &Register,
+    width: usize,
+    times: usize,
+    t: &mut Target<'_>,
+) -> Result<Selections, VimError> {
+    let lines: Vec<&str> = register.text.split('\n').collect();
+    let columns = t.pane.viewport.columns();
+    let ranges: Vec<_> = targets
+        .iter()
+        .map(|target| content(t.buffer, &target.region))
+        .collect();
+    let before = targets.to_selections(|target| Selection::cursor(target.start));
+    t.buffer.begin_transaction(before.clone())?;
+    let deletions = union(ranges.iter().cloned());
+    let map = t
+        .buffer
+        .apply(deletions.into_iter().map(Edit::delete).collect())?;
+    let plans: Vec<_> = ranges
+        .iter()
+        .map(|range| {
+            let start = map.map(range.start, Bias::Before);
+            let cursor = clamp_normal(t.buffer, start);
+            let side = if cursor < start {
+                PasteSide::After
+            } else {
+                PasteSide::Before
+            };
+            block::put(t.buffer, cursor, &lines, width, side, times, columns)
+        })
+        .collect();
+    let (cursors, _) = block::apply(t.buffer, &plans)?;
+    let after = cursors_at(t.buffer, cursors).unwrap_or(before);
+    t.buffer.commit_transaction(after.clone())?;
+    Ok(after)
+}
+
+/// Pega `put` donde quedó cada bloque borrado.
+fn put_over_blocks(
+    put: &Put<'_>,
+    landings: &[Landing],
+    t: &mut Target<'_>,
+) -> Result<Option<Selections>, VimError> {
+    let columns = t.pane.viewport.columns();
+    let content = put.content;
+    let plans: Vec<Plan> = match content.shape {
+        Shape::Block { width } => {
+            let lines: Vec<&str> = content.text.split('\n').collect();
+            landings
+                .iter()
+                .map(|landing| {
+                    let (cursor, side) = (landing.cursor, landing.side);
+                    block::put(t.buffer, cursor, &lines, width, side, put.times, columns)
+                })
+                .collect()
+        }
+        Shape::Chars if !content.text.contains('\n') => landings
+            .iter()
+            .map(|landing| {
+                let Landing {
+                    cursor, side, last, ..
+                } = *landing;
+                block::put_in_each_line(
+                    t.buffer,
+                    cursor,
+                    last,
+                    &content.text,
+                    side,
+                    put.times,
+                    columns,
+                )
+            })
+            .collect(),
+        Shape::Chars | Shape::Lines => return put_text(put, landings, t.buffer),
+    };
+    let (cursors, _) = block::apply(t.buffer, &plans)?;
+    Ok(cursors_at(t.buffer, cursors))
 }

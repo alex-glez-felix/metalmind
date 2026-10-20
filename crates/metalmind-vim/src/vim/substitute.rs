@@ -2,9 +2,8 @@
 
 use std::ops::RangeInclusive;
 
-use metalmind_buffer::{Buffer, Selections};
-
 use super::Vim;
+use crate::Target;
 use crate::search::{Case, Pattern, SearchError};
 use crate::substitute::{self, Replacement, SubstituteCommand};
 use crate::{Action, CommandError, KeyOutcome, VimError};
@@ -23,8 +22,7 @@ impl Vim {
         &mut self,
         command: &SubstituteCommand,
         lines: RangeInclusive<usize>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         let (remembered, used) = match self.substitution_parts(command) {
             Ok(parts) => parts,
@@ -33,7 +31,7 @@ impl Vim {
         self.search.pattern = Some(remembered.pattern.clone());
         self.search.highlight = true;
         let applied = substitute::apply(
-            buffer,
+            t.buffer,
             &used,
             &remembered.replacement,
             lines,
@@ -42,13 +40,13 @@ impl Vim {
         self.last_substitute = Some(remembered);
         Ok(match (applied, &mut self.global) {
             (Some(applied), Some(run)) => {
-                *selections = applied.selections;
+                *t.selections = applied.selections;
                 run.substituted.replacements += applied.summary.replacements;
                 run.substituted.lines += applied.summary.lines;
                 KeyOutcome::Executed(Action::SubmitCommand)
             }
             (Some(applied), None) => {
-                *selections = applied.selections;
+                *t.selections = applied.selections;
                 KeyOutcome::Substituted(applied.summary)
             }
             (None, Some(_)) => KeyOutcome::Executed(Action::SubmitCommand),
