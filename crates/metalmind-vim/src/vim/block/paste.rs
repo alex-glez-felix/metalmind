@@ -9,7 +9,7 @@ use crate::dot::{BlockChange, Change, Dot};
 use crate::lines::clamp_normal;
 use crate::operator::{content, union};
 use crate::register::{Clipboard, Register, RegisterName, Shape};
-use crate::span::Target;
+use crate::span::Extent;
 use crate::{Operator, PasteSide, VimError, paste};
 
 /// Lo que se pega y cómo.
@@ -143,7 +143,7 @@ impl Vim {
     /// carácter si el borrado llegó al fin de línea.
     pub(in crate::vim) fn put_block_over_chars(
         &self,
-        targets: &PerSelection<Target>,
+        targets: &PerSelection<Extent>,
         register: &Register,
         width: usize,
         times: usize,

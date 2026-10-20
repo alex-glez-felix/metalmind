@@ -58,7 +58,7 @@ pub use find::CharSearch;
 pub use indent::Indent;
 pub use jumplist::{FileId, Jump, JumpList, Landing};
 pub use key::Key;
-pub use keymap::{Binding, Context, Keymap, Target};
+pub use keymap::{Binding, Bound, Context, Keymap};
 pub use layout::{BufferLines, Layout};
 pub use mark::{Marks, PlacedMark};
 pub use markdown::Markdown;

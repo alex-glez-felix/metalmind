@@ -255,7 +255,7 @@ impl Vim {
                         .map(|hit| {
                             hit.destination()
                                 .span_from(selection.head)
-                                .into_target(buffer)
+                                .into_extent(buffer)
                         })
                         .ok_or(Missed::Stay),
                 });

@@ -10,7 +10,7 @@ use crate::indent::{Indent, Shift};
 use crate::lines::{Want, clamp_normal, first_non_blank, in_indent, is_blank, last_char};
 use crate::register::Register;
 use crate::shift;
-use crate::span::{Missed, Region, Target};
+use crate::span::{Extent, Missed, Region};
 use crate::transform::Transform;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub enum Operator {
 #[derive(Clone, Debug)]
 pub(crate) struct Operand {
     pub selection: Selection,
-    pub target: Result<Target, Missed>,
+    pub target: Result<Extent, Missed>,
 }
 
 pub(crate) enum Outcome {

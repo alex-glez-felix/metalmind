@@ -7,7 +7,7 @@ use metalmind_buffer::{
 use crate::lines::{clamp_normal, first_non_blank};
 use crate::operator::content;
 use crate::register::Register;
-use crate::span::{Region, Target};
+use crate::span::{Extent, Region};
 use crate::{PasteSide, VimError};
 
 /// `p`/`P`. El cursor queda donde lo deja vim: en el primer no blanco de la
@@ -114,7 +114,7 @@ fn cursor_after(
 /// un registro por líneas parte la línea y va en medio.
 pub(crate) fn replace(
     buffer: &mut Buffer,
-    targets: &PerSelection<Target>,
+    targets: &PerSelection<Extent>,
     register: &Register,
     count: usize,
 ) -> Result<Selections, VimError> {
@@ -138,7 +138,7 @@ struct Replacement {
 }
 
 impl Replacement {
-    fn new(buffer: &Buffer, target: &Target, register: &Register, count: usize) -> Self {
+    fn new(buffer: &Buffer, target: &Extent, register: &Register, count: usize) -> Self {
         let range = content(buffer, &target.region);
         match target.region {
             Region::Lines { .. } => Self {

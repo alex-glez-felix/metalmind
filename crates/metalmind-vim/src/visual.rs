@@ -6,7 +6,7 @@ use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
 use crate::VisualKind;
 use crate::block::BlockSize;
 use crate::columns::Columns;
-use crate::span::{Region, Target};
+use crate::span::{Extent, Region};
 
 /// Lo que reusan `[count]v`, `[count]V` y `[count]ctrl-v`: el tamaño de la
 /// última selección sobre la que se operó.
@@ -18,7 +18,7 @@ pub(crate) enum Reselect {
 
 /// El texto que abarca una selección Visual. Vim incluye el carácter bajo
 /// los dos extremos, y el salto de línea si el final está sobre él.
-pub(crate) fn target(buffer: &Buffer, selection: &Selection, kind: VisualKind) -> Target {
+pub(crate) fn target(buffer: &Buffer, selection: &Selection, kind: VisualKind) -> Extent {
     let (start, end) = (selection.start(), selection.end());
     let (region, start) = match kind {
         // Los operadores de un bloque no pasan por aquí (ver `crate::block`).
@@ -31,7 +31,7 @@ pub(crate) fn target(buffer: &Buffer, selection: &Selection, kind: VisualKind) -
             (Region::Lines { first, last }, buffer.line_start(first))
         }
     };
-    Target {
+    Extent {
         region,
         start,
         adjusted: false,
@@ -50,7 +50,7 @@ pub(crate) enum Area {
 }
 
 impl Area {
-    pub fn target(self, buffer: &Buffer, selection: &Selection, columns: Columns) -> Target {
+    pub fn target(self, buffer: &Buffer, selection: &Selection, columns: Columns) -> Extent {
         match self {
             Self::Selection(kind) => target(buffer, selection, kind),
             Self::Sized(size) => {
