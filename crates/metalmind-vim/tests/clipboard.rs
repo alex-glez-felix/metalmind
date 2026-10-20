@@ -142,9 +142,9 @@ fn without_a_clipboard_they_are_plain_registers() {
 
 impl Editor {
     fn with_system_register(&mut self, action: Action) -> &mut Self {
+        self.vim.use_register(SystemRegister::Clipboard);
         self.vim
-            .execute_with_system_register(
-                SystemRegister::Clipboard,
+            .execute_with_clipboard(
                 action,
                 &mut self.buffer,
                 &mut self.selections,
