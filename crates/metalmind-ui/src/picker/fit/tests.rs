@@ -222,20 +222,26 @@ fn un_picker_angosto_no_pinta_el_detalle() {
     assert_eq!(split(11.0, 500.0, Some(30.0), 8.0, 0.4, 2.0), (11.0, None));
 }
 
-/// Recortar es lineal en el largo de la fila: con 200 000 grafemas, cada
-/// recorte termina en mucho menos de lo que tardaría uno cuadrático.
+/// Recortar es lineal en el largo de la fila: alrededor de una coincidencia,
+/// por el medio y una ruta con una carpeta cada 1 000 grafemas.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn una_fila_enorme_se_recorta_en_tiempo_lineal() {
-    let widths = vec![1.0; 200_000];
-    let slashes: Vec<usize> = (0..widths.len()).step_by(1000).collect();
-    let started = std::time::Instant::now();
-    let around_kept = around(&widths, 100_000..100_004, 150_000.0, 1.0);
-    let middle_kept = middle_all(&Widths::new(&widths), 150_000.0, 1.0);
-    let path_kept = path(&widths, &slashes, Some(5_000..5_004), 150_000.0, 1.0);
-    assert!(started.elapsed() < std::time::Duration::from_secs(2));
-    assert!(around_kept.shows(&(100_000..100_004)));
-    assert_eq!(middle_kept.ranges.len(), 2);
-    assert!(path_kept.shows(&(5_000..5_004)));
+    metalmind_perf::assert_linear(
+        20_000,
+        |len| vec![1.0; len],
+        |widths| {
+            let len = widths.len();
+            let slashes: Vec<usize> = (0..len).step_by(1000).collect();
+            let budget = 0.75 * widths.iter().sum::<f32>();
+            let around_kept = around(&widths, len / 2..len / 2 + 4, budget, 1.0);
+            let middle_kept = middle_all(&Widths::new(&widths), budget, 1.0);
+            let path_kept = path(&widths, &slashes, Some(len / 40..len / 40 + 4), budget, 1.0);
+            assert!(around_kept.shows(&(len / 2..len / 2 + 4)));
+            assert_eq!(middle_kept.ranges.len(), 2);
+            assert!(path_kept.shows(&(len / 40..len / 40 + 4)));
+        },
+    );
 }
 
 #[test]

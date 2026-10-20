@@ -447,28 +447,24 @@ fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &st
 
 #[test]
 fn reports_the_visual_mode() {
-    use metalmind_vim::{Key, Mode, Vim, VisualKind};
+    use metalmind_vim::{Key, Mode, VisualKind};
 
-    let (mut buffer, mut selections) = support::parse("|ab\ncd");
-    let mut vim = Vim::new();
-    let mut feed = |vim: &mut Vim, key| vim.feed(key, &mut buffer, &mut selections).unwrap();
-    feed(&mut vim, Key::Char('v'));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
-    feed(&mut vim, Key::Char('V'));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Line));
-    feed(&mut vim, Key::Escape);
-    assert_eq!(vim.mode(), Mode::Normal);
+    let mut editor = support::Editor::new("|ab\ncd");
+    editor.key(Key::Char('v'));
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Char));
+    editor.key(Key::Char('V'));
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Line));
+    editor.key(Key::Escape);
+    assert_eq!(editor.vim.mode(), Mode::Normal);
 }
 
 #[test]
 fn the_selection_keeps_its_anchor() {
     use metalmind_buffer::ByteOffset;
-    use metalmind_vim::Vim;
 
-    let (mut buffer, mut selections) = support::parse("a|bcd");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "vll");
-    let selection = selections.primary();
+    let mut editor = support::Editor::new("a|bcd");
+    editor.keys("vll");
+    let selection = editor.selections.primary();
     assert_eq!(selection.anchor, ByteOffset::new(1));
     assert_eq!(selection.head, ByteOffset::new(3));
 }
@@ -478,46 +474,43 @@ fn the_selection_keeps_its_anchor() {
 #[test]
 fn moving_the_cursor_ends_visual() {
     use metalmind_buffer::{ByteOffset, Selection, Selections};
-    use metalmind_vim::{Mode, Vim};
+    use metalmind_vim::Mode;
 
-    let (mut buffer, mut selections) = support::parse("|abc def");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "vl");
-    selections = Selections::single(Selection::cursor(ByteOffset::new(4)));
-    vim.cursor_moved();
-    assert_eq!(vim.mode(), Mode::Normal);
-    support::feed(&mut vim, &mut buffer, &mut selections, "x");
-    let heads = selections.iter().map(|s| s.head);
-    assert_eq!(support::render(&buffer, heads), "abc |ef");
+    let mut editor = support::Editor::new("|abc def");
+    editor.keys("vl");
+    editor.selections = Selections::single(Selection::cursor(ByteOffset::new(4)));
+    editor.vim.cursor_moved();
+    assert_eq!(editor.vim.mode(), Mode::Normal);
+    editor.keys("x");
+    let heads = editor.selections.iter().map(|s| s.head);
+    assert_eq!(support::render(&editor.buffer, heads), "abc |ef");
 }
 
 #[test]
 fn visual_actions_run_by_name() {
-    use metalmind_vim::{Action, Vim};
+    use metalmind_vim::Action;
 
-    let (mut buffer, mut selections) = support::parse("|abc");
-    let mut vim = Vim::new();
+    let mut editor = support::Editor::new("|abc");
     for name in ["vim::toggle_visual", "vim::right", "vim::uppercase"] {
         let action = Action::from_name(name).unwrap();
-        vim.execute(action, &mut buffer, &mut selections).unwrap();
+        editor.execute(action);
     }
     assert_eq!(
-        support::render(&buffer, [selections.primary().head]),
+        support::render(&editor.buffer, [editor.selections.primary().head]),
         "|ABc"
     );
 }
 
 #[test]
 fn replace_waits_for_the_char() {
-    use metalmind_vim::{Action, Key, KeyOutcome, Mode, Vim, VisualKind};
+    use metalmind_vim::{Action, Key, KeyOutcome, Mode, VisualKind};
 
-    let (mut buffer, mut selections) = support::parse("|ab");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "v");
-    let pending = vim.feed(Key::Char('r'), &mut buffer, &mut selections);
+    let mut editor = support::Editor::new("|ab");
+    editor.keys("v");
+    let pending = editor.run(|vim, t| vim.feed(Key::Char('r'), t));
     assert_eq!(pending.unwrap(), KeyOutcome::Executed(Action::Replace));
-    let cancelled = vim.feed(Key::Escape, &mut buffer, &mut selections);
+    let cancelled = editor.run(|vim, t| vim.feed(Key::Escape, t));
     assert_eq!(cancelled.unwrap(), KeyOutcome::Executed(Action::NormalMode));
-    assert_eq!(vim.mode(), Mode::Visual(VisualKind::Char));
-    assert_eq!(buffer.to_string(), "ab");
+    assert_eq!(editor.vim.mode(), Mode::Visual(VisualKind::Char));
+    assert_eq!(editor.buffer.to_string(), "ab");
 }

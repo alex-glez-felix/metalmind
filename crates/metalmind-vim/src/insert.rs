@@ -2,10 +2,9 @@ use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, Selection, Selections};
 
 use crate::columns::Columns;
 use crate::dot::{BlockChange, Change, Dot};
-use crate::layout::Layout;
 use crate::lines::first_non_blank;
 use crate::markdown::{After, LazyOutline, Newline, opened_item, renumber_items};
-use crate::{InsertAt, VimError};
+use crate::{DocState, InsertAt, VimError};
 
 /// Cómo escriben Insert, `o` y `O` una línea nueva.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,6 +24,22 @@ impl Typing {
     }
 }
 
+/// Lo pegado fuera de Insert: un paso propio de undo en el cursor
+/// principal, que queda sobre el último carácter pegado.
+pub(crate) fn paste_at_cursor(
+    buffer: &mut Buffer,
+    selections: &Selections,
+    text: &str,
+) -> Result<Selections, VimError> {
+    buffer.begin_transaction(selections.clone())?;
+    let at = selections.primary().head;
+    let map = buffer.apply(vec![Edit::insert(at, text)])?;
+    let end = map.map(at, Bias::After);
+    let pasted = Selections::single(Selection::cursor(buffer.prev_boundary(end)));
+    buffer.commit_transaction(pasted.clone())?;
+    Ok(pasted)
+}
+
 /// Abre la transacción que dura todo el modo Insert, para que `u` la deshaga
 /// entera. Dice también si `o` u `O` abrieron un ítem de lista.
 pub(crate) fn enter(
@@ -32,12 +47,12 @@ pub(crate) fn enter(
     selections: &Selections,
     at: InsertAt,
     typing: Typing,
-    layout: Option<&mut Layout>,
+    doc: &mut DocState,
 ) -> Result<(Selections, bool), VimError> {
     let points = insertion_points(buffer, selections, at);
     match at {
-        InsertAt::LineBelow => open_line(buffer, selections, &points, true, typing, layout),
-        InsertAt::LineAbove => open_line(buffer, selections, &points, false, typing, layout),
+        InsertAt::LineBelow => open_line(buffer, selections, &points, true, typing, doc),
+        InsertAt::LineAbove => open_line(buffer, selections, &points, false, typing, doc),
         _ => {
             buffer.begin_transaction(points.clone())?;
             Ok((points, false))
@@ -73,10 +88,10 @@ fn open_line(
     points: &Selections,
     below: bool,
     typing: Typing,
-    layout: Option<&mut Layout>,
+    doc: &mut DocState,
 ) -> Result<(Selections, bool), VimError> {
     buffer.begin_transaction(original.clone())?;
-    let outline = LazyOutline::new(layout);
+    let outline = LazyOutline::new(doc.styles_mut());
     let opened = points.map_to(|point| {
         let line = buffer.line_of(point.head);
         let item = typing
@@ -119,16 +134,14 @@ pub(crate) fn newline(
     selections: &Selections,
     typing: Typing,
     ends: bool,
-    mut layout: Option<&mut Layout>,
+    doc: &mut DocState,
 ) -> Result<(Selections, bool), VimError> {
     if !typing.continue_lists {
         return Ok((type_text(buffer, selections, "\n")?, false));
     }
     // Lo tecleado antes en este Insert ya cambió el texto.
-    if let Some(layout) = layout.as_deref_mut() {
-        layout.sync(buffer);
-    }
-    let outline = LazyOutline::new(layout);
+    doc.sync(buffer);
+    let outline = LazyOutline::new(doc.styles_mut());
     let plans = selections.map_to(|selection| {
         let head = selection.head;
         let line_start = buffer.line_start(buffer.line_of(head));
@@ -240,14 +253,14 @@ impl Typed {
         buffer: &mut Buffer,
         selections: &Selections,
         typing: Typing,
-        layout: Option<&mut Layout>,
+        doc: &mut DocState,
     ) -> Result<(Selections, Self), VimError> {
         Ok(match self {
             Self::Text(text) => (type_text(buffer, selections, text)?, self.clone()),
             Self::Backspace => (backspace(buffer, selections)?, Self::Backspace),
             &Self::Newline { list } => {
                 let typing = typing.lists_if(list);
-                let (selections, list) = newline(buffer, selections, typing, true, layout)?;
+                let (selections, list) = newline(buffer, selections, typing, true, doc)?;
                 (selections, Self::Newline { list })
             }
         })
@@ -298,7 +311,7 @@ impl Session {
         buffer: &mut Buffer,
         selections: &Selections,
         typing: Typing,
-        layout: &mut Option<Layout>,
+        doc: &mut DocState,
     ) -> Result<Selections, VimError> {
         let mut selections = selections.clone();
         let (opens_line, list) = match (&self.dot.change, self.cursor_moved) {
@@ -312,10 +325,10 @@ impl Session {
         let opening = typing.lists_if(list);
         for _ in 1..self.dot.count.unwrap_or(1) {
             if opens_line {
-                (selections, _) = newline(buffer, &selections, opening, false, layout.as_mut())?;
+                (selections, _) = newline(buffer, &selections, opening, false, doc)?;
             }
             for typed in &self.dot.typed {
-                (selections, _) = typed.apply(buffer, &selections, typing, layout.as_mut())?;
+                (selections, _) = typed.apply(buffer, &selections, typing, doc)?;
             }
         }
         Ok(selections)

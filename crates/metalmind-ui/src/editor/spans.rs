@@ -154,7 +154,7 @@ fn inclusive_end(buffer: &Buffer, offset: ByteOffset) -> SpanEnd {
 #[cfg(test)]
 mod tests {
     use metalmind_buffer::{Goal, Selections};
-    use metalmind_vim::{Key, Vim};
+    use metalmind_vim::{DocState, FileId, Key, PaneState, Target, Vim};
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -261,11 +261,17 @@ mod tests {
     /// El patrón que deja `/` en el motor, como lo recibe la UI.
     fn searched(source: &str) -> Pattern {
         let mut vim = Vim::new();
-        let mut buffer = Buffer::from("");
-        let mut selections = Selections::single(Selection::cursor(ByteOffset::ZERO));
+        let mut target = Target {
+            buffer: &mut Buffer::from(""),
+            selections: &mut Selections::single(Selection::cursor(ByteOffset::ZERO)),
+            doc: &mut DocState::default(),
+            pane: &mut PaneState::default(),
+            file: FileId::default(),
+            clipboard: None,
+        };
         let keys = std::iter::once('/').chain(source.chars()).map(Key::Char);
         for key in keys.chain([Key::Enter]) {
-            vim.feed(key, &mut buffer, &mut selections).unwrap();
+            vim.feed(key, &mut target).unwrap();
         }
         vim.search_highlight().unwrap().clone()
     }

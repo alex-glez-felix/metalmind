@@ -17,8 +17,8 @@ mod support;
 
 use std::num::NonZeroUsize;
 
-use metalmind_buffer::{Buffer, Selections};
-use metalmind_vim::{Action, Indent, Layout, Markdown, Viewport, Vim};
+use metalmind_syntax::Rows;
+use metalmind_vim::{Action, DocState, Indent, Markdown};
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 use rstest_reuse::{self, apply, template};
@@ -260,17 +260,14 @@ fn indent_width_and_tabs(
     #[case] keys: &str,
     #[case] after: &str,
 ) {
-    let (mut buffer, mut selections) = support::parse(before);
-    let mut vim = Vim::new();
-    vim.set_indent(Indent {
+    let mut editor = support::Editor::new(before);
+    editor.vim.set_indent(Indent {
         shiftwidth: NonZeroUsize::new(shiftwidth).unwrap(),
         expandtab,
     });
-    let mut viewport = Viewport::default();
-    viewport.set_tabstop(shiftwidth);
-    vim.swap_viewport(&mut viewport);
-    support::feed(&mut vim, &mut buffer, &mut selections, keys);
-    assert_eq!(support::render(&buffer, heads(&selections)), after);
+    editor.pane.viewport.set_tabstop(shiftwidth);
+    editor.keys(keys);
+    assert_eq!(editor.cursors(), after);
 }
 
 /// Los de arriba sin el ítem con hijos, que nvim no lleva consigo.
@@ -319,41 +316,32 @@ fn every_markdown_action_has_a_name() {
     }
 }
 
-/// Como `support::feed`, con `<toggle>` como `editor::toggle_checkbox`, que
+/// Como `support::Editor::keys`, con `<toggle>` como `editor::toggle_checkbox`, que
 /// no tiene tecla en el motor, y el motor como lo deja la app en una nota:
 /// lo que pone el ftplugin de markdown de nvim (`sw=4 ts=4 et`) y, con
 /// `layout`, el estilo de las líneas que comparte con el editor. Devuelve el
 /// texto y el modo.
 fn run(before: &str, keys: &str, markdown: Markdown, layout: bool) -> (String, String) {
-    let (mut buffer, mut selections) = support::parse(before);
-    let mut vim = markdown_vim(&buffer, layout);
-    vim.set_markdown(markdown);
-    let toggle = Action::from_name("editor::toggle_checkbox").unwrap();
-    let mut pieces = keys.split("<toggle>").peekable();
-    while let Some(piece) = pieces.next() {
-        support::feed(&mut vim, &mut buffer, &mut selections, piece);
-        if pieces.peek().is_some() {
-            vim.execute(toggle, &mut buffer, &mut selections).unwrap();
-        }
-    }
-    let text = support::render(&buffer, heads(&selections));
-    (text, support::mode_name(vim.mode()).to_owned())
-}
-
-fn markdown_vim(buffer: &Buffer, layout: bool) -> Vim {
-    let mut vim = Vim::new();
-    vim.set_indent(Indent {
+    let mut editor = support::Editor::new(before);
+    editor.vim.set_indent(Indent {
         shiftwidth: NonZeroUsize::new(4).unwrap(),
         expandtab: true,
     });
-    let mut viewport = Viewport::default();
-    viewport.set_tabstop(4);
-    vim.swap_viewport(&mut viewport);
-    let mut layout = layout.then(|| Layout::new(buffer));
-    vim.swap_layout(&mut layout);
-    vim
-}
-
-fn heads(selections: &Selections) -> Vec<metalmind_buffer::ByteOffset> {
-    selections.iter().map(|s| s.head).collect()
+    editor.vim.set_markdown(markdown);
+    editor.pane.viewport.set_tabstop(4);
+    if layout {
+        editor.doc = DocState::painted(&editor.buffer, Rows::uniform(1));
+    }
+    let toggle = Action::from_name("editor::toggle_checkbox").unwrap();
+    let mut pieces = keys.split("<toggle>").peekable();
+    while let Some(piece) = pieces.next() {
+        editor.keys(piece);
+        if pieces.peek().is_some() {
+            editor.execute(toggle);
+        }
+    }
+    (
+        editor.cursors(),
+        support::mode_name(editor.vim.mode()).to_owned(),
+    )
 }

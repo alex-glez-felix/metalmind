@@ -30,4 +30,4 @@ pub use file_tree::{FileTree, Row};
 pub use frames::FrameClock;
 pub use session::last_vault;
 pub use theme::{NoMonoFont, Theme};
-pub use window::{OpenError, Startup, open};
+pub use window::{OpenError, Startup, open, open_window};

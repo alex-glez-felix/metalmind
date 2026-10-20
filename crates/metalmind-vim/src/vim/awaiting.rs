@@ -1,9 +1,8 @@
 //! Lo que espera un carácter en la tecla siguiente: `f`, `"`, ….
 
-use metalmind_buffer::{Buffer, Selections};
-
 use super::Vim;
-use crate::register::{Clipboard, RegisterName};
+use crate::Target;
+use crate::register::RegisterName;
 use crate::{Action, CharSearch, Key, KeyOutcome, VimError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,9 +30,7 @@ impl Vim {
         &mut self,
         awaiting: Awaiting,
         key: Key,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         let Some(c) = awaited_char(key) else {
             self.reset();
@@ -41,7 +38,7 @@ impl Vim {
         };
         let action = match awaiting {
             Awaiting::Find(search) => {
-                self.find_char(search, c, buffer, selections, clipboard)?;
+                self.find_char(search, c, t)?;
                 Action::FindChar(search)
             }
             Awaiting::Register => {
@@ -53,23 +50,23 @@ impl Vim {
                 Action::RecordMacro
             }
             Awaiting::Play => {
-                if let Some(error) = self.play_macro(c, clipboard) {
+                if let Some(error) = self.play_macro(c, t.clipboard.as_deref_mut()) {
                     return Ok(KeyOutcome::InvalidCommand(error));
                 }
                 Action::PlayMacro
             }
             Awaiting::SetMark => {
-                self.set_mark(c, buffer, selections)?;
+                self.set_mark(c, t)?;
                 Action::SetMark
             }
             Awaiting::Mark { exact } => {
-                if let Some(outcome) = self.go_to_mark(c, exact, buffer, selections, clipboard)? {
+                if let Some(outcome) = self.go_to_mark(c, exact, t)? {
                     return Ok(outcome);
                 }
                 Action::GoToMark { exact }
             }
             Awaiting::Replace => {
-                self.replace_char(c, buffer, selections)?;
+                self.replace_char(c, t)?;
                 Action::Replace
             }
         };

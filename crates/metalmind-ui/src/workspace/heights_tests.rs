@@ -1,7 +1,7 @@
 //! La ventana con headings más altos que el texto, como la mide la vista:
 //! en píxeles, con una línea de texto de 20 y un `#` de 48.
 
-use metalmind_vim::{LineHeights, Rows};
+use metalmind_syntax::Rows;
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 
@@ -39,7 +39,7 @@ fn session() -> (Session, PaneId) {
 /// Las líneas que se ven enteras desde arriba y la del cursor, desde 0.
 fn window(session: &Session, pane: PaneId) -> (usize, usize, usize) {
     let view = session.view(pane);
-    let layout = view.document.layout().unwrap();
+    let layout = view.document.state().heights().unwrap();
     let top = view.viewport.top();
     let lines = view.buffer().line_count();
     let mut used = 0;
@@ -55,7 +55,7 @@ fn window(session: &Session, pane: PaneId) -> (usize, usize, usize) {
 fn un_heading_mide_lo_que_dice_el_tema() {
     let (session, pane) = session();
     let view = session.view(pane);
-    let layout = view.document.layout().unwrap();
+    let layout = view.document.state().heights().unwrap();
     assert_eq!(
         (layout.height(0), layout.height(1), layout.height(4)),
         (48, 20, 36)

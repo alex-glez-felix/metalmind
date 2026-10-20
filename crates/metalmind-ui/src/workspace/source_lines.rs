@@ -6,7 +6,7 @@
 
 use std::ops::RangeInclusive;
 
-use metalmind_vim::{Layout, Mode};
+use metalmind_vim::Mode;
 
 use super::PaneView;
 
@@ -35,7 +35,7 @@ impl PaneView<'_> {
             cursor
         };
         let (mut first, mut last) = (anchor.min(cursor), anchor.max(cursor));
-        if let Some(styles) = self.document.layout().map(Layout::styles) {
+        if let Some(styles) = self.document.state().styles() {
             for end in [anchor, cursor] {
                 if let Some(block) = styles.math_block(end) {
                     first = first.min(*block.start());

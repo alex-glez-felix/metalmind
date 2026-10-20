@@ -4,13 +4,13 @@ use metalmind_buffer::{Buffer, Selection, Selections};
 
 use super::Vim;
 use super::awaiting::Awaiting;
+use crate::Target;
 use crate::insert::Typed;
 use crate::jumplist::Direction;
 use crate::markdown::LazyOutline;
 use crate::matching;
 use crate::motion::Destination;
 use crate::object::Object;
-use crate::register::Clipboard;
 use crate::travel::Travel;
 use crate::{Action, KeyOutcome, Mode, Motion, Operator, Prompt, VimError};
 
@@ -18,22 +18,21 @@ impl Vim {
     pub(super) fn run(
         &mut self,
         action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         self.awaiting = None;
-        self.sync_layout(buffer);
+        // Lo que lea el estilo de las líneas tiene que ver el texto de ahora.
+        t.doc.sync(t.buffer);
         match self.mode {
-            Mode::Insert => self.run_in_insert(action, buffer, selections)?,
+            Mode::Insert => self.run_in_insert(action, t)?,
             Mode::CommandLine => {
-                return self.run_in_command_line(action, buffer, selections, clipboard);
+                return self.run_in_command_line(action, t);
             }
             Mode::Normal | Mode::OperatorPending(_) => {
-                return self.run_in_normal(action, buffer, selections, clipboard);
+                return self.run_in_normal(action, t);
             }
             Mode::Visual(kind) => {
-                return self.run_in_visual(action, kind, buffer, selections, clipboard);
+                return self.run_in_visual(action, kind, t);
             }
         }
         Ok(KeyOutcome::Executed(action))
@@ -43,30 +42,28 @@ impl Vim {
     fn run_in_normal(
         &mut self,
         action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         match (action, self.mode) {
             (Action::Motion(motion), Mode::OperatorPending(operator)) => {
-                if motion.is_jump() && self.lands(motion, buffer, selections) {
-                    self.jumped(buffer, selections)?;
+                if motion.is_jump() && self.lands(motion, t.buffer, t.selections) {
+                    self.jumped(t)?;
                 }
                 let object = Object::Motion(motion).into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
+                self.operate(operator, object, t)?;
             }
-            (Action::Motion(motion), Mode::Normal) => self.move_by(motion, buffer, selections)?,
+            (Action::Motion(motion), Mode::Normal) => self.move_by(motion, t)?,
             (Action::FindChar(search), Mode::Normal | Mode::OperatorPending(_)) => {
                 self.awaiting = Some(Awaiting::Find(search));
             }
             (Action::RepeatFind { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                self.repeat_find(reversed, buffer, selections, clipboard)?;
+                self.repeat_find(reversed, t)?;
             }
             (Action::Search { backward }, Mode::Normal | Mode::OperatorPending(_)) => {
                 self.open_search(backward);
             }
             (Action::SearchNext { reversed }, Mode::Normal | Mode::OperatorPending(_)) => {
-                return self.search_next(reversed, buffer, selections, clipboard);
+                return self.search_next(reversed, t);
             }
             (
                 Action::SearchWord {
@@ -74,26 +71,26 @@ impl Vim {
                     whole_word,
                 },
                 Mode::Normal | Mode::OperatorPending(_),
-            ) => return self.search_word(backward, whole_word, buffer, selections, clipboard),
-            (Action::Scroll(scroll), Mode::Normal) => self.scroll(scroll, buffer, selections),
+            ) => return self.search_word(backward, whole_word, t),
+            (Action::Scroll(scroll), Mode::Normal) => self.scroll(scroll, t),
             (
                 Action::Reposition {
                     place,
                     first_non_blank,
                 },
                 Mode::Normal,
-            ) => self.reposition(place, first_non_blank, buffer, selections)?,
+            ) => self.reposition(place, first_non_blank, t)?,
             (Action::ClearSearchHighlight, Mode::Normal) => {
                 self.reset();
                 self.search.highlight = false;
             }
             (Action::TextObject(object), Mode::OperatorPending(operator)) => {
                 let object = Object::TextObject(object).into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
+                self.operate(operator, object, t)?;
             }
             (Action::CurrentLine, Mode::OperatorPending(operator)) => {
                 let object = self.doubled_object(operator).into();
-                self.operate(operator, object, buffer, selections, clipboard)?;
+                self.operate(operator, object, t)?;
             }
             (Action::Operator(operator), Mode::Normal) => {
                 self.operator_count = self.take_count();
@@ -110,51 +107,46 @@ impl Vim {
                 self.awaiting = Some(Awaiting::Mark { exact });
             }
             (Action::JumpOlder, Mode::Normal | Mode::OperatorPending(_)) => {
-                let jumped = self.jump_in_list(Direction::Older, buffer, selections)?;
+                let jumped = self.jump_in_list(Direction::Older, t)?;
                 return Ok(jumped.unwrap_or(KeyOutcome::Executed(action)));
             }
             (Action::JumpNewer, Mode::Normal | Mode::OperatorPending(_)) => {
-                let jumped = self.jump_in_list(Direction::Newer, buffer, selections)?;
+                let jumped = self.jump_in_list(Direction::Newer, t)?;
                 return Ok(jumped.unwrap_or(KeyOutcome::Executed(action)));
             }
             (Action::DeleteRight, Mode::Normal) => {
                 let object = Object::Motion(Motion::Right).into();
-                self.operate(Operator::Delete, object, buffer, selections, clipboard)?;
+                self.operate(Operator::Delete, object, t)?;
             }
-            (Action::Visual(kind), Mode::Normal) => self.enter_visual(kind, buffer, selections),
-            (Action::RestoreVisual, Mode::Normal) => self.restore_visual(buffer, selections),
+            (Action::Visual(kind), Mode::Normal) => self.enter_visual(kind, t),
+            (Action::RestoreVisual, Mode::Normal) => self.restore_visual(t),
             (Action::Insert(at), Mode::Normal) => {
-                self.enter_insert(at, true, buffer, selections)?;
+                self.enter_insert(at, true, t)?;
             }
             (Action::Paste(side), Mode::Normal) => {
-                self.paste(side, buffer, selections, clipboard)?;
+                self.paste(side, t)?;
             }
             (Action::RepeatChange, Mode::Normal) => {
-                self.repeat_change(buffer, selections, clipboard)?;
+                self.repeat_change(t)?;
             }
-            (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, buffer, selections)?,
-            (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, buffer, selections)?,
-            (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, buffer, selections)?,
-            (Action::Later, Mode::Normal) => self.travel(Travel::Later, buffer, selections)?,
+            (Action::Undo, Mode::Normal) => self.travel(Travel::Undo, t)?,
+            (Action::Redo, Mode::Normal) => self.travel(Travel::Redo, t)?,
+            (Action::Earlier, Mode::Normal) => self.travel(Travel::Earlier, t)?,
+            (Action::Later, Mode::Normal) => self.travel(Travel::Later, t)?,
             (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
-            (Action::ToggleCheckbox, Mode::Normal) => self.toggle_checkbox(buffer, selections)?,
+            (Action::ToggleCheckbox, Mode::Normal) => self.toggle_checkbox(t)?,
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))
     }
 
-    fn run_in_insert(
-        &mut self,
-        action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
+    fn run_in_insert(&mut self, action: Action, t: &mut Target<'_>) -> Result<(), VimError> {
         match action {
-            Action::NormalMode => self.finish_insert(buffer, selections)?,
-            Action::Interrupt => self.leave_insert(buffer, selections)?,
-            Action::Backspace => self.type_in_insert(&Typed::Backspace, buffer, selections)?,
+            Action::NormalMode => self.finish_insert(t)?,
+            Action::Interrupt => self.leave_insert(t)?,
+            Action::Backspace => self.type_in_insert(&Typed::Backspace, t)?,
             Action::Newline => {
-                self.type_in_insert(&Typed::Newline { list: true }, buffer, selections)?;
+                self.type_in_insert(&Typed::Newline { list: true }, t)?;
             }
             _ => self.reset(),
         }
@@ -164,9 +156,7 @@ impl Vim {
     fn run_in_command_line(
         &mut self,
         action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         match action {
             Action::NormalMode | Action::Interrupt => self.close_command_line(),
@@ -174,18 +164,11 @@ impl Vim {
             Action::HistoryPrevious => self.recall(true),
             Action::HistoryNext => self.recall(false),
             Action::SubmitCommand => {
-                return self.submit_command_line(buffer, selections, clipboard);
+                return self.submit_command_line(t);
             }
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))
-    }
-
-    /// Lo que lea el estilo de las líneas tiene que ver el texto de ahora.
-    fn sync_layout(&mut self, buffer: &mut Buffer) {
-        if let Some(layout) = self.layout.as_mut() {
-            layout.sync(buffer);
-        }
     }
 
     /// Sobre qué actúa un operador doblado (`dd`, `>>`): la línea o, en
@@ -201,32 +184,27 @@ impl Vim {
     /// Una motion en Normal o, extendiendo la selección, en Visual. Como en
     /// vim, falla si falla en todos los cursores, y `h` y `l` también si no
     /// se mueven.
-    pub(super) fn move_by(
-        &mut self,
-        motion: Motion,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<(), VimError> {
+    pub(super) fn move_by(&mut self, motion: Motion, t: &mut Target<'_>) -> Result<(), VimError> {
         if let Motion::Window(place) = motion {
-            return self.move_to_window_line(place, buffer, selections);
+            return self.move_to_window_line(place, t);
         }
         let count = self.take_count();
         self.reset();
         let purpose = self.motion_purpose();
         let visual = self.in_visual();
-        let outline = LazyOutline::new(self.layout.as_mut());
-        let moved = move_cursors(selections, visual, |s| {
+        let outline = LazyOutline::new(t.doc.styles_mut());
+        let moved = move_cursors(t.selections, visual, |s| {
             let destination =
-                motion.resolve(buffer, s, count, purpose, &self.viewport, &outline)?;
+                motion.resolve(t.buffer, s, count, purpose, &t.pane.viewport, &outline)?;
             let stuck = motion.fails_without_moving() && destination.offset == s.head;
             (!stuck).then_some(destination)
         });
         match moved {
             Some(moved) => {
                 if motion.is_jump() {
-                    self.jumped(buffer, selections)?;
+                    self.jumped(t)?;
                 }
-                *selections = moved;
+                *t.selections = moved;
             }
             None => self.fail(),
         }

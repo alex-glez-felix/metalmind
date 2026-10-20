@@ -3,11 +3,11 @@
 
 use std::ops::RangeInclusive;
 
-use metalmind_buffer::{Buffer, Selection, Selections};
+use metalmind_buffer::{Selection, Selections};
 
 use super::{Failure, done};
+use crate::Target;
 use crate::lines::Want;
-use crate::register::Clipboard;
 use crate::vim::Vim;
 use crate::{CommandError, Key, KeyOutcome, Mode, VimError};
 
@@ -18,15 +18,13 @@ impl Vim {
         &mut self,
         keys: &str,
         lines: Option<RangeInclusive<usize>>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, Failure> {
         let keys: Vec<Key> = keys.chars().map(Key::Char).collect();
         self.ex_depth += 1;
-        buffer.begin_undo_group();
-        let notice = self.normal_on_lines(&keys, lines, buffer, selections, clipboard);
-        buffer.end_undo_group();
+        t.buffer.begin_undo_group();
+        let notice = self.normal_on_lines(&keys, lines, t);
+        t.buffer.end_undo_group();
         self.ex_depth -= 1;
         Ok(notice?.unwrap_or_else(done))
     }
@@ -37,24 +35,26 @@ impl Vim {
         &mut self,
         keys: &[Key],
         lines: Option<RangeInclusive<usize>>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let Some(lines) = lines else {
-            return self.normal_once(keys, buffer, selections, clipboard);
+            return self.normal_once(keys, t);
         };
         let mut notice = None;
         for line in lines {
-            let line = line.min(buffer.last_line());
-            let goal = Want::of(buffer, selections.primary(), true, self.viewport.columns()).goal();
-            *selections = Selections::single(Selection {
+            let line = line.min(t.buffer.last_line());
+            let goal = Want::of(
+                t.buffer,
+                t.selections.primary(),
+                true,
+                t.pane.viewport.columns(),
+            )
+            .goal();
+            *t.selections = Selections::single(Selection {
                 goal,
-                ..Selection::cursor(buffer.line_start(line))
+                ..Selection::cursor(t.buffer.line_start(line))
             });
-            notice = self
-                .normal_once(keys, buffer, selections, clipboard)?
-                .or(notice);
+            notice = self.normal_once(keys, t)?.or(notice);
         }
         Ok(notice)
     }
@@ -65,13 +65,11 @@ impl Vim {
     fn normal_once(
         &mut self,
         keys: &[Key],
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
-        let notice = self.play_isolated(keys, buffer, selections, clipboard)?;
+        let notice = self.play_isolated(keys, t)?;
         while self.is_incomplete() {
-            self.process(Key::Escape, buffer, selections, clipboard)?;
+            self.process(Key::Escape, t)?;
         }
         self.failed = false;
         Ok(notice.map(|notice| match notice {

@@ -6,6 +6,7 @@ use metalmind_buffer::{Buffer, ByteOffset, Edit, Selection, Selections};
 
 use super::Failure;
 use super::range::Lines;
+use crate::Target;
 use crate::columns::Columns;
 use crate::ex;
 use crate::indent::{self, Shift};
@@ -21,21 +22,25 @@ impl Vim {
         &mut self,
         lines: RangeInclusive<usize>,
         register: Option<RegisterName>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
-        self.jumped(buffer, selections)?;
-        let deleted = lines_register(buffer, &lines);
+        self.jumped(t)?;
+        let deleted = lines_register(t.buffer, &lines);
         let write = Write::Delete {
             spans_lines: true,
             always_numbered: false,
         };
-        self.registers.write(register, deleted, write, clipboard);
-        let edits = vec![Edit::delete(whole_lines(buffer, &lines))];
+        self.registers
+            .write(register, deleted, write, t.clipboard.as_deref_mut());
+        let edits = vec![Edit::delete(whole_lines(t.buffer, &lines))];
         let first = *lines.start();
-        let undo = keep_column(buffer, self.viewport.columns(), selections.primary(), first);
-        edit_lines(buffer, selections, undo, edits, |buffer| {
+        let undo = keep_column(
+            t.buffer,
+            t.pane.viewport.columns(),
+            t.selections.primary(),
+            first,
+        );
+        edit_lines(t.buffer, t.selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first.min(buffer.last_line()))
         })
     }
@@ -45,7 +50,7 @@ impl Vim {
         lines: &RangeInclusive<usize>,
         register: Option<RegisterName>,
         buffer: &Buffer,
-        clipboard: &mut dyn Clipboard,
+        clipboard: Option<&mut (dyn Clipboard + '_)>,
     ) {
         let yanked = lines_register(buffer, lines);
         self.registers
@@ -58,26 +63,32 @@ impl Vim {
         &mut self,
         lines: Lines,
         spaces: bool,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let (first, mut last) = (lines.first - 1, lines.last - 1);
         if first == last {
             if lines.given >= 2 {
                 return Ok(());
             }
-            if last == buffer.last_line() {
+            if last == t.buffer.last_line() {
                 self.fail();
                 return Ok(());
             }
             last += 1;
         }
-        let texts: Vec<_> = (first..=last).map(|line| buffer.line_text(line)).collect();
+        let texts: Vec<_> = (first..=last)
+            .map(|line| t.buffer.line_text(line))
+            .collect();
         let joined = ex::join(texts.iter().map(AsRef::as_ref), spaces);
-        let range = buffer.line_start(first)..buffer.line_end(last);
+        let range = t.buffer.line_start(first)..t.buffer.line_end(last);
         let edits = vec![Edit::replace(range, joined)];
-        let undo = keep_column(buffer, self.viewport.columns(), selections.primary(), first);
-        edit_lines(buffer, selections, undo, edits, |buffer| {
+        let undo = keep_column(
+            t.buffer,
+            t.pane.viewport.columns(),
+            t.selections.primary(),
+            first,
+        );
+        edit_lines(t.buffer, t.selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first)
         })
     }
@@ -89,29 +100,28 @@ impl Vim {
         lines: RangeInclusive<usize>,
         shift: Shift,
         levels: usize,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
-        self.jumped(buffer, selections)?;
-        let columns = self.viewport.columns();
+        self.jumped(t)?;
+        let columns = t.pane.viewport.columns();
         let width = self.indent.levels_width(levels);
         let edits = lines
             .clone()
             .filter_map(|line| {
-                let text = buffer.line_text(line);
+                let text = t.buffer.line_text(line);
                 let (len, new) = indent::shift(&text, shift, width, columns, self.indent)?;
-                let start = buffer.line_start(line);
+                let start = t.buffer.line_start(line);
                 Some(Edit::replace(start..start + len, new))
             })
             .collect();
         let last = *lines.end();
         let undo = keep_column(
-            buffer,
-            self.viewport.columns(),
-            selections.primary(),
+            t.buffer,
+            t.pane.viewport.columns(),
+            t.selections.primary(),
             *lines.start(),
         );
-        edit_lines(buffer, selections, undo, edits, |buffer| {
+        edit_lines(t.buffer, t.selections, undo, edits, |buffer| {
             line_start_cursor(buffer, last)
         })
     }

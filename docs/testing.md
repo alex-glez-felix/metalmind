@@ -6,6 +6,23 @@ cargo nextest run --workspace     # todo lo que no necesita pantalla
 
 Los casos de `metalmind-vim` también corren en `nvim --headless` 0.12.6; sin ese `nvim` en el `PATH` se ignoran (ver `crates/metalmind-vim/tests/support/nvim.rs`). Lo mismo los de `metalmind-ui` que cambian de panel o de archivo desde un modo a medias, que comparan modo, archivo y cursor de cada panel con nvim (`crates/metalmind-ui/src/workspace/panes_oracle.rs`).
 
+## Pruebas de complejidad y guardas de rendimiento
+
+Las pruebas `complexity.rs` (y las `…_lineal` de los tests unitarios) cuentan instrucciones con callgrind: necesitan `valgrind` en el PATH al compilar y al correr. Sin él salen como ignoradas, igual que los casos del oráculo sin `nvim`; el job `test` del CI lo instala y falla si no está.
+
+```sh
+sudo pacman -S --needed valgrind          # Arch
+sudo apt-get install -y valgrind          # Debian/Ubuntu
+
+cargo nextest run --workspace                                   # las incluye, en paralelo
+cargo nextest run --workspace --success-output final \
+  -E 'binary(complexity) | test(/::complexity::|_lineal$|^growth::tests::/)'   # solo ellas (el filtro de .config/nextest.toml), con sus conteos
+```
+
+Tras instalar valgrind hay que recompilar (`cargo clean -p <crate>` o tocar su `build.rs`) para que el `build.rs` lo vea. Cada prueba corre su operación con N y 16N en dos procesos bajo callgrind y falla si crece más de ×32 (lineal) o ×4 (lo que no debería depender del tamaño); la salida dice los dos conteos y la proporción. Bajo callgrind todo va ~50 veces más lento: unos 2 min para todas en una máquina de escritorio. Si una falla, se reproduce sola con `-E 'test(nombre)'` y se busca dónde crece con `callgrind_annotate` (detalles y umbrales en [rendimiento](performance.md#3-pruebas-de-complejidad-cargo-nextest-en-cada-pr)). La del render del editor (`metalmind-ui`) abre la ventana en la plataforma de pruebas de GPUI, sin display: además de valgrind pide una fuente monoespaciada instalada.
+
+Las guardas de tiempo de cada operación (benchmarks `instrucciones`, el job `instrucciones` de `perf.yml`), cómo correrlas en local, cómo se rehace una línea base y qué hacer cuando fallan: [rendimiento, capa 2](performance.md#2-conteo-de-instrucciones-en-cada-pr-gungraun-ci).
+
 ## Smoke de la app real
 
 `crates/metalmind/tests/gui_smoke.rs` lanza el binario `metalmind` de verdad, le teclea con XTest y comprueba el **efecto en disco** y **cómo termina el proceso**. Los píxeles solo sirven para saber si algo aparece o no, como el tooltip de una mark (`el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve`, que también mueve el ratón y la rueda): se comparan con lo que había antes en la misma ventana, nunca con una imagen guardada. Cada test levanta su propio Xvfb, en el primer display libre desde `:100`, así que corren en paralelo sin pisarse el foco. Están en `#[ignore]` porque necesitan Xvfb y un driver que dibuje sin GPU; el job `gui-smoke` del CI los corre en cada push a `main` (en una PR, sin caché, compilar le toma más de 10 min; los tests, segundos). En una PR que toque la app, córrelo en local o lanza el CI a mano sobre la rama: `gh workflow run CI --ref <rama>`.

@@ -1,41 +1,35 @@
 //! `m{a-zA-Z}`, `'{a-zA-Z}` y `` `{a-zA-Z} ``, y `''` y ` `` ` para volver.
 //! Las `A`–`Z` llevan también el archivo y valen desde cualquier buffer.
 
-use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
+use metalmind_buffer::{Buffer, ByteOffset, Goal, Point, Selection, Selections};
 
 use super::Vim;
 use crate::dot::{MarkJump, Subject};
 use crate::jumplist::{FileId, Jump, Landing};
-use crate::mark::{self, MarkName, Marks, PlacedMark};
+use crate::mark::{self, MarkName, PlacedMark};
 use crate::object::Object;
-use crate::register::Clipboard;
-use crate::{CommandError, KeyOutcome, Mode, VimError};
+use crate::{CommandError, DocState, KeyOutcome, Mode, Target, VimError};
 
 impl Vim {
     /// `m{a-zA-Z}` en el cursor principal; `m'` pone la del salto anterior.
-    pub(super) fn set_mark(
-        &mut self,
-        c: char,
-        buffer: &mut Buffer,
-        selections: &Selections,
-    ) -> Result<(), VimError> {
+    pub(super) fn set_mark(&mut self, c: char, t: &mut Target<'_>) -> Result<(), VimError> {
         self.reset();
-        let head = selections.primary().head;
+        let head = t.selections.primary().head;
         match MarkName::parse(c) {
             Some(MarkName::File(letter)) => {
-                self.catch_up(buffer);
-                let point = buffer.point_at(head)?;
+                self.catch_up(t);
+                let point = t.buffer.point_at(head)?;
                 self.file_marks.set(
                     letter,
                     Jump {
-                        file: self.file,
+                        file: t.file,
                         point,
                     },
                 );
             }
             Some(name) => {
                 if let Some(name) = name.of_buffer() {
-                    self.marks.set(buffer, name, head)?;
+                    t.doc.marks.set(t.buffer, name, head)?;
                 }
             }
             None => self.fail(),
@@ -43,44 +37,40 @@ impl Vim {
         Ok(())
     }
 
-    /// Las marks `a`–`z` de `marks` y las `A`–`Z` de `file` que caen en
-    /// `buffer`, en ese orden, con lo editado ya seguido
-    /// ([`Vim::catch_up`]).
+    /// Las marks `a`–`z` de `doc` y las `A`–`Z` de `file` que caen en
+    /// `buffer`, en ese orden.
     pub fn placed_marks<'a>(
         &'a self,
-        marks: &'a Marks,
+        doc: &'a DocState,
         file: FileId,
         buffer: &'a Buffer,
     ) -> impl Iterator<Item = PlacedMark> + 'a {
-        let named = marks.named(buffer).map(|(letter, offset)| PlacedMark {
+        let named = doc.marks.named(buffer).map(|(letter, offset)| PlacedMark {
             name: char::from(b'a' + letter),
             line: buffer.line_of(offset),
         });
         let of_file = self
             .file_marks
             .in_file(file)
-            .map(|(letter, jump)| PlacedMark {
+            .map(move |(letter, jump)| PlacedMark {
                 name: char::from(b'A' + letter),
-                line: jump.point.line.min(buffer.last_line()),
+                line: followed(jump.point, doc, buffer)
+                    .line
+                    .min(buffer.last_line()),
             });
         named.chain(of_file)
     }
 
     /// Dónde está la mark en este buffer; `None` si no se puso, se borró su
     /// línea o es de otro archivo.
-    pub(super) fn mark_offset(&self, name: MarkName, buffer: &Buffer) -> Option<ByteOffset> {
+    pub(super) fn mark_offset(&self, name: MarkName, t: &Target<'_>) -> Option<ByteOffset> {
         match name {
             MarkName::File(letter) => {
                 let jump = self.file_marks.get(letter)?;
-                // Lo editado dentro del mismo comando (un rango de `:g`)
-                // todavía no lo siguió `catch_up`.
-                let pending = buffer.splices().get(self.splices_seen..).unwrap_or(&[]);
-                let point = pending
-                    .iter()
-                    .fold(jump.point, |point, splice| splice.lines.keep(point));
-                (jump.file == self.file).then(|| buffer.offset_at_point(point))
+                let point = followed(jump.point, t.doc, t.buffer);
+                (jump.file == t.file).then(|| t.buffer.offset_at_point(point))
             }
-            name => self.marks.get(buffer, name.of_buffer()?),
+            name => t.doc.marks.get(t.buffer, name.of_buffer()?),
         }
     }
 
@@ -94,36 +84,34 @@ impl Vim {
         &mut self,
         c: char,
         exact: bool,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let Some(name) = MarkName::parse(c) else {
             self.fail();
             return Ok(None);
         };
-        if let Some(landing) = self.mark_elsewhere(name, exact) {
-            return self.go_to_other_file(landing, buffer, selections);
+        if let Some(landing) = self.mark_elsewhere(name, exact, t.file) {
+            return self.go_to_other_file(landing, t);
         }
         let subject = Subject::Mark(MarkJump { name, exact });
-        let object = self.object_of(&subject, buffer);
+        let object = self.object_of(&subject, t);
         if object.is_none() {
             self.fail();
             return Ok(Some(KeyOutcome::InvalidCommand(CommandError::MarkNotSet)));
         }
-        self.jumped(buffer, selections)?;
+        self.jumped(t)?;
         if let Mode::OperatorPending(operator) = self.mode {
-            self.operate_on(operator, subject, object, buffer, selections, clipboard)?;
+            self.operate_on(operator, subject, object, t)?;
             return Ok(None);
         }
         self.reset();
         if let Some(Object::Mark { offset, exact }) = object {
-            let head = mark::destination(buffer, offset, exact);
+            let head = mark::destination(t.buffer, offset, exact);
             let anchor = match self.mode {
-                Mode::Visual(_) => selections.primary().anchor,
+                Mode::Visual(_) => t.selections.primary().anchor,
                 _ => head,
             };
-            *selections = Selections::single(Selection {
+            *t.selections = Selections::single(Selection {
                 anchor,
                 head,
                 goal: Goal::None,
@@ -133,12 +121,12 @@ impl Vim {
     }
 
     /// La mark `A`–`Z`, si es de otro archivo.
-    fn mark_elsewhere(&mut self, name: MarkName, exact: bool) -> Option<Landing> {
+    fn mark_elsewhere(&self, name: MarkName, exact: bool, file: FileId) -> Option<Landing> {
         let MarkName::File(letter) = name else {
             return None;
         };
         let jump = self.file_marks.get(letter)?;
-        (jump.file != self.file).then_some(Landing {
+        (jump.file != file).then_some(Landing {
             file: jump.file,
             point: jump.point,
             first_non_blank: !exact,
@@ -149,15 +137,22 @@ impl Vim {
     fn go_to_other_file(
         &mut self,
         landing: Landing,
-        buffer: &mut Buffer,
-        selections: &Selections,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
         if self.mode != Mode::Normal {
             self.fail();
             return Ok(None);
         }
         self.reset();
-        self.jumped(buffer, selections)?;
+        self.jumped(t)?;
         Ok(Some(KeyOutcome::SwitchFile(landing)))
     }
+}
+
+/// `point` de una mark `A`–`Z` tras lo editado que todavía no siguió, como
+/// un rango de `:g` a medio correr.
+fn followed(point: Point, doc: &DocState, buffer: &Buffer) -> Point {
+    doc.unfollowed(buffer)
+        .iter()
+        .fold(point, |point, splice| splice.lines.keep(point))
 }

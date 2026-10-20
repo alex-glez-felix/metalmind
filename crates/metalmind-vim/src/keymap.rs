@@ -36,17 +36,17 @@ impl Context {
     }
 }
 
-/// En `context`, la secuencia `keys` invoca `target`.
+/// En `context`, la secuencia `keys` invoca `bound`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Binding {
     pub context: Context,
     pub keys: Vec<Key>,
-    pub target: Target,
+    pub bound: Bound,
 }
 
 /// Lo que invoca un binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Target {
+pub enum Bound {
     Engine(Action),
     /// Una acción ajena: el motor devuelve su nombre a quien lo aloja, como
     /// los paneles de `ctrl-w`, que así comparten prefijo, count y
@@ -56,7 +56,7 @@ pub enum Target {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Lookup {
-    Action(Target),
+    Action(Bound),
     /// Las teclas son el inicio de algún binding.
     Pending,
     Unbound,
@@ -90,7 +90,7 @@ impl Keymap {
         let bindings = VIM.iter().map(|&(context, keys, action)| Binding {
             context,
             keys: keys.to_vec(),
-            target: Target::Engine(action),
+            bound: Bound::Engine(action),
         });
         Self::new(bindings, [])
     }
@@ -113,7 +113,7 @@ impl Keymap {
             if binding.keys.len() > keys.len() {
                 return Lookup::Pending;
             }
-            exact.get_or_insert(binding.target);
+            exact.get_or_insert(binding.bound);
         }
         exact.map_or(Lookup::Unbound, Lookup::Action)
     }
@@ -421,10 +421,10 @@ mod tests {
     fn default_keymap_is_unambiguous() {
         let bindings = Keymap::vim().bindings;
         for (i, binding) in bindings.iter().enumerate() {
-            let (context, keys, action) = (binding.context, &binding.keys, binding.target);
+            let (context, keys, action) = (binding.context, &binding.keys, binding.bound);
             for other in &bindings[i + 1..] {
                 let (other_context, other_keys, other_action) =
-                    (other.context, &other.keys, other.target);
+                    (other.context, &other.keys, other.bound);
                 if !overlap(context, other_context) {
                     continue;
                 }
@@ -447,7 +447,7 @@ mod tests {
         assert_eq!(keymap.lookup(Mode::Normal, &[ch('g')]), Lookup::Pending);
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('g'), ch('g')]),
-            Lookup::Action(Target::Engine(motion(Motion::DocumentStart)))
+            Lookup::Action(Bound::Engine(motion(Motion::DocumentStart)))
         );
         assert_eq!(
             keymap.lookup(Mode::Normal, &[ch('g'), ch('x')]),
@@ -461,7 +461,7 @@ mod tests {
         let pending = Mode::OperatorPending;
         assert_eq!(
             keymap.lookup(pending(Operator::Delete), &[ch('d')]),
-            Lookup::Action(Target::Engine(Action::CurrentLine))
+            Lookup::Action(Bound::Engine(Action::CurrentLine))
         );
         assert_eq!(
             keymap.lookup(pending(Operator::Yank), &[ch('d')]),
@@ -471,14 +471,14 @@ mod tests {
 
     #[test]
     fn later_bindings_win() {
-        let binding = |target| Binding {
+        let binding = |bound| Binding {
             context: Context::Normal,
             keys: vec![ch('x')],
-            target,
+            bound,
         };
-        let open = Target::Host(ActionName::new("workspace::open_finder"));
+        let open = Bound::Host(ActionName::new("workspace::open_finder"));
         let keymap = Keymap::new(
-            [binding(Target::Engine(Action::DeleteRight)), binding(open)],
+            [binding(Bound::Engine(Action::DeleteRight)), binding(open)],
             [],
         );
         assert_eq!(

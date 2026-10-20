@@ -33,9 +33,12 @@ env_logger = "0.11.11"
 # Fijado con `=`: gpui-pre cambia cada semana (04 §riesgo 9). Sin gpui-component
 # ni sus assets: el editor es propio y no usa el `Root` de gpui-kit (04 §riesgo 1).
 gpui-kit = { version = "=0.7.3", default-features = false }
-# El GPUI que trae gpui-kit, solo para el `TestAppContext` de los tests: la
-# feature `test-support` de gpui-kit arrastra gpui-fast y no resuelve.
+# El GPUI que trae gpui-kit, solo por su feature `test-support`: el
+# `TestAppContext` de los tests y la plataforma de pruebas del benchmark del
+# render. La de gpui-kit arrastra gpui-fast y no resuelve.
 gpui-pre = "=0.3.9"
+# El sistema de texto de GPUI en Linux (cosmic-text), sin abrir una plataforma.
+gpui-pre-wgpu = { version = "=0.3.9", default-features = false }
 grep-matcher = "0.1.9"
 grep-regex = "0.1.14"
 grep-searcher = "0.1.17"

@@ -24,11 +24,10 @@ use rstest::rstest;
 /// Corre `keys` sobre `before` y devuelve lo que pasó con la última tecla,
 /// el motor y el texto con los cursores.
 fn run(before: &str, keys: &str) -> (KeyOutcome, Vim, String) {
-    let (mut buffer, mut selections) = support::parse(before);
-    let mut vim = Vim::new();
-    let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
-    let text = support::render(&buffer, selections.iter().map(|s| s.head));
-    (last.unwrap(), vim, text)
+    let mut editor = support::Editor::new(before);
+    let last = editor.keys(keys);
+    let text = support::render(&editor.buffer, editor.selections.iter().map(|s| s.head));
+    (last.unwrap(), editor.vim, text)
 }
 
 fn outcome(before: &str, keys: &str) -> KeyOutcome {
@@ -134,48 +133,47 @@ fn the_ui_can_read_the_prompt_and_what_was_typed() {
 
 #[test]
 fn the_active_search_stays_until_noh() {
-    let (mut buffer, mut selections) = support::parse("|ab xab\nab");
-    let mut vim = Vim::new();
-    assert!(vim.search_highlight().is_none());
-    support::feed(&mut vim, &mut buffer, &mut selections, "/ab<CR>");
-    let pattern = vim.search_highlight().unwrap();
+    let mut editor = support::Editor::new("|ab xab\nab");
+    assert!(editor.vim.search_highlight().is_none());
+    editor.keys("/ab<CR>");
+    let pattern = editor.vim.search_highlight().unwrap();
     assert_eq!(pattern.source(), "ab");
     let found: Vec<_> = pattern
-        .matches_in(&buffer, 0..2)
+        .matches_in(&editor.buffer, 0..2)
         .into_iter()
         .map(|range| (range.start.get(), range.end.get()))
         .collect();
     assert_eq!(found, [(0, 2), (4, 6), (7, 9)]);
-    support::feed(&mut vim, &mut buffer, &mut selections, ":noh<CR>");
-    assert!(vim.search_highlight().is_none());
-    support::feed(&mut vim, &mut buffer, &mut selections, "n");
+    editor.keys(":noh<CR>");
+    assert!(editor.vim.search_highlight().is_none());
+    editor.keys("n");
     assert_eq!(
-        vim.search_highlight().map(metalmind_vim::Pattern::source),
+        editor
+            .vim
+            .search_highlight()
+            .map(metalmind_vim::Pattern::source),
         Some("ab")
     );
-    support::feed(
-        &mut vim,
-        &mut buffer,
-        &mut selections,
-        ":nohlsearch<CR>:s/b/c/<CR>",
-    );
+    editor.keys(":nohlsearch<CR>:s/b/c/<CR>");
     assert_eq!(
-        vim.search_highlight().map(metalmind_vim::Pattern::source),
+        editor
+            .vim
+            .search_highlight()
+            .map(metalmind_vim::Pattern::source),
         Some("b")
     );
 }
 
 #[test]
 fn search_actions_run_by_name() {
-    let (mut buffer, mut selections) = support::parse("|a b c b");
-    let mut vim = Vim::new();
-    support::feed(&mut vim, &mut buffer, &mut selections, "/b<CR>");
+    let mut editor = support::Editor::new("|a b c b");
+    editor.keys("/b<CR>");
     let next = Action::from_name("vim::search_next").unwrap();
-    vim.execute(next, &mut buffer, &mut selections).unwrap();
-    assert_eq!(selections.primary().head, ByteOffset::new(6));
+    editor.execute(next);
+    assert_eq!(editor.selections.primary().head, ByteOffset::new(6));
     let clear = Action::from_name("vim::clear_search_highlight").unwrap();
-    vim.execute(clear, &mut buffer, &mut selections).unwrap();
-    assert!(vim.search_highlight().is_none());
+    editor.execute(clear);
+    assert!(editor.vim.search_highlight().is_none());
 }
 
 /// nvim no tiene multi-cursor: cada cursor busca desde donde está, y con `*`

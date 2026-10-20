@@ -8,7 +8,6 @@ use gpui_kit::{
     Bounds, Font, PaintQuad, Pixels, SharedString, TextRun, Window, fill, point, px, size,
 };
 use metalmind_syntax::{LineKind, LineStyle, MathPlace, MathSpot};
-use metalmind_vim::{Layout, LineHeights};
 
 use super::layout::{FormulaError, LaidLine, Piece, PlacedFormula, Viewport};
 use super::links::Links;
@@ -26,11 +25,11 @@ pub struct Typeface {
     pub size: Pixels,
 }
 
-/// Lo que mide la línea `line` en píxeles: del layout del documento o, sin
-/// él, una línea de texto.
+/// Lo que mide la línea `line` en píxeles, según el documento o, si no lo
+/// mide, una línea de texto.
 pub fn line_height(view: &PaneView<'_>, line_height: Pixels, line: usize) -> f32 {
-    match view.document.layout() {
-        Some(layout) => units(layout.height(line)),
+    match view.document.state().heights() {
+        Some(heights) => units(heights.height(line)),
         None => f32::from(line_height),
     }
 }
@@ -70,7 +69,7 @@ pub fn shape_visible_lines(
     math: &MathFrame<'_>,
     window: &Window,
 ) -> Shaped {
-    let styles = view.document.layout().map(Layout::styles);
+    let styles = view.document.state().styles();
     let height = f32::from(viewport.bounds.size.height);
     let placed = place(viewport.scroll, view.buffer().last_line(), height, |line| {
         line_height(view, viewport.line_height, line)

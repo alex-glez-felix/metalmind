@@ -17,6 +17,7 @@ mod inline;
 mod paragraph;
 mod pieces;
 mod region;
+mod rows;
 
 #[cfg(test)]
 mod tests;
@@ -25,6 +26,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 pub use cache::Styles;
+pub use rows::{FormulaRows, Rows};
 
 /// Dónde termina el prefijo de cita de `line` (`> `, `> > `), como lo ve
 /// el estilo; 0 si no es una cita.

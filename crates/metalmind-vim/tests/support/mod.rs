@@ -5,8 +5,10 @@
 pub mod nvim;
 
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
+use metalmind_syntax::Rows;
 use metalmind_vim::{
-    Key, KeyOutcome, Layout, LineHeights, Mode, Rows, Uniform, Viewport, Vim, VisualKind,
+    Action, Clipboard, DocState, FileId, Key, KeyOutcome, Mode, PaneState, Target, Viewport, Vim,
+    VisualKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,30 +113,106 @@ pub fn inputs(notation: &str) -> Vec<Input> {
     inputs
 }
 
-/// Pasa `notation` al motor y devuelve lo que pasó con la última entrada.
-pub fn feed(
-    vim: &mut Vim,
-    buffer: &mut Buffer,
-    selections: &mut Selections,
-    notation: &str,
-) -> Option<KeyOutcome> {
-    let mut last = None;
-    for input in inputs(notation) {
-        let outcome = match input {
-            Input::Key(key) => vim.feed(key, buffer, selections),
-            Input::Paste(text) => vim.insert_text(&text, buffer, selections),
-            Input::Click { line, column } => {
-                assert_eq!(vim.mode(), Mode::Insert, "el clic solo se modela en Insert");
-                let offset = buffer.offset_at_column(line, column);
-                *selections = Selections::single(Selection::cursor(offset));
-                vim.cursor_moved();
-                continue;
-            }
-            Input::Release => continue,
-        };
-        last = Some(outcome.unwrap());
+/// Una nota en un panel con el motor, como la tiene la ventana: lo que le
+/// presta en cada tecla y lo que guarda entre una y otra.
+pub struct Editor {
+    pub vim: Vim,
+    pub buffer: Buffer,
+    pub selections: Selections,
+    pub doc: DocState,
+    pub pane: PaneState,
+    pub file: FileId,
+}
+
+impl Editor {
+    /// `marked` con el motor solo, sin los atajos de la app.
+    pub fn new(marked: &str) -> Self {
+        Self::with(Vim::new(), marked)
     }
-    last
+
+    /// `marked` con los atajos y los `:` de la app.
+    pub fn app(marked: &str) -> Self {
+        Self::with(app_vim(), marked)
+    }
+
+    pub fn with(vim: Vim, marked: &str) -> Self {
+        let (buffer, selections) = parse(marked);
+        Self {
+            vim,
+            buffer,
+            selections,
+            doc: DocState::default(),
+            pane: PaneState::default(),
+            file: FileId::default(),
+        }
+    }
+
+    /// Corre `edit` con el motor y lo que se le presta, sin portapapeles.
+    pub fn run<T>(&mut self, edit: impl FnOnce(&mut Vim, &mut Target<'_>) -> T) -> T {
+        self.run_with(None, edit)
+    }
+
+    /// Como [`Editor::run`], con `"+` y `"*` en `clipboard`.
+    pub fn run_with<T>(
+        &mut self,
+        clipboard: Option<&mut dyn Clipboard>,
+        edit: impl FnOnce(&mut Vim, &mut Target<'_>) -> T,
+    ) -> T {
+        let mut target = Target {
+            buffer: &mut self.buffer,
+            selections: &mut self.selections,
+            doc: &mut self.doc,
+            pane: &mut self.pane,
+            file: self.file,
+            // Al portapapeles le basta vivir lo que dura el préstamo.
+            clipboard: clipboard.map(|clipboard| clipboard as &mut dyn Clipboard),
+        };
+        edit(&mut self.vim, &mut target)
+    }
+
+    pub fn key(&mut self, key: Key) -> KeyOutcome {
+        self.run(|vim, target| vim.feed(key, target)).unwrap()
+    }
+
+    pub fn execute(&mut self, action: Action) -> KeyOutcome {
+        self.run(|vim, target| vim.execute(action, target)).unwrap()
+    }
+
+    /// Pasa `notation` al motor y devuelve lo que pasó con la última entrada.
+    pub fn keys(&mut self, notation: &str) -> Option<KeyOutcome> {
+        let mut last = None;
+        for input in inputs(notation) {
+            let outcome = match input {
+                Input::Key(key) => self.key(key),
+                Input::Paste(text) => self
+                    .run(|vim, target| vim.paste_text(&text, target))
+                    .unwrap(),
+                Input::Click { line, column } => {
+                    assert_eq!(
+                        self.vim.mode(),
+                        Mode::Insert,
+                        "el clic solo se modela en Insert"
+                    );
+                    let offset = self.buffer.offset_at_column(line, column);
+                    self.selections = Selections::single(Selection::cursor(offset));
+                    self.vim.cursor_moved();
+                    continue;
+                }
+                Input::Release => continue,
+            };
+            last = Some(outcome);
+        }
+        last
+    }
+
+    pub fn text(&self) -> String {
+        self.buffer.to_string()
+    }
+
+    /// El texto con cada cursor.
+    pub fn cursors(&self) -> String {
+        render(&self.buffer, self.selections.iter().map(|s| s.head))
+    }
 }
 
 fn mouse(text: &str) -> Option<(Input, usize)> {
@@ -211,49 +289,41 @@ pub fn run_engine(before: &str, keys: &str) -> State {
 /// Como [`run_engine`], en una ventana como `screen`; devuelve además la
 /// primera línea visible.
 pub fn run_engine_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize) {
-    let (mut buffer, mut selections) = parse(before);
-    let mut vim = Vim::new();
+    let mut editor = Editor::new(before);
     if let Some(screen) = screen {
-        let mut viewport = Viewport::new(screen.rows);
-        let mut layout = screen.tall_headings.then(|| {
-            let mut layout = Layout::new(&buffer);
-            layout.set_rows(TALL_HEADINGS);
-            layout.ensure(&buffer, usize::MAX);
-            layout
-        });
-        let uniform = Uniform(1);
-        let heights: &dyn LineHeights = match &layout {
-            Some(layout) => layout,
-            None => &uniform,
-        };
-        let moved = viewport.scroll_to(
+        if screen.tall_headings {
+            editor.doc = DocState::painted(&editor.buffer, TALL_HEADINGS);
+            editor.doc.ensure(&editor.buffer, usize::MAX);
+        }
+        editor.pane.viewport = Viewport::new(screen.rows);
+        let moved = editor.pane.scroll_to(
             screen.top,
-            &buffer,
-            &mut selections,
+            &editor.buffer,
+            &mut editor.selections,
+            &mut editor.doc,
             screen.scrolloff,
             Mode::Normal,
-            heights,
         );
         assert!(!moved, "el cursor del caso tiene que verse en la ventana");
-        viewport.reveal(
-            &buffer,
-            selections.primary().head,
+        editor.pane.reveal(
+            &mut editor.buffer,
+            &editor.selections,
+            &mut editor.doc,
             screen.scrolloff,
-            heights,
         );
-        vim.set_scrolloff(screen.scrolloff);
-        vim.swap_viewport(&mut viewport);
-        vim.swap_layout(&mut layout);
+        editor.vim.set_scrolloff(screen.scrolloff);
     }
-    feed(&mut vim, &mut buffer, &mut selections, keys);
-    let visual = matches!(vim.mode(), Mode::Visual(_));
-    let primary = selections.primary();
+    editor.keys(keys);
+    let visual = matches!(editor.vim.mode(), Mode::Visual(_));
+    let primary = editor.selections.primary();
     let state = State {
-        text: render(&buffer, selections.iter().map(|s| s.head)),
-        mode: mode_name(vim.mode()).to_owned(),
-        selection: render_visual(&buffer, visual.then_some(primary.anchor), primary.head),
+        text: editor.cursors(),
+        mode: mode_name(editor.vim.mode()).to_owned(),
+        selection: render_visual(
+            &editor.buffer,
+            visual.then_some(primary.anchor),
+            primary.head,
+        ),
     };
-    let mut viewport = Viewport::default();
-    vim.swap_viewport(&mut viewport);
-    (state, viewport.top())
+    (state, editor.pane.viewport.top())
 }

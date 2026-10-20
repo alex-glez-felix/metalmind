@@ -34,6 +34,8 @@ unicode-segmentation.workspace = true
 [dev-dependencies]
 divan.workspace = true
 gpui-pre = { workspace = true, features = ["test-support"] }
+gpui-pre-wgpu.workspace = true
+gungraun.workspace = true
 metalmind-perf.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
@@ -55,6 +57,11 @@ harness = false
 
 [[bench]]
 name = "formulas"
+harness = false
+
+# Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
+[[bench]]
+name = "instrucciones"
 harness = false
 
 [lints]

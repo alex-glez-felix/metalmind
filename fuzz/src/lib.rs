@@ -3,7 +3,9 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
-use metalmind_vim::{Clipboard, Key, Mode, SystemRegister, Vim};
+use metalmind_vim::{
+    Clipboard, DocState, FileId, Key, Mode, PaneState, SystemRegister, Target, Vim,
+};
 
 /// Más que esto y una sola tecla con count tarda segundos: el fuzzer
 /// buscaría lentitud esperada en vez de bugs.
@@ -244,6 +246,8 @@ pub fn initial_selections(buffer: &Buffer, raw: &[u16]) -> Selections {
 pub struct Host {
     pub buffer: Buffer,
     pub selections: Selections,
+    pub doc: DocState,
+    pub pane: PaneState,
     pub clipboard: FuzzClipboard,
 }
 
@@ -255,6 +259,8 @@ impl Host {
         Self {
             buffer,
             selections,
+            doc: DocState::default(),
+            pane: PaneState::default(),
             clipboard: FuzzClipboard::default(),
         }
     }
@@ -268,7 +274,7 @@ impl Host {
                 }
             }
             Input::Paste(text) => {
-                if let Err(error) = vim.insert_text(text, &mut self.buffer, &mut self.selections) {
+                if let Err(error) = vim.paste_text(text, &mut self.target()) {
                     panic!("pegar {text:?} dio un error de buffer: {error}");
                 }
             }
@@ -289,14 +295,21 @@ impl Host {
     }
 
     pub fn press(&mut self, vim: &mut Vim, key: Key) {
-        let result = vim.feed_with_clipboard(
-            key,
-            &mut self.buffer,
-            &mut self.selections,
-            &mut self.clipboard,
-        );
+        let result = vim.feed(key, &mut self.target());
         if let Err(error) = result {
             panic!("{key:?} dio un error de buffer, que el motor promete que no pasa: {error}");
+        }
+    }
+
+    /// Lo que se le presta al motor, con el portapapeles de prueba.
+    fn target(&mut self) -> Target<'_> {
+        Target {
+            buffer: &mut self.buffer,
+            selections: &mut self.selections,
+            doc: &mut self.doc,
+            pane: &mut self.pane,
+            file: FileId::default(),
+            clipboard: Some(&mut self.clipboard),
         }
     }
 
