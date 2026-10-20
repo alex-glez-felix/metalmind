@@ -25,12 +25,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use metalmind_config::HistoryRetention;
-
 pub use deleted::{DeletedId, DeletedNote};
 pub use diff::{ChunkKind, DiffChunk, RestoreEdit, RestorePlan, TextDiff};
 pub use kind::{AUTOSAVE_GROUP, VersionKind};
 pub use prune::Pruned;
+pub use retention::Retention;
+#[cfg(test)]
+pub(crate) use retention::TEST_RETENTION;
 
 use crate::file::FileError;
 use crate::path::VaultPath;
@@ -136,7 +137,7 @@ impl HistoryError {
 /// (la app y la CLI) pueden usar el mismo a la vez.
 pub struct History {
     store: Store,
-    retention: HistoryRetention,
+    retention: Retention,
     latest: Mutex<Option<Latest>>,
 }
 
@@ -152,7 +153,7 @@ struct Latest {
 impl History {
     /// El historial que vive en `dir`; no crea nada hasta el primer guardado.
     #[must_use]
-    pub fn new(dir: impl Into<PathBuf>, retention: HistoryRetention) -> Self {
+    pub fn new(dir: impl Into<PathBuf>, retention: Retention) -> Self {
         Self {
             store: Store::new(dir.into()),
             retention,

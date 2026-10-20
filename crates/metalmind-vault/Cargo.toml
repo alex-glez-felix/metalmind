@@ -15,7 +15,6 @@ ignore.workspace = true
 jiff.workspace = true
 log.workspace = true
 miniz_oxide.workspace = true
-metalmind-config.workspace = true
 notify.workspace = true
 notify-debouncer-full.workspace = true
 metalmind-syntax.workspace = true

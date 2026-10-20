@@ -15,16 +15,15 @@ use std::fmt::Write as _;
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use metalmind_config::HistoryRetention;
 use metalmind_vault::{AUTOSAVE_GROUP, History, VaultPath, VersionKind};
 use pretty_assertions::assert_eq;
-use support::history::{contents, epoch, path};
+use support::history::{RETENTION, contents, epoch, path};
 use tempfile::TempDir;
 
 const SECOND: Duration = Duration::from_secs(1);
 
 fn history(dir: &TempDir) -> History {
-    History::new(dir.path(), HistoryRetention::default())
+    History::new(dir.path(), RETENTION)
 }
 
 fn kinds(history: &History, note: &VaultPath) -> Vec<VersionKind> {

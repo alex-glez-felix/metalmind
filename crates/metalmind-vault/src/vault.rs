@@ -8,7 +8,6 @@ use std::time::{Duration, SystemTime};
 
 use arc_swap::ArcSwap;
 use jiff::civil::DateTime;
-use metalmind_config::{HistoryRetention, Paths};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{Debouncer, RecommendedCache, new_debouncer};
 
@@ -19,7 +18,7 @@ use crate::attachment::{
 use crate::capture::{self, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
 use crate::file::{FileError, create_atomic, write_atomic};
-use crate::history::{History, HistoryError, VersionId};
+use crate::history::{History, HistoryError, Retention, VersionId};
 use crate::index::VaultIndex;
 use crate::links::LinkIndex;
 #[cfg(doc)]
@@ -116,9 +115,10 @@ pub struct VaultOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryOptions {
-    /// El historial va en la carpeta de datos del vault: `paths.vault_data`.
-    pub paths: Paths,
-    pub retention: HistoryRetention,
+    /// La carpeta del historial, fuera del vault (06 §3); se crea al primer
+    /// guardado.
+    pub dir: PathBuf,
+    pub retention: Retention,
 }
 
 impl Default for VaultOptions {
@@ -229,10 +229,9 @@ impl Vault {
         let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
             read_note(&root, path)
         });
-        let history = options.history.map(|options| {
-            let dir = options.paths.vault_data(&root).join("history");
-            Arc::new(History::new(dir, options.retention))
-        });
+        let history = options
+            .history
+            .map(|options| Arc::new(History::new(options.dir, options.retention)));
         let index = Arc::new(ArcSwap::from_pointee(files));
         let links = Arc::new(ArcSwap::from_pointee(links));
         let tags = Arc::new(ArcSwap::from_pointee(tags));

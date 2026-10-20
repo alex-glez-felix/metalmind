@@ -4083,7 +4083,6 @@ dependencies = [
  "insta",
  "jiff",
  "log",
- "metalmind-config",
  "metalmind-perf",
  "metalmind-syntax",
  "miniz_oxide 0.9.1",

@@ -2,7 +2,7 @@
 
 El vault en disco, sin GUI.
 
-- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag y la de adjuntos. `VaultRoot::new(raíz)` solo comprueba la raíz, y `VaultRoot::files()` lista sus archivos sin leer notas ni vigilar, para la CLI. Con `Vault::open_with(raíz, opciones)`, `VaultOptions::history` (las `Paths` de `metalmind-config` y la retención) le da historial de versiones; sin eso no tiene.
+- `Vault::open(raíz)`: indexa la carpeta con `ignore` y la vigila con `notify`. Devuelve el `Vault` y un receptor de `VaultUpdate { changes, snapshot, links, tags, tag_changes }`; `Vault::open_with(raíz, opciones)` elige la carpeta de las páginas de tag y la de adjuntos. `VaultRoot::new(raíz)` solo comprueba la raíz, y `VaultRoot::files()` lista sus archivos sin leer notas ni vigilar, para la CLI. Con `Vault::open_with(raíz, opciones)`, `VaultOptions::history` (la carpeta del historial y su `Retention`) le da historial de versiones; sin eso no tiene. El vault no sabe dónde guarda sus datos la app ni lee la config: eso lo decide quien lo abre.
 - `Vault::snapshot()`: el `VaultIndex` de este momento, sin bloquear (`ArcSwap`). `children(carpeta)` recorre el árbol ya ordenado (carpetas primero, nombre sin mayúsculas); `files()` da notas y adjuntos para el finder. `VaultIndex::from_entries` arma uno a mano, para tests y benchmarks.
 - `VaultChange`: `Created`, `Removed`, `Renamed` (cubre el contenido de una carpeta) y `Modified`. Un guardado atómico es `Modified`, no borrar y crear.
 - `VaultPath`: ruta relativa con `/`, nunca sale de la raíz ni apunta a algo oculto.

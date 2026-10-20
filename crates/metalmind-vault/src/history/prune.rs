@@ -37,7 +37,7 @@ impl History {
         running: impl Fn() -> bool,
     ) -> Result<Pruned, HistoryError> {
         let now = to_millis(now);
-        let deleted_for = millis(self.retention.deleted());
+        let deleted_for = millis(self.retention.deleted);
         let expired =
             |deleted: Option<i64>| deleted.is_some_and(|at| now.saturating_sub(at) > deleted_for);
         let mut pruned = Pruned::default();

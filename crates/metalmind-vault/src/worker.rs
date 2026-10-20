@@ -336,10 +336,10 @@ impl<'a> Inbox<'a> {
 mod tests {
     use std::fs;
 
-    use metalmind_config::HistoryRetention;
     use tempfile::TempDir;
 
     use super::*;
+    use crate::history::TEST_RETENTION;
 
     fn worker(root: &Path, history: &Arc<History>) -> Worker {
         let (updates, _published) = mpsc::channel();
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn un_guardado_ya_escrito_se_registra_antes_de_seguir_un_renombre() {
         let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let history = Arc::new(History::new(data.path(), TEST_RETENTION));
         let worker = worker(root.path(), &history);
         let (a, b) = (
             VaultPath::new("a.md").unwrap(),
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn un_guardado_en_el_destino_de_un_renombre_espera_al_renombre() {
         let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let history = Arc::new(History::new(data.path(), TEST_RETENTION));
         let worker = worker(root.path(), &history);
         let (a, b) = (
             VaultPath::new("a.md").unwrap(),
@@ -442,7 +442,7 @@ mod tests {
     #[test]
     fn al_renombrarse_lo_que_tiene_la_nota_tambien_es_una_version() {
         let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let history = Arc::new(History::new(data.path(), TEST_RETENTION));
         let worker = worker(root.path(), &history);
         let (a, b) = (
             VaultPath::new("a.md").unwrap(),
@@ -466,7 +466,7 @@ mod tests {
     #[test]
     fn un_guardado_que_espera_se_registra_antes_que_lo_que_ya_hay_en_disco() {
         let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-        let history = Arc::new(History::new(data.path(), HistoryRetention::default()));
+        let history = Arc::new(History::new(data.path(), TEST_RETENTION));
         let worker = worker(root.path(), &history);
         let note = VaultPath::new("a.md").unwrap();
         let (messages, received) = mpsc::channel();
