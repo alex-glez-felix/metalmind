@@ -185,7 +185,8 @@ impl gpui_kit::Element for EditorElement {
         let top = view.viewport.top();
         let scroll = editor.scroll.follow(top, editor.synced_top);
         let cell = em_width(&typeface, window);
-        let gutter = Gutter::new(&view, marks, self.theme.gutter_mark_columns, rows, cell);
+        let mark_columns = self.theme.layout.gutter_mark_columns;
+        let gutter = Gutter::new(&view, marks, mark_columns, rows, cell);
         let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
         let math = MathFrame {
             formulas: formulas.read(cx),
@@ -354,7 +355,6 @@ fn rows_of(line_height: Pixels, theme: &Theme, formulas: Arc<dyn FormulaRows>) -
     Rows {
         text: to_units(text.round()),
         headings: theme
-            .markdown
             .headings
             .map(|(scale, _)| to_units((text * scale).round())),
         formulas: Some(formulas),
@@ -371,23 +371,23 @@ fn geometry_of(
     let text_system = window.text_system();
     let font_id = text_system.resolve_font(&typeface.font);
     Geometry {
-        size: f32::from(typeface.size) * theme.markdown.math_size,
+        size: f32::from(typeface.size) * theme.text.math.0,
         line_height: f32::from(line_height),
         ascent: f32::from(text_system.ascent(font_id, typeface.size)).abs(),
         descent: f32::from(text_system.descent(font_id, typeface.size)).abs(),
-        block_margin: f32::from(theme.markdown.math_block_margin),
+        block_margin: f32::from(theme.layout.math_block_margin),
     }
 }
 
 /// Una fórmula se pinta con la letra de las fórmulas, la escala de la
 /// pantalla, el color del texto y el margen del tema.
 fn look_of(geometry: Geometry, theme: &Theme, window: &Window) -> Look {
-    let color = theme.foreground.to_rgb();
+    let color = theme.ui.foreground.to_rgb();
     Look {
         size: geometry.size,
         scale: window.scale_factor(),
         color: [color.r, color.g, color.b, color.a],
-        padding: f32::from(theme.markdown.math_padding),
+        padding: f32::from(theme.layout.math_padding),
     }
 }
 

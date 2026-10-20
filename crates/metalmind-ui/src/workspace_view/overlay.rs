@@ -60,7 +60,7 @@ impl Overlay {
             .flex()
             .flex_col()
             .items_center()
-            .pt(theme.picker_top)
+            .pt(theme.layout.picker_top)
             .child(picker)
             .into_any_element()
     }

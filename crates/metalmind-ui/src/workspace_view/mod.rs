@@ -301,7 +301,7 @@ impl WorkspaceView {
                         .flex_1()
                         .min_w_0()
                         .min_h_0()
-                        .border_color(theme.pane_border)
+                        .border_color(theme.ui.pane_border)
                         .when(index > 0, |cell| match axis {
                             Axis::Row => cell.border_l(theme.pane_border_width),
                             Axis::Column => cell.border_t(theme.pane_border_width),
@@ -336,8 +336,8 @@ impl Render for WorkspaceView {
             .size_full()
             .font_family(theme.font_family.clone())
             .map(|element| theme.ui_text(element))
-            .text_color(theme.foreground)
-            .bg(theme.background)
+            .text_color(theme.ui.foreground)
+            .bg(theme.ui.background)
             // Los comandos y las acciones del motor llegan aquí desde
             // cualquier vista; lo demás llega solo si su vista no tenía el
             // foco.

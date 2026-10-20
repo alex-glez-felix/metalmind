@@ -33,13 +33,13 @@ impl RowLine {
     pub fn new(row: PickerRow, theme: &Theme) -> Self {
         Self {
             row,
-            matched: theme.picker_match,
-            muted: theme.picker_muted,
-            strong: theme.weight_strong,
+            matched: theme.ui.picker_match,
+            muted: theme.ui.picker_muted,
+            strong: theme.text.strong,
             text_size: theme.ui_font_size,
             detail_size: theme.ui_small_font_size,
-            gap: theme.picker_gap,
-            detail_share: theme.picker_detail_share,
+            gap: theme.layout.picker_gap,
+            detail_share: theme.layout.picker_detail_share,
         }
     }
 }

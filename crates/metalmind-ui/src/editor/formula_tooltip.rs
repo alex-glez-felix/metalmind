@@ -58,7 +58,7 @@ pub fn show(hover: &Hover, clip: Bounds<Pixels>, theme: &Theme, window: &mut Win
         window.viewport_size().width,
     );
     // GPUI corre el tooltip un píxel del ancla, el grosor del borde.
-    let gap = theme.border_width;
+    let gap = theme.stroke.border;
     window.set_tooltip(AnyTooltip {
         view,
         mouse_position: origin - point(gap, gap),

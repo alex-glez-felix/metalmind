@@ -20,30 +20,30 @@ impl<D: PickerDelegate> Render for PickerView<D> {
         let row_height = theme.picker_row_height();
         let list_height = fit::list_height(
             self.delegate.len(),
-            theme.picker_rows,
+            theme.layout.picker_rows,
             f32::from(row_height),
-            f32::from(theme.border_width),
+            f32::from(theme.stroke.border),
         );
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_dispatch))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(PickerEvent::Dismissed)))
-            .w(theme.picker_width)
+            .w(theme.layout.picker_width)
             .max_w(relative(0.9))
             .flex()
             .flex_col()
             .overflow_hidden()
-            .bg(theme.picker_background)
-            .border(theme.border_width)
-            .border_color(theme.picker_border)
-            .rounded(theme.radius_lg)
+            .bg(theme.ui.picker_background)
+            .border(theme.stroke.border)
+            .border_color(theme.ui.picker_border)
+            .rounded(theme.radius.lg)
             .child(self.render_input(&theme, cx))
             .child(
                 div()
                     .h(px(list_height))
-                    .border_t(theme.border_width)
-                    .border_color(theme.picker_border)
+                    .border_t(theme.stroke.border)
+                    .border_color(theme.ui.picker_border)
                     .child(self.render_list(&theme, row_height, cx)),
             )
     }
@@ -62,17 +62,22 @@ impl<D: PickerDelegate> PickerView<D> {
             .relative()
             .flex()
             .items_center()
-            .px(theme.picker_padding_x)
-            .py(theme.picker_input_padding_y)
+            .px(theme.layout.picker_padding_x)
+            .py(theme.layout.picker_input_padding_y)
             .child(div().child(before.to_owned()))
             .when(!marked.is_empty(), |input| {
                 input.child(div().underline().child(marked))
             })
-            .child(div().w(theme.caret_width).h(caret_height).bg(theme.caret))
+            .child(
+                div()
+                    .w(theme.stroke.caret)
+                    .h(caret_height)
+                    .bg(theme.cursor.insert),
+            )
             .when(empty, |input| {
                 input.child(
                     div()
-                        .text_color(theme.picker_muted)
+                        .text_color(theme.ui.picker_muted)
                         .child(self.options.placeholder.clone()),
                 )
             })
@@ -80,10 +85,10 @@ impl<D: PickerDelegate> PickerView<D> {
             .children(self.delegate.status().map(|status| {
                 div()
                     .ml_auto()
-                    .pl(theme.picker_gap)
+                    .pl(theme.layout.picker_gap)
                     .flex_none()
                     .map(|element| theme.ui_small_text(element))
-                    .text_color(theme.picker_muted)
+                    .text_color(theme.ui.picker_muted)
                     .child(status)
             }))
             .child(
@@ -107,10 +112,10 @@ impl<D: PickerDelegate> PickerView<D> {
         if self.delegate.len() == 0 {
             return div()
                 .h(row_height)
-                .px(theme.picker_padding_x)
+                .px(theme.layout.picker_padding_x)
                 .flex()
                 .items_center()
-                .text_color(theme.picker_muted)
+                .text_color(theme.ui.picker_muted)
                 .child(self.delegate.empty())
                 .into_any_element();
         }
@@ -139,7 +144,7 @@ impl<D: PickerDelegate> PickerView<D> {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = row == self.delegate.selected();
-        let hover = theme.picker_hover;
+        let hover = theme.ui.picker_hover;
         let line = RowLine::new(self.delegate.row(row), theme);
         div()
             .id(row)
@@ -147,8 +152,8 @@ impl<D: PickerDelegate> PickerView<D> {
             .h(row_height)
             .flex()
             .items_center()
-            .px(theme.picker_padding_x)
-            .when(selected, |row| row.bg(theme.picker_selected))
+            .px(theme.layout.picker_padding_x)
+            .when(selected, |row| row.bg(theme.ui.picker_selected))
             .when(!selected, |row| row.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
             .child(line)
