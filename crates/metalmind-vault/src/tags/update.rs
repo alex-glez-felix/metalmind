@@ -241,16 +241,16 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         let folder = VaultPath::fixed(DEFAULT_TAGS_FOLDER);
         let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         let mut tags = Tags::build(folder.clone(), &index, read);
         for batch in batches {
             let mut touched = Touched::default();
             for op in batch {
                 touched.merge(apply(&root, op));
             }
-            let changes = refresh(&mut index, &root, &touched);
+            let changes = refresh(&mut index, &root, &touched, None);
             tags.apply(&changes, &index, &read);
-            let full = Tags::build(folder.clone(), &scan(&root), read);
+            let full = Tags::build(folder.clone(), &scan(&root, None), read);
             prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
         }
         Ok(())
