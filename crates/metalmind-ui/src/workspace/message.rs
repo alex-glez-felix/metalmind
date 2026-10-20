@@ -1,5 +1,6 @@
 //! El último aviso, el que vim muestra en la línea de comandos.
 
+use metalmind_vault::Unwatched;
 use metalmind_vim::{Substitution, Wrap};
 
 use super::DocumentId;
@@ -96,6 +97,19 @@ impl Message {
         ))
     }
 
+    /// El vault dejó de ver los cambios de fuera, y cómo arreglarlo; el log
+    /// dice además cómo dejarlo así al reiniciar.
+    #[must_use]
+    pub fn unwatched(reason: Unwatched) -> Self {
+        let text = match reason {
+            Unwatched::WatchLimit => {
+                "no se ven los cambios de fuera: se acabaron los watches de inotify; \
+                 súbelos con sudo sysctl fs.inotify.max_user_watches=524288 y reabre"
+            }
+        };
+        Self::Error(text.to_owned())
+    }
+
     /// `:wa` con un buffer sin archivo.
     #[must_use]
     pub fn no_file_name_for(id: DocumentId) -> Self {
@@ -111,6 +125,17 @@ mod tests {
     use metalmind_vault::FileError;
 
     use super::*;
+
+    #[test]
+    fn sin_watches_dice_como_subir_el_limite() {
+        let Message::Error(text) = Message::unwatched(Unwatched::WatchLimit) else {
+            panic!("es un error");
+        };
+        assert!(
+            text.contains("sudo sysctl fs.inotify.max_user_watches="),
+            "{text}"
+        );
+    }
 
     #[test]
     fn un_guardado_que_falla_dice_la_causa_primero() {

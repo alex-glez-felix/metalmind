@@ -12,7 +12,7 @@ use std::{fs, thread};
 
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use metalmind_config::Paths;
-use metalmind_vault::{Vault, VaultPath, VaultUpdate};
+use metalmind_vault::{Unwatched, Vault, VaultPath, VaultUpdate};
 
 use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
@@ -29,6 +29,9 @@ pub enum SessionError {
 /// Un lote del watcher, ya aplicado al índice.
 pub struct VaultChanged(pub VaultUpdate);
 
+/// El vault dejó de ver los cambios de fuera mientras estaba abierto.
+pub struct WatchLost(pub Unwatched);
+
 pub struct VaultSession {
     /// Compartido con el panel lateral, que hace las operaciones de archivo.
     vault: Rc<Vault>,
@@ -36,11 +39,13 @@ pub struct VaultSession {
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
     notes: Arc<[Note]>,
+    unwatched: Option<Unwatched>,
     _updates: Task<()>,
     _quit: Subscription,
 }
 
 impl EventEmitter<VaultChanged> for VaultSession {}
+impl EventEmitter<WatchLost> for VaultSession {}
 
 /// Lo que se prepara antes de abrir la ventana: los hilos que siguen al
 /// vault y guardan los recientes, y los recientes guardados.
@@ -100,11 +105,13 @@ impl VaultSession {
             async {}
         });
         let notes = notes(&vault.snapshot(), &recents);
+        let unwatched = vault.unwatched();
         Self {
             vault: Rc::new(vault),
             recents,
             writer,
             notes,
+            unwatched,
             _updates: updates,
             _quit: quit,
         }
@@ -120,6 +127,12 @@ impl VaultSession {
     #[must_use]
     pub fn root(&self) -> &Path {
         self.vault.root()
+    }
+
+    /// Por qué no se ven los cambios de fuera, si no se ven.
+    #[must_use]
+    pub fn unwatched(&self) -> Option<Unwatched> {
+        self.unwatched
     }
 
     /// Lo que lista el finder ahora.
@@ -151,6 +164,11 @@ impl VaultSession {
         }
         self.notes = notes(&update.snapshot, &self.recents);
         cx.emit(VaultChanged(update));
+        // Se pierde al aparecer carpetas, así que llega con un lote.
+        if let (None, Some(reason)) = (self.unwatched, self.vault.unwatched()) {
+            self.unwatched = Some(reason);
+            cx.emit(WatchLost(reason));
+        }
         cx.notify();
     }
 
