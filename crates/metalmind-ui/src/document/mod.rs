@@ -8,8 +8,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use metalmind_buffer::{Buffer, BufferError, HistorySeq};
+use metalmind_syntax::Rows;
 use metalmind_vault::{ContentHash, FileError};
-use metalmind_vim::{Layout, Marks, Rows};
+use metalmind_vim::{Layout, Marks};
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
 /// la última no lo lleva.

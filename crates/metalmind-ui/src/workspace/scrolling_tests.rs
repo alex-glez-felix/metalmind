@@ -1,4 +1,5 @@
-use metalmind_vim::{Mode, Rows};
+use metalmind_syntax::Rows;
+use metalmind_vim::Mode;
 use pretty_assertions::assert_eq;
 
 use super::super::test_session::Session;

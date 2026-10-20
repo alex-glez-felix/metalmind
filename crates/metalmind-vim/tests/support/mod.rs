@@ -5,8 +5,9 @@
 pub mod nvim;
 
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
+use metalmind_syntax::Rows;
 use metalmind_vim::{
-    Key, KeyOutcome, Layout, LineHeights, Mode, Rows, Uniform, Viewport, Vim, VisualKind,
+    Key, KeyOutcome, Layout, LineHeights, Mode, Uniform, Viewport, Vim, VisualKind,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,7 +1,8 @@
 //! La ventana de cada panel: cuántas filas le caben y la rueda del ratón.
 
 use metalmind_buffer::Buffer;
-use metalmind_vim::{LineHeights, Mode, Rows, Uniform};
+use metalmind_syntax::Rows;
+use metalmind_vim::{LineHeights, Mode, Uniform};
 
 use super::{Pane, PaneId, Workspace, WorkspaceError};
 use crate::document::Editable;
