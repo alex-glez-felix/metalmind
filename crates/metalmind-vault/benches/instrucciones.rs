@@ -20,6 +20,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
+use std::hash::{BuildHasherDefault, DefaultHasher};
 use std::hint::black_box;
 use std::path::Path;
 
@@ -35,7 +36,11 @@ use tempfile::TempDir;
 const NOTES: usize = 5_000;
 const ATTACHMENTS: usize = 1_000;
 
-type Files = HashMap<VaultPath, (EntryKind, String)>;
+/// Sin orden, como los archivos que el vault le pasa al índice de links,
+/// pero con claves fijas: con la semilla de cada proceso el orden cambiaba
+/// entre corridas, y con él la forma de los `BTreeSet` del índice y lo que
+/// cuesta tocarlos (hasta 5.5 % en un cambio del watcher).
+type Files = HashMap<VaultPath, (EntryKind, String), BuildHasherDefault<DefaultHasher>>;
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -71,7 +76,7 @@ fn index(names: NoteNames) -> LinkIndex {
 
 // Un cambio del watcher: modificar una nota y crear una cuyo nombre usan
 // 300 links de las 100 carpetas.
-#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
+#[library_benchmark]
 #[bench::modificar_una_nota(args = (NoteNames::Repeated), setup = modified)]
 #[bench::crear_una_nota_que_empata(args = (NoteNames::Repeated), setup = created)]
 fn links_cambio_del_watcher(
@@ -116,17 +121,8 @@ fn links_clonar_el_indice(index: LinkIndex) -> (LinkIndex, LinkIndex) {
 #[library_benchmark]
 #[bench::una_nota(args = (NoteNames::Unique, "area-3/tema-4/nota-3-4-7.md", "area-3/tema-4/otra.md"), setup = rename)]
 #[bench::una_carpeta_nombres_repetidos(args = (NoteNames::Repeated, "area-3", "archivo/area-3"), setup = rename)]
-fn links_plan_de_renombre(
-    (index, from, to): (LinkIndex, VaultPath, VaultPath),
-) -> (RenamePlan, LinkIndex) {
-    black_box((index.rename_plan(&from, &to).unwrap(), index))
-}
-
-// Mover una carpeta con nombres únicos varía más entre corridas (ver
-// `MAX_NOISY_INSTRUCTION_REGRESSION`).
-#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
 #[bench::una_carpeta_nombres_unicos(args = (NoteNames::Unique, "area-3", "archivo/area-3"), setup = rename)]
-fn links_plan_de_mover_con_nombres_unicos(
+fn links_plan_de_renombre(
     (index, from, to): (LinkIndex, VaultPath, VaultPath),
 ) -> (RenamePlan, LinkIndex) {
     black_box((index.rename_plan(&from, &to).unwrap(), index))
@@ -137,7 +133,7 @@ fn rename(names: NoteNames, from: &str, to: &str) -> (LinkIndex, VaultPath, Vaul
 }
 
 // `gd` sobre el último link de una nota de 5 000 líneas.
-#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
+#[library_benchmark]
 #[bench::lineas_5k(args = (NoteNames::Repeated), setup = follow_setup)]
 fn links_seguir_un_link(
     (index, text, offset): (LinkIndex, String, usize),
@@ -265,7 +261,6 @@ library_benchmark_group!(
         links_cambio_del_watcher,
         links_clonar_el_indice,
         links_plan_de_renombre,
-        links_plan_de_mover_con_nombres_unicos,
         links_seguir_un_link,
         links_nombrar_para_completar,
         adjuntos_huerfanos
