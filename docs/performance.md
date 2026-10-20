@@ -21,7 +21,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Operación | Objetivo | Hoy | | Bench |
 |---|---|---|---|---|
 | Arranque al primer frame, archivo chico / 50 k líneas / en un vault de 5 k notas (abre el vault antes de la ventana) | ≤ 300 ms | p50 109–166 / 162–233 / 187–192 ms (lavapipe); 244–297 ms el spike en la máquina de pruebas | ⚠️ | `metalmind` `ui` ([abajo](#benchmark-de-la-ui)) |
-| `metalmind add` / `metalmind search` de punta a punta (proceso entero, vault de 500 notas, build de debug) | ≤ 500 ms | 4 / 6 ms | ✅ | test `add_y_search_terminan_rapido` (`crates/metalmind/tests/commands.rs`) |
+| `metalmind add` / `metalmind search` de punta a punta (proceso entero, vault de 500 notas, build de debug) | ≤ 500 ms | 4 / 6 ms | ✅ | medido a mano; en CI, que no arrancan la GUI (test `add_y_search_terminan_en_un_vault_de_500_notas`, sin display) y leer el vault (`metalmind-vault` `instrucciones`) |
 | Primer `space f` en un vault de 5 k notas, hasta abrir la nota elegida | ≤ 300 ms (el vault, antes del primer frame) | p50 31–41 ms, p95 ≤ 42 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Tecla en Insert / Normal / `ctrl-d`, 50 k líneas, de la tecla al frame | < 16 ms | p50 0.95–1.02 / 0.86–0.89 / 1.49–1.57 ms; p95 ≤ 1.8 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Render: CPU por frame (`render` de la raíz → último `paint`), mismas teclas y ráfaga de `ctrl-d` | ≤ 4 ms (240 Hz) | p50 0.72–1.42 ms, p95 ≤ 1.7 ms (lavapipe); p99 1.05 ms el spike | ✅ | `metalmind` `ui` |
@@ -142,7 +142,7 @@ Lo que encontró:
 - El markdown con estilo (headings con su tamaño, código, links, tags) no movió el CPU por frame: la misma nota, que tiene de todo eso, daba 0.77 ms por tecla en Insert y 1.38 ms por `ctrl-d` justo antes, en la misma máquina, y ahora da 0.75–0.79 y 1.34–1.42 ms.
 - Cada tecla se pinta en su propio frame también en ráfaga: 200 `ctrl-d` dan 200 frames, ~1.2 ms cada uno, sin acumular teclas pendientes.
 - `ctrl-d` cuesta casi el doble que una tecla en Insert (~1.4 contra ~0.77 ms de CPU): entra media pantalla de líneas que GPUI no tenía en caché y les da forma, cuando una tecla en Insert solo cambia una. Sigue lejos de los 4 ms.
-- Ninguna fila de la ventana necesita hoy una guarda en CI: la p50 de las teclas y del CPU por frame queda a menos de la mitad de su objetivo aun con el render en la CPU, y el arranque solo vale en la máquina de pruebas. Una guarda determinista del render, contando instrucciones de layout y paint sin ventana, queda en [#72](https://github.com/alex-glez-felix/metalmind/issues/72).
+- Ninguna fila de la ventana necesita hoy una guarda en CI: la p50 de las teclas y del CPU por frame queda a menos de la mitad de su objetivo aun con el render en la CPU, y el arranque solo vale en la máquina de pruebas. La guarda del render en el CI cuenta instrucciones de la tecla al frame sin ventana (capa 2, [#72](https://github.com/alex-glez-felix/metalmind/issues/72)).
 
 Para comparar un cambio en la UI, la misma máquina antes y después:
 
@@ -185,6 +185,12 @@ Lo que encontró:
 - **Memoria**: el layout se guarda en em, sin color, en dos generaciones de 4 096 fórmulas; las imágenes, con tope de 32 MB (una fórmula ocupa ~29 KB a escala 1 y ~115 KB a escala 2, 08 §5), y lo que sale de la caché se suelta del atlas de GPUI.
 - El rasterizador propio de la `DisplayList` que dejaba abierto 08 §7 no hizo falta: pintar va en el fondo y cuesta 0.12 ms por fórmula.
 
+## El CI
+
+> **Decisión de Alex (2026-10-19):** el CI se queda en los **runners gratis de GitHub** (nada de Blacksmith ni runners de pago) y **prefiere un CI lento a una app lenta**. Las guardas no se aflojan para que el CI tarde menos: si contar instrucciones en cada PR lo hace más lento, se paga en tiempo de CI.
+
+Por eso las guardas del CI cuentan instrucciones y no miden tiempo: en un runner compartido el reloj varía más que las regresiones que se quieren atrapar, y contar no depende de la máquina. valgrind se instala en cada job que lo usa (`test` y `instrucciones`), con sus paquetes de apt en caché (`awalsh128/cache-apt-pkgs-action`). Lo que costó, en una PR del 2026-10-19 contra la anterior sin estas guardas: el job `test` pasó de 6 a 20 min (la suite, de 249 a 976 s, casi todo bajo callgrind) e `instrucciones` de 3.5 a 18.5 min, compilando GPUI en release sin caché, que en `main` queda guardado.
+
 ## Tres capas contra regresiones
 
 ### 1. Benchmarks de tiempo (`divan`, local)
@@ -195,58 +201,100 @@ No sirven para CI: en los runners de GitHub el tiempo de pared varía más que l
 
 ### 2. Conteo de instrucciones en cada PR (`gungraun`, CI)
 
-`crates/metalmind-perf/benches/instrucciones.rs` cuenta instrucciones con callgrind para un subconjunto de la tabla: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal, patológico y con fórmulas), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer. La búsqueda en el vault no entra: lee el disco con varios hilos y su conteo no es determinista. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
+Tres benchmarks `instrucciones` cuentan instrucciones con callgrind para lo del presupuesto que corre en un hilo sobre datos en memoria. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
 
-`gungraun` 0.20 y no `iai-callgrind`: es el mismo proyecto renombrado; `iai-callgrind` se quedó en 0.16.1 (julio de 2025) y `gungraun` sigue publicando (0.20.0, septiembre de 2026).
+- `metalmind-perf/benches/instrucciones.rs`, el núcleo: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal, patológico y con fórmulas), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer.
+- `metalmind-vault/benches/instrucciones.rs`, los índices, con 5 k notas: un cambio del watcher en el de links (modificar una nota, crear una cuyo nombre usan 300 links), clonarlo, los planes de renombre (una nota, una carpeta), `gd`, nombrar 50 notas para completar `[[`, los adjuntos huérfanos y los tags (consulta con descendientes, panel entero y en focus, candidatos de `#`, plan de renombre y clonarlos). Abrir el vault (disco, varios hilos) y armar el índice de links, que reparte el scan en un hilo por núcleo, van en la preparación: gungraun solo cuenta el hilo de la función medida. Que armar el índice siga lineal lo cuentan, con todos sus hilos, las pruebas de complejidad.
+- `metalmind-ui/benches/instrucciones.rs`, los modelos (una tecla en el finder con 5 k rutas, el árbol del panel, medir las fórmulas en frío y en caliente, pintar las 22 del spike, `space /`) y **el editor de la tecla al frame** ([#72](https://github.com/alex-glez-felix/metalmind/issues/72)): la ventana de verdad (`metalmind_ui::open_window`) en la plataforma de pruebas de GPUI (`HeadlessAppContext`), sin display ni GPU, con el sistema de texto que GPUI usa en Linux (cosmic-text con las fuentes del sistema), así que el layout le da forma a cada línea como en la app. Cuenta el primer frame (nota de 50 k líneas, nota con 200 fórmulas, nota en un vault de 5 k notas) y una tecla con su frame (Insert, `j` y `ctrl-d` a la mitad de 50 k líneas; `ctrl-d` con 200 fórmulas y la caché fría): el motor de vim, `render`, layout y `paint`. No cuenta `present` ni la GPU, ni las imágenes de las fórmulas, que se pintan después en el fondo.
+
+La búsqueda de texto en el vault no entra: lee el disco con varios hilos. Que el render no dependa del largo de la nota lo vigila además una prueba de complejidad (capa 3): una tecla en Insert y un `ctrl-d` cuestan lo mismo con 5 k que con 80 k líneas.
+
+`gungraun` 0.20 y no `iai-callgrind`: es el mismo proyecto renombrado; `iai-callgrind` se quedó en 0.16.1 (julio de 2025) y `gungraun` sigue publicando (0.20.0, septiembre de 2026, MIT o Apache-2.0; revisado en crates.io el 2026-10-19).
 
 El job `instrucciones` de `.github/workflows/perf.yml`:
 
-- **La referencia de `main` no se guarda: se mide.** En una PR, `HEAD` es el merge con la base y `HEAD^1` es la base. El job corre los benchmarks en la base (`--save-baseline=base`) y luego en la PR (`--baseline=base`), en el mismo runner. Guardar el número de `main` en un caché o un artefacto no sirve: el conteo depende de las extensiones del CPU, porque `memchr` y `ropey` eligen su implementación SIMD al arrancar, y dos runners de GitHub no siempre tienen el mismo CPU. Medir los dos lados en la misma máquina cuesta una corrida más (~15 s de benchmarks y lo que se recompile) y quita esa fuente de error. La base se compila en un `CARGO_TARGET_DIR` aparte: con el mismo, cargo daba por fresco el binario de la base (mismas rutas relativas, fuentes de la PR más viejas) y comparaba la base consigo misma.
-- **Falla si un benchmark sube más del 5 % en instrucciones** (`--callgrind-limits='ir=5%'`). Repetir la corrida en la misma máquina da casi el mismo conteo: la diferencia más grande entre dos corridas fue 0.024 % (la semilla de los `HashMap` cambia por proceso), así que el 5 % es todo margen para regresiones de verdad y deja pasar cambios chicos que mueven unos pocos cientos de instrucciones. Una regresión del 5 % es chica para un usuario, pero 4 PRs de 5 % son un 22 %: el límite es para que cada subida se vea y se discuta cuando aparece.
-- **Una regresión justificada** (una función nueva que cuesta lo que cuesta) se acepta poniendo la etiqueta `rendimiento-aceptado` en la PR: el job vuelve a correr, reporta la diferencia y no falla. La justificación va en la descripción de la PR.
-- **Solo corre si cambia el núcleo medido** (`metalmind-buffer`, `metalmind-vim`, `metalmind-syntax`, `metalmind-search`, `metalmind-perf`, `Cargo.toml`, `Cargo.lock`, el toolchain o el propio workflow), y en `main` con los mismos filtros para dejar el caché de compilación. El tiempo en CI se anota en la PR que lo agrega; si pasa de unos 5 minutos con caché, se recorta el subconjunto. Una PR que solo toca la UI o la documentación no lo paga.
-- Si la PR cambia un benchmark, se compara el de la base con el de la PR, que ya no miden lo mismo: la diferencia de ese benchmark no significa nada y la etiqueta es la salida. Si la base no tiene benchmarks (la PR que los agrega), el job solo los corre.
+- **La referencia de `main` no se guarda: se mide.** En una PR, `HEAD` es el merge con la base y `HEAD^1` es la base. El job corre los benchmarks en la base (`--save-baseline=base`) y luego en la PR (`--baseline=base`), en el mismo runner. Guardar el número de `main` en un caché o un artefacto no sirve: el conteo depende de las extensiones del CPU, porque `memchr` y `ropey` eligen su implementación SIMD al arrancar, y dos runners de GitHub no siempre tienen el mismo CPU. Cada crate se mide en su propio `cargo bench`: compilados juntos, las features de las dependencias compartidas se unifican con las dev-dependencies de los otros (las de GPUI de `metalmind-ui`), y en la primera corrida eso subió entre 12 y 29 % el conteo de `dd`, `ciw` y `.` sin tocar su código. La base se compila en el mismo `target` que la PR, así que las dependencias (GPUI incluido) se compilan una vez. Cargo decide si un crate del workspace está al día por fechas y con rutas relativas al crate: tras medir la base, el job toca (`touch -c`) los archivos que cambia la PR, para que queden más nuevos que lo que compiló la base; si no, mediría el binario de la base dos veces.
+- **Falla si un benchmark sube más del 5 % en instrucciones.** El límite está en el código de cada benchmark (`metalmind_perf::MAX_INSTRUCTION_REGRESSION`, en el `main!`), no en el workflow, porque no es el mismo para todos. Repetir la corrida en la misma máquina mueve el conteo menos de 1 % en casi todos (0.024 % en el núcleo; la semilla de los `HashMap` cambia por proceso), así que el 5 % es margen para regresiones de verdad y deja pasar cambios chicos de unos cientos de instrucciones. Una regresión del 5 % es chica para un usuario, pero 4 PRs de 5 % son un 22 %: el límite es para que cada subida se vea y se discuta cuando aparece.
+- **Tres benchmarks del vault tienen 10 %** (`MAX_NOISY_INSTRUCTION_REGRESSION`): recorren un `HashMap` cuyo orden cambia con la semilla de cada proceso, y en tres corridas de la misma máquina variaron hasta 2.9 % (un cambio del watcher en una nota), 1.9 % (`gd`) y 1.5 % (mover una carpeta con nombres únicos). Con 5 % fallarían al azar; los demás del vault variaron 0.5 % o menos y siguen en 5 %. Son guardas nuevas: ninguna guarda que existía se aflojó.
+- **Una regresión justificada** (una función nueva que cuesta lo que cuesta) se acepta poniendo la etiqueta `rendimiento-aceptado` en la PR: el job vuelve a correr, reporta la diferencia y no falla por una regresión (código de salida 3 de gungraun); cualquier otro error sí lo hace fallar. La justificación va en la descripción de la PR.
+- **Corre si cambia algo medido**: `metalmind-buffer`, `-vim`, `-syntax`, `-search`, `-vault`, `-config` (el tema), `-ui`, `-perf`, `Cargo.toml`, `Cargo.lock`, el toolchain o el propio workflow; y en `main` con los mismos filtros para dejar el caché de compilación (`prefix-key: v3-perf`, con GPUI en release). Una PR que solo toca la documentación o el binario no lo paga.
+- Si la PR cambia un benchmark, se compara el de la base con el de la PR, que ya no miden lo mismo: la diferencia de ese benchmark no significa nada y la etiqueta es la salida. Un benchmark nuevo, o un crate cuyo benchmark la base no tiene, solo se corre.
 
-Conteos de hoy (valgrind 3.25, x86_64), la referencia contra la que se comparará la próxima PR:
+Conteos del 2026-10-19 en un runner `ubuntu-latest` de GitHub (valgrind 3.22, x86_64). Sirven para leer órdenes de magnitud: el job compara contra la base en el mismo runner, y en otra máquina el mismo benchmark da otro número (en una de escritorio, un cambio del watcher en una nota da 45 k).
 
 | Benchmark | Instrucciones |
 |---|---|
-| Insertar un carácter en el buffer, 5 k / 50 k | 18.8 k / 30.9 k |
-| Undo + redo en 50 k | 25.2 k |
-| Tecla en Insert, 5 k / 50 k | 21.0 k / 31.4 k |
-| `dd` / `ciw` / `.` en 5 k | 41.5 k / 311 k / 132 k |
-| `100@a` en 5 k | 32.9 M |
-| `:%s` en 5 k | 107.9 M |
-| `/` sin resultado en 50 k | 6.0 M |
-| Scan 5 k / 50 k | 16.5 M / 165.0 M |
-| Scan patológico: `#` / `[[` / títulos / backticks / 1 MB | 8.8 M / 4.2 M / 5.7 M / 29.1 M / 52.7 M |
-| Estilo tras una tecla en un párrafo (editar el buffer, seguir la edición y pintar la ventana), 5 k / 50 k | 177 k / 551 k |
-| Finder 5 k / 50 k (ordenar todas las coincidencias, para la lista virtual) | 18.9 M / 187.8 M |
+| Insertar un carácter en el buffer, 5 k / 50 k | 19.6 k / 31.7 k |
+| Undo + redo en 50 k | 25.7 k |
+| Tecla en Insert, 5 k / 50 k | 24.3 k / 35.5 k |
+| `dd` / `ciw` / `.` en 5 k | 48.1 k / 342 k / 136 k |
+| `100@a` en 5 k | 36.9 M |
+| `:%s` en 5 k | 108.9 M |
+| `/` sin resultado en 50 k | 6.1 M |
+| Scan 5 k / 50 k | 15.9 M / 158.7 M |
+| Scan patológico: `#` / `[[` / títulos / backticks / 1 MB / `$` | 8.3 M / 4.1 M / 5.6 M / 29.1 M / 50.9 M / 1.6 M |
+| Scan de una nota con 200 fórmulas | 647 k |
+| Estilo tras una tecla en un párrafo, 5 k / 50 k | 189 k / 578 k |
+| Finder 5 k / 50 k (ordenar todas las coincidencias) | 18.9 M / 187.8 M |
 | Texto completo en una nota de 5 k: palabra frecuente / sin resultado | 12.4 M / 459 k |
+| Índice de links, un cambio del watcher: modificar una nota / crear una que empata (10 %) | 353 k / 4.3 M |
+| Clonar el índice de links, 5 k | 43.7 M |
+| Plan de renombre: una nota / una carpeta con nombres repetidos / únicos (10 %) | 752 k / 548.7 M / 191.4 M |
+| `gd` en una nota de 5 k líneas (10 %) / nombrar 50 notas para `[[` | 16.7 M / 3.0 M |
+| Adjuntos huérfanos, 5 k notas | 1.6 M |
+| Tags, 5 k: consulta / panel entero / en focus / candidatos de `#` / plan de renombre / clonarlos | 10.2 M / 17.9 M / 19.9 M / 13.9 M / 1.1 M / 25.0 M |
+| Finder: una tecla con 5 k rutas, peor consulta, y las 12 filas visibles | 17.9 M |
+| Árbol, 5 k: armarlo todo abierto / abrir y cerrar una carpeta / filtrar y quitar el filtro / rename de 10 carpetas | 2.2 M / 5.8 M / 60.7 M / 7.0 M |
+| Fórmulas: medir las 200 en frío / en caliente / pintar las 22 | 103.3 M / 104 k / 81.0 M |
+| `space /`: tecla con una búsqueda corriendo (hilo de la UI) / recibir un lote de 50 | 354 k / 547 k |
+| Editor, primer frame: nota de 50 k líneas / 200 fórmulas / vault de 5 k notas | 47.4 M / 35.2 M / 54.2 M |
+| Editor, de la tecla al frame en 50 k líneas: Insert / `j` / `ctrl-d` | 18.9 M / 18.0 M / 23.0 M |
+| Editor, `ctrl-d` con 200 fórmulas y la caché fría | 20.6 M |
 
-Para correrlo en local hacen falta `valgrind` y `gungraun-runner` de la misma versión que `gungraun` (`cargo binstall gungraun-runner@0.20.0`, o el binario de su release):
+El render cuesta ~18 M instrucciones por tecla en Insert, 500 veces lo que cuesta el motor de vim (35 k): casi todo es GPUI dándole forma y pintando las líneas de la ventana. Entre dos corridas sin cambios en la UI, los del editor variaron 0.7 % o menos.
+
+**Al escribir un benchmark.** gungraun prende la cuenta al entrar en la función medida y la apaga al salir (`--toggle-collect`), y eso tiene tres trampas, las tres encontradas al escribir estos:
+
+- **Solo cuenta ese hilo.** Lo que se reparte en otros hilos (`thread::scope`, el walk del vault) no entra: va en la preparación, y su crecimiento lo vigila una prueba de complejidad, que sí cuenta todos los hilos.
+- **Un closure escrito dentro de la función medida la apaga.** El nombre de lo que lo recibe (`LinkIndex::apply::<…::links_cambio_del_watcher::{closure}>`) contiene el de la función medida, y callgrind la cuenta como otra entrada: la cuenta se apaga ahí adentro. Un cambio del watcher daba 244 instrucciones en vez de 3.2 M. El closure va en una función aparte.
+- **Lo que se suelta adentro cuenta.** La función devuelve lo que recibió (`black_box((resultado, entrada))`) para que se suelte afuera: soltar el índice de 5 k notas dentro del plan de renombre de una nota daba 87 M instrucciones en vez de 131 k.
+
+Si un conteo no cuadra con el tiempo del benchmark `divan` del mismo caso, se mira con `callgrind_annotate` qué funciones entraron.
+
+**Correrlo en local.** Hacen falta `valgrind`, `gungraun-runner` de la misma versión que `gungraun` (`cargo binstall gungraun-runner@0.20.0`, o el binario de su release) y, para `metalmind-ui`, lo que GPUI necesita para compilar y una fuente monoespaciada ([Primeros pasos](GETTING-STARTED.md#correr-metalmind)):
 
 ```sh
-cargo bench -p metalmind-perf --bench instrucciones -- --save-baseline=antes
-# cambios…
-cargo bench -p metalmind-perf --bench instrucciones -- --baseline=antes
+medir() { for p in metalmind-perf metalmind-vault metalmind-ui; do cargo bench -p "$p" --bench instrucciones -- "$@"; done; }
+git switch main && medir --save-baseline=antes
+git switch mi-rama && medir --baseline=antes
 ```
 
-`cargo bench --workspace` incluye este benchmark; sin valgrind, `--exclude metalmind-perf`.
+Cada crate en su propio `cargo bench`, como en el CI (ver arriba). Contra una línea base, el límite de cada benchmark se aplica también en local.
+
+Un solo crate o un solo benchmark: `cargo bench -p metalmind-ui --bench instrucciones -- '*editor_ctrl_d*'` (el filtro es un patrón con `*`). gungraun limpia el entorno del benchmark: con valgrind instalado fuera de las rutas del sistema, `-- --env-clear=false`. `cargo bench --workspace` incluye estos benchmarks; sin valgrind fallan, y los de tiempo se corren por crate (`cargo bench -p metalmind-vim`).
+
+**La línea base.** No hay un número guardado que actualizar: la referencia de cada PR es su base, medida en el mismo runner, y al mergear, `main` pasa a ser la base de la siguiente. En local, la línea base es la que se guarda con `--save-baseline=<nombre>` (en `target/gungraun`); se rehace corriendo otra vez con el mismo nombre. La tabla de conteos de arriba es para leer, no la usa nadie: se actualiza a mano, con los números del job y la fecha, cuando cambian.
+
+**Cuando falla.** La salida del job dice qué benchmark subió y cuánto (`Ir: … (+7.31%)`). Primero se reproduce en local con los comandos de arriba; lo que cambió se ve con `callgrind_annotate` sobre los `callgrind.*.out` de ese benchmark en `target/gungraun/` (de la base y de la rama). Si la subida es un error, se arregla la causa; si es el costo justo de algo nuevo, va la etiqueta `rendimiento-aceptado` y la justificación con números en la PR. Nunca se sube un límite para que pase una PR. Si un benchmark resulta ruidoso (varía más de 1 % entre corridas de la misma máquina), se mide su variación en tres corridas y, con esos números, pasa a `MAX_NOISY_INSTRUCTION_REGRESSION` en su propio `#[library_benchmark(config = …)]`.
 
 ### 3. Pruebas de complejidad (`cargo nextest`, en cada PR)
 
-Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner y el estilo de las líneas, la búsqueda, `:s`, el índice del vault, el de links y el de tags, los lotes de ediciones) tiene un test `complexity.rs` (o `…_es_lineal` en los tests unitarios de `metalmind-vault`) que corre la operación con tamaño N y **16N**:
+Lo que puede volverse cuadrático sin que ningún benchmark de tamaño fijo lo note (el scanner y el estilo de las líneas, la búsqueda, `:s`, el índice del vault, el de links y el de tags, los lotes de ediciones, el recorte de las filas del finder) tiene un test `complexity.rs` (o `…_lineal` en los tests unitarios) que corre la operación con tamaño N y **16N** y compara **instrucciones**, contadas con callgrind:
 
 - El paso es ×16 y no ×4 porque con ×4 un `N^1.5` da ×8, justo entre lineal (×4) y cuadrático (×16), y ningún umbral lo separa de lo lineal con margen. No es teórico: las rachas de backticks sin pareja de largos 1…k miden k² bytes y el código anterior al arreglo costaba k³, o sea `N^1.5` en bytes, y con ×4 pasaba.
-- `metalmind_perf::assert_linear` falla si 16N tarda más de **×40** lo que N. Lineal da ×16; lo peor que se ve en verde son las de tags de `metalmind-vault`, entre ×23 y ×30 (`N log N` con la caché en contra: con 16N el costo por nota sube ×1.5). `N^1.5` da ×64 y cuadrático ×256: ×40 deja casi el doble de margen hacia los dos lados.
-- `metalmind_perf::assert_flat` es para lo que no debería depender del tamaño, como una tecla en Insert: falla con más de **×4** (constante ×1, lineal ×16). En instrucciones, que no ven la caché, una tecla en 50 k líneas cuesta ×1.5 lo que en 5 k.
-- Mide tiempo, no instrucciones: así corre en `cargo nextest` sin valgrind. Para que el ruido no lo tumbe, alterna hasta 11 corridas de cada tamaño y se queda con la más rápida de cada uno (el ruido solo suma tiempo), y exige que la corrida con N dure al menos 1 ms. Si tras 3 rondas lo grande ya gastó 2 s, deja de medir; y nextest corta a los 60 s cualquier test (`.config/nextest.toml`), porque con el código roto hasta una sola corrida grande puede tardar minutos. Corren de a una (el grupo `complexity` de `.config/nextest.toml`): el mínimo quita los picos, no la CPU repartida, y con más pruebas de tiempo que núcleos las de tags llegaron a ×41 en el CI y a ×66 en local con 2 CPU. Con el grupo, la suite tarda el doble en una máquina de 4 hilos (~80 → ~150 s), casi todo en estas pruebas.
+- `metalmind_perf::assert_linear` falla si 16N cuesta más de **×32** lo que N. Lineal da ×16; lo peor que se ve en verde son los tags de `metalmind-vault` (×20–×22, `N log N`). `N^1.5` da ×64 y cuadrático ×256: ×32 deja ×1.5 de margen hacia arriba de lo que hay y ×2 hacia abajo de `N^1.5`. Con tiempo el umbral era ×40, porque la caché en contra subía los tags a ×30.
+- `metalmind_perf::assert_flat` es para lo que no debería depender del tamaño, como una tecla: falla con más de **×4** (constante ×1, lineal ×16). Hoy lo más alto es una tecla en Insert del motor de vim, ×1.8.
+- **Cómo cuenta.** Cada tamaño corre en un proceso aparte: el mismo binario de tests, bajo `valgrind --tool=callgrind`, solo esa prueba (`--exact`) y solo esa medición (`METALMIND_CRECIMIENTO`). La entrada se arma fuera de la cuenta y la cuenta abarca todos los hilos de la operación (`--dump-before`/`--dump-after` alrededor de la función medida), así que también vale para la búsqueda de texto, que recorre el vault con varios hilos. Los dos tamaños corren a la vez y la prueba ocupa dos hilos de nextest (`threads-required` en `.config/nextest.toml`).
+- **Por qué instrucciones.** Con tiempo de reloj había que alternar hasta 11 corridas, quedarse con la más rápida y correr las pruebas de a una, porque con más pruebas que núcleos se repartían la CPU y la proporción salía inflada (los tags llegaron a ×41 en el CI). Contar instrucciones da el mismo número con la máquina cargada o no: las pruebas vuelven a correr en paralelo con todo lo demás y un solo conteo por tamaño basta. Lo que no ve es la caché; para eso están los benchmarks de tiempo.
+- **Necesita valgrind** en el PATH. Sin él, cada prueba sale como ignorada (`cfg(valgrind_available)`, del `build.rs` del crate, como el oráculo de nvim), nunca en verde; el job `test` del CI lo instala y falla si no está. Bajo callgrind todo corre unas 50 veces más lento: la más lenta tarda ~100 s en una máquina de escritorio y ~110 s en el CI. El tope de nextest para estas pruebas es de 10 min; una que se volvió cuadrática falla ahí.
+- La prueba imprime los dos conteos y la proporción (`de n = 2000 a 16n: 52783040 → 1126588582 instrucciones, ×21.34`); nextest lo muestra si falla, o siempre con `--success-output final`.
 
-Comprobado revirtiendo los dos arreglos cuadráticos que encontró la revisión en `metalmind-syntax`: sin el de los títulos `(` sin cerrar, ese test da ×253; sin el de las rachas de backticks fallan tres (rachas ×60, línea de 1 MB ×106, títulos ×256). Un caso que hoy no cumple queda con `#[ignore = "…#issue"]` hasta que se arregle, y el `ignore` se quita en el PR del arreglo.
+Comprobado, cuando medían tiempo, revirtiendo los dos arreglos cuadráticos que encontró la revisión en `metalmind-syntax`: sin el de los títulos `(` sin cerrar, ese test da ×253; sin el de las rachas de backticks fallan tres (rachas ×60, línea de 1 MB ×106, títulos ×256). Un caso que hoy no cumple queda con `#[ignore = "…#issue"]` hasta que se arregle, y el `ignore` se quita en el PR del arreglo.
+
+Contar instrucciones destapó una prueba que con tiempo pasaba sin medir nada: `a_key_costs_the_same_in_a_long_note` tecleaba en la línea del medio, que con 1 000 líneas es un párrafo y con 16 000 la apertura de una cerca de código. En instrucciones daba ×0.01: 31 M con 1 000 líneas contra 0.4 M con 16 000. Ahora teclea en la primera línea de párrafo desde la mitad (×0.34: los párrafos miden 21 y 11 líneas), y una tecla que creciera lineal daría ×5.4 y fallaría.
 
 ## Al cambiar algo
 
-- Operación nueva en el núcleo que corra en cada tecla o sobre todo el buffer: su fila en la tabla, su benchmark `divan`, y si recorre algo que crece, su prueba de complejidad. Si está en el camino de cada tecla, también en `instrucciones.rs`.
-- Cambio en cómo se pinta el editor (`metalmind-ui/src/editor`) o en lo que corre al arrancar: el benchmark de la UI antes y después, en la misma máquina.
+- Operación nueva que corra en cada tecla o sobre todo el buffer o el vault: su fila en la tabla, su benchmark `divan`, y si recorre algo que crece, su prueba de complejidad. Si está en el camino de cada tecla o es de las filas del presupuesto, también en el `instrucciones.rs` de su crate (`metalmind-perf` para el núcleo, `metalmind-vault`, `metalmind-ui`).
+- Cambio en cómo se pinta el editor (`metalmind-ui/src/editor`) o en lo que corre al arrancar: el job `instrucciones` lo compara solo; el benchmark de la UI, antes y después en la misma máquina, da el tiempo con un driver de verdad.
 - Al tocar un número de la tabla, se actualiza con la fecha y el tipo de máquina en términos genéricos.

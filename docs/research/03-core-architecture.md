@@ -548,7 +548,7 @@ dbg_macro = "deny"
 | Fuzzing | `cargo-fuzz` 0.13 (libFuzzer, nightly solo ahí) + `arbitrary` 1.5 | Lo inesperado: pánicos, offsets fuera de frontera de char, estados inválidos del motor vim. Crate `fuzz/` fuera del workspace; corre a diario en `fuzz.yml`, no en las PRs. Ver `docs/fuzzing.md`. |
 | Diff legible | `pretty_assertions` 1.4 | |
 | Runner | `cargo-nextest` 0.9.148 | Paralelo, rápido en CI. |
-| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) y `gungraun` 0.20 (conteo de instrucciones con callgrind, para CI) | Tiempos por operación contra el [presupuesto](../performance.md); en cada PR, conteo de instrucciones contra la base y pruebas de complejidad N contra 16N. |
+| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) y `gungraun` 0.20 (conteo de instrucciones con callgrind, para CI) | Tiempos por operación contra el [presupuesto](../performance.md); en cada PR, conteo de instrucciones contra la base y pruebas de complejidad N contra 16N, también en instrucciones. |
 | UI | test del framework (GPUI `TestAppContext`; iced: lógica pura en `update`) | Mínimo; la lógica vive fuera de la UI. |
 
 Formato de test de vim recomendado (copiado de cómo Zed testea su vim, con `|` como cursor **(estilo, sin verificar literalmente)**):
@@ -563,7 +563,7 @@ fn normal_mode(#[case] before: &str, #[case] keys: &str, #[case] after: &str) { 
 ### CI y calidad
 
 - GitHub Actions / Forgejo Actions: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run`, `cargo deny check` (licencias y advisories; `cargo-deny` 0.20), `cargo machete` (deps sin usar), `typos`.
-- Rendimiento (`.github/workflows/perf.yml`): conteo de instrucciones con `gungraun` en cada PR que toque el núcleo, contra la base medida en el mismo runner; falla con más de 5 % ([`docs/performance.md`](../performance.md)).
+- Rendimiento (`.github/workflows/perf.yml`): conteo de instrucciones con `gungraun` en cada PR que toque el núcleo o la UI (el editor de la tecla al frame en la plataforma de pruebas de GPUI), contra la base medida en el mismo runner; falla con más de 5 %. Las pruebas de complejidad también cuentan instrucciones (callgrind) y corren en paralelo en `cargo nextest`. Runners gratis de GitHub: mejor un CI lento que una app lenta (decisión del 2026-10-19, [`docs/performance.md`](../performance.md#el-ci)).
 - `rustfmt.toml` mínimo (`imports_granularity = "Crate"` requiere nightly; mejor no).
 - Cache con `Swatinem/rust-cache` **(sin verificar versión)**.
 
