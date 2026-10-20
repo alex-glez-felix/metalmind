@@ -97,14 +97,13 @@ impl Message {
         ))
     }
 
-    /// El vault dejó de ver los cambios de fuera, y cómo arreglarlo; el log
-    /// dice además cómo dejarlo así al reiniciar.
+    /// El vault dejó de ver los cambios de fuera, y cómo arreglarlo. Corto,
+    /// para que el comando quepa en la barra; el log lo explica entero.
     #[must_use]
     pub fn unwatched(reason: Unwatched) -> Self {
         let text = match reason {
             Unwatched::WatchLimit => {
-                "no se ven los cambios de fuera: se acabaron los watches de inotify; \
-                 súbelos con sudo sysctl fs.inotify.max_user_watches=524288 y reabre"
+                "no se ven cambios externos: sudo sysctl fs.inotify.max_user_watches=524288"
             }
         };
         Self::Error(text.to_owned())
