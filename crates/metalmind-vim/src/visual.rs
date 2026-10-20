@@ -54,7 +54,7 @@ impl Area {
         match self {
             Self::Selection(kind) => target(buffer, selection, kind),
             Self::Sized(size) => {
-                let sized = size.select_from(buffer, selection.head, 1, columns);
+                let sized = size.redo_from(buffer, selection, columns);
                 target(buffer, &sized, size.kind())
             }
         }
@@ -146,6 +146,36 @@ impl VisualSize {
             goal,
         }
     }
+
+    /// La selección que `.` reconstruye desde `cursor` (`redo_VIsual` de
+    /// vim). Por líneas, también tras `V$`, el cursor conserva su columna
+    /// buscada; tras un `v$` de una línea, vim suma `MAXCOL` a la columna
+    /// del cursor.
+    pub fn redo_from(self, buffer: &Buffer, cursor: &Selection, columns: Columns) -> Selection {
+        let sized = self.select_from(buffer, cursor.head, 1, columns);
+        if self.linewise {
+            return Selection {
+                goal: cursor.goal,
+                ..sized
+            };
+        }
+        let single_line_end = self.reach == Reach::LineEnd && self.lines == 1;
+        if single_line_end && overflows_past_maxcol(columns.cursor_at(buffer, cursor.head, true)) {
+            let line = buffer.line_of(cursor.head);
+            return Selection {
+                head: buffer.line_start(line),
+                goal: Goal::Column(0),
+                ..sized
+            };
+        }
+        sized
+    }
+}
+
+/// Si `column + MAXCOL - 1` se desborda en el `int` de vim: la columna
+/// negativa que queda lleva `coladvance` al inicio de la línea.
+fn overflows_past_maxcol(column: usize) -> bool {
+    i32::try_from(column).map_or(true, |column| column.checked_add(i32::MAX - 1).is_none())
 }
 
 /// Lo que `gv` vuelve a seleccionar, como las marcas `'<` y `'>` de vim:
