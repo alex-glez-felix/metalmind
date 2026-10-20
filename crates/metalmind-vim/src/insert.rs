@@ -25,6 +25,22 @@ impl Typing {
     }
 }
 
+/// Lo pegado fuera de Insert: un paso propio de undo en el cursor
+/// principal, que queda sobre el último carácter pegado.
+pub(crate) fn paste_at_cursor(
+    buffer: &mut Buffer,
+    selections: &Selections,
+    text: &str,
+) -> Result<Selections, VimError> {
+    buffer.begin_transaction(selections.clone())?;
+    let at = selections.primary().head;
+    let map = buffer.apply(vec![Edit::insert(at, text)])?;
+    let end = map.map(at, Bias::After);
+    let pasted = Selections::single(Selection::cursor(buffer.prev_boundary(end)));
+    buffer.commit_transaction(pasted.clone())?;
+    Ok(pasted)
+}
+
 /// Abre la transacción que dura todo el modo Insert, para que `u` la deshaga
 /// entera. Dice también si `o` u `O` abrieron un ítem de lista.
 pub(crate) fn enter(

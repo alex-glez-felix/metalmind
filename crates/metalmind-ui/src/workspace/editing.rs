@@ -1,6 +1,6 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
-use metalmind_buffer::{Bias, ByteOffset, Edit, Goal, Selection, Selections};
+use metalmind_buffer::{ByteOffset, Goal, Selection, Selections};
 use metalmind_syntax::Conceal;
 use metalmind_vim::{
     Action, Clipboard, Invocation, Key, KeyOutcome, Mode, Operator, PasteSide, SystemRegister,
@@ -289,10 +289,8 @@ impl Workspace {
         Ok(())
     }
 
-    /// Pega en el cursor, o en la línea de comandos si está abierta. En
-    /// Insert entra como lo tecleado: `u` lo deshace junto con lo escrito y
-    /// el count lo repite. En Normal es un paso propio y el cursor queda
-    /// sobre el último carácter pegado.
+    /// Pega en el cursor de `pane`, o en la línea de comandos si está
+    /// abierta, como [`metalmind_vim::Vim::paste_text`].
     ///
     /// # Errors
     /// Si `pane` no existe o la edición resulta inválida, lo que sería un bug.
@@ -302,17 +300,7 @@ impl Workspace {
         }
         self.focus(pane)?;
         self.edit_pane(pane, |vim, buffer, selections| {
-            if vim.mode().takes_text() {
-                vim.insert_text(text, buffer, selections)?;
-                return Ok(());
-            }
-            vim.cursor_moved();
-            buffer.begin_transaction(selections.clone())?;
-            let at = selections.primary().head;
-            let map = buffer.apply(vec![Edit::insert(at, text)])?;
-            let end = map.map(at, Bias::After);
-            *selections = Selections::single(Selection::cursor(buffer.prev_boundary(end)));
-            buffer.commit_transaction(selections.clone())?;
+            vim.paste_text(text, buffer, selections)?;
             Ok(())
         })
     }

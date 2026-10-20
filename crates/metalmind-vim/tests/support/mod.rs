@@ -123,7 +123,7 @@ pub fn feed(
     for input in inputs(notation) {
         let outcome = match input {
             Input::Key(key) => vim.feed(key, buffer, selections),
-            Input::Paste(text) => vim.insert_text(&text, buffer, selections),
+            Input::Paste(text) => vim.paste_text(&text, buffer, selections),
             Input::Click { line, column } => {
                 assert_eq!(vim.mode(), Mode::Insert, "el clic solo se modela en Insert");
                 let offset = buffer.offset_at_column(line, column);

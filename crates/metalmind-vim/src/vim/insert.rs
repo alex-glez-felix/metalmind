@@ -8,23 +8,29 @@ use crate::insert::{self, Session, Typed, Typing};
 use crate::{InsertAt, Key, KeyOutcome, Mode, VimError};
 
 impl Vim {
-    /// Texto que llega entero, como lo pegado: entra por el mismo camino que
-    /// lo tecleado, así que en Insert también lo repiten el count y `.`.
-    /// Fuera de Insert y de la línea de comandos no hace nada.
+    /// Texto que llega entero, como lo pegado. En Insert y en la línea de
+    /// comandos entra por el mismo camino que lo tecleado, así que en Insert
+    /// también lo repiten el count y `.`. Si no, como un clic cancela lo
+    /// pendiente y sale de Visual, y lo pegado es un paso propio de undo con
+    /// el cursor sobre su último carácter.
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn insert_text(
+    pub fn paste_text(
         &mut self,
         text: &str,
         buffer: &mut Buffer,
         selections: &mut Selections,
     ) -> Result<KeyOutcome, VimError> {
-        if self.mode.takes_text() {
-            self.record(text.chars().map(Key::Char));
-        }
         let version = buffer.version();
-        let outcome = self.write_text(text, buffer, selections)?;
+        let outcome = if self.mode.takes_text() {
+            self.record(text.chars().map(Key::Char));
+            self.write_text(text, buffer, selections)?
+        } else {
+            self.cursor_moved();
+            *selections = insert::paste_at_cursor(buffer, selections, text)?;
+            KeyOutcome::Inserted
+        };
         self.follow_cursor(buffer, selections, version);
         Ok(outcome)
     }

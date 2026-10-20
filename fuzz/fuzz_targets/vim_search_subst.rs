@@ -63,7 +63,7 @@ fn submit(
 ) -> KeyOutcome {
     press(vim, Key::Char(prompt), buffer, selections);
     assert_eq!(vim.mode(), Mode::CommandLine, "{prompt} no abrió la línea");
-    if let Err(error) = vim.insert_text(line, buffer, selections) {
+    if let Err(error) = vim.paste_text(line, buffer, selections) {
         panic!("escribir {line:?} dio un error de buffer: {error}");
     }
     assert_eq!(vim.command_line(), Some(line));

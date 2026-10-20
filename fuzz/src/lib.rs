@@ -268,7 +268,7 @@ impl Host {
                 }
             }
             Input::Paste(text) => {
-                if let Err(error) = vim.insert_text(text, &mut self.buffer, &mut self.selections) {
+                if let Err(error) = vim.paste_text(text, &mut self.buffer, &mut self.selections) {
                     panic!("pegar {text:?} dio un error de buffer: {error}");
                 }
             }
