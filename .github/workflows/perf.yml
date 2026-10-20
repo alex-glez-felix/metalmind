@@ -103,9 +103,9 @@ jobs:
         env:
           ACEPTADA: ${{ contains(github.event.pull_request.labels.*.name, 'rendimiento-aceptado') }}
           MEDIDOS: ${{ steps.base.outputs.paquetes }}
-        # El límite de cada benchmark está en su código (5 %, o 10 % en los que
-        # varían entre corridas; ver metalmind-perf/src/limits.rs). Con una
-        # regresión, gungraun sale con código 3.
+        # El límite (5 %) está en el código de cada benchmark (ver
+        # metalmind-perf/src/limits.rs). Con una regresión, gungraun sale con
+        # código 3.
         run: |
           # Todos corren aunque uno falle, para ver cada regresión de una vez.
           # Un crate cuyo benchmark la base no tiene solo se corre.
