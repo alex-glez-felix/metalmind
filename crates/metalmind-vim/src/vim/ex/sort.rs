@@ -2,10 +2,11 @@
 
 use std::ops::RangeInclusive;
 
-use metalmind_buffer::{Buffer, Edit, Selections};
+use metalmind_buffer::Edit;
 
 use super::Failure;
 use super::lines::{edit_lines, line_start_cursor, undo_cursor};
+use crate::Target;
 use crate::ex::{self, SortOptions};
 use crate::search::{Case, Pattern, SearchError};
 use crate::vim::Vim;
@@ -18,8 +19,7 @@ impl Vim {
         &mut self,
         lines: RangeInclusive<usize>,
         options: &SortOptions,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), Failure> {
         let pattern = match options
             .pattern
@@ -42,7 +42,7 @@ impl Vim {
             .as_ref()
             .is_some_and(|pattern| pattern.by_match);
         let (first, last) = (*lines.start(), *lines.end());
-        let text = buffer.lines_text(first..last + 1).into_owned();
+        let text = t.buffer.lines_text(first..last + 1).into_owned();
         let unsorted: Vec<&str> = text.split('\n').collect();
         let sorted = ex::sort(&unsorted, options, |line| {
             let Some(pattern) = &pattern else {
@@ -56,18 +56,18 @@ impl Vim {
         });
         let mut edits = Vec::new();
         if sorted != unsorted {
-            let range = buffer.line_start(first)..buffer.line_end(last);
+            let range = t.buffer.line_start(first)..t.buffer.line_end(last);
             edits.push(Edit::replace(range, sorted.join("\n")));
         }
-        let cursor = buffer.line_of(selections.primary().head);
+        let cursor = t.buffer.line_of(t.selections.primary().head);
         let undo = undo_cursor(
-            buffer,
-            self.viewport.columns(),
-            selections,
+            t.buffer,
+            t.pane.viewport.columns(),
+            t.selections,
             lines.contains(&cursor),
             first,
         );
-        Ok(edit_lines(buffer, selections, undo, edits, |buffer| {
+        Ok(edit_lines(t.buffer, t.selections, undo, edits, |buffer| {
             line_start_cursor(buffer, first)
         })?)
     }

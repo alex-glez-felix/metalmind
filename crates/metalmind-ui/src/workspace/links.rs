@@ -138,10 +138,10 @@ impl Workspace {
             self.message = Some(Message::Error(format!("la nota no tiene {name}")));
             return Ok(());
         };
-        self.edit_pane(self.focused(), |vim, buffer, selections| {
+        self.edit_pane(self.focused(), None, |vim, target| {
             vim.cursor_moved();
-            let head = clamp_cursor(buffer, ByteOffset::new(found.start), vim.mode());
-            *selections = Selections::single(Selection::cursor(head));
+            let head = clamp_cursor(target.buffer, ByteOffset::new(found.start), vim.mode());
+            *target.selections = Selections::single(Selection::cursor(head));
             Ok(())
         })
     }

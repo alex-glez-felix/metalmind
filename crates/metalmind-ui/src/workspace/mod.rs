@@ -3,9 +3,11 @@
 //!
 //! Hay un solo [`Vim`] para todos los paneles, como en vim, donde el modo,
 //! los registros, `.` y `;` son globales: lo copiado en un buffer se pega en
-//! otro. Las marks, en cambio, son de cada documento, y la ventana
-//! ([`Viewport`]) de cada panel: el motor las toma prestadas mientras edita.
-//! Cambiar de panel lo deja en Normal antes, como un `ctrl-c`.
+//! otro. Las marks `a`–`z`, en cambio, son de cada documento
+//! ([`DocState`](metalmind_vim::DocState)), y la ventana y la jumplist de
+//! cada panel ([`PaneState`]): el motor los recibe prestados en cada tecla,
+//! en un [`Target`]. Cambiar de panel lo deja
+//! en Normal antes, como un `ctrl-c`.
 //!
 //! Como vim con `hidden`, el default de nvim, un documento que ningún panel
 //! muestra queda oculto, con sus cambios, su historial y su cursor.
@@ -35,8 +37,8 @@ use std::rc::Rc;
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_keymap::{Keymap, UnknownAction};
 use metalmind_vim::{
-    Action, FileId, Indent, JumpList, Layout, Markdown, Mode, Pattern, Prompt, Uniform, Viewport,
-    Vim, VimError,
+    Action, Clipboard, FileId, Indent, Markdown, Mode, PaneState, Pattern, Prompt, Target,
+    Viewport, Vim, VimError,
 };
 
 pub use self::autosave::{Autosave, SaveState, SystemClock};
@@ -69,34 +71,14 @@ pub enum WorkspaceError {
     UnknownAction(#[from] UnknownAction),
 }
 
-/// `viewport` muestra `head` con `scrolloff` líneas alrededor, con lo que
-/// mide cada línea: antes se sigue lo editado y se mide lo que va a mirar.
-fn reveal(
-    viewport: &mut Viewport,
-    buffer: &mut Buffer,
-    layout: Option<&mut Layout>,
-    head: ByteOffset,
-    scrolloff: usize,
-) {
-    if let Some(layout) = layout {
-        layout.sync(buffer);
-        layout.ensure_window(buffer, viewport, head, scrolloff, 0);
-        viewport.reveal(buffer, head, scrolloff, layout);
-    } else {
-        let uniform = Uniform(viewport.row());
-        viewport.reveal(buffer, head, scrolloff, &uniform);
-    }
-}
-
 /// Lo que muestra un panel.
 #[derive(Clone, Debug)]
 struct Pane {
     document: DocumentId,
     selections: Selections,
     numbers: LineNumbers,
-    viewport: Viewport,
-    /// Como en vim, la jumplist es de cada panel; un split copia la suya.
-    jumps: JumpList,
+    /// La ventana y la jumplist; un split copia las suyas.
+    state: PaneState,
 }
 
 /// Dónde estaba el cursor de un documento oculto, para volver ahí. La
@@ -109,14 +91,13 @@ struct LastView {
 
 impl Pane {
     fn at_start(document: DocumentId, numbers: LineNumbers, tabstop: usize) -> Self {
-        let mut viewport = Viewport::default();
-        viewport.set_tabstop(tabstop);
+        let mut state = PaneState::default();
+        state.viewport.set_tabstop(tabstop);
         Self {
             document,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
             numbers,
-            viewport,
-            jumps: JumpList::default(),
+            state,
         }
     }
 }
@@ -300,7 +281,7 @@ impl Workspace {
             document,
             save: self.save_state(state.document, document),
             selection: *state.selections.primary(),
-            viewport: state.viewport,
+            viewport: state.state.viewport,
             focused,
             mode: if focused {
                 self.vim.mode()
@@ -344,8 +325,8 @@ impl Workspace {
     /// comandos) termina como con `ctrl-c`: es lo que pasa antes de que el
     /// panel deje el foco o cambie de documento.
     fn interrupt(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
-        self.edit_pane(pane, |vim, buffer, selections| {
-            vim.execute(Action::Interrupt, buffer, selections)?;
+        self.edit_pane(pane, None, |vim, target| {
+            vim.execute(Action::Interrupt, target)?;
             Ok(())
         })
     }
@@ -376,24 +357,15 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))
     }
 
-    /// Corre `edit` sobre el buffer, las marks, la ventana y los cursores de
-    /// `pane`, que queda mostrando su cursor; después, los cursores de los
+    /// Corre `edit` con el motor sobre `pane`: su buffer, sus cursores y lo
+    /// que el motor guarda del panel y de su documento, con `clipboard` para
+    /// `"+` y `"*`. Después `pane` muestra su cursor y los cursores de los
     /// otros paneles del mismo documento siguen al texto.
     fn edit_pane<T>(
         &mut self,
         pane: PaneId,
-        edit: impl FnOnce(&mut Vim, &mut Buffer, &mut Selections) -> Result<T, WorkspaceError>,
-    ) -> Result<T, WorkspaceError> {
-        self.edit_pane_with(pane, self.scrolloff, edit)
-    }
-
-    /// Como [`Workspace::edit_pane`], mostrando el cursor con `scrolloff`
-    /// líneas alrededor.
-    fn edit_pane_with<T>(
-        &mut self,
-        pane: PaneId,
-        scrolloff: usize,
-        edit: impl FnOnce(&mut Vim, &mut Buffer, &mut Selections) -> Result<T, WorkspaceError>,
+        clipboard: Option<&mut dyn Clipboard>,
+        edit: impl FnOnce(&mut Vim, &mut Target<'_>) -> Result<T, WorkspaceError>,
     ) -> Result<T, WorkspaceError> {
         let state = self
             .panes
@@ -408,31 +380,23 @@ impl Workspace {
             .documents
             .get_mut(id)
             .ok_or(WorkspaceError::NoDocument(id))?;
-        let Editable {
-            buffer,
-            marks,
-            layout,
-        } = document.editable();
-        self.vim.swap_marks(marks);
-        self.vim.swap_viewport(&mut state.viewport);
-        self.vim.swap_jumps(&mut state.jumps);
-        self.vim.set_file(file);
-        self.vim.swap_layout(layout);
+        let Editable { buffer, state: doc } = document.editable();
         let was_editing = buffer.has_open_transaction();
-        let result = edit(&mut self.vim, buffer, &mut state.selections);
-        self.vim.swap_layout(layout);
-        self.vim.catch_up(buffer);
-        self.vim.swap_jumps(&mut state.jumps);
-        self.vim.swap_viewport(&mut state.viewport);
-        self.vim.swap_marks(marks);
-        let head = state.selections.primary().head;
-        reveal(
-            &mut state.viewport,
-            buffer,
-            layout.as_mut(),
-            head,
-            scrolloff,
+        let result = edit(
+            &mut self.vim,
+            &mut Target {
+                buffer: &mut *buffer,
+                selections: &mut state.selections,
+                doc: &mut *doc,
+                pane: &mut state.state,
+                file,
+                // Al portapapeles le basta vivir lo que dura el préstamo.
+                clipboard: clipboard.map(|clipboard| clipboard as &mut dyn Clipboard),
+            },
         );
+        state
+            .state
+            .reveal(buffer, &state.selections, doc, self.scrolloff);
         let splices = buffer.take_splices();
         document.settle();
         // Lo que cambió fuera durante un Insert se relee al cerrarlo, si no
@@ -463,14 +427,14 @@ impl Workspace {
         if splices.is_empty() {
             return Ok(());
         }
-        let Editable { buffer, layout, .. } = self
+        let Editable { buffer, state: doc } = self
             .documents
             .get_mut(id)
             .ok_or(WorkspaceError::NoDocument(id))?
             .editable();
         let scrolloff = self.scrolloff;
         for (_, other) in self.panes.iter_mut().filter(|(pane, _)| **pane != edited) {
-            other.jumps.adjust(file, splices);
+            other.state.jumps.adjust(file, splices);
         }
         for (_, other) in self
             .panes
@@ -482,14 +446,9 @@ impl Workspace {
                 let head = Splice::map_all(splices, selection.head);
                 normal_selection(buffer, anchor, head)
             });
-            let head = other.selections.primary().head;
-            reveal(
-                &mut other.viewport,
-                buffer,
-                layout.as_mut(),
-                head,
-                scrolloff,
-            );
+            other
+                .state
+                .reveal(buffer, &other.selections, doc, scrolloff);
         }
         Ok(())
     }
@@ -523,7 +482,7 @@ impl Workspace {
                 id,
                 LastView {
                     selections: old.selections,
-                    viewport: old.viewport,
+                    viewport: old.state.viewport,
                 },
             );
         }

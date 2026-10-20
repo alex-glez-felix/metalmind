@@ -34,13 +34,12 @@ struct Left {
 
 fn run(before: &str, keys: &str) -> (KeyOutcome, Left, String) {
     let run = || {
-        let (mut buffer, mut selections) = support::parse(before);
-        let mut vim = support::app_vim();
-        let last = support::feed(&mut vim, &mut buffer, &mut selections, keys);
-        let text = support::render(&buffer, selections.iter().map(|s| s.head));
+        let mut editor = support::Editor::app(before);
+        let last = editor.keys(keys);
+        let text = support::render(&editor.buffer, editor.selections.iter().map(|s| s.head));
         let left = Left {
-            mode: vim.mode(),
-            command_line: vim.command_line().map(ToOwned::to_owned),
+            mode: editor.vim.mode(),
+            command_line: editor.vim.command_line().map(ToOwned::to_owned),
         };
         (last.unwrap(), left, text)
     };

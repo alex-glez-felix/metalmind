@@ -23,8 +23,8 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, WorkspaceError> {
         self.focus(pane)?;
-        let outcome = self.edit_pane(pane, |vim, buffer, selections| {
-            Ok(vim.feed_with_clipboard(key, buffer, selections, clipboard)?)
+        let outcome = self.edit_pane(pane, Some(&mut *clipboard), |vim, target| {
+            Ok(vim.feed(key, target)?)
         })?;
         self.note(&outcome);
         self.settle(outcome, clipboard)
@@ -42,8 +42,8 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, WorkspaceError> {
         self.focus(pane)?;
-        let outcome = self.edit_pane(pane, |vim, buffer, selections| {
-            Ok(vim.execute_with_clipboard(action, buffer, selections, clipboard)?)
+        let outcome = self.edit_pane(pane, Some(&mut *clipboard), |vim, target| {
+            Ok(vim.execute(action, target)?)
         })?;
         self.note(&outcome);
         self.settle(outcome, clipboard)
@@ -54,8 +54,8 @@ impl Workspace {
     pub(super) fn resume_macro(&mut self, clipboard: &mut dyn Clipboard) -> Option<Invocation> {
         loop {
             let resumed = self
-                .edit_pane(self.focused(), |vim, buffer, selections| {
-                    Ok(vim.resume_macro(buffer, selections, clipboard)?)
+                .edit_pane(self.focused(), Some(&mut *clipboard), |vim, target| {
+                    Ok(vim.resume_macro(target)?)
                 })
                 .and_then(|resumed| match resumed {
                     Some(KeyOutcome::SwitchFile(landing)) => {
@@ -138,20 +138,23 @@ impl Workspace {
         head: ByteOffset,
     ) -> Result<(), WorkspaceError> {
         self.focus(pane)?;
-        self.edit_pane_with(pane, 0, |vim, buffer, selections| {
-            vim.cursor_moved();
-            let selection = if anchor == head {
-                Selection::cursor(clamp_cursor(buffer, head, vim.mode()))
-            } else {
-                Selection {
-                    anchor,
-                    head,
-                    goal: Goal::None,
-                }
-            };
-            *selections = Selections::single(selection);
-            Ok(())
-        })
+        self.vim.cursor_moved();
+        let mode = self.vim.mode();
+        let (state, editable) = self.shown(pane)?;
+        let selection = if anchor == head {
+            Selection::cursor(clamp_cursor(editable.buffer, head, mode))
+        } else {
+            Selection {
+                anchor,
+                head,
+                goal: Goal::None,
+            }
+        };
+        state.selections = Selections::single(selection);
+        state
+            .state
+            .reveal(editable.buffer, &state.selections, editable.state, 0);
+        Ok(())
     }
 
     /// El botón del ratón baja en `offset`: lleva el cursor ahí. Dice si
@@ -188,8 +191,9 @@ impl Workspace {
         let index = offset.get() - buffer.line_start(line).get();
         let style = view
             .document
-            .layout()
-            .and_then(|layout| layout.styles().line(line));
+            .state()
+            .styles()
+            .and_then(|styles| styles.line(line));
         Ok(style.is_some_and(|style| {
             style.spans.iter().any(|span| {
                 matches!(span.conceal, Some(Conceal::Checkbox { .. }))
@@ -276,9 +280,9 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
         self.focus(pane)?;
-        let outcome = self.edit_pane(pane, |vim, buffer, selections| {
+        let outcome = self.edit_pane(pane, Some(clipboard), |vim, target| {
             vim.use_register(SystemRegister::Clipboard);
-            Ok(vim.execute_with_clipboard(action, buffer, selections, clipboard)?)
+            Ok(vim.execute(action, target)?)
         })?;
         self.note(&outcome);
         Ok(())
@@ -294,8 +298,8 @@ impl Workspace {
             return Ok(());
         }
         self.focus(pane)?;
-        self.edit_pane(pane, |vim, buffer, selections| {
-            vim.paste_text(text, buffer, selections)?;
+        self.edit_pane(pane, None, |vim, target| {
+            vim.paste_text(text, target)?;
             Ok(())
         })
     }

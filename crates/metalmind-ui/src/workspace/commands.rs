@@ -13,7 +13,7 @@ use metalmind_vim::{Clipboard, Mode};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
-use super::{DocumentId, Message, Pane, PaneId, Workspace, WorkspaceError, clamp_cursor};
+use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
 use crate::panel::PanelView;
 
@@ -346,13 +346,14 @@ impl Workspace {
         let Some(id) = self.open_document(path) else {
             return Ok(());
         };
-        let shown = self.pane_on(id, numbers)?;
+        let mut shown = self.pane_on(id, numbers)?;
         self.push_jump(focused)?;
-        let jumps = self.pane(focused)?.jumps.clone();
+        let jumps = self.pane(focused)?.state.jumps.clone();
         self.message = Some(Message::opened(self.document(shown.document)?));
         self.vim.cursor_moved();
         let new = self.tree.split(axis);
-        self.panes.insert(new, Pane { jumps, ..shown });
+        shown.state.jumps = jumps;
+        self.panes.insert(new, shown);
         Ok(())
     }
 

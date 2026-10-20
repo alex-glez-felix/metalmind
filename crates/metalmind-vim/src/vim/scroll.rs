@@ -1,14 +1,14 @@
 //! La ventana del panel que se edita: los comandos de scroll, `H`, `M` y
 //! `L` fuera de un operador, y que el cursor se vea tras cada tecla.
 
-use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
+use metalmind_buffer::{ByteOffset, Goal, Selection};
 
 use super::Vim;
 use super::dispatch::move_cursors;
 use crate::lines::{self, Want, at_byte_column, clamp_normal, last_char, tab_end};
 use crate::motion::vertical;
 use crate::scroll::Shift;
-use crate::{Layout, LineHeights, Place, Scroll, Uniform, Viewport, VimError};
+use crate::{Place, Scroll, Target, Uniform, VimError};
 
 impl Vim {
     /// Las líneas que se dejan visibles por encima y por debajo del cursor.
@@ -16,38 +16,27 @@ impl Vim {
         self.scrolloff = lines;
     }
 
-    /// Cambia la ventana del motor por `viewport`: antes de editar en un
-    /// panel se le da la suya y después se recupera, ya movida.
-    pub fn swap_viewport(&mut self, viewport: &mut Viewport) {
-        std::mem::swap(&mut self.viewport, viewport);
-    }
-
-    /// Cambia el [`Layout`] del motor por `layout`, como la ventana: es el
-    /// del documento que se edita, y el motor lo sigue al editar.
-    pub fn swap_layout(&mut self, layout: &mut Option<Layout>) {
-        std::mem::swap(&mut self.layout, layout);
-    }
-
     /// Calcula el estilo de las líneas que va a mirar la ventana, hasta
     /// `extra` líneas más allá de lo que se ve.
-    fn measure(&mut self, buffer: &Buffer, head: ByteOffset, extra: usize) {
-        if let Some(layout) = self.layout.as_mut() {
-            layout.ensure_window(buffer, &self.viewport, head, self.scrolloff, extra);
-        }
+    fn measure(&self, t: &mut Target<'_>, extra: usize) {
+        let head = t.selections.primary().head;
+        t.doc
+            .ensure_window(t.buffer, &t.pane.viewport, head, self.scrolloff, extra);
     }
 
     /// La rueda llevó la ventana a `top`: los cursores la siguen, como en
     /// vim, y lo pendiente (un count, un operador) se cancela, como con un
     /// clic. Si se mueven en Insert, lo que se teclee después es otro cambio.
-    pub fn scroll_to(&mut self, top: usize, buffer: &Buffer, selections: &mut Selections) {
+    pub fn scroll_to(&mut self, top: usize, t: &mut Target<'_>) {
         self.reset();
-        let head = selections.primary().head;
-        self.measure(buffer, head, top.saturating_sub(self.viewport.top()));
-        let uniform = Uniform(self.viewport.row());
-        let heights = heights(self.layout.as_ref(), &uniform);
-        let moved =
-            self.viewport
-                .scroll_to(top, buffer, selections, self.scrolloff, self.mode, heights);
+        let moved = t.pane.scroll_to(
+            top,
+            t.buffer,
+            t.selections,
+            t.doc,
+            self.scrolloff,
+            self.mode,
+        );
         if let Some(session) = self.insert.as_mut().filter(|_| moved) {
             session.cursor_moved();
         }
@@ -55,45 +44,36 @@ impl Vim {
 
     /// Tras cada tecla, como vim antes de pintar: el cursor se ve. Si el
     /// texto cambió, se revisa aunque siga en la misma línea.
-    pub(super) fn follow_cursor(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &Selections,
-        version: u64,
-    ) {
-        if let Some(layout) = self.layout.as_mut() {
-            layout.sync(buffer);
+    pub(super) fn follow_cursor(&mut self, t: &mut Target<'_>, version: u64) {
+        if t.buffer.version() != version {
+            t.pane.viewport.invalidate();
+            self.catch_up(t);
         }
-        if buffer.version() != version {
-            self.viewport.invalidate();
-            self.catch_up(buffer);
-        }
-        let head = selections.primary().head;
-        self.measure(buffer, head, 0);
-        let uniform = Uniform(self.viewport.row());
-        let heights = heights(self.layout.as_ref(), &uniform);
-        self.viewport.reveal(buffer, head, self.scrolloff, heights);
+        t.pane.reveal(t.buffer, t.selections, t.doc, self.scrolloff);
     }
 
     /// Los cursores que no son el principal se mueven las mismas líneas que
     /// él. `ctrl-d`, `ctrl-u`, `ctrl-f` y `ctrl-b` fallan si no se movió nada.
-    pub(super) fn scroll(&mut self, scroll: Scroll, buffer: &Buffer, selections: &mut Selections) {
+    pub(super) fn scroll(&mut self, scroll: Scroll, t: &mut Target<'_>) {
         let count = self.take_count();
         self.reset();
-        let head = selections.primary().head;
-        let from = buffer.line_of(head);
-        let page = (self.viewport.height() / self.viewport.row().max(1)).max(1);
+        let head = t.selections.primary().head;
+        let from = t.buffer.line_of(head);
+        let page = (t.pane.viewport.height() / t.pane.viewport.row().max(1)).max(1);
         let reach = match scroll {
             Scroll::LineDown | Scroll::LineUp => count.unwrap_or(1),
             Scroll::HalfPageDown | Scroll::HalfPageUp => page,
             Scroll::PageDown | Scroll::PageUp => count.unwrap_or(1).saturating_mul(page),
         };
-        self.measure(buffer, head, reach);
+        self.measure(t, reach);
         let half = matches!(scroll, Scroll::HalfPageDown | Scroll::HalfPageUp)
-            .then(|| self.viewport.half_page(count));
-        let uniform = Uniform(self.viewport.row());
-        let heights = heights(self.layout.as_ref(), &uniform);
-        let mut window = self.viewport.window(buffer, head, self.scrolloff, heights);
+            .then(|| t.pane.viewport.half_page(count));
+        let uniform = Uniform(t.pane.viewport.row());
+        let heights = t.doc.heights().unwrap_or(&uniform);
+        let mut window = t
+            .pane
+            .viewport
+            .window(t.buffer, head, self.scrolloff, heights);
         let moved = match (scroll, half) {
             (Scroll::LineDown | Scroll::LineUp, _) => {
                 window.scroll_lines(scroll == Scroll::LineDown, count.unwrap_or(1));
@@ -105,13 +85,14 @@ impl Vim {
             _ => window.scroll_page(scroll == Scroll::PageDown, count.unwrap_or(1)),
         };
         let line = window.cursor;
-        self.viewport.apply(&window);
+        t.pane.viewport.apply(&window);
         if !moved {
             self.fail();
         }
         let shift = (moved && line != from).then_some(Shift { from, line });
         if let Some(shift) = shift {
-            *selections = shift.apply(buffer, selections, self.mode, self.viewport.columns());
+            *t.selections =
+                shift.apply(t.buffer, t.selections, self.mode, t.pane.viewport.columns());
         }
     }
 
@@ -122,27 +103,26 @@ impl Vim {
         &mut self,
         place: Place,
         first_non_blank: bool,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let count = self.take_count();
         self.reset();
-        let current = buffer.line_of(selections.primary().head);
+        let current = t.buffer.line_of(t.selections.primary().head);
         if let Some(line) = count.map(|n| n.saturating_sub(1)).filter(|&l| l != current) {
-            self.jumped(buffer, selections)?;
-            let line = line.min(buffer.last_line());
+            self.jumped(t)?;
+            let line = line.min(t.buffer.last_line());
             let visual = self.in_visual();
-            let columns = self.viewport.columns();
+            let columns = t.pane.viewport.columns();
             let mode = self.mode;
-            *selections = selections.map(|s| {
-                let column = s.head.get() - buffer.line_start(buffer.line_of(s.head)).get();
-                let offset = at_byte_column(buffer, line, column);
+            *t.selections = t.selections.map(|s| {
+                let column = s.head.get() - t.buffer.line_start(t.buffer.line_of(s.head)).get();
+                let offset = at_byte_column(t.buffer, line, column);
                 let head = if visual {
                     offset
                 } else {
-                    clamp_normal(buffer, offset)
+                    clamp_normal(t.buffer, offset)
                 };
-                let want = Want::of(buffer, s, tab_end(mode, s), columns);
+                let want = Want::of(t.buffer, s, tab_end(mode, s), columns);
                 Selection {
                     goal: want.goal(),
                     ..moved_head(s, head, visual)
@@ -151,26 +131,29 @@ impl Vim {
         }
         if first_non_blank {
             let visual = self.in_visual();
-            *selections = selections.map(|s| {
-                let line = buffer.line_of(s.head);
-                let head = lines::first_non_blank(buffer, line).min(last_char(buffer, line));
+            *t.selections = t.selections.map(|s| {
+                let line = t.buffer.line_of(s.head);
+                let head = lines::first_non_blank(t.buffer, line).min(last_char(t.buffer, line));
                 Selection {
                     goal: Goal::None,
                     ..moved_head(s, head, visual)
                 }
             });
         }
-        let head = selections.primary().head;
-        self.measure(buffer, head, 0);
-        let uniform = Uniform(self.viewport.row());
-        let heights = heights(self.layout.as_ref(), &uniform);
-        let mut window = self.viewport.window(buffer, head, self.scrolloff, heights);
+        let head = t.selections.primary().head;
+        self.measure(t, 0);
+        let uniform = Uniform(t.pane.viewport.row());
+        let heights = t.doc.heights().unwrap_or(&uniform);
+        let mut window = t
+            .pane
+            .viewport
+            .window(t.buffer, head, self.scrolloff, heights);
         match place {
             Place::Top => window.scroll_cursor_top(0, true),
             Place::Middle => window.scroll_cursor_halfway(true, false),
             Place::Bottom => window.scroll_cursor_bot(0, true),
         }
-        self.viewport.apply(&window);
+        t.pane.viewport.apply(&window);
         Ok(())
     }
 
@@ -179,26 +162,28 @@ impl Vim {
     pub(super) fn move_to_window_line(
         &mut self,
         place: Place,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
+        t: &mut Target<'_>,
     ) -> Result<(), VimError> {
         let count = self.take_count();
         self.reset();
-        self.jumped(buffer, selections)?;
-        let head = selections.primary().head;
-        self.measure(buffer, head, 0);
-        let uniform = Uniform(self.viewport.row());
-        let heights = heights(self.layout.as_ref(), &uniform);
-        let mut window = self.viewport.window(buffer, head, self.scrolloff, heights);
-        window.cursor = self.viewport.line_at(place, count.unwrap_or(1), buffer);
+        self.jumped(t)?;
+        let head = t.selections.primary().head;
+        self.measure(t, 0);
+        let uniform = Uniform(t.pane.viewport.row());
+        let heights = t.doc.heights().unwrap_or(&uniform);
+        let mut window = t
+            .pane
+            .viewport
+            .window(t.buffer, head, self.scrolloff, heights);
+        window.cursor = t.pane.viewport.line_at(place, count.unwrap_or(1), t.buffer);
         window.cursor_correct();
-        self.viewport.apply(&window);
+        t.pane.viewport.apply(&window);
         let purpose = self.motion_purpose();
-        let columns = self.viewport.columns();
-        if let Some(moved) = move_cursors(selections, self.in_visual(), |s| {
-            Some(vertical(buffer, s, window.cursor, purpose, columns))
+        let columns = t.pane.viewport.columns();
+        if let Some(moved) = move_cursors(t.selections, self.in_visual(), |s| {
+            Some(vertical(t.buffer, s, window.cursor, purpose, columns))
         }) {
-            *selections = moved;
+            *t.selections = moved;
         }
         Ok(())
     }
@@ -210,13 +195,5 @@ fn moved_head(selection: &Selection, head: ByteOffset, visual: bool) -> Selectio
         anchor: if visual { selection.anchor } else { head },
         head,
         goal: selection.goal,
-    }
-}
-
-/// Las alturas del documento o, sin él, todas de una fila.
-fn heights<'h>(layout: Option<&'h Layout>, uniform: &'h Uniform) -> &'h dyn LineHeights {
-    match layout {
-        Some(layout) => layout,
-        None => uniform,
     }
 }

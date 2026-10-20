@@ -15,8 +15,8 @@ use gungraun::{Callgrind, EventKind};
 use metalmind_buffer::{Buffer, Edit, Selection, Selections};
 use metalmind_perf::{MISSING_WORD, Session, WORD};
 use metalmind_search::{FuzzyMatcher, Query, TextMatcher, TextQuery};
-use metalmind_syntax::Scan;
-use metalmind_vim::Layout;
+use metalmind_syntax::{Rows, Scan};
+use metalmind_vim::DocState;
 
 /// La nota de `lines` líneas en Normal, con el cursor a la mitad.
 fn session(lines: usize) -> Session {
@@ -131,11 +131,11 @@ fn syntax_scan(text: String) -> Scan {
 }
 
 /// La nota con el estilo de todas sus líneas ya calculado.
-fn styled_buffer(lines: usize) -> (Buffer, Layout) {
+fn styled_buffer(lines: usize) -> (Buffer, DocState) {
     let buffer = note_buffer(lines);
-    let mut layout = Layout::new(&buffer);
-    layout.ensure(&buffer, usize::MAX);
-    (buffer, layout)
+    let mut doc = DocState::painted(&buffer, Rows::uniform(1));
+    doc.ensure(&buffer, usize::MAX);
+    (buffer, doc)
 }
 
 // Una letra al final de la línea del medio y el estilo de la ventana que
@@ -143,15 +143,15 @@ fn styled_buffer(lines: usize) -> (Buffer, Layout) {
 #[library_benchmark]
 #[bench::lineas_5k(args = (5_000), setup = styled_buffer)]
 #[bench::lineas_50k(args = (50_000), setup = styled_buffer)]
-fn syntax_estilo_tecla((mut buffer, mut layout): (Buffer, Layout)) -> (Buffer, Layout) {
+fn syntax_estilo_tecla((mut buffer, mut doc): (Buffer, DocState)) -> (Buffer, DocState) {
     let line = buffer.line_count() / 2;
     let at = buffer.line_end(line);
     buffer.begin_transaction(cursor(&buffer, line)).unwrap();
     buffer.apply(vec![Edit::insert(at, "x")]).unwrap();
     buffer.commit_transaction(cursor(&buffer, line)).unwrap();
-    layout.sync(&mut buffer);
-    layout.ensure(&buffer, line + 60);
-    black_box((buffer, layout))
+    doc.sync(&mut buffer);
+    doc.ensure(&buffer, line + 60);
+    black_box((buffer, doc))
 }
 
 #[library_benchmark]

@@ -13,8 +13,9 @@
 )]
 mod support;
 
-use metalmind_buffer::{Buffer, Selections};
-use metalmind_vim::{Action, Clipboard, Mode, Operator, PasteSide, SystemRegister, Vim};
+use metalmind_vim::{
+    Action, Clipboard, KeyOutcome, Mode, Operator, PasteSide, SystemRegister, Target, Vim, VimError,
+};
 use pretty_assertions::assert_eq;
 
 #[derive(Default)]
@@ -41,22 +42,25 @@ impl Clipboard for FakeClipboard {
     }
 }
 
+/// Un panel con un portapapeles de prueba.
 struct Editor {
-    vim: Vim,
-    buffer: Buffer,
-    selections: Selections,
+    pane: support::Editor,
     clipboard: FakeClipboard,
 }
 
 impl Editor {
     fn new(marked: &str) -> Self {
-        let (buffer, selections) = support::parse(marked);
         Self {
-            vim: Vim::new(),
-            buffer,
-            selections,
+            pane: support::Editor::new(marked),
             clipboard: FakeClipboard::default(),
         }
+    }
+
+    fn run(
+        &mut self,
+        edit: impl FnOnce(&mut Vim, &mut Target<'_>) -> Result<KeyOutcome, VimError>,
+    ) {
+        self.pane.run_with(Some(&mut self.clipboard), edit).unwrap();
     }
 
     fn keys(&mut self, notation: &str) -> &mut Self {
@@ -64,20 +68,17 @@ impl Editor {
             let support::Input::Key(key) = input else {
                 panic!("solo teclas");
             };
-            self.vim
-                .feed_with_clipboard(
-                    key,
-                    &mut self.buffer,
-                    &mut self.selections,
-                    &mut self.clipboard,
-                )
-                .unwrap();
+            self.run(|vim, target| vim.feed(key, target));
         }
         self
     }
 
     fn text(&self) -> String {
-        support::render(&self.buffer, self.selections.iter().map(|s| s.head))
+        self.pane.cursors()
+    }
+
+    fn mode(&self) -> Mode {
+        self.pane.vim.mode()
     }
 }
 
@@ -142,15 +143,8 @@ fn without_a_clipboard_they_are_plain_registers() {
 
 impl Editor {
     fn with_system_register(&mut self, action: Action) -> &mut Self {
-        self.vim.use_register(SystemRegister::Clipboard);
-        self.vim
-            .execute_with_clipboard(
-                action,
-                &mut self.buffer,
-                &mut self.selections,
-                &mut self.clipboard,
-            )
-            .unwrap();
+        self.pane.vim.use_register(SystemRegister::Clipboard);
+        self.run(|vim, target| vim.execute(action, target));
         self
     }
 }
@@ -163,7 +157,7 @@ fn a_system_register_action_in_visual_is_like_typing_it() {
     let mut editor = Editor::new("|ab cd\nef");
     editor.keys("ve").with_system_register(YANK);
     assert_eq!(editor.clipboard.clipboard.as_deref(), Some("ab"));
-    assert_eq!(editor.vim.mode(), Mode::Normal);
+    assert_eq!(editor.mode(), Mode::Normal);
     editor.keys("jV").with_system_register(YANK);
     assert_eq!(editor.clipboard.clipboard.as_deref(), Some("ef\n"));
     editor.clipboard.clipboard = Some("X".to_owned());
@@ -180,7 +174,7 @@ fn a_system_register_action_drops_what_was_pending() {
         editor.clipboard.clipboard = Some("X".to_owned());
         editor.keys("ve").keys(pending).with_system_register(PUT);
         assert_eq!(editor.text(), "|X cd\nef", "tras {pending:?}");
-        assert_eq!(editor.vim.mode(), Mode::Normal, "tras {pending:?}");
+        assert_eq!(editor.mode(), Mode::Normal, "tras {pending:?}");
     }
 }
 

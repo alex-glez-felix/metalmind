@@ -22,20 +22,17 @@ pub(crate) struct Detached {
 }
 
 impl Detached {
-    fn slot(&mut self, register: SystemRegister) -> &mut Option<String> {
+    pub(crate) fn get(&self, register: SystemRegister) -> Option<String> {
         match register {
-            SystemRegister::Clipboard => &mut self.clipboard,
-            SystemRegister::Primary => &mut self.primary,
+            SystemRegister::Clipboard => self.clipboard.clone(),
+            SystemRegister::Primary => self.primary.clone(),
         }
     }
-}
 
-impl Clipboard for Detached {
-    fn read(&mut self, register: SystemRegister) -> Option<String> {
-        self.slot(register).clone()
-    }
-
-    fn write(&mut self, register: SystemRegister, text: String) {
-        *self.slot(register) = Some(text);
+    pub(crate) fn set(&mut self, register: SystemRegister, text: String) {
+        match register {
+            SystemRegister::Clipboard => self.clipboard = Some(text),
+            SystemRegister::Primary => self.primary = Some(text),
+        }
     }
 }

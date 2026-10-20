@@ -1,23 +1,17 @@
 //! `.`: repetir el último cambio.
 
-use metalmind_buffer::{Buffer, Selections};
-
 use super::Vim;
+use crate::Target;
 use crate::dot::{Change, Subject};
 use crate::object::Object;
-use crate::register::{Clipboard, RegisterName};
+use crate::register::RegisterName;
 use crate::{Mode, VimError};
 
 impl Vim {
     /// Un count reemplaza el del cambio y queda para los `.` siguientes. Si
     /// falla, `.` sigue repitiendo el cambio de antes, con su count. Usa el
     /// registro del cambio, salvo `"1`–`"8`, que avanzan al siguiente.
-    pub(super) fn repeat_change(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<(), VimError> {
+    pub(super) fn repeat_change(&mut self, t: &mut Target<'_>) -> Result<(), VimError> {
         let count = self.count.take();
         self.reset();
         // Se clona porque repetirlo lo vuelve a grabar, ya con el count nuevo.
@@ -39,28 +33,28 @@ impl Vim {
                 self.search.remember(query);
             }
             Change::Operate(_, Subject::Object(Object::SearchWord(search))) => {
-                self.remember_word(*search, buffer, selections);
+                self.remember_word(*search, t.buffer, t.selections);
             }
             _ => {}
         }
         match dot.change {
             Change::Operate(operator, subject) => {
-                self.operate(operator, subject, buffer, selections, clipboard)?;
+                self.operate(operator, subject, t)?;
             }
-            Change::Paste(side) => self.paste(side, buffer, selections, clipboard)?,
-            Change::Insert { at, list } => self.enter_insert(at, list, buffer, selections)?,
-            Change::Replace(c, size) => self.replace_sized(c, size, buffer, selections)?,
+            Change::Paste(side) => self.paste(side, t)?,
+            Change::Insert { at, list } => self.enter_insert(at, list, t)?,
+            Change::Replace(c, size) => self.replace_sized(c, size, t)?,
             Change::Block(change, size) => {
-                self.repeat_block(change, size, buffer, selections, clipboard)?;
+                self.repeat_block(change, size, t)?;
             }
-            Change::ToggleCheckbox => self.toggle_checkbox(buffer, selections)?,
+            Change::ToggleCheckbox => self.toggle_checkbox(t)?,
         }
         if self.mode != Mode::Insert {
             return Ok(());
         }
         for typed in &dot.typed {
-            self.type_in_insert(typed, buffer, selections)?;
+            self.type_in_insert(typed, t)?;
         }
-        self.finish_insert(buffer, selections)
+        self.finish_insert(t)
     }
 }

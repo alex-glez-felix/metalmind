@@ -35,12 +35,10 @@ pub struct PlacedMark {
     pub line: usize,
 }
 
-/// Las marks de un buffer. Son anclas de ese buffer, así que quien edita
-/// varios con un solo [`Vim`](crate::Vim) le presta las del que edita con
-/// [`Vim::swap_marks`](crate::Vim::swap_marks), como vim, donde son de cada
-/// buffer.
+/// Las marks de un buffer, como en vim, donde son de cada buffer: son anclas
+/// suyas y van en su [`DocState`](crate::DocState).
 #[derive(Debug, Default)]
-pub struct Marks {
+pub(crate) struct Marks {
     named: [Option<LineAnchor>; 26],
     previous: Option<LineAnchor>,
 }
@@ -52,7 +50,7 @@ impl Marks {
     ///
     /// # Errors
     /// Solo si una mark no cae en `from`, lo que sería un bug.
-    pub fn carried(&self, from: &Buffer, to: &mut Buffer) -> Result<Self, BufferError> {
+    pub(crate) fn carried(&self, from: &Buffer, to: &mut Buffer) -> Result<Self, BufferError> {
         let mut carry = |anchor: Option<LineAnchor>| -> Result<Option<LineAnchor>, BufferError> {
             let Some(offset) = anchor.and_then(|anchor| from.anchor_offset(anchor)) else {
                 return Ok(None);

@@ -67,14 +67,6 @@ impl Buffer {
         std::mem::take(&mut self.changes.lines)
     }
 
-    /// Los reemplazos hechos desde el último [`Buffer::take_splices`], sin
-    /// sacarlos: para quien los sigue a medias, como el motor vim con las
-    /// posiciones que guarda mientras edita.
-    #[must_use]
-    pub fn splices(&self) -> &[Splice] {
-        &self.changes.splices
-    }
-
     /// Cuántos reemplazos se hicieron desde que existe el buffer, también
     /// los ya sacados con [`Buffer::take_splices`]. Para quien sigue los
     /// reemplazos sin sacarlos, como el motor vim con las posiciones que

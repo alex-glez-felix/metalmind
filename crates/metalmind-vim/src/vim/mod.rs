@@ -19,8 +19,6 @@ mod visual;
 
 use std::collections::HashSet;
 
-use metalmind_buffer::{Buffer, Selections};
-
 use self::awaiting::Awaiting;
 use self::ex::GlobalRun;
 use self::macros::{Playback, Recording, Replay};
@@ -33,15 +31,16 @@ use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
 use crate::insert::{Session, Typed};
-use crate::jumplist::{FileId, JumpList};
+use crate::jumplist::FileId;
 use crate::keymap::{Bound, Lookup};
-use crate::mark::{FileMarks, Marks};
-use crate::register::{Clipboard, Detached, RegisterName, Registers, SystemRegister};
+use crate::mark::FileMarks;
+use crate::register::{RegisterName, Registers, SystemRegister};
 use crate::visual::{LastVisual, Reselect};
-use crate::{Action, Indent, Key, Keymap, Layout, Markdown, Mode, Prompt, Viewport, VimError};
+use crate::{Action, Indent, Key, Keymap, Markdown, Mode, Prompt, Target, VimError};
 
-/// Estado del modo vim de un editor. No hace I/O: recibe teclas y edita el
-/// buffer y las selecciones que le pasan.
+/// Lo de vim que es de todo el editor: el modo, lo pendiente, los
+/// registros, las macros, las marks `A`–`Z` y los historiales. No hace I/O:
+/// cada tecla edita el [`Target`] que le presta quien lo aloja.
 #[derive(Debug)]
 pub struct Vim {
     keymap: Keymap,
@@ -54,8 +53,6 @@ pub struct Vim {
     /// El registro elegido con `"x` para lo siguiente.
     selected: Option<RegisterName>,
     registers: Registers,
-    /// `"+` y `"*` cuando quien aloja el motor no da un portapapeles.
-    detached: Detached,
     command_line: String,
     prompt: Prompt,
     command_history: History,
@@ -83,15 +80,8 @@ pub struct Vim {
     last_find: Option<Find>,
     recording: Option<Recording>,
     playback: Playback,
-    marks: Marks,
     /// `A`–`Z`, de todos los buffers.
     file_marks: FileMarks,
-    /// El archivo del buffer que se edita, prestado como las marks.
-    file: FileId,
-    /// La jumplist del panel que se edita, prestada como la ventana.
-    jumps: JumpList,
-    /// Los reemplazos del buffer que ya siguieron `jumps` y `file_marks`.
-    splices_seen: usize,
     /// Los archivos que ya no existen: `ctrl-o` salta sus entradas.
     missing_files: HashSet<FileId>,
     /// La última macro reproducida, para `@@`.
@@ -109,11 +99,6 @@ pub struct Vim {
     /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert, por
     /// selección.
     block_insert: Option<Vec<Pending>>,
-    /// La ventana del panel que se edita, prestada por quien aloja el motor.
-    viewport: Viewport,
-    /// Lo que mide cada línea del documento que se edita, también prestado;
-    /// sin él, todas miden una fila.
-    layout: Option<Layout>,
     scrolloff: usize,
     indent: Indent,
     markdown: Markdown,
@@ -141,7 +126,6 @@ impl Vim {
             operator_count: None,
             selected: None,
             registers: Registers::default(),
-            detached: Detached::default(),
             command_line: String::new(),
             prompt: Prompt::Command,
             command_history: History::default(),
@@ -159,11 +143,7 @@ impl Vim {
             last_find: None,
             recording: None,
             playback: Playback::default(),
-            marks: Marks::default(),
             file_marks: FileMarks::default(),
-            file: FileId::default(),
-            jumps: JumpList::default(),
-            splices_seen: 0,
             missing_files: HashSet::new(),
             last_played: None,
             failed: false,
@@ -171,8 +151,6 @@ impl Vim {
             last_visual_size: None,
             stale_line_end: false,
             block_insert: None,
-            viewport: Viewport::default(),
-            layout: None,
             scrolloff: 0,
             indent: Indent::default(),
             markdown: Markdown::default(),
@@ -194,61 +172,28 @@ impl Vim {
         self.mode
     }
 
-    #[must_use]
-    pub fn keymap(&self) -> &Keymap {
-        &self.keymap
-    }
-
-    /// Como [`Vim::feed_with_clipboard`], con `"+` y `"*` como registros
-    /// normales.
+    /// Pasa una tecla al motor. Si la tecla reproduce una macro, la
+    /// reproduce entera.
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn feed(
-        &mut self,
-        key: Key,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
-        self.with_detached(|vim, clipboard| {
-            vim.feed_with_clipboard(key, buffer, selections, clipboard)
-        })
-    }
-
-    /// Pasa una tecla al motor; `clipboard` es lo que leen y escriben `"+`
-    /// y `"*`. Si la tecla reproduce una macro, la reproduce entera.
-    ///
-    /// # Errors
-    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn feed_with_clipboard(
-        &mut self,
-        key: Key,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
+    pub fn feed(&mut self, key: Key, t: &mut Target<'_>) -> Result<KeyOutcome, VimError> {
         let recording = self.recording.is_some();
-        let outcome = self.process(key, buffer, selections, clipboard)?;
+        let outcome = self.process(key, t)?;
         // Así no se graba la `q` que termina la grabación.
         if recording {
             self.record([key]);
         }
-        self.play_queued(outcome, buffer, selections, clipboard)
+        self.play_queued(outcome, t)
     }
 
     /// Una tecla, tecleada o de una macro. Como en vim, una búsqueda o un
     /// `:s` que no encuentran nada fallan.
-    fn process(
-        &mut self,
-        key: Key,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
+    fn process(&mut self, key: Key, t: &mut Target<'_>) -> Result<KeyOutcome, VimError> {
         self.failed = false;
-        let version = buffer.version();
-        let outcome = self.interpret(key, buffer, selections, clipboard)?;
-        self.follow_cursor(buffer, selections, version);
+        let version = t.buffer.version();
+        let outcome = self.interpret(key, t)?;
+        self.follow_cursor(t, version);
         if matches!(
             outcome,
             KeyOutcome::SearchFailed(_) | KeyOutcome::InvalidCommand(_)
@@ -258,15 +203,9 @@ impl Vim {
         Ok(outcome)
     }
 
-    fn interpret(
-        &mut self,
-        key: Key,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
+    fn interpret(&mut self, key: Key, t: &mut Target<'_>) -> Result<KeyOutcome, VimError> {
         if let Some(awaiting) = self.awaiting.take() {
-            return self.complete(awaiting, key, buffer, selections, clipboard);
+            return self.complete(awaiting, key, t);
         }
         if self.push_count_digit(key) {
             return Ok(KeyOutcome::Pending);
@@ -276,30 +215,14 @@ impl Vim {
             Lookup::Pending => Ok(KeyOutcome::Pending),
             Lookup::Action(Bound::Engine(action)) => {
                 self.pending.clear();
-                self.run(action, buffer, selections, clipboard)
+                self.run(action, t)
             }
             Lookup::Action(Bound::Host(action)) => {
                 self.reset();
                 Ok(KeyOutcome::Dispatch(action.into()))
             }
-            Lookup::Unbound => self.unbound(buffer, selections),
+            Lookup::Unbound => self.unbound(t),
         }
-    }
-
-    /// Como [`Vim::execute_with_clipboard`], con `"+` y `"*` como registros
-    /// normales.
-    ///
-    /// # Errors
-    /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn execute(
-        &mut self,
-        action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
-        self.with_detached(|vim, clipboard| {
-            vim.execute_with_clipboard(action, buffer, selections, clipboard)
-        })
     }
 
     /// Ejecuta una acción por nombre ya resuelto, como harán la paleta y `:`.
@@ -309,16 +232,10 @@ impl Vim {
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.
-    pub fn execute_with_clipboard(
-        &mut self,
-        action: Action,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
-    ) -> Result<KeyOutcome, VimError> {
-        let version = buffer.version();
-        let outcome = self.run(action, buffer, selections, clipboard)?;
-        self.follow_cursor(buffer, selections, version);
+    pub fn execute(&mut self, action: Action, t: &mut Target<'_>) -> Result<KeyOutcome, VimError> {
+        let version = t.buffer.version();
+        let outcome = self.run(action, t)?;
+        self.follow_cursor(t, version);
         Ok(outcome)
     }
 
@@ -328,19 +245,6 @@ impl Vim {
     pub fn use_register(&mut self, register: SystemRegister) {
         self.reset();
         self.selected = Some(RegisterName::System(register));
-    }
-
-    fn with_detached<T>(&mut self, run: impl FnOnce(&mut Self, &mut Detached) -> T) -> T {
-        let mut detached = std::mem::take(&mut self.detached);
-        let result = run(self, &mut detached);
-        self.detached = detached;
-        result
-    }
-
-    /// Cambia las marks del motor por `marks`: antes de editar otro buffer
-    /// se le dan las suyas y después se recuperan las del anterior.
-    pub fn swap_marks(&mut self, marks: &mut Marks) {
-        std::mem::swap(&mut self.marks, marks);
     }
 
     /// El cursor se movió por fuera del motor, como con un clic o un pegado
@@ -373,11 +277,7 @@ impl Vim {
         true
     }
 
-    fn unbound(
-        &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-    ) -> Result<KeyOutcome, VimError> {
+    fn unbound(&mut self, t: &mut Target<'_>) -> Result<KeyOutcome, VimError> {
         let keys = std::mem::take(&mut self.pending);
         if !self.mode.takes_text() {
             self.fail();
@@ -390,7 +290,7 @@ impl Vim {
         if text.is_empty() {
             return Ok(KeyOutcome::Unbound);
         }
-        self.write_text(&text, buffer, selections)
+        self.write_text(&text, t)
     }
 
     /// El count de lo que se va a ejecutar: `2"a3x` borra 6.
