@@ -10,6 +10,7 @@ mod finder;
 mod link_choice;
 mod overlay;
 mod palette;
+mod reroute;
 mod text_search;
 
 use std::collections::HashMap;
@@ -32,11 +33,12 @@ use crate::panel::PanelView;
 use crate::session::VaultState;
 use crate::sidebar::{self, Sidebar, SidebarEvent};
 use crate::theme::Theme;
-use crate::workspace::{Axis, Direction, Effect, Node, PaneId, Workspace};
+use crate::workspace::{Axis, Direction, Effect, Message, Node, PaneId, Workspace};
 
 use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
+use self::reroute::{Reroute, reroute};
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -185,10 +187,28 @@ impl WorkspaceView {
             }
             Effect::Dispatch(action) => {
                 self.sync_editors(cx);
-                self.focus(window, cx);
                 window.dispatch_action(Box::new(Dispatch(action.into())), cx);
             }
         }
+    }
+
+    /// Una acción que llegó a la raíz sin que la atendiera su vista.
+    fn reroute(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
+        let sidebar = self.sidebar.read(cx).is_visible();
+        match reroute(invocation.action.owner(), sidebar, self.overlay.is_some()) {
+            Reroute::Sidebar => self.focus_sidebar(window, cx),
+            Reroute::Editor => self.focus(window, cx),
+            Reroute::Nowhere => {
+                let name = invocation.action.name();
+                let error = format!("{name} no tiene a quién llegar: su vista no está abierta");
+                self.workspace.update(cx, |workspace, _| {
+                    workspace.set_message(Message::Error(error));
+                });
+                cx.notify();
+                return;
+            }
+        }
+        window.dispatch_action(Box::new(Dispatch(invocation.clone())), cx);
     }
 
     fn toggle_panel(&mut self, view: PanelView, window: &mut Window, cx: &mut Context<Self>) {
@@ -319,13 +339,14 @@ impl Render for WorkspaceView {
             .text_color(theme.foreground)
             .bg(theme.background)
             // Los comandos y las acciones del motor llegan aquí desde
-            // cualquier vista; lo demás es de la vista que lo atiende.
+            // cualquier vista; lo demás llega solo si su vista no tenía el
+            // foco.
             .on_action(
                 cx.listener(|view, Dispatch(invocation): &Dispatch, window, cx| {
                     match invocation.action {
                         Action::Command(_) => view.run(invocation, window, cx),
                         Action::Vim(action) => view.execute_vim(action, window, cx),
-                        _ => cx.propagate(),
+                        _ => view.reroute(invocation, window, cx),
                     }
                 }),
             );
