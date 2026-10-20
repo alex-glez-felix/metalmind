@@ -20,6 +20,7 @@ use std::hint::black_box;
 use std::sync::Arc;
 
 use gungraun::prelude::*;
+use gungraun::{Callgrind, EventKind};
 use headless::{Headless, NOTE, Prepared};
 use metalmind_buffer::Buffer;
 use metalmind_perf::{FORMULAS, WORD};
@@ -404,4 +405,14 @@ library_benchmark_group!(
     ]
 );
 
-main!(library_benchmark_groups = modelos, editor);
+/// El límite de regresión contra la base, en instrucciones.
+fn limit(percent: f64) -> LibraryBenchmarkConfig {
+    let mut config = LibraryBenchmarkConfig::default();
+    config.tool(Callgrind::default().soft_limits([(EventKind::Ir, percent)]));
+    config
+}
+
+main!(
+    config = limit(metalmind_perf::MAX_INSTRUCTION_REGRESSION),
+    library_benchmark_groups = [modelos, editor]
+);

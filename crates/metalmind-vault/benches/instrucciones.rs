@@ -13,6 +13,10 @@
     clippy::unwrap_used,
     reason = "en un benchmark, un unwrap que falla es un benchmark roto"
 )]
+#![allow(
+    clippy::must_use_candidate,
+    reason = "lo pide la función que genera `library_benchmark(config = …)`"
+)]
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -20,6 +24,7 @@ use std::hint::black_box;
 use std::path::Path;
 
 use gungraun::prelude::*;
+use gungraun::{Callgrind, EventKind};
 use metalmind_perf::{NoteNames, linked_vault};
 use metalmind_vault::tags::{Scope, TagQuery, Tags};
 use metalmind_vault::{
@@ -66,7 +71,7 @@ fn index(names: NoteNames) -> LinkIndex {
 
 // Un cambio del watcher: modificar una nota y crear una cuyo nombre usan
 // 300 links de las 100 carpetas.
-#[library_benchmark]
+#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
 #[bench::modificar_una_nota(args = (NoteNames::Repeated), setup = modified)]
 #[bench::crear_una_nota_que_empata(args = (NoteNames::Repeated), setup = created)]
 fn links_cambio_del_watcher(
@@ -110,9 +115,18 @@ fn links_clonar_el_indice(index: LinkIndex) -> (LinkIndex, LinkIndex) {
 // notas con cada nombre en las 100 carpetas o con nombres únicos.
 #[library_benchmark]
 #[bench::una_nota(args = (NoteNames::Unique, "area-3/tema-4/nota-3-4-7.md", "area-3/tema-4/otra.md"), setup = rename)]
-#[bench::una_carpeta_nombres_unicos(args = (NoteNames::Unique, "area-3", "archivo/area-3"), setup = rename)]
 #[bench::una_carpeta_nombres_repetidos(args = (NoteNames::Repeated, "area-3", "archivo/area-3"), setup = rename)]
 fn links_plan_de_renombre(
+    (index, from, to): (LinkIndex, VaultPath, VaultPath),
+) -> (RenamePlan, LinkIndex) {
+    black_box((index.rename_plan(&from, &to).unwrap(), index))
+}
+
+// Mover una carpeta con nombres únicos varía más entre corridas (ver
+// `MAX_NOISY_INSTRUCTION_REGRESSION`).
+#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
+#[bench::una_carpeta_nombres_unicos(args = (NoteNames::Unique, "area-3", "archivo/area-3"), setup = rename)]
+fn links_plan_de_mover_con_nombres_unicos(
     (index, from, to): (LinkIndex, VaultPath, VaultPath),
 ) -> (RenamePlan, LinkIndex) {
     black_box((index.rename_plan(&from, &to).unwrap(), index))
@@ -123,7 +137,7 @@ fn rename(names: NoteNames, from: &str, to: &str) -> (LinkIndex, VaultPath, Vaul
 }
 
 // `gd` sobre el último link de una nota de 5 000 líneas.
-#[library_benchmark]
+#[library_benchmark(config = limit(metalmind_perf::MAX_NOISY_INSTRUCTION_REGRESSION))]
 #[bench::lineas_5k(args = (NoteNames::Repeated), setup = follow_setup)]
 fn links_seguir_un_link(
     (index, text, offset): (LinkIndex, String, usize),
@@ -252,6 +266,7 @@ library_benchmark_group!(
         links_cambio_del_watcher,
         links_clonar_el_indice,
         links_plan_de_renombre,
+        links_plan_de_mover_con_nombres_unicos,
         links_seguir_un_link,
         links_nombrar_para_completar,
         adjuntos_huerfanos
@@ -269,4 +284,14 @@ library_benchmark_group!(
     ]
 );
 
-main!(library_benchmark_groups = links, tags);
+/// El límite de regresión contra la base, en instrucciones.
+fn limit(percent: f64) -> LibraryBenchmarkConfig {
+    let mut config = LibraryBenchmarkConfig::default();
+    config.tool(Callgrind::default().soft_limits([(EventKind::Ir, percent)]));
+    config
+}
+
+main!(
+    config = limit(metalmind_perf::MAX_INSTRUCTION_REGRESSION),
+    library_benchmark_groups = [links, tags]
+);
