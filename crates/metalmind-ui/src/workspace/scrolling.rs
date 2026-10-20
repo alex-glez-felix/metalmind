@@ -1,7 +1,7 @@
 //! La ventana de cada panel: cuántas filas le caben y la rueda del ratón.
 
-use metalmind_buffer::Buffer;
-use metalmind_vim::{LineHeights, Mode, Rows, Uniform};
+use metalmind_syntax::Rows;
+use metalmind_vim::Mode;
 
 use super::{Pane, PaneId, Workspace, WorkspaceError};
 use crate::document::Editable;
@@ -23,13 +23,11 @@ impl Workspace {
         self.set_rows(rows);
         let scrolloff = self.scrolloff;
         let (state, editable) = self.shown(pane)?;
-        state.viewport.resize(height, text);
-        let head = state.selections.primary().head;
-        super::reveal(
-            &mut state.viewport,
+        state.state.viewport.resize(height, text);
+        state.state.reveal(
             editable.buffer,
-            editable.layout.as_mut(),
-            head,
+            &state.selections,
+            editable.state,
             scrolloff,
         );
         Ok(())
@@ -40,7 +38,7 @@ impl Workspace {
     fn set_rows(&mut self, rows: Rows) {
         if self.documents.set_rows(rows) {
             for pane in self.panes.values_mut() {
-                pane.viewport.heights_changed();
+                pane.state.viewport.heights_changed();
             }
         }
     }
@@ -52,38 +50,29 @@ impl Workspace {
     /// Si `pane` no existe o su documento tampoco, lo que sería un bug.
     pub fn scroll_to(&mut self, pane: PaneId, top: usize) -> Result<(), WorkspaceError> {
         if pane == self.focused() {
-            return self.edit_pane(pane, |vim, buffer, selections| {
-                vim.scroll_to(top, buffer, selections);
+            return self.edit_pane(pane, None, |vim, target| {
+                vim.scroll_to(top, target);
                 Ok(())
             });
         }
         let scrolloff = self.scrolloff;
         let (state, editable) = self.shown(pane)?;
-        let buffer: &Buffer = editable.buffer;
-        let head = state.selections.primary().head;
-        let viewport = &mut state.viewport;
-        let uniform = Uniform(viewport.row());
-        let heights: &dyn LineHeights = match editable.layout.as_mut() {
-            Some(layout) => {
-                let extra = top.saturating_sub(viewport.top());
-                layout.ensure_window(buffer, viewport, head, scrolloff, extra);
-                layout
-            }
-            None => &uniform,
-        };
-        viewport.scroll_to(
+        state.state.scroll_to(
             top,
-            buffer,
+            editable.buffer,
             &mut state.selections,
+            editable.state,
             scrolloff,
             Mode::Normal,
-            heights,
         );
         Ok(())
     }
 
     /// `pane`, para cambiarlo, y el documento que muestra.
-    fn shown(&mut self, pane: PaneId) -> Result<(&mut Pane, Editable<'_>), WorkspaceError> {
+    pub(super) fn shown(
+        &mut self,
+        pane: PaneId,
+    ) -> Result<(&mut Pane, Editable<'_>), WorkspaceError> {
         let state = self
             .panes
             .get_mut(&pane)

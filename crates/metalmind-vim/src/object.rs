@@ -7,7 +7,7 @@ use crate::mark;
 use crate::markdown::{LazyOutline, ListItem, indent_of};
 use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
-use crate::span::{Missed, Region, Span, SpanKind, Target};
+use crate::span::{Extent, Missed, Region, Span, SpanKind};
 use crate::visual::Area;
 use crate::{Motion, Operator, TextObject, Viewport};
 
@@ -44,7 +44,7 @@ impl Object {
         count: Option<usize>,
         viewport: &Viewport,
         outline: &LazyOutline,
-    ) -> Result<Target, Missed> {
+    ) -> Result<Extent, Missed> {
         let span = match *self {
             Self::Motion(motion) => motion
                 .resolve(
@@ -94,7 +94,7 @@ impl Object {
             }
             Self::Visual(area) => return Ok(area.target(buffer, selection, viewport.columns())),
         };
-        Ok(span.into_target(buffer))
+        Ok(span.into_extent(buffer))
     }
 }
 
@@ -104,14 +104,14 @@ fn current_lines(
     selection: &Selection,
     operator: Operator,
     count: usize,
-) -> Option<Target> {
+) -> Option<Extent> {
     let first = buffer.line_of(selection.head);
     let last_line = buffer.last_line();
     if count > 1 && first >= last_line {
         return None;
     }
     let last = first.saturating_add(count - 1).min(last_line);
-    Some(Target {
+    Some(Extent {
         region: Region::Lines { first, last },
         start: line_start_for(buffer, selection, operator, last),
         adjusted: false,
@@ -125,10 +125,10 @@ fn current_lines(
 /// indentado, con las líneas en blanco de en medio.
 fn with_children(
     buffer: &Buffer,
-    target: Target,
+    target: Extent,
     columns: Columns,
     outline: &LazyOutline,
-) -> Target {
+) -> Extent {
     let Region::Lines { first, last } = target.region else {
         return target;
     };
@@ -137,7 +137,7 @@ fn with_children(
         return target;
     }
     let last = (first..=last).fold(last, |end, line| end.max(last_child(buffer, line, columns)));
-    Target {
+    Extent {
         region: Region::Lines { first, last },
         nested: true,
         ..target

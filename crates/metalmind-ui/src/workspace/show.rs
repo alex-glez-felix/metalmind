@@ -68,11 +68,9 @@ impl Workspace {
         if current.document == id {
             return Ok(());
         }
-        let (numbers, jumps) = (current.numbers, current.jumps.clone());
-        let shown = Pane {
-            jumps,
-            ..self.pane_on(id, numbers)?
-        };
+        let (numbers, jumps) = (current.numbers, current.state.jumps.clone());
+        let mut shown = self.pane_on(id, numbers)?;
+        shown.state.jumps = jumps;
         self.message = Some(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
         if let Some(old) = self.panes.insert(pane, shown) {
@@ -103,7 +101,7 @@ impl Workspace {
         }
         if let Some(last) = self.hidden.remove(&id) {
             pane.selections = last.selections;
-            pane.viewport = last.viewport;
+            pane.state.viewport = last.viewport;
         }
         Ok(pane)
     }

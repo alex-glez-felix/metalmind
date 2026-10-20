@@ -5,12 +5,13 @@ use metalmind_buffer::{Buffer, Goal, Selection, Selections};
 
 use super::Vim;
 use super::operate::Operation;
+use crate::Target;
 use crate::dot::Subject;
 use crate::history::History;
 use crate::lines::clamp_normal;
 use crate::object::Object;
 use crate::operator::Operand;
-use crate::register::{Clipboard, RegisterName};
+use crate::register::RegisterName;
 use crate::search::{Case, Hit, Query, WordSearch, split_at_delimiter};
 use crate::span::Missed;
 use crate::{
@@ -84,9 +85,7 @@ impl Vim {
         &mut self,
         backward: bool,
         line: &str,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.awaiting_search.take().unwrap_or_default();
         if let Some(kind) = awaiting.visual {
@@ -107,16 +106,14 @@ impl Vim {
             subject,
             awaiting,
         };
-        self.jump_to_match(jump, find, buffer, selections, clipboard)
+        self.jump_to_match(jump, find, t)
             .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SubmitCommand)))
     }
 
     pub(super) fn search_next(
         &mut self,
         reversed: bool,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.take_motion_context();
         let Some(last) = self.search.query() else {
@@ -136,7 +133,7 @@ impl Vim {
             subject,
             awaiting,
         };
-        self.jump_to_match(jump, find, buffer, selections, clipboard)
+        self.jump_to_match(jump, find, t)
             .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(Action::SearchNext { reversed })))
     }
 
@@ -146,16 +143,14 @@ impl Vim {
         &mut self,
         backward: bool,
         whole_word: bool,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         let awaiting = self.take_motion_context();
         let search = WordSearch {
             backward,
             whole_word,
         };
-        let Some(query) = self.remember_word(search, buffer, selections) else {
+        let Some(query) = self.remember_word(search, t.buffer, t.selections) else {
             return Ok(KeyOutcome::SearchFailed(SearchError::NoStringUnderCursor));
         };
         self.search.history.push(query.pattern.source());
@@ -172,7 +167,7 @@ impl Vim {
             subject,
             awaiting,
         };
-        self.jump_to_match(jump, find, buffer, selections, clipboard)
+        self.jump_to_match(jump, find, t)
             .map(|outcome| outcome.unwrap_or(KeyOutcome::Executed(action)))
     }
 
@@ -228,9 +223,7 @@ impl Vim {
         &mut self,
         jump: Jump<'_>,
         find: impl Fn(&Buffer, &Selection, usize) -> Option<Hit>,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<Option<KeyOutcome>, VimError> {
         let Jump {
             pattern,
@@ -238,12 +231,14 @@ impl Vim {
             awaiting,
         } = jump;
         let times = awaiting.count.unwrap_or(1);
-        let hits = selections.map_to(|selection| (*selection, find(buffer, selection, times)));
+        let hits = t
+            .selections
+            .map_to(|selection| (*selection, find(t.buffer, selection, times)));
         if hits.iter().all(|(_, hit)| hit.is_none()) {
             let error = SearchError::NotFound(pattern.to_owned());
             return Ok(Some(KeyOutcome::SearchFailed(error)));
         }
-        self.jumped(buffer, selections)?;
+        self.jumped(t)?;
         let wrapped = hits
             .iter()
             .find_map(|(_, hit)| hit.and_then(|hit| hit.wrapped));
@@ -255,7 +250,7 @@ impl Vim {
                         .map(|hit| {
                             hit.destination()
                                 .span_from(selection.head)
-                                .into_target(buffer)
+                                .into_extent(t.buffer)
                         })
                         .ok_or(Missed::Stay),
                 });
@@ -265,17 +260,17 @@ impl Vim {
                     count: awaiting.count,
                     register: awaiting.register,
                 };
-                self.finish_operator(operation, &operands, buffer, selections, clipboard)?;
+                self.finish_operator(operation, &operands, t)?;
             }
             None => {
-                *selections = hits.to_selections(|(selection, hit)| {
+                *t.selections = hits.to_selections(|(selection, hit)| {
                     hit.map_or(*selection, |hit| match awaiting.visual {
                         Some(_) => Selection {
                             head: hit.offset,
                             goal: Goal::None,
                             ..*selection
                         },
-                        None => Selection::cursor(clamp_normal(buffer, hit.offset)),
+                        None => Selection::cursor(clamp_normal(t.buffer, hit.offset)),
                     })
                 });
             }

@@ -3983,6 +3983,7 @@ dependencies = [
  "metalmind-syntax",
  "metalmind-vim",
  "tempfile",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4044,6 +4045,8 @@ dependencies = [
  "divan",
  "gpui-kit",
  "gpui-pre",
+ "gpui-pre-wgpu",
+ "gungraun",
  "image",
  "log",
  "metalmind-buffer",
@@ -4079,6 +4082,7 @@ dependencies = [
  "blake3",
  "caseless",
  "divan",
+ "gungraun",
  "ignore",
  "insta",
  "jiff",

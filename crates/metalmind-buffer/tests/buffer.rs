@@ -453,6 +453,27 @@ fn splices_follow_edits_and_history() {
     assert_eq!(buffer.take_splices(), []);
 }
 
+#[test]
+fn splices_since_a_count_survive_taking_them() {
+    let mut buffer = Buffer::from("uno dos");
+    let start = buffer.splice_count();
+    edit(&mut buffer, vec![Edit::replace(at(0)..at(3), "un")]);
+    let middle = buffer.splice_count();
+    edit(&mut buffer, vec![Edit::insert(at(0), "x")]);
+    assert_eq!(buffer.splices_since(start).len(), 2);
+    assert_eq!(
+        buffer.splices_since(middle),
+        &buffer.splices_since(start)[1..]
+    );
+    let taken = buffer.take_splices();
+    assert_eq!(buffer.splice_count(), 2, "sacarlos no los descuenta");
+    assert_eq!(buffer.splices_since(start), [], "los sacados no vuelven");
+    edit(&mut buffer, vec![Edit::insert(at(0), "y")]);
+    assert_eq!(buffer.splices_since(middle).len(), 1);
+    assert_eq!(buffer.splices_since(buffer.splice_count()), []);
+    assert_eq!(taken.len(), 2);
+}
+
 fn char_boundaries(text: &str) -> Vec<usize> {
     text.char_indices()
         .map(|(i, _)| i)

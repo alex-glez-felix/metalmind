@@ -78,7 +78,7 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))?;
         let placed = self
             .vim
-            .placed_marks(document.marks(), file, document.buffer());
+            .placed_marks(document.state(), file, document.buffer());
         Ok(Some(GutterMarks::new(placed)))
     }
 }

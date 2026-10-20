@@ -17,42 +17,50 @@ use metalmind_syntax::{Lines, Styles, scan};
 use styled::{NoteLines, StyledNote};
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn a_note_scans_in_linear_time() {
     assert_linear(1_000, note, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn hash_runs_scan_in_linear_time() {
     assert_linear(2_000, hash_runs, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn unclosed_wikilinks_scan_in_linear_time() {
     assert_linear(10_000, unclosed_wikilinks, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn unclosed_link_titles_scan_in_linear_time() {
     assert_linear(5_000, unclosed_link_titles, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn a_huge_line_scans_in_linear_time() {
     assert_linear(100_000, huge_line, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn unclosed_dollars_scan_in_linear_time() {
     assert_linear(10_000, dollar_runs, |text| scan(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn formulas_scan_in_linear_time() {
     assert_linear(5_000, math_note, |text| scan(&text));
 }
 
 /// Rachas de 1 a k: el texto mide ~k²/2, así que k crece con la raíz.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn backtick_runs_scan_in_linear_time() {
     assert_linear(
         100_000,
@@ -69,36 +77,43 @@ fn style_all(text: &str) -> Styles {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_a_note_is_linear() {
     assert_linear(1_000, note, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_hash_runs_is_linear() {
     assert_linear(2_000, hash_runs, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_unclosed_wikilinks_is_linear() {
     assert_linear(10_000, unclosed_wikilinks, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_unclosed_link_titles_is_linear() {
     assert_linear(5_000, unclosed_link_titles, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_a_huge_line_is_linear() {
     assert_linear(100_000, huge_line, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_unclosed_dollars_is_linear() {
     assert_linear(10_000, dollar_runs, |text| style_all(&text));
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_formulas_is_linear() {
     assert_linear(2_000, math_note, |text| style_all(&text));
 }
@@ -106,6 +121,7 @@ fn styling_formulas_is_linear() {
 /// Bloques `$$` de varias líneas seguidos, sin una línea en blanco: tras
 /// cada cierre el estilo sigue en el mismo párrafo.
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_blocks_in_one_paragraph_is_linear() {
     assert_linear(
         2_000,
@@ -115,6 +131,7 @@ fn styling_blocks_in_one_paragraph_is_linear() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn styling_unpaired_emphasis_is_linear() {
     assert_linear(10_000, emphasis_runs, |text| style_all(&text));
 }
@@ -128,6 +145,7 @@ fn emphasis_runs(count: usize) -> String {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn a_key_costs_the_same_in_a_long_note() {
     assert_flat(
         1_000,
@@ -142,6 +160,7 @@ fn a_key_costs_the_same_in_a_long_note() {
 }
 
 #[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn opening_a_fence_paints_only_the_window() {
     assert_flat(
         1_000,

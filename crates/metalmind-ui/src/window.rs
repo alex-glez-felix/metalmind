@@ -5,7 +5,7 @@
 use std::rc::Rc;
 use std::sync::mpsc;
 
-use gpui_kit::{App, AppContext as _, TitlebarOptions, WindowOptions};
+use gpui_kit::{AnyWindowHandle, App, AppContext as _, TitlebarOptions, WindowOptions};
 use metalmind_config::{Config, Paths};
 use metalmind_keymap::Keymap;
 use metalmind_vault::{Vault, VaultUpdate};
@@ -67,15 +67,29 @@ pub fn open(
     if cx.graphical_environment().is_none() {
         return Err(OpenError::NoDisplay);
     }
-    cx.set_global(Theme::new(config, cx)?);
     cx.set_global(clock);
-    actions::bind_keys(Keymap::default(), cx);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
             cx.quit();
         }
     })
     .detach();
+    open_window(startup, config, cx).map(drop)
+}
+
+/// La ventana de [`open`], en la plataforma que tenga `cx`: también la de
+/// pruebas de GPUI, sin display, para contar lo que cuesta pintarla.
+///
+/// # Errors
+/// Si no hay fuente monoespaciada, no arranca el hilo del watcher o la
+/// plataforma no puede abrir la ventana.
+pub fn open_window(
+    startup: Startup,
+    config: &Config,
+    cx: &mut App,
+) -> Result<AnyWindowHandle, OpenError> {
+    cx.set_global(Theme::new(config, cx)?);
+    actions::bind_keys(Keymap::default(), cx);
     let Startup {
         vault,
         updates,
@@ -134,8 +148,8 @@ pub fn open(
         });
         view
     })
-    .map_err(OpenError::Window)?;
-    Ok(())
+    .map(Into::into)
+    .map_err(OpenError::Window)
 }
 
 /// El estado guardado de `vault`, que además queda como el último abierto.

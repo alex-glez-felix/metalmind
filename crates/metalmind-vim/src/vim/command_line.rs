@@ -1,11 +1,9 @@
 //! La línea donde se escribe tras `:`, `/` o `?`: editarla, recorrer su
 //! historial y enviarla.
 
-use metalmind_buffer::{Buffer, Selections};
-
 use super::Vim;
+use crate::Target;
 use crate::history::History;
-use crate::register::Clipboard;
 use crate::{KeyOutcome, Mode, Prompt, VimError};
 
 impl Vim {
@@ -65,20 +63,16 @@ impl Vim {
 
     pub(super) fn submit_command_line(
         &mut self,
-        buffer: &mut Buffer,
-        selections: &mut Selections,
-        clipboard: &mut dyn Clipboard,
+        t: &mut Target<'_>,
     ) -> Result<KeyOutcome, VimError> {
         self.mode = Mode::Normal;
         let line = std::mem::take(&mut self.command_line);
         match self.prompt {
-            Prompt::Search { backward } => {
-                self.submit_search(backward, &line, buffer, selections, clipboard)
-            }
+            Prompt::Search { backward } => self.submit_search(backward, &line, t),
             // Como vim, `@:` dentro de la línea repite la anterior, no esta.
             Prompt::Command => {
                 self.command_history.push(&line);
-                let outcome = self.run_ex(&line, buffer, selections, clipboard);
+                let outcome = self.run_ex(&line, t);
                 if !line.is_empty() {
                     self.last_command_line = Some(line);
                 }

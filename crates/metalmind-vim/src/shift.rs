@@ -11,7 +11,7 @@ use crate::columns::Columns;
 use crate::indent::{self, Indent, Shift, leading_blanks};
 use crate::lines::Want;
 use crate::operator::{Operand, Outcome};
-use crate::span::{Region, Target};
+use crate::span::{Extent, Region};
 
 /// Corre la sangría de cada línea una sola vez aunque la abarquen varias
 /// selecciones, sin tocar las vacías. El cursor va a la primera línea, en
@@ -112,7 +112,7 @@ impl Step {
     }
 }
 
-fn lines_of(buffer: &Buffer, target: &Target) -> RangeInclusive<usize> {
+fn lines_of(buffer: &Buffer, target: &Extent) -> RangeInclusive<usize> {
     match target.region {
         // El final es exclusivo: un `v$` que llega al salto termina en su línea.
         Region::Chars(ref range) if range.end > range.start => {
@@ -125,6 +125,6 @@ fn lines_of(buffer: &Buffer, target: &Target) -> RangeInclusive<usize> {
 
 /// Como el cursor de Visual sobre un tab, que se ve al inicio si va antes
 /// del otro extremo (ver [`crate::lines::tab_end`]).
-fn tab_end(target: &Target, selection: &Selection) -> bool {
+fn tab_end(target: &Extent, selection: &Selection) -> bool {
     !target.visual || selection.head > selection.anchor
 }

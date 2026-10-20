@@ -8,8 +8,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use metalmind_buffer::{Buffer, BufferError, HistorySeq};
+use metalmind_syntax::Rows;
 use metalmind_vault::{ContentHash, FileError};
-use metalmind_vim::{Layout, Marks, Rows};
+use metalmind_vim::DocState;
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
 /// la última no lo lleva.
@@ -68,8 +69,7 @@ impl fmt::Display for FileStats {
 /// Lo que el motor toma prestado de un documento mientras edita.
 pub(crate) struct Editable<'a> {
     pub buffer: &'a mut Buffer,
-    pub marks: &'a mut Marks,
-    pub layout: &'a mut Option<Layout>,
+    pub state: &'a mut DocState,
 }
 
 #[derive(Debug)]
@@ -78,11 +78,9 @@ pub struct Document {
     /// un buffer sin archivo, como el de abrir un vault sin nota.
     path: Option<PathBuf>,
     buffer: Buffer,
-    /// Las marks de vim son de cada buffer; el motor las toma prestadas.
-    marks: Marks,
-    /// El estilo de cada línea y lo que mide; también lo toma prestado el
-    /// motor, que lo sigue al editar. Siempre está, salvo mientras lo tiene.
-    layout: Option<Layout>,
+    /// Lo que el motor guarda del documento (sus marks, el estilo de cada
+    /// línea y lo que mide), que le presta en cada tecla.
+    state: DocState,
     /// Estado del historial que coincide con el disco; `None` si se guardó
     /// a mitad de una transacción y ningún estado coincide.
     saved: Option<HistorySeq>,
@@ -137,8 +135,7 @@ impl Document {
             written: buffer.version(),
             on_disk: None,
             changed_on_disk: false,
-            marks: Marks::default(),
-            layout: Some(Layout::new(&buffer)),
+            state: DocState::painted(&buffer, Rows::uniform(1)),
             buffer,
             blank_line: false,
             noeol: false,
@@ -256,9 +253,10 @@ impl Document {
         self.buffer.has_uncommitted_edits() || self.saved != Some(self.buffer.history_seq())
     }
 
+    /// Lo que el motor guarda del documento, para pintarlo.
     #[must_use]
-    pub fn marks(&self) -> &Marks {
-        &self.marks
+    pub fn state(&self) -> &DocState {
+        &self.state
     }
 
     #[must_use]
@@ -272,30 +270,21 @@ impl Document {
     /// # Errors
     /// Solo si una mark no cae en el buffer de `old`, lo que sería un bug.
     pub(crate) fn keep_marks_of(&mut self, old: &Self) -> Result<(), BufferError> {
-        self.marks = old.marks.carried(&old.buffer, &mut self.buffer)?;
-        Ok(())
+        self.state
+            .keep_marks_of(&old.state, &old.buffer, &mut self.buffer)
     }
 
     /// Lo que mide una línea de texto y cada heading.
     pub(crate) fn set_rows(&mut self, rows: &Rows) {
-        if let Some(layout) = self.layout.as_mut() {
-            layout.set_rows(rows.clone());
-        }
+        self.state.set_rows(rows.clone());
     }
 
-    /// El estilo de las líneas, para pintarlas.
-    #[must_use]
-    pub fn layout(&self) -> Option<&Layout> {
-        self.layout.as_ref()
-    }
-
-    /// El buffer para editarlo, y sus marks y su layout para prestárselos
-    /// al motor.
+    /// El buffer para editarlo y lo que el motor guarda del documento, para
+    /// prestárselo.
     pub(crate) fn editable(&mut self) -> Editable<'_> {
         Editable {
             buffer: &mut self.buffer,
-            marks: &mut self.marks,
-            layout: &mut self.layout,
+            state: &mut self.state,
         }
     }
 

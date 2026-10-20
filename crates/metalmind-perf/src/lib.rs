@@ -6,6 +6,7 @@
 //! Los números objetivo y cómo se miden están en `docs/performance.md`.
 
 mod growth;
+mod limits;
 mod links;
 mod math;
 mod session;
@@ -14,6 +15,7 @@ mod text;
 mod vault;
 
 pub use growth::{FACTOR, MAX_FLAT_GROWTH, MAX_LINEAR_GROWTH, assert_flat, assert_linear, growth};
+pub use limits::MAX_INSTRUCTION_REGRESSION;
 pub use links::{NoteNames, linked_vault};
 pub use math::{FORMULAS, Formula, dollar_runs, formulas_note, math_note};
 pub use session::Session;

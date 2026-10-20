@@ -3,7 +3,7 @@
 
 use std::borrow::Cow;
 
-use metalmind_syntax::{Lines, Styles};
+use metalmind_syntax::{LineKind, Lines, Styles};
 
 /// Las filas que pinta una ventana: lo que se pide tras cada tecla.
 pub const WINDOW: usize = 60;
@@ -41,12 +41,29 @@ impl StyledNote {
         Self { lines, styles }
     }
 
-    /// Una letra al final de la línea del medio y la ventana que la muestra.
+    /// Una letra al final de la primera línea de párrafo desde la mitad y la
+    /// ventana que la muestra. De párrafo, para que notas de distinto largo
+    /// comparen la misma tecla y no una en una cerca con otra en un párrafo.
     pub fn type_in_the_middle(&mut self) {
-        let line = self.lines.0.len() / 2;
+        let middle = self.lines.0.len() / 2;
+        let line = (middle..self.lines.0.len())
+            .find(|&line| self.is_paragraph(line))
+            .unwrap_or(middle);
         self.lines.0[line].push('x');
         self.styles.edit(line, 1, 1);
         self.styles.ensure(line + WINDOW, &self.lines);
+    }
+
+    /// Texto corrido, según el estilo ya calculado: ni vacía, ni ítem de
+    /// lista, ni heading, código o frontmatter.
+    fn is_paragraph(&self, line: usize) -> bool {
+        let text = &self.lines.0[line];
+        !text.is_empty()
+            && !text.starts_with('-')
+            && self
+                .styles
+                .line(line)
+                .is_some_and(|style| style.kind == LineKind::Text)
     }
 
     /// Una cerca que no cierra en la línea 10: todo lo de abajo pasa a ser

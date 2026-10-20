@@ -8,7 +8,7 @@ use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
 use metalmind_fuzz::{FuzzChar, MAX_BUFFER_LEN, check_engine};
-use metalmind_vim::{Key, KeyOutcome, Mode, Vim};
+use metalmind_vim::{DocState, FileId, Key, KeyOutcome, Mode, PaneState, Target, Vim};
 
 #[derive(Debug, Arbitrary)]
 enum Op {
@@ -46,28 +46,22 @@ struct Case {
     ops: Vec<Op>,
 }
 
-fn press(vim: &mut Vim, key: Key, buffer: &mut Buffer, selections: &mut Selections) -> KeyOutcome {
-    match vim.feed(key, buffer, selections) {
+fn press(vim: &mut Vim, key: Key, target: &mut Target<'_>) -> KeyOutcome {
+    match vim.feed(key, target) {
         Ok(outcome) => outcome,
         Err(error) => panic!("{key:?} dio un error de buffer: {error}"),
     }
 }
 
 /// Escribe `line` en la línea de comandos tras `prompt` y la envía.
-fn submit(
-    vim: &mut Vim,
-    prompt: char,
-    line: &str,
-    buffer: &mut Buffer,
-    selections: &mut Selections,
-) -> KeyOutcome {
-    press(vim, Key::Char(prompt), buffer, selections);
+fn submit(vim: &mut Vim, prompt: char, line: &str, target: &mut Target<'_>) -> KeyOutcome {
+    press(vim, Key::Char(prompt), target);
     assert_eq!(vim.mode(), Mode::CommandLine, "{prompt} no abrió la línea");
-    if let Err(error) = vim.insert_text(line, buffer, selections) {
+    if let Err(error) = vim.paste_text(line, target) {
         panic!("escribir {line:?} dio un error de buffer: {error}");
     }
     assert_eq!(vim.command_line(), Some(line));
-    let outcome = press(vim, Key::Enter, buffer, selections);
+    let outcome = press(vim, Key::Enter, target);
     assert_eq!(vim.mode(), Mode::Normal, "{line:?} no cerró la línea");
     outcome
 }
@@ -86,12 +80,21 @@ fn substitute_line(
 fuzz_target!(|case: Case| {
     let mut buffer = Buffer::from(case.text.as_str());
     let mut selections = Selections::single(Selection::cursor(ByteOffset::ZERO));
+    let (mut doc, mut pane) = (DocState::default(), PaneState::default());
     let mut vim = Vim::new();
     for op in &case.ops {
+        let mut target = Target {
+            buffer: &mut buffer,
+            selections: &mut selections,
+            doc: &mut doc,
+            pane: &mut pane,
+            file: FileId::default(),
+            clipboard: None,
+        };
         match op {
             Op::Search { backward, pattern } => {
                 let prompt = if *backward { '?' } else { '/' };
-                submit(&mut vim, prompt, pattern, &mut buffer, &mut selections);
+                submit(&mut vim, prompt, pattern, &mut target);
             }
             Op::Substitute {
                 whole_file,
@@ -101,14 +104,14 @@ fuzz_target!(|case: Case| {
                 flags,
             } => {
                 let line = substitute_line(*whole_file, delimiter.0, pattern, replacement, flags);
-                submit(&mut vim, ':', &line, &mut buffer, &mut selections);
+                submit(&mut vim, ':', &line, &mut target);
             }
             Op::Ex(line) => {
-                submit(&mut vim, ':', line, &mut buffer, &mut selections);
+                submit(&mut vim, ':', line, &mut target);
             }
             Op::Normal(index) => {
                 let key = NORMAL[usize::from(*index) % NORMAL.len()];
-                press(&mut vim, key, &mut buffer, &mut selections);
+                press(&mut vim, key, &mut target);
             }
         }
         check_engine(&vim, &buffer, &selections);
