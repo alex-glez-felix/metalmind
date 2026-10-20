@@ -269,6 +269,12 @@ use rstest_reuse::{self, apply, template};
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>j$djj.", "a\ne\n|\n")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jld3.", "|a\ne\nijkl\nmnop")]
 #[case("a|bcd\nefgh\nijkl\nmnop", "<C-v>jldu.", "a|d\neh\nijkl\nmnop")]
+#[case("a|bcdef\nabcdef\nabcdef\nabcdef", "<C-v>j$djj0.", "a\na\n|\n")]
+#[case(
+    "a|bcdef\nabcdef\nabcdef\nabcdef",
+    "<C-v>j$~jjl.",
+    "aBCDEF\naBCDEF\nab|CDEF\nabCDEF"
+)]
 // p de varias líneas por caracteres o por líneas: el lado lo decide dónde
 // quedó el cursor al borrar el bloque
 #[case("|X\nYz\nabc\nabc", "vjyjjll<C-v>jp", "X\nYz\nab|X\nY\nab")]
@@ -316,6 +322,11 @@ use rstest_reuse::{self, apply, template};
     "ab\t\t  cd\nef\t\t  gh\nijk|\t\t   l\nmno\t\t   p"
 )]
 #[case("ab|cd\nefgh\nijkl\nmnop", "<C-v>j>u", "ab|cd\nefgh\nijkl\nmnop")]
+#[case(
+    "a|bcdef\nabcdef\nabcdef\nabcdef",
+    "<C-v>jl>jj.",
+    "a\t bcdef\na\t bcdef\nabcde|\t     f\nabcde\t     f"
+)]
 #[case(
     "ab|\t\tcd\nef\t\tgh\nij\t\tkl",
     "<C-v>j<lt>j.",

@@ -263,6 +263,31 @@ use rstest_reuse::{self, apply, template};
 #[case("|ab cd ef", "vlx.", "|d ef")]
 #[case("|abc\ndef\nghi", "vjdu.", "|ef\nghi")]
 #[case("|abcdef", "vldu.", "|cdef")]
+// tras `v$` en una línea, vim suma MAXCOL a la columna del cursor y se
+// desborda a la columna 0 si el cursor no está en las dos primeras
+#[case("0123456\nab|cdef", "v$dk$.", "|\nab")]
+#[case("0123456\nab|cdef", "v$dk0l.", "0|ab")]
+#[case("ab|c\nabcdef\nxy", "v$rXjll.", "abX\n|XXXXXf\nxy")]
+#[case("ab|c\nabcdef\nxy", "v$~jll.", "abC\n|ABCDEf\nxy")]
+#[case("|abc\nabcdef\nxy", "v$~jl.", "ABC\na|BCDEF\nxy")]
+#[case("a|bc\nabcdef\nxy", "v$~jl.", "aBC\n|ABCdef\nxy")]
+#[case("a|bc\nabcdef\nxy", "v$Uj0.", "aBC\n|ABCDEF\nxy")]
+#[case("|abc\nabcdef\nxy", "v$~j$.", "ABC\n|ABCDEF\nxy")]
+#[case("ab|c\nabcdef\nxy", "v$dj.", "ababcdef\n|x")]
+// en varias líneas, `.` llega a la misma columna, o al final tras `$`
+#[case("|abcd\nefgh\nijkl\nmnop\nqrst", "vjdj.", "fgh\n|nop\nqrst")]
+#[case("a|bcd\nefgh\nijkl\nmnop\nqrst", "vjldj.", "ah\ni|p\nqrst")]
+#[case("a|bcd\nefgh\nijkl\nmnop\nqrst", "vj$dj.", "aijkl\n|m")]
+#[case(
+    "a|bcd\nefgh\nijkl\nmnop\nqrst",
+    "vj$~jj.",
+    "aBCD\nEFGH\ni|JKL\nMNOP\nqrst"
+)]
+// en una línea, el ancho en columnas de pantalla
+#[case("|a\tbcdef\nabcdefghijkl", "vl~j.", "A\tbcdef\n|ABCDEFGHijkl")]
+#[case("|a\tbcdef\nabcdefghijkl", "vlll~j0.", "A\tBCdef\n|ABCDEFGHIJkl")]
+#[case("|日本語\nabcdefghijkl", "vl~j0.", "日本語\n|ABCDefghijkl")]
+#[case("a|b日本\nabcdefghijkl", "vl~j0.", "aB日本\n|ABCdefghijkl")]
 // gv
 #[case("a|bcdef", "vll<Esc>0gvd", "a|ef")]
 #[case("a|bcdef", "vlly$gvd", "a|ef")]
@@ -322,6 +347,18 @@ fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 )]
 #[case("|a\nb\nc\nd\ne\nf", "Vj>jj3.", "\ta\n\tb\n|\tc\n\td\ne\nf")]
 #[case("abc\nde|f\nx", "vk>u", "ab|c\ndef\nx")]
+// `.` deja la columna buscada que deja volver a seleccionar: con `V`, la
+// del cursor, y tras `V$`, el final
+#[case("|abcdef\nabcdef", "vl>j.", "\tabcdef\n|\tabcdef")]
+#[case("|abcdef\nabcdef", "vl2>j.", "\t\tabcdef\n|\t\tabcdef")]
+#[case("|abcdef\nabcdef", "vl>j3.", "\tabcdef\n|\tabcdef")]
+#[case("abc|def\nx\nab\nabcdef", "V>jj.", "\tabcdef\nx\n|\tab\nabcdef")]
+#[case("a|bc\nx\nabcdef", "V$>jj.", "\tabc\nx\n\tab|cdef")]
+#[case("a|bc\nx\nabcdef\nab", "Vj$>jj.", "\tabc\n\tx\n\tab|cdef\n\tab")]
+#[case("a|bc\nx\nabcdef\nab", "Vj>jj$.", "\tabc\n\tx\n\tabcde|f\n\tab")]
+#[case("abcd|e\nx\nabcdefghijkl", "V$>jj.", "\tabcde\nx\n\tabcd|efghijkl")]
+#[case("a|bc\nx\nabcdefghijkl", "V$>jj$.", "\tabc\nx\n\tabcdefghijk|l")]
+#[case("abcde\nx\nabcdefghijk|l", "V$>k.", "abcde\n\t|x\n\tabcdefghijkl")]
 #[case("a|b\n\ncd", "Vjj>", "|\tab\n\n\tcd")]
 fn shifts(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
