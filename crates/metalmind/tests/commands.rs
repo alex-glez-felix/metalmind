@@ -481,8 +481,7 @@ fn la_ayuda_de_un_subcomando_no_abre_nada() {
 }
 
 /// En un vault de 500 notas los subcomandos terminan sin pantalla (ver
-/// arriba): no arrancan la GUI. Lo que cuesta leer el vault lo cuentan los
-/// benchmarks de instrucciones de `metalmind-vault` (docs/performance.md).
+/// arriba): no arrancan la GUI.
 #[test]
 fn add_y_search_terminan_en_un_vault_de_500_notas() {
     let sandbox = Sandbox::new();
