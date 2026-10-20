@@ -8,12 +8,7 @@ use notify_debouncer_full::DebouncedEvent;
 
 use crate::path::VaultPath;
 use crate::refresh::Touched;
-
-/// Los archivos que cambian qué se ignora: tocarlos relee su carpeta.
-const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
-
-/// Las reglas de exclusión de git del vault: tocarlas relee todo.
-const GIT_EXCLUDE: &str = ".git/info/exclude";
+use crate::scan::ruled_by;
 
 pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
     let mut touched = Touched::default();
@@ -72,18 +67,8 @@ pub(crate) fn touched_by_errors(root: &Path, errors: &[notify::Error]) -> Touche
 
 /// La ruta del vault que hay que releer por un evento en `path`, si alguna.
 fn relevant(root: &Path, path: &Path) -> Option<VaultPath> {
-    let relative = path.strip_prefix(root).ok()?;
-    if relative == Path::new(GIT_EXCLUDE) {
-        return Some(VaultPath::root());
-    }
-    let name = relative.file_name().and_then(|name| name.to_str());
-    if let Some(name) = name
-        && IGNORE_FILES.contains(&name)
-    {
-        return VaultPath::from_fs(root, path.parent()?);
-    }
     // Un oculto (temporal de un guardado, algo en `.git/`) no está en el índice.
-    VaultPath::from_fs(root, path)
+    ruled_by(root, path).or_else(|| VaultPath::from_fs(root, path))
 }
 
 #[cfg(test)]
@@ -158,6 +143,16 @@ mod tests {
             event(EventKind::Create(CreateKind::File), &["/v/.ignore"]),
         ];
         assert_eq!(paths(&touched(root, &events)), ["", "sub"]);
+    }
+
+    #[test]
+    fn marcar_una_carpeta_como_cache_la_relee() {
+        let root = Path::new("/v");
+        let events = [event(
+            EventKind::Create(CreateKind::File),
+            &["/v/sub/target/CACHEDIR.TAG"],
+        )];
+        assert_eq!(paths(&touched(root, &events)), ["sub/target"]);
     }
 
     #[test]

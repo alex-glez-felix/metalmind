@@ -204,13 +204,18 @@ fn edited_while_moving(
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::time::Instant;
 
+    use notify::event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode};
+    use notify::{Event, EventKind};
+    use notify_debouncer_full::DebouncedEvent;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::scan::scan;
+    use crate::scan::{CACHEDIR_SIGNATURE, CACHEDIR_TAG, scan};
+    use crate::watch::touched;
 
     #[derive(Debug, Clone)]
     enum Op {
@@ -221,9 +226,9 @@ mod tests {
     }
 
     fn op() -> impl Strategy<Value = Op> {
-        let path =
-            prop::collection::vec(prop::sample::select(vec!["a", "b", "x.md", "y.png"]), 1..=3)
-                .prop_map(|parts| parts.join("/"));
+        let names = vec!["a", "b", "x.md", "y.png", "node_modules", CACHEDIR_TAG];
+        let path = prop::collection::vec(prop::sample::select(names), 1..=3)
+            .prop_map(|parts| parts.join("/"));
         prop_oneof![
             path.clone().prop_map(Op::WriteFile),
             path.clone().prop_map(Op::CreateDir),
@@ -232,34 +237,52 @@ mod tests {
         ]
     }
 
-    /// Aplica `op` en disco y devuelve lo que el watcher diría que tocó.
+    /// Aplica `op` en disco y devuelve lo que el watcher diría que tocó, con
+    /// los eventos que daría inotify aunque la operación falle.
     fn apply(root: &Path, op: &Op) -> Touched {
         let at = |path: &str| root.join(path);
-        let vault = |path: &str| VaultPath::new(path).unwrap();
-        let mut touched = Touched::default();
-        let _ = match op {
+        let event = |kind, paths: &[&str]| {
+            let event = paths
+                .iter()
+                .fold(Event::new(kind), |event, path| event.add_path(at(path)));
+            DebouncedEvent::new(event, Instant::now())
+        };
+        let (_, events) = match op {
             Op::WriteFile(path) => {
                 let _ = fs::create_dir_all(at(path).parent().unwrap());
-                touched.paths.insert(vault(path));
-                touched.written.insert(vault(path));
-                fs::write(at(path), "")
+                let contents: &[u8] = if path.ends_with(CACHEDIR_TAG) {
+                    CACHEDIR_SIGNATURE
+                } else {
+                    b""
+                };
+                (
+                    fs::write(at(path), contents),
+                    vec![event(
+                        EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+                        &[path],
+                    )],
+                )
             }
-            Op::CreateDir(path) => {
-                touched.paths.insert(vault(path));
-                fs::create_dir_all(at(path))
-            }
-            Op::Remove(path) => {
-                touched.paths.insert(vault(path));
-                fs::remove_file(at(path)).or_else(|_| fs::remove_dir_all(at(path)))
-            }
+            Op::CreateDir(path) => (
+                fs::create_dir_all(at(path)),
+                vec![event(EventKind::Create(CreateKind::Folder), &[path])],
+            ),
+            Op::Remove(path) => (
+                fs::remove_file(at(path)).or_else(|_| fs::remove_dir_all(at(path))),
+                vec![event(EventKind::Remove(RemoveKind::Any), &[path])],
+            ),
             Op::Rename(from, to) => {
                 let _ = fs::create_dir_all(at(to).parent().unwrap());
-                touched.paths.extend([vault(from), vault(to)]);
-                touched.renames.push((vault(from), vault(to)));
-                fs::rename(at(from), at(to))
+                (
+                    fs::rename(at(from), at(to)),
+                    vec![event(
+                        EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+                        &[from, to],
+                    )],
+                )
             }
         };
-        touched
+        touched(root, &events)
     }
 
     type Mirror = HashMap<VaultPath, EntryKind>;
