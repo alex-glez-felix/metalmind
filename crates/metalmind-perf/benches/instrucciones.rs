@@ -11,6 +11,7 @@
 use std::hint::black_box;
 
 use gungraun::prelude::*;
+use gungraun::{Callgrind, EventKind};
 use metalmind_buffer::{Buffer, Edit, Selection, Selections};
 use metalmind_perf::{MISSING_WORD, Session, WORD};
 use metalmind_search::{FuzzyMatcher, Query, TextMatcher, TextQuery};
@@ -201,4 +202,14 @@ library_benchmark_group!(
     benchmarks = [search_finder, search_texto_en_memoria]
 );
 
-main!(library_benchmark_groups = buffer, vim, syntax, search);
+/// El límite de regresión contra la base, en instrucciones.
+fn limit(percent: f64) -> LibraryBenchmarkConfig {
+    let mut config = LibraryBenchmarkConfig::default();
+    config.tool(Callgrind::default().soft_limits([(EventKind::Ir, percent)]));
+    config
+}
+
+main!(
+    config = limit(metalmind_perf::MAX_INSTRUCTION_REGRESSION),
+    library_benchmark_groups = [buffer, vim, syntax, search]
+);

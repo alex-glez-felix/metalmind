@@ -5,8 +5,8 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 # Las pruebas de complejidad cuentan instrucciones con callgrind, que corre
 # ~50 veces más lento, en dos procesos a la vez (N y 16N): ocupan dos hilos.
 # Corren en paralelo porque contar no depende de la CPU que queda
-# (docs/performance.md). Una que se volvió cuadrática falla por tiempo a los
-# 10 min, ×16 lo que tarda hoy la más lenta en el CI.
+# (docs/performance.md). La más lenta tarda hoy ~110 s en el CI; una que se
+# volvió cuadrática (×16 más trabajo con 16N) falla por tiempo a los 10 min.
 [[profile.default.overrides]]
 filter = 'binary(complexity) | test(/::complexity::|_lineal$|^growth::tests::/)'
 threads-required = 2

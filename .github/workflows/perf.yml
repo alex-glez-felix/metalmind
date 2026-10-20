@@ -31,8 +31,6 @@ env:
   GUNGRAUN_VERSION: 0.20.0
   # Los crates con un benchmark `instrucciones`.
   PAQUETES: metalmind-perf metalmind-vault metalmind-ui
-  # Una regresión de más de esto en instrucciones hace fallar el job.
-  LIMITE: ir=5%
   # Con esta etiqueta, una regresión justificada se reporta sin fallar.
   ETIQUETA_ACEPTADA: rendimiento-aceptado
 
@@ -100,26 +98,28 @@ jobs:
         env:
           ACEPTADA: ${{ contains(github.event.pull_request.labels.*.name, 'rendimiento-aceptado') }}
           MEDIDOS: ${{ steps.base.outputs.paquetes }}
+        # El límite de cada benchmark está en su código (5 %, o 10 % en los que
+        # varían entre corridas; ver metalmind-perf/src/limits.rs). Con una
+        # regresión, gungraun sale con código 3.
         run: |
-          limite=()
-          if [ "$ACEPTADA" = "true" ]; then
-            echo "::warning::Etiqueta $ETIQUETA_ACEPTADA: las regresiones se reportan sin fallar."
-          else
-            limite=(--callgrind-limits="$LIMITE")
-          fi
           # Todos corren aunque uno falle, para ver cada regresión de una vez.
           # Un crate cuyo benchmark la base no tiene solo se corre.
           fallaron=()
           for paquete in $PAQUETES; do
             comparar=()
             if [[ " $MEDIDOS " == *" $paquete "* ]]; then
-              comparar=(--baseline=base "${limite[@]}")
+              comparar=(--baseline=base)
             fi
-            cargo bench -p "$paquete" --bench instrucciones -- "${comparar[@]}" \
-              || fallaron+=("$paquete")
+            codigo=0
+            cargo bench -p "$paquete" --bench instrucciones -- "${comparar[@]}" || codigo=$?
+            if [ "$codigo" -eq 3 ] && [ "$ACEPTADA" = "true" ]; then
+              echo "::warning::Etiqueta $ETIQUETA_ACEPTADA: regresiones en $paquete, reportadas sin fallar."
+            elif [ "$codigo" -ne 0 ]; then
+              fallaron+=("$paquete")
+            fi
           done
           if [ ${#fallaron[@]} -gt 0 ]; then
-            echo "::error::Regresiones en: ${fallaron[*]}"
+            echo "::error::Fallaron: ${fallaron[*]}"
             exit 1
           fi
 
