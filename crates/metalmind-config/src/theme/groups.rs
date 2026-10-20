@@ -1,10 +1,12 @@
 //! Los grupos de colores semánticos de un tema. Cada grupo existe en tres
 //! formas: como se escribe (`Raw*`), resuelto pero quizá incompleto
-//! (`Partial*`, para fusionar con `extends`) y completo.
+//! (`Partial*`, para fusionar con `extends`) y completo, en las unidades de
+//! quien lo usa (ver [`Represent`]).
 
 use std::collections::BTreeMap;
 
 use super::color::{Base, Color, ColorRef};
+use super::represent::{Plain, Represent, Units};
 use crate::diagnostic::Location;
 use crate::parse::Spanned;
 use serde::{Deserialize, Deserializer};
@@ -58,8 +60,16 @@ macro_rules! color_group {
     ) => {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, PartialEq)]
-        pub struct $name {
-            $($(#[$field_meta])* pub $field: Color,)*
+        pub struct $name<U: Units = Plain> {
+            $($(#[$field_meta])* pub $field: <U as Represent<Color>>::Value,)*
+        }
+
+        impl $name {
+            /// El grupo en las unidades de `U`.
+            #[must_use]
+            pub fn convert<U: Units>(self) -> $name<U> {
+                $name { $($field: <U as Represent<Color>>::represent(self.$field),)* }
+            }
         }
 
         #[derive(Debug, Default, Deserialize)]
