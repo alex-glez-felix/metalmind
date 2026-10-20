@@ -35,7 +35,7 @@ pub enum Effect {
     /// la ventana muestra [`Workspace::link_choice`] para elegir una.
     ChooseLink,
     /// Una acción que no es un comando, como las del panel lateral: la
-    /// atiende la vista que la tenga.
+    /// ventana se la lleva a su vista.
     Dispatch(Action),
 }
 
