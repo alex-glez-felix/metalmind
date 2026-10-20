@@ -1,8 +1,12 @@
 //! Recorrer el disco con `ignore`. El walk completo y el parcial del watcher
 //! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
+//! Este módulo es el único que sabe qué es del vault y qué archivos lo deciden.
+//! Los dos pueden avisar de cada carpeta antes de leerla, para que el
+//! watcher la vigile.
 
 use std::collections::HashSet;
-use std::io;
+use std::fs::File;
+use std::io::{self, Read as _};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, mpsc};
@@ -12,6 +16,44 @@ use ignore::{DirEntry, WalkBuilder, WalkState};
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::{VaultPath, is_hidden_name};
 
+const NODE_MODULES: &str = "node_modules";
+pub(crate) const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
+pub(crate) const CACHEDIR_SIGNATURE: &[u8; 43] = b"Signature: 8a477f597d28d172789f06886806bc55";
+
+/// Los archivos que deciden qué de su carpeta es del vault.
+const FOLDER_RULES: [&str; 3] = [".gitignore", ".ignore", CACHEDIR_TAG];
+
+/// Las reglas que valen para todo el vault.
+const VAULT_RULES: &str = ".git/info/exclude";
+
+/// La parte del vault que decide `path` si es un archivo de reglas: su
+/// carpeta, o todo el vault. Cuando cambia, hay que releer esa parte.
+pub(crate) fn ruled_by(root: &Path, path: &Path) -> Option<VaultPath> {
+    let relative = path.strip_prefix(root).ok()?;
+    if relative == Path::new(VAULT_RULES) {
+        return Some(VaultPath::root());
+    }
+    let name = relative.file_name()?.to_str()?;
+    if FOLDER_RULES.contains(&name) {
+        return VaultPath::from_fs(root, path.parent()?);
+    }
+    None
+}
+
+/// Las carpetas de las reglas de todo el vault. El walk no entra (son
+/// ocultas), pero quien vigile el vault tiene que ver si aparecen o cambian.
+pub(crate) fn vault_rule_dirs(root: &Path) -> impl Iterator<Item = PathBuf> {
+    Path::new(VAULT_RULES)
+        .ancestors()
+        .skip(1)
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map(|dir| root.join(dir))
+}
+
+/// Lo que se hace con cada carpeta del vault que el walk va a leer, antes de
+/// leerla.
+pub(crate) type BeforeReading = Arc<dyn Fn(&Path) + Send + Sync>;
+
 /// Recorre en paralelo las notas (`.md`) de `root` con las reglas del índice,
 /// para quien lea el disco por su cuenta (la búsqueda de texto). Cada hilo
 /// arma su visitante con `visitor`, que recibe la ruta en el vault y la del
@@ -20,7 +62,7 @@ pub fn walk_notes<'s, V>(root: &'s Path, mut visitor: impl FnMut() -> V)
 where
     V: FnMut(VaultPath, &Path) -> ControlFlow<()> + Send + 's,
 {
-    walker(root).build_parallel().run(|| {
+    walker(root, None).build_parallel().run(|| {
         let mut visit = visitor();
         Box::new(move |result| {
             let entry = match result {
@@ -41,10 +83,24 @@ where
     });
 }
 
-fn walker(root: &Path) -> WalkBuilder {
+fn walker(root: &Path, before: Option<BeforeReading>) -> WalkBuilder {
     let mut builder = rules(root);
-    builder.filter_entry(is_visible);
+    builder.filter_entry(move |entry| enters(entry, before.as_ref()));
     builder
+}
+
+/// Si el walk sigue por `entry`. El filtro corre después de los
+/// `.gitignore` y antes de leer la carpeta: el momento de `before`.
+fn enters(entry: &DirEntry, before: Option<&BeforeReading>) -> bool {
+    if !in_vault(entry) {
+        return false;
+    }
+    if let Some(before) = before
+        && entry.file_type().is_some_and(|kind| kind.is_dir())
+    {
+        before(entry.path());
+    }
+    true
 }
 
 /// Las reglas del vault, iguales en cualquier máquina: `.gitignore` e
@@ -66,8 +122,26 @@ fn rules(root: &Path) -> WalkBuilder {
     builder
 }
 
-fn is_visible(entry: &DirEntry) -> bool {
-    entry.depth() == 0 || !entry.file_name().to_str().is_some_and(is_hidden_name)
+/// Lo que nunca es del vault aunque no lo ignore ningún `.gitignore`: lo
+/// oculto, las dependencias de Node y las carpetas de caché.
+fn in_vault(entry: &DirEntry) -> bool {
+    if entry.depth() == 0 {
+        return true;
+    }
+    let name = entry.file_name().to_str();
+    if name.is_some_and(is_hidden_name) {
+        return false;
+    }
+    let is_dir = entry.file_type().is_some_and(|kind| kind.is_dir());
+    !(is_dir && (name == Some(NODE_MODULES) || is_cache_dir(entry.path())))
+}
+
+/// Ver <https://bford.info/cachedir/>: el `target` de cargo lo lleva.
+fn is_cache_dir(dir: &Path) -> bool {
+    let mut signature = [0; CACHEDIR_SIGNATURE.len()];
+    File::open(dir.join(CACHEDIR_TAG))
+        .and_then(|mut tag| tag.read_exact(&mut signature))
+        .is_ok_and(|()| signature == *CACHEDIR_SIGNATURE)
 }
 
 /// La ruta y el tipo de una entrada del walk, como los guarda el índice: nada
@@ -103,9 +177,9 @@ fn accept(root: &Path, result: Result<DirEntry, ignore::Error>) -> Option<(Vault
 }
 
 /// El índice de todo `root`, recorrido en paralelo.
-pub(crate) fn scan(root: &Path) -> VaultIndex {
+pub(crate) fn scan(root: &Path, before: Option<BeforeReading>) -> VaultIndex {
     let (sender, receiver) = mpsc::channel();
-    walker(root).build_parallel().run(|| {
+    walker(root, before).build_parallel().run(|| {
         let sender = sender.clone();
         let root = root.to_owned();
         Box::new(move |result| {
@@ -131,16 +205,20 @@ pub(crate) struct Partial {
 /// Lo que hay hoy en disco en `dirty` y en sus carpetas. Recorre desde la raíz
 /// para que apliquen todos los `.gitignore` de por medio, pero solo entra en
 /// los ancestros de `dirty`.
-pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Partial {
+pub(crate) fn scan_partial(
+    root: &Path,
+    dirty: &[VaultPath],
+    before: Option<BeforeReading>,
+) -> Partial {
     let scope = Arc::new(Scope::new(dirty));
     let root_owned: PathBuf = root.to_owned();
     let filter_scope = Arc::clone(&scope);
     let mut found = Partial::default();
     let walk = rules(root)
         .filter_entry(move |entry| {
-            is_visible(entry)
-                && VaultPath::from_fs(&root_owned, entry.path())
-                    .is_some_and(|path| filter_scope.allows(&path))
+            VaultPath::from_fs(&root_owned, entry.path())
+                .is_some_and(|path| filter_scope.allows(&path))
+                && enters(entry, before.as_ref())
         })
         .build();
     for result in walk {

@@ -7,3 +7,4 @@
 cc e7f3d616fc809caca5b3ead48711b5707851089c50f84270f17e23942ee96e30 # shrinks to batches = [[WriteFile("a")], [Rename("a", "b/a"), WriteFile("a/a")]]
 cc 9219379f99eb2990628f08dbb91660b9477eae792c90174da05291404a703e09 # shrinks to batches = [[CreateDir("b/x.md")], [Rename("b/x.md", "a"), Remove("b")]]
 cc 799dba394b36d6608d0212aa30c3209ff2fa69cc0695f1d68e89069010feb010 # shrinks to batches = [[WriteFile("a")], [Rename("a", "b/a/a"), Rename("x.md", "a/a/a")]]
+cc afdfd0cf79dd79d85ac6b68d227276307802dd9ed415622367d22563d7f1bb20 # shrinks to batches = [[WriteFile("x.md/a")], [WriteFile("x.md/CACHEDIR.TAG")]]

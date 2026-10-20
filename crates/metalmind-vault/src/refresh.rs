@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::index::{EntryKind, VaultIndex};
 use crate::order::{Entries, arrange};
 use crate::path::VaultPath;
-use crate::scan::scan_partial;
+use crate::scan::{BeforeReading, scan_partial};
 
 /// Un cambio del índice. Los de un lote van en un orden que se puede aplicar
 /// sobre un árbol: nada se crea ni se mueve a una carpeta que todavía no
@@ -61,15 +61,21 @@ impl Touched {
     }
 }
 
-/// Relee del disco lo que dice `touched` y devuelve qué cambió.
-pub(crate) fn refresh(index: &mut VaultIndex, root: &Path, touched: &Touched) -> Vec<VaultChange> {
+/// Relee del disco lo que dice `touched` y devuelve qué cambió. Cada carpeta
+/// que relee pasa antes por `on_folder`.
+pub(crate) fn refresh(
+    index: &mut VaultIndex,
+    root: &Path,
+    touched: &Touched,
+    on_folder: Option<BeforeReading>,
+) -> Vec<VaultChange> {
     let all: BTreeSet<VaultPath> = touched.paths.union(&touched.reread).cloned().collect();
     let dirty = dirty_roots(index, &all);
     let before = subtrees(index, &dirty);
     for path in &dirty {
         index.remove_subtree(path);
     }
-    let found = scan_partial(root, &dirty);
+    let found = scan_partial(root, &dirty, on_folder);
     index.insert_all(found.entries);
     // Lo que no se pudo leer se queda como estaba hasta el próximo evento.
     let kept: HashMap<VaultPath, EntryKind> = before
@@ -198,13 +204,18 @@ fn edited_while_moving(
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::time::Instant;
 
+    use notify::event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode};
+    use notify::{Event, EventKind};
+    use notify_debouncer_full::DebouncedEvent;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::scan::scan;
+    use crate::scan::{CACHEDIR_SIGNATURE, CACHEDIR_TAG, scan};
+    use crate::watch::touched;
 
     #[derive(Debug, Clone)]
     enum Op {
@@ -215,9 +226,9 @@ mod tests {
     }
 
     fn op() -> impl Strategy<Value = Op> {
-        let path =
-            prop::collection::vec(prop::sample::select(vec!["a", "b", "x.md", "y.png"]), 1..=3)
-                .prop_map(|parts| parts.join("/"));
+        let names = vec!["a", "b", "x.md", "y.png", "node_modules", CACHEDIR_TAG];
+        let path = prop::collection::vec(prop::sample::select(names), 1..=3)
+            .prop_map(|parts| parts.join("/"));
         prop_oneof![
             path.clone().prop_map(Op::WriteFile),
             path.clone().prop_map(Op::CreateDir),
@@ -226,34 +237,52 @@ mod tests {
         ]
     }
 
-    /// Aplica `op` en disco y devuelve lo que el watcher diría que tocó.
+    /// Aplica `op` en disco y devuelve lo que el watcher diría que tocó, con
+    /// los eventos que daría inotify aunque la operación falle.
     fn apply(root: &Path, op: &Op) -> Touched {
         let at = |path: &str| root.join(path);
-        let vault = |path: &str| VaultPath::new(path).unwrap();
-        let mut touched = Touched::default();
-        let _ = match op {
+        let event = |kind, paths: &[&str]| {
+            let event = paths
+                .iter()
+                .fold(Event::new(kind), |event, path| event.add_path(at(path)));
+            DebouncedEvent::new(event, Instant::now())
+        };
+        let (_, events) = match op {
             Op::WriteFile(path) => {
                 let _ = fs::create_dir_all(at(path).parent().unwrap());
-                touched.paths.insert(vault(path));
-                touched.written.insert(vault(path));
-                fs::write(at(path), "")
+                let contents: &[u8] = if path.ends_with(CACHEDIR_TAG) {
+                    CACHEDIR_SIGNATURE
+                } else {
+                    b""
+                };
+                (
+                    fs::write(at(path), contents),
+                    vec![event(
+                        EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+                        &[path],
+                    )],
+                )
             }
-            Op::CreateDir(path) => {
-                touched.paths.insert(vault(path));
-                fs::create_dir_all(at(path))
-            }
-            Op::Remove(path) => {
-                touched.paths.insert(vault(path));
-                fs::remove_file(at(path)).or_else(|_| fs::remove_dir_all(at(path)))
-            }
+            Op::CreateDir(path) => (
+                fs::create_dir_all(at(path)),
+                vec![event(EventKind::Create(CreateKind::Folder), &[path])],
+            ),
+            Op::Remove(path) => (
+                fs::remove_file(at(path)).or_else(|_| fs::remove_dir_all(at(path))),
+                vec![event(EventKind::Remove(RemoveKind::Any), &[path])],
+            ),
             Op::Rename(from, to) => {
                 let _ = fs::create_dir_all(at(to).parent().unwrap());
-                touched.paths.extend([vault(from), vault(to)]);
-                touched.renames.push((vault(from), vault(to)));
-                fs::rename(at(from), at(to))
+                (
+                    fs::rename(at(from), at(to)),
+                    vec![event(
+                        EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+                        &[from, to],
+                    )],
+                )
             }
         };
-        touched
+        touched(root, &events)
     }
 
     type Mirror = HashMap<VaultPath, EntryKind>;
@@ -329,29 +358,53 @@ mod tests {
         Ok(())
     }
 
+    /// Reindexar a pedazos da el mismo índice que un walk completo, y los
+    /// cambios emitidos llevan de un índice al otro. Varias operaciones
+    /// pueden caer en un mismo lote, como cuando el debouncer las junta.
+    fn incremental_matches_full_walk(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let mut index = scan(&root, None);
+        let mut copy = mirror(&index);
+        for batch in batches {
+            let mut touched = Touched::default();
+            for op in batch {
+                touched.merge(apply(&root, op));
+            }
+            let changes = refresh(&mut index, &root, &touched, None);
+            replay(&mut copy, &changes);
+            prop_assert_eq!(&index, &scan(&root, None), "tras {:?}", batch);
+            prop_assert_eq!(
+                &copy,
+                &mirror(&index),
+                "cambios de {:?}: {:?}",
+                batch,
+                changes
+            );
+        }
+        Ok(())
+    }
+
     proptest! {
-        /// Reindexar a pedazos da el mismo índice que un walk completo, y los
-        /// cambios emitidos llevan de un índice al otro. Varias operaciones
-        /// pueden caer en un mismo lote, como cuando el debouncer las junta.
         #[test]
         fn incremental_igual_a_walk_completo(
             batches in prop::collection::vec(prop::collection::vec(op(), 1..5), 1..12),
         ) {
-            let dir = TempDir::new().unwrap();
-            let root = dir.path().canonicalize().unwrap();
-            let mut index = scan(&root);
-            let mut copy = mirror(&index);
-            for batch in &batches {
-                let mut touched = Touched::default();
-                for op in batch {
-                    touched.merge(apply(&root, op));
-                }
-                let changes = refresh(&mut index, &root, &touched);
-                replay(&mut copy, &changes);
-                prop_assert_eq!(&index, &scan(&root), "tras {:?}", batch);
-                prop_assert_eq!(&copy, &mirror(&index), "cambios de {:?}: {:?}", batch, changes);
-            }
+            incremental_matches_full_walk(&batches)?;
         }
+    }
+
+    /// Lo encontró el proptest en CI: el rename `a/a → y.png` falla en disco
+    /// (`y.png` ya tiene algo), pero el lote lo trae emparejado.
+    #[test]
+    fn un_rename_que_no_coincide_con_el_disco_no_se_lleva_el_contenido() {
+        let write = |path: &str| Op::WriteFile(path.to_owned());
+        let rename = |from: &str, to: &str| Op::Rename(from.to_owned(), to.to_owned());
+        incremental_matches_full_walk(&[
+            vec![write("y.png/x.md"), rename("y.png", "a/a")],
+            vec![write("y.png/a"), rename("a/a", "y.png"), rename("a", "b/a")],
+        ])
+        .unwrap();
     }
 
     #[test]
@@ -362,7 +415,7 @@ mod tests {
         fs::create_dir_all(root.join("cerrada/hondo")).unwrap();
         fs::write(root.join("cerrada/hondo/a.md"), "").unwrap();
         fs::write(root.join("cerrada/b.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         let snapshot = index.clone();
         fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o000)).unwrap();
         let touched = Touched {
@@ -370,7 +423,7 @@ mod tests {
             renames: Vec::new(),
             ..Touched::default()
         };
-        let changes = refresh(&mut index, &root, &touched);
+        let changes = refresh(&mut index, &root, &touched, None);
         fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(changes, []);
         assert_eq!(index, snapshot);
@@ -384,7 +437,7 @@ mod tests {
         fs::create_dir_all(root.join("cerrada")).unwrap();
         fs::write(root.join("cerrada/a.md"), "").unwrap();
         fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o000)).unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         fs::set_permissions(root.join("cerrada"), fs::Permissions::from_mode(0o755)).unwrap();
         let path = |path: &str| VaultPath::new(path).unwrap();
         let touched = Touched {
@@ -392,13 +445,13 @@ mod tests {
             ..Touched::default()
         };
         assert_eq!(
-            refresh(&mut index, &root, &touched),
+            refresh(&mut index, &root, &touched, None),
             [VaultChange::Created {
                 path: path("cerrada/a.md"),
                 kind: EntryKind::Note
             }]
         );
-        assert_eq!(index, scan(&root));
+        assert_eq!(index, scan(&root, None));
     }
 
     #[test]
@@ -406,12 +459,12 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
         fs::write(root.join("a.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         let touched = Touched {
             reread: [VaultPath::new("a.md").unwrap()].into(),
             ..Touched::default()
         };
-        assert_eq!(refresh(&mut index, &root, &touched), []);
+        assert_eq!(refresh(&mut index, &root, &touched, None), []);
     }
 
     #[test]
@@ -421,7 +474,7 @@ mod tests {
         fs::create_dir_all(root.join("a")).unwrap();
         fs::write(root.join("a/x.md"), "").unwrap();
         fs::write(root.join("a/y.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         fs::write(root.join("a/x.md"), "editada").unwrap();
         fs::rename(root.join("a"), root.join("b")).unwrap();
         let path = |path: &str| VaultPath::new(path).unwrap();
@@ -432,7 +485,7 @@ mod tests {
             ..Touched::default()
         };
         assert_eq!(
-            refresh(&mut index, &root, &touched),
+            refresh(&mut index, &root, &touched, None),
             [
                 VaultChange::Renamed {
                     from: path("a"),
@@ -452,7 +505,7 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         fs::create_dir_all(root.join("a")).unwrap();
         fs::write(root.join("a/x.md"), "vieja").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         fs::write(root.join("nueva.md"), "nueva").unwrap();
         fs::rename(root.join("nueva.md"), root.join("a/x.md")).unwrap();
         fs::rename(root.join("a"), root.join("b")).unwrap();
@@ -464,7 +517,7 @@ mod tests {
             ..Touched::default()
         };
         assert_eq!(
-            refresh(&mut index, &root, &touched),
+            refresh(&mut index, &root, &touched, None),
             [
                 VaultChange::Renamed {
                     from: path("a"),
@@ -483,7 +536,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
         fs::write(root.join("x.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         let mut copy = mirror(&index);
         fs::create_dir(root.join("nueva")).unwrap();
         fs::rename(root.join("x.md"), root.join("nueva/x.md")).unwrap();
@@ -493,7 +546,7 @@ mod tests {
             renames: vec![(path("x.md"), path("nueva/x.md"))],
             ..Touched::default()
         };
-        let changes = refresh(&mut index, &root, &touched);
+        let changes = refresh(&mut index, &root, &touched, None);
         assert_eq!(
             changes,
             [
@@ -519,7 +572,7 @@ mod tests {
         fs::create_dir_all(root.join("a")).unwrap();
         fs::write(root.join("a/x.md"), "").unwrap();
         fs::write(root.join("a/y.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         let mut copy = mirror(&index);
         fs::remove_file(root.join("a/x.md")).unwrap();
         fs::rename(root.join("a"), root.join("b")).unwrap();
@@ -529,7 +582,7 @@ mod tests {
             renames: vec![(path("a"), path("b"))],
             ..Touched::default()
         };
-        let changes = refresh(&mut index, &root, &touched);
+        let changes = refresh(&mut index, &root, &touched, None);
         assert_eq!(
             changes,
             [
@@ -554,7 +607,7 @@ mod tests {
         let root = dir.path().canonicalize().unwrap();
         fs::create_dir_all(root.join("a")).unwrap();
         fs::write(root.join("a/x.md"), "").unwrap();
-        let mut index = scan(&root);
+        let mut index = scan(&root, None);
         fs::rename(root.join("a"), root.join("b")).unwrap();
         fs::write(root.join("b/nuevo.md"), "").unwrap();
         let path = |path: &str| VaultPath::new(path).unwrap();
@@ -564,7 +617,7 @@ mod tests {
             ..Touched::default()
         };
         assert_eq!(
-            refresh(&mut index, &root, &touched),
+            refresh(&mut index, &root, &touched, None),
             [
                 VaultChange::Renamed {
                     from: path("a"),

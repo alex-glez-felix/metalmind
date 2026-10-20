@@ -9,7 +9,7 @@ use metalmind_keymap::{Command, Invocation};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::finder::{Note, VaultChanged, VaultSession};
+use crate::finder::{Note, VaultChanged, VaultSession, WatchLost};
 use crate::picker::{Fuzzy, Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
 use crate::workspace::{Axis, Message, Workspace, shown_path};
 
@@ -21,6 +21,7 @@ pub struct FinderVault {
     touched: Option<PathBuf>,
     _changes: Subscription,
     _files: Subscription,
+    _lost: Subscription,
 }
 
 impl FinderVault {
@@ -37,16 +38,32 @@ impl FinderVault {
                 workspace.set_links(&root, Arc::clone(&update.links));
             });
         });
-        let (root, links) = {
+        let lost = cx.subscribe(&session, |view, _, WatchLost(reason), cx| {
+            view.workspace.update(cx, |workspace, _| {
+                workspace.set_message(Message::unwatched(*reason));
+            });
+        });
+        let (root, links, unwatched) = {
             let session = session.read(cx);
-            (session.root().to_owned(), session.vault().links())
+            let unwatched = session.unwatched();
+            (
+                session.root().to_owned(),
+                session.vault().links(),
+                unwatched,
+            )
         };
-        workspace.update(cx, |workspace, _| workspace.set_links(&root, links));
+        workspace.update(cx, |workspace, _| {
+            workspace.set_links(&root, links);
+            if let Some(reason) = unwatched {
+                workspace.set_message(Message::unwatched(reason));
+            }
+        });
         Self {
             session,
             touched: None,
             _changes: changes,
             _files: files,
+            _lost: lost,
         }
     }
 }
