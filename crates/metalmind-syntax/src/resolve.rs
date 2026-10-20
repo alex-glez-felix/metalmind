@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use crate::note_name;
+
 /// A qué archivo del vault apunta el destino de un link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolution<'p> {
@@ -117,7 +119,7 @@ pub fn target_key(source: &str, target: &str) -> Option<TargetKey> {
 /// nombre en minúsculas y, si termina en `.md`, también sin la extensión.
 pub fn path_keys(path: &str) -> impl Iterator<Item = String> {
     let name = path.rsplit('/').next().unwrap_or_default().to_lowercase();
-    let stem = strip_md(&name).map(str::to_owned);
+    let stem = note_name::strip_extension(&name).map(str::to_owned);
     std::iter::once(name).chain(stem)
 }
 
@@ -179,14 +181,7 @@ fn matches(path: &str, target: &str, from_root: bool) -> bool {
         name.strip_suffix(target)
             .is_some_and(|rest| rest.is_empty() || rest.ends_with('/'))
     };
-    ends_with(path) || strip_md(path).is_some_and(ends_with)
-}
-
-/// `path` sin su `.md`, que puede estar en mayúsculas (`Casa.MD`).
-fn strip_md(path: &str) -> Option<&str> {
-    let stem = path.len().checked_sub(3)?;
-    let extension = path.get(stem..)?;
-    extension.eq_ignore_ascii_case(".md").then(|| &path[..stem])
+    ends_with(path) || note_name::strip_extension(path).is_some_and(ends_with)
 }
 
 #[cfg(test)]
@@ -240,6 +235,13 @@ mod tests {
         assert_eq!(path_keys("img.png").collect::<Vec<_>>(), ["img.png"]);
         assert_eq!(path_parent_key("A/B/nota.md"), "b");
         assert_eq!(path_parent_key("nota.md"), "");
+    }
+
+    #[test]
+    fn a_bare_extension_is_a_file_and_not_a_note_without_a_name() {
+        assert_eq!(resolve("a/", ["a/.md"]), Resolution::Unresolved);
+        assert_eq!(resolve("a/.md", ["a/.md"]), Resolution::Resolved("a/.md"));
+        assert_eq!(path_keys("a/.MD").collect::<Vec<_>>(), [".md"]);
     }
 
     #[test]

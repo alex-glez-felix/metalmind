@@ -12,6 +12,7 @@ mod frontmatter;
 mod link;
 mod markdown_link;
 mod math;
+pub mod note_name;
 mod resolve;
 mod scanner;
 mod sink;
