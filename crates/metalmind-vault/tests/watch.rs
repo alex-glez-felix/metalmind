@@ -201,6 +201,104 @@ fn lo_oculto_no_genera_cambios() {
     assert_eq!(listing(&vault.snapshot()), ["visible.md (nota)"]);
 }
 
+/// Los watches de inotify de este proceso. nextest corre cada test en su
+/// propio proceso, así que son los del vault del test.
+fn inotify_watches() -> usize {
+    fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|fd| {
+            let fd = fd.ok()?;
+            let target = fs::read_link(fd.path()).ok()?;
+            (target == Path::new("anon_inode:inotify")).then(|| fd.file_name())
+        })
+        .map(|fd| {
+            let info = fs::read_to_string(Path::new("/proc/self/fdinfo").join(fd)).unwrap();
+            info.lines()
+                .filter(|line| line.starts_with("inotify wd:"))
+                .count()
+        })
+        .sum()
+}
+
+/// #97: un vault con un proyecto de Node adentro no gasta un watch por
+/// carpeta de `node_modules`.
+#[test]
+fn solo_vigila_las_carpetas_del_vault() {
+    let dir = TempDir::new().unwrap();
+    let mut tree = vec!["notas/sub/a.md", ".cache/x/y/z", "build/x/y/z.md"];
+    let deps: Vec<String> = (0..40)
+        .map(|n| format!("web/node_modules/dep{n}/lib/index.js"))
+        .collect();
+    tree.extend(deps.iter().map(String::as_str));
+    make_tree(dir.path(), &tree);
+    fs::write(dir.path().join(".gitignore"), "build/\n").unwrap();
+    let (vault, updates) = open(dir.path());
+    let expected = ["notas/", "notas/sub/", "notas/sub/a.md (nota)", "web/"];
+    assert_eq!(listing(&vault.snapshot()), expected);
+    assert_eq!(inotify_watches(), 4, "la raíz, notas, notas/sub y web");
+
+    fs::remove_dir_all(dir.path().join("notas/sub")).unwrap();
+    settle(&vault, &updates, &["notas/", "web/"]);
+    assert_eq!(inotify_watches(), 3);
+    assert_eq!(vault.unwatched(), None);
+}
+
+#[test]
+fn una_carpeta_nueva_se_vigila_sin_perder_lo_que_ya_tenia() {
+    let dir = TempDir::new().unwrap();
+    let (vault, updates) = open(dir.path());
+    // Antes de que el vault la vea: este archivo no da evento.
+    make_tree(dir.path(), &["a/b/c.md"]);
+    settle(&vault, &updates, &["a/", "a/b/", "a/b/c.md (nota)"]);
+    fs::write(dir.path().join("a/b/d.md"), "").unwrap();
+    settle(
+        &vault,
+        &updates,
+        &["a/", "a/b/", "a/b/c.md (nota)", "a/b/d.md (nota)"],
+    );
+    fs::rename(dir.path().join("a/b"), dir.path().join("e")).unwrap();
+    settle(
+        &vault,
+        &updates,
+        &["a/", "e/", "e/c.md (nota)", "e/d.md (nota)"],
+    );
+    fs::write(dir.path().join("e/f.md"), "").unwrap();
+    settle(
+        &vault,
+        &updates,
+        &[
+            "a/",
+            "e/",
+            "e/c.md (nota)",
+            "e/d.md (nota)",
+            "e/f.md (nota)",
+        ],
+    );
+    assert_eq!(inotify_watches(), 3);
+}
+
+#[test]
+fn el_exclude_de_git_relee_todo_aunque_git_llegue_despues() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a.md", "privado/b.md"]);
+    let (vault, updates) = open(dir.path());
+    fs::create_dir_all(dir.path().join(".git/info")).unwrap();
+    // Que el vault vea `.git/info` antes de escribir en ella.
+    make_tree(dir.path(), &["c.md"]);
+    settle(
+        &vault,
+        &updates,
+        &[
+            "privado/",
+            "privado/b.md (nota)",
+            "a.md (nota)",
+            "c.md (nota)",
+        ],
+    );
+    fs::write(dir.path().join(".git/info/exclude"), "privado/\n").unwrap();
+    settle(&vault, &updates, &["a.md (nota)", "c.md (nota)"]);
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, ..ProptestConfig::default() })]
 

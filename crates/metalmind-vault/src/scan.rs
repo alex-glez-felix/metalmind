@@ -1,5 +1,7 @@
 //! Recorrer el disco con `ignore`. El walk completo y el parcial del watcher
 //! usan las mismas reglas, así que reindexar a pedazos da lo mismo que de cero.
+//! Los dos pueden avisar de cada carpeta antes de leerla, para que el
+//! watcher la vigile.
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -17,6 +19,10 @@ const NODE_MODULES: &str = "node_modules";
 const CACHEDIR_TAG: &str = "CACHEDIR.TAG";
 const CACHEDIR_SIGNATURE: &[u8; 43] = b"Signature: 8a477f597d28d172789f06886806bc55";
 
+/// Lo que se hace con cada carpeta del vault que el walk va a leer, antes de
+/// leerla.
+pub(crate) type BeforeReading = Arc<dyn Fn(&Path) + Send + Sync>;
+
 /// Recorre en paralelo las notas (`.md`) de `root` con las reglas del índice,
 /// para quien lea el disco por su cuenta (la búsqueda de texto). Cada hilo
 /// arma su visitante con `visitor`, que recibe la ruta en el vault y la del
@@ -25,7 +31,7 @@ pub fn walk_notes<'s, V>(root: &'s Path, mut visitor: impl FnMut() -> V)
 where
     V: FnMut(VaultPath, &Path) -> ControlFlow<()> + Send + 's,
 {
-    walker(root).build_parallel().run(|| {
+    walker(root, None).build_parallel().run(|| {
         let mut visit = visitor();
         Box::new(move |result| {
             let entry = match result {
@@ -46,10 +52,24 @@ where
     });
 }
 
-fn walker(root: &Path) -> WalkBuilder {
+fn walker(root: &Path, before: Option<BeforeReading>) -> WalkBuilder {
     let mut builder = rules(root);
-    builder.filter_entry(in_vault);
+    builder.filter_entry(move |entry| enters(entry, before.as_ref()));
     builder
+}
+
+/// Si el walk sigue por `entry`. El filtro corre después de los
+/// `.gitignore` y antes de leer la carpeta: el momento de `before`.
+fn enters(entry: &DirEntry, before: Option<&BeforeReading>) -> bool {
+    if !in_vault(entry) {
+        return false;
+    }
+    if let Some(before) = before
+        && entry.file_type().is_some_and(|kind| kind.is_dir())
+    {
+        before(entry.path());
+    }
+    true
 }
 
 /// Las reglas del vault, iguales en cualquier máquina: `.gitignore` e
@@ -126,9 +146,9 @@ fn accept(root: &Path, result: Result<DirEntry, ignore::Error>) -> Option<(Vault
 }
 
 /// El índice de todo `root`, recorrido en paralelo.
-pub(crate) fn scan(root: &Path) -> VaultIndex {
+pub(crate) fn scan(root: &Path, before: Option<BeforeReading>) -> VaultIndex {
     let (sender, receiver) = mpsc::channel();
-    walker(root).build_parallel().run(|| {
+    walker(root, before).build_parallel().run(|| {
         let sender = sender.clone();
         let root = root.to_owned();
         Box::new(move |result| {
@@ -154,16 +174,20 @@ pub(crate) struct Partial {
 /// Lo que hay hoy en disco en `dirty` y en sus carpetas. Recorre desde la raíz
 /// para que apliquen todos los `.gitignore` de por medio, pero solo entra en
 /// los ancestros de `dirty`.
-pub(crate) fn scan_partial(root: &Path, dirty: &[VaultPath]) -> Partial {
+pub(crate) fn scan_partial(
+    root: &Path,
+    dirty: &[VaultPath],
+    before: Option<BeforeReading>,
+) -> Partial {
     let scope = Arc::new(Scope::new(dirty));
     let root_owned: PathBuf = root.to_owned();
     let filter_scope = Arc::clone(&scope);
     let mut found = Partial::default();
     let walk = rules(root)
         .filter_entry(move |entry| {
-            in_vault(entry)
-                && VaultPath::from_fs(&root_owned, entry.path())
-                    .is_some_and(|path| filter_scope.allows(&path))
+            VaultPath::from_fs(&root_owned, entry.path())
+                .is_some_and(|path| filter_scope.allows(&path))
+                && enters(entry, before.as_ref())
         })
         .build();
     for result in walk {

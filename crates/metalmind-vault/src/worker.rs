@@ -2,10 +2,10 @@
 //! watcher y es el único que escribe el historial, así que las versiones y
 //! los renombres le llegan en el orden en que pasaron.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
 use std::time::SystemTime;
 
 use arc_swap::ArcSwap;
@@ -20,6 +20,7 @@ use crate::refresh::{Touched, VaultChange, refresh};
 use crate::tags::Tags;
 use crate::vault::{SaveKind, VaultUpdate};
 use crate::watch::{touched, touched_by_errors};
+use crate::watcher::{Watch, before_reading};
 
 pub(crate) enum Message {
     Disk(DebounceEventResult),
@@ -50,6 +51,8 @@ pub(crate) struct Worker {
     pub saving: Arc<Mutex<()>>,
     pub updates: mpsc::Sender<VaultUpdate>,
     pub stop: Arc<AtomicBool>,
+    /// Lo vigilado, que amplía cada walk.
+    pub watch: Arc<Mutex<Watch>>,
 }
 
 impl Worker {
@@ -67,9 +70,10 @@ impl Worker {
                 Message::Save(save) => self.record(&save),
                 // Quien espera puede haberse ido.
                 Message::Flush(done) => drop(done.send(())),
-                Message::Stop => return,
+                Message::Stop => break,
             }
         }
+        self.watch().stop();
     }
 
     /// Relee de una vez los eventos de disco seguidos que esperan.
@@ -83,7 +87,9 @@ impl Worker {
         }
         let Indexes { files, links, tags } = indexes;
         let read = |path: &VaultPath| read_note(&self.root, path);
-        let changes = refresh(files, &self.root, &touched);
+        let watching = self.watch().lost().is_none();
+        let changes = self.refresh(files, &touched);
+        let lost = watching && self.watch().lost().is_some();
         for change in &changes {
             links.apply(change, read);
         }
@@ -101,7 +107,8 @@ impl Worker {
         tag_changes.extend(tags.apply(&rescans, files, &read));
         tag_changes.sort_unstable();
         tag_changes.dedup();
-        if changes.is_empty() && !reread && tag_changes.is_empty() {
+        // Perder la vigilancia también se publica: sin eso no llegaría otro lote.
+        if changes.is_empty() && !reread && tag_changes.is_empty() && !lost {
             return;
         }
         // Antes de publicar, para que quien reciba el cambio ya vea el
@@ -232,6 +239,26 @@ impl Worker {
         }
     }
 
+    /// Relee `touched`, vigilando cada carpeta antes de leerla, y deja de
+    /// vigilar lo que salió del índice. Si apareció `.git/info`, relee todo:
+    /// su `exclude` no dio evento.
+    fn refresh(&self, files: &mut VaultIndex, touched: &Touched) -> Vec<VaultChange> {
+        let before = before_reading(&self.watch);
+        let mut changes = refresh(files, &self.root, touched, Some(Arc::clone(&before)));
+        while self.watch().follow(files) {
+            let all = Touched {
+                paths: BTreeSet::from([VaultPath::root()]),
+                ..Touched::default()
+            };
+            changes.extend(refresh(files, &self.root, &all, Some(Arc::clone(&before))));
+        }
+        changes
+    }
+
+    fn watch(&self) -> MutexGuard<'_, Watch> {
+        self.watch.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn touched(&self, result: DebounceEventResult) -> Touched {
         match result {
             Ok(events) => touched(&self.root, &events),
@@ -335,11 +362,14 @@ impl<'a> Inbox<'a> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::time::Duration;
 
+    use notify_debouncer_full::new_debouncer;
     use tempfile::TempDir;
 
     use super::*;
     use crate::history::TEST_RETENTION;
+    use crate::watcher::FolderWatch;
 
     fn worker(root: &Path, history: &Arc<History>) -> Worker {
         let (updates, _published) = mpsc::channel();
@@ -356,7 +386,13 @@ mod tests {
             saving: Arc::new(Mutex::new(())),
             updates,
             stop: Arc::new(AtomicBool::new(false)),
+            watch: Arc::new(Mutex::new(watch(root))),
         }
+    }
+
+    fn watch(root: &Path) -> Watch {
+        let debouncer = new_debouncer(Duration::from_millis(10), None, |_| {}).unwrap();
+        FolderWatch::start(root, debouncer, Arc::default()).unwrap()
     }
 
     fn contents(history: &History, note: &VaultPath) -> Vec<String> {

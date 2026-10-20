@@ -2,14 +2,13 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime};
 
 use arc_swap::ArcSwap;
 use jiff::civil::DateTime;
-use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{Debouncer, RecommendedCache, new_debouncer};
+use notify_debouncer_full::new_debouncer;
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
 use crate::attachment::{
@@ -28,6 +27,7 @@ use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 use crate::scan::scan;
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
+use crate::watcher::{FolderWatch, Unwatched, before_reading};
 use crate::worker::{Message, Save, Worker, read_note};
 
 /// Cuánto tiene que calmarse una ruta antes de releerla. Junta el temporal y
@@ -89,8 +89,9 @@ impl PendingVersion {
 }
 
 /// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
-/// puede venir vacío si solo cambiaron los links o los tags: un chmod que
-/// vuelve legible una nota.
+/// puede venir vacío si solo cambiaron los links o los tags (un chmod que
+/// vuelve legible una nota) o si se dejó de vigilar el vault
+/// ([`Vault::unwatched`]).
 #[derive(Debug, Clone)]
 pub struct VaultUpdate {
     pub changes: Vec<VaultChange>,
@@ -153,7 +154,7 @@ impl VaultRoot {
     /// sin leer ninguna nota: lo que necesita quien solo busca rutas.
     #[must_use]
     pub fn files(&self) -> VaultIndex {
-        scan(&self.0)
+        scan(&self.0, None)
     }
 
     /// Crea en la raíz una nota con `note` como `slug.md`, que nunca pisa
@@ -178,12 +179,12 @@ pub struct Vault {
     history: Option<Arc<History>>,
     messages: mpsc::Sender<Message>,
     saving: Arc<Mutex<()>>,
-    watch: Option<Watch>,
+    unwatched: Arc<OnceLock<Unwatched>>,
+    worker: Option<WorkerThread>,
 }
 
-struct Watch {
-    debouncer: Debouncer<RecommendedWatcher, RecommendedCache>,
-    worker: JoinHandle<()>,
+struct WorkerThread {
+    handle: JoinHandle<()>,
     stop: Arc<AtomicBool>,
 }
 
@@ -206,6 +207,9 @@ impl Vault {
     /// y borrados que ve el watcher, y guarda como versión lo que cambie una
     /// nota desde fuera.
     ///
+    /// Si no quedan watches de inotify, el vault abre igual pero no ve los
+    /// cambios de fuera: ver [`Vault::unwatched`].
+    ///
     /// # Errors
     /// Si `root` no existe, no es una carpeta o no se puede vigilar.
     pub fn open_with(
@@ -215,13 +219,15 @@ impl Vault {
         let root = canonical_dir(root.as_ref())?;
         let (messages, inbox) = mpsc::channel();
         let disk = messages.clone();
-        let mut debouncer = new_debouncer(DEBOUNCE, None, move |result| {
+        let debouncer = new_debouncer(DEBOUNCE, None, move |result| {
             // Si el hilo ya terminó, el vault se está cerrando.
             let _ = disk.send(Message::Disk(result));
         })?;
-        // Vigilar antes del walk: lo que cambie mientras tanto llega como evento.
-        debouncer.watch(&root, RecursiveMode::Recursive)?;
-        let files = scan(&root);
+        let unwatched = Arc::new(OnceLock::new());
+        // La raíz antes del walk: lo que cambie mientras tanto llega como evento.
+        let watch = FolderWatch::start(&root, debouncer, Arc::clone(&unwatched))?;
+        let watch = Arc::new(Mutex::new(watch));
+        let files = scan(&root, Some(before_reading(&watch)));
         let links = LinkIndex::build(
             files.files().map(|entry| (entry.path.clone(), entry.kind)),
             |path| read_note(&root, path),
@@ -247,8 +253,9 @@ impl Vault {
             saving: Arc::clone(&saving),
             updates,
             stop: Arc::clone(&stop),
+            watch,
         };
-        let worker = thread::Builder::new()
+        let handle = thread::Builder::new()
             .name("metalmind-vault".to_owned())
             .spawn(move || worker.run(&inbox))
             .map_err(VaultError::Spawn)?;
@@ -261,11 +268,8 @@ impl Vault {
             history,
             messages,
             saving,
-            watch: Some(Watch {
-                debouncer,
-                worker,
-                stop,
-            }),
+            unwatched,
+            worker: Some(WorkerThread { handle, stop }),
         };
         Ok((vault, receiver))
     }
@@ -295,6 +299,14 @@ impl Vault {
     #[must_use]
     pub fn tags(&self) -> Arc<Tags> {
         self.tags.load_full()
+    }
+
+    /// Por qué el vault dejó de ver los cambios que se hacen fuera de
+    /// Metalmind, si ya no los ve. Puede pasar al abrirlo o después, al
+    /// aparecer carpetas; no tiene vuelta.
+    #[must_use]
+    pub fn unwatched(&self) -> Option<Unwatched> {
+        self.unwatched.get().copied()
     }
 
     /// El historial de versiones de las notas de este vault, si tiene.
@@ -375,10 +387,10 @@ impl Vault {
     /// que ya volvieron, para que lo guardado justo antes de salir no se
     /// quede sin versión. Después de esto, el vault solo sirve para soltarlo.
     pub fn shut_down(&self) {
-        let Some(watch) = &self.watch else {
+        let Some(worker) = &self.worker else {
             return;
         };
-        watch.stop.store(true, Ordering::Release);
+        worker.stop.store(true, Ordering::Release);
         let (done, flushed) = mpsc::channel();
         if self.messages.send(Message::Flush(done)).is_ok() {
             // Si el hilo terminó, no queda nada que esperar.
@@ -478,21 +490,15 @@ impl Vault {
 
 impl Drop for Vault {
     fn drop(&mut self) {
-        let Some(Watch {
-            debouncer,
-            worker,
-            stop,
-        }) = self.watch.take()
-        else {
+        let Some(WorkerThread { handle, stop }) = self.worker.take() else {
             return;
         };
         // El hilo deja de releer el disco, pero registra las versiones que
-        // esperan antes de salir.
+        // esperan antes de salir; después para el watcher.
         stop.store(true, Ordering::Release);
-        debouncer.stop();
         // Si el hilo ya terminó en pánico, lo dice el `join`.
         let _ = self.messages.send(Message::Stop);
-        if worker.join().is_err() {
+        if handle.join().is_err() {
             log::error!("el watcher de {} terminó en pánico", self.root.display());
         }
     }
