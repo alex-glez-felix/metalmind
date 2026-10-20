@@ -31,12 +31,12 @@ pub fn cursor_quad(
 ) -> Option<PaintQuad> {
     let (width, color) = match view.mode {
         Mode::CommandLine => return None,
-        Mode::Insert => (theme.caret_width, theme.caret),
+        Mode::Insert => (theme.stroke.caret, theme.cursor.insert),
         Mode::Normal | Mode::OperatorPending(_) | Mode::Visual(_) => {
             let color = match view.mode {
-                _ if !view.focused => theme.unfocused_cursor,
-                Mode::Visual(_) => theme.visual_cursor,
-                _ => theme.block_cursor,
+                _ if !view.focused => theme.cursor.unfocused,
+                Mode::Visual(_) => theme.cursor.visual,
+                _ => theme.cursor.normal,
             };
             (block_width(view, layout, typeface, window)?, color)
         }
@@ -112,21 +112,21 @@ pub fn preedit(
 ) -> Option<Preedit> {
     let (laid, column) = cursor_position(view, layout)?;
     let underline = UnderlineStyle {
-        color: Some(theme.foreground),
-        thickness: theme.underline_thickness,
+        color: Some(theme.ui.foreground),
+        thickness: theme.stroke.text_line,
         wavy: false,
     };
     let shaped = shape(
         text.into(),
         &line_face(typeface, laid),
-        theme.foreground,
+        theme.ui.foreground,
         Some(underline),
         window,
     );
     let origin = point(laid.origin.x + laid.x_for_index(column), laid.origin.y);
     let background = fill(
         Bounds::new(origin, size(shaped.width(), laid.text_height)),
-        theme.background,
+        theme.ui.background,
     );
     Some(Preedit {
         origin,

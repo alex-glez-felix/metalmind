@@ -124,14 +124,14 @@ impl ContextMenu {
 
     pub fn render(&self, theme: &Theme, cx: &mut Context<Sidebar>) -> AnyElement {
         let mut list = div()
-            .w(theme.menu_width)
-            .p(theme.menu_padding)
+            .w(theme.layout.menu_width)
+            .p(theme.layout.menu_padding)
             .flex()
             .flex_col()
-            .bg(theme.menu_background)
-            .border(theme.border_width)
-            .border_color(theme.menu_border)
-            .rounded(theme.radius_md)
+            .bg(theme.ui.menu_background)
+            .border(theme.stroke.border)
+            .border_color(theme.ui.menu_border)
+            .rounded(theme.radius.md)
             .on_mouse_down_out(cx.listener(|sidebar, _, _, cx| {
                 sidebar.menu = None;
                 cx.notify();
@@ -141,9 +141,9 @@ impl ContextMenu {
             if group_index > 0 {
                 list = list.child(
                     div()
-                        .my(theme.menu_padding)
-                        .h(theme.border_width)
-                        .bg(theme.menu_border),
+                        .my(theme.layout.menu_padding)
+                        .h(theme.stroke.border)
+                        .bg(theme.ui.menu_border),
                 );
             }
             for &item in *group {
@@ -169,21 +169,21 @@ impl ContextMenu {
         cx: &mut Context<Sidebar>,
     ) -> AnyElement {
         let color = if item == MenuItem::Delete {
-            theme.error
+            theme.ui.error
         } else {
-            theme.panel_foreground
+            theme.ui.panel_foreground
         };
         div()
             .id(("menu-item", index))
             .flex()
             .justify_between()
-            .px(theme.menu_item_padding_x)
+            .px(theme.layout.menu_item_padding_x)
             .h(theme.menu_row_height)
             .items_center()
-            .rounded(theme.radius_md)
+            .rounded(theme.radius.md)
             .text_color(color)
-            .when(index == self.selected, |row| row.bg(theme.menu_hover))
-            .hover(|row| row.bg(theme.menu_hover))
+            .when(index == self.selected, |row| row.bg(theme.ui.menu_hover))
+            .hover(|row| row.bg(theme.ui.menu_hover))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .on_click(cx.listener(move |sidebar, _, window, cx| {
                 sidebar.menu = None;
@@ -194,7 +194,7 @@ impl ContextMenu {
             .child(
                 div()
                     .map(|element| theme.ui_small_text(element))
-                    .text_color(theme.panel_muted)
+                    .text_color(theme.ui.panel_muted)
                     .children(item.keys(AppKeymap::get(cx))),
             )
             .into_any_element()

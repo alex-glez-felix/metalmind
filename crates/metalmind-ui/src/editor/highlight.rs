@@ -60,8 +60,13 @@ pub fn search_quads(
     );
     let (current, others): (Vec<_>, Vec<_>) = found.into_iter().partition(|found| found.current);
     let spans = |matches: Vec<Match>| matches.into_iter().map(|found| found.span);
-    let mut painted = quads(spans(others), layout, cells, theme.search);
-    painted.extend(quads(spans(current), layout, cells, theme.search_current));
+    let mut painted = quads(spans(others), layout, cells, theme.ui.search);
+    painted.extend(quads(
+        spans(current),
+        layout,
+        cells,
+        theme.ui.search_current,
+    ));
     painted
 }
 
@@ -79,5 +84,5 @@ pub fn selection_quads(
         &view.viewport,
         visible,
     );
-    quads(spans, layout, cells, theme.selection)
+    quads(spans, layout, cells, theme.ui.selection)
 }

@@ -1,3 +1,5 @@
+use gpui_kit::{Hsla, rgb};
+
 use super::*;
 
 fn installed(names: &[&str]) -> Vec<String> {
@@ -31,50 +33,54 @@ fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
     let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
     let blue = Hsla::from(rgb(0x7a_a2_f7));
     let expected: [(&str, Hsla, Hsla); 16] = [
-        ("background", theme.background, rgb(0x1c_1f_24).into()),
-        ("foreground", theme.foreground, rgb(0xd7_da_e0).into()),
-        ("caret", theme.caret, rgb(0x7a_a2_f7).into()),
-        ("block_cursor", theme.block_cursor, blue.opacity(0.5)),
+        ("background", theme.ui.background, rgb(0x1c_1f_24).into()),
+        ("foreground", theme.ui.foreground, rgb(0xd7_da_e0).into()),
+        ("caret", theme.cursor.insert, rgb(0x7a_a2_f7).into()),
+        ("block_cursor", theme.cursor.normal, blue.opacity(0.5)),
         (
             "visual_cursor",
-            theme.visual_cursor,
+            theme.cursor.visual,
             Hsla::from(rgb(0xbb_9a_f7)).opacity(0.5),
         ),
         (
             "unfocused_cursor",
-            theme.unfocused_cursor,
+            theme.cursor.unfocused,
             Hsla::from(rgb(0x9a_a0_a6)).opacity(0.35),
         ),
-        ("selection", theme.selection, blue.opacity(0.3)),
+        ("selection", theme.ui.selection, blue.opacity(0.3)),
         (
             "search",
-            theme.search,
+            theme.ui.search,
             Hsla::from(rgb(0xe0_af_68)).opacity(0.3),
         ),
         (
             "search_current",
-            theme.search_current,
+            theme.ui.search_current,
             Hsla::from(rgb(0x00ff_9e64)).opacity(0.6),
         ),
         (
             "status_background",
-            theme.status.background,
+            theme.ui.status_background,
             rgb(0x16_18_1d).into(),
         ),
         (
             "status_foreground",
-            theme.status.foreground,
+            theme.ui.status_foreground,
             rgb(0x9a_a0_a6).into(),
         ),
         (
             "status_unfocused_foreground",
-            theme.status.unfocused_foreground,
+            theme.ui.status_unfocused_foreground,
             rgb(0x5c_63_70).into(),
         ),
-        ("status_border", theme.status.border, rgb(0x2a_2e_36).into()),
-        ("pane_border", theme.pane_border, rgb(0x5c_63_70).into()),
-        ("modified", theme.modified, rgb(0xe0_af_68).into()),
-        ("error", theme.error, rgb(0xf7_76_8e).into()),
+        (
+            "status_border",
+            theme.ui.status_border,
+            rgb(0x2a_2e_36).into(),
+        ),
+        ("pane_border", theme.ui.pane_border, rgb(0x5c_63_70).into()),
+        ("modified", theme.ui.modified, rgb(0xe0_af_68).into()),
+        ("error", theme.ui.error, rgb(0xf7_76_8e).into()),
     ];
     for (name, actual, before) in expected {
         assert_eq!(actual, before, "{name}");
@@ -86,7 +92,7 @@ fn el_tema_oscuro_embebido_se_ve_igual_que_antes() {
 #[test]
 fn la_parte_del_detalle_del_picker_sale_del_tema() {
     let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
-    assert!((theme.picker_detail_share - 0.4).abs() < 1e-6);
+    assert!((theme.layout.picker_detail_share - 0.4).abs() < 1e-6);
 }
 
 /// Las medidas que la UI tenía fijas antes de leerlas del tema, con la fuente de 15.
@@ -94,45 +100,56 @@ fn la_parte_del_detalle_del_picker_sale_del_tema() {
 fn las_medidas_de_fabrica_son_las_de_antes() {
     let theme = Theme::with_font(&config::Config::defaults().unwrap(), "Mono".into());
     let expected = [
-        ("status_padding_x", theme.status.padding_x, 10.),
-        ("status_padding_y", theme.status.padding_y, 3.),
-        ("status_gap", theme.status.gap, 16.),
-        ("picker_width", theme.picker_width, 640.),
-        ("picker_top", theme.picker_top, 64.),
-        ("picker_padding_x", theme.picker_padding_x, 12.),
+        ("status_padding_x", theme.layout.status_padding_x, 10.),
+        ("status_padding_y", theme.layout.status_padding_y, 3.),
+        ("status_gap", theme.layout.status_gap, 16.),
+        ("picker_width", theme.layout.picker_width, 640.),
+        ("picker_top", theme.layout.picker_top, 64.),
+        ("picker_padding_x", theme.layout.picker_padding_x, 12.),
         ("picker_row_height", theme.picker_row_height(), 33.),
-        ("picker_input_padding_y", theme.picker_input_padding_y, 12.),
-        ("picker_gap", theme.picker_gap, 16.),
+        (
+            "picker_input_padding_y",
+            theme.layout.picker_input_padding_y,
+            12.,
+        ),
+        ("picker_gap", theme.layout.picker_gap, 16.),
         ("panel_row_height", theme.panel_row_height, 26.),
         ("menu_row_height", theme.menu_row_height, 26.),
-        ("panel_indent", theme.panel_indent, 14.),
-        ("panel_padding_x", theme.panel_padding_x, 8.),
-        ("panel_padding_y", theme.panel_padding_y, 6.),
-        ("panel_gap", theme.panel_gap, 6.),
-        ("panel_button_padding_x", theme.panel_button_padding_x, 4.),
+        ("panel_indent", theme.layout.panel_indent, 14.),
+        ("panel_padding_x", theme.layout.panel_padding_x, 8.),
+        ("panel_padding_y", theme.layout.panel_padding_y, 6.),
+        ("panel_gap", theme.layout.panel_gap, 6.),
+        (
+            "panel_button_padding_x",
+            theme.layout.panel_button_padding_x,
+            4.,
+        ),
         ("icon_size", theme.icon_size, 12.),
         ("icon_short_side", theme.icon_short_side(), 9.),
-        ("rail_width", theme.rail_width, 36.),
-        ("rail_button_size", theme.rail_button_size, 28.),
-        ("radius_sm", theme.radius_sm, 2.),
-        ("radius_md", theme.radius_md, 4.),
-        ("radius_lg", theme.radius_lg, 8.),
-        ("menu_width", theme.menu_width, 240.),
-        ("menu_padding", theme.menu_padding, 4.),
-        ("menu_item_padding_x", theme.menu_item_padding_x, 8.),
-        ("caret_width", theme.caret_width, 2.),
-        ("border_width", theme.border_width, 1.),
-        ("underline_thickness", theme.underline_thickness, 1.),
-        ("strike_thickness", theme.markdown.strike_thickness, 1.),
+        ("rail_width", theme.layout.rail_width, 36.),
+        ("rail_button_size", theme.layout.rail_button_size, 28.),
+        ("radius_sm", theme.radius.sm, 2.),
+        ("radius_md", theme.radius.md, 4.),
+        ("radius_lg", theme.radius.lg, 8.),
+        ("menu_width", theme.layout.menu_width, 240.),
+        ("menu_padding", theme.layout.menu_padding, 4.),
+        ("menu_item_padding_x", theme.layout.menu_item_padding_x, 8.),
+        ("caret_width", theme.stroke.caret, 2.),
+        ("border_width", theme.stroke.border, 1.),
+        ("underline_thickness", theme.stroke.text_line, 1.),
+        ("strike_thickness", theme.stroke.text_line, 1.),
         ("ui_small_font_size", theme.ui_small_font_size, 15.),
     ];
     for (name, actual, before) in expected {
         assert_eq!(actual, px(before), "{name}");
     }
-    assert_eq!(theme.picker_rows, 12);
-    assert_eq!((theme.editor_line_height, theme.ui_line_height), (1.4, 1.4));
+    assert_eq!(theme.layout.picker_rows, 12);
     assert_eq!(
-        (theme.weight_normal, theme.weight_strong),
+        (theme.text.editor.line_height, theme.text.ui_md.line_height),
+        (1.4, 1.4)
+    );
+    assert_eq!(
+        (theme.text.normal, theme.text.strong),
         (FontWeight::NORMAL, FontWeight::BOLD)
     );
 }
@@ -147,15 +164,15 @@ fn las_medidas_salen_del_tema() {
     metrics.text.ui_md.size = 0.8;
     metrics.text.strong = config::Weight(600);
     let theme = Theme::with_font(&config, "Mono".into());
-    assert_eq!(theme.picker_padding_x, px(20.));
+    assert_eq!(theme.layout.picker_padding_x, px(20.));
     assert_eq!(theme.ui_font_size, px(12.));
     assert_eq!(
         theme.panel_row_height,
         px(24.),
         "2 veces la fuente de la UI"
     );
-    assert_eq!(theme.radius_lg, px(0.));
-    assert_eq!(theme.weight_strong, FontWeight(600.));
+    assert_eq!(theme.radius.lg, px(0.));
+    assert_eq!(theme.text.strong, FontWeight(600.));
     assert_eq!(theme.editor_font_size, px(15.), "el editor no cambia");
 }
 
@@ -180,7 +197,7 @@ fn el_menu_no_sigue_al_padding_del_panel() {
     let mut config = config::Config::defaults().unwrap();
     config.theme.metrics.layout.panel_padding_x = config::Length(20.);
     let theme = Theme::with_font(&config, "Mono".into());
-    assert_eq!(theme.menu_item_padding_x, px(8.));
+    assert_eq!(theme.layout.menu_item_padding_x, px(8.));
 }
 
 #[test]
@@ -221,12 +238,12 @@ fn sin_ninguna_candidata_no_hay_fuente() {
 fn el_indicador_del_autoguardado_sale_del_tema() {
     let mut config = config::Config::defaults().unwrap();
     let theme = Theme::with_font(&config, "Mono".into());
-    let status = &theme.status;
-    assert_eq!(status.saved, status.unfocused_foreground);
-    assert_eq!(status.unsaved, theme.modified);
-    assert_eq!(status.changed_on_disk, theme.error);
-    assert!((status.message_max_width - 0.5).abs() < f32::EPSILON);
+    let ui = &theme.ui;
+    assert_eq!(ui.status_saved, ui.status_unfocused_foreground);
+    assert_eq!(ui.status_unsaved, ui.modified);
+    assert_eq!(ui.status_changed_on_disk, ui.error);
+    assert!((theme.layout.status_message_max_width - 0.5).abs() < f32::EPSILON);
     config.theme.metrics.layout.status_message_max_width = config::Fraction(0.25);
     let theme = Theme::with_font(&config, "Mono".into());
-    assert!((theme.status.message_max_width - 0.25).abs() < f32::EPSILON);
+    assert!((theme.layout.status_message_max_width - 0.25).abs() < f32::EPSILON);
 }

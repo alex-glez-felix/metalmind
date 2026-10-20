@@ -19,10 +19,10 @@ pub fn entry(kind: EntryKind, theme: &Theme) -> Div {
         EntryKind::Folder => div()
             .w(size)
             .h(theme.icon_short_side())
-            .rounded(theme.radius_sm)
-            .bg(theme.panel_folder),
-        EntryKind::Note => page(size, theme.panel_note, theme),
-        EntryKind::Attachment => page(size, theme.panel_muted, theme),
+            .rounded(theme.radius.sm)
+            .bg(theme.ui.panel_folder),
+        EntryKind::Note => page(size, theme.ui.panel_note, theme),
+        EntryKind::Attachment => page(size, theme.ui.panel_muted, theme),
     };
     slot.child(shape)
 }
@@ -31,8 +31,8 @@ fn page(size: gpui_kit::Pixels, color: Hsla, theme: &Theme) -> Div {
     div()
         .w(theme.icon_short_side())
         .h(size)
-        .rounded(theme.radius_sm)
-        .border(theme.border_width)
+        .rounded(theme.radius.sm)
+        .border(theme.stroke.border)
         .border_color(color)
 }
 
@@ -42,7 +42,7 @@ pub fn disclosure(kind: EntryKind, expanded: bool, theme: &Theme) -> Div {
     let slot = div()
         .w(theme.icon_size)
         .flex_none()
-        .text_color(theme.panel_muted);
+        .text_color(theme.ui.panel_muted);
     match (kind, expanded) {
         (EntryKind::Folder, true) => slot.child("▾"),
         (EntryKind::Folder, false) => slot.child("▸"),

@@ -419,7 +419,7 @@ pub fn code_block_quads(lines: &[LaidLine], right: Pixels, theme: &Theme) -> Vec
         .map(|laid| {
             fill(
                 Bounds::new(laid.origin, size(right - laid.origin.x, laid.height)),
-                theme.markdown.code_block_background,
+                theme.syntax.code_block_background,
             )
         })
         .collect()

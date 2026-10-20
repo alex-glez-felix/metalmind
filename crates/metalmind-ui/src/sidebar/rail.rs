@@ -16,17 +16,17 @@ use crate::theme::Theme;
 /// `shown`: la vista que se ve, si el panel está visible.
 pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
     div()
-        .w(theme.rail_width)
+        .w(theme.layout.rail_width)
         .h_full()
         .flex_none()
         .flex()
         .flex_col()
         .items_center()
-        .gap(theme.panel_gap)
-        .py(theme.panel_padding_y)
-        .bg(theme.panel_background)
-        .border_r(theme.border_width)
-        .border_color(theme.panel_border)
+        .gap(theme.layout.panel_gap)
+        .py(theme.layout.panel_padding_y)
+        .bg(theme.ui.panel_background)
+        .border_r(theme.stroke.border)
+        .border_color(theme.ui.panel_border)
         .child(rail_button(
             "rail-folders",
             shown == Some(PanelView::Folders),
@@ -52,18 +52,18 @@ fn rail_button(
 ) -> AnyElement {
     div()
         .id(id)
-        .size(theme.rail_button_size)
+        .size(theme.layout.rail_button_size)
         .flex()
         .items_center()
         .justify_center()
-        .rounded(theme.radius_md)
-        .text_color(theme.panel_muted)
+        .rounded(theme.radius.md)
+        .text_color(theme.ui.panel_muted)
         .when(active, |button| {
             button
-                .bg(theme.panel_active)
-                .text_color(theme.panel_foreground)
+                .bg(theme.ui.panel_active)
+                .text_color(theme.ui.panel_foreground)
         })
-        .hover(|button| button.bg(theme.panel_hover))
+        .hover(|button| button.bg(theme.ui.panel_hover))
         .on_click(move |_, window, cx| {
             window.dispatch_action(Box::new(Dispatch(command.into())), cx);
         })

@@ -17,11 +17,11 @@ impl Sidebar {
             .flex()
             .flex_col()
             .flex_none()
-            .gap(theme.panel_gap)
-            .px(theme.panel_padding_x)
-            .py(theme.panel_padding_y)
-            .border_b(theme.border_width)
-            .border_color(theme.panel_border);
+            .gap(theme.layout.panel_gap)
+            .px(theme.layout.panel_padding_x)
+            .py(theme.layout.panel_padding_y)
+            .border_b(theme.stroke.border)
+            .border_color(theme.ui.panel_border);
         let (label, input) = match prompt {
             Prompt::Filter(input) => ("Filtrar".to_owned(), input),
             Prompt::Create {
@@ -43,7 +43,7 @@ impl Sidebar {
         };
         Some(
             frame
-                .child(div().text_color(theme.panel_muted).child(label))
+                .child(div().text_color(theme.ui.panel_muted).child(label))
                 .child(input_field(input, theme)),
         )
     }
@@ -64,20 +64,20 @@ fn input_field(input: &LineInput, theme: &Theme) -> Div {
         .flex()
         .items_center()
         .h(theme.panel_row_height)
-        .px(theme.panel_padding_x)
-        .bg(theme.background)
-        .border(theme.border_width)
-        .border_color(theme.panel_border)
-        .rounded(theme.radius_md)
+        .px(theme.layout.panel_padding_x)
+        .bg(theme.ui.background)
+        .border(theme.stroke.border)
+        .border_color(theme.ui.panel_border)
+        .rounded(theme.radius.md)
         .whitespace_nowrap()
         .overflow_hidden()
         .child(before.to_owned())
         .child(
             div()
-                .w(theme.caret_width)
+                .w(theme.stroke.caret)
                 .h(theme.ui_font_size)
                 .flex_none()
-                .bg(theme.caret),
+                .bg(theme.cursor.insert),
         )
         .child(after.to_owned())
 }
@@ -91,19 +91,19 @@ fn confirm_delete(
     div()
         .flex()
         .flex_col()
-        .gap(theme.panel_gap)
+        .gap(theme.layout.panel_gap)
         .child(format!("¿Mandar «{path}» a la papelera del vault?"))
         .when(unsaved, |question| {
             question.child(
                 div()
-                    .text_color(theme.error)
+                    .text_color(theme.ui.error)
                     .child("Tiene cambios sin guardar: se pierden."),
             )
         })
         .child(
             div()
                 .flex()
-                .gap(theme.panel_gap)
+                .gap(theme.layout.panel_gap)
                 .child(button(
                     "confirm-delete",
                     "Borrar (y)",

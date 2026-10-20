@@ -59,26 +59,26 @@ impl Middle {
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let foreground = if status.mode.is_some() {
-        theme.status.foreground
+        theme.ui.status_foreground
     } else {
-        theme.status.unfocused_foreground
+        theme.ui.status_unfocused_foreground
     };
     let mark = match status.save {
         Some(state) => Some(save_label(state, theme)),
         None => status
             .modified
-            .then(|| fixed().text_color(theme.modified).child(" [+]")),
+            .then(|| fixed().text_color(theme.ui.modified).child(" [+]")),
     };
     div()
         .flex()
         .flex_row()
-        .gap(theme.status.gap)
-        .px(theme.status.padding_x)
-        .py(theme.status.padding_y)
-        .bg(theme.status.background)
+        .gap(theme.layout.status_gap)
+        .px(theme.layout.status_padding_x)
+        .py(theme.layout.status_padding_y)
+        .bg(theme.ui.status_background)
         .text_color(foreground)
-        .border_t(theme.border_width)
-        .border_color(theme.status.border)
+        .border_t(theme.stroke.border)
+        .border_color(theme.ui.status_border)
         .children(status.mode.map(|mode| fixed().child(mode_label(mode))))
         .when_some(status.recording, |bar, register| {
             bar.child(fixed().child(format!("grabando @{register}")))
@@ -120,8 +120,8 @@ fn note(file: SharedString, mark: Option<Div>, message: Option<Message>, theme: 
         .children(message.map(|message| {
             message_line(message, theme)
                 .flex_shrink_0()
-                .max_w(relative(theme.status.message_max_width))
-                .ml(theme.status.gap)
+                .max_w(relative(theme.layout.status_message_max_width))
+                .ml(theme.layout.status_gap)
                 .truncate()
         }))
 }
@@ -129,11 +129,11 @@ fn note(file: SharedString, mark: Option<Div>, message: Option<Message>, theme: 
 /// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
 fn save_label(state: SaveState, theme: &Theme) -> Div {
     let (text, color) = match state {
-        SaveState::Saved => (" · guardado", theme.status.saved),
-        SaveState::Unsaved => (" · sin guardar", theme.status.unsaved),
+        SaveState::Saved => (" · guardado", theme.ui.status_saved),
+        SaveState::Unsaved => (" · sin guardar", theme.ui.status_unsaved),
         SaveState::ChangedOnDisk => (
             " · cambió en disco: :w! o :e!",
-            theme.status.changed_on_disk,
+            theme.ui.status_changed_on_disk,
         ),
     };
     fixed().text_color(color).child(text)
@@ -168,7 +168,7 @@ fn command_line(line: CommandLine, theme: &Theme) -> Div {
         .flex_row()
         .flex_grow_1()
         .min_w_0()
-        .text_color(theme.foreground)
+        .text_color(theme.ui.foreground)
         .child(
             div()
                 .min_w_0()
@@ -180,13 +180,18 @@ fn command_line(line: CommandLine, theme: &Theme) -> Div {
         .when(!preedit.is_empty(), |line| {
             line.child(fixed().underline().child(preedit))
         })
-        .child(fixed().w(theme.caret_width).h_full().bg(theme.caret))
+        .child(
+            fixed()
+                .w(theme.stroke.caret)
+                .h_full()
+                .bg(theme.cursor.insert),
+        )
 }
 
 fn message_line(message: Message, theme: &Theme) -> Div {
     match message {
         Message::Info(text) => div().child(text),
-        Message::Error(text) => div().text_color(theme.error).child(text),
+        Message::Error(text) => div().text_color(theme.ui.error).child(text),
     }
 }
 

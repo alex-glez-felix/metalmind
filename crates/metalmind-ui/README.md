@@ -20,7 +20,7 @@ Con GPUI:
 - `picker/`: la vista de un picker (`PickerView`), una sola para el finder, la paleta y `space /`; lo que cambia lo pone su `PickerDelegate`.
 - `sidebar/`: el panel lateral. El árbol en una `uniform_list` (solo se pintan las filas visibles), el menú del clic derecho, los botones y lo que hace cada acción `file_tree::*` y `panel::*`; sus nombres y atajos son de `metalmind-keymap`.
 - `actions.rs`: GPUI como transporte del registro de `metalmind-keymap`. Los atajos de las vistas salen del keymap de la app y cada acción viaja como `Dispatch` por el foco; `dispatch(nombre, argumento)` es lo que hacen `:`, la paleta y los atajos que resuelve el motor.
-- `theme.rs`: todo color y tamaño de la UI sale de aquí.
+- `theme.rs`: todo color y tamaño de la UI sale de aquí: los grupos del tema ya convertidos a GPUI (`theme.layout.picker_gap`) y lo que se calcula con la fuente.
 
 ## El panel lateral
 

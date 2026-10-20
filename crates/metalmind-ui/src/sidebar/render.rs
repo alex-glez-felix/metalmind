@@ -31,10 +31,10 @@ impl Render for Sidebar {
             .flex_none()
             .flex()
             .flex_col()
-            .bg(theme.panel_background)
-            .text_color(theme.panel_foreground)
-            .border_r(theme.border_width)
-            .border_color(theme.panel_border)
+            .bg(theme.ui.panel_background)
+            .text_color(theme.ui.panel_foreground)
+            .border_r(theme.stroke.border)
+            .border_color(theme.ui.panel_border)
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|sidebar, _, window, cx| sidebar.focus(window, cx)),
@@ -47,9 +47,9 @@ impl Render for Sidebar {
             .child(self.body(&theme, focused, cx))
             .children(self.panel.error().map(|error| {
                 div()
-                    .px(theme.panel_padding_x)
-                    .py(theme.panel_padding_y)
-                    .text_color(theme.error)
+                    .px(theme.layout.panel_padding_x)
+                    .py(theme.layout.panel_padding_y)
+                    .text_color(theme.ui.error)
                     .child(error.to_owned())
             }))
             .children(self.menu.as_ref().map(|menu| menu.render(&theme, cx)))
@@ -83,7 +83,7 @@ impl Sidebar {
         };
         let buttons = div()
             .flex()
-            .gap(theme.panel_gap)
+            .gap(theme.layout.panel_gap)
             .when(self.panel.view == PanelView::Folders, |buttons| {
                 buttons
                     .child(button("new-note", "+nota", PanelAction::NewNote, theme, cx))
@@ -108,8 +108,8 @@ impl Sidebar {
             .justify_between()
             .items_center()
             .h(theme.panel_row_height)
-            .px(theme.panel_padding_x)
-            .text_color(theme.panel_muted)
+            .px(theme.layout.panel_padding_x)
+            .text_color(theme.ui.panel_muted)
             .child(title)
             .child(buttons)
     }
@@ -118,9 +118,9 @@ impl Sidebar {
         let empty = |text: &'static str| {
             div()
                 .flex_1()
-                .px(theme.panel_padding_x)
-                .py(theme.panel_padding_y)
-                .text_color(theme.panel_muted)
+                .px(theme.layout.panel_padding_x)
+                .py(theme.layout.panel_padding_y)
+                .text_color(theme.ui.panel_muted)
                 .child(text)
                 .into_any_element()
         };
@@ -207,11 +207,11 @@ fn row_view(
     cx: &mut Context<Sidebar>,
 ) -> AnyElement {
     let depth = u16::try_from(row.depth).unwrap_or(u16::MAX);
-    let indent = theme.panel_padding_x + theme.panel_indent * f32::from(depth);
+    let indent = theme.layout.panel_padding_x + theme.layout.panel_indent * f32::from(depth);
     let text_color = if row.kind == EntryKind::Attachment {
-        theme.panel_muted
+        theme.ui.panel_muted
     } else {
-        theme.panel_foreground
+        theme.ui.panel_foreground
     };
     div()
         .id(("file-tree-row", at))
@@ -219,18 +219,18 @@ fn row_view(
         .w_full()
         .flex()
         .items_center()
-        .gap(theme.panel_gap)
+        .gap(theme.layout.panel_gap)
         .pl(indent)
-        .pr(theme.panel_padding_x)
+        .pr(theme.layout.panel_padding_x)
         .text_color(text_color)
         .map(|element| match marks.fill {
-            Some(Fill::Selection) => element.bg(theme.panel_selection),
-            Some(Fill::Active) => element.bg(theme.panel_active),
-            None => element.hover(|element| element.bg(theme.panel_hover)),
+            Some(Fill::Selection) => element.bg(theme.ui.panel_selection),
+            Some(Fill::Active) => element.bg(theme.ui.panel_active),
+            None => element.hover(|element| element.bg(theme.ui.panel_hover)),
         })
-        .border(theme.border_width)
+        .border(theme.stroke.border)
         .border_color(if marks.outline {
-            theme.panel_selection_unfocused
+            theme.ui.panel_selection_unfocused
         } else {
             gpui_kit::transparent_black()
         })
@@ -253,7 +253,7 @@ fn row_view(
 fn name(row: &Row, theme: &Theme) -> StyledText {
     let name = row.name();
     let style = HighlightStyle {
-        color: Some(theme.panel_match),
+        color: Some(theme.ui.panel_match),
         ..HighlightStyle::default()
     };
     let highlights: Vec<(Range<usize>, HighlightStyle)> = row
@@ -278,13 +278,13 @@ pub(super) fn button(
     let action: Action = action.into();
     div()
         .id(id)
-        .px(theme.panel_button_padding_x)
-        .rounded(theme.radius_md)
-        .text_color(theme.panel_muted)
+        .px(theme.layout.panel_button_padding_x)
+        .rounded(theme.radius.md)
+        .text_color(theme.ui.panel_muted)
         .hover(|button| {
             button
-                .bg(theme.panel_hover)
-                .text_color(theme.panel_foreground)
+                .bg(theme.ui.panel_hover)
+                .text_color(theme.ui.panel_foreground)
         })
         .on_click(cx.listener(move |sidebar, _, window, cx| {
             sidebar.focus(window, cx);

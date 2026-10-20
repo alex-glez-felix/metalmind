@@ -32,17 +32,17 @@ impl Render for Tooltip {
         div()
             .font_family(theme.font_family.clone())
             .text_size(theme.ui_font_size)
-            .line_height(relative(theme.ui_line_height))
-            .px(theme.tooltip_padding_x)
-            .py(theme.tooltip_padding_y)
-            .bg(theme.menu_background)
-            .border(theme.border_width)
-            .border_color(theme.menu_border)
-            .rounded(theme.radius_md)
+            .line_height(relative(theme.text.ui_md.line_height))
+            .px(theme.layout.tooltip_padding_x)
+            .py(theme.layout.tooltip_padding_y)
+            .bg(theme.ui.menu_background)
+            .border(theme.stroke.border)
+            .border_color(theme.ui.menu_border)
+            .rounded(theme.radius.md)
             .text_color(if self.error {
-                theme.error
+                theme.ui.error
             } else {
-                theme.foreground
+                theme.ui.foreground
             })
             .child(self.text.clone())
     }

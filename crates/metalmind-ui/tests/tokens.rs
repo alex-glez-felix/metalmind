@@ -257,7 +257,7 @@ fn las_reglas_atrapan_lo_suelto() {
     ];
     let allowed = [
         ".w_full().min_w_0()",
-        ".px(theme.panel_padding_x)",
+        ".px(theme.layout.panel_padding_x)",
         ".w(relative(1.))",
         "let width = (total - used).max(px(0.));",
         "fn ink(run: &Run) -> Hsla {",

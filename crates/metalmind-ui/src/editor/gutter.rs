@@ -91,7 +91,7 @@ impl Gutter {
                 bounds.origin,
                 size(text_left - bounds.left(), bounds.size.height),
             ),
-            theme.gutter,
+            theme.ui.gutter,
         );
         let cursor_line = view.buffer().line_of(view.cursor());
         let number_columns = self.columns - self.mark_columns;
@@ -107,9 +107,9 @@ impl Gutter {
             }
             if let Some(label) = view.numbers.label(laid.line, cursor_line, number_columns) {
                 let color = if label.current {
-                    theme.gutter_current
+                    theme.ui.gutter_current
                 } else {
-                    theme.gutter_foreground
+                    theme.ui.gutter_foreground
                 };
                 let shaped = shape(label.text.into(), typeface, color, None, window);
                 labels.push(at(numbers_left, shaped));
@@ -179,7 +179,7 @@ impl Gutter {
         };
         let origin = tooltip_origin(row, measured, clip.bottom(), window.viewport_size().width);
         // GPUI corre el tooltip un píxel del ancla, el grosor del borde.
-        let gap = theme.border_width;
+        let gap = theme.stroke.border;
         window.set_tooltip(AnyTooltip {
             view,
             mouse_position: origin - point(gap, gap),
@@ -209,10 +209,10 @@ fn shape_mark(
         strikethrough: None,
     };
     let mut text = mark.shown.to_string();
-    let mut runs = vec![run(text.len(), theme.gutter_mark)];
+    let mut runs = vec![run(text.len(), theme.ui.gutter_mark)];
     if mark.more() {
         text.push('+');
-        runs.push(run(1, theme.gutter_foreground));
+        runs.push(run(1, theme.ui.gutter_foreground));
     }
     window
         .text_system()
