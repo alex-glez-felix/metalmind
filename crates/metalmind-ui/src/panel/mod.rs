@@ -6,6 +6,7 @@
 mod input;
 mod marks;
 
+use metalmind_syntax::note_name;
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
@@ -326,8 +327,8 @@ fn new_entry(
     }
     let relative = match kind {
         NewEntry::Folder => name.to_owned(),
-        NewEntry::Note if has_md_extension(name) => name.to_owned(),
-        NewEntry::Note => format!("{name}.md"),
+        NewEntry::Note if note_name::is_note(name) => name.to_owned(),
+        NewEntry::Note => note_name::with_extension(name),
     };
     let path = if parent.is_root() {
         VaultPath::new(&relative)?
@@ -338,11 +339,6 @@ fn new_entry(
         NewEntry::Note => Request::CreateNote(path),
         NewEntry::Folder => Request::CreateFolder(path),
     }))
-}
-
-fn has_md_extension(name: &str) -> bool {
-    name.rsplit_once('.')
-        .is_some_and(|(stem, ext)| !stem.is_empty() && ext.eq_ignore_ascii_case("md"))
 }
 
 fn renamed(from: &VaultPath, to: Option<VaultPath>) -> Option<Request> {
