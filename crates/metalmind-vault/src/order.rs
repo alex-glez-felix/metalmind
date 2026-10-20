@@ -175,12 +175,15 @@ impl Tree {
 }
 
 /// Convierte en `Renamed` lo que se borró en `from` y apareció igual en `to`.
+/// Lo que está dentro de un `from` ya emparejado viaja con ese rename, así
+/// que otro no puede reclamarlo como suyo.
 fn pair_renames(
     renames: &[(VaultPath, VaultPath)],
     removed: &mut Entries,
     created: &mut Entries,
 ) -> Vec<VaultChange> {
     let mut changes = Vec::new();
+    let mut sources: HashSet<VaultPath> = HashSet::new();
     for (from, to) in renames {
         let Some(&kind) = removed
             .get(from)
@@ -189,11 +192,13 @@ fn pair_renames(
             continue;
         };
         let moved: Vec<_> = subtree(removed, from)
+            .filter(|(path, _)| !path.ancestors().any(|folder| sources.contains(&folder)))
             .filter_map(|(path, kind)| {
                 let target = path.rebase(from, to)?;
                 (created.get(&target) == Some(kind)).then(|| (path.clone(), target))
             })
             .collect();
+        sources.insert(from.clone());
         for (old, new) in moved {
             removed.remove(&old);
             created.remove(&new);

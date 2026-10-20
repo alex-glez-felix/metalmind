@@ -335,29 +335,53 @@ mod tests {
         Ok(())
     }
 
+    /// Reindexar a pedazos da el mismo índice que un walk completo, y los
+    /// cambios emitidos llevan de un índice al otro. Varias operaciones
+    /// pueden caer en un mismo lote, como cuando el debouncer las junta.
+    fn incremental_matches_full_walk(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let mut index = scan(&root, None);
+        let mut copy = mirror(&index);
+        for batch in batches {
+            let mut touched = Touched::default();
+            for op in batch {
+                touched.merge(apply(&root, op));
+            }
+            let changes = refresh(&mut index, &root, &touched, None);
+            replay(&mut copy, &changes);
+            prop_assert_eq!(&index, &scan(&root, None), "tras {:?}", batch);
+            prop_assert_eq!(
+                &copy,
+                &mirror(&index),
+                "cambios de {:?}: {:?}",
+                batch,
+                changes
+            );
+        }
+        Ok(())
+    }
+
     proptest! {
-        /// Reindexar a pedazos da el mismo índice que un walk completo, y los
-        /// cambios emitidos llevan de un índice al otro. Varias operaciones
-        /// pueden caer en un mismo lote, como cuando el debouncer las junta.
         #[test]
         fn incremental_igual_a_walk_completo(
             batches in prop::collection::vec(prop::collection::vec(op(), 1..5), 1..12),
         ) {
-            let dir = TempDir::new().unwrap();
-            let root = dir.path().canonicalize().unwrap();
-            let mut index = scan(&root, None);
-            let mut copy = mirror(&index);
-            for batch in &batches {
-                let mut touched = Touched::default();
-                for op in batch {
-                    touched.merge(apply(&root, op));
-                }
-                let changes = refresh(&mut index, &root, &touched, None);
-                replay(&mut copy, &changes);
-                prop_assert_eq!(&index, &scan(&root, None), "tras {:?}", batch);
-                prop_assert_eq!(&copy, &mirror(&index), "cambios de {:?}: {:?}", batch, changes);
-            }
+            incremental_matches_full_walk(&batches)?;
         }
+    }
+
+    /// Lo encontró el proptest en CI: el rename `a/a → y.png` falla en disco
+    /// (`y.png` ya tiene algo), pero el lote lo trae emparejado.
+    #[test]
+    fn un_rename_que_no_coincide_con_el_disco_no_se_lleva_el_contenido() {
+        let write = |path: &str| Op::WriteFile(path.to_owned());
+        let rename = |from: &str, to: &str| Op::Rename(from.to_owned(), to.to_owned());
+        incremental_matches_full_walk(&[
+            vec![write("y.png/x.md"), rename("y.png", "a/a")],
+            vec![write("y.png/a"), rename("a/a", "y.png"), rename("a", "b/a")],
+        ])
+        .unwrap();
     }
 
     #[test]
