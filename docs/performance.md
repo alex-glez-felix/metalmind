@@ -242,7 +242,7 @@ Conteos del 2026-10-19 en un runner `ubuntu-latest` de GitHub (valgrind 3.22, x8
 | Plan de renombre: una nota / una carpeta con nombres repetidos / únicos (10 %) | 752 k / 548.7 M / 191.4 M |
 | `gd` en una nota de 5 k líneas (10 %) / nombrar 50 notas para `[[` | 16.7 M / 3.0 M |
 | Adjuntos huérfanos, 5 k notas | 1.6 M |
-| Tags, 5 k: consulta / panel entero / en focus / candidatos de `#` / plan de renombre / clonarlos | 10.2 M / 17.9 M / 19.9 M / 13.9 M / 1.1 M / 25.0 M |
+| Tags, 5 k: consulta / panel entero / en focus / candidatos de `#` / plan de renombre / clonarlos | 9.8 M / 16.4 M / 19.2 M / 12.6 M / 1.0 M / 25.0 M |
 | Finder: una tecla con 5 k rutas, peor consulta, y las 12 filas visibles | 17.9 M |
 | Árbol, 5 k: armarlo todo abierto / abrir y cerrar una carpeta / filtrar y quitar el filtro / rename de 10 carpetas | 2.2 M / 5.8 M / 60.7 M / 7.0 M |
 | Fórmulas: medir las 200 en frío / en caliente / pintar las 22 | 103.3 M / 104 k / 81.0 M |
