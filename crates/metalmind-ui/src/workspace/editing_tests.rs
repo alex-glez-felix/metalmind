@@ -79,6 +79,27 @@ fn pegar_fuera_de_visual_pega_en_el_cursor() {
     assert_eq!(session.text(), "Xab\n");
 }
 
+/// Pegar en Normal pasa por el motor, así que la jumplist del panel, la mark
+/// `A` y el cursor de otro panel siguen a lo pegado.
+#[test]
+fn pegar_en_normal_mueve_la_jumplist_las_marks_y_el_otro_panel() {
+    let mut session = Session::new("uno\ndos\ntres\ncuatro\n");
+    session.keys("jjmAgg⌃wv");
+    let right = session.pane();
+    session.keys("G⌃wh");
+    let below = session.line(right);
+    session.paste("nueva\n");
+    assert_eq!(session.line(right), below + 1, "el cursor del otro panel");
+    session.keys("⌃o");
+    assert_eq!(
+        session.line(session.pane()),
+        4,
+        "el salto de gg siguió a su línea"
+    );
+    session.keys("gg'A");
+    assert_eq!(session.line(session.pane()), 4, "la mark A también");
+}
+
 fn highlighted(session: &Session, pane: PaneId) -> Option<String> {
     session
         .view(pane)
