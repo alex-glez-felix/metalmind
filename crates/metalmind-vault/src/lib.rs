@@ -18,6 +18,7 @@ mod order;
 mod path;
 mod refresh;
 mod scan;
+mod searchable;
 pub mod tags;
 mod vault;
 mod watch;

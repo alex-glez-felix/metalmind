@@ -7,7 +7,7 @@ use gpui_kit::{AppContext as _, Context, Entity, Window};
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::picker::{Open, PickerEvent, PickerOptions, PickerView};
-use crate::text_search::{Hit, OpenNote, TextSearch, searchable};
+use crate::text_search::{Hit, OpenNote, TextSearch};
 use crate::workspace::{Axis, LinePosition, Placement, shown_path};
 
 /// El picker de `space /`.
@@ -17,14 +17,13 @@ impl WorkspaceView {
     pub(super) fn open_text_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
         let root = session.root().to_owned();
-        let index = session.vault().snapshot();
         let open: Vec<OpenNote> = self
             .workspace
             .read(cx)
             .unsaved_files()
             .filter_map(|(file, document)| {
                 let path = session.vault_path(file)?;
-                searchable(&index, &path, file).then(|| OpenNote {
+                session.vault().is_searchable(&path).then(|| OpenNote {
                     path,
                     text: document.buffer().snapshot(),
                 })
