@@ -478,7 +478,7 @@ fn block_actions_run_by_name() {
         let action = Action::from_name(name).unwrap();
         vim.execute(action, &mut buffer, &mut selections).unwrap();
     }
-    vim.insert_text("X", &mut buffer, &mut selections).unwrap();
+    vim.paste_text("X", &mut buffer, &mut selections).unwrap();
     let escape = Action::from_name("vim::normal_mode").unwrap();
     vim.execute(escape, &mut buffer, &mut selections).unwrap();
     assert_eq!(buffer.to_string(), "aXb\ncXd");

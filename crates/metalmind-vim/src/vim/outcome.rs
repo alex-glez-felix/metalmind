@@ -10,7 +10,7 @@ pub enum KeyOutcome {
     /// Falta el resto de la secuencia o del count.
     Pending,
     Executed(Action),
-    /// Texto escrito en modo Insert o en la línea de comandos.
+    /// Texto escrito en modo Insert o en la línea de comandos, o pegado.
     Inserted,
     /// Ningún binding la usa; la capa de arriba puede probar otro keymap.
     Unbound,
