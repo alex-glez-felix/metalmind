@@ -260,6 +260,31 @@ impl Vim {
         self.finish_operator(operation, &operands, buffer, selections, clipboard)
     }
 
+    /// `.` de un operador en Visual: como vim, vuelve a seleccionar lo mismo
+    /// desde el cursor, con la columna buscada que eso deja, y opera ahí.
+    pub(super) fn redo_visual(
+        &mut self,
+        operator: Operator,
+        size: VisualSize,
+        buffer: &mut Buffer,
+        selections: &mut Selections,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), VimError> {
+        let count = self.take_count();
+        let register = self.selected.take();
+        self.reset();
+        let columns = self.viewport.columns();
+        let redone = selections.map(|selection| size.redo_from(buffer, selection, columns));
+        let operands = visual_operands(Area::Selection(size.kind()), buffer, &redone, columns);
+        let operation = Operation {
+            operator,
+            subject: Subject::Object(Object::Visual(Area::Sized(size))),
+            count,
+            register,
+        };
+        self.finish_operator(operation, &operands, buffer, selections, clipboard)
+    }
+
     /// `p` y `P`: lo pegado reemplaza la selección. Como en vim, con `p` lo
     /// borrado va a los registros como un `d`, y con `P` a ninguno; `.`
     /// repite ese borrado (`"_d` tras `P`), que es lo que vim guarda.

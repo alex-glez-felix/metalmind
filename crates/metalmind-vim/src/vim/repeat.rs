@@ -6,6 +6,7 @@ use super::Vim;
 use crate::dot::{Change, Subject};
 use crate::object::Object;
 use crate::register::{Clipboard, RegisterName};
+use crate::visual::Area;
 use crate::{Mode, VimError};
 
 impl Vim {
@@ -44,6 +45,9 @@ impl Vim {
             _ => {}
         }
         match dot.change {
+            Change::Operate(operator, Subject::Object(Object::Visual(Area::Sized(size)))) => {
+                self.redo_visual(operator, size, buffer, selections, clipboard)?;
+            }
             Change::Operate(operator, subject) => {
                 self.operate(operator, subject, buffer, selections, clipboard)?;
             }
