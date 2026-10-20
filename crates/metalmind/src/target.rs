@@ -2,7 +2,10 @@
 //!
 //! - `metalmind <carpeta>`: esa carpeta es el vault, sin archivo abierto.
 //! - `metalmind <archivo>`: el vault es la carpeta que contiene al archivo
-//!   (exista o no el archivo, la carpeta tiene que existir).
+//!   (exista o no el archivo, la carpeta tiene que existir). Una ruta que no
+//!   existe es un archivo solo si tiene extensión (`nueva.md`); sin ella
+//!   (`~/Notas`) es una carpeta que falta, y se dice en vez de abrir la de
+//!   arriba.
 //! - `metalmind`: la carpeta de la variable `METALMIND_VAULT`, si está; si no, el
 //!   último vault abierto y, si no hay, el `vault:` de `config.yaml`
 //!   (06 §8).
@@ -29,6 +32,11 @@ pub struct Target {
 pub enum TargetError {
     #[error("no existe la carpeta {}", .0.display())]
     MissingFolder(PathBuf),
+    #[error(
+        "no existe la carpeta {path}; créala con `mkdir -p {path}` o pasa una que exista",
+        path = .0.display()
+    )]
+    MissingVault(PathBuf),
     #[error("{VAULT_VARIABLE} apunta a {}, que no es una carpeta", .0.display())]
     VariableNotAFolder(PathBuf),
     #[error("no hay un vault que abrir: pasa una carpeta o un archivo")]
@@ -97,6 +105,9 @@ pub fn resolve(argument: Option<&Path>, sources: Sources) -> Result<Target, Targ
             vault: path.to_owned(),
             file: None,
         });
+    }
+    if path.extension().is_none() && !path.exists() {
+        return Err(TargetError::MissingVault(path.to_owned()));
     }
     let folder = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent.to_owned(),
@@ -202,6 +213,29 @@ mod tests {
         assert_eq!(
             resolve(Some(&file), None, None, None),
             Err(TargetError::MissingFolder(dir.path().join("no")))
+        );
+    }
+
+    /// #97: `metalmind ~/Notas` sin `~/Notas` abría `~` entero como vault.
+    #[test]
+    fn una_carpeta_que_no_existe_no_abre_la_de_arriba() {
+        let dir = vault();
+        for missing in ["Notas", "Notas/", "notas/no/existe"] {
+            let path = dir.path().join(missing);
+            assert_eq!(
+                resolve(Some(&path), None, None, None),
+                Err(TargetError::MissingVault(path.clone())),
+                "{missing}"
+            );
+        }
+    }
+
+    #[test]
+    fn la_carpeta_que_falta_se_nombra_con_como_crearla() {
+        let message = TargetError::MissingVault(PathBuf::from("/x/Notas")).to_string();
+        assert_eq!(
+            message,
+            "no existe la carpeta /x/Notas; créala con `mkdir -p /x/Notas` o pasa una que exista"
         );
     }
 
