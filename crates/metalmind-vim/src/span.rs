@@ -28,15 +28,15 @@ impl Span {
         }
     }
 
-    pub fn into_target(self, buffer: &Buffer) -> Target {
-        let lines = |first, last| Target {
+    pub fn into_extent(self, buffer: &Buffer) -> Extent {
+        let lines = |first, last| Extent {
             region: Region::Lines { first, last },
             start: self.start,
             adjusted: false,
             visual: false,
             nested: false,
         };
-        let chars = |end, adjusted| Target {
+        let chars = |end, adjusted| Extent {
             region: Region::Chars(self.start..end),
             start: self.start,
             adjusted,
@@ -50,7 +50,7 @@ impl Span {
             SpanKind::Inclusive => chars(including_char_at(buffer, self.end), false),
             SpanKind::Exclusive if last > first && self.end == buffer.line_start(last) => {
                 if in_indent(buffer, self.start) {
-                    Target {
+                    Extent {
                         adjusted: true,
                         ..lines(first, last - 1)
                     }
@@ -84,7 +84,7 @@ impl Region {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Target {
+pub(crate) struct Extent {
     pub region: Region,
     /// Donde vim deja el cursor antes de aplicar el operador.
     pub start: ByteOffset,

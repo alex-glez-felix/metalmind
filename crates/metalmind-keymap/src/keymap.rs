@@ -2,7 +2,7 @@
 //! en una sola lista. De ella salen la tabla del motor y los atajos de la
 //! ventana.
 
-use metalmind_vim::{ActionName, Context as VimContext, Key, Target};
+use metalmind_vim::{ActionName, Bound, Context as VimContext, Key};
 
 use crate::command::ex_commands;
 use crate::{Action, Keystroke, View, defaults};
@@ -50,12 +50,12 @@ impl Default for Keymap {
         let editing = vim
             .bindings()
             .iter()
-            .filter_map(|binding| match binding.target {
-                Target::Engine(action) => Some(Binding {
+            .filter_map(|binding| match binding.bound {
+                Bound::Engine(action) => Some(Binding {
                     keys: Keys::Vim(binding.context, binding.keys.clone()),
                     action: Action::Vim(action),
                 }),
-                Target::Host(_) => None,
+                Bound::Host(_) => None,
             });
         Self {
             bindings: editing.chain(defaults::bindings()).collect(),
@@ -77,14 +77,14 @@ impl Keymap {
             let Keys::Vim(context, keys) = &binding.keys else {
                 return None;
             };
-            let target = match binding.action {
-                Action::Vim(action) => Target::Engine(action),
-                action => Target::Host(ActionName::new(action.name())),
+            let bound = match binding.action {
+                Action::Vim(action) => Bound::Engine(action),
+                action => Bound::Host(ActionName::new(action.name())),
             };
             Some(metalmind_vim::Binding {
                 context: *context,
                 keys: keys.clone(),
-                target,
+                bound,
             })
         });
         metalmind_vim::Keymap::new(bindings, ex_commands())
@@ -189,20 +189,20 @@ mod tests {
     #[test]
     fn el_motor_recibe_las_acciones_ajenas_por_nombre() {
         let engine = Keymap::default().engine();
-        let target = |keys: &[Key]| {
+        let bound = |keys: &[Key]| {
             engine
                 .bindings()
                 .iter()
                 .find(|binding| binding.context == VimContext::Normal && binding.keys == keys)
-                .map(|binding| binding.target)
+                .map(|binding| binding.bound)
         };
         assert_eq!(
-            target(&[Key::Char(' '), Key::Char('f')]),
-            Some(Target::Host(ActionName::new("workspace::open_finder")))
+            bound(&[Key::Char(' '), Key::Char('f')]),
+            Some(Bound::Host(ActionName::new("workspace::open_finder")))
         );
         assert_eq!(
-            target(&[Key::Char('x')]),
-            Some(Target::Engine(metalmind_vim::Action::DeleteRight))
+            bound(&[Key::Char('x')]),
+            Some(Bound::Engine(metalmind_vim::Action::DeleteRight))
         );
     }
 
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn los_nombres_que_devuelve_el_motor_son_del_registro() {
         for binding in Keymap::default().engine().bindings() {
-            if let Target::Host(name) = binding.target {
+            if let Bound::Host(name) = binding.bound {
                 assert!(Action::from_name(name.as_str()).is_some(), "{name}");
             }
         }

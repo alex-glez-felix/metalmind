@@ -512,7 +512,7 @@ mod tests {
     #[test]
     fn every_bound_action_is_listed() {
         for binding in crate::Keymap::vim().bindings() {
-            if let crate::Target::Engine(action) = binding.target {
+            if let crate::Bound::Engine(action) = binding.bound {
                 assert!(Action::ALL.contains(&action), "{action:?}");
             }
         }
