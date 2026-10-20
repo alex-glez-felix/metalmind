@@ -22,6 +22,7 @@ mod searchable;
 pub mod tags;
 mod vault;
 mod watch;
+mod watcher;
 mod worker;
 
 pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
@@ -50,3 +51,4 @@ pub use vault::{
     HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
     VaultRoot, VaultUpdate, VersionError,
 };
+pub use watcher::Unwatched;
