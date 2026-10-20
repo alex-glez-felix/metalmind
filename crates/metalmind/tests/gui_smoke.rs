@@ -633,3 +633,50 @@ fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
         unchanged,
     );
 }
+
+/// Alto de una línea de texto con la fuente por defecto.
+const TEXT_LINE: i16 = 21;
+/// Donde sale el tooltip de una fórmula de la segunda línea: debajo de ella.
+const FORMULA_TOOLTIP: Area = Area {
+    x: EDITOR_LEFT,
+    y: 0,
+    width: 900,
+    height: 120,
+};
+
+/// Con el ratón quieto sobre una fórmula rota (en la segunda línea, para que
+/// el cursor no la muestre como fuente), `:e` a otra nota quita el
+/// tooltip de la anterior sin esperar a que se mueva el ratón (#95).
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_tooltip_de_una_formula_rota_no_sigue_en_otra_nota() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", &format!("uno\n$\\frac{{1}}{{{}$\n", "x".repeat(60)));
+    smoke.write("b.md", "otra nota\n");
+    let mut metalmind = smoke.launch(&["b.md"]);
+    let window = metalmind.window();
+    let over_formula = (EDITOR_LEFT + 250, TEXT_TOP + TEXT_LINE + 10);
+    let away = (EDITOR_LEFT + 300, 300);
+    window.move_pointer(over_formula.0, over_formula.1);
+    let other_note = window.wait_still(FORMULA_TOOLTIP);
+
+    window.type_keys(":e a.md<CR>");
+    window.move_pointer(away.0, away.1);
+    window.wait_change("la nota de la fórmula", FORMULA_TOOLTIP, &other_note);
+    let without_tooltip = window.wait_still(FORMULA_TOOLTIP);
+    window.move_pointer(over_formula.0, over_formula.1);
+    window.wait_change(
+        "el tooltip de la fórmula rota",
+        FORMULA_TOOLTIP,
+        &without_tooltip,
+    );
+
+    window.type_keys(":e b.md<CR>");
+    wait::until("la otra nota, sin el tooltip", TIMEOUT, || {
+        if window.area_pixels(FORMULA_TOOLTIP) == other_note {
+            Ok(())
+        } else {
+            Err("sigue el tooltip".to_owned())
+        }
+    });
+}
