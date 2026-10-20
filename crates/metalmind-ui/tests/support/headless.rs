@@ -118,6 +118,15 @@ impl Headless {
         self.draw();
     }
 
+    /// Deja la ventana sin soltar (soltarla espera a los hilos del vault) y
+    /// devuelve la carpeta del vault, que sí se borra al soltarla.
+    #[allow(dead_code, reason = "solo lo usa el benchmark, no las pruebas")]
+    pub fn leak_window(self) -> TempDir {
+        let Self { cx, _dir: dir, .. } = self;
+        std::mem::forget(cx);
+        dir
+    }
+
     fn draw(&mut self) {
         self.cx
             .update_window(self.window, |_, window, cx| window.draw(cx).clear(cx))

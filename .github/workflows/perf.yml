@@ -17,6 +17,8 @@ on:
       - "crates/metalmind-vault/**"
       - "crates/metalmind-config/**"
       - "crates/metalmind-ui/**"
+      # Los atajos que el benchmark del editor despacha.
+      - "crates/metalmind-keymap/**"
       - "crates/metalmind-perf/**"
       - "Cargo.toml"
       - "Cargo.lock"

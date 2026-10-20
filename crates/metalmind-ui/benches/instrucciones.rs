@@ -320,8 +320,8 @@ fn in_vault(notes: usize) -> Prepared {
 #[bench::nota_de_50k_lineas(args = (50_000), setup = long_note)]
 #[bench::nota_con_200_formulas(args = (200), setup = formulas_note)]
 #[bench::vault_de_5k_notas(args = (NOTES), setup = in_vault)]
-fn editor_primer_frame(prepared: Prepared) {
-    keep(prepared.first_frame());
+fn editor_primer_frame(prepared: Prepared) -> TempDir {
+    keep(prepared.first_frame())
 }
 
 /// La ventana abierta en `prepared`, tras teclear `keys`.
@@ -350,14 +350,14 @@ fn formulas_open(count: usize) -> Headless {
 // `paint` de la ventana.
 #[library_benchmark]
 #[bench::insert_50k(args = (50_000), setup = insert_in_the_middle)]
-fn editor_tecla_en_insert(headless: Headless) {
-    frame(headless, "x");
+fn editor_tecla_en_insert(headless: Headless) -> TempDir {
+    frame(headless, "x")
 }
 
 #[library_benchmark]
 #[bench::j_50k(args = (50_000), setup = normal_in_the_middle)]
-fn editor_tecla_en_normal(headless: Headless) {
-    frame(headless, "j");
+fn editor_tecla_en_normal(headless: Headless) -> TempDir {
+    frame(headless, "j")
 }
 
 // Media pantalla de líneas que GPUI no tenía en caché; con las fórmulas,
@@ -365,19 +365,20 @@ fn editor_tecla_en_normal(headless: Headless) {
 #[library_benchmark]
 #[bench::nota_de_50k_lineas(args = (50_000), setup = normal_in_the_middle)]
 #[bench::cache_fria_200_formulas(args = (200), setup = formulas_open)]
-fn editor_ctrl_d(headless: Headless) {
-    frame(headless, "ctrl-d");
+fn editor_ctrl_d(headless: Headless) -> TempDir {
+    frame(headless, "ctrl-d")
 }
 
-fn frame(mut headless: Headless, key: &str) {
+fn frame(mut headless: Headless, key: &str) -> TempDir {
     headless.key_to_frame(key);
-    keep(headless);
+    keep(headless)
 }
 
 /// La ventana queda sin soltar: soltarla espera a los hilos del vault, que
 /// bajo valgrind no hace falta, y el proceso del benchmark sale enseguida.
-fn keep(headless: Headless) {
-    std::mem::forget(black_box(headless));
+/// La carpeta del vault vuelve, y gungraun la borra fuera de la cuenta.
+fn keep(headless: Headless) -> TempDir {
+    black_box(headless).leak_window()
 }
 
 library_benchmark_group!(

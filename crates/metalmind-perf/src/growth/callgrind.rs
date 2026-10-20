@@ -49,7 +49,14 @@ pub fn child() -> Option<(usize, usize)> {
 /// `size`, de todos los hilos.
 pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountError> {
     let dir = tempfile::tempdir().map_err(CountError::Dumps)?;
-    let out = dir.path().join("callgrind.out");
+    let dumps = dir.path().join("callgrind");
+    // El hijo sale sin soltar lo medido: lo temporal que arme va aquí, aparte
+    // de los volcados, y se borra con `dir`.
+    let scratch = dir.path().join("tmp");
+    for folder in [&dumps, &scratch] {
+        fs::create_dir(folder).map_err(CountError::Dumps)?;
+    }
+    let out = dumps.join("callgrind.out");
     let exe = env::current_exe().map_err(CountError::Valgrind)?;
     let Output { status, stderr, .. } = Command::new("valgrind")
         .arg("--tool=callgrind")
@@ -60,6 +67,7 @@ pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountEr
         .args([test, "--exact", "--include-ignored", "--nocapture"])
         .args(["--test-threads", "1"])
         .env(CHILD, format!("{call}:{size}"))
+        .env("TMPDIR", &scratch)
         .output()
         .map_err(CountError::Valgrind)?;
     if !status.success() {
@@ -69,7 +77,7 @@ pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountEr
             stderr: String::from_utf8_lossy(&stderr).into_owned(),
         });
     }
-    measured_part(dir.path())
+    measured_part(&dumps)
 }
 
 /// Las instrucciones del volcado que cierra la función medida.
