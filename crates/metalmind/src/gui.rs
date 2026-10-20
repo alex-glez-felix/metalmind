@@ -9,9 +9,11 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use gpui_kit::App;
-use metalmind_config::{Config, Diagnostic, Paths, Severity};
+use metalmind_config::{Config, Diagnostic, HistoryRetention, Paths, Severity};
 use metalmind_ui::{Document, FrameClock, OpenError, Startup};
-use metalmind_vault::{FileError, HistoryOptions, Vault, VaultError, VaultOptions};
+use metalmind_vault::{
+    FileError, HistoryOptions, Retention, Vault, VaultError, VaultOptions, VaultRoot,
+};
 
 use crate::target::{self, Sources, Target};
 
@@ -70,15 +72,14 @@ pub struct Prepared {
 /// Si el vault no se puede abrir o el archivo no se puede leer.
 pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError> {
     let Session { paths, config } = session;
-    let history = paths.clone().map(|paths| HistoryOptions {
-        paths,
-        retention: config.settings.history,
-    });
+    let root = VaultRoot::new(&target.vault)?;
     let options = VaultOptions {
-        history,
+        history: paths
+            .as_ref()
+            .map(|paths| history(paths, &root, &config.settings.history)),
         ..VaultOptions::default()
     };
-    let (vault, updates) = Vault::open_with(&target.vault, options)?;
+    let (vault, updates) = Vault::open_with(root.path(), options)?;
     let file = target
         .file
         .as_deref()
@@ -95,6 +96,20 @@ pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError
         paths,
     };
     Ok(Prepared { startup, config })
+}
+
+/// El historial del vault de `root`: en su carpeta de datos, que sale de su
+/// ruta canónica (06 §8), con la retención de `config.yaml`.
+fn history(paths: &Paths, root: &VaultRoot, retention: &HistoryRetention) -> HistoryOptions {
+    HistoryOptions {
+        dir: paths.vault_data(root.path()).join("history"),
+        retention: Retention {
+            keep_all: retention.keep_all(),
+            hourly: retention.hourly(),
+            daily: retention.daily(),
+            deleted: retention.deleted(),
+        },
+    }
 }
 
 /// El reloj de los frames; con `frame_log`, escribe ahí los tiempos de
@@ -148,4 +163,60 @@ fn load_config(paths: Option<&Paths>) -> Result<Config, Diagnostic> {
         }
     }
     Ok(loaded.value)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+    use std::time::Duration;
+
+    use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+
+    use super::*;
+
+    const DAY: Duration = Duration::from_hours(24);
+
+    #[test]
+    fn el_historial_va_en_la_carpeta_de_datos_de_la_ruta_canonica() {
+        let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+        let paths = Paths::under(data.path());
+        let real = dir.path().join("notas");
+        fs::create_dir(&real).unwrap();
+        symlink(&real, dir.path().join("enlace")).unwrap();
+        let retention = HistoryRetention::default();
+        let dir_of = |root: &Path| history(&paths, &VaultRoot::new(root).unwrap(), &retention).dir;
+
+        let expected = paths
+            .vault_data(&real.canonicalize().unwrap())
+            .join("history");
+        assert_eq!(dir_of(&real), expected);
+        assert_eq!(dir_of(&dir.path().join("enlace")), expected);
+        let moved = dir.path().join("movidas");
+        fs::rename(&real, &moved).unwrap();
+        assert_ne!(dir_of(&moved), expected, "un vault movido empieza de cero");
+    }
+
+    #[test]
+    fn la_retencion_de_la_config_pasa_a_duraciones() {
+        let data = TempDir::new().unwrap();
+        let root = VaultRoot::new(data.path()).unwrap();
+        let retention = HistoryRetention {
+            keep_all_hours: 6,
+            hourly_days: 7,
+            daily_days: Some(365),
+            deleted_days: 30,
+        };
+        let options = history(&Paths::under(data.path()), &root, &retention);
+        assert_eq!(
+            options.retention,
+            Retention {
+                keep_all: Duration::from_hours(6),
+                hourly: 7 * DAY,
+                daily: Some(365 * DAY),
+                deleted: 30 * DAY,
+            }
+        );
+    }
 }

@@ -10,15 +10,14 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::time::Duration;
 
-use metalmind_config::HistoryRetention;
 use metalmind_vault::{ChunkKind, DeletedNote, History, Pruned, VaultPath, Version};
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
-use support::history::{DAY, HOUR, contents, epoch, path};
+use support::history::{DAY, HOUR, RETENTION, contents, epoch, path};
 use tempfile::TempDir;
 
 fn history(dir: &TempDir) -> History {
-    History::new(dir.path(), HistoryRetention::default())
+    History::new(dir.path(), RETENTION)
 }
 
 /// Una edición chica sobre el texto anterior, como un guardado de verdad.
@@ -443,7 +442,7 @@ fn un_log_danado_no_frena_la_poda_de_las_demas() {
 #[test]
 fn leer_un_historial_que_no_existe_no_crea_nada() {
     let dir = TempDir::new().unwrap();
-    let history = History::new(dir.path().join("historial"), HistoryRetention::default());
+    let history = History::new(dir.path().join("historial"), RETENTION);
     assert_eq!(
         history.versions(&path("a.md")).unwrap(),
         Vec::<Version>::new()

@@ -9,14 +9,23 @@
 
 use std::cell::Cell;
 use std::fmt::Write as _;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use divan::Bencher;
-use metalmind_config::{HistoryRetention, Paths};
-use metalmind_vault::{History, HistoryOptions, SaveKind, Vault, VaultOptions, VaultPath};
+use metalmind_vault::{
+    History, HistoryOptions, Retention, SaveKind, Vault, VaultOptions, VaultPath,
+};
 use tempfile::TempDir;
 
 const LINES: [usize; 2] = [5_000, 50_000];
+
+/// La de 06 §3; ningún bench poda.
+const RETENTION: Retention = Retention {
+    keep_all: Duration::from_hours(24),
+    hourly: Duration::from_hours(30 * 24),
+    daily: None,
+    deleted: Duration::from_hours(90 * 24),
+};
 
 fn main() {
     divan::main();
@@ -53,8 +62,8 @@ fn guardar_desde_el_vault(bencher: Bencher, lines: usize) {
     let note = metalmind_perf::note(lines);
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let history = HistoryOptions {
-        paths: Paths::under(data.path()),
-        retention: HistoryRetention::default(),
+        dir: data.path().to_owned(),
+        retention: RETENTION,
     };
     let options = VaultOptions {
         history: Some(history),
@@ -78,7 +87,7 @@ fn primera_version(bencher: Bencher, lines: usize) {
     bencher
         .with_inputs(|| TempDir::new().unwrap())
         .bench_local_values(|dir| {
-            let history = History::new(dir.path(), HistoryRetention::default());
+            let history = History::new(dir.path(), RETENTION);
             history.record(&path, &note, SystemTime::now()).unwrap();
             dir
         });
@@ -91,7 +100,7 @@ fn version_con_una_linea_cambiada(bencher: Bencher, lines: usize) {
     let note = metalmind_perf::note(lines);
     let path = VaultPath::new("larga.md").unwrap();
     let dir = TempDir::new().unwrap();
-    let history = History::new(dir.path(), HistoryRetention::default());
+    let history = History::new(dir.path(), RETENTION);
     history.record(&path, &note, SystemTime::now()).unwrap();
     let edit = Cell::new(0);
     bencher
@@ -111,7 +120,7 @@ fn version_con_todo_cambiado(bencher: Bencher, lines: usize) {
     bencher
         .with_inputs(|| {
             let dir = TempDir::new().unwrap();
-            let history = History::new(dir.path(), HistoryRetention::default());
+            let history = History::new(dir.path(), RETENTION);
             history.record(&path, &note, SystemTime::now()).unwrap();
             (dir, history)
         })

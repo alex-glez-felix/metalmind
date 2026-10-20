@@ -91,12 +91,32 @@ impl Disk for VaultDisk {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::time::Duration;
 
-    use metalmind_config::{HistoryRetention, Paths};
-    use metalmind_vault::{History, HistoryOptions, VaultOptions, VaultPath, VersionKind};
+    use metalmind_vault::{
+        History, HistoryOptions, Retention, VaultOptions, VaultPath, VersionKind,
+    };
     use tempfile::TempDir;
 
     use super::*;
+
+    /// Ningún test poda: basta con que guarde todo.
+    const RETENTION: Retention = Retention {
+        keep_all: Duration::MAX,
+        hourly: Duration::MAX,
+        daily: None,
+        deleted: Duration::MAX,
+    };
+
+    fn options(history: &TempDir) -> VaultOptions {
+        VaultOptions {
+            history: Some(HistoryOptions {
+                dir: history.path().to_owned(),
+                retention: RETENTION,
+            }),
+            ..VaultOptions::default()
+        }
+    }
 
     #[test]
     fn una_nota_del_vault_deja_su_version_y_lo_de_fuera_no() {
@@ -105,14 +125,7 @@ mod tests {
             TempDir::new().unwrap(),
             TempDir::new().unwrap(),
         );
-        let options = VaultOptions {
-            history: Some(HistoryOptions {
-                paths: Paths::under(data.path()),
-                retention: HistoryRetention::default(),
-            }),
-            ..VaultOptions::default()
-        };
-        let (vault, _updates) = Vault::open_with(dir.path(), options).unwrap();
+        let (vault, _updates) = Vault::open_with(dir.path(), options(&data)).unwrap();
         let vault = Rc::new(vault);
         let disk = VaultDisk::new(Rc::clone(&vault));
         let note = dir.path().join("a.md");
@@ -136,14 +149,9 @@ mod tests {
             fs::read_to_string(outside.path().join("b.md")).unwrap(),
             "dos\n"
         );
-        let root = vault.root().to_owned();
         // Cerrar el vault registra las versiones que esperan.
         drop((disk, vault));
-        let paths = Paths::under(data.path());
-        let history = History::new(
-            paths.vault_data(&root).join("history"),
-            HistoryRetention::default(),
-        );
+        let history = History::new(data.path(), RETENTION);
         let versions = history.versions(&VaultPath::new("a.md").unwrap()).unwrap();
         assert_eq!(versions.len(), 1);
         assert_eq!(versions[0].kind, VersionKind::Autosaved);
@@ -170,15 +178,7 @@ mod tests {
         fs::write(dir.path().join("real.md"), "viejo\n").unwrap();
         symlink(dir.path().join("real.md"), dir.path().join("enlace.md")).unwrap();
         symlink(outside.path(), dir.path().join("fuera")).unwrap();
-        let options = VaultOptions {
-            history: Some(HistoryOptions {
-                paths: Paths::under(data.path()),
-                retention: HistoryRetention::default(),
-            }),
-            ..VaultOptions::default()
-        };
-        let (vault, _updates) = Vault::open_with(dir.path(), options).unwrap();
-        let root = vault.root().to_owned();
+        let (vault, _updates) = Vault::open_with(dir.path(), options(&data)).unwrap();
         let disk = VaultDisk::new(Rc::new(vault));
         disk.write(&dir.path().join("enlace.md"), "nuevo\n", SaveKind::Explicit)
             .unwrap();
@@ -199,10 +199,7 @@ mod tests {
             "b\n"
         );
         drop(disk);
-        let history = History::new(
-            Paths::under(data.path()).vault_data(&root).join("history"),
-            HistoryRetention::default(),
-        );
+        let history = History::new(data.path(), RETENTION);
         let real = history
             .versions(&VaultPath::new("real.md").unwrap())
             .unwrap();

@@ -12,20 +12,19 @@ use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::SystemTime;
 
-use metalmind_config::{HistoryRetention, Paths};
 use metalmind_vault::{
     History, HistoryOptions, SaveKind, Vault, VaultChange, VaultOptions, VaultPath, VaultUpdate,
     Version, VersionError, VersionId, VersionKind,
 };
 use pretty_assertions::assert_eq;
-use support::history::{HOUR, contents, epoch, path};
+use support::history::{HOUR, RETENTION, contents, epoch, path};
 use support::wait_for_changes;
 use tempfile::TempDir;
 
-fn open_vault(root: &Path, data: &Path) -> (Vault, Receiver<VaultUpdate>) {
+fn open_vault(root: &Path, history: &Path) -> (Vault, Receiver<VaultUpdate>) {
     let history = HistoryOptions {
-        paths: Paths::under(data),
-        retention: HistoryRetention::default(),
+        dir: history.to_owned(),
+        retention: RETENTION,
     };
     let options = VaultOptions {
         history: Some(history),
@@ -203,28 +202,6 @@ fn al_abrir_sigue_lo_que_paso_con_el_vault_cerrado() {
 }
 
 #[test]
-fn un_vault_movido_empieza_su_historial_de_cero() {
-    let (outer, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let old_root = outer.path().join("viejo");
-    fs::create_dir(&old_root).unwrap();
-    let old_root = old_root.canonicalize().unwrap();
-    {
-        let (vault, _updates) = open_vault(&old_root, data.path());
-        save(&vault, &path("a.md"), "uno");
-        save(&vault, &path("a.md"), "dos");
-    }
-    let new_root = outer.path().join("nuevo");
-    fs::rename(&old_root, &new_root).unwrap();
-    let new_root = new_root.canonicalize().unwrap();
-
-    let (vault, _updates) = open_vault(&new_root, data.path());
-    assert_eq!(
-        vault.history().unwrap().versions(&path("a.md")).unwrap(),
-        Vec::<Version>::new()
-    );
-}
-
-#[test]
 fn un_cambio_desde_fuera_tambien_es_una_version() {
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let note = path("a.md");
@@ -298,7 +275,7 @@ fn una_version_con_una_linea_cambiada_es_lineal() {
     let setup = |lines: usize| {
         let note = metalmind_perf::note(lines);
         let dir = TempDir::new().unwrap();
-        let history = History::new(dir.path(), HistoryRetention::default());
+        let history = History::new(dir.path(), RETENTION);
         history.record(&path("a.md"), &note, epoch()).unwrap();
         let middle = note[..note.len() / 2].rfind('\n').unwrap() + 1;
         let edited = format!("{}cambio {}", &note[..middle], &note[middle..]);
@@ -494,12 +471,7 @@ fn sin_historial_en_las_opciones_guardar_igual_escribe() {
 #[test]
 fn al_abrir_se_aplica_la_retencion() {
     let (dir, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
-    let history = History::new(
-        Paths::under(data.path())
-            .vault_data(&dir.path().canonicalize().unwrap())
-            .join("history"),
-        HistoryRetention::default(),
-    );
+    let history = History::new(data.path(), RETENTION);
     // Borrada hace mucho más de 90 días: la retención la olvida.
     history.record(&path("vieja.md"), "uno", epoch()).unwrap();
     history.mark_deleted(&path("vieja.md"), epoch()).unwrap();
@@ -518,11 +490,8 @@ fn al_abrir_se_aplica_la_retencion() {
 
 /// Toma el lock del historial como otro proceso que escribe en él (la CLI):
 /// mientras lo tenga, el hilo del vault espera al registrar una versión.
-fn lock_history(data: &Path, root: &Path) -> fs::File {
-    let lock = Paths::under(data)
-        .vault_data(&root.canonicalize().unwrap())
-        .join("history/lock");
-    let file = fs::File::open(lock).unwrap();
+fn lock_history(history: &Path) -> fs::File {
+    let file = fs::File::open(history.join("lock")).unwrap();
     rustix::fs::flock(&file, rustix::fs::FlockOperation::LockExclusive).unwrap();
     file
 }
@@ -542,7 +511,7 @@ fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
     // un cambio; el de `vault` lo entrega con el mismo debounce.
     let (_witness, witnessed) = Vault::open(dir.path()).unwrap();
 
-    let lock = lock_history(data.path(), dir.path());
+    let lock = lock_history(data.path());
     // El hilo se queda esperando el lock con este guardado, que el lote no toca.
     let untouched = vault
         .save(&c, "c".to_owned(), SaveKind::Explicit)

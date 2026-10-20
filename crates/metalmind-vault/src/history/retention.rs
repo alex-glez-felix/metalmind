@@ -4,13 +4,38 @@
 //! la hora que se repite cuenta como una sola.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use jiff::Timestamp;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
-use metalmind_config::HistoryRetention;
 
 use super::millis;
+
+/// Qué versiones de una nota sobreviven con el tiempo. Cada tramo empieza
+/// donde acaba el anterior: todas al principio, luego una por hora, luego una
+/// por día. La última versión de una nota viva se guarda siempre.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Retention {
+    /// Cuánto tiempo se guardan todas las versiones.
+    pub keep_all: Duration,
+    /// Hasta qué edad se guarda la última versión de cada hora.
+    pub hourly: Duration,
+    /// Hasta qué edad se guarda la última versión de cada día; `None` es
+    /// para siempre.
+    pub daily: Option<Duration>,
+    /// Cuánto se guarda la historia de una nota borrada.
+    pub deleted: Duration,
+}
+
+/// La de 06 §3, la que trae `config.yaml` por defecto.
+#[cfg(test)]
+pub(crate) const TEST_RETENTION: Retention = Retention {
+    keep_all: Duration::from_hours(24),
+    hourly: Duration::from_hours(30 * 24),
+    daily: None,
+    deleted: Duration::from_hours(90 * 24),
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Slot {
@@ -25,12 +50,12 @@ enum Slot {
 pub(super) fn keep(
     saved_at: &[i64],
     now: i64,
-    retention: &HistoryRetention,
+    retention: &Retention,
     zone: &TimeZone,
 ) -> Vec<bool> {
-    let keep_all = millis(retention.keep_all());
-    let hourly = millis(retention.hourly());
-    let daily = retention.daily().map(millis);
+    let keep_all = millis(retention.keep_all);
+    let hourly = millis(retention.hourly);
+    let daily = retention.daily.map(millis);
     let slot = |at: i64| {
         let age = now.saturating_sub(at);
         // Un instante fuera de lo que `jiff` representa no tiene hora local: se queda.
@@ -75,7 +100,7 @@ mod tests {
     const DAY_MS: i64 = 24 * HOUR_MS;
     const NOW: i64 = 400 * DAY_MS;
 
-    fn utc(saved: &[i64], now: i64, retention: &HistoryRetention) -> Vec<bool> {
+    fn utc(saved: &[i64], now: i64, retention: &Retention) -> Vec<bool> {
         keep(saved, now, retention, &TimeZone::UTC)
     }
 
@@ -101,7 +126,7 @@ mod tests {
             ago(2 * HOUR_MS + 1),
             ago(2 * HOUR_MS),
         ];
-        let kept = utc(&saved, NOW, &HistoryRetention::default());
+        let kept = utc(&saved, NOW, &TEST_RETENTION);
         assert_eq!(kept, [false, true, true, true, true]);
     }
 
@@ -109,12 +134,12 @@ mod tests {
     fn una_por_dia_despues_de_30_dias_y_la_ultima_siempre() {
         let day = |n: i64| NOW.div_euclid(DAY_MS) * DAY_MS - n * DAY_MS;
         let saved = [day(100) + 1_000, day(100) + 2_000, day(50) + 1_000, day(40)];
-        let kept = utc(&saved, NOW, &HistoryRetention::default());
+        let kept = utc(&saved, NOW, &TEST_RETENTION);
         assert_eq!(kept, [false, true, true, true]);
 
-        let limited = HistoryRetention {
-            daily_days: Some(45),
-            ..HistoryRetention::default()
+        let limited = Retention {
+            daily: Some(Duration::from_hours(45 * 24)),
+            ..TEST_RETENTION
         };
         assert_eq!(utc(&saved, NOW, &limited), [false, false, false, true]);
         assert_eq!(utc(&saved[..1], NOW, &limited), [true]);
@@ -123,7 +148,7 @@ mod tests {
     #[test]
     fn podar_dos_veces_da_lo_mismo() {
         let saved: Vec<i64> = (0..2_000).map(|n| ago(n * 37 * 60_000)).rev().collect();
-        let retention = HistoryRetention::default();
+        let retention = TEST_RETENTION;
         let kept = utc(&saved, NOW, &retention);
         let survivors: Vec<i64> = saved
             .iter()
@@ -145,7 +170,7 @@ mod tests {
             at("2026-10-25T03:10:00+01:00"),
         ];
         let now = at("2026-10-28T12:00:00+01:00");
-        let retention = HistoryRetention::default();
+        let retention = TEST_RETENTION;
         assert_eq!(
             keep(&saved, now, &retention, &central_europe()),
             [true, false, true, true]
@@ -162,7 +187,7 @@ mod tests {
             at("2026-11-03T00:30:00+01:00"),
         ];
         let now = at("2027-02-01T12:00:00+01:00");
-        let retention = HistoryRetention::default();
+        let retention = TEST_RETENTION;
         assert_eq!(
             keep(&saved, now, &retention, &central_europe()),
             [true, true]
