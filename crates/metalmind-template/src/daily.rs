@@ -3,6 +3,7 @@
 
 use jiff::Zoned;
 use metalmind_config::Daily;
+use metalmind_syntax::note_name;
 use metalmind_vault::tags::TagGraph;
 use metalmind_vault::{InvalidPath, VaultPath};
 
@@ -42,9 +43,9 @@ pub fn daily_note(
     // Solo se quita un `/` final: `/` o `//` tienen que fallar como absolutas.
     let folder = daily.folder.strip_suffix('/').unwrap_or(&daily.folder);
     let path = if daily.folder.is_empty() {
-        format!("{name}.md")
+        note_name::with_extension(&name)
     } else {
-        format!("{folder}/{name}.md")
+        note_name::with_extension(&format!("{folder}/{name}"))
     };
     let path = VaultPath::new(&path)?;
     let title = name.rsplit('/').next().unwrap_or(&name);
