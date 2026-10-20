@@ -186,7 +186,7 @@ fn visible(root: &Path, created: Created) -> Result<SavedAttachment, AttachmentE
 
 /// Si el walk del vault ve `path`: el mismo que arma el índice.
 fn is_visible(root: &Path, path: &VaultPath) -> bool {
-    scan_partial(root, std::slice::from_ref(path))
+    scan_partial(root, std::slice::from_ref(path), None)
         .entries
         .iter()
         .any(|(found, _)| found == path)
