@@ -26,7 +26,7 @@ use std::path::Path;
 use gungraun::prelude::*;
 use gungraun::{Callgrind, EventKind};
 use metalmind_perf::{NoteNames, linked_vault};
-use metalmind_vault::tags::{Scope, TagQuery, Tags};
+use metalmind_vault::tags::{Scope, TagCompletion, TagPlan, TagQuery, TagTree, Tags};
 use metalmind_vault::{
     Destination, EntryKind, LinkIndex, RenamePlan, Vault, VaultChange, VaultPath,
 };
@@ -216,19 +216,21 @@ fn tagged(notes: usize) -> (TempDir, Tags) {
 
 #[library_benchmark]
 #[bench::consulta_con_descendientes(args = (NOTES), setup = tagged)]
-fn tags_consulta((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
-    black_box((
-        TagQuery::parse("#t1 -#t3").query.notes(&tags).len(),
-        dir,
-        tags,
-    ))
+fn tags_consulta((dir, tags): (TempDir, Tags)) -> (TempDir, Tags) {
+    // Lo que sale toma prestado `tags`: no puede volver con él, y no se suelta.
+    std::mem::forget(black_box(TagQuery::parse("#t1 -#t3").query.notes(&tags)));
+    black_box((dir, tags))
 }
 
 #[library_benchmark]
 #[bench::entero(args = (NOTES, None), setup = tags_in)]
 #[bench::en_focus(args = (NOTES, Some("area-1/ #t1")), setup = tags_in)]
-fn tags_panel((dir, tags, scope): (TempDir, Tags, Scope)) -> (usize, TempDir, Tags) {
-    black_box((tags.tree(&scope.filter(&tags)).roots().len(), dir, tags))
+fn tags_panel((dir, tags, scope): (TempDir, Tags, Scope)) -> (TagTree, TempDir, Tags) {
+    let filter = scope.filter(&tags);
+    let tree = tags.tree(&filter);
+    // Toma prestado `tags`: no puede volver con él, y no se suelta.
+    std::mem::forget(filter);
+    black_box((tree, dir, tags))
 }
 
 fn tags_in(notes: usize, scope: Option<&str>) -> (TempDir, Tags, Scope) {
@@ -239,19 +241,16 @@ fn tags_in(notes: usize, scope: Option<&str>) -> (TempDir, Tags, Scope) {
 
 #[library_benchmark]
 #[bench::notas_5k(args = (NOTES), setup = tagged)]
-fn tags_candidatos_de_autocompletado((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
-    black_box((tags.completions().len(), dir, tags))
+fn tags_candidatos_de_autocompletado(
+    (dir, tags): (TempDir, Tags),
+) -> (Vec<TagCompletion>, TempDir, Tags) {
+    black_box((tags.completions(), dir, tags))
 }
 
 #[library_benchmark]
 #[bench::con_pagina(args = (NOTES), setup = tagged)]
-fn tags_plan_de_renombre((dir, tags): (TempDir, Tags)) -> (usize, TempDir, Tags) {
-    let edits = tags
-        .plan_rename("#t1", "#uno")
-        .unwrap()
-        .changes
-        .edit_count();
-    black_box((edits, dir, tags))
+fn tags_plan_de_renombre((dir, tags): (TempDir, Tags)) -> (TagPlan, TempDir, Tags) {
+    black_box((tags.plan_rename("#t1", "#uno").unwrap(), dir, tags))
 }
 
 #[library_benchmark]
