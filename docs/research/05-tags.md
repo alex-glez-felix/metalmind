@@ -13,8 +13,8 @@
 - **Se usa desde la UI**: clic derecho sobre un tag (en el panel o en el texto) cambia color, ícono, alias y padres, renombra, fusiona y abre su página. Metalmind crea la página sola; el archivo es el almacenamiento, no la interfaz (§3).
 - **Panel lateral** con dos vistas, tags (en grafo por `parents`, con conteo) y carpetas, y una tecla para cambiar. Abre en tags; `T` cambia a carpetas.
 - **Modo focus**: enfocar toda la app (finder, búsqueda, panel, backlinks) en una carpeta, un tag o una consulta de tags. `:focus #rust`, `:focus proyectos/`, o desde el panel.
-- **Consultas**: `#rust #nota -#archivado`. Espacio es "y", `-` es "no", un tag incluye a sus alias y a sus descendientes por `parents`. Nada más.
-- **Operaciones**: autocompletado de `#`, renombrar un tag o un alias en todo el vault (con su página y los `parents`/`aliases` que lo nombran, con vista previa y deshacer), pasar un alias al nombre principal, fusionar dos tags.
+- **Consultas**: `#rust #nota -#archivado`. Espacio es "y", `-` es "no", un tag incluye a sus alias y a sus descendientes por `parents`. La forma `clave:valor` queda reservada para filtros futuros (§4).
+- **Operaciones**: autocompletado de `#`, renombrar un tag o un alias en todo el vault (con su página y los `parents`/`aliases` que lo nombran, con vista previa y deshacer), quitar un tag de todo el vault con el mismo flujo, pasar un alias al nombre principal, fusionar dos tags.
 - **Solo los tags tienen alias.** Se declaran en la página del tag; una nota normal no tiene `aliases`.
 - `#Rust`, `#rust` y `#RUST` son el mismo tag, y se muestra como lo escribe la mayoría; `#canción` y `#cancion` son distintos (§6).
 
@@ -37,6 +37,7 @@ Reglas del texto (las del scanner de `metalmind-syntax`, 03 §2):
 - Letras, números, `_` y `-`; fuera de ASCII, letras, marcas, números y símbolos (emoji incluidos). La puntuación lo corta: `#rust.` es `#rust`.
 - **Decisión: puede ser solo números.** `#2024`, `#1` y `#2024-10` son tags, porque en Metalmind los tags son el eje de organización y `#2024` sirve para agrupar un año; la regla contraria venía de Obsidian. Costo aceptado: en texto como "PR #12", `#12` se vuelve tag.
 - `# Título` es un heading, no un tag: el espacio lo decide.
+- **Un tag nunca lleva espacios**, ni en el texto, ni en `tags:`, ni con una sintaxis de cierre como el `#tag con espacios#` de Bear. Decidido el 2026-10-24 ([07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 2): ninguna otra herramienta la lee, y la gramática no se cambia después de publicarla.
 
 Reglas del frontmatter:
 
@@ -199,6 +200,8 @@ Sintaxis mínima, la misma en `space f`, en `:focus` y en el filtro del panel:
 - Las páginas de tag no son resultados, salvo que se pida (§7).
 - **No hay "o"**, ni paréntesis, ni comodines. Cubren casos reales pero convierten esto en un lenguaje; si hacen falta, se ven junto con las vistas guardadas (`IDEAS.md`).
 - Un tag que no existe en el vault no es error: da cero resultados y el prompt lo marca en el color de aviso del tema.
+- **La forma `clave:valor` está reservada** (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 4): `modified:7d`, `has:adjunto` y cualquier otra palabra con `:` son filtros, no texto para el fuzzy. Hoy no hay ninguno implementado, así que una palabra así es un error de consulta que el prompt marca; cuando llegue cada filtro, ninguna vista guardada ([06](06-decisiones-de-fondo.md) §10) ni salida `--json` cambia de significado. "Sin tags" ya existe como `-#`.
+- **Fechas** (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 3): "modificada" es el `mtime` del archivo; "creada" sale solo del campo `created:` del frontmatter (que el índice guarda entero, 03 §4), y una nota sin él no entra en un filtro por creación. Metalmind nunca escribe `created:` por su cuenta: sería un dato en cada nota, como el ID que 06 §1 descartó.
 - En código, `TagQuery { include: Vec<TagKey>, exclude: Vec<TagKey>, untagged: bool }` y `Scope { folder: Option<VaultPath>, tags: TagQuery }`, con `fn notes(&self, &TagIndex, &TagGraph, &VaultIndex) -> NoteSet`. El parseo es una función pura con tabla de casos en `insta`.
 
 ## 5. Operaciones
@@ -229,6 +232,14 @@ Detalles:
 - **Buffers abiertos con cambios sin guardar**: el cambio se aplica al buffer como una transacción (entra en su undo) y el archivo queda modificado sin guardar; no se escribe el disco por debajo del buffer. Buffers abiertos sin cambios: se escribe el disco y el buffer se recarga.
 - **Deshacer**: la operación entera, renombre de la página incluido, es una sola transacción de vault, con el contenido previo de cada archivo tocado guardado en memoria durante la sesión. `:tagundo` (`tags::undo_rename`) o el botón "Deshacer" del aviso que queda al aplicar la revierte. Si un archivo cambió después del renombre, ese archivo no se revierte y se lista; los demás sí. Es el mismo motor que necesita M3 para "renombrar nota actualiza links" (03 §4), y se diseña una vez para los dos.
 - **Fallo a medias**: cada archivo es atómico, el conjunto no. Si una escritura falla, se para, se informa qué quedó escrito y se ofrece deshacer lo aplicado.
+
+### Quitar un tag de todo el vault
+
+`:tagremove #a` (`tags::remove`) o "Quitar de todas las notas" en el menú contextual borra el tag de cada nota que lo lleva, sin borrar ninguna nota. Es renombrar hacia "nada", con el mismo flujo de tres pasos, la misma vista previa y el mismo deshacer. Se quitan todas las variantes de mayúsculas y las ocurrencias escritas con un alias, porque un alias vale por su tag (§4). En `tags:` se borra el valor con el rango de borrado que guarda el scanner (03 §2); en el texto, el `#nombre`, y la vista previa enseña cómo queda cada línea. La página `tags/a.md` y los `parents` que la nombran no se tocan: borrarlos es otra acción. Decidido el 2026-10-24 para M2.5 ([07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 8).
+
+### Aviso al crear un tag nuevo
+
+Escribir un tag que el vault todavía no tiene (ninguna nota, página ni alias lo usa) lo marca en el color de aviso del tema, con un tooltip que dice que es nuevo. No impide nada: evita `#rsut` cuando ya existe `#rust`, junto con el autocompletado. Viene encendido y se apaga en los ajustes. Decidido el 2026-10-24 ([07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 9); no entra en M2.5.
 
 ### Renombrar un alias
 
