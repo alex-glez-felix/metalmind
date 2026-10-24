@@ -10,11 +10,11 @@
 | 1 | La identidad de una nota es su **ruta**; sin ID en el frontmatter | Índice e historial siguen los renombres, también los que llegan por el watcher como borrar + crear |
 | 2 | Celular: quizá algún día una app de captura; fuera de alcance | Núcleo sin GPUI ni supuestos de escritorio; archivos planos; cambios externos en cualquier momento |
 | 3 | Historial de versiones por nota, escondido (`:history`) | Vive en el directorio de **datos**, por vault; no depende de git |
-| 4 | Cifrado de notas: deseable, sin fecha | Nada derivado guarda en claro el contenido de una nota cifrada |
+| 4 | Cifrado de notas: deseable, sin fecha; la ruta queda en claro y las notas cifradas van ocultas en la UI | Nada derivado guarda en claro el contenido de una nota cifrada, tampoco sus tags, sus links ni su historial |
 | 5 | Sin sistema de tareas | No indexar tareas "por si acaso" |
 | 6 | Una carpeta de adjuntos por vault, `ctrl-v` pega imágenes | Renombrar o borrar una nota no toca sus adjuntos |
 | 7 | CLI de primera clase (`metalmind add`, `search`, `tags`, `--json`) | Todo lo del vault funciona sin ventana, desde el núcleo |
-| 8 | Un vault abierto a la vez | Caché, historial y estado de UI van por vault |
+| 8 | Un vault abierto a la vez | Caché, historial y estado de UI van por vault; un vault movido puede recuperar su historial |
 | 9 | Buzón = las notas sin tags | La captura deja la nota sin tags; `TagQuery` sabe decir "sin tags" |
 | 10 | Vistas guardadas: consultas de tags con nombre, en el panel | Se guardan con el vault, no en la config global |
 | 11 | Daily notes, plantillas, grafo, temas | Ninguna |
@@ -86,12 +86,17 @@ Se guarda en el directorio de **datos** (`$XDG_DATA_HOME/metalmind/`, `Paths::da
 - Los logs llevan rutas, tamaños y errores, **nunca contenido** de notas, cifradas o no. Es la única forma de que la regla se cumpla sin acordarse caso por caso.
 - Lo que solo vive en memoria mientras la nota está abierta y descifrada no tiene esta restricción.
 - El historial (§3) ya tiene ese punto: todo contenido pasa a disco por un códec (`metalmind-vault`, `history/codec.rs`) y cada registro guarda cuál usó. Una nota cifrada será un códec que cifra después de comprimir, así que ni snapshots ni deltas quedan en claro; los deltas se calculan en memoria. El hash que identifica cada versión tendrá que ser con clave (`blake3::keyed_hash`) para no delatar un contenido conocido.
+- Al cifrar una nota que ya tiene historial, sus versiones se vuelven a cifrar; ninguna queda en claro ni se borra (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 7).
+
+Decidido el 2026-10-24 ([07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 6):
+
+- **La ruta queda en claro**, en disco y en git: carpeta y nombre de una nota cifrada se ven. Es el costo aceptado de que la ruta sea la identidad (§1); esconderla exigiría nombres opacos. Los tags, los links y el frontmatter van dentro del cifrado, así que de una nota cifrada cerrada el índice solo sabe la ruta.
+- **Ocultas por defecto en la UI**: el árbol, el finder, la búsqueda y el picker de links no muestran las notas cifradas. Una acción con nombre, con su toggle en la UI, las muestra, y se vuelven a ocultar solas pasado un tiempo, igual que se vence la sesión de desbloqueo (07 §2.7).
 
 Abierto **(propuesta)**:
 
 - Formato: [`age`](https://age-encryption.org/) (archivo `nota.md.age`, legible con la herramienta estándar fuera de Metalmind), frente a algo propio. `age` mantiene la regla de que cualquier herramienta puede leer el vault.
 - Unidad: la nota o la carpeta. Por carpeta es más simple de usar (todo lo de `privado/` va cifrado) pero cambia qué pasa al mover una nota dentro o fuera.
-- Qué ve el índice de una nota cifrada cerrada: solo la ruta, sin tags ni links, es lo más simple y lo único que cumple la regla sin una caché cifrada.
 
 ## 5. Sin sistema de tareas
 
@@ -153,7 +158,7 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 - El vault es un valor que se crea y se suelta, no un global: `:vault` tiene que poder cerrar uno y abrir otro en el mismo proceso sin que nada quede apuntando al anterior.
 - Config: la global y encima la del vault (`<vault>/.metalmind/`, 03 §5).
 - El último vault abierto se guarda en `state`. Prioridad al arrancar (decidido por el autor el 2026-10-18, en la PR #44): el argumento (o `--vault` en los subcomandos de la CLI, §7), luego la variable de entorno `METALMIND_VAULT`, luego el último abierto, luego `vault:` de `config.yaml` (hecho en M2, 03 §8).
-- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral; `Paths::vault_data`, con la misma clave, para el historial de §3). Si se mueve el vault, empieza de cero. Nada de identificador dentro del vault (`<vault>/.metalmind/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
+- Cómo se identifica un vault para su directorio en `data`/`cache`/`state` (decidido por el autor el 2026-10-18, en la PR #44): por su ruta canónica, con la carpeta `<nombre>-<hash>`: el nombre de la carpeta del vault para reconocerla a ojo y un FNV-1a de 64 bits de la ruta canónica para que dos vaults no choquen (`Paths::vault_state`, hecho en M2 para los recientes del finder y el estado del panel lateral; `Paths::vault_data`, con la misma clave, para el historial de §3). Si se mueve el vault, la clave cambia; al abrir un vault que parece movido, Metalmind ofrece reasignarle el historial del directorio viejo (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 18). Cómo se reconoce "parece movido" **(propuesta)**: no tiene directorio en `data` y hay otro con el mismo `<nombre>` cuyas rutas de historial coinciden con las notas del vault. Nada de identificador dentro del vault (`<vault>/.metalmind/`): sobreviviría a mover la carpeta, pero choca con la sincronización, porque deja de ser único en cuanto el vault se copia a otra máquina con Syncthing.
 
 ## 9. Buzón
 
