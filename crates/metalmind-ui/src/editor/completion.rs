@@ -71,9 +71,19 @@ impl Editor {
         key_context
     }
 
+    /// Tras cualquier cambio del workspace o del vault, la lista abierta
+    /// sigue al tag que se está escribiendo con los tags de ahora, o se
+    /// cierra.
+    pub(super) fn refresh_completion(&mut self, cx: &App) {
+        if self.completion.is_open() {
+            self.update_completion(cx);
+        }
+    }
+
     /// Tras lo tecleado: abre, filtra o cierra la lista según el tag que se
     /// está escribiendo. `aliases` y `parents` solo nombran tags en una
-    /// página de tag.
+    /// página de tag. Si lo escrito y los tags no cambiaron, la lista se
+    /// queda como está, con su fila elegida.
     pub(super) fn update_completion(&mut self, cx: &App) {
         let typed = self
             .workspace
@@ -94,6 +104,11 @@ impl Editor {
             return;
         }
         let candidates = self.completion.candidates(tags);
+        if (self.completion.list.as_ref())
+            .is_some_and(|list| list.is_for(&candidates, &typed.typed, typed.place))
+        {
+            return;
+        }
         self.completion.list = TagCompletions::open(
             candidates,
             &typed.typed,
@@ -108,14 +123,9 @@ impl Editor {
         let Some(list) = self.completion.list.take() else {
             return;
         };
-        let accepted = list.accept();
+        let text = list.accept();
         let result = self.update_workspace(cx, |workspace, pane, cx| {
-            workspace.complete_tag(
-                pane,
-                &accepted.typed,
-                &accepted.text,
-                &mut SystemClipboard(cx),
-            )
+            workspace.complete_tag(pane, &text, &mut SystemClipboard(cx))
         });
         if let Err(error) = result {
             self.report(&error, cx);

@@ -55,13 +55,8 @@ fn los_que_empiezan_con_lo_escrito_van_primero() {
 fn un_alias_encuentra_su_tag_y_acepta_su_nombre() {
     assert_eq!(shown("rs"), ["Rust (rs)"]);
     let list = open("rs", TagPlace::Inline).unwrap();
-    assert_eq!(
-        list.accept(),
-        Accepted {
-            typed: "rs".to_owned(),
-            text: "Rust".to_owned(),
-        }
-    );
+    assert_eq!(list.typed(), "rs");
+    assert_eq!(list.accept(), "Rust");
 }
 
 /// Si el nombre y un alias coinciden, se muestra por el nombre.
@@ -88,11 +83,8 @@ fn sin_coincidencias_no_hay_lista() {
 #[test]
 fn en_el_frontmatter_acepta_un_escalar_de_yaml() {
     let list = open("202", TagPlace::Tags).unwrap();
-    assert_eq!(
-        list.accept().text,
-        metalmind_vault::tags::yaml_scalar("2024")
-    );
-    assert_ne!(list.accept().text, "2024");
+    assert_eq!(list.accept(), metalmind_vault::tags::yaml_scalar("2024"));
+    assert_ne!(list.accept(), "2024");
 }
 
 #[test]
@@ -103,7 +95,25 @@ fn elegir_da_la_vuelta() {
     list.select_next();
     assert_eq!(list.selected(), 0);
     list.select_next();
-    assert_eq!(list.accept().text, "rueda");
+    assert_eq!(list.accept(), "rueda");
     list.select(10);
     assert_eq!(list.selected(), 2);
+}
+
+/// Solo es la misma lista con lo mismo escrito, en el mismo lugar y entre
+/// los mismos tags: si el vault trae otros, se abre de nuevo.
+#[test]
+fn es_la_misma_lista_solo_con_lo_mismo() {
+    let candidates = vault();
+    let list = TagCompletions::open(
+        Arc::clone(&candidates),
+        "ru",
+        TagPlace::Inline,
+        &mut FuzzyMatcher::text(),
+    )
+    .unwrap();
+    assert!(list.is_for(&candidates, "ru", TagPlace::Inline));
+    assert!(!list.is_for(&candidates, "rue", TagPlace::Inline));
+    assert!(!list.is_for(&candidates, "ru", TagPlace::Tags));
+    assert!(!list.is_for(&vault(), "ru", TagPlace::Inline));
 }

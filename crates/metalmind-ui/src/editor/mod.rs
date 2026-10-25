@@ -93,9 +93,15 @@ impl Editor {
         pane: PaneId,
         cx: &mut Context<Self>,
     ) -> Self {
-        let repaint = cx.observe(&workspace, |_, _, cx| cx.notify());
-        // Una nota nueva puede resolver un link que se ve.
-        let vault_changed = cx.subscribe(&session, |_, _, _: &VaultChanged, cx| cx.notify());
+        let repaint = cx.observe(&workspace, |editor, _, cx| {
+            editor.refresh_completion(cx);
+            cx.notify();
+        });
+        // Una nota nueva puede resolver un link que se ve o traer otros tags.
+        let vault_changed = cx.subscribe(&session, |editor, _, _: &VaultChanged, cx| {
+            editor.refresh_completion(cx);
+            cx.notify();
+        });
         // Llegó la imagen de una fórmula.
         let formulas_ready = cx.observe(&formulas, |_, _, cx| cx.notify());
         Self {

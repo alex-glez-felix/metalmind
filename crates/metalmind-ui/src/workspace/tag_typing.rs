@@ -45,20 +45,23 @@ impl Workspace {
         }))
     }
 
-    /// Cambia lo escrito del nombre (`typed`) por `text`, como si se
-    /// tecleara: entra en el mismo paso de undo que el resto de la pasada
-    /// por Insert y `.` lo repite.
+    /// Cambia lo escrito del tag que se está escribiendo por `text`, como
+    /// si se tecleara: entra en el mismo paso de undo que el resto de la
+    /// pasada por Insert y `.` lo repite. Sin tag a medio escribir
+    /// ([`Workspace::typed_tag`]), no hace nada.
     ///
     /// # Errors
     /// Si `pane` no existe o una edición no cae en el buffer.
     pub fn complete_tag(
         &mut self,
         pane: PaneId,
-        typed: &str,
         text: &str,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
-        for _ in typed.chars() {
+        let Some(typed) = self.typed_tag(pane)? else {
+            return Ok(());
+        };
+        for _ in typed.typed.chars() {
             self.feed(pane, Key::Backspace, clipboard)?;
         }
         self.type_text(pane, text, clipboard)?;
