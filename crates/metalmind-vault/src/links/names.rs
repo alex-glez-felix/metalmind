@@ -98,21 +98,18 @@ impl Names {
     /// `from` a `to`. Solo copia las claves que cambian.
     pub fn renamed(&self, moved: &[VaultPath], from: &VaultPath, to: &VaultPath) -> Overlay<'_> {
         let mut changed: HashMap<String, KeyFiles> = HashMap::new();
-        let mut added = Vec::new();
         for old in moved {
             let new = old.rebase(from, to).unwrap_or_else(|| old.clone());
             for key in path_keys(old.as_str()) {
                 self.changed_entry(&mut changed, key).remove(old);
             }
             for key in path_keys(new.as_str()) {
-                self.changed_entry(&mut changed, key.clone()).insert(&new);
-                added.push(key);
+                self.changed_entry(&mut changed, key).insert(&new);
             }
         }
         Overlay {
             base: self,
             changed,
-            added,
         }
     }
 
@@ -125,7 +122,6 @@ impl Names {
         Overlay {
             base: self,
             changed,
-            added: Vec::new(),
         }
     }
 
@@ -146,7 +142,6 @@ impl Names {
 pub(super) struct Overlay<'a> {
     base: &'a Names,
     changed: HashMap<String, KeyFiles>,
-    added: Vec<String>,
 }
 
 impl Overlay<'_> {
@@ -158,9 +153,10 @@ impl Overlay<'_> {
         resolve_with(lookup, source, target)
     }
 
-    /// Las claves de las rutas nuevas.
-    pub fn added_keys(&self) -> impl Iterator<Item = &String> {
-        self.added.iter()
+    /// Las claves que ganan o pierden archivos: un link con otra clave
+    /// resuelve igual que en la base.
+    pub fn changed_keys(&self) -> impl Iterator<Item = &String> {
+        self.changed.keys()
     }
 }
 
