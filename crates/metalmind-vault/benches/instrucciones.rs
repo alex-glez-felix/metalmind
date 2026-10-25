@@ -200,14 +200,20 @@ fn adjuntos_huerfanos((dir, vault): (TempDir, Vault)) -> (Vec<VaultPath>, TempDi
     black_box((vault.orphan_attachments(), dir, vault))
 }
 
-/// Una página de tag cada 25 notas, como `benches/tags.rs`.
+/// Una página de tag cada 25 notas, como `benches/tags.rs`. El vault se abre
+/// y se cierra en otro hilo: lo que suelta no queda en la arena de malloc del
+/// hilo medido, donde según cómo se turnaran los hilos costaba hasta 19 % más.
 fn tagged(notes: usize) -> (TempDir, Tags) {
-    let (dir, vault) = opened(|root| {
-        metalmind_perf::write_files(root, &metalmind_perf::tagged_vault(notes, notes / 25))
-            .unwrap();
-    });
-    let tags = Tags::clone(&vault.tags());
-    (dir, tags)
+    std::thread::spawn(move || {
+        let (dir, vault) = opened(|root| {
+            metalmind_perf::write_files(root, &metalmind_perf::tagged_vault(notes, notes / 25))
+                .unwrap();
+        });
+        let tags = Tags::clone(&vault.tags());
+        (dir, tags)
+    })
+    .join()
+    .unwrap()
 }
 
 #[library_benchmark]
