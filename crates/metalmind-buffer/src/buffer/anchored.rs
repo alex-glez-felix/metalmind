@@ -59,8 +59,7 @@ impl Buffer {
     /// # Errors
     /// Si `offset` no cae en un límite de carácter del texto.
     pub fn point_at(&self, offset: ByteOffset) -> Result<Point, BufferError> {
-        self.check_range(&(offset..offset))?;
-        Ok(Point::of(&self.rope, offset.get()))
+        Ok(self.spots(&(offset..offset))?.0.point)
     }
 
     /// El offset de `point`, dentro del texto: una línea de más es la
