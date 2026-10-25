@@ -3,16 +3,18 @@ use std::ops::Range;
 use crate::Problem;
 use crate::code::{line_end, line_start};
 
+mod property;
 mod value;
 mod yaml;
 
+pub use property::{Property, PropertyValue};
 use value::Place;
 pub use value::Value;
 use yaml::{Field, Fields, Item, ReadError};
 
-/// El bloque `---` … `---` al principio de la nota. Solo se leen los campos
-/// que Metalmind entiende, cada uno con su rango para reescribirlo sin tocar el
-/// resto del YAML del usuario.
+/// El bloque `---` … `---` al principio de la nota: entero en
+/// [`Frontmatter::properties`] y, con su rango para reescribirlos sin tocar
+/// el resto del YAML del usuario, los campos que Metalmind entiende.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Frontmatter {
     /// Desde el primer `---` hasta el fin de la línea del `---` de cierre.
@@ -35,6 +37,9 @@ pub struct Frontmatter {
     /// clave al principio de su línea: solo así se puede cambiar o agregar un
     /// campo sin tocar los demás.
     pub entries: Option<Vec<Entry>>,
+    /// Cada clave del primer nivel con su valor, en orden; vacío si el YAML
+    /// no se pudo leer o no es un mapa.
+    pub properties: Vec<Property>,
 }
 
 /// Una clave del primer nivel del frontmatter y su valor.
@@ -116,6 +121,7 @@ impl Frontmatter {
 
     fn read_fields(&mut self, text: &str, fields: Fields, problems: &mut Vec<Problem>) {
         self.entries = fields.keys.and_then(|keys| entries(text, &self.yaml, keys));
+        self.properties = fields.properties;
         let mut reader = FieldReader {
             text,
             offset: self.yaml.start,

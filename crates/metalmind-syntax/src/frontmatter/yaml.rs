@@ -1,6 +1,7 @@
-//! Los campos del frontmatter que Metalmind entiende, leídos con serde-saphyr
-//! (YAML 1.2). Se lee a mano con `deserialize_any` para que un campo de un
-//! tipo raro solo invalide ese campo y no todo el frontmatter.
+//! El frontmatter leído con serde-saphyr (YAML 1.2): cada valor entero y,
+//! con su rango, los campos que Metalmind entiende. Se lee a mano con
+//! `deserialize_any` para que un campo de un tipo raro solo invalide ese
+//! campo y no todo el frontmatter.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -12,6 +13,8 @@ use serde_saphyr::localizer::Localizer;
 use serde_saphyr::{
     Error, Location, MessageFormatter, SnippetMode, Span, Spanned, UserMessageFormatter,
 };
+
+use super::property::{Property, PropertyValue};
 
 /// Los escalares de YAML 1.2 como texto, envueltos con `$wrap`.
 macro_rules! visit_scalars {
@@ -67,6 +70,8 @@ pub(super) struct Fields {
     /// Las claves del primer nivel, en orden; `None` si alguna no es un
     /// escalar (`? [a]`).
     pub keys: Option<Vec<Item>>,
+    /// Las de clave escalar con su valor, en orden.
+    pub properties: Vec<Property>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -90,6 +95,7 @@ pub(super) fn read(yaml: &str) -> Result<Fields, ReadError> {
         color: field(fields.color),
         icon: field(fields.icon),
         template: field(fields.template),
+        properties: fields.properties,
         keys: fields
             .keys
             .into_iter()
@@ -178,41 +184,37 @@ struct RawFields {
     icon: Option<RawField>,
     template: Option<RawField>,
     keys: Vec<Spanned<Scalar>>,
+    properties: Vec<Property>,
 }
 
 /// El valor de un campo y dónde está.
 struct RawField {
-    shape: Shape,
+    node: Node,
     span: Span,
 }
 
-enum Shape {
-    Null,
-    List(Vec<Spanned<Scalar>>),
-    Text(String),
-    Invalid,
-}
-
 impl RawField {
+    /// Un elemento anidado de una lista (`[a, [b]]`) no aporta nada y se salta.
     fn into_field(self, yaml: &str) -> Field {
-        match self.shape {
-            Shape::List(items) => Field::List(
+        match self.node {
+            Node::List(items) => Field::List(
                 items
                     .into_iter()
-                    .filter_map(|item| {
-                        Some(Item {
-                            text: item.value.0?,
+                    .filter_map(|item| match item.value {
+                        Node::Scalar(text) => Some(Item {
+                            text,
                             span: byte_range(yaml, item.referenced.span()),
-                        })
+                        }),
+                        Node::Null | Node::List(_) | Node::Map(_) => None,
                     })
                     .collect(),
             ),
-            Shape::Text(text) => Field::Text(Item {
+            Node::Scalar(text) => Field::Text(Item {
                 text,
                 span: byte_range(yaml, self.span),
             }),
-            Shape::Null => Field::Null,
-            Shape::Invalid => Field::Invalid,
+            Node::Null => Field::Null,
+            Node::Map(_) => Field::Invalid,
         }
     }
 }
@@ -251,22 +253,26 @@ impl<'de> Visitor<'de> for DocumentVisitor {
         while let Some(key) = map.next_key::<Spanned<Scalar>>()? {
             let name = key.value.0.clone();
             fields.keys.push(key);
-            let slot = match name.as_deref() {
-                Some("tags") => &mut fields.tags,
-                Some("aliases") => &mut fields.aliases,
-                Some("parents") => &mut fields.parents,
-                Some("cssclasses") => &mut fields.cssclasses,
-                Some("color") => &mut fields.color,
-                Some("icon") => &mut fields.icon,
-                Some("template") => &mut fields.template,
-                _ => {
-                    map.next_value::<IgnoredAny>()?;
-                    continue;
-                }
+            let value: Spanned<Node> = map.next_value()?;
+            let Some(name) = name else {
+                continue;
             };
-            let value: Spanned<Shape> = map.next_value()?;
+            fields.properties.push(Property {
+                key: name.clone(),
+                value: value.value.to_property(),
+            });
+            let slot = match name.as_str() {
+                "tags" => &mut fields.tags,
+                "aliases" => &mut fields.aliases,
+                "parents" => &mut fields.parents,
+                "cssclasses" => &mut fields.cssclasses,
+                "color" => &mut fields.color,
+                "icon" => &mut fields.icon,
+                "template" => &mut fields.template,
+                _ => continue,
+            };
             *slot = Some(RawField {
-                shape: value.value,
+                node: value.value,
                 span: value.referenced.span(),
             });
         }
@@ -279,42 +285,78 @@ impl<'de> Visitor<'de> for DocumentVisitor {
     }
 }
 
-impl<'de> Deserialize<'de> for Shape {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_any(ShapeVisitor)
+/// Un valor cualquiera, con el rango de cada elemento de una lista: de ahí
+/// salen tanto la [`Property`] como el campo que Metalmind entiende.
+enum Node {
+    Null,
+    Scalar(String),
+    List(Vec<Spanned<Node>>),
+    /// Las claves que no son un escalar quedan como `None`.
+    Map(Vec<(Option<String>, Node)>),
+}
+
+impl Node {
+    fn to_property(&self) -> PropertyValue {
+        match self {
+            Self::Null => PropertyValue::Null,
+            Self::Scalar(text) => PropertyValue::Text(text.clone()),
+            Self::List(items) => {
+                PropertyValue::List(items.iter().map(|item| item.value.to_property()).collect())
+            }
+            Self::Map(entries) => PropertyValue::Map(
+                entries
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        Some(Property {
+                            key: key.clone()?,
+                            value: value.to_property(),
+                        })
+                    })
+                    .collect(),
+            ),
+        }
     }
 }
 
-struct ShapeVisitor;
+impl<'de> Deserialize<'de> for Node {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(NodeVisitor)
+    }
+}
 
-impl<'de> Visitor<'de> for ShapeVisitor {
-    type Value = Shape;
+struct NodeVisitor;
 
-    visit_scalars!(Shape, Shape::Text);
+impl<'de> Visitor<'de> for NodeVisitor {
+    type Value = Node;
+
+    visit_scalars!(Node, Node::Scalar);
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("una lista o un texto")
+        f.write_str("un valor de YAML")
     }
 
-    fn visit_unit<E: de::Error>(self) -> Result<Shape, E> {
-        Ok(Shape::Null)
+    fn visit_unit<E: de::Error>(self) -> Result<Node, E> {
+        Ok(Node::Null)
     }
 
-    fn visit_none<E: de::Error>(self) -> Result<Shape, E> {
+    fn visit_none<E: de::Error>(self) -> Result<Node, E> {
         self.visit_unit()
     }
 
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Shape, A::Error> {
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Node, A::Error> {
         let mut items = Vec::new();
         while let Some(item) = seq.next_element()? {
             items.push(item);
         }
-        Ok(Shape::List(items))
+        Ok(Node::List(items))
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Shape, A::Error> {
-        IgnoredAny.visit_map(map)?;
-        Ok(Shape::Invalid)
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Node, A::Error> {
+        let mut entries = Vec::new();
+        while let Some(Scalar(key)) = map.next_key()? {
+            entries.push((key, map.next_value()?));
+        }
+        Ok(Node::Map(entries))
     }
 }
 
@@ -415,6 +457,49 @@ mod tests {
                 text: "x".into(),
                 span: x..x + 1
             }]))
+        );
+    }
+
+    fn text(text: &str) -> PropertyValue {
+        PropertyValue::Text(text.to_owned())
+    }
+
+    fn property(key: &str, value: PropertyValue) -> Property {
+        Property {
+            key: key.to_owned(),
+            value,
+        }
+    }
+
+    /// Cada clave escalar con su valor entero, también las que Metalmind no
+    /// entiende y las de tipos que invalidan un campo suyo.
+    #[test]
+    fn every_key_keeps_its_whole_value() {
+        let yaml = "título: Ñandú\nfecha: 2024-10-01\nlisto: true\n? [complex]\n: x\n\
+                    vacío:\ntags: [a, [b], ~]\nautor: {nombre: Ana, 3: tres, ? [x]: y}\n\
+                    ref: &r 7\notra: *r\n";
+        let properties = read(yaml).unwrap().properties;
+        let list = PropertyValue::List(vec![
+            text("a"),
+            PropertyValue::List(vec![text("b")]),
+            PropertyValue::Null,
+        ]);
+        let author = PropertyValue::Map(vec![
+            property("nombre", text("Ana")),
+            property("3", text("tres")),
+        ]);
+        assert_eq!(
+            properties,
+            [
+                property("título", text("Ñandú")),
+                property("fecha", text("2024-10-01")),
+                property("listo", text("true")),
+                property("vacío", PropertyValue::Null),
+                property("tags", list),
+                property("autor", author),
+                property("ref", text("7")),
+                property("otra", text("7")),
+            ]
         );
     }
 

@@ -1,12 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Arc;
+
+use metalmind_syntax::Property;
 
 use crate::path::VaultPath;
 use crate::tags::key::TagKey;
 use crate::tags::note::NoteTags;
 
 /// Lo que las notas escriben: qué notas llevan cada tag, y con qué
-/// ocurrencias, para renombrar sin reescanear. Las páginas de tag guardan sus
-/// ocurrencias (se reescriben al renombrar) pero no cuentan en `by_tag`.
+/// ocurrencias, para renombrar sin reescanear, y el frontmatter entero de
+/// cada una. Las páginas de tag guardan sus ocurrencias (se reescriben al
+/// renombrar) pero no cuentan en `by_tag`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagIndex {
     by_tag: HashMap<TagKey, TagEntry>,
@@ -26,6 +30,8 @@ pub struct TagEntry {
 pub(crate) struct IndexedNote {
     pub tags: NoteTags,
     pub page: bool,
+    /// Compartido: cada lote del watcher clona el índice entero.
+    pub frontmatter: Option<Arc<[Property]>>,
 }
 
 impl TagIndex {
@@ -43,6 +49,16 @@ impl TagIndex {
     #[must_use]
     pub fn note(&self, path: &VaultPath) -> Option<&NoteTags> {
         self.by_note.get(path).map(|note| &note.tags)
+    }
+
+    /// Cada clave del frontmatter de una nota o página con su valor, en
+    /// orden; vacío si no tiene, no se pudo leer o no es un mapa.
+    #[must_use]
+    pub fn frontmatter(&self, path: &VaultPath) -> &[Property] {
+        self.by_note
+            .get(path)
+            .and_then(|note| note.frontmatter.as_deref())
+            .unwrap_or_default()
     }
 
     /// Las notas indexadas que no son páginas de tag, sin orden.
