@@ -15,6 +15,13 @@ const FILES: &[(&str, &str)] = &[
     ("tags/gpui.md", "---\nparents: [rust, ui]\n---\n"),
 ];
 
+/// Ya armado, como al mostrar la vista de tags.
+fn outline_of(tags: Arc<Tags>) -> TagOutline {
+    let mut outline = TagOutline::new(tags);
+    outline.refresh();
+    outline
+}
+
 fn tags_of(files: &[(&str, &str)]) -> Arc<Tags> {
     let dir = tempfile::tempdir().unwrap();
     for (name, text) in files {
@@ -70,7 +77,7 @@ fn shown(outline: &TagOutline) -> Vec<String> {
 
 #[test]
 fn abre_cerrado_con_las_raices_y_el_buzon() {
-    let outline = TagOutline::new(tags_of(FILES));
+    let outline = outline_of(tags_of(FILES));
     assert_eq!(
         shown(&outline),
         [">▸ #Rust (3)", " ▸ #ui (2)", " ▸ Buzón (2)"]
@@ -80,7 +87,7 @@ fn abre_cerrado_con_las_raices_y_el_buzon() {
 /// Bajo un tag, primero sus tags hijos y luego sus notas (05 §3).
 #[test]
 fn l_abre_y_baja_y_h_sube_y_cierra() {
-    let mut outline = TagOutline::new(tags_of(FILES));
+    let mut outline = outline_of(tags_of(FILES));
     outline.expand_or_enter();
     assert_eq!(
         shown(&outline),
@@ -109,7 +116,7 @@ fn l_abre_y_baja_y_h_sube_y_cierra() {
 /// abre bajo el otro.
 #[test]
 fn un_tag_con_dos_padres_se_abre_en_cada_lugar_por_separado() {
-    let mut outline = TagOutline::new(tags_of(FILES));
+    let mut outline = outline_of(tags_of(FILES));
     outline.expand_or_enter();
     outline.select_row(4);
     outline.expand_or_enter();
@@ -133,7 +140,7 @@ fn un_tag_con_dos_padres_se_abre_en_cada_lugar_por_separado() {
 
 #[test]
 fn el_buzon_tiene_las_notas_sin_tags_en_orden() {
-    let mut outline = TagOutline::new(tags_of(FILES));
+    let mut outline = outline_of(tags_of(FILES));
     outline.select_last();
     outline.toggle_selected();
     assert_eq!(
@@ -147,7 +154,7 @@ fn el_buzon_tiene_las_notas_sin_tags_en_orden() {
 #[test]
 fn otro_lote_conserva_lo_abierto_y_la_seleccion() {
     let tags = tags_of(FILES);
-    let mut outline = TagOutline::new(Arc::clone(&tags));
+    let mut outline = outline_of(Arc::clone(&tags));
     outline.expand_or_enter();
     outline.select_row(3);
     let nueva = VaultPath::new("a nueva.md").unwrap();
@@ -171,7 +178,7 @@ fn otro_lote_conserva_lo_abierto_y_la_seleccion() {
 #[test]
 fn si_la_seleccionada_desaparece_queda_su_lugar() {
     let tags = tags_of(FILES);
-    let mut outline = TagOutline::new(Arc::clone(&tags));
+    let mut outline = outline_of(Arc::clone(&tags));
     outline.expand_or_enter();
     outline.select_row(2);
     let parser = VaultPath::new("parser.md").unwrap();
@@ -184,7 +191,7 @@ fn si_la_seleccionada_desaparece_queda_su_lugar() {
 /// aparece `a` en el camino se marca y no se abre.
 #[test]
 fn un_ciclo_no_se_abre_dos_veces() {
-    let mut outline = TagOutline::new(tags_of(&[
+    let mut outline = outline_of(tags_of(&[
         ("nota.md", "#a #b #c"),
         ("tags/a.md", "---\nparents: [b, c]\n---\n"),
         ("tags/b.md", "---\nparents: [a]\n---\n"),
@@ -210,6 +217,6 @@ fn un_ciclo_no_se_abre_dos_veces() {
 
 #[test]
 fn sin_tags_queda_solo_el_buzon() {
-    let outline = TagOutline::new(tags_of(&[("a.md", "nada")]));
+    let outline = outline_of(tags_of(&[("a.md", "nada")]));
     assert_eq!(shown(&outline), [">▸ Buzón (1)"]);
 }

@@ -414,3 +414,25 @@ fn first_tag(panel: &Panel) -> &str {
         other => panic!("la primera fila no es un tag: {other:?}"),
     }
 }
+
+/// Abrir con la vista de carpetas no arma el árbol de tags, que cuesta lo
+/// que el vault; mostrarla sí.
+#[test]
+fn el_arbol_de_tags_se_arma_al_mostrarse() {
+    let panel = tags_panel();
+    assert_eq!(first_tag(&panel), "rust", "abrió en tags");
+    let index = VaultIndex::from_entries([(path("a.md"), EntryKind::Note)]);
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| {
+        Some("#rust".to_owned())
+    });
+    let tree = FileTree::new(Arc::new(index));
+    let mut panel = Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags)),
+        true,
+        PanelView::Folders,
+    );
+    assert_eq!(panel.tags.rows(), []);
+    panel.switch_view();
+    assert_eq!(first_tag(&panel), "rust");
+}

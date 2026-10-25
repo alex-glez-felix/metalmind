@@ -94,22 +94,20 @@ pub struct TagOutline {
 }
 
 impl TagOutline {
-    /// Todo cerrado y la primera fila seleccionada.
+    /// Sin filas hasta [`TagOutline::refresh`]: armar el árbol cuesta lo que
+    /// el vault, y la vista puede no mostrarse nunca. Después, todo cerrado
+    /// y la primera fila seleccionada.
     #[must_use]
     pub fn new(tags: Arc<Tags>) -> Self {
-        let tree = tags.tree(&Scope::default().filter(&tags));
-        let mut outline = Self {
-            tags,
-            tree,
-            pending: None,
+        Self {
+            tags: Arc::clone(&tags),
+            tree: TagTree::default(),
+            pending: Some(tags),
             expanded: BTreeSet::new(),
             selected: None,
             rows: Vec::new(),
             selected_row: None,
-        };
-        outline.rebuild();
-        outline.select_row(0);
-        outline
+        }
     }
 
     #[must_use]
