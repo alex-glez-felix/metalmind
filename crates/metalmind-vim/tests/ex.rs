@@ -222,6 +222,24 @@ use rstest_reuse::{self, apply, template};
 #[case("|abcd\nabcd\nabcd", "ll:2,3norm my<CR>k", "abcd\nab|cd\nabcd")]
 #[case("|abcd\nab\nabcd", "$:2,3norm my<CR>k", "abcd\na|b\nabcd")]
 #[case("ab|cd\nxy\nabcd", ":2,3norm fc<CR>k", "abcd\nx|y\nabcd")]
+// :g y :normal: las marks siguen a su línea, el undo es un solo paso y los
+// rangos se toman al empezar
+#[case("a\nb\nc|\nd", "ma:g/b/d<CR>'a", "a\n|c\nd")]
+#[case("a\nb\nc|\nd", "ma:g/c/d<CR>u'a", "a\nb\n|c\nd")]
+#[case("a\nb|\nc\nd", "ma:%norm Oz<CR>'a", "z\nz\nz\nz\na\n|b\nc\nd")]
+#[case("a\nb|\nc\nd", "ma:%norm Oz<CR>u'a", "a\n|b\nc\nd")]
+#[case("a1\nb\na|2\nc\na3", ":g/^/m0<CR>u", "a1\n|b\na2\nc\na3")]
+#[case("a1\nb\na|2\nc\na3", ":g/^/m0<CR>u<C-r>", "a3\n|c\na2\nb\na1")]
+#[case("a1\nb\na|2\nc\na3", ":g/a/normal Ax<CR>u", "a|1\nb\na2\nc\na3")]
+#[case("a1\nb\na|2\nc\na3", ":2,4norm Ax<CR>u<C-r>", "a1\nb|x\na2x\ncx\na3")]
+#[case("a1\nb\na|2\nc\na3", ":.,+1norm x<CR>", "a1\nb\n2\n|\na3")]
+#[case("a1\nb\na|2\nc\na3", ":2,$norm Ax<CR>", "a1\nbx\na2x\ncx\na3|x")]
+#[case("a1\nb|\na2\nc\na3", "majjmb:'a,'bnorm Ax<CR>", "a1\nbx\na2x\nc|x\na3")]
+#[case("a1\nb\na|2\nc\na3", ":2,4g/a/norm Ax<CR>", "a1\nb\na2|x\nc\na3")]
+#[case("a1\nb\na|2\nc\na3", ":g/a/.,+1d<CR>", "|a3")]
+#[case("a1\nb\na|2\nc\na3", ":g/a/.,+1d<CR>u", "a|1\nb\na2\nc\na3")]
+#[case("a1\nb\na|2\nc\na3", ":g/a/norm jdd<CR>", "a1\na2\n|a3")]
+#[case("a1\nb\na|2\nc\na3", ":%norm ddp<CR>u", "|a1\nb\na2\nc\na3")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]
