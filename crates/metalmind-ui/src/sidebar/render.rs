@@ -52,7 +52,11 @@ impl Render for Sidebar {
                     .text_color(theme.ui.error)
                     .child(error.to_owned())
             }))
-            .children(self.menu.as_ref().map(|menu| menu.render(&theme, cx)))
+            .children(
+                self.menu
+                    .as_ref()
+                    .map(|menu| menu.render(&theme, window, cx)),
+            )
     }
 }
 

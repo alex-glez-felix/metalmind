@@ -252,7 +252,7 @@ Theme {
             rail_button_size: Length(
                 28.0,
             ),
-            menu_min_width: Length(
+            menu_width: Length(
                 240.0,
             ),
             menu_padding: Length(
@@ -260,9 +260,6 @@ Theme {
             ),
             menu_item_padding_x: Length(
                 8.0,
-            ),
-            menu_gap: Length(
-                12.0,
             ),
             tooltip_padding_x: Length(
                 8.0,
