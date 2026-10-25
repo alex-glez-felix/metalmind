@@ -1,6 +1,6 @@
 # Capturas del menú del árbol (#109): `main` contra esta rama
 
-`scripts/capturas.sh` en Xvfb con lavapipe: primero `main` (`e81ab50`), después esta rama con `--antes`. De las 132 capturas solo cambian las ocho del menú contextual: «Abrir a la derecha» ya no queda pegada a `ctrl-v` y el menú crece hasta su fila más larga. `formulas-bloque-oscuro-1920` cambia 7 píxeles del borde de una fórmula, el mismo ruido de `main` contra `main` que se ve en [theme-desde-config](../theme-desde-config/); no va aquí.
+`scripts/capturas.sh` en Xvfb con lavapipe: primero `main` (`0a848da`), después esta rama con `--antes`. De las 132 capturas solo cambian las ocho del menú contextual: «Abrir a la derecha» ya no queda pegada a `ctrl-v` (entre las dos queda al menos `menu_item_padding_x`) y el menú crece hasta su fila más larga.
 
 Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`).
 
@@ -9,8 +9,8 @@ Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`
 | editor-claro-1280 | 0 |
 | editor-final-claro-1280 | 0 |
 | arbol-claro-1280 | 0 |
-| menu-claro-1280 | 2863 (`diff-menu-claro-1280.png`) |
-| menu-borde-claro-1280 | 2925 (`diff-menu-borde-claro-1280.png`) |
+| menu-claro-1280 | 2450 (`diff-menu-claro-1280.png`) |
+| menu-borde-claro-1280 | 2639 (`diff-menu-borde-claro-1280.png`) |
 | split-claro-1280 | 0 |
 | linea-de-comandos-claro-1280 | 0 |
 | finder-claro-1280 | 0 |
@@ -42,8 +42,8 @@ Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`
 | editor-claro-1920 | 0 |
 | editor-final-claro-1920 | 0 |
 | arbol-claro-1920 | 0 |
-| menu-claro-1920 | 2863 (`diff-menu-claro-1920.png`) |
-| menu-borde-claro-1920 | 2980 (`diff-menu-borde-claro-1920.png`) |
+| menu-claro-1920 | 2450 (`diff-menu-claro-1920.png`) |
+| menu-borde-claro-1920 | 2655 (`diff-menu-borde-claro-1920.png`) |
 | split-claro-1920 | 0 |
 | linea-de-comandos-claro-1920 | 0 |
 | finder-claro-1920 | 0 |
@@ -75,8 +75,8 @@ Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`
 | editor-oscuro-1280 | 0 |
 | editor-final-oscuro-1280 | 0 |
 | arbol-oscuro-1280 | 0 |
-| menu-oscuro-1280 | 4823 (`diff-menu-oscuro-1280.png`) |
-| menu-borde-oscuro-1280 | 4823 (`diff-menu-borde-oscuro-1280.png`) |
+| menu-oscuro-1280 | 3983 (`diff-menu-oscuro-1280.png`) |
+| menu-borde-oscuro-1280 | 3982 (`diff-menu-borde-oscuro-1280.png`) |
 | split-oscuro-1280 | 0 |
 | linea-de-comandos-oscuro-1280 | 0 |
 | finder-oscuro-1280 | 0 |
@@ -108,8 +108,8 @@ Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`
 | editor-oscuro-1920 | 0 |
 | editor-final-oscuro-1920 | 0 |
 | arbol-oscuro-1920 | 0 |
-| menu-oscuro-1920 | 4823 (`diff-menu-oscuro-1920.png`) |
-| menu-borde-oscuro-1920 | 4823 (`diff-menu-borde-oscuro-1920.png`) |
+| menu-oscuro-1920 | 3983 (`diff-menu-oscuro-1920.png`) |
+| menu-borde-oscuro-1920 | 3983 (`diff-menu-borde-oscuro-1920.png`) |
 | split-oscuro-1920 | 0 |
 | linea-de-comandos-oscuro-1920 | 0 |
 | finder-oscuro-1920 | 0 |
@@ -133,7 +133,7 @@ Aquí van las ocho de la rama, las de `main` (`antes-…`) y el diff (`diff-…`
 | listas-oscuro-1920 | 0 |
 | listas-casilla-oscuro-1920 | 0 |
 | formulas-oscuro-1920 | 0 |
-| formulas-bloque-oscuro-1920 | 7 (`diff-formulas-bloque-oscuro-1920.png`) |
+| formulas-bloque-oscuro-1920 | 0 |
 | formulas-larga-oscuro-1920 | 0 |
 | autoguardado-guardado-oscuro-1920 | 0 |
 | autoguardado-sin-guardar-oscuro-1920 | 0 |
