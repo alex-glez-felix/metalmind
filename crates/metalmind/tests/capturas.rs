@@ -413,6 +413,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let mark_color = gutter_mark_color(theme);
     window.resize(width.into(), height.into());
     let mut report = Vec::new();
+    let mut previous = None;
     let mut titles = String::new();
     for (scene, steps) in SCENES {
         for step in *steps {
@@ -431,7 +432,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 Step::HoverMark(at) => {
                     // El tooltip sale tras una demora con el ratón quieto, más
                     // larga que la quietud de `settle`: se espera a verlo.
-                    let still = settle(&window, &frames, seen);
+                    let still = settle(&window, &frames, seen, previous.as_ref());
                     seen = frame_count(&frames);
                     let (x, y) = mark_position(*at, &still, mark_color);
                     window.move_pointer(x, y);
@@ -447,7 +448,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                     window.type_keys(&format!(":{}<CR>zb?aqui<CR>", vault::FORMULAS_BROKEN));
                 }
                 Step::HoverBrokenFormula => {
-                    let still = settle(&window, &frames, seen);
+                    let still = settle(&window, &frames, seen, previous.as_ref());
                     if hover_broken_formula(&window, &still, theme, rest) {
                         seen = frame_count(&frames);
                         wait::until("el tooltip de la fórmula rota", TIMEOUT, || {
@@ -477,13 +478,14 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
         ) {
             window.move_pointer(rest.0, rest.1);
         }
-        let image = settle(&window, &frames, seen);
+        let image = settle(&window, &frames, seen, previous.as_ref());
         seen = frame_count(&frames);
         assert_eq!((image.width, image.height), (width, height), "{scene}");
         let name = format!("{scene}-{theme}-{width}");
         image.save(&out.join(format!("{name}.png")));
         report.push(compare(&out, &name, &image));
         writeln!(titles, "{name}: {}", window.title()).unwrap();
+        previous = Some(image);
     }
     drop(metalmind);
     // Para que la carpeta del caso se pueda borrar.
@@ -631,10 +633,10 @@ fn frame_count(frames: &Path) -> usize {
 }
 
 /// Espera a que la ventana pinte algo después de `before` frames y deje de
-/// pintar, y devuelve lo que se ve. Con lavapipe, un frame registrado puede
-/// no verse aún y el siguiente tardar más que [`QUIET`]: una ventana de un
-/// solo color todavía no pintó (#116).
-fn settle(window: &Window<'_>, frames: &Path, before: usize) -> Image {
+/// pintar, y devuelve lo que se ve. Que el registro de frames esté quieto no
+/// basta: con lavapipe, un frame registrado puede no verse aún (#116). Por
+/// eso la imagen tampoco puede ser `previous`, la escena anterior.
+fn settle(window: &Window<'_>, frames: &Path, before: usize, previous: Option<&Image>) -> Image {
     wait::until("un frame nuevo", TIMEOUT, || {
         let count = frame_count(frames);
         if count > before {
@@ -653,12 +655,21 @@ fn settle(window: &Window<'_>, frames: &Path, before: usize) -> Image {
             return Err(format!("{count} frames"));
         }
         let (width, height, rgb) = window.pixels();
-        let (pixels, _) = rgb.as_chunks::<3>();
-        if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
-            return Err("de un solo color".to_owned());
-        }
-        Ok(Image { width, height, rgb })
+        let image = Image { width, height, rgb };
+        not_yet_painted(&image, previous).map_or(Ok(image), |why| Err(why.to_owned()))
     })
+}
+
+/// Por qué `image` todavía no puede ser la escena que sigue a `previous`.
+fn not_yet_painted(image: &Image, previous: Option<&Image>) -> Option<&'static str> {
+    let (pixels, _) = image.rgb.as_chunks::<3>();
+    if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
+        Some("de un solo color")
+    } else if previous == Some(image) {
+        Some("igual a la escena anterior")
+    } else {
+        None
+    }
 }
 
 /// Una línea del resumen, y la imagen de lo que cambió si cambió algo.
@@ -702,4 +713,23 @@ fn finish(out: &Path, case: &str, report: &[(String, usize)]) {
         "cambiaron píxeles:\n{}",
         changed.join("\n")
     );
+}
+
+#[rstest]
+#[case::de_un_solo_color([[0, 0, 0], [0, 0, 0]], None, Some("de un solo color"))]
+#[case::la_primera([[0, 0, 0], [9, 9, 9]], None, None)]
+#[case::igual_a_la_anterior([[0, 0, 0], [9, 9, 9]], Some([[0, 0, 0], [9, 9, 9]]), Some("igual a la escena anterior"))]
+#[case::distinta_de_la_anterior([[0, 0, 0], [9, 9, 9]], Some([[0, 0, 0], [7, 7, 7]]), None)]
+fn una_captura_es_de_la_escena_nueva_solo_si_ya_pinto(
+    #[case] pixels: [[u8; 3]; 2],
+    #[case] previous: Option<[[u8; 3]; 2]>,
+    #[case] expected: Option<&str>,
+) {
+    let image = |pixels: [[u8; 3]; 2]| Image {
+        width: 2,
+        height: 1,
+        rgb: pixels.as_flattened().to_vec(),
+    };
+    let previous = previous.map(image);
+    assert_eq!(not_yet_painted(&image(pixels), previous.as_ref()), expected);
 }

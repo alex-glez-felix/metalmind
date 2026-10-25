@@ -41,17 +41,19 @@ fn saltos(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let mut seen = frame_count(&frames);
     window.resize(width.into(), height.into());
     let mut report = Vec::new();
+    let mut previous = None;
     let mut titles = String::new();
     for (scene, keys) in SCENES {
         window.type_keys(keys);
         window.move_pointer(rest.0, rest.1);
-        let image = settle(&window, &frames, seen);
+        let image = settle(&window, &frames, seen, previous.as_ref());
         seen = frame_count(&frames);
         assert_eq!((image.width, image.height), (width, height), "{scene}");
         let name = format!("{scene}-{theme}-{width}");
         image.save(&out.join(format!("{name}.png")));
         report.push(compare(&out, &name, &image));
         writeln!(titles, "{name}: {}", window.title()).unwrap();
+        previous = Some(image);
     }
     drop(metalmind);
     fs::write(
