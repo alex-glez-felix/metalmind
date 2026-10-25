@@ -436,3 +436,19 @@ fn el_arbol_de_tags_se_arma_al_mostrarse() {
     panel.switch_view();
     assert_eq!(first_tag(&panel), "rust");
 }
+
+/// `Escape` sin pregunta quita el filtro de carpetas solo si esa vista se
+/// ve: en la de tags no se toca lo que no está a la vista.
+#[test]
+fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
+    let mut panel = panel();
+    panel.start_filter();
+    type_text(&mut panel, "hoy");
+    panel.confirm();
+    panel.switch_view();
+    panel.escape();
+    assert_eq!(panel.tree.filter(), "hoy");
+    panel.switch_view();
+    panel.escape();
+    assert_eq!(panel.tree.filter(), "");
+}

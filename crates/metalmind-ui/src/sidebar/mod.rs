@@ -27,7 +27,7 @@ use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
 use crate::finder::{VaultChanged, VaultSession};
-use crate::panel::{Panel, PanelView};
+use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_outline::TagOutline;
 use crate::workspace::{Placement, Workspace, shown_path};
@@ -150,8 +150,8 @@ impl Sidebar {
         self.panel
             .tree
             .apply(&update.changes, Arc::clone(&update.snapshot));
-        self.panel.set_tags(Arc::clone(&update.tags));
         self.panel.follow(&update.changes);
+        self.panel.set_tags(Arc::clone(&update.tags));
         let selected = self.panel.outline().selected_path();
         if let Some(menu) = &mut self.menu
             && !menu.still_on(&update.changes, selected)
@@ -162,17 +162,17 @@ impl Sidebar {
         cx.notify();
     }
 
+    /// Cada vista lleva su scroll a su selección, se vea o no: lo que
+    /// `reveal` o el watcher seleccionan en la escondida se ve al volver.
     fn scroll_to_selection(&self) {
-        if let Some(row) = self.panel.outline().selected_row() {
-            self.scroll_handle()
-                .scroll_to_item(row, ScrollStrategy::Nearest);
-        }
-    }
-
-    fn scroll_handle(&self) -> &UniformListScrollHandle {
-        match self.panel.view {
-            PanelView::Folders => &self.scroll,
-            PanelView::Tags => &self.tag_scroll,
+        let views: [(&dyn Outline, &UniformListScrollHandle); 2] = [
+            (&self.panel.tree, &self.scroll),
+            (&self.panel.tags, &self.tag_scroll),
+        ];
+        for (outline, handle) in views {
+            if let Some(row) = outline.selected_row() {
+                handle.scroll_to_item(row, ScrollStrategy::Nearest);
+            }
         }
     }
 

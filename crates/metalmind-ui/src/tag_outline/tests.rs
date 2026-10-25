@@ -220,3 +220,42 @@ fn sin_tags_queda_solo_el_buzon() {
     let outline = outline_of(tags_of(&[("a.md", "nada")]));
     assert_eq!(shown(&outline), [">▸ Buzón (1)"]);
 }
+
+/// Una nota seleccionada que se renombra sigue elegida en su nuevo lugar,
+/// no queda la que ocupa su fila de antes.
+#[test]
+fn la_nota_seleccionada_sigue_a_su_renombre() {
+    let mut outline = outline_of(tags_of(FILES));
+    outline.expand_or_enter();
+    outline.select_row(3);
+    assert_eq!(shown(&outline)[3], ">    viejo.md");
+    let renamed: Vec<(&str, &str)> = FILES
+        .iter()
+        .map(|&(name, text)| {
+            (
+                if name == "viejo.md" {
+                    "a viejo.md"
+                } else {
+                    name
+                },
+                text,
+            )
+        })
+        .collect();
+    outline.follow(&[VaultChange::Renamed {
+        from: VaultPath::new("viejo.md").unwrap(),
+        to: VaultPath::new("a viejo.md").unwrap(),
+        kind: metalmind_vault::EntryKind::Note,
+    }]);
+    outline.set_tags(tags_of(&renamed));
+    outline.refresh();
+    assert_eq!(
+        shown(&outline)[..4],
+        [
+            " ▾ #Rust (3)",
+            "   ▸ #gpui (1)",
+            ">    a viejo.md",
+            "     parser.md"
+        ]
+    );
+}
