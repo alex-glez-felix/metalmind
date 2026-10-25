@@ -90,8 +90,7 @@ fn walker(root: &Path, before: Option<BeforeReading>) -> WalkBuilder {
 }
 
 /// Si el walk sigue por `entry`. El filtro corre después de los
-/// `.gitignore` y antes de leer la carpeta: el momento de `before`, que va
-/// antes de buscar su `CACHEDIR.TAG` para que uno que llegue después dé evento.
+/// `.gitignore` y antes de leer la carpeta: el momento de `before`.
 fn enters(entry: &DirEntry, before: Option<&BeforeReading>) -> bool {
     if !named_in_vault(entry) {
         return false;
@@ -99,10 +98,16 @@ fn enters(entry: &DirEntry, before: Option<&BeforeReading>) -> bool {
     if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
         return true;
     }
-    if let Some(before) = before {
-        before(entry.path());
+    let is_root = entry.depth() == 0;
+    if !is_root && is_cache_dir(entry.path()) {
+        return false;
     }
-    entry.depth() == 0 || !is_cache_dir(entry.path())
+    let Some(before) = before else {
+        return true;
+    };
+    before(entry.path());
+    // Un `CACHEDIR.TAG` escrito antes del watch no dio evento.
+    is_root || !is_cache_dir(entry.path())
 }
 
 /// Las reglas del vault, iguales en cualquier máquina: `.gitignore` e

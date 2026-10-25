@@ -235,7 +235,7 @@ fn inotify_watches() -> usize {
 }
 
 /// #97: un vault con un proyecto de Node adentro no gasta un watch por
-/// carpeta de `node_modules`.
+/// carpeta de `node_modules`, ni las carpetas de caché uno cada una.
 #[test]
 fn solo_vigila_las_carpetas_del_vault() {
     let dir = TempDir::new().unwrap();
@@ -244,7 +244,12 @@ fn solo_vigila_las_carpetas_del_vault() {
         .map(|n| format!("web/node_modules/dep{n}/lib/index.js"))
         .collect();
     tree.extend(deps.iter().map(String::as_str));
+    tree.extend(["target/debug/x", "web/cache/y"]);
     make_tree(dir.path(), &tree);
+    for cache in ["target", "web/cache"] {
+        let tag = dir.path().join(cache).join("CACHEDIR.TAG");
+        fs::write(tag, "Signature: 8a477f597d28d172789f06886806bc55").unwrap();
+    }
     fs::write(dir.path().join(".gitignore"), "build/\n").unwrap();
     let (vault, updates) = open(dir.path());
     let expected = ["notas/", "notas/sub/", "notas/sub/a.md (nota)", "web/"];
