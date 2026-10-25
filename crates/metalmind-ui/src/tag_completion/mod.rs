@@ -30,13 +30,6 @@ struct Shown {
     alias: Option<String>,
 }
 
-/// Lo que escribe aceptar: borrar lo escrito y poner el texto.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Accepted {
-    pub typed: String,
-    pub text: String,
-}
-
 impl TagCompletions {
     /// La lista para `typed` en `place`; `None` si ningún tag coincide.
     #[must_use]
@@ -54,6 +47,13 @@ impl TagCompletions {
             shown,
             selected: 0,
         })
+    }
+
+    /// Si abrirla para `typed` en `place` entre `candidates` daría esta
+    /// misma lista.
+    #[must_use]
+    pub fn is_for(&self, candidates: &Arc<[TagCompletion]>, typed: &str, place: TagPlace) -> bool {
+        Arc::ptr_eq(&self.candidates, candidates) && self.typed == typed && self.place == place
     }
 
     /// Cada tag de la lista con el alias por el que coincidió, en orden.
@@ -88,15 +88,12 @@ impl TagCompletions {
         self.selected = row.min(self.shown.len() - 1);
     }
 
-    /// La forma establecida del tag elegido, aunque coincidiera por un
-    /// alias: escribir `#rs` y aceptar deja `#Rust` (05 §3).
+    /// Lo que escribe aceptar en lugar de lo escrito: la forma establecida
+    /// del tag elegido, aunque coincidiera por un alias (escribir `#rs` y
+    /// aceptar deja `#Rust`, 05 §3).
     #[must_use]
-    pub fn accept(&self) -> Accepted {
-        let completion = &self.candidates[self.shown[self.selected].index];
-        Accepted {
-            typed: self.typed.clone(),
-            text: completion.text(self.place),
-        }
+    pub fn accept(&self) -> String {
+        self.candidates[self.shown[self.selected].index].text(self.place)
     }
 }
 
