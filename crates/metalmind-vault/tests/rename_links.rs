@@ -162,6 +162,13 @@ fn a_name_that_now_ties_gets_more_of_its_path() {
     "b/b/y.md",
     "[t](X.md)"
 )]
+#[case::issue_126_markdown_a_si_misma(
+    &[("a/a/x.md", ""), ("a/b/X.md", "[t](x.md)"), ("b/a/x.md", "")],
+    "a/a/x.md",
+    "y.md",
+    "a/b/X.md",
+    "[t](X.md)"
+)]
 fn removing_a_tied_candidate_keeps_the_other_links(
     #[case] files: &[(&str, &str)],
     #[case] from: &str,
