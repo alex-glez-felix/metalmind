@@ -177,6 +177,7 @@ layout:
   menu_width: 240
   menu_padding: xs
   menu_item_padding_x: sm
+  completion_rows: 8
   tooltip_padding_x: sm
   tooltip_padding_y: xs
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio

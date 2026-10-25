@@ -17,6 +17,7 @@ mod panel;
 pub mod picker;
 mod session;
 mod sidebar;
+mod tag_completion;
 mod tag_outline;
 pub mod text_search;
 mod theme;

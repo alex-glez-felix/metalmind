@@ -248,6 +248,9 @@ metric_group! {
         /// A los lados del texto de cada entrada del menú y entre su etiqueta
         /// y su tecla.
         menu_item_padding_x: Length,
+        /// Cuántos tags muestra la lista del autocompletado de `#` antes de
+        /// desplazarse.
+        completion_rows: Count,
         tooltip_padding_x: Length,
         tooltip_padding_y: Length,
         /// Las columnas de las marks en el margen: la letra, el `+` de las

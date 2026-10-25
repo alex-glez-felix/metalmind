@@ -58,6 +58,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         self.take_focus(window, cx);
+        self.completion.close();
         let Some(offset) = self.offset_at(event.position, cx) else {
             return;
         };

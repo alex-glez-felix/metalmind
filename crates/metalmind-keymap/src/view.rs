@@ -11,6 +11,11 @@ named_actions! {
         Copy = "editor::copy",
         /// Pega en el cursor; en Visual, reemplaza la selección.
         Paste = "editor::paste",
+        /// Cambia lo escrito del tag por el elegido en la lista del
+        /// autocompletado de `#`.
+        AcceptTagCompletion = "editor::accept_tag_completion",
+        NextTagCompletion = "editor::next_tag_completion",
+        PreviousTagCompletion = "editor::previous_tag_completion",
     }
 }
 
@@ -88,6 +93,9 @@ pub mod context {
     pub const FILE_TREE_CONFIRM: &str = "FileTreeConfirm";
     /// Con el menú contextual abierto.
     pub const FILE_TREE_MENU: &str = "FileTreeMenu";
+    /// Lo que se agrega al del editor con la lista del autocompletado de
+    /// `#` abierta.
+    pub const TAG_COMPLETION: &str = "TagCompletion";
     /// Cualquier picker.
     pub const PICKER: &str = "Picker";
     /// Lo que se agrega al de un picker si abre en un split.
@@ -98,6 +106,8 @@ pub mod context {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     Editor,
+    /// El editor con la lista del autocompletado de `#` abierta.
+    TagCompletion,
     FileTree,
     FileTreeInput,
     FileTreeConfirm,
@@ -113,6 +123,7 @@ impl View {
     pub const fn predicate(self) -> &'static str {
         match self {
             Self::Editor => context::EDITOR,
+            Self::TagCompletion => "Editor && TagCompletion",
             Self::FileTree => context::FILE_TREE,
             Self::FileTreeInput => context::FILE_TREE_INPUT,
             Self::FileTreeConfirm => context::FILE_TREE_CONFIRM,
@@ -126,6 +137,14 @@ impl View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn el_predicado_del_autocompletado_nombra_sus_dos_contextos() {
+        assert_eq!(
+            View::TagCompletion.predicate(),
+            format!("{} && {}", context::EDITOR, context::TAG_COMPLETION)
+        );
+    }
 
     #[test]
     fn el_predicado_de_splits_nombra_sus_dos_contextos() {

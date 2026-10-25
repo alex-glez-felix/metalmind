@@ -29,6 +29,7 @@ mod pane_tree;
 mod scrolling;
 mod show;
 mod source_lines;
+mod tag_typing;
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -528,6 +529,9 @@ mod panes_oracle;
 #[cfg(test)]
 #[path = "source_lines_tests.rs"]
 mod source_lines_tests;
+#[cfg(test)]
+#[path = "tag_typing_tests.rs"]
+mod tag_typing_tests;
 #[cfg(test)]
 mod test_session;
 #[cfg(test)]

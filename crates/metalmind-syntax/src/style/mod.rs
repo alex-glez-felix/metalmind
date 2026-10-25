@@ -25,6 +25,8 @@ mod tests;
 use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::{TagPlace, TagSpot};
+
 pub use cache::Styles;
 pub use rows::{FormulaRows, Rows};
 
@@ -90,6 +92,28 @@ pub struct LineStyle {
     pub links: Vec<LinkSpot>,
     /// Las fórmulas que se componen en esta línea, en orden.
     pub math: Vec<MathSpot>,
+}
+
+impl LineStyle {
+    /// El tag del cuerpo que cubre el byte `at` de la línea, contando el `#`
+    /// y el byte justo después del nombre, como [`crate::Scan::tag_at`]; el
+    /// estilo ya deja fuera el código. En el frontmatter, `None`: ahí lo
+    /// sabe `Scan::tag_at`, que ve en qué campo está.
+    #[must_use]
+    pub fn tag_at(&self, at: usize) -> Option<TagSpot> {
+        if self.kind == LineKind::Frontmatter {
+            return None;
+        }
+        let tag = self.spans.iter().find(|span| {
+            span.style.role == Role::Tag && span.range.start <= at && at <= span.range.end
+        })?;
+        let name = tag.range.start + '#'.len_utf8()..tag.range.end;
+        Some(TagSpot {
+            name: name.clone(),
+            replace: name,
+            place: TagPlace::Inline,
+        })
+    }
 }
 
 /// Lo que cambia la línea entera: su alto, su fondo.

@@ -312,3 +312,33 @@ proptest! {
         prop_assert_eq!(incremental, styled(&text));
     }
 }
+
+/// El tag que se está escribiendo, como lo ve el estilo: con el cursor del
+/// `#` al byte después del nombre, y nunca en código ni en el frontmatter.
+#[rstest::rstest]
+#[case::al_final("hay #rust", 9, Some(5..9))]
+#[case::sobre_el_numeral("hay #rust", 4, Some(5..9))]
+#[case::en_medio("hay #rust y más", 6, Some(5..9))]
+#[case::fuera("hay #rust y más", 10, None)]
+#[case::en_cursiva("*a #rust* y", 8, Some(4..8))]
+#[case::pegado_a_otro_estilo("**#rust** y", 7, None)]
+#[case::hasta_donde_corta_otro_estilo("#ru**st** y", 3, Some(1..3))]
+#[case::en_codigo_inline("`#rust`", 5, None)]
+#[case::heading("# rust", 6, None)]
+#[case::solo_el_numeral("#", 1, None)]
+fn tag_at_line(
+    #[case] line: &str,
+    #[case] at: usize,
+    #[case] name: Option<std::ops::Range<usize>>,
+) {
+    let style = &styled(line)[0];
+    assert_eq!(style.tag_at(at).map(|spot| spot.name), name);
+}
+
+#[test]
+fn tag_at_no_mira_el_frontmatter_ni_el_codigo() {
+    let text = "---\ntags: [rust]\n---\n```\n#rust\n```\n";
+    let styles = styled(text);
+    assert_eq!(styles[1].tag_at(8), None);
+    assert_eq!(styles[4].tag_at(5), None);
+}
