@@ -152,3 +152,21 @@ fn en_un_frontmatter_largo() {
         })
     );
 }
+
+/// Con el principio del tag escrito antes de entrar en Insert, `.` repite
+/// lo que nvim: con `ignorecase`, `ru` y `ctrl-n` hasta `Rust` (o `rust`)
+/// dejan `abRust` (o `abcdst`) al repetirse tras `abcd`.
+#[rstest::rstest]
+#[case::cambia_lo_escrito("Rust", "#Rust\nabRust\n")]
+#[case::sigue_a_lo_escrito("rust", "#rust\nabcdst\n")]
+fn el_punto_repite_como_el_completado_de_nvim(#[case] text: &str, #[case] expected: &str) {
+    let mut session = Session::new("#ru\nabcd\n");
+    session.keys("A");
+    let pane = session.pane();
+    session
+        .workspace
+        .complete_tag(pane, text, &mut session.clipboard)
+        .unwrap();
+    session.keys("⎋j.");
+    assert_eq!(session.text(), expected);
+}
