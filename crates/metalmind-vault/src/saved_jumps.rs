@@ -68,8 +68,9 @@ impl SavedJumps {
     }
 
     /// Lo guardado en `file` para el vault de `root`, cuyos archivos son
-    /// los de `index`. Lo de una nota que ya no está pasa a la única con su
-    /// mismo contenido (se renombró con Metalmind cerrado) o se descarta.
+    /// los de `index`. Lo de un archivo que ya no está pasa al único de su
+    /// tipo con su mismo contenido (se renombró con Metalmind cerrado) o se
+    /// descarta.
     /// Si no hay nada, es de otro formato o no se puede leer, no hay saltos.
     #[must_use]
     pub fn load(root: &Path, file: &Path, index: &VaultIndex) -> Self {

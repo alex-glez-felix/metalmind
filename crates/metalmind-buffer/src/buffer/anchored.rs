@@ -68,7 +68,8 @@ impl Buffer {
     #[must_use]
     pub fn offset_at_point(&self, point: Point) -> ByteOffset {
         let line = point.line.min(self.last_line());
-        let offset = (self.line_start(line) + point.column).min(self.line_end(line));
+        let (start, end) = (self.line_start(line), self.line_end(line));
+        let offset = start + point.column.min(end.get() - start.get());
         let char_start = self.rope.char_to_byte(self.rope.byte_to_char(offset.get()));
         ByteOffset::new(char_start)
     }
