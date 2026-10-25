@@ -188,6 +188,7 @@ mod tests {
         "---\naliases: [rs]\nparents: [lenguajes]\n---\n#rust",
         "---\nparents: [rust, a]\n---\n",
         "---\nparents: rs\ncolor: rojo\n---\n#b",
+        "---\ntítulo: Algo\nfecha: [2024, {mes: 10}]\n---\n",
     ];
 
     fn op() -> impl Strategy<Value = Op> {
@@ -285,6 +286,43 @@ mod tests {
             ],
         ])
         .unwrap();
+    }
+
+    /// El frontmatter entero sigue a la nota: cambia al editarla y se va con
+    /// ella al renombrarla, sin releerla.
+    #[test]
+    fn el_frontmatter_sigue_a_la_nota() {
+        use metalmind_syntax::{Property, PropertyValue};
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
+        let title = |text: &str| {
+            vec![Property {
+                key: "título".to_owned(),
+                value: PropertyValue::Text(text.to_owned()),
+            }]
+        };
+        fs::write(root.join("a.md"), "---\ntítulo: Uno\n---\n").unwrap();
+        let mut index = scan(&root, None);
+        let mut tags = Tags::build(VaultPath::fixed(DEFAULT_TAGS_FOLDER), &index, read);
+        let a = VaultPath::new("a.md").unwrap();
+        assert_eq!(tags.index().frontmatter(&a), title("Uno"));
+
+        let mut batch = |op: Op, tags: &mut Tags| {
+            let changes = refresh(&mut index, &root, &apply(&root, &op), None);
+            tags.apply(&changes, &index, &read);
+        };
+        batch(
+            Op::Write("a.md".into(), "---\ntítulo: Dos\n---\n"),
+            &mut tags,
+        );
+        assert_eq!(tags.index().frontmatter(&a), title("Dos"));
+        batch(Op::Rename("a.md".into(), "b.md".into()), &mut tags);
+        assert_eq!(tags.index().frontmatter(&a), []);
+        let b = VaultPath::new("b.md").unwrap();
+        assert_eq!(tags.index().frontmatter(&b), title("Dos"));
+        batch(Op::Write("b.md".into(), "sin frontmatter"), &mut tags);
+        assert_eq!(tags.index().frontmatter(&b), []);
     }
 
     proptest! {

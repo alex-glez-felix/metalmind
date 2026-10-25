@@ -156,6 +156,8 @@ Plan para el frontmatter: extraer el bloque `---...---` a mano (rangos exactos p
 
 Estado (M2.5, 2026-10-18): cada valor que Metalmind entiende (`tags`, `aliases`, `parents`, `cssclasses`, `color`, `icon`) es un `Value` con el rango del escalar en bytes (de `Spanned<T>`, que con un `&str` trae los bytes), el rango del texto si está escrito tal cual (sin comillas o entre comillas sin escapes) y lo que se borra para sacarlo de su lista: la línea de un `- valor`, o el valor con la coma que lo separa del anterior (del siguiente si es el primero), así quitar dos seguidos nunca toca la misma coma. Renombrar un tag reemplaza solo ese rango; si el valor tiene escapes o varias líneas, reemplaza el escalar entero por el nombre nuevo entre comillas, que siempre es válido porque un tag nunca lleva `"` ni `\`.
 
+Estado (2026-10-24): además, `Frontmatter::properties` trae cada clave escalar del primer nivel con su valor entero (`PropertyValue`: nulo, texto, lista o mapa anidado), en orden, de la misma lectura con `serde-saphyr`. Los escalares son su texto, como en los campos de arriba, y un alias de YAML (`*a`) vale lo que nombra.
+
 ---
 
 ## 3. Motor vim
@@ -305,7 +307,7 @@ struct LinkIndex {
 
 Los tags tienen su propio `TagIndex`, alimentado del mismo scan y del mismo watcher: ver [05 §2](05-tags.md#2-modelo-de-datos).
 
-**Restricción: el frontmatter entero va al índice** (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 1). Además de los campos que Metalmind entiende (`tags`, `aliases`, `cssclasses`, …), cada nota guarda su frontmatter completo como clave/valor genérico, de **solo lectura**: Metalmind lo consulta, nunca lo escribe por esta vía. Es lo que deja a las consultas filtrar por cualquier campo (`created:`, [05 §4](05-tags.md#4-consultas)) sin tocar los cimientos. Las vistas de tabla y las bases de datos no se decidieron con esto; 07 §2.2 recomienda que no entren. De una nota cifrada no se guarda nada: su frontmatter va dentro del cifrado ([06 §4](06-decisiones-de-fondo.md#4-cifrado-de-notas)).
+**Restricción: el frontmatter entero va al índice** (decidido el 2026-10-24, [07 §5](07-features-otras-apps.md#5-preguntas-y-respuestas), pregunta 1). Además de los campos que Metalmind entiende (`tags`, `aliases`, `cssclasses`, …), cada nota guarda su frontmatter completo como clave/valor genérico, de **solo lectura**: Metalmind lo consulta, nunca lo escribe por esta vía. Es lo que deja a las consultas filtrar por cualquier campo (`created:`, [05 §4](05-tags.md#4-consultas)) sin tocar los cimientos. Las vistas de tabla y las bases de datos no se decidieron con esto; 07 §2.2 recomienda que no entren. De una nota cifrada no se guarda nada: su frontmatter va dentro del cifrado ([06 §4](06-decisiones-de-fondo.md#4-cifrado-de-notas)). Vive en el `TagIndex`, que es el que ya lee cada nota (05 §2 "Estado"); guarda las claves de primer nivel que son escalares, que son las que una consulta puede nombrar.
 
 - **Fuente de verdad = los `.md` en disco.** El índice es derivado y siempre reconstruible. Nada de base de datos propietaria (eso es exactamente lo que hace a Obsidian compatible con git, sync, etc.).
 - **En memoria** para el MVP: 10 k notas × ~20 links ≈ unos MB. Rápido y simple.

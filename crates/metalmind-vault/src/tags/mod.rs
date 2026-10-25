@@ -22,6 +22,7 @@ mod update;
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::sync::Arc;
 use std::thread;
 
 pub use complete::TagCompletion;
@@ -284,6 +285,10 @@ fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, 
     let note = IndexedNote {
         tags,
         page: matches!(page, Some(PageFile::Page(_))),
+        frontmatter: frontmatter
+            .map(|frontmatter| frontmatter.properties)
+            .filter(|properties| !properties.is_empty())
+            .map(Arc::from),
     };
     (note, page)
 }
