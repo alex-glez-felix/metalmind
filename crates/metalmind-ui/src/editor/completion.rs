@@ -123,6 +123,8 @@ impl Editor {
         let Some(list) = self.completion.list.take() else {
             return;
         };
+        // Como una tecla del motor: lo que componía el IME ya no aplica.
+        self.marked = None;
         let text = list.accept();
         let result = self.update_workspace(cx, |workspace, pane, cx| {
             workspace.complete_tag(pane, &text, &mut SystemClipboard(cx))

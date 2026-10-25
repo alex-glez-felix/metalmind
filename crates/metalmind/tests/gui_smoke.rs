@@ -680,3 +680,32 @@ fn el_tooltip_de_una_formula_rota_no_sigue_en_otra_nota() {
         }
     });
 }
+
+/// Bajo la primera línea, donde se abre la lista de `#`.
+const TAG_COMPLETION: Area = Area {
+    x: EDITOR_LEFT,
+    y: TEXT_TOP + TEXT_LINE,
+    width: 600,
+    height: 200,
+};
+
+/// Con la lista de `#` abierta, un tag que llega del vault entra en ella:
+/// `ruby` empieza con lo escrito y pasa delante de `bruma`, y `tab` lo
+/// escribe.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_lista_de_tags_trae_los_que_llegan_del_vault() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "hola\n");
+    smoke.write("b.md", "#bruma\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let closed = window.wait_still(TAG_COMPLETION);
+    window.type_keys("A #ru");
+    window.wait_change("la lista con bruma", TAG_COMPLETION, &closed);
+    let with_bruma = window.wait_still(TAG_COMPLETION);
+    smoke.write("c.md", "#ruby\n");
+    window.wait_change("la lista con ruby", TAG_COMPLETION, &with_bruma);
+    window.type_keys("<Tab><Esc>:w<CR>");
+    smoke.wait_contents("a.md", "hola #ruby\n");
+}
