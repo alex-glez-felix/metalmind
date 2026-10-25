@@ -37,10 +37,10 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | `u` de ese `:%s` | ≤ 16 ms | 2.9 ms | ✅ | `metalmind-vim` `deshacer_sustituir_todo` |
 | `:%s` en 50 k | ≤ 160 ms | 84 ms | ⚠️ | `metalmind-vim` `sustituir_todo` |
 | `:sort` en 5 k / 50 k | ≤ 16 / 160 ms | 0.71 / 11 ms | ✅ | `metalmind-vim` `ordenar` |
-| `:g/nota/d` en 5 k / 50 k; su `u` en 5 k | ≤ 16 / 160 ms; ≤ 16 ms | 11.1 / 126 ms; 1.5 ms | ⚠️ | `metalmind-vim` `global_borrar`, `deshacer_global_borrar` |
-| `:g/nota/s/nota/apunte/` en 5 k / 50 k | ≤ 16 / 160 ms | 11.3 / 144 ms | ⚠️ | `metalmind-vim` `global_sustituir` |
-| `:g/^/m0` y `:%norm Ax` en 5 k | ≤ 16 ms | 14.3 / 13.4 ms | ⚠️ | `metalmind-vim` `global_mover_arriba`, `normal_en_cada_linea` |
-| `:g/^/m0` y `:%norm Ax` en 50 k | ≤ 160 ms | 167 / 165 ms | ❌ | ídem ([#66](https://github.com/alex-glez-felix/metalmind/issues/66)) |
+| `:g/nota/d` en 5 k / 50 k; su `u` en 5 k ([en otra máquina](#g-y-normal)) | ≤ 16 / 160 ms; ≤ 16 ms | 10.9 / 114 ms; 2.0 ms | ⚠️ | `metalmind-vim` `global_borrar`, `deshacer_global_borrar` |
+| `:g/nota/s/nota/apunte/` en 5 k / 50 k ([ídem](#g-y-normal)) | ≤ 16 / 160 ms | 13.1 / 151 ms | ⚠️ | `metalmind-vim` `global_sustituir` |
+| `:g/^/m0` y `:%norm Ax` en 5 k ([ídem](#g-y-normal)) | ≤ 16 ms | 15.2 / 11.6 ms | ⚠️ | `metalmind-vim` `global_mover_arriba`, `normal_en_cada_linea` |
+| `:g/^/m0` y `:%norm Ax` en 50 k ([ídem](#g-y-normal)) | ≤ 160 ms | 163 / 132 ms | ⚠️ | ídem |
 | `/` sin coincidencias en 50 k (recorre todo) | ≤ 8 ms | 0.34 ms | ✅ | `metalmind-vim` `buscar_sin_resultado` |
 | `?`, `/\<…\>` y `:%s` sin coincidencias en 50 k | ≤ 8 ms | 0.35 / 0.37 / 0.35 ms | ✅ | `metalmind-vim` `…_sin_resultado` |
 | `/` hasta la siguiente coincidencia en 50 k; `n` | ≤ 1 ms | 36 µs; 2 µs | ✅ | `metalmind-vim` |
@@ -154,7 +154,9 @@ cargo bench -p metalmind --bench ui > despues.md
 
 `cargo bench --workspace` lo incluye; sin Xvfb o sin driver, `--exclude metalmind`.
 
-❌ no cumple y tiene su issue. `:g` y `:normal` corren su comando en cada línea como una edición aparte, igual que vim, y lo que cuesta es la transacción del buffer: unos 3 µs por línea.
+### `:g` y `:normal`
+
+Sus filas se midieron el 2026-10-25 en un contenedor x86_64 de CI, más lento que la máquina de escritorio: ahí `main` daba, en 50 k, 202 / 304 / 266 / 316 ms en `:g/nota/d`, `:g/^/m0`, `:g/nota/s/nota/apunte/` y `:%norm Ax`, contra 126 / 167 / 144 / 165 ms en la de escritorio. Como en vim, cada línea corre su comando como una edición aparte; lo que bajó ([#66](https://github.com/alex-glez-felix/metalmind/issues/66)) es lo que cuesta cada una. Cada consulta al rope lo recorre desde la raíz y cuesta cerca de 1 k instrucciones en 50 k líneas: una edición recorría el rope unas veinte veces y ahora de tres a cinco (un `Spot` da carácter, línea y columna de un offset en un recorrido), y una línea de texto, uno o dos. El keymap mira solo los bindings que empiezan con la tecla, y `:normal` con rango no calcula la columna buscada en cada línea (vim tampoco). En instrucciones, `:g/^/m0` y `:%norm Ax` en 5 k bajaron un 36 y un 57 % (`metalmind-perf` `instrucciones`), y de paso una tecla en Insert en 50 k, un 47 %.
 
 ## El finder y la paleta
 
@@ -203,7 +205,7 @@ No sirven para CI: en los runners de GitHub el tiempo de pared varía más que l
 
 Tres benchmarks `instrucciones` cuentan instrucciones con callgrind para lo del presupuesto que corre en un hilo sobre datos en memoria. El conteo es determinista: la misma entrada da el mismo número en cada corrida, haya o no otros procesos.
 
-- `metalmind-perf/benches/instrucciones.rs`, el núcleo: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `/` sin resultado, el scan (normal, patológico y con fórmulas), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer.
+- `metalmind-perf/benches/instrucciones.rs`, el núcleo: una tecla en Insert, `dd`, `ciw`, `.`, `100@a`, `:%s`, `:g/^/m0`, `:%norm Ax`, `/` sin resultado, el scan (normal, patológico y con fórmulas), el estilo de las líneas tras una tecla, el finder, la búsqueda de texto en una nota en memoria y editar y deshacer en el buffer.
 - `metalmind-vault/benches/instrucciones.rs`, los índices, con 5 k notas: un cambio del watcher en el de links (modificar una nota, crear una cuyo nombre usan 300 links), clonarlo, los planes de renombre (una nota, una carpeta), `gd`, nombrar 50 notas para completar `[[`, los adjuntos huérfanos y los tags (consulta con descendientes, panel entero y en focus, candidatos de `#`, plan de renombre y clonarlos). Abrir el vault (disco, varios hilos) y armar el índice de links, que reparte el scan en un hilo por núcleo, van en la preparación: gungraun solo cuenta el hilo de la función medida. Que armar el índice siga lineal lo cuentan, con todos sus hilos, las pruebas de complejidad.
 - `metalmind-ui/benches/instrucciones.rs`, los modelos (una tecla en el finder con 5 k rutas, el árbol del panel, medir las fórmulas en frío y en caliente, pintar las 22 del spike, `space /`) y **el editor de la tecla al frame** ([#72](https://github.com/alex-glez-felix/metalmind/issues/72)): la ventana de verdad (`metalmind_ui::open_window`) en la plataforma de pruebas de GPUI (`HeadlessAppContext`), sin display ni GPU, con el sistema de texto que GPUI usa en Linux (cosmic-text con las fuentes del sistema), así que el layout le da forma a cada línea como en la app. Cuenta el primer frame (nota de 50 k líneas, nota con 200 fórmulas, nota en un vault de 5 k notas) y una tecla con su frame (Insert, `j` y `ctrl-d` a la mitad de 50 k líneas; `ctrl-d` con 200 fórmulas y la caché fría): el motor de vim, `render`, layout y `paint`. No cuenta `present` ni la GPU, ni las imágenes de las fórmulas, que se pintan después en el fondo.
 
