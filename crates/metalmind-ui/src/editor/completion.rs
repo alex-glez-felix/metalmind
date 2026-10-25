@@ -5,16 +5,16 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    AnyElement, App, Context, Div, InteractiveElement as _, IntoElement, KeyContext, MouseButton,
-    ParentElement as _, Point, StatefulInteractiveElement as _, Styled as _, Window, anchored, div,
-    prelude::FluentBuilder as _,
+    AnyElement, App, Context, InteractiveElement as _, IntoElement, KeyContext, MouseButton,
+    ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Window, anchored,
 };
 use metalmind_keymap::{EditorAction, View, context};
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
-use metalmind_vault::tags::{TagCompletion, TagIcon, TagKey, Tags};
+use metalmind_vault::tags::{TagCompletion, TagKey, Tags};
 
 use super::Editor;
+use super::completion_menu::CompletionMenu;
 use super::cursor::cursor_position;
 use super::layout::FrameLayout;
 use crate::actions::{AppKeymap, EDITOR_CONTEXT};
@@ -159,23 +159,25 @@ impl Editor {
 
     /// La lista bajo el nombre del tag, o encima si abajo no cabe en el
     /// texto del panel, sobre `layout`: el del frame que se está pintando.
+    /// No pasa de `max_width`, el ancho de la ventana.
     pub(super) fn completion_overlay(
-        &self,
+        &mut self,
         layout: &FrameLayout,
+        max_width: Pixels,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
+        let rows = usize::from(theme.layout.completion_rows);
+        let visible = self.completion.list.as_mut()?.visible(rows);
         let list = self.completion.list.as_ref()?;
         let view = self.view(cx)?;
         let (laid, column) = cursor_position(&view, layout)?;
         let typed = list.typed().len().min(column);
         let x = laid.origin.x + laid.x_for_index(column - typed);
-        let rows = u8::try_from(list.rows().len())
-            .unwrap_or(u8::MAX)
-            .min(theme.layout.completion_rows);
-        // El relleno y el borde, arriba y abajo.
+        // Las filas, el relleno y el borde, arriba y abajo.
         let frame = theme.layout.menu_padding + theme.stroke.border;
-        let height = theme.menu_row_height * f32::from(rows) + frame + frame;
+        let shown = u16::try_from(visible.len()).unwrap_or(u16::MAX);
+        let height = theme.menu_row_height * f32::from(shown) + frame + frame;
         let text_area = layout.viewport.bounds;
         let below = laid.origin.y + laid.height;
         let above = laid.origin.y - height;
@@ -184,29 +186,28 @@ impl Editor {
         } else {
             below
         };
-        let rows = usize::from(rows);
-        let first = list.selected().saturating_sub(rows - 1);
         let accept_keys = AppKeymap::get(cx)
             .keys_for(EditorAction::AcceptTagCompletion.into(), |view| {
                 view == View::TagCompletion
             });
-        let mut menu = div()
-            .min_w(theme.layout.menu_width)
-            .p(theme.layout.menu_padding)
-            .flex()
-            .flex_col()
-            .bg(theme.ui.menu_background)
-            .border(theme.stroke.border)
-            .border_color(theme.ui.menu_border)
-            .rounded(theme.radius.md)
-            .map(|element| theme.ui_text(element));
-        for (row, (completion, alias)) in list.rows().enumerate().skip(first).take(rows) {
-            let selected = row == list.selected();
-            let keys = selected.then(|| accept_keys.clone()).flatten();
-            menu = menu.child(completion_row(
-                row, completion, alias, keys, selected, theme, cx,
-            ));
+        let menu = CompletionMenu {
+            list,
+            visible,
+            accept_keys,
+            max_width,
         }
+        .render(theme, cx, |row, element, cx| {
+            element
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(cx.listener(move |editor, _, window, cx| {
+                    if let Some(list) = &mut editor.completion.list {
+                        list.select(row);
+                    }
+                    // El foco pudo irse (al panel lateral) con la lista abierta.
+                    editor.take_focus(window, cx);
+                    editor.accept_completion(window, cx);
+                }))
+        });
         Some(
             anchored()
                 .position(Point { x, y })
@@ -214,66 +215,5 @@ impl Editor {
                 .child(menu)
                 .into_any_element(),
         )
-    }
-}
-
-/// Un tag de la lista: su ícono, su nombre, el alias por el que coincidió,
-/// su conteo y, en el elegido, la tecla que lo acepta.
-fn completion_row(
-    row: usize,
-    completion: &TagCompletion,
-    alias: Option<&str>,
-    keys: Option<String>,
-    selected: bool,
-    theme: &Theme,
-    cx: &mut Context<Editor>,
-) -> AnyElement {
-    let muted = |text: String| {
-        div()
-            .flex_none()
-            .map(|element| theme.ui_small_text(element))
-            .text_color(theme.ui.panel_muted)
-            .child(text)
-    };
-    div()
-        .id(("tag-completion", row))
-        .h(theme.menu_row_height)
-        .px(theme.layout.menu_item_padding_x)
-        .flex()
-        .items_center()
-        .gap(theme.layout.panel_gap)
-        .rounded(theme.radius.md)
-        .text_color(theme.ui.panel_foreground)
-        .when(selected, |element| element.bg(theme.ui.menu_hover))
-        .hover(|element| element.bg(theme.ui.menu_hover))
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_click(cx.listener(move |editor, _, window, cx| {
-            if let Some(list) = &mut editor.completion.list {
-                list.select(row);
-            }
-            // El foco pudo irse (al panel lateral) con la lista abierta.
-            editor.take_focus(window, cx);
-            editor.accept_completion(window, cx);
-        }))
-        .child(icon(completion.icon.as_ref(), theme))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .child(completion.name.clone()),
-        )
-        .children(alias.map(|alias| muted(format!("alias {alias}"))))
-        .child(muted(completion.count.to_string()))
-        .children(keys.map(muted))
-        .into_any_element()
-}
-
-/// El emoji de la página del tag o un `#` tenue, como en el panel.
-fn icon(icon: Option<&TagIcon>, theme: &Theme) -> Div {
-    let slot = div().w(theme.icon_size).flex_none().flex().justify_center();
-    match icon {
-        Some(TagIcon::Emoji(emoji)) => slot.child(emoji.clone()),
-        Some(TagIcon::Set { .. }) | None => slot.text_color(theme.ui.panel_muted).child("#"),
     }
 }

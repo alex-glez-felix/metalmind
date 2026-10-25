@@ -2,6 +2,7 @@
 //! entrada al [`Workspace`], que es quien edita.
 
 mod completion;
+mod completion_menu;
 mod cursor;
 mod element;
 mod formula_tooltip;

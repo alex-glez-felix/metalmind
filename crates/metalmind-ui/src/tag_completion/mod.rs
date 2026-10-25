@@ -6,6 +6,7 @@
 //! `#ru` ofrece `Rust` antes que `arquitectura` aunque esta tenga más.
 
 use std::borrow::Cow;
+use std::ops::Range;
 use std::sync::Arc;
 
 use metalmind_search::{FuzzyMatcher, Query};
@@ -20,6 +21,8 @@ pub struct TagCompletions {
     place: TagPlace,
     shown: Vec<Shown>,
     selected: usize,
+    /// La primera fila que se ve.
+    first: usize,
 }
 
 /// Un tag de la lista.
@@ -50,6 +53,7 @@ impl TagCompletions {
             place,
             shown,
             selected: 0,
+            first: 0,
         })
     }
 
@@ -76,6 +80,19 @@ impl TagCompletions {
     #[must_use]
     pub fn selected(&self) -> usize {
         self.selected
+    }
+
+    /// Las filas que se ven, `rows` como mucho. Como en un picker, solo se
+    /// corren cuando la elegida sale de ellas.
+    pub fn visible(&mut self, rows: usize) -> Range<usize> {
+        let rows = rows.clamp(1, self.shown.len());
+        if self.selected < self.first {
+            self.first = self.selected;
+        } else if self.selected >= self.first + rows {
+            self.first = self.selected + 1 - rows;
+        }
+        self.first = self.first.min(self.shown.len() - rows);
+        self.first..self.first + rows
     }
 
     /// La siguiente, y tras la última la primera.
