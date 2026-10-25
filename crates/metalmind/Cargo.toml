@@ -16,6 +16,7 @@ jiff.workspace = true
 log.workspace = true
 metalmind-config.workspace = true
 metalmind-search.workspace = true
+metalmind-syntax.workspace = true
 metalmind-ui.workspace = true
 metalmind-vault.workspace = true
 serde.workspace = true
@@ -24,7 +25,6 @@ thiserror.workspace = true
 
 [dev-dependencies]
 metalmind-perf.workspace = true
-metalmind-syntax.workspace = true
 png.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true

@@ -3,9 +3,9 @@
 //! - `metalmind <carpeta>`: esa carpeta es el vault, sin archivo abierto.
 //! - `metalmind <archivo>`: el vault es la carpeta que contiene al archivo
 //!   (exista o no el archivo, la carpeta tiene que existir). Una ruta que no
-//!   existe es un archivo solo si tiene extensión (`nueva.md`); sin ella
-//!   (`~/Notas`) es una carpeta que falta, y se dice en vez de abrir la de
-//!   arriba.
+//!   existe es un archivo solo si es una nota (`nueva.md`); si no
+//!   (`~/Notas`, `~/Notas.2026`) es una carpeta que falta, y se dice en vez
+//!   de abrir la de arriba.
 //! - `metalmind`: la carpeta de la variable `METALMIND_VAULT`, si está; si no, el
 //!   último vault abierto y, si no hay, el `vault:` de `config.yaml`
 //!   (06 §8).
@@ -18,6 +18,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use metalmind_config::{Paths, Settings};
+use metalmind_syntax::note_name;
 
 /// La variable de entorno con el vault que abre `metalmind` sin argumentos.
 pub const VAULT_VARIABLE: &str = "METALMIND_VAULT";
@@ -33,8 +34,9 @@ pub enum TargetError {
     #[error("no existe la carpeta {}", .0.display())]
     MissingFolder(PathBuf),
     #[error(
-        "no existe la carpeta {path}; créala con `mkdir -p {path}` o pasa una que exista",
-        path = .0.display()
+        "no existe la carpeta {}; créala con `mkdir -p {}` o pasa una que exista",
+        .0.display(),
+        shell_quoted(.0)
     )]
     MissingVault(PathBuf),
     #[error("{VAULT_VARIABLE} apunta a {}, que no es una carpeta", .0.display())]
@@ -106,7 +108,7 @@ pub fn resolve(argument: Option<&Path>, sources: Sources) -> Result<Target, Targ
             file: None,
         });
     }
-    if path.extension().is_none() && !path.exists() {
+    if !path.exists() && !is_note(path) {
         return Err(TargetError::MissingVault(path.to_owned()));
     }
     let folder = match path.parent() {
@@ -120,6 +122,23 @@ pub fn resolve(argument: Option<&Path>, sources: Sources) -> Result<Target, Targ
         vault: folder,
         file: Some(path.to_owned()),
     })
+}
+
+fn is_note(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(note_name::is_note)
+}
+
+/// `path` como se escribe en el shell para que llegue tal cual.
+fn shell_quoted(path: &Path) -> String {
+    let path = path.to_string_lossy();
+    let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+,:@%".contains(c);
+    if !path.is_empty() && path.chars().all(plain) {
+        path.into_owned()
+    } else {
+        format!("'{}'", path.replace('\'', r"'\''"))
+    }
 }
 
 /// `file` (relativa al directorio de trabajo de ahora) como se escribiría
@@ -220,7 +239,13 @@ mod tests {
     #[test]
     fn una_carpeta_que_no_existe_no_abre_la_de_arriba() {
         let dir = vault();
-        for missing in ["Notas", "Notas/", "notas/no/existe"] {
+        for missing in [
+            "Notas",
+            "Notas/",
+            "notas/no/existe",
+            "Notas.2026",
+            "vault.v2/",
+        ] {
             let path = dir.path().join(missing);
             assert_eq!(
                 resolve(Some(&path), None, None, None),
@@ -236,6 +261,11 @@ mod tests {
         assert_eq!(
             message,
             "no existe la carpeta /x/Notas; créala con `mkdir -p /x/Notas` o pasa una que exista"
+        );
+        let message = TargetError::MissingVault(PathBuf::from("/x/Mi vault's")).to_string();
+        assert_eq!(
+            message,
+            "no existe la carpeta /x/Mi vault's; créala con `mkdir -p '/x/Mi vault'\\''s'` o pasa una que exista"
         );
     }
 
