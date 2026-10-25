@@ -89,15 +89,13 @@ impl<W: Watches> FolderWatch<W> {
         Ok(watch)
     }
 
-    /// Vigila la carpeta `dir` si no lo está ya. El walk la pasa antes de
-    /// leerla.
+    /// Vigila la carpeta `dir`. El walk la pasa antes de leerla, aunque ya
+    /// se vigilara: si la borraron y la crearon otra vez, notify soltó el
+    /// watch de la vieja. Para la misma carpeta, inotify reusa el que tiene.
     pub(crate) fn folder(&mut self, dir: &Path) {
         let Some(watches) = &mut self.watches else {
             return;
         };
-        if self.watched.contains(dir) {
-            return;
-        }
         match watches.watch(dir) {
             Ok(()) => {
                 self.watched.insert(dir.to_owned());
@@ -125,9 +123,8 @@ impl<W: Watches> FolderWatch<W> {
             .collect();
         for dir in left {
             self.watched.remove(&dir);
-            // Una carpeta movida conserva su watch, y el walk ya la vigiló en
-            // su ruta nueva: soltar la vieja la dejaría sin ninguno. Solo se
-            // suelta lo que sigue ahí, como lo que pasó a estar ignorado.
+            // Lo que se movió o borró ya lo soltó notify, con todo lo de
+            // adentro; lo que sigue ahí es lo que pasó a estar ignorado.
             if is_dir(&dir) {
                 // Si ya no tenía watch, no hay nada que soltar.
                 let _ = watches.unwatch(&dir);
@@ -233,7 +230,7 @@ mod tests {
     use super::*;
 
     /// Un watcher de mentira que anota lo que vigila y se queda sin watches
-    /// después de `limit`.
+    /// después de `limit`. Como inotify, la misma carpeta gasta uno solo.
     #[derive(Clone)]
     struct Fake {
         watched: Rc<RefCell<BTreeSet<PathBuf>>>,
@@ -262,7 +259,7 @@ mod tests {
     impl Watches for Fake {
         fn watch(&mut self, dir: &Path) -> notify::Result<()> {
             let mut watched = self.watched.borrow_mut();
-            if watched.len() == self.limit {
+            if !watched.contains(dir) && watched.len() == self.limit {
                 return Err(notify::Error::new(ErrorKind::MaxFilesWatch));
             }
             self.log.borrow_mut().push(format!("+{}", dir.display()));
@@ -294,17 +291,16 @@ mod tests {
     }
 
     #[test]
-    fn vigila_cada_carpeta_una_vez() {
+    fn vigilar_otra_vez_una_carpeta_no_gasta_otro_watch() {
         let dir = TempDir::new().unwrap();
         let root = dir.path();
-        let fake = Fake::new(usize::MAX);
+        let fake = Fake::new(3);
         let mut watch = start(root, &fake);
         assert_eq!(fake.relative(root), [""]);
         watch.folder(&root.join("a"));
         watch.folder(&root.join("a/b"));
         watch.folder(&root.join("a"));
         assert_eq!(fake.relative(root), ["", "a", "a/b"]);
-        assert_eq!(fake.log.borrow().len(), 3);
         assert_eq!(watch.lost(), None);
     }
 

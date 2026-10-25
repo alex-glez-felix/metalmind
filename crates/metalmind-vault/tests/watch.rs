@@ -292,6 +292,40 @@ fn una_carpeta_nueva_se_vigila_sin_perder_lo_que_ya_tenia() {
 }
 
 #[test]
+fn una_carpeta_reemplazada_en_un_lote_se_sigue_vigilando() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["a/vieja.md"]);
+    let (vault, updates) = open(dir.path());
+    fs::remove_dir_all(dir.path().join("a")).unwrap();
+    make_tree(dir.path(), &["a/nueva.md"]);
+    settle(&vault, &updates, &["a/", "a/nueva.md (nota)"]);
+    fs::write(dir.path().join("a/otra.md"), "").unwrap();
+    settle(
+        &vault,
+        &updates,
+        &["a/", "a/nueva.md (nota)", "a/otra.md (nota)"],
+    );
+    assert_eq!(inotify_watches(), 2);
+}
+
+#[test]
+fn una_carpeta_que_sale_del_vault_suelta_sus_watches() {
+    let outside = TempDir::new().unwrap();
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["sub/deep/a.md", "otra/b.md", "web/"]);
+    let (vault, updates) = open(dir.path());
+    assert_eq!(inotify_watches(), 5);
+    fs::rename(dir.path().join("sub"), outside.path().join("sub")).unwrap();
+    fs::rename(dir.path().join("otra"), dir.path().join("web/node_modules")).unwrap();
+    settle(&vault, &updates, &["web/"]);
+    assert_eq!(inotify_watches(), 2, "la raíz y web");
+    fs::write(outside.path().join("sub/deep/c.md"), "").unwrap();
+    fs::write(dir.path().join("web/node_modules/c.md"), "").unwrap();
+    make_tree(dir.path(), &["d.md"]);
+    settle(&vault, &updates, &["web/", "d.md (nota)"]);
+}
+
+#[test]
 fn el_exclude_de_git_relee_todo_aunque_git_llegue_despues() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["a.md", "privado/b.md"]);

@@ -90,17 +90,19 @@ fn walker(root: &Path, before: Option<BeforeReading>) -> WalkBuilder {
 }
 
 /// Si el walk sigue por `entry`. El filtro corre después de los
-/// `.gitignore` y antes de leer la carpeta: el momento de `before`.
+/// `.gitignore` y antes de leer la carpeta: el momento de `before`, que va
+/// antes de buscar su `CACHEDIR.TAG` para que uno que llegue después dé evento.
 fn enters(entry: &DirEntry, before: Option<&BeforeReading>) -> bool {
-    if !in_vault(entry) {
+    if !named_in_vault(entry) {
         return false;
     }
-    if let Some(before) = before
-        && entry.file_type().is_some_and(|kind| kind.is_dir())
-    {
+    if !entry.file_type().is_some_and(|kind| kind.is_dir()) {
+        return true;
+    }
+    if let Some(before) = before {
         before(entry.path());
     }
-    true
+    entry.depth() == 0 || !is_cache_dir(entry.path())
 }
 
 /// Las reglas del vault, iguales en cualquier máquina: `.gitignore` e
@@ -122,9 +124,10 @@ fn rules(root: &Path) -> WalkBuilder {
     builder
 }
 
-/// Lo que nunca es del vault aunque no lo ignore ningún `.gitignore`: lo
-/// oculto, las dependencias de Node y las carpetas de caché.
-fn in_vault(entry: &DirEntry) -> bool {
+/// Lo que por su nombre nunca es del vault aunque no lo ignore ningún
+/// `.gitignore`: lo oculto y las dependencias de Node. Las carpetas de caché
+/// tampoco, pero esas se reconocen por su `CACHEDIR.TAG`.
+fn named_in_vault(entry: &DirEntry) -> bool {
     if entry.depth() == 0 {
         return true;
     }
@@ -133,7 +136,7 @@ fn in_vault(entry: &DirEntry) -> bool {
         return false;
     }
     let is_dir = entry.file_type().is_some_and(|kind| kind.is_dir());
-    !(is_dir && (name == Some(NODE_MODULES) || is_cache_dir(entry.path())))
+    !(is_dir && name == Some(NODE_MODULES))
 }
 
 /// Ver <https://bford.info/cachedir/>: el `target` de cargo lo lleva.
@@ -296,5 +299,32 @@ impl Scope {
 
     fn allows(&self, path: &VaultPath) -> bool {
         self.ancestors.contains(path) || self.contains(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use pretty_assertions::assert_eq;
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn un_cachedir_tag_escrito_al_vigilar_la_carpeta_la_saca() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("cache/sub")).unwrap();
+        fs::write(root.join("cache/sub/a.md"), "").unwrap();
+        let cache = root.join("cache");
+        let tag_on_watch: BeforeReading = Arc::new(move |dir| {
+            if dir == cache {
+                fs::write(dir.join(CACHEDIR_TAG), CACHEDIR_SIGNATURE).unwrap();
+            }
+        });
+        let index = scan(&root, Some(tag_on_watch));
+        assert_eq!(index.kind(&VaultPath::new("cache").unwrap()), None);
+        assert!(index.is_empty());
     }
 }
