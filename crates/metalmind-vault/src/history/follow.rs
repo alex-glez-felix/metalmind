@@ -2,13 +2,12 @@
 //! ve el watcher, y lo que pasó con el vault cerrado (06 §1).
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
 
 use super::store::{Index, IndexEntry};
-use super::{ContentHash, History, HistoryError, to_millis};
-use crate::file;
+use super::{History, HistoryError, to_millis};
+use crate::fingerprint::{Fingerprint, pair_by_content};
 use crate::index::EntryKind;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
@@ -165,11 +164,9 @@ impl History {
         Ok(())
     }
 
-    /// Para cada historia de `lost`, la nota cuyo contenido es igual a su
-    /// última versión y que no tiene historia viva. Solo cuando el
-    /// emparejamiento no tiene dudas: una nota vacía, o un contenido que
-    /// tiene más de una historia o más de una nota, se queda sin adoptar.
-    /// Mira el tamaño antes de leer y hashear.
+    /// Para cada historia de `lost`, la nota sin historia viva cuyo
+    /// contenido es igual a su última versión, si no hay dudas
+    /// ([`pair_by_content`]).
     fn adopt<'a>(
         &self,
         root: &Path,
@@ -177,64 +174,35 @@ impl History {
         lost: &[VaultPath],
         notes: &HashSet<&'a VaultPath>,
     ) -> Result<HashMap<VaultPath, &'a VaultPath>, HistoryError> {
-        let mut wanted: HashMap<(usize, ContentHash), Vec<VaultPath>> = HashMap::new();
+        let mut latest = Vec::new();
         for path in lost {
             let Some(entry) = index.notes.get(path) else {
                 continue;
             };
-            let latest = match self.store.read_log(entry.id) {
-                Ok(log) => log.entries().last().map(|last| (last.len, last.hash)),
+            match self.store.read_log(entry.id) {
+                Ok(log) => latest.extend(log.entries().last().map(|last| {
+                    let fingerprint = Fingerprint {
+                        len: last.len,
+                        hash: last.hash,
+                    };
+                    (path.clone(), fingerprint)
+                })),
                 // Un log dañado no impide alinear las demás notas.
-                Err(error @ HistoryError::Corrupt { .. }) => {
-                    log::warn!("{error}");
-                    None
-                }
+                Err(error @ HistoryError::Corrupt { .. }) => log::warn!("{error}"),
                 Err(error) => return Err(error),
-            };
-            if let Some(key @ (len, _)) = latest
-                && len > 0
-            {
-                wanted.entry(key).or_default().push(path.clone());
             }
         }
-        let sizes: HashSet<usize> = wanted.keys().map(|(len, _)| *len).collect();
-        if sizes.is_empty() {
-            return Ok(HashMap::new());
-        }
-        let mut found: HashMap<(usize, ContentHash), Vec<&'a VaultPath>> = HashMap::new();
-        let free = |note: &VaultPath| {
+        let free = |note: &&VaultPath| {
             index
                 .notes
-                .get(note)
+                .get(*note)
                 .is_none_or(|entry| entry.deleted.is_some())
         };
-        for &note in notes.iter().filter(|note| free(note)) {
-            let full = note.to_fs(root);
-            let same_size = fs::metadata(&full)
-                .ok()
-                .and_then(|metadata| usize::try_from(metadata.len()).ok())
-                .is_some_and(|len| sizes.contains(&len));
-            if !same_size {
-                continue;
-            }
-            let Ok(Some(text)) = file::read(&full) else {
-                continue;
-            };
-            let key = (text.len(), ContentHash::of(&text));
-            if wanted.contains_key(&key) {
-                found.entry(key).or_default().push(note);
-            }
-        }
-        // Con dos historias del mismo contenido, nada dice cuál fue a dónde.
-        Ok(wanted
-            .into_iter()
-            .filter_map(|(key, histories)| {
-                match (histories.as_slice(), found.remove(&key)?.as_slice()) {
-                    ([history], [target]) => Some((history.clone(), *target)),
-                    _ => None,
-                }
-            })
-            .collect())
+        Ok(pair_by_content(
+            root,
+            latest,
+            notes.iter().copied().filter(free),
+        ))
     }
 }
 

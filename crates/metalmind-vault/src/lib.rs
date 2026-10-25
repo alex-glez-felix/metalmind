@@ -1,7 +1,8 @@
 //! El vault en disco: abrir una carpeta, sus índices de archivos, links y
 //! tags al día con lo que pasa en disco, crear, capturar, mover y borrar, el
 //! guardado atómico de cada nota, aplicar y deshacer cambios en varios
-//! archivos, los adjuntos y el historial de versiones de cada nota.
+//! archivos, los adjuntos, el historial de versiones de cada nota y la
+//! jumplist y las marks `A`–`Z` guardadas entre sesiones.
 
 mod apply;
 mod attachment;
@@ -10,6 +11,7 @@ mod cause;
 mod changes;
 mod edit;
 mod file;
+mod fingerprint;
 mod history;
 mod index;
 mod links;
@@ -17,6 +19,7 @@ mod ops;
 mod order;
 mod path;
 mod refresh;
+mod saved_jumps;
 mod scan;
 mod searchable;
 pub mod tags;
@@ -46,6 +49,7 @@ pub use links::{
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
+pub use saved_jumps::{SaveJumpsError, SavedJump, SavedJumps};
 pub use scan::walk_notes;
 pub use vault::{
     HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
