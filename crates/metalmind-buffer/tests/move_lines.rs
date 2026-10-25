@@ -51,6 +51,8 @@ fn moves_the_text_like_vim() {
         ("a\nb\nc", 2..=2, 0, "c\na\nb"),
         ("a\nb\nc", 0..=0, 3, "b\nc\na"),
         ("a\nb\n", 0..=0, 3, "b\n\na"),
+        ("a\n\nc", 2..=2, 1, "a\nc\n"),
+        ("a\n\nc\nd", 2..=3, 1, "a\nc\nd\n"),
     ];
     for (before, lines, below, after) in cases {
         let mut buffer = Buffer::from(before);
@@ -133,16 +135,19 @@ fn rejects_moves_into_themselves_or_out_of_the_text() {
 }
 
 proptest! {
-    /// Cada ancla sigue en una línea con el mismo texto que antes, y deshacer
-    /// devuelve el texto.
+    /// Cada ancla sigue en una línea con el mismo texto que antes, también
+    /// con líneas vacías, y deshacer devuelve el texto.
     #[test]
     fn every_anchor_keeps_its_line_text(
         count in 1..12usize,
         first in 0..12usize,
         len in 0..12usize,
         below in 0..13usize,
+        empty in proptest::collection::vec(proptest::bool::ANY, 12),
     ) {
-        let text: Vec<String> = (0..count).map(|line| format!("l{line}")).collect();
+        let text: Vec<String> = (0..count)
+            .map(|line| if empty[line] { String::new() } else { format!("l{line}") })
+            .collect();
         let text = text.join("\n");
         let first = first.min(count - 1);
         let last = (first + len).min(count - 1);
