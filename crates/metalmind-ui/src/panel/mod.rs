@@ -1,20 +1,22 @@
-//! El panel lateral sin GPUI: si se ve, en qué vista, el árbol de carpetas
-//! y lo que se le está preguntando al usuario (un nombre, el filtro o
+//! El panel lateral sin GPUI: si se ve, en qué vista, el árbol de carpetas,
+//! el de tags y lo que se le está preguntando al usuario (un nombre, el filtro o
 //! confirmar un borrado). Confirmar devuelve un [`Request`] que ejecuta
 //! quien tiene el vault; así las reglas de los nombres se prueban sin disco.
 
 mod input;
 mod marks;
+mod outline;
 
 use metalmind_syntax::note_name;
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
+pub use self::outline::Outline;
 use crate::file_tree::FileTree;
+use crate::tag_outline::TagOutline;
 
-/// Las dos vistas del panel (05 §3). La de tags llega con el índice de
-/// tags (M2.5).
+/// Las dos vistas del panel (05 §3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelView {
     #[default]
@@ -101,6 +103,7 @@ pub struct Panel {
     pub visible: bool,
     pub view: PanelView,
     pub tree: FileTree,
+    pub tags: TagOutline,
     prompt: Option<Prompt>,
     /// El último error de una operación, hasta la próxima.
     error: Option<String>,
@@ -108,11 +111,12 @@ pub struct Panel {
 
 impl Panel {
     #[must_use]
-    pub fn new(tree: FileTree, visible: bool, view: PanelView) -> Self {
+    pub fn new(tree: FileTree, tags: TagOutline, visible: bool, view: PanelView) -> Self {
         Self {
             visible,
             view,
             tree,
+            tags,
             prompt: None,
             error: None,
         }
@@ -141,23 +145,39 @@ impl Panel {
         self.visible
     }
 
-    /// Un clic en la fila `at`, el `count`-ésimo seguido: selecciona, y el
-    /// primero abre o cierra una carpeta. Sobre un archivo, cada clic lo
-    /// abre, como en Zed: el primero deja el foco en el árbol y el doble se
-    /// lo pasa al editor. El segundo clic sobre una carpeta no hace nada:
-    /// si no, un doble clic la dejaría como estaba.
+    /// La vista que se ve.
+    #[must_use]
+    pub fn outline(&self) -> &dyn Outline {
+        match self.view {
+            PanelView::Folders => &self.tree,
+            PanelView::Tags => &self.tags,
+        }
+    }
+
+    pub fn outline_mut(&mut self) -> &mut dyn Outline {
+        match self.view {
+            PanelView::Folders => &mut self.tree,
+            PanelView::Tags => &mut self.tags,
+        }
+    }
+
+    /// Un clic en la fila `at` de la vista que se ve, el `count`-ésimo
+    /// seguido: selecciona, y el primero abre o cierra una carpeta o un tag.
+    /// Sobre un archivo, cada clic lo abre, como en Zed: el primero deja el
+    /// foco en el panel y el doble se lo pasa al editor. El segundo clic
+    /// sobre una carpeta no hace nada: si no, un doble clic la dejaría como
+    /// estaba.
     pub fn click(&mut self, at: usize, count: usize) -> Option<ClickOpen> {
-        self.tree.select_row(at);
-        let row = self.tree.selected_entry()?;
-        let path = row.path.clone();
-        if row.kind != EntryKind::Folder {
+        let outline = self.outline_mut();
+        outline.select_row(at);
+        if let Some(path) = outline.selected_file() {
             return Some(ClickOpen {
-                path,
+                path: path.clone(),
                 focus_editor: count > 1,
             });
         }
         if count == 1 {
-            self.tree.toggle(&path);
+            outline.toggle_selected();
         }
         None
     }
@@ -249,7 +269,11 @@ impl Panel {
         }
     }
 
+    /// Las preguntas son de archivos: en la vista de tags no se abren.
     fn open(&mut self, prompt: Prompt) {
+        if self.view != PanelView::Folders {
+            return;
+        }
         self.error = None;
         self.prompt = Some(prompt);
     }

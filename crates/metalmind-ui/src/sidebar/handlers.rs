@@ -1,14 +1,12 @@
 //! Qué hace cada acción del panel.
 
 use gpui_kit::{Context, Window};
-use metalmind_vault::EntryKind;
 
 use metalmind_keymap::{Action, PanelAction};
 
 use super::{Sidebar, SidebarEvent};
 use crate::actions::Dispatch;
-use crate::file_tree::FileTree;
-use crate::panel::{NewEntry, Request};
+use crate::panel::{NewEntry, Outline, Request};
 use crate::workspace::{Axis, Placement};
 
 impl Sidebar {
@@ -49,53 +47,45 @@ impl Sidebar {
         }
     }
 
-    /// Una operación del árbol que mueve la selección.
-    fn navigate(&mut self, cx: &mut Context<Self>, step: impl FnOnce(&mut FileTree)) {
-        step(&mut self.panel.tree);
+    /// Una operación de la vista que se ve que mueve la selección.
+    fn navigate(&mut self, cx: &mut Context<Self>, step: impl FnOnce(&mut dyn Outline)) {
+        step(self.panel.outline_mut());
         self.scroll_to_selection();
         cx.notify();
     }
 
     fn select_next(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(cx, FileTree::select_next);
+        self.navigate(cx, |outline| outline.select_next());
     }
 
     fn select_previous(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(cx, FileTree::select_previous);
+        self.navigate(cx, |outline| outline.select_previous());
     }
 
     fn select_first(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(cx, FileTree::select_first);
+        self.navigate(cx, |outline| outline.select_first());
     }
 
     fn select_last(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(cx, FileTree::select_last);
+        self.navigate(cx, |outline| outline.select_last());
     }
 
     fn collapse_or_parent(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.navigate(cx, FileTree::collapse_or_parent);
+        self.navigate(cx, |outline| outline.collapse_or_parent());
     }
 
     fn expand_or_open(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        match self.panel.tree.selected_entry() {
-            Some(row) if row.kind != EntryKind::Folder => {
-                let path = row.path.clone();
-                self.open(&path, Placement::Current, true, cx);
-            }
-            _ => self.navigate(cx, FileTree::expand_or_enter),
+        match self.panel.outline().selected_file().cloned() {
+            Some(path) => self.open(&path, Placement::Current, true, cx),
+            None => self.navigate(cx, |outline| outline.expand_or_enter()),
         }
     }
 
-    /// Un archivo se abre; una carpeta se abre o se cierra.
+    /// Un archivo se abre; una carpeta o un tag se abre o se cierra.
     fn open_selected(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        let Some(row) = self.panel.tree.selected_entry() else {
-            return;
-        };
-        let path = row.path.clone();
-        if row.kind == EntryKind::Folder {
-            self.navigate(cx, |tree| tree.toggle(&path));
-        } else {
-            self.open(&path, Placement::Current, true, cx);
+        match self.panel.outline().selected_file().cloned() {
+            Some(path) => self.open(&path, Placement::Current, true, cx),
+            None => self.navigate(cx, |outline| outline.toggle_selected()),
         }
     }
 
@@ -109,11 +99,7 @@ impl Sidebar {
 
     fn open_selected_in(&mut self, placement: Placement, cx: &mut Context<Self>) {
         self.menu = None;
-        let Some(row) = self.panel.tree.selected_entry() else {
-            return;
-        };
-        if row.kind != EntryKind::Folder {
-            let path = row.path.clone();
+        if let Some(path) = self.panel.outline().selected_file().cloned() {
             self.open(&path, placement, true, cx);
         }
     }

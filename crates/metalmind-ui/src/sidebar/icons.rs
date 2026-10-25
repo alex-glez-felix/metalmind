@@ -39,13 +39,18 @@ fn page(size: gpui_kit::Pixels, color: Hsla, theme: &Theme) -> Div {
 /// `▸` o `▾` delante de una carpeta; un hueco del mismo ancho delante de
 /// un archivo, para que los nombres queden alineados.
 pub fn disclosure(kind: EntryKind, expanded: bool, theme: &Theme) -> Div {
+    arrow((kind == EntryKind::Folder).then_some(expanded), theme)
+}
+
+/// `▸` cerrado, `▾` abierto, o el hueco de lo que no se abre.
+pub fn arrow(expanded: Option<bool>, theme: &Theme) -> Div {
     let slot = div()
         .w(theme.icon_size)
         .flex_none()
         .text_color(theme.ui.panel_muted);
-    match (kind, expanded) {
-        (EntryKind::Folder, true) => slot.child("▾"),
-        (EntryKind::Folder, false) => slot.child("▸"),
-        _ => slot,
+    match expanded {
+        Some(true) => slot.child("▾"),
+        Some(false) => slot.child("▸"),
+        None => slot,
     }
 }

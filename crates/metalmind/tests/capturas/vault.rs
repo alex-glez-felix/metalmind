@@ -122,6 +122,15 @@ pub fn write(root: &Path) {
         "Proyectos/foto de las vacaciones con un nombre larguísimo.jpg",
         b"\xff\xd8\xff",
     );
+    // Las páginas dan la jerarquía y los íconos de la vista de tags.
+    file(
+        "tags/rust.md",
+        "---\nicon: 🦀\n---\nEl lenguaje.\n".as_bytes(),
+    );
+    file(
+        "tags/diseño.md",
+        "---\nicon: 🎨\nparents: [rust]\n---\n".as_bytes(),
+    );
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
     file(FORMULAS, SPIKE_FORMULAS.as_bytes());
     file(LONG_FORMULAS, long_formulas().as_bytes());

@@ -14,6 +14,7 @@ use std::sync::Arc;
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 
 use self::filter::Matches;
+use crate::panel::Outline;
 
 /// Una fila visible del árbol.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,11 +95,6 @@ impl FileTree {
     }
 
     #[must_use]
-    pub fn selected_row(&self) -> Option<usize> {
-        self.selected_row
-    }
-
-    #[must_use]
     pub fn selected_entry(&self) -> Option<&Row> {
         self.rows.get(self.selected_row?)
     }
@@ -121,17 +117,6 @@ impl FileTree {
     #[must_use]
     pub fn is_filtering(&self) -> bool {
         !self.filter.is_empty()
-    }
-
-    pub fn select_row(&mut self, row: usize) {
-        let Some(last) = self.rows.len().checked_sub(1) else {
-            self.selected = None;
-            self.selected_row = None;
-            return;
-        };
-        let row = row.min(last);
-        self.selected = Some(self.rows[row].path.clone());
-        self.selected_row = Some(row);
     }
 
     /// Selecciona `path`, abriendo las carpetas que lo contienen. Devuelve
@@ -162,30 +147,6 @@ impl FileTree {
         }
     }
 
-    pub fn select_next(&mut self) {
-        self.move_selection(1);
-    }
-
-    pub fn select_previous(&mut self) {
-        self.move_selection(-1);
-    }
-
-    pub fn select_first(&mut self) {
-        self.select_row(0);
-    }
-
-    pub fn select_last(&mut self) {
-        self.select_row(usize::MAX);
-    }
-
-    fn move_selection(&mut self, delta: isize) {
-        let row = match self.selected_row {
-            Some(row) => row.saturating_add_signed(delta),
-            None => 0,
-        };
-        self.select_row(row);
-    }
-
     /// Abre o cierra la carpeta `path`. Con un filtro, todas se ven
     /// abiertas y esto no hace nada.
     pub fn toggle(&mut self, path: &VaultPath) {
@@ -211,42 +172,6 @@ impl FileTree {
         }
         if self.expanded.remove(path) {
             self.rebuild();
-        }
-    }
-
-    /// `h`: cierra la carpeta seleccionada o, si ya está cerrada o es un
-    /// archivo, sube a la carpeta que la contiene.
-    pub fn collapse_or_parent(&mut self) {
-        let Some(row) = self.selected_entry() else {
-            return;
-        };
-        if row.expanded && !self.is_filtering() {
-            let path = row.path.clone();
-            self.collapse(&path);
-            return;
-        }
-        if let Some(parent) = row.path.parent().filter(|parent| !parent.is_root()) {
-            self.select(&parent);
-        }
-    }
-
-    /// `l` sobre una carpeta: la abre o, si ya está abierta, baja a su
-    /// primer hijo.
-    pub fn expand_or_enter(&mut self) {
-        let (Some(row), Some(at)) = (self.selected_entry(), self.selected_row) else {
-            return;
-        };
-        if !row.is_folder() {
-            return;
-        }
-        if row.expanded {
-            let depth = row.depth;
-            if self.rows.get(at + 1).is_some_and(|next| next.depth > depth) {
-                self.select_row(at + 1);
-            }
-        } else {
-            let path = row.path.clone();
-            self.expand(&path);
         }
     }
 
@@ -370,6 +295,76 @@ impl FileTree {
                 self.push_children(entry.path, depth + 1, matches, rows);
             }
         }
+    }
+}
+
+impl Outline for FileTree {
+    fn selected_row(&self) -> Option<usize> {
+        self.selected_row
+    }
+
+    fn select_row(&mut self, row: usize) {
+        let Some(last) = self.rows.len().checked_sub(1) else {
+            self.selected = None;
+            self.selected_row = None;
+            return;
+        };
+        let row = row.min(last);
+        self.selected = Some(self.rows[row].path.clone());
+        self.selected_row = Some(row);
+    }
+
+    /// `h`: cierra la carpeta seleccionada o, si ya está cerrada o es un
+    /// archivo, sube a la carpeta que la contiene.
+    fn collapse_or_parent(&mut self) {
+        let Some(row) = self.selected_entry() else {
+            return;
+        };
+        if row.expanded && !self.is_filtering() {
+            let path = row.path.clone();
+            self.collapse(&path);
+            return;
+        }
+        if let Some(parent) = row.path.parent().filter(|parent| !parent.is_root()) {
+            self.select(&parent);
+        }
+    }
+
+    /// `l` sobre una carpeta: la abre o, si ya está abierta, baja a su
+    /// primer hijo.
+    fn expand_or_enter(&mut self) {
+        let (Some(row), Some(at)) = (self.selected_entry(), self.selected_row) else {
+            return;
+        };
+        if !row.is_folder() {
+            return;
+        }
+        if row.expanded {
+            let depth = row.depth;
+            if self.rows.get(at + 1).is_some_and(|next| next.depth > depth) {
+                self.select_row(at + 1);
+            }
+        } else {
+            let path = row.path.clone();
+            self.expand(&path);
+        }
+    }
+
+    fn toggle_selected(&mut self) {
+        if let Some(row) = self.selected_entry().filter(|row| row.is_folder()) {
+            let path = row.path.clone();
+            self.toggle(&path);
+        }
+    }
+
+    fn selected_path(&self) -> Option<&VaultPath> {
+        self.selected.as_ref()
+    }
+
+    fn selected_file(&self) -> Option<&VaultPath> {
+        self.selected_entry()
+            .filter(|row| !row.is_folder())
+            .map(|row| &row.path)
     }
 }
 

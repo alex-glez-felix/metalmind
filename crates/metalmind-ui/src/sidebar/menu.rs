@@ -86,6 +86,16 @@ impl ContextMenu {
         }
     }
 
+    /// Sobre una nota de la vista de tags: solo abrirla en un split.
+    pub fn on_note(position: Point<Pixels>, target: VaultPath) -> Self {
+        Self {
+            position,
+            target,
+            groups: vec![&[MenuItem::OpenSplitRight, MenuItem::OpenSplitDown]],
+            selected: 0,
+        }
+    }
+
     /// Tras un lote del watcher: sigue a su entrada en los renombres y dice
     /// si el menú todavía vale, es decir, si su entrada existe y sigue
     /// seleccionada. Si no, una acción caería sobre otra entrada.
