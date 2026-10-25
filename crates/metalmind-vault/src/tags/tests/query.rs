@@ -6,9 +6,9 @@ use std::fmt::Write as _;
 use pretty_assertions::assert_eq;
 use rstest::rstest;
 
-use super::tags;
+use super::{key, tags};
 use crate::path::VaultPath;
-use crate::tags::{TagKey, TagQuery, Tags};
+use crate::tags::{QueryWord, TagKey, TagQuery, Tags};
 
 const QUERIES: &[&str] = &[
     "",
@@ -44,6 +44,28 @@ fn parse_table() {
         .unwrap();
     }
     insta::assert_snapshot!(out);
+}
+
+/// Cada palabra con sus bytes, como las marca el finder: los espacios de
+/// más no cuentan y `##a` no es `#a`.
+#[test]
+fn words_with_their_bytes() {
+    let text = "  #rust -#Nada ñandú  -# ##a #2024/10 -";
+    let words: Vec<(&str, QueryWord)> = TagQuery::words(text)
+        .map(|(range, word)| (&text[range], word))
+        .collect();
+    assert_eq!(
+        words,
+        [
+            ("#rust", QueryWord::Include(key("rust"))),
+            ("-#Nada", QueryWord::Exclude(key("nada"))),
+            ("ñandú", QueryWord::Text),
+            ("-#", QueryWord::Untagged),
+            ("##a", QueryWord::Invalid),
+            ("#2024/10", QueryWord::Invalid),
+            ("-", QueryWord::Text),
+        ]
+    );
 }
 
 fn vault() -> Tags {
