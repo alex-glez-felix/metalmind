@@ -129,7 +129,7 @@ pub fn write(root: &Path) {
     );
     file(
         "tags/diseño.md",
-        "---\nicon: 🎨\nparents: [rust]\n---\n".as_bytes(),
+        "---\nicon: 🎨\nparents: [rust]\naliases: [arquitectura-de-la-interfaz-y-sus-principios-a-largo-plazo-con-un-alias-que-no-cabe-ni-en-la-ventana-mas-ancha-que-hay-porque-sigue-y-sigue-sin-parar-por-mucho-que-uno-quiera-leerlo-entero-de-una-sola-vez-en-la-lista-de-tags-del-autocompletado]\n---\n".as_bytes(),
     );
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
     file(FORMULAS, SPIKE_FORMULAS.as_bytes());
