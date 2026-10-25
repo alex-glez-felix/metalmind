@@ -91,6 +91,8 @@ fn vim_tecla_en_insert(session: Session) -> Session {
 #[bench::ciw(args = (5_000, "wciwapunte\x1b".into()), setup = command)]
 #[bench::sustituir_todo(args = (5_000, format!(":%s/{WORD}/apunte/g\n")), setup = command)]
 #[bench::buscar_sin_resultado_50k(args = (50_000, format!("/{MISSING_WORD}\n")), setup = command)]
+#[bench::global_mover_arriba(args = (5_000, ":g/^/m0\n".into()), setup = command)]
+#[bench::normal_en_cada_linea(args = (5_000, ":%norm Ax\n".into()), setup = command)]
 fn vim_comando((session, keys): (Session, String)) -> Session {
     run(session, &keys)
 }
