@@ -177,7 +177,8 @@ impl Parsed {
     }
 
     /// Con las rutas de ahora: las que siguen en `index` quedan, las que
-    /// no pasan a la nota con su contenido y, si no hay, se descartan.
+    /// no pasan al archivo del mismo tipo con su contenido (una nota nunca
+    /// pasa a un adjunto) y, si no hay, se descartan.
     fn into_vault(self, root: &Path, index: &VaultIndex) -> SavedJumps {
         let Self {
             fingerprints,
@@ -189,15 +190,26 @@ impl Parsed {
                 .is_some_and(|kind| kind != EntryKind::Folder)
         };
         let named: HashSet<VaultPath> = saved.positions().map(|jump| jump.path.clone()).collect();
-        let lost = named
+        let lost: Vec<(VaultPath, Fingerprint)> = named
             .iter()
             .filter(|path| !exists(path))
-            .filter_map(|path| Some((path.clone(), *fingerprints.get(path)?)));
-        let candidates = index
-            .files()
-            .map(|entry| entry.path)
-            .filter(|path| !named.contains(*path));
-        let moved = pair_by_content(root, lost, candidates);
+            .filter_map(|path| Some((path.clone(), *fingerprints.get(path)?)))
+            .collect();
+        let moved: HashMap<VaultPath, &VaultPath> = [EntryKind::Note, EntryKind::Attachment]
+            .into_iter()
+            .flat_map(|kind| {
+                let lost = lost
+                    .iter()
+                    .filter(|(path, _)| EntryKind::of_file(path) == kind)
+                    .cloned();
+                let candidates = index
+                    .files()
+                    .filter(|entry| entry.kind == kind)
+                    .map(|entry| entry.path)
+                    .filter(|path| !named.contains(*path));
+                pair_by_content(root, lost, candidates)
+            })
+            .collect();
         let current = |jump: SavedJump| -> Option<SavedJump> {
             if exists(&jump.path) {
                 return Some(jump);

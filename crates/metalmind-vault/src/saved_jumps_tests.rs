@@ -1,4 +1,5 @@
 use pretty_assertions::assert_eq;
+use rstest::rstest;
 use tempfile::TempDir;
 
 use super::*;
@@ -150,6 +151,43 @@ fn sigue_a_la_nota_renombrada_con_metalmind_cerrado() {
             marks: vec![('A', at("movida.md", 2, 0)), ('Q', at("a.md", 7, 5))],
         }
     );
+}
+
+/// Un adjunto con el mismo texto no es a dónde fue una nota: ni la recibe
+/// ni le quita la pareja a la nota renombrada.
+#[rstest]
+#[case::con_la_nota_renombrada(Some("movida.md"))]
+#[case::sin_ella(None)]
+fn una_nota_no_pasa_a_un_adjunto_con_su_contenido(#[case] renamed: Option<&str>) {
+    let fixture = Fixture::new(&[("a.md", "uno\n"), ("d/b.md", "dos\n")]);
+    fixture.save(&sample());
+    fs::remove_file(fixture.root().join("d/b.md")).unwrap();
+    fixture.write("copia.txt", "dos\n");
+    if let Some(renamed) = renamed {
+        fixture.write(renamed, "dos\n");
+    }
+    let mark = fixture
+        .load()
+        .marks
+        .into_iter()
+        .find(|(letter, _)| *letter == 'A');
+    assert_eq!(mark, renamed.map(|path| ('A', at(path, 2, 0))));
+}
+
+#[test]
+fn sigue_al_adjunto_renombrado_con_metalmind_cerrado() {
+    let fixture = Fixture::new(&[("a.md", "dos\n"), ("lista.txt", "dos\n")]);
+    let saved = SavedJumps {
+        jumps: vec![at("lista.txt", 0, 1)],
+        marks: Vec::new(),
+    };
+    fixture.save(&saved);
+    fs::rename(
+        fixture.root().join("lista.txt"),
+        fixture.root().join("otra.txt"),
+    )
+    .unwrap();
+    assert_eq!(fixture.load().jumps, [at("otra.txt", 0, 1)]);
 }
 
 /// Si el contenido cambió además del nombre, o hay dos notas con ese
