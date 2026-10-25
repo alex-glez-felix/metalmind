@@ -503,6 +503,22 @@ mod tests {
         );
     }
 
+    /// Un valor que ningún campo de Metalmind usa no le quita los tags a la
+    /// nota, sea del tipo que sea.
+    #[rstest]
+    #[case::binary("!!binary aGVsbG8=")]
+    #[case::huge_integer("123456789012345678901234567890")]
+    #[case::huge_negative("-123456789012345678901234567890")]
+    #[case::custom_tag("!fecha 2024-10-01")]
+    #[case::custom_tag_on_a_map("!persona {nombre: Ana}")]
+    #[case::infinity(".inf")]
+    #[case::nan(".nan")]
+    fn an_unusual_value_keeps_the_tags(#[case] value: &str) {
+        let yaml = format!("raro: {value}\ntags: [a]\n");
+        assert_eq!(tags(&yaml), Some(vec![("a".to_owned(), "a")]));
+        assert_eq!(read(&yaml).unwrap().properties[0].key, "raro");
+    }
+
     #[rstest]
     #[case::empty("")]
     #[case::only_comment("# nada")]

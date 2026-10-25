@@ -45,6 +45,9 @@ grep-searcher = "0.1.17"
 ignore = "0.4.33"
 # Los píxeles de una fórmula van a GPUI como `image::Frame`; la misma versión que GPUI.
 image = { version = "0.25.10", default-features = false }
+# Mapas que comparten lo que no cambió entre versiones: publicar los tags de un
+# lote no copia el vault.
+imbl = "7.0.2"
 jiff = "0.2.38"
 log = "0.4.34"
 # Deflate sin C para los snapshots del historial; GPUI ya lo trae.

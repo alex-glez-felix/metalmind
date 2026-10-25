@@ -47,14 +47,17 @@ use note::{PageFile, page_name, scan_note};
 pub const DEFAULT_TAGS_FOLDER: &str = "tags";
 
 /// Índice y grafo de los tags de un vault, siempre al día entre sí. Es un
-/// valor inmutable para quien lo lee, como [`VaultIndex`].
+/// valor inmutable para quien lo lee, como [`VaultIndex`]; clonarlo para
+/// publicar un lote comparte todo lo que el lote no tocó.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tags {
     folder: VaultPath,
     index: TagIndex,
-    /// Los archivos de la carpeta de tags, en orden de ruta.
-    pages: BTreeMap<VaultPath, PageFile>,
-    graph: TagGraph,
+    /// Los archivos de la carpeta de tags, en orden de ruta. Son pocos y
+    /// cambiar uno ya rehace el grafo: se copian enteros solo entonces.
+    pages: Arc<BTreeMap<VaultPath, PageFile>>,
+    /// Sale solo de `pages` y se rehace entero cuando cambian.
+    graph: Arc<TagGraph>,
 }
 
 /// Lee una nota del vault; `None` si no se pudo.
@@ -84,8 +87,8 @@ impl Tags {
         Self {
             folder,
             index: TagIndex::default(),
-            pages: BTreeMap::new(),
-            graph: TagGraph::default(),
+            pages: Arc::default(),
+            graph: Arc::default(),
         }
     }
 
@@ -116,20 +119,22 @@ impl Tags {
     }
 
     /// Las notas que trae `#key`: el tag, sus alias y sus descendientes con
-    /// los suyos. Las páginas de tag no cuentan.
-    pub(crate) fn notes_with(&self, key: &TagKey) -> HashSet<&VaultPath> {
-        self.graph
+    /// los suyos; una nota sale una vez por cada uno que lleve. Las páginas de
+    /// tag no cuentan.
+    pub(crate) fn notes_with(&self, key: &TagKey) -> impl Iterator<Item = &VaultPath> {
+        let entries: Vec<&TagEntry> = self
+            .graph
             .expansion(key)
             .iter()
             .filter_map(|key| self.index.tag(key))
-            .flat_map(|entry| &entry.notes)
-            .collect()
+            .collect();
+        entries.into_iter().flat_map(|entry| &entry.notes)
     }
 
     /// Cuántas notas distintas trae `#key` (05 §2, conteo del panel).
     #[must_use]
     pub fn count(&self, key: &TagKey) -> usize {
-        self.notes_with(key).len()
+        self.notes_with(key).collect::<HashSet<_>>().len()
     }
 
     /// Si `key` solo existe porque lo nombra un `parents`: ni nota ni página.
@@ -237,17 +242,22 @@ impl Tags {
         let page_changed = self.pages.get(&path) != page.as_ref();
         match page {
             Some(page) if page_changed => {
-                self.pages.insert(path.clone(), page);
+                Arc::make_mut(&mut self.pages).insert(path.clone(), page);
             }
             Some(_) => {}
             None => {
-                self.pages.remove(&path);
+                self.drop_page(&path);
             }
         }
-        (self.index.insert(path, note), page_changed)
+        (self.index.insert(path, Arc::new(note)), page_changed)
     }
 
-    fn rebuild_graph(&self) -> TagGraph {
+    /// Quita `path` de las páginas sin copiarlas si no estaba; dice si estaba.
+    fn drop_page(&mut self, path: &VaultPath) -> bool {
+        self.pages.contains_key(path) && Arc::make_mut(&mut self.pages).remove(path).is_some()
+    }
+
+    fn rebuild_graph(&self) -> Arc<TagGraph> {
         let pages = self.pages.values().filter_map(|file| match file {
             PageFile::Page(page) => Some(page.as_ref()),
             PageFile::InvalidName => None,
@@ -257,7 +267,7 @@ impl Tags {
             .iter()
             .filter(|(_, file)| matches!(file, PageFile::InvalidName))
             .map(|(path, _)| path);
-        TagGraph::build(pages, invalid)
+        Arc::new(TagGraph::build(pages, invalid))
     }
 }
 
@@ -274,7 +284,7 @@ fn scan_one(
 fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, Option<PageFile>) {
     let (tags, frontmatter) = scan_note(text);
     let page = page_name(folder, path).map(|name| match name {
-        Ok(name) => PageFile::Page(Box::new(TagPage::new(
+        Ok(name) => PageFile::Page(Arc::new(TagPage::new(
             path.clone(),
             name,
             text,
@@ -287,8 +297,7 @@ fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, 
         page: matches!(page, Some(PageFile::Page(_))),
         frontmatter: frontmatter
             .map(|frontmatter| frontmatter.properties)
-            .filter(|properties| !properties.is_empty())
-            .map(Arc::from),
+            .unwrap_or_default(),
     };
     (note, page)
 }
