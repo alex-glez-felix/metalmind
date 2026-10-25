@@ -233,6 +233,8 @@ color_group! {
         picker_hover,
         /// Las letras que coinciden con lo escrito.
         picker_match,
+        /// Lo escrito que no va a encontrar nada, como un tag que no existe.
+        picker_warning,
         /// Lo secundario: carpeta de una nota, atajo de una acción, el
         /// texto de ayuda del input vacío.
         picker_muted,

@@ -88,9 +88,10 @@ pub fn write(root: &Path) {
     for index in 1..=120 {
         let topic = TOPICS[index % TOPICS.len()];
         let body = format!(
-            "# Idea {index}\n\nUna idea sobre {topic}: {}\n\nOtra línea con la idea repetida, idea tras idea.\n",
+            "# Idea {index}\n\nUna idea sobre {topic}: {}\n\nOtra línea con la idea repetida, idea tras idea.\n\n{}\n",
             "texto que sigue y sigue sin cortarse para que la línea pase del ancho de la ventana "
-                .repeat(4)
+                .repeat(4),
+            idea_tags(index),
         );
         file(
             &format!("Ideas/idea {index:03} — {topic}.md"),
@@ -124,6 +125,25 @@ pub fn write(root: &Path) {
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
     file(FORMULAS, SPIKE_FORMULAS.as_bytes());
     file(LONG_FORMULAS, long_formulas().as_bytes());
+}
+
+/// Los tags de una idea: unas sin ninguno (el buzón), otras con varios, y
+/// uno con un nombre que no cabe.
+fn idea_tags(index: usize) -> String {
+    [
+        (2, "#Rust"),
+        (3, "#diseño"),
+        (5, "#archivado"),
+        (
+            7,
+            "#un-tag-con-un-nombre-larguísimo-para-ver-dónde-se-corta",
+        ),
+    ]
+    .iter()
+    .filter(|(every, _)| index.is_multiple_of(*every))
+    .map(|(_, tag)| *tag)
+    .collect::<Vec<_>>()
+    .join(" ")
 }
 
 /// Párrafos de más de 250 caracteres con fórmulas en línea, un bloque de
