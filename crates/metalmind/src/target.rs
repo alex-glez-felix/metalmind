@@ -36,7 +36,7 @@ pub enum TargetError {
     #[error(
         "no existe la carpeta {}; créala con `mkdir -p {}` o pasa una que exista",
         .0.display(),
-        shell_quoted(.0)
+        shell_argument(.0)
     )]
     MissingVault(PathBuf),
     #[error("{VAULT_VARIABLE} apunta a {}, que no es una carpeta", .0.display())]
@@ -130,12 +130,18 @@ fn is_note(path: &Path) -> bool {
         .is_some_and(note_name::is_note)
 }
 
-/// `path` como se escribe en el shell para que llegue tal cual.
-fn shell_quoted(path: &Path) -> String {
+/// `path` como se escribe en el shell para que llegue tal cual a un comando
+/// como argumento, no como opción.
+fn shell_argument(path: &Path) -> String {
     let path = path.to_string_lossy();
+    let path = if path.starts_with('-') {
+        format!("./{path}")
+    } else {
+        path.into_owned()
+    };
     let plain = |c: char| c.is_ascii_alphanumeric() || "/._-+,:@%".contains(c);
     if !path.is_empty() && path.chars().all(plain) {
-        path.into_owned()
+        path
     } else {
         format!("'{}'", path.replace('\'', r"'\''"))
     }
@@ -266,6 +272,11 @@ mod tests {
         assert_eq!(
             message,
             "no existe la carpeta /x/Mi vault's; créala con `mkdir -p '/x/Mi vault'\\''s'` o pasa una que exista"
+        );
+        let message = TargetError::MissingVault(PathBuf::from("-notas")).to_string();
+        assert_eq!(
+            message,
+            "no existe la carpeta -notas; créala con `mkdir -p ./-notas` o pasa una que exista"
         );
     }
 
