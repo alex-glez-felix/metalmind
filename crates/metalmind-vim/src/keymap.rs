@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     Action, ActionName, CharSearch, HostCommand, InsertAt, Key, Mode, Motion, Operator, PasteSide,
     Place, Scroll, TextObject, VisualKind,
@@ -68,6 +70,9 @@ pub(crate) enum Lookup {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Keymap {
     bindings: Vec<Binding>,
+    /// Los índices en `bindings` de los que empiezan con cada tecla, en
+    /// orden: así cada tecla mira unos pocos y no todos.
+    by_first_key: HashMap<Key, Vec<usize>>,
     commands: Vec<HostCommand>,
 }
 
@@ -77,8 +82,16 @@ impl Keymap {
         bindings: impl IntoIterator<Item = Binding>,
         commands: impl IntoIterator<Item = HostCommand>,
     ) -> Self {
+        let bindings: Vec<Binding> = bindings.into_iter().collect();
+        let mut by_first_key: HashMap<Key, Vec<usize>> = HashMap::new();
+        for (index, binding) in bindings.iter().enumerate() {
+            if let Some(&first) = binding.keys.first() {
+                by_first_key.entry(first).or_default().push(index);
+            }
+        }
         Self {
-            bindings: bindings.into_iter().collect(),
+            bindings,
+            by_first_key,
             commands: commands.into_iter().collect(),
         }
     }
@@ -105,8 +118,12 @@ impl Keymap {
     }
 
     pub(crate) fn lookup(&self, mode: Mode, keys: &[Key]) -> Lookup {
+        let candidates = keys
+            .first()
+            .and_then(|first| self.by_first_key.get(first))
+            .map_or(&[][..], Vec::as_slice);
         let mut exact = None;
-        for binding in self.bindings.iter().rev() {
+        for binding in candidates.iter().rev().map(|&index| &self.bindings[index]) {
             if !binding.context.matches(mode) || !binding.keys.starts_with(keys) {
                 continue;
             }
