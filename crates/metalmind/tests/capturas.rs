@@ -208,6 +208,17 @@ const SCENES: &[(&str, &[Step])] = &[
         "autocompletado-borde",
         &[Step::Keys("<Esc>:e formulas-larga.md<CR>GA #un")],
     ),
+    // Un alias largo junto al borde derecho: la lista no sale de la
+    // ventana, se recortan el nombre y el alias.
+    (
+        "autocompletado-alias-largo",
+        &[Step::Keys(concat!(
+            "<Esc>:e listas.md<CR>Go",
+            "Un texto muy largo que lleva el tag hasta el borde derecho de la ventana, ",
+            "aunque la ventana sea ancha y el panel lateral siga abierto, para que la ",
+            "lista se abra pegada al borde y se vea que no sale de la ventana #arquitectura",
+        ))],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
