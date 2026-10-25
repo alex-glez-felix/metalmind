@@ -36,9 +36,9 @@ fn type_text(panel: &mut Panel, text: &str) {
 #[test]
 fn mostrar_una_vista_o_esconder_si_ya_se_ve_con_el_foco() {
     let mut panel = panel();
-    assert!(!panel.toggle(PanelView::Folders, true));
-    assert!(panel.toggle(PanelView::Folders, false));
-    assert!(panel.toggle(PanelView::Tags, true));
+    assert!(!panel.toggle(PanelView::Folders, true).visible);
+    assert!(panel.toggle(PanelView::Folders, false).visible);
+    assert!(panel.toggle(PanelView::Tags, true).visible);
     assert_eq!(panel.view, PanelView::Tags);
     assert_eq!(panel.view.other(), PanelView::Folders);
 }
@@ -48,7 +48,7 @@ fn mostrar_una_vista_o_esconder_si_ya_se_ve_con_el_foco() {
 #[test]
 fn la_vista_que_se_ve_sin_foco_sigue_visible() {
     let mut panel = panel();
-    assert!(panel.toggle(PanelView::Folders, false));
+    assert!(panel.toggle(PanelView::Folders, false).visible);
     assert!(panel.visible);
     assert_eq!(panel.view, PanelView::Folders);
 }
@@ -464,4 +464,25 @@ fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
     panel.switch_view();
     panel.escape();
     assert_eq!(panel.tree.filter(), "");
+}
+
+/// Al volver a tags, si los lotes que llegaron mientras se veía otra vista
+/// movieron la fila elegida, se pide llevarla a la vista; si no, no.
+#[test]
+fn volver_a_tags_lleva_a_la_vista_la_fila_que_se_movio() {
+    let mut panel = tags_panel();
+    panel.tags.toggle_selected();
+    panel.tags.select_row(1);
+    assert_eq!(panel.switch_view(), None);
+    assert_eq!(panel.switch_view(), None, "nada llegó: queda donde estaba");
+    panel.switch_view();
+    let index = VaultIndex::from_entries([
+        (path("0.md"), EntryKind::Note),
+        (path("a.md"), EntryKind::Note),
+    ]);
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| {
+        Some("#rust".to_owned())
+    });
+    panel.set_tags(Arc::new(tags));
+    assert_eq!(panel.toggle(PanelView::Tags, false).moved, Some(2));
 }

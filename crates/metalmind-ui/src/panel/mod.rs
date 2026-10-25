@@ -37,6 +37,15 @@ impl PanelView {
     }
 }
 
+/// Lo que deja mostrar una vista.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Shown {
+    pub visible: bool,
+    /// La fila elegida de tags, si rehacer la vista al mostrarla la cambió
+    /// de lugar: hay que llevarla a la vista.
+    pub moved: Option<usize>,
+}
+
 /// Un archivo que un clic pide abrir.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClickOpen {
@@ -143,20 +152,23 @@ impl Panel {
 
     /// Muestra `view`, o esconde el panel si ya la mostraba con el foco
     /// (`focused`): si la mostraba sin el foco, sigue visible para que lo
-    /// tome, como `ToggleFocus` de Zed. Devuelve si quedó visible.
-    pub fn toggle(&mut self, view: PanelView, focused: bool) -> bool {
+    /// tome, como `ToggleFocus` de Zed.
+    pub fn toggle(&mut self, view: PanelView, focused: bool) -> Shown {
         self.visible = !(self.visible && self.view == view && focused);
         if self.view != view {
             self.show(view);
         }
-        self.refresh_shown();
-        self.visible
+        Shown {
+            visible: self.visible,
+            moved: self.refresh_shown(),
+        }
     }
 
-    /// `T`: la otra vista.
-    pub fn switch_view(&mut self) {
+    /// `T`: la otra vista. Devuelve la fila elegida de tags si al rehacerla
+    /// cambió de lugar.
+    pub fn switch_view(&mut self) -> Option<usize> {
         self.show(self.view.other());
-        self.refresh_shown();
+        self.refresh_shown()
     }
 
     /// Cambia de vista: lo que se estaba preguntando era sobre la otra. Un
@@ -173,10 +185,16 @@ impl Panel {
         self.refresh_shown();
     }
 
-    fn refresh_shown(&mut self) {
-        if self.visible && self.view == PanelView::Tags {
-            self.tags.refresh();
+    /// Rehace la vista de tags si se ve; devuelve su fila elegida si con eso
+    /// cambió de lugar.
+    fn refresh_shown(&mut self) -> Option<usize> {
+        if !(self.visible && self.view == PanelView::Tags) {
+            return None;
         }
+        let before = self.tags.selected_row();
+        self.tags.refresh();
+        let after = self.tags.selected_row();
+        after.filter(|_| after != before)
     }
 
     /// La vista que se ve.
