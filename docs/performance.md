@@ -75,7 +75,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.35 / 30 ms | ✅ | `metalmind-vault` `panel_en_focus` |
 | Candidatos del autocompletado de `#`, 5 k / 50 k | ≤ 16 / 160 ms | 0.90 / 25 ms | ✅ | `metalmind-vault` `candidatos_de_autocompletado` |
 | Plan de renombrar un tag con página, hijos y alias, 5 k / 50 k | ≤ 16 / 160 ms | 0.05 / 1.0 ms | ✅ | `metalmind-vault` `plan_de_renombrar_un_tag_con_pagina` |
-| Publicar los tags en cada lote (clonarlos), 5 k / 50 k | ≤ 16 / 160 ms | 1.7 / 33 ms | ✅ | `metalmind-vault` `clonar_los_tags` ([#60](https://github.com/alex-glez-felix/metalmind/issues/60)) |
+| Publicar los tags en cada lote (clonarlos), 5 k / 50 k | ≤ 16 / 160 ms | 14 / 14 ns (antes de [#60](https://github.com/alex-glez-felix/metalmind/issues/60), 1.7 / 33 ms) | ✅ | `metalmind-vault` `clonar_los_tags` |
+| Publicar los tags tras cambiar una nota, 5 k / 50 k ([#60](https://github.com/alex-glez-felix/metalmind/issues/60)) | lo que reescanearla | 13 / 13 µs; reescanearla, 3–4 µs | ✅ | `metalmind-vault` `publicar_una_nota_cambiada`, `reescanear_una_nota` |
 | Árbol del panel, todo abierto: armarlo, 5 k / 50 k notas | ≤ 16 ms | 0.11 / 1.3 ms | ✅ | `metalmind-ui` `construir_todo_abierto` |
 | Árbol: abrir o cerrar una carpeta, 5 k / 50 k | ≤ 1 ms | 0.13 / 1.6 ms | ❌ | `metalmind-ui` `expandir_y_colapsar` ([#59](https://github.com/alex-glez-felix/metalmind/issues/59)) |
 | Árbol: bajar una fila | ≤ 1 ms | 20 ns | ✅ | `metalmind-ui` `bajar_una_fila` |

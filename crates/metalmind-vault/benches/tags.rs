@@ -8,8 +8,8 @@
 )]
 
 use divan::Bencher;
-use metalmind_vault::Vault;
 use metalmind_vault::tags::{Scope, TagQuery, Tags};
+use metalmind_vault::{Vault, VaultPath};
 use tempfile::TempDir;
 
 const SIZES: [usize; 2] = [5_000, 50_000];
@@ -93,4 +93,34 @@ fn clonar_los_tags(bencher: Bencher, notes: usize) {
     let (_dir, vault) = vault(notes);
     let tags = vault.tags();
     bencher.bench(|| Tags::clone(&tags));
+}
+
+/// Publicar los tags tras cambiar una nota (#60): debería costar lo que
+/// reescanearla, no lo que el vault.
+#[divan::bench(args = SIZES)]
+fn publicar_una_nota_cambiada(bencher: Bencher, notes: usize) {
+    let (dir, vault) = vault(notes);
+    let tags = vault.tags();
+    let (path, text) = changed_note(&dir, &tags);
+    bencher.bench(|| tags.with_unsaved([(&path, text.as_str())]));
+}
+
+/// La referencia de `publicar_una_nota_cambiada`.
+#[divan::bench(args = SIZES)]
+fn reescanear_una_nota(bencher: Bencher, notes: usize) {
+    let (dir, vault) = vault(notes);
+    let (_, text) = changed_note(&dir, &vault.tags());
+    bencher.bench(|| metalmind_syntax::scan(&text));
+}
+
+/// Una nota con tags del vault, con uno más al final.
+fn changed_note(dir: &TempDir, tags: &Tags) -> (VaultPath, String) {
+    let (path, _) = tags
+        .index()
+        .notes()
+        .filter(|(_, note)| !note.occurrences.is_empty())
+        .min_by_key(|(path, _)| *path)
+        .unwrap();
+    let text = std::fs::read_to_string(dir.path().join(path.as_str())).unwrap();
+    (path.clone(), format!("{text}\n#nuevo\n"))
 }
