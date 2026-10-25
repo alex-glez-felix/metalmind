@@ -1,8 +1,8 @@
 //! `:d`, `:y`, `:m`, `:t`, `:j`, `:>`, `:<` y el salto de `:12`.
 
-use std::ops::{Range, RangeInclusive};
+use std::ops::RangeInclusive;
 
-use metalmind_buffer::{Buffer, ByteOffset, Edit, Selection, Selections};
+use metalmind_buffer::{Buffer, BufferError, Edit, Selection, Selections};
 
 use super::Failure;
 use super::range::Lines;
@@ -32,7 +32,7 @@ impl Vim {
         };
         self.registers
             .write(register, deleted, write, t.clipboard.as_deref_mut());
-        let edits = vec![Edit::delete(whole_lines(t.buffer, &lines))];
+        let edits = vec![t.buffer.lines_deletion(&lines)];
         let first = *lines.start();
         let undo = keep_column(
             t.buffer,
@@ -147,23 +147,17 @@ pub(super) fn move_lines(
     } else {
         below + moved - 1
     };
-    let mut edits = Vec::new();
-    // Debajo de la línea de antes o de la última es quedarse donde están.
-    if below != first && below != last + 1 {
-        edits.push(Edit::delete(whole_lines(buffer, &lines)));
-        edits.push(insert_lines(
-            buffer,
-            below,
-            &buffer.lines_text(first..last + 1),
-        ));
-    }
     let cursor = buffer.line_of(selections.primary().head);
     let top = first.min(below.min(buffer.last_line()));
     let undo = undo_cursor(buffer, columns, selections, lines.contains(&cursor), top);
     let want = Want::of(buffer, selections.primary(), true, columns);
-    Ok(edit_lines(buffer, selections, undo, edits, |buffer| {
-        at_column(buffer, columns, want, cursor_line)
-    })?)
+    Ok(edit_lines_with(
+        buffer,
+        selections,
+        undo,
+        |buffer| buffer.move_lines(lines, below),
+        |buffer| at_column(buffer, columns, want, cursor_line),
+    )?)
 }
 
 /// `:t` o `:co`, como `:m` pero sin quitarlas de donde estaban.
@@ -176,7 +170,7 @@ pub(super) fn copy_lines(
 ) -> Result<(), VimError> {
     let (first, last) = (*lines.start(), *lines.end());
     let text = buffer.lines_text(first..last + 1).into_owned();
-    let edits = vec![insert_lines(buffer, below, &text)];
+    let edits = vec![buffer.lines_insertion(below, &text)];
     let cursor_line = below + last - first;
     let above = buffer.line_of(selections.primary().head) < below;
     let undo = undo_cursor(
@@ -206,8 +200,25 @@ pub(super) fn edit_lines(
     edits: Vec<Edit>,
     cursor: impl FnOnce(&Buffer) -> Selection,
 ) -> Result<(), VimError> {
+    edit_lines_with(
+        buffer,
+        selections,
+        undo,
+        |buffer| buffer.apply(edits).map(drop),
+        cursor,
+    )
+}
+
+/// Como [`edit_lines`], con lo que haga `edit` en el buffer.
+fn edit_lines_with(
+    buffer: &mut Buffer,
+    selections: &mut Selections,
+    undo: Selection,
+    edit: impl FnOnce(&mut Buffer) -> Result<(), BufferError>,
+    cursor: impl FnOnce(&Buffer) -> Selection,
+) -> Result<(), VimError> {
     buffer.begin_transaction(Selections::single(undo))?;
-    buffer.apply(edits)?;
+    edit(buffer)?;
     let after = Selections::single(cursor(buffer));
     buffer.commit_transaction(after.clone())?;
     *selections = after;
@@ -261,27 +272,4 @@ pub(super) fn line_start_cursor(buffer: &Buffer, line: usize) -> Selection {
 
 fn lines_register(buffer: &Buffer, lines: &RangeInclusive<usize>) -> Register {
     Register::lines(buffer.lines_text(*lines.start()..lines.end() + 1))
-}
-
-/// Lo que hay que borrar para quitar `lines` con un salto de línea: el de
-/// después o, si son las últimas, el de antes.
-fn whole_lines(buffer: &Buffer, lines: &RangeInclusive<usize>) -> Range<ByteOffset> {
-    let (first, last) = (*lines.start(), *lines.end());
-    if last < buffer.last_line() {
-        buffer.line_start(first)..buffer.line_start(last + 1)
-    } else if first > 0 {
-        buffer.line_end(first - 1)..buffer.len()
-    } else {
-        ByteOffset::new(0)..buffer.len()
-    }
-}
-
-/// Mete `text`, líneas sin el salto final, debajo de la línea `below` desde
-/// 1; 0 es arriba de todo.
-fn insert_lines(buffer: &Buffer, below: usize, text: &str) -> Edit {
-    if below < buffer.line_count() {
-        Edit::insert(buffer.line_start(below), format!("{text}\n"))
-    } else {
-        Edit::insert(buffer.len(), format!("\n{text}"))
-    }
 }

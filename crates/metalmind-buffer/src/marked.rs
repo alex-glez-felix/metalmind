@@ -1,7 +1,7 @@
 //! Líneas marcadas, como las de `:g` en vim (`ml_setmarked`): siguen a su
 //! línea con cada edición, también de undo, y se pierden si se borra.
 
-use crate::anchor::LineChange;
+use crate::anchor::Replacement;
 
 /// Las marcas van en orden y ninguna edición lo cambia, así que las que
 /// quedan después de una edición se corren todas lo mismo: ese corrimiento
@@ -44,7 +44,7 @@ impl MarkedLines {
         None
     }
 
-    pub fn adjust(&mut self, change: &LineChange) {
+    pub fn adjust(&mut self, change: &Replacement) {
         let lines = change.lines();
         let first = self.first_from(self.next, |line| line >= lines.start().cast_signed());
         let after = self.first_from(first, |line| line > lines.end().cast_signed());
@@ -135,7 +135,7 @@ mod tests {
     /// Reemplaza `start..start + removed` de `text` por `inserted` y corre
     /// las marcas.
     fn edit(marks: &mut MarkedLines, text: &str, start: usize, removed: usize, inserted: &str) {
-        marks.adjust(&LineChange::new(
+        marks.adjust(&Replacement::new(
             &Rope::from_str(text),
             start,
             removed,
@@ -206,7 +206,7 @@ mod tests {
                 let line = line.min(lines);
                 let removed = removed.min(lines - line);
                 let rope = Rope::from_str(&text);
-                let change = LineChange::new(&rope, line * 2, removed * 2, &"n\n".repeat(inserted));
+                let change = Replacement::new(&rope, line * 2, removed * 2, &"n\n".repeat(inserted));
                 marks.adjust(&change);
                 for slot in &mut model[next..] {
                     *slot = slot.and_then(|line| change.adjust_line(line));

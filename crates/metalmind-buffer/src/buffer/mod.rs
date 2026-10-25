@@ -4,16 +4,18 @@ use std::ops::Range;
 use ropey::Rope;
 
 mod anchored;
+mod lines;
 mod marked;
 mod text;
+mod undo;
 
-use crate::anchor::{Anchors, LineChange};
-use crate::history::{AppliedEdit, Direction, History, Step};
+use crate::anchor::{Anchors, LineChange, Replacement};
+use crate::history::{AppliedEdit, History};
+use crate::line_move::LineMove;
 use crate::marked::MarkedLines;
 use crate::spot::Spot;
 use crate::{
     BufferError, ByteOffset, Edit, EditMap, HistorySeq, LineEdit, Selections, Snapshot, Splice,
-    Transaction,
 };
 
 /// Texto editable. Las líneas se separan solo por `\n`.
@@ -144,6 +146,16 @@ impl Buffer {
     /// Si no hay transacción abierta o alguna edición es inválida; en ese caso
     /// no se aplica ninguna.
     pub fn apply(&mut self, edits: Vec<Edit>) -> Result<EditMap, BufferError> {
+        self.apply_following(edits, None)
+    }
+
+    /// Como [`Buffer::apply`]; con `moved`, las anclas y los [`Splice`]
+    /// siguen a ese movimiento de líneas en vez de a cada reemplazo.
+    fn apply_following(
+        &mut self,
+        edits: Vec<Edit>,
+        moved: Option<LineMove>,
+    ) -> Result<EditMap, BufferError> {
         self.history.ensure_open()?;
         let mut located = edits
             .into_iter()
@@ -156,7 +168,15 @@ impl Buffer {
         let mut applied = Vec::with_capacity(edits.len());
         // De atrás hacia adelante, así lo de antes de cada edición, y con
         // eso sus `Spot`, no cambia.
-        for (&(start, end), edit) in spots.iter().zip(&edits).rev() {
+        for (index, (&(start, end), edit)) in spots.iter().zip(&edits).rev().enumerate() {
+            // Las anclas siguen al movimiento en cuanto empieza.
+            let follow = moved.map(|moved| {
+                if index == 0 {
+                    LineChange::moved(moved)
+                } else {
+                    LineChange::UNCHANGED
+                }
+            });
             applied.push(AppliedEdit {
                 start: edit.range.start,
                 deleted: self.slice(start.byte..end.byte).into_owned(),
@@ -169,97 +189,12 @@ impl Buffer {
                 &mut self.changes,
                 (start, end),
                 &edit.text,
+                follow,
             )?;
             self.version += 1;
         }
         self.history.record(applied)?;
         Ok(EditMap::new(&edits))
-    }
-
-    /// Vuelve al estado anterior en la rama actual y devuelve la transacción
-    /// deshecha.
-    ///
-    /// # Errors
-    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
-    pub fn undo(&mut self) -> Result<Option<&Transaction>, BufferError> {
-        let steps = self.history.undo()?;
-        self.travel(&steps)
-    }
-
-    /// Rehace la transacción deshecha o visitada más recientemente desde el
-    /// estado actual y la devuelve.
-    ///
-    /// # Errors
-    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
-    pub fn redo(&mut self) -> Result<Option<&Transaction>, BufferError> {
-        let steps = self.history.redo()?;
-        self.travel(&steps)
-    }
-
-    /// Retrocede `steps` estados en orden cronológico, aunque estén en otra
-    /// rama, como `g-` en vim. Devuelve la última transacción recorrida.
-    ///
-    /// # Errors
-    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
-    pub fn earlier(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
-        let steps = self.history.earlier(steps)?;
-        self.travel(&steps)
-    }
-
-    /// Avanza `steps` estados en orden cronológico, aunque estén en otra
-    /// rama, como `g+` en vim. Devuelve la última transacción recorrida.
-    ///
-    /// # Errors
-    /// [`BufferError::TransactionAlreadyOpen`] si hay una transacción abierta.
-    pub fn later(&mut self, steps: usize) -> Result<Option<&Transaction>, BufferError> {
-        let steps = self.history.later(steps)?;
-        self.travel(&steps)
-    }
-
-    /// Deshace o rehace cada transacción del recorrido y devuelve la última.
-    /// Como en vim, cada una deja las anclas donde estaban del otro lado.
-    fn travel(&mut self, steps: &[Step]) -> Result<Option<&Transaction>, BufferError> {
-        for step in steps {
-            let Some(transaction) = self.history.transaction(step.seq) else {
-                continue;
-            };
-            let anchors_before = self.anchors.clone();
-            let edits = transaction.edits();
-            match step.direction {
-                Direction::Undo => {
-                    for edit in edits.iter().rev() {
-                        let spots = locate(&self.rope, edit.start, edit.inserted.len())?;
-                        splice(
-                            &mut self.rope,
-                            &mut self.anchors,
-                            &mut self.marked,
-                            &mut self.changes,
-                            spots,
-                            &edit.deleted,
-                        )?;
-                    }
-                }
-                Direction::Redo => {
-                    for edit in edits {
-                        let spots = locate(&self.rope, edit.start, edit.deleted.len())?;
-                        splice(
-                            &mut self.rope,
-                            &mut self.anchors,
-                            &mut self.marked,
-                            &mut self.changes,
-                            spots,
-                            &edit.inserted,
-                        )?;
-                    }
-                }
-            }
-            self.version += 1;
-            let saved = self.history.swap_anchors(step.seq, anchors_before);
-            self.anchors.restore(&saved);
-        }
-        Ok(steps
-            .last()
-            .and_then(|step| self.history.transaction(step.seq)))
     }
 
     /// Los dos extremos de `range`, con los errores de [`Self::check_range`].
@@ -330,6 +265,8 @@ fn locate(rope: &Rope, start: ByteOffset, removed: usize) -> Result<(Spot, Spot)
     Ok((first, last))
 }
 
+/// Reemplaza `start..end` por `text`; lo que sigue a las líneas va como
+/// diga `follow` o, si no, con el reemplazo.
 fn splice(
     rope: &mut Rope,
     anchors: &mut Anchors,
@@ -337,6 +274,7 @@ fn splice(
     log: &mut Changes,
     (start, end): (Spot, Spot),
     text: &str,
+    follow: Option<LineChange>,
 ) -> Result<(), BufferError> {
     let removed = end.byte - start.byte;
     let len = ByteOffset::new(rope.len_bytes());
@@ -345,8 +283,9 @@ fn splice(
         end: ByteOffset::new(end.byte),
         len,
     };
-    let change = LineChange::between(rope, &start, &end, text);
-    anchors.adjust(&change);
+    let change = Replacement::between(rope, &start, &end, text);
+    let follow = follow.unwrap_or(LineChange::replaced(change));
+    anchors.adjust(&follow);
     marked.adjust(&change);
     // Un rango vacío también recorre el rope.
     if removed > 0 {
@@ -360,7 +299,7 @@ fn splice(
         start: ByteOffset::new(start.byte),
         removed,
         inserted: text.len(),
-        lines: change,
+        lines: follow,
     });
     log.lines.push(change.line_edit());
     Ok(())
