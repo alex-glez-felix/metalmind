@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use gpui_kit::{AnyWindowHandle, App, AppContext as _, TitlebarOptions, WindowOptions};
 use metalmind_config::{Config, Paths};
 use metalmind_keymap::Keymap;
-use metalmind_vault::{Vault, VaultUpdate};
+use metalmind_vault::{SavedJumps, Vault, VaultUpdate};
 use metalmind_vim::Markdown;
 
 use crate::actions::{self, AppKeymap};
@@ -98,6 +98,10 @@ pub fn open_window(
         paths,
     } = startup;
     let state = remember(paths.as_ref(), &vault);
+    let root = vault.root().to_owned();
+    let jumps = paths.as_ref().map_or_else(SavedJumps::default, |paths| {
+        SavedJumps::load(&root, &session::jumps_file(paths, &root), &vault.snapshot())
+    });
     let prepared = Prepared::new(vault, updates, paths.as_ref())?;
     let options = window_options(&document);
     let editor = config.settings.editor;
@@ -130,6 +134,9 @@ pub fn open_window(
             workspace.set_disk(disk);
             workspace
                 .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));
+            if let Err(error) = workspace.restore_jumps(&root, &jumps) {
+                workspace.report(&error);
+            }
             workspace
         });
         let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));

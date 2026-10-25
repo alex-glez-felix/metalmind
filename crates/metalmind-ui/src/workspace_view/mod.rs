@@ -16,6 +16,7 @@ mod tag_change;
 mod text_search;
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
@@ -33,7 +34,7 @@ use crate::frames::FrameClock;
 use crate::math::Formulas;
 use crate::new_note::NoteSettings;
 use crate::panel::PanelView;
-use crate::session::VaultState;
+use crate::session::{self, VaultState};
 use crate::sidebar::{self, Sidebar, SidebarEvent};
 use crate::theme::Theme;
 use crate::workspace::{Axis, Direction, Effect, Message, Node, PaneId, Workspace};
@@ -150,11 +151,26 @@ impl WorkspaceView {
             return;
         };
         let sidebar = self.sidebar.read(cx);
+        let root = sidebar.root();
         let state = VaultState {
             panel: sidebar.state(),
         };
-        if let Err(error) = state.save(paths, sidebar.root()) {
+        if let Err(error) = state.save(paths, root) {
             log::warn!("no se guardó el estado del vault: {error}");
+        }
+        self.save_jumps(paths, root, cx);
+    }
+
+    /// La jumplist y las marks `A`–`Z`, para la próxima vez que se abra el
+    /// vault de `root`.
+    fn save_jumps(&self, paths: &Paths, root: &Path, cx: &Context<Self>) {
+        match self.workspace.read(cx).saved_jumps(root) {
+            Ok(jumps) => {
+                if let Err(error) = jumps.save(root, &session::jumps_file(paths, root)) {
+                    log::warn!("no se guardaron los saltos: {error}");
+                }
+            }
+            Err(error) => log::warn!("no se guardaron los saltos: {error}"),
         }
     }
 

@@ -27,6 +27,7 @@ mod links;
 mod message;
 mod options;
 mod pane_tree;
+mod saved_jumps;
 mod scrolling;
 mod show;
 mod source_lines;
