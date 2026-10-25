@@ -5,6 +5,7 @@
 //! empiezan con lo escrito y, dentro de cada grupo, los de más notas: así
 //! `#ru` ofrece `Rust` antes que `arquitectura` aunque esta tenga más.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use metalmind_search::{FuzzyMatcher, Query};
@@ -118,19 +119,25 @@ fn matches(candidates: &[TagCompletion], typed: &str, matcher: &mut FuzzyMatcher
             )
         })
         .collect();
-    let texts: Vec<&str> = haystacks
+    // Plegado, como la identidad de un tag: `#RU` también encuentra `Rust`,
+    // y `#groß`, `Gross`.
+    let keys: Vec<Cow<'_, str>> = haystacks
         .iter()
-        .map(|&(index, alias)| alias.unwrap_or(&candidates[index].name))
+        .map(|&(index, alias)| match alias {
+            Some(alias) => Cow::Owned(TagKey::new(alias).as_str().to_owned()),
+            None => Cow::Borrowed(candidates[index].key.as_str()),
+        })
         .collect();
-    // Plegado, como la identidad de un tag: `#RU` también encuentra `Rust`.
     let typed = TagKey::new(typed);
+    let mut starts = vec![false; keys.len()];
+    for ranked in matcher.rank(&Query::prefix(typed.as_str()), &keys) {
+        starts[ranked.index] = true;
+    }
     let mut best: Vec<Option<Side<'_>>> = vec![None; candidates.len()];
-    for ranked in matcher.rank(&Query::new(typed.as_str()), &texts) {
+    for ranked in matcher.rank(&Query::new(typed.as_str()), &keys) {
         let (index, alias) = haystacks[ranked.index];
         let side = Side {
-            in_middle: !TagKey::new(texts[ranked.index])
-                .as_str()
-                .starts_with(typed.as_str()),
+            in_middle: !starts[ranked.index],
             alias,
         };
         let better = |current: Side<'_>| {
