@@ -159,9 +159,10 @@ impl Panel {
         self.refresh_shown();
     }
 
-    /// Cambia de vista: lo que se estaba preguntando era sobre la otra.
+    /// Cambia de vista: lo que se estaba preguntando era sobre la otra. Un
+    /// filtro a medio escribir se queda puesto, como con `Enter`.
     fn show(&mut self, view: PanelView) {
-        self.cancel();
+        self.prompt = None;
         self.view = view;
     }
 
