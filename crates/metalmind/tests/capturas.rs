@@ -410,6 +410,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let mut seen = frame_count(&frames);
     let mark_color = gutter_mark_color(theme);
     window.resize(width.into(), height.into());
+    wait_first_paint(&window);
     let mut report = Vec::new();
     let mut titles = String::new();
     for (scene, steps) in SCENES {
@@ -626,6 +627,21 @@ fn prepare(smoke: &Smoke, theme: &str) {
 
 fn frame_count(frames: &Path) -> usize {
     fs::read_to_string(frames).map_or(0, |log| log.lines().count())
+}
+
+/// Con lavapipe, el primer frame registrado puede no verse y el siguiente
+/// tardar más que [`QUIET`]: mientras la ventana sea de un solo color, no
+/// pintó nada todavía (#116).
+fn wait_first_paint(window: &Window<'_>) {
+    wait::until("que la ventana muestre algo", TIMEOUT, || {
+        let (_, _, rgb) = window.pixels();
+        let (pixels, _) = rgb.as_chunks::<3>();
+        if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
+            Err("de un solo color".to_owned())
+        } else {
+            Ok(())
+        }
+    });
 }
 
 /// Espera a que la ventana pinte algo después de `before` frames y deje de
