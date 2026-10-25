@@ -214,6 +214,14 @@ use rstest_reuse::{self, apply, template};
 #[case("abc\nb|b\ncc", ":%norm Ax<CR>u", "ab|c\nbb\ncc")]
 #[case("a|a\nbb\ncc", "qq:%norm Ax<CR>:2d<CR>q:1d<CR>u", "|aax\nccx")]
 #[case("a|a\nbb\ncc", "qq:%norm Ax<CR>:2d<CR>qu@qu", "aa|x\nbbx\nccx")]
+// :normal con rango resuelve la columna buscada antes de la primera línea
+// y al terminar, no entre líneas; :g, tras el comando de cada línea
+#[case("|abcd\nxyz\nabcd", ":1,2norm fd<CR>j", "abcd\nxyz\n|abcd")]
+#[case("|abcd\nxyz\nabcd", ":1,2g/^/norm fd<CR>j", "abcd\nxyz\nabc|d")]
+#[case("abcd\nxyz\na|bcd", ":1,2norm my<CR>j", "abcd\nxyz\na|bcd")]
+#[case("|abcd\nabcd\nabcd", "ll:2,3norm my<CR>k", "abcd\nab|cd\nabcd")]
+#[case("|abcd\nab\nabcd", "$:2,3norm my<CR>k", "abcd\na|b\nabcd")]
+#[case("ab|cd\nxy\nabcd", ":2,3norm fc<CR>k", "abcd\nx|y\nabcd")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]

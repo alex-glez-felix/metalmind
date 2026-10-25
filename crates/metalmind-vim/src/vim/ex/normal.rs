@@ -29,8 +29,9 @@ impl Vim {
         Ok(notice?.unwrap_or_else(done))
     }
 
-    /// Como vim, en cada línea empieza en la columna 0 sin cambiar la
-    /// columna buscada, y una línea que ya no existe es la última.
+    /// Como vim, en cada línea empieza en la columna 0 y una línea que ya no
+    /// existe es la última. La columna buscada se resuelve antes de la
+    /// primera línea y no entre una y otra.
     fn normal_on_lines(
         &mut self,
         keys: &[Key],
@@ -40,21 +41,22 @@ impl Vim {
         let Some(lines) = lines else {
             return self.normal_once(keys, t);
         };
+        let mut goal = Want::of(
+            t.buffer,
+            t.selections.primary(),
+            true,
+            t.pane.viewport.columns(),
+        )
+        .goal();
         let mut notice = None;
         for line in lines {
             let line = line.min(t.buffer.last_line());
-            let goal = Want::of(
-                t.buffer,
-                t.selections.primary(),
-                true,
-                t.pane.viewport.columns(),
-            )
-            .goal();
             *t.selections = Selections::single(Selection {
                 goal,
                 ..Selection::cursor(t.buffer.line_start(line))
             });
             notice = self.normal_once(keys, t)?.or(notice);
+            goal = t.selections.primary().goal;
         }
         Ok(notice)
     }
