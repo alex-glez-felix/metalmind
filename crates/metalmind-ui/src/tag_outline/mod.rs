@@ -85,6 +85,8 @@ impl Row {
 pub struct TagOutline {
     tags: Arc<Tags>,
     tree: TagTree,
+    /// Los tags que llegaron y todavía no están en las filas.
+    pending: Option<Arc<Tags>>,
     expanded: BTreeSet<RowId>,
     selected: Option<RowId>,
     rows: Vec<Row>,
@@ -99,6 +101,7 @@ impl TagOutline {
         let mut outline = Self {
             tags,
             tree,
+            pending: None,
             expanded: BTreeSet::new(),
             selected: None,
             rows: Vec::new(),
@@ -119,9 +122,20 @@ impl TagOutline {
         self.rows.get(self.selected_row?)
     }
 
-    /// Los tags de otro lote del watcher. Lo abierto sigue abierto y la
-    /// selección se queda en su fila si sigue, y si no en la que ocupaba.
+    /// Los tags de otro lote del watcher. Las filas no cambian hasta
+    /// [`TagOutline::refresh`]: armar el árbol cuesta lo que el vault, y no
+    /// hace falta mientras la vista no se ve.
     pub fn set_tags(&mut self, tags: Arc<Tags>) {
+        self.pending = Some(tags);
+    }
+
+    /// Rehace las filas con los últimos tags, si llegaron otros. Lo abierto
+    /// sigue abierto y la selección se queda en su fila si sigue, y si no en
+    /// la que ocupaba.
+    pub fn refresh(&mut self) {
+        let Some(tags) = self.pending.take() else {
+            return;
+        };
         self.tree = tags.tree(&Scope::default().filter(&tags));
         self.tags = tags;
         let previous_row = self.selected_row;

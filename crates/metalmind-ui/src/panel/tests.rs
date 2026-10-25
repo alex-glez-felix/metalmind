@@ -5,6 +5,7 @@ use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::tag_outline::RowKind;
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -369,4 +370,47 @@ fn en_la_vista_de_tags_no_se_pregunta_por_archivos() {
     panel.start_delete(path("a.md"), false);
     assert_eq!(panel.prompt(), None);
     assert_eq!(panel.confirm(), None);
+}
+
+/// Un renombre o un borrado empezado en carpetas no sigue abierto en la
+/// vista de tags, donde `Enter` lo confirmaría sin que se vea su archivo.
+#[test]
+fn cambiar_de_vista_cierra_la_pregunta() {
+    let mut panel = panel();
+    panel.tree.select(&path("a.md"));
+    panel.start_rename();
+    panel.switch_view();
+    assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.confirm(), None);
+    panel.switch_view();
+    panel.start_delete(path("a.md"), false);
+    panel.toggle(PanelView::Tags, true);
+    assert_eq!(panel.prompt(), None);
+}
+
+/// Armar el árbol de tags cuesta lo que el vault: con otra vista a la
+/// vista, un lote nuevo espera a que se muestre la de tags.
+#[test]
+fn los_tags_nuevos_se_arman_al_mostrar_su_vista() {
+    let mut panel = tags_panel();
+    panel.switch_view();
+    let index = VaultIndex::from_entries([(path("c.md"), EntryKind::Note)]);
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| {
+        Some("#gpui".to_owned())
+    });
+    panel.set_tags(Arc::new(tags));
+    assert_eq!(
+        first_tag(&panel),
+        "rust",
+        "con carpetas a la vista no cambia"
+    );
+    panel.switch_view();
+    assert_eq!(first_tag(&panel), "gpui");
+}
+
+fn first_tag(panel: &Panel) -> &str {
+    match &panel.tags.rows()[0].kind {
+        RowKind::Tag { name, .. } => name,
+        other => panic!("la primera fila no es un tag: {other:?}"),
+    }
 }

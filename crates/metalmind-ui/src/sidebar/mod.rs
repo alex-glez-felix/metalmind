@@ -50,7 +50,9 @@ pub struct Sidebar {
     vault: Rc<Vault>,
     workspace: Entity<Workspace>,
     focus_handle: FocusHandle,
+    /// Cada vista con su scroll: cambiar de vista no mueve la otra.
     scroll: UniformListScrollHandle,
+    tag_scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
     _changes: Subscription,
     _workspace: Subscription,
@@ -80,6 +82,7 @@ impl Sidebar {
             workspace,
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
+            tag_scroll: UniformListScrollHandle::new(),
             menu: None,
             _changes: changes,
             _workspace: workspace_changes,
@@ -133,6 +136,7 @@ impl Sidebar {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
         let visible = self.panel.toggle(view, focused);
+        self.scroll_to_selection();
         cx.notify();
         visible
     }
@@ -147,7 +151,7 @@ impl Sidebar {
         self.panel
             .tree
             .apply(&update.changes, Arc::clone(&update.snapshot));
-        self.panel.tags.set_tags(Arc::clone(&update.tags));
+        self.panel.set_tags(Arc::clone(&update.tags));
         self.panel.follow(&update.changes);
         let selected = self.panel.outline().selected_path();
         if let Some(menu) = &mut self.menu
@@ -161,7 +165,15 @@ impl Sidebar {
 
     fn scroll_to_selection(&self) {
         if let Some(row) = self.panel.outline().selected_row() {
-            self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+            self.scroll_handle()
+                .scroll_to_item(row, ScrollStrategy::Nearest);
+        }
+    }
+
+    fn scroll_handle(&self) -> &UniformListScrollHandle {
+        match self.panel.view {
+            PanelView::Folders => &self.scroll,
+            PanelView::Tags => &self.tag_scroll,
         }
     }
 

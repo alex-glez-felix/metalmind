@@ -184,7 +184,9 @@ impl Sidebar {
     }
 
     fn toggle_view(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        self.panel.view = self.panel.view.other();
+        self.menu = None;
+        self.panel.switch_view();
+        self.scroll_to_selection();
         cx.notify();
     }
 
