@@ -5,8 +5,9 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    AnyElement, App, Context, InteractiveElement as _, IntoElement, KeyContext, MouseButton,
-    ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Window, anchored,
+    AnyElement, App, Bounds, Context, InteractiveElement as _, IntoElement, KeyContext,
+    MouseButton, ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Window,
+    anchored, size,
 };
 use metalmind_keymap::{EditorAction, View, context};
 use metalmind_search::FuzzyMatcher;
@@ -14,7 +15,7 @@ use metalmind_syntax::TagPlace;
 use metalmind_vault::tags::{TagCompletion, TagKey, Tags};
 
 use super::Editor;
-use super::completion_menu::CompletionMenu;
+use super::completion_menu::{CompletionMenu, MenuMetrics};
 use super::cursor::cursor_position;
 use super::layout::FrameLayout;
 use crate::actions::{AppKeymap, EDITOR_CONTEXT};
@@ -158,8 +159,9 @@ impl Editor {
     }
 
     /// La lista bajo el nombre del tag, o encima si abajo no cabe en el
-    /// texto del panel, sobre `layout`: el del frame que se está pintando.
-    /// No pasa de `max_width`, el ancho de la ventana.
+    /// texto del panel (ver [`MenuMetrics::place`]), sobre `layout`: el del
+    /// frame que se está pintando. No pasa de `max_width`, el ancho de la
+    /// ventana.
     pub(super) fn completion_overlay(
         &mut self,
         layout: &FrameLayout,
@@ -167,25 +169,20 @@ impl Editor {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let rows = usize::from(theme.layout.completion_rows);
-        let visible = self.completion.list.as_mut()?.visible(rows);
         let list = self.completion.list.as_ref()?;
+        let wanted = usize::from(theme.layout.completion_rows).min(list.rows().len());
+        let typed = list.typed().len();
         let view = self.view(cx)?;
         let (laid, column) = cursor_position(&view, layout)?;
-        let typed = list.typed().len().min(column);
-        let x = laid.origin.x + laid.x_for_index(column - typed);
-        // Las filas, el relleno y el borde, arriba y abajo.
-        let frame = theme.layout.menu_padding + theme.stroke.border;
-        let shown = u16::try_from(visible.len()).unwrap_or(u16::MAX);
-        let height = theme.menu_row_height * f32::from(shown) + frame + frame;
-        let text_area = layout.viewport.bounds;
-        let below = laid.origin.y + laid.height;
-        let above = laid.origin.y - height;
-        let y = if below + height > text_area.bottom() && above >= text_area.top() {
-            above
-        } else {
-            below
-        };
+        let x = laid.origin.x + laid.x_for_index(column - typed.min(column));
+        let line = Bounds::new(laid.origin, size(laid.width(), laid.height));
+        let placement = MenuMetrics {
+            row_height: theme.menu_row_height,
+            frame: theme.layout.menu_padding + theme.stroke.border,
+        }
+        .place(wanted, line, layout.viewport.bounds);
+        let visible = self.completion.list.as_mut()?.visible(placement.rows);
+        let list = self.completion.list.as_ref()?;
         let accept_keys = AppKeymap::get(cx)
             .keys_for(EditorAction::AcceptTagCompletion.into(), |view| {
                 view == View::TagCompletion
@@ -210,7 +207,7 @@ impl Editor {
         });
         Some(
             anchored()
-                .position(Point { x, y })
+                .position(Point { x, y: placement.y })
                 .snap_to_window()
                 .child(menu)
                 .into_any_element(),
