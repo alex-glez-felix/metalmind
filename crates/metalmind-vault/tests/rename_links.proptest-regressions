@@ -10,3 +10,4 @@ cc 18c74ae9291fa77fda9b87fb2cda78f42f0df6b8336a51b8a7055fbaafed7c1a # shrinks to
 cc c502a2f650da7e0d0bc97bb426391574add924290fc7a7a9dfbda076dfc07bdd
 cc 30835788d84f7dc6eb9785b7e645ec0d9f2d025660054f39f9f8e74309ef95b4
 cc d93e7f8800c78a6866d7b942e91c8632368fc4a4fa0e47cd7faf4a82900a4a30 # shrinks to model = {"a/a/x.md": "", "b/a/x.md": "", "b/b/X.md": "", "b/b/y.md": "[t](x.md)"}, file = Index(0), folder = None, to = "y.md"
+cc 52e33f7eaf49301e09eaa05e84cc62194f1d582e2780c732e4879466a8488d71 # shrinks to model = {"a/a/x.md": "", "a/b/X.md": "[t](x.md)", "b/a/x.md": ""}, file = Index(0), folder = None, to = "y.md"
