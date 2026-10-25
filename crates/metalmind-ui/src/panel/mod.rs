@@ -115,14 +115,16 @@ pub struct Panel {
 impl Panel {
     #[must_use]
     pub fn new(tree: FileTree, tags: TagOutline, visible: bool, view: PanelView) -> Self {
-        Self {
+        let mut panel = Self {
             visible,
             view,
             tree,
             tags,
             prompt: None,
             error: None,
-        }
+        };
+        panel.refresh_shown();
+        panel
     }
 
     #[must_use]
