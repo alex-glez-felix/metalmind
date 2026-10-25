@@ -307,7 +307,6 @@ impl Render for Editor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let status = self.status(cx).map(|status| status_bar(status, &theme));
-        let completion = self.completion_overlay(&theme, cx);
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
@@ -349,6 +348,5 @@ impl Render for Editor {
                     .child(EditorElement::new(cx.entity(), theme.clone())),
             )
             .children(status)
-            .children(completion)
     }
 }

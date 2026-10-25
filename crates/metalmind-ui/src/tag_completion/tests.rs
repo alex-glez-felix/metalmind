@@ -25,7 +25,7 @@ fn vault() -> Arc<[TagCompletion]> {
 }
 
 fn open(typed: &str, place: TagPlace) -> Option<TagCompletions> {
-    TagCompletions::open(vault(), typed, place, &mut FuzzyMatcher::text())
+    TagCompletions::open(vault(), typed, place, false, &mut FuzzyMatcher::text())
 }
 
 /// Cada fila como se ve: el nombre y, si coincidió por él, el alias.
@@ -67,6 +67,7 @@ fn por_el_nombre_antes_que_por_un_alias() {
         candidates,
         "rust",
         TagPlace::Inline,
+        false,
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
@@ -109,6 +110,7 @@ fn es_la_misma_lista_solo_con_lo_mismo() {
         Arc::clone(&candidates),
         "ru",
         TagPlace::Inline,
+        false,
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
@@ -128,6 +130,7 @@ fn el_plegado_de_varias_letras_coincide() {
             Arc::clone(&candidates),
             typed,
             TagPlace::Inline,
+            false,
             &mut FuzzyMatcher::text(),
         )
         .map(|list| list.rows().map(|(tag, _)| tag.name.clone()).collect())
@@ -147,9 +150,30 @@ fn empezar_sin_acento_cuenta_como_empezar() {
         candidates,
         "cancion",
         TagPlace::Inline,
+        false,
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
     let names: Vec<&str> = list.rows().map(|(tag, _)| tag.name.as_str()).collect();
     assert_eq!(names, ["canción", "cancionera"]);
+}
+
+/// Lo que se escribe, si solo lo nombra esta ocurrencia ya autoguardada, no
+/// se ofrece a sí mismo; los demás que coinciden sí.
+#[test]
+fn lo_escrito_no_se_ofrece_a_si_mismo() {
+    let candidates: Arc<[TagCompletion]> = Arc::from([tag("ru", 1, &[]), tag("bruma", 1, &[])]);
+    let names = |only_here: bool| -> Vec<String> {
+        TagCompletions::open(
+            Arc::clone(&candidates),
+            "RU",
+            TagPlace::Inline,
+            only_here,
+            &mut FuzzyMatcher::text(),
+        )
+        .map(|list| list.rows().map(|(tag, _)| tag.name.clone()).collect())
+        .unwrap_or_default()
+    };
+    assert_eq!(names(false), ["ru", "bruma"]);
+    assert_eq!(names(true), ["bruma"]);
 }

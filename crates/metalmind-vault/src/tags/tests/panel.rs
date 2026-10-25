@@ -8,7 +8,7 @@ use pretty_assertions::assert_eq;
 use rstest::rstest;
 
 use super::graph::panel;
-use super::{Fixture, key, path};
+use super::{Fixture, key, path, tags};
 use crate::tags::{Scope, ScopeError, TagColor, TagIcon, TagQuery, Tags};
 
 fn fixture() -> Fixture {
@@ -212,4 +212,26 @@ fn completions_by_count_with_aliases() {
         .unwrap();
     assert_eq!(year.text(TagPlace::Inline), "2024");
     assert_eq!(year.text(TagPlace::Tags), "\"2024\"");
+}
+
+/// El tag que una nota escribe una sola vez, y nada más nombra, es el que se
+/// está escribiendo ahí; otra nota, una página o un `parents` ya lo hacen
+/// del vault.
+#[test]
+fn only_once_in_a_note() {
+    let tags = tags(&[
+        ("a.md", "#ru #dos #dos #otra"),
+        ("b.md", "#otra"),
+        ("tags/hijo.md", "---\nparents: [padre]\n---\n"),
+        ("d.md", "#padre"),
+        ("tags/pagina.md", ""),
+        ("e.md", "#pagina"),
+    ]);
+    let a = path("a.md");
+    assert!(tags.is_only_once_in(&key("RU"), &a));
+    assert!(!tags.is_only_once_in(&key("ru"), &path("b.md")));
+    assert!(!tags.is_only_once_in(&key("dos"), &a));
+    assert!(!tags.is_only_once_in(&key("otra"), &a));
+    assert!(!tags.is_only_once_in(&key("padre"), &path("d.md")));
+    assert!(!tags.is_only_once_in(&key("pagina"), &path("e.md")));
 }

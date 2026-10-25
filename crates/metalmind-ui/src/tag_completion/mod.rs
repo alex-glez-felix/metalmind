@@ -33,14 +33,17 @@ struct Shown {
 
 impl TagCompletions {
     /// La lista para `typed` en `place`; `None` si ningún tag coincide.
+    /// Con `only_here`, lo escrito solo existe en el vault por esta misma
+    /// ocurrencia (ya autoguardada) y no se ofrece a sí mismo.
     #[must_use]
     pub fn open(
         candidates: Arc<[TagCompletion]>,
         typed: &str,
         place: TagPlace,
+        only_here: bool,
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
-        let shown = matches(&candidates, typed, matcher);
+        let shown = matches(&candidates, typed, only_here, matcher);
         (!shown.is_empty()).then(|| Self {
             candidates,
             typed: typed.to_owned(),
@@ -106,10 +109,17 @@ struct Side<'a> {
     alias: Option<&'a str>,
 }
 
-fn matches(candidates: &[TagCompletion], typed: &str, matcher: &mut FuzzyMatcher) -> Vec<Shown> {
+fn matches(
+    candidates: &[TagCompletion],
+    typed: &str,
+    only_here: bool,
+    matcher: &mut FuzzyMatcher,
+) -> Vec<Shown> {
+    let typed = TagKey::new(typed);
     let haystacks: Vec<(usize, Option<&str>)> = candidates
         .iter()
         .enumerate()
+        .filter(|(_, completion)| !(only_here && completion.key == typed))
         .flat_map(|(index, completion)| {
             std::iter::once((index, None)).chain(
                 completion
@@ -128,7 +138,6 @@ fn matches(candidates: &[TagCompletion], typed: &str, matcher: &mut FuzzyMatcher
             None => Cow::Borrowed(candidates[index].key.as_str()),
         })
         .collect();
-    let typed = TagKey::new(typed);
     let mut starts = vec![false; keys.len()];
     for ranked in matcher.rank(&Query::prefix(typed.as_str()), &keys) {
         starts[ranked.index] = true;
