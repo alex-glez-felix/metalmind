@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use rstest::rstest;
 use support::wait::{self, TIMEOUT};
-use support::{Area, Smoke};
+use support::{Area, Smoke, Window};
 
 /// Con la config por defecto, lo escrito llega al disco tras un segundo sin
 /// teclear, sin `:w`, deja su versión en el historial y `:q` sale.
@@ -266,6 +266,42 @@ fn una_mark_de_archivo_vuelve_a_su_nota() {
         "tres
 "
     );
+}
+
+/// La jumplist y las marks `A`–`Z` sobreviven a cerrar la ventana, con `:qa`
+/// o desde el gestor de ventanas (#73): en la sesión siguiente, `ctrl-o`
+/// vuelve a la línea de a.md de donde se saltó y `'B` a la de la mark.
+#[rstest]
+#[case::qa(|window: &Window| window.type_keys(":qa<CR>"))]
+#[case::gestor_de_ventanas(|window: &Window| window.request_close())]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_jumplist_y_las_marks_siguen_en_la_sesion_siguiente(#[case] close: fn(&Window)) {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\ndos\ntres\n");
+    smoke.write("b.md", "cuatro\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("jjmBk:e b.md<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    close(&window);
+    assert!(metalmind.wait_exit().success());
+    let saved = smoke.saved_jumps();
+    assert_eq!(saved.len(), 1, "{saved:?}");
+    assert!(saved[0].starts_with("metalmind-saltos 1\n"), "{saved:?}");
+
+    let mut metalmind = smoke.launch(&["b.md"]);
+    let window = metalmind.window();
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("<C-o>");
+    window.wait_title("de a.md", |title| title.starts_with("a.md"));
+    window.type_keys("x:w<CR>:e b.md<CR>");
+    window.wait_title("de b.md otra vez", |title| title.starts_with("b.md"));
+    window.type_keys("'B");
+    window.wait_title("de a.md otra vez", |title| title.starts_with("a.md"));
+    window.type_keys("x:wq<CR>");
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(smoke.read("a.md"), "uno\nos\nres\n");
+    assert_eq!(smoke.read("b.md"), "cuatro\n");
 }
 
 /// `space f`, parte del nombre y `enter`: el finder abre la nota en el panel.
