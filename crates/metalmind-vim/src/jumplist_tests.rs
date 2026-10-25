@@ -108,6 +108,36 @@ fn las_entradas_siguen_a_su_linea() {
     assert_eq!(lines(&list), [(0, 1), (1, 2), (0, 1)]);
 }
 
+/// Lo que se guarda sigue lo editado en el archivo del panel que la lista
+/// todavía no siguió; lo de los otros archivos ya lo siguió quien editó.
+#[test]
+fn lo_que_se_guarda_sigue_lo_editado_en_el_archivo_del_panel() {
+    let mut buffer = Buffer::from("a\nb\nc\nd");
+    let doc = DocState::default();
+    let list = list_of(&[(0, 2), (1, 2), (0, 3)]);
+    let selections = Selections::single(Selection::cursor(metalmind_buffer::ByteOffset::ZERO));
+    buffer.begin_transaction(selections.clone()).unwrap();
+    buffer
+        .apply(vec![Edit::insert(
+            metalmind_buffer::ByteOffset::ZERO,
+            "x\n",
+        )])
+        .unwrap();
+    buffer.commit_transaction(selections).unwrap();
+    let saved = list.followed(FileId::new(0), &doc, &buffer);
+    assert_eq!(saved, [at(0, 3), at(1, 2), at(0, 4)]);
+    assert_eq!(lines(&list), [(0, 2), (1, 2), (0, 3)], "la lista no cambia");
+}
+
+#[test]
+fn una_lista_recuperada_queda_sin_retroceder_y_con_las_ultimas_cien() {
+    let list = JumpList::restored((0..CAPACITY + 5).map(|line| at(0, line)));
+    assert_eq!(list.entries().len(), CAPACITY);
+    assert_eq!(list.entries()[0], at(0, 5));
+    assert_eq!(list.index(), CAPACITY);
+    assert_eq!(JumpList::restored([]), JumpList::default());
+}
+
 #[derive(Clone, Debug)]
 enum Op {
     Push(u32, usize),
