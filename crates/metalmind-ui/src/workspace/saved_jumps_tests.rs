@@ -90,3 +90,19 @@ fn se_guarda_la_ruta_de_una_nota_renombrada_con_la_app_abierta() {
     let jumps = session.workspace.saved_jumps(vault.root()).unwrap();
     assert_eq!(jumps.marks, [('B', saved("c.md", 1, 0))]);
 }
+
+/// Lo editado ya lo siguió la jumplist cuando el panel pasa a otra nota sin
+/// saltar: se guarda donde quedó, no donde estaba.
+#[test]
+fn lo_editado_antes_de_cambiar_de_nota_sin_saltar_se_guarda_donde_quedo() {
+    let (_dir, vault, mut session) = vault_session(&[("a.md", A), ("b.md", B)], "a.md");
+    session.keys("jjggOnueva⎋");
+    let pane = session.pane();
+    session
+        .workspace
+        .show_file(pane, &vault.root().join("b.md"))
+        .unwrap();
+    assert_eq!(at(&session), ("b.md".into(), 1));
+    let jumps = session.workspace.saved_jumps(vault.root()).unwrap();
+    assert_eq!(jumps.jumps, [saved("a.md", 3, 0)]);
+}

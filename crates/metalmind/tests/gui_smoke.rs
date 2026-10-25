@@ -268,11 +268,13 @@ fn una_mark_de_archivo_vuelve_a_su_nota() {
     );
 }
 
-/// La jumplist y las marks `A`–`Z` sobreviven a cerrar la ventana, con `:qa`
-/// o desde el gestor de ventanas (#73): en la sesión siguiente, `ctrl-o`
-/// vuelve a la línea de a.md de donde se saltó y `'B` a la de la mark.
+/// La jumplist y las marks `A`–`Z` sobreviven a cerrar la ventana, con `:qa`,
+/// `:qa!` (como el shada de nvim) o desde el gestor de ventanas (#73): en la
+/// sesión siguiente, `ctrl-o` vuelve a la línea de a.md de donde se saltó y
+/// `'B` a la de la mark.
 #[rstest]
 #[case::qa(|window: &Window| window.type_keys(":qa<CR>"))]
+#[case::qa_forzado(|window: &Window| window.type_keys(":qa!<CR>"))]
 #[case::gestor_de_ventanas(|window: &Window| window.request_close())]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn la_jumplist_y_las_marks_siguen_en_la_sesion_siguiente(#[case] close: fn(&Window)) {
