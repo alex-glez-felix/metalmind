@@ -4,8 +4,8 @@
 )]
 
 use metalmind_buffer::{
-    Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, LineAnchor, Selection, Selections,
-    Splice,
+    Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, LineAnchor, Point, Selection,
+    Selections, Splice,
 };
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
@@ -51,6 +51,77 @@ fn lines_text_joins_whole_lines_without_the_last_line_feed() {
     assert_eq!(buffer.lines_text(1..3), "añb\n");
     assert_eq!(buffer.lines_text(2..3), "");
     assert_eq!(buffer.lines_text(1..1), "");
+}
+
+/// Un texto que el rope parte en muchos trozos, con una línea más larga
+/// que un trozo.
+fn many_chunks() -> String {
+    format!(
+        "{}{}\n{}",
+        "añ — línea\n\n".repeat(300),
+        "x".repeat(5_000),
+        "é\n".repeat(300)
+    )
+}
+
+#[test]
+fn reads_characters_across_chunk_boundaries() {
+    let text = many_chunks();
+    let buffer = Buffer::from(text.as_str());
+    for offset in 0..=text.len() {
+        let (at_offset, before) = match text.get(offset..) {
+            Some(rest) => (rest.chars().next(), text[..offset].chars().next_back()),
+            None => (None, None),
+        };
+        assert_eq!(buffer.char_at(at(offset)), at_offset, "{offset}");
+        assert_eq!(buffer.char_before(at(offset)), before, "{offset}");
+        assert_eq!(
+            buffer.is_char_boundary(at(offset)),
+            text.is_char_boundary(offset)
+        );
+    }
+}
+
+#[test]
+fn reads_lines_across_chunk_boundaries() {
+    let text = many_chunks();
+    let buffer = Buffer::from(text.as_str());
+    let lines: Vec<&str> = text.split('\n').collect();
+    for first in 0..lines.len() {
+        for count in [1, 2, 7] {
+            let last = (first + count).min(lines.len());
+            let expected = lines[first..last].join("\n");
+            assert_eq!(buffer.lines_text(first..first + count), expected, "{first}");
+        }
+    }
+}
+
+#[test]
+fn edits_across_chunk_boundaries_and_undoes_them() {
+    let text = many_chunks();
+    let mut buffer = Buffer::from(text.as_str());
+    let mut expected = text.clone();
+    let edits = [(4_000, 9, "uno\ndos"), (1_000, 0, "\n"), (12, 3_500, "")];
+    for (start, removed, inserted) in edits {
+        edit(
+            &mut buffer,
+            vec![Edit::replace(at(start)..at(start + removed), inserted)],
+        );
+        expected.replace_range(start..start + removed, inserted);
+        assert_eq!(buffer.to_string(), expected);
+        let line = expected[..start].matches('\n').count();
+        let line_start = expected[..start]
+            .rfind('\n')
+            .map_or(0, |newline| newline + 1);
+        assert_eq!(
+            buffer.point_at(at(start)).unwrap(),
+            Point::new(line, start - line_start)
+        );
+    }
+    for _ in edits {
+        buffer.undo().unwrap();
+    }
+    assert_eq!(buffer.to_string(), text);
 }
 
 #[test]

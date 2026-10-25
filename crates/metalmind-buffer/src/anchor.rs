@@ -6,6 +6,7 @@ use std::ops::RangeInclusive;
 use ropey::Rope;
 
 use crate::LineEdit;
+use crate::spot::Spot;
 
 /// Una posición que sigue a su línea. La crea [`crate::Buffer::create_anchor`]
 /// y solo vale en ese buffer.
@@ -23,14 +24,6 @@ impl Point {
     #[must_use]
     pub fn new(line: usize, column: usize) -> Self {
         Self { line, column }
-    }
-
-    pub(crate) fn of(rope: &Rope, byte: usize) -> Self {
-        let line = rope.byte_to_line(byte);
-        Self {
-            line,
-            column: byte - rope.line_to_byte(line),
-        }
     }
 }
 
@@ -85,7 +78,8 @@ impl Anchors {
 pub struct LineChange {
     start: Point,
     end: Point,
-    end_line_len: usize,
+    /// Borra hasta el final de una línea posterior a la primera.
+    reaches_later_line_end: bool,
     /// Borra todo el texto: todas las líneas desaparecen.
     clears_text: bool,
     inserted_lines: usize,
@@ -96,28 +90,39 @@ pub struct LineChange {
 }
 
 impl LineChange {
-    pub(crate) fn new(rope: &Rope, start: usize, removed: usize, text: &str) -> Self {
-        let end = start + removed;
-        let line_len = |line| {
-            let next = rope.line_to_byte(line + 1);
-            let has_newline = line + 1 < rope.len_lines();
-            next - usize::from(has_newline) - rope.line_to_byte(line)
+    /// Reemplazar `start..end` de `rope` por `text`.
+    pub(crate) fn between(rope: &Rope, start: &Spot, end: &Spot, text: &str) -> Self {
+        let removed = end.byte - start.byte;
+        let reaches_later_line_end = end.point.line > start.point.line && {
+            let next = end.point.line + 1;
+            let line_end = if next < rope.len_lines() {
+                rope.line_to_byte(next) - 1
+            } else {
+                rope.len_bytes()
+            };
+            end.byte == line_end
         };
-        let (start, end) = (Point::of(rope, start), Point::of(rope, end));
         let inserted_lines = text.matches('\n').count();
         let tail = match text.rfind('\n') {
             Some(newline) => text.len() - newline - 1,
-            None => start.column + text.len(),
+            None => start.point.column + text.len(),
         };
         Self {
-            start,
-            end,
-            end_line_len: line_len(end.line),
+            start: start.point,
+            end: end.point,
+            reaches_later_line_end,
             clears_text: removed > 0 && removed == rope.len_bytes(),
             inserted_lines,
             tail,
-            inserts_lines_before: removed == 0 && start.column == 0 && text.ends_with('\n'),
+            inserts_lines_before: removed == 0 && start.point.column == 0 && text.ends_with('\n'),
         }
+    }
+
+    /// Como [`Self::between`], con bytes.
+    #[cfg(test)]
+    pub(crate) fn new(rope: &Rope, start: usize, removed: usize, text: &str) -> Self {
+        let spot = |byte| Spot::of(rope, byte).unwrap_or_else(|| panic!("{byte} fuera del texto"));
+        Self::between(rope, &spot(start), &spot(start + removed), text)
     }
 
     /// Las líneas de antes que toca la edición; las de después se corren
@@ -216,7 +221,7 @@ impl LineChange {
         if line == first {
             whole_lines
         } else if line == last {
-            !whole_lines && self.end.column == self.end_line_len
+            !whole_lines && self.reaches_later_line_end
         } else {
             true
         }
