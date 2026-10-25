@@ -273,13 +273,12 @@ fn batch(notes: usize) -> (TextSearchState, u64, Vec<NoteMatches>, TempDir) {
     let mut searcher = TextSearcher::new(dir.path());
     let mut state = TextSearchState::new();
     let search = state.edit(LineEdit::Insert(WORD)).unwrap();
-    let batch = searcher
-        .search(&search.query)
-        .unwrap()
-        .iter()
-        .take(50)
-        .collect();
-    (state, search.version, batch, dir)
+    // La búsqueda es paralela y llega en cualquier orden: sin ordenar, cada
+    // corrida mediría otras 50 notas.
+    let mut found: Vec<NoteMatches> = searcher.search(&search.query).unwrap().iter().collect();
+    found.sort_by(|a, b| a.path.cmp(&b.path));
+    found.truncate(50);
+    (state, search.version, found, dir)
 }
 
 #[library_benchmark]
