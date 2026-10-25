@@ -72,9 +72,17 @@ impl MarkedLines {
     }
 
     /// El primer índice desde `from` cuya línea cumple `holds`, que una vez
-    /// que se cumple se sigue cumpliendo.
+    /// que se cumple se sigue cumpliendo. Busca a saltos desde `from`
+    /// porque `:g` edita casi siempre cerca de la marca que sigue.
     fn first_from(&self, from: usize, holds: impl Fn(isize) -> bool) -> usize {
-        let (mut low, mut high) = (from, self.base.len());
+        // Las de antes de `low` no cumplen; `high` cumple o es el final.
+        let (mut low, mut high, mut step) = (from, from, 1);
+        while high < self.base.len() && !holds(self.line(high)) {
+            low = high + 1;
+            high += step;
+            step *= 2;
+        }
+        let mut high = high.min(self.base.len());
         while low < high {
             let middle = low + (high - low) / 2;
             if holds(self.line(middle)) {
@@ -180,5 +188,44 @@ mod tests {
             moved.push(line);
         }
         assert_eq!(moved, [0, 1, 2, 3, 4]);
+    }
+
+    proptest::proptest! {
+        /// Contra un modelo que mueve cada marca por su cuenta.
+        #[test]
+        fn follow_their_lines_like_each_one_on_its_own(
+            marked in proptest::collection::btree_set(0..40usize, 0..40),
+            edits in proptest::collection::vec((0..40usize, 0..3usize, 0..3usize, proptest::bool::ANY), 1..30),
+        ) {
+            let mut text = "l\n".repeat(40);
+            let mut marks = MarkedLines::new(marked.iter().copied());
+            let mut model: Vec<Option<usize>> = marked.iter().map(|&line| Some(line)).collect();
+            let (mut taken, mut next) = (Vec::new(), 0);
+            for (line, removed, inserted, pop) in edits {
+                let lines = text.len() / 2;
+                let line = line.min(lines);
+                let removed = removed.min(lines - line);
+                let rope = Rope::from_str(&text);
+                let change = LineChange::new(&rope, line * 2, removed * 2, &"n\n".repeat(inserted));
+                marks.adjust(&change);
+                for slot in &mut model[next..] {
+                    *slot = slot.and_then(|line| change.adjust_line(line));
+                }
+                text.replace_range(line * 2..(line + removed) * 2, &"n\n".repeat(inserted));
+                if pop {
+                    taken.push(marks.pop_first());
+                    let found = model[next..].iter().position(Option::is_some);
+                    taken.push(found.and_then(|found| {
+                        next += found + 1;
+                        model[next - 1]
+                    }));
+                }
+            }
+            for pair in taken.chunks(2) {
+                proptest::prop_assert_eq!(pair[0], pair[1]);
+            }
+            let rest: Vec<usize> = model[next..].iter().flatten().copied().collect();
+            proptest::prop_assert_eq!(drain(marks), rest);
+        }
     }
 }
