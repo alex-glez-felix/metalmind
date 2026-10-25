@@ -268,10 +268,16 @@ impl Vim {
         let register = self.selected.take();
         self.reset();
         let columns = t.pane.viewport.columns();
-        let redone = t
-            .selections
-            .map(|selection| size.redo_from(t.buffer, selection, columns));
-        let operands = visual_operands(Area::Selection(size.kind()), t.buffer, &redone, columns);
+        // Un operando por cursor aunque las selecciones rehechas se solapen:
+        // cada cursor guarda su trozo en el registro.
+        let operands = t.selections.map_to(|cursor| {
+            let redone = size.redo_from(t.buffer, cursor, columns);
+            let area = Area::Selection(size.kind());
+            Operand {
+                selection: redone,
+                target: Ok(area.target(t.buffer, &redone, columns)),
+            }
+        });
         let operation = Operation {
             operator,
             subject: Subject::Object(Object::Visual(Area::Sized(size))),

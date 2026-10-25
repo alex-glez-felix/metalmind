@@ -475,6 +475,7 @@ fn nvim_selection(#[case] before: &str, #[case] keys: &str, #[case] after: &str)
 #[case("|abc |def", "vlrx", "|xxc |xxf")]
 #[case("|ab |cd", "vl<Esc>gvd", "| ")]
 #[case("|abcd\n|efgh", "vld.", "|\n|")]
+#[case("|abcd|efghijkl", "vlld.P", "|dhi\nhijkl")]
 #[case("|ab\n|cd", "vl<Esc>x", "|a\n|c")]
 #[case("f|oo b|ar", "viwo<Esc>x", "|oo |ar")]
 #[case("|ab x. |ab x.", "v/x<CR>d", "|. |.")]
