@@ -146,3 +146,21 @@ proptest! {
         prop_assert_eq!(positions.len(), query_text.chars().count());
     }
 }
+
+/// Un prefijo sigue las reglas de mayúsculas y acentos del fuzzy.
+#[test]
+fn prefijo_con_las_reglas_del_fuzzy() {
+    let candidates = ["canción", "Cancionero", "la canción", "cañón"];
+    let starts = |text: &str| -> Vec<&str> {
+        let mut found: Vec<&str> = FuzzyMatcher::text()
+            .rank(&Query::prefix(text), &candidates)
+            .into_iter()
+            .map(|found| candidates[found.index])
+            .collect();
+        found.sort_unstable();
+        found
+    };
+    assert_eq!(starts("cancion"), ["Cancionero", "canción"]);
+    assert_eq!(starts("canción"), ["canción"]);
+    assert_eq!(starts("cañ"), ["cañón"]);
+}

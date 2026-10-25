@@ -117,3 +117,39 @@ fn es_la_misma_lista_solo_con_lo_mismo() {
     assert!(!list.is_for(&candidates, "ru", TagPlace::Tags));
     assert!(!list.is_for(&vault(), "ru", TagPlace::Inline));
 }
+
+/// Lo escrito y los nombres se pliegan igual, también cuando el plegado de
+/// una letra son dos: `ß` es `ss`.
+#[test]
+fn el_plegado_de_varias_letras_coincide() {
+    let candidates: Arc<[TagCompletion]> = Arc::from([tag("Groß", 2, &[]), tag("Strasse", 1, &[])]);
+    let names = |typed: &str| -> Vec<String> {
+        TagCompletions::open(
+            Arc::clone(&candidates),
+            typed,
+            TagPlace::Inline,
+            &mut FuzzyMatcher::text(),
+        )
+        .map(|list| list.rows().map(|(tag, _)| tag.name.clone()).collect())
+        .unwrap_or_default()
+    };
+    assert_eq!(names("GROSS"), ["Groß"]);
+    assert_eq!(names("straß"), ["Strasse"]);
+}
+
+/// Si el fuzzy encuentra `canción` con `cancion`, también cuenta como que
+/// empieza con lo escrito: va antes que uno con menos notas.
+#[test]
+fn empezar_sin_acento_cuenta_como_empezar() {
+    let candidates: Arc<[TagCompletion]> =
+        Arc::from([tag("canción", 9, &[]), tag("cancionera", 1, &[])]);
+    let list = TagCompletions::open(
+        candidates,
+        "cancion",
+        TagPlace::Inline,
+        &mut FuzzyMatcher::text(),
+    )
+    .unwrap();
+    let names: Vec<&str> = list.rows().map(|(tag, _)| tag.name.as_str()).collect();
+    assert_eq!(names, ["canción", "cancionera"]);
+}

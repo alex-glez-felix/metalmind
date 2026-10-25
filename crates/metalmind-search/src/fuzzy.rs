@@ -3,7 +3,7 @@
 
 use std::cmp::Reverse;
 
-use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use unicode_segmentation::UnicodeSegmentation as _;
 
@@ -21,6 +21,18 @@ impl Query {
             text,
             CaseMatching::Smart,
             Normalization::Smart,
+        ))
+    }
+
+    /// Lo que empieza con `text`, con las mismas reglas de mayúsculas y
+    /// acentos que [`Query::new`]: `cancion` encuentra `canción`.
+    #[must_use]
+    pub fn prefix(text: &str) -> Self {
+        Self(Pattern::new(
+            text,
+            CaseMatching::Smart,
+            Normalization::Smart,
+            AtomKind::Prefix,
         ))
     }
 
