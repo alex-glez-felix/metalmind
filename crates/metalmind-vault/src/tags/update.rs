@@ -272,6 +272,21 @@ mod tests {
         .unwrap();
     }
 
+    /// Dos renames del lote llegan a la misma nota: queda el contenido del
+    /// segundo, sin tags. Lo encontró el proptest de abajo.
+    #[test]
+    fn dos_renames_al_mismo_destino() {
+        check(&[
+            vec![Op::Write("rust.md/rust.md".into(), "#Rust #gpui")],
+            vec![Op::Write("tags".into(), "")],
+            vec![
+                Op::Rename("rust.md/rust.md".into(), "a.md".into()),
+                Op::Rename("tags".into(), "a.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
     proptest! {
         /// Índice y grafo incrementales tras cualquier secuencia de crear,
         /// editar, mover y borrar notas y páginas == construidos de cero

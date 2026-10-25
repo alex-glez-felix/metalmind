@@ -176,7 +176,8 @@ impl Tree {
 
 /// Convierte en `Renamed` lo que se borró en `from` y apareció igual en `to`.
 /// Lo que está dentro de un `from` ya emparejado viaja con ese rename, así
-/// que otro no puede reclamarlo como suyo.
+/// que otro no puede reclamarlo como suyo. Si dos llegan al mismo `to`, lo
+/// que quedó ahí es del último.
 fn pair_renames(
     renames: &[(VaultPath, VaultPath)],
     removed: &mut Entries,
@@ -184,7 +185,15 @@ fn pair_renames(
 ) -> Vec<VaultChange> {
     let mut changes = Vec::new();
     let mut sources: HashSet<VaultPath> = HashSet::new();
-    for (from, to) in renames {
+    let last_to: HashMap<&VaultPath, usize> = renames
+        .iter()
+        .enumerate()
+        .map(|(at, (_, to))| (to, at))
+        .collect();
+    for (at, (from, to)) in renames.iter().enumerate() {
+        if last_to.get(to) != Some(&at) {
+            continue;
+        }
         let Some(&kind) = removed
             .get(from)
             .filter(|&kind| created.get(to) == Some(kind))
