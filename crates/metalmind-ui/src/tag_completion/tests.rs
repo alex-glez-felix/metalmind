@@ -177,3 +177,28 @@ fn lo_escrito_no_se_ofrece_a_si_mismo() {
     assert_eq!(names(false), ["ru", "bruma"]);
     assert_eq!(names(true), ["bruma"]);
 }
+
+/// La ventana de filas solo se corre cuando la elegida sale de ella: subir
+/// desde abajo mueve la elegida por las que ya se ven.
+#[test]
+fn la_ventana_se_corre_solo_al_salir_la_elegida() {
+    let mut list = open("", TagPlace::Inline).unwrap();
+    assert_eq!(list.visible(3), 0..3);
+    for _ in 0..4 {
+        list.select_next();
+    }
+    assert_eq!(list.visible(3), 2..5);
+    list.select_previous();
+    list.select_previous();
+    assert_eq!((list.selected(), list.visible(3)), (2, 2..5));
+    list.select_previous();
+    assert_eq!(list.visible(3), 1..4);
+    list.select_previous();
+    list.select_previous();
+    assert_eq!(
+        (list.selected(), list.visible(3)),
+        (4, 2..5),
+        "da la vuelta"
+    );
+    assert_eq!(list.visible(10), 0..5);
+}

@@ -52,8 +52,9 @@ impl EditorElement {
         if let Some(hover) = formula {
             formula_tooltip::show(&hover, clip, &self.theme, window, cx);
         }
+        let max_width = window.viewport_size().width;
         let completion = self.editor.update(cx, |editor, cx| {
-            editor.completion_overlay(layout, &self.theme, cx)
+            editor.completion_overlay(layout, max_width, &self.theme, cx)
         });
         if let Some(mut completion) = completion {
             // Va fuera del árbol del editor, así que se mide sola.
