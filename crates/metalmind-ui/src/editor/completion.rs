@@ -81,8 +81,8 @@ impl Editor {
         }
     }
 
-    /// Tras lo tecleado: abre, filtra o cierra la lista según el tag que se
-    /// está escribiendo. `aliases` y `parents` solo nombran tags en una
+    /// Tras escribir texto: abre, filtra o cierra la lista según el tag que
+    /// se está escribiendo. `aliases` y `parents` solo nombran tags en una
     /// página de tag. Si lo escrito y los tags no cambiaron, la lista se
     /// queda como está, con su fila elegida.
     pub(super) fn update_completion(&mut self, cx: &App) {
@@ -251,6 +251,8 @@ fn completion_row(
             if let Some(list) = &mut editor.completion.list {
                 list.select(row);
             }
+            // El foco pudo irse (al panel lateral) con la lista abierta.
+            editor.take_focus(window, cx);
             editor.accept_completion(window, cx);
         }))
         .child(icon(completion.icon.as_ref(), theme))
