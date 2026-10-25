@@ -1,0 +1,12 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 8020f54a0b318d809d7685a0858b7e3ff85ce1aa0ca0533adaea5f1a95f7feb8 # shrinks to model = {"a/a/X.md": "", "a/b/x.md": "[[X]]", "b/a/X.md": ""}, file = Index(12297829382473034411), folder = None, to = "y.md"
+cc 8a725e4ff1ea0f153c9a7e6d4fd745749e9c7f0c6e361b12e95cad00aff10400
+cc 18c74ae9291fa77fda9b87fb2cda78f42f0df6b8336a51b8a7055fbaafed7c1a # shrinks to model = {"a/a/X.md": "[[x]]", "a/b/x.md": "", "b/a/x.md": ""}, file = Index(6148914691236517206), folder = None, to = "y.md"
+cc c502a2f650da7e0d0bc97bb426391574add924290fc7a7a9dfbda076dfc07bdd
+cc 30835788d84f7dc6eb9785b7e645ec0d9f2d025660054f39f9f8e74309ef95b4
+cc d93e7f8800c78a6866d7b942e91c8632368fc4a4fa0e47cd7faf4a82900a4a30 # shrinks to model = {"a/a/x.md": "", "b/a/x.md": "", "b/b/X.md": "", "b/b/y.md": "[t](x.md)"}, file = Index(0), folder = None, to = "y.md"

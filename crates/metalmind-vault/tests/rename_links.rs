@@ -117,6 +117,62 @@ fn a_name_that_now_ties_gets_more_of_its_path() {
     );
 }
 
+/// Quitar un candidato de un nombre repetido cambia el desempate de los que
+/// quedan, aunque el link no nombrara al movido: el plan lo reescribe.
+#[rstest]
+#[case::issue_62_por_carpeta(
+    &[("a/a/X.md", ""), ("a/b/x.md", "[[X]]"), ("b/a/X.md", "")],
+    "b/a/X.md",
+    "y.md",
+    "a/b/x.md",
+    "[[x]]"
+)]
+#[case::issue_62_por_escritura(
+    &[("a/a/X.md", "[[x.md]]"), ("a/b/x.md", ""), ("b/a/x.md", "")],
+    "a/b/x.md",
+    "y.md",
+    "a/a/X.md",
+    "[[X.md]]"
+)]
+#[case::issue_79(
+    &[("a/a/X.md", "[[x]]"), ("a/b/x.md", ""), ("b/a/x.md", "")],
+    "a/b/x.md",
+    "y.md",
+    "a/a/X.md",
+    "[[X]]"
+)]
+#[case::issue_87_mayusculas(
+    &[("a/a/x.md", ""), ("a/b/x.md", ""), ("b/a/X.md", "[[x]]")],
+    "a/a/x.md",
+    "y.md",
+    "b/a/X.md",
+    "[[X]]"
+)]
+#[case::issue_87_nombre_con_espacio(
+    &[("a/a/x.md", "[[X]]"), ("a/b/X.md", ""), ("b/a/X.md", ""), ("y.md", "")],
+    "a/b/X.md",
+    "m n.md",
+    "a/a/x.md",
+    "[[x]]"
+)]
+#[case::issue_88_markdown(
+    &[("a/a/x.md", ""), ("b/a/x.md", ""), ("b/b/X.md", ""), ("b/b/y.md", "[t](x.md)")],
+    "a/a/x.md",
+    "y.md",
+    "b/b/y.md",
+    "[t](X.md)"
+)]
+fn removing_a_tied_candidate_keeps_the_other_links(
+    #[case] files: &[(&str, &str)],
+    #[case] from: &str,
+    #[case] to: &str,
+    #[case] note: &str,
+    #[case] expected: &str,
+) {
+    keeps_every_resolved_target(&model(files), &path(from), &path(to)).unwrap();
+    assert_eq!(renamed(files, from, to, note), expected);
+}
+
 #[test]
 fn a_wikilink_cannot_name_a_file_with_a_hash() {
     let model = model(&[("inicio.md", "[[nota]] [x](nota.md)"), ("nota.md", "")]);
@@ -222,8 +278,36 @@ fn vault() -> impl Strategy<Value = Model> {
     })
 }
 
+/// Un vault donde todos los nombres empatan en profundidad y difieren a lo
+/// más en mayúsculas o carpeta: cada link por nombre depende del desempate.
+fn tied_vault() -> impl Strategy<Value = Model> {
+    let file = (
+        prop::sample::select(vec!["a", "b"]),
+        prop::sample::select(vec!["a", "b"]),
+        prop::sample::select(vec!["x.md", "X.md"]),
+    )
+        .prop_map(|(top, sub, name)| format!("{top}/{sub}/{name}"));
+    prop::collection::btree_map(file, content(), 2..=8).prop_map(|files| {
+        files
+            .iter()
+            .map(|(file, text)| (path(file), text.clone()))
+            .collect()
+    })
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// Sacar un archivo de un empate, a un nombre que no captura nada, no
+    /// cambia a dónde lleva ningún link que resolvía a otro archivo.
+    #[test]
+    fn leaving_a_tie_keeps_the_links_to_the_others(
+        model in tied_vault(),
+        file in any::<prop::sample::Index>(),
+    ) {
+        let files: Vec<VaultPath> = model.keys().cloned().collect();
+        keeps_every_resolved_target(&model, file.get(&files), &path("y.md"))?;
+    }
 
     /// Ver [`keeps_every_resolved_target`].
     #[test]

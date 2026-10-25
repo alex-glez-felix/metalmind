@@ -126,7 +126,8 @@ impl LinkIndex {
 
     /// Los links que el rename puede cambiar: los que llegan a lo movido,
     /// los de las notas movidas (sus relativos y el desempate por carpeta) y
-    /// los que tienen la clave de un nombre nuevo, que podría capturarlos.
+    /// los que tienen la clave de un nombre que gana o pierde un archivo: uno
+    /// nuevo puede capturarlos y quitar uno cambia el desempate del resto.
     fn links_to_check(&self, moved: &[VaultPath], after: &After<'_>) -> BTreeSet<LinkId> {
         let mut ids: BTreeSet<LinkId> = moved
             .iter()
@@ -134,21 +135,21 @@ impl LinkIndex {
             .flatten()
             .cloned()
             .collect();
-        let added: HashSet<&String> = after.names.added_keys().collect();
-        let sources: BTreeSet<&VaultPath> = added
+        let changed: HashSet<&String> = after.names.changed_keys().collect();
+        let sources: BTreeSet<&VaultPath> = changed
             .iter()
             .filter_map(|key| self.by_key.get(*key))
             .flatten()
             .collect();
         for source in sources {
-            let captured = self
+            let affected = self
                 .outgoing(source)
                 .iter()
                 .enumerate()
                 .filter(|(_, link)| {
-                    key_of(source, &link.target_text).is_some_and(|key| added.contains(&key))
+                    key_of(source, &link.target_text).is_some_and(|key| changed.contains(&key))
                 });
-            ids.extend(captured.map(|(ordinal, _)| LinkId {
+            ids.extend(affected.map(|(ordinal, _)| LinkId {
                 source: source.clone(),
                 ordinal,
             }));
