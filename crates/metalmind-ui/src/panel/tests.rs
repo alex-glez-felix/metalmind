@@ -388,6 +388,19 @@ fn cambiar_de_vista_cierra_la_pregunta() {
     assert_eq!(panel.prompt(), None);
 }
 
+/// Un filtro a medio escribir sobrevive al cambio de vista, como uno
+/// confirmado con `Enter`.
+#[test]
+fn cambiar_de_vista_deja_el_filtro_que_se_escribia() {
+    let mut panel = panel();
+    panel.start_filter();
+    type_text(&mut panel, "hoy");
+    panel.switch_view();
+    assert_eq!(panel.prompt(), None);
+    panel.switch_view();
+    assert_eq!(panel.tree.filter(), "hoy");
+}
+
 /// Armar el árbol de tags cuesta lo que el vault: con otra vista a la
 /// vista, un lote nuevo espera a que se muestre la de tags.
 #[test]
