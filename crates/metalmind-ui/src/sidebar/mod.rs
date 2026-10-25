@@ -50,7 +50,7 @@ pub struct Sidebar {
     vault: Rc<Vault>,
     workspace: Entity<Workspace>,
     focus_handle: FocusHandle,
-    /// Cada vista con su scroll: cambiar de vista no mueve la otra.
+    /// Cada vista con su scroll: al volver a una, sigue donde se dejó.
     scroll: UniformListScrollHandle,
     tag_scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
@@ -136,7 +136,6 @@ impl Sidebar {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
         let visible = self.panel.toggle(view, focused);
-        self.scroll_to_selection();
         cx.notify();
         visible
     }
