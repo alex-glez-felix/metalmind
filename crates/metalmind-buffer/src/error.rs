@@ -23,6 +23,12 @@ pub enum BufferError {
     NoOpenTransaction,
     #[error("ya hay una transacción abierta")]
     TransactionAlreadyOpen,
+    #[error("las líneas {first}..={last} no se pueden mover debajo de la {below}")]
+    InvalidMove {
+        first: usize,
+        last: usize,
+        below: usize,
+    },
     #[error("el ancla {0:?} no es de este buffer")]
     UnknownAnchor(LineAnchor),
 }

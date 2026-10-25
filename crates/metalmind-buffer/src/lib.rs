@@ -10,6 +10,7 @@ mod buffer;
 mod edit;
 mod error;
 mod history;
+mod line_move;
 mod marked;
 mod offset;
 mod selection;

@@ -6,6 +6,7 @@ use std::ops::RangeInclusive;
 use ropey::Rope;
 
 use crate::LineEdit;
+use crate::line_move::LineMove;
 use crate::spot::Spot;
 
 /// Una posición que sigue a su línea. La crea [`crate::Buffer::create_anchor`]
@@ -75,7 +76,55 @@ impl Anchors {
 /// Viene en cada [`Splice`](crate::Splice) para mover posiciones guardadas
 /// por línea fuera del buffer, como la jumplist de vim.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct LineChange {
+pub struct LineChange(Shape);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Shape {
+    Replace(Replacement),
+    Move(LineMove),
+    /// La otra mitad de un movimiento: sus líneas ya se movieron con la
+    /// primera.
+    Unchanged,
+}
+
+impl LineChange {
+    pub(crate) const UNCHANGED: Self = Self(Shape::Unchanged);
+
+    pub(crate) fn replaced(replacement: Replacement) -> Self {
+        Self(Shape::Replace(replacement))
+    }
+
+    pub(crate) fn moved(moved: LineMove) -> Self {
+        Self(Shape::Move(moved))
+    }
+
+    /// Dónde queda `point` tras la edición, como una mark de vim; `None` si
+    /// su línea se borró. En la línea editada la columna no cambia; lo que
+    /// queda de una línea que se une a otra sí se corre con su texto.
+    #[must_use]
+    pub fn adjust(&self, point: Point) -> Option<Point> {
+        match &self.0 {
+            Shape::Replace(replacement) => replacement.adjust(point),
+            Shape::Move(_) | Shape::Unchanged => Some(self.keep(point)),
+        }
+    }
+
+    /// Como [`Self::adjust`], pero si su línea se borra queda en la primera
+    /// línea de lo borrado, como las entradas de la jumplist de vim
+    /// (`one_adjust_nodel`).
+    #[must_use]
+    pub fn keep(&self, point: Point) -> Point {
+        match &self.0 {
+            Shape::Replace(replacement) => replacement.keep(point),
+            Shape::Move(moved) => moved.point(point),
+            Shape::Unchanged => point,
+        }
+    }
+}
+
+/// Un reemplazo de texto visto por líneas, como lo ven las marks de vim.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Replacement {
     start: Point,
     end: Point,
     /// Borra hasta el final de una línea posterior a la primera.
@@ -89,7 +138,7 @@ pub struct LineChange {
     inserts_lines_before: bool,
 }
 
-impl LineChange {
+impl Replacement {
     /// Reemplazar `start..end` de `rope` por `text`.
     pub(crate) fn between(rope: &Rope, start: &Spot, end: &Spot, text: &str) -> Self {
         let removed = end.byte - start.byte;
@@ -152,11 +201,8 @@ impl LineChange {
             .map(|point| point.line)
     }
 
-    /// Dónde queda `point` tras la edición, como una mark de vim; `None` si
-    /// su línea se borró. En la línea editada la columna no cambia; lo que
-    /// queda de una línea que se une a otra sí se corre con su texto.
-    #[must_use]
-    pub fn adjust(&self, point: Point) -> Option<Point> {
+    /// Como [`LineChange::adjust`].
+    pub(crate) fn adjust(&self, point: Point) -> Option<Point> {
         let (first, last) = (self.start.line, self.end.line);
         if point.line < first {
             return Some(point);
@@ -192,11 +238,8 @@ impl LineChange {
         })
     }
 
-    /// Como [`Self::adjust`], pero si su línea se borra queda en la primera
-    /// línea de lo borrado, como las entradas de la jumplist de vim
-    /// (`one_adjust_nodel`).
-    #[must_use]
-    pub fn keep(&self, point: Point) -> Point {
+    /// Como [`LineChange::keep`].
+    pub(crate) fn keep(&self, point: Point) -> Point {
         self.adjust(point).unwrap_or(Point {
             line: self.start.line,
             ..point
@@ -238,7 +281,7 @@ mod tests {
 
     /// Dónde queda `at` tras reemplazar `start..start + removed` por `text`.
     fn moved(text: &str, start: usize, removed: usize, inserted: &str, at: Point) -> Option<Point> {
-        LineChange::new(&Rope::from_str(text), start, removed, inserted).adjust(at)
+        Replacement::new(&Rope::from_str(text), start, removed, inserted).adjust(at)
     }
 
     const TEXT: &str = "ab\ncd\nef";
@@ -284,7 +327,7 @@ mod tests {
     #[test]
     fn keep_leaves_a_deleted_line_at_the_start_of_the_deletion() {
         let keep = |start, removed, at| {
-            LineChange::new(&Rope::from_str(TEXT), start, removed, "").keep(at)
+            Replacement::new(&Rope::from_str(TEXT), start, removed, "").keep(at)
         };
         assert_eq!(keep(3, 3, point(1, 1)), point(1, 1));
         assert_eq!(keep(0, 6, point(1, 1)), point(0, 1));

@@ -54,6 +54,7 @@ mod tests {
     use ropey::Rope;
 
     use super::*;
+    use crate::anchor::Replacement;
 
     fn splice(start: usize, removed: usize, inserted: usize) -> Splice {
         let text = Rope::from_str(&"x".repeat(start + removed));
@@ -61,7 +62,12 @@ mod tests {
             start: ByteOffset::new(start),
             removed,
             inserted,
-            lines: LineChange::new(&text, start, removed, &"y".repeat(inserted)),
+            lines: LineChange::replaced(Replacement::new(
+                &text,
+                start,
+                removed,
+                &"y".repeat(inserted),
+            )),
         }
     }
 
