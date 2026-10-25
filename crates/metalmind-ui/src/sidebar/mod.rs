@@ -135,9 +135,18 @@ impl Sidebar {
     pub fn toggle(&mut self, view: PanelView, window: &Window, cx: &mut Context<Self>) -> bool {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
-        let visible = self.panel.toggle(view, focused);
+        let shown = self.panel.toggle(view, focused);
+        self.reveal_tag_row(shown.moved);
         cx.notify();
-        visible
+        shown.visible
+    }
+
+    /// Lleva a la vista la fila de tags que rehacer la vista movió; si no se
+    /// movió, la vista queda donde se dejó.
+    fn reveal_tag_row(&self, moved: Option<usize>) {
+        if let Some(row) = moved {
+            self.tag_scroll.scroll_to_item(row, ScrollStrategy::Nearest);
+        }
     }
 
     fn vault_path(&self, path: &Path) -> Option<VaultPath> {
