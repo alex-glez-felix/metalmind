@@ -230,3 +230,45 @@ fn mientras_carga_sin_query_elige_la_primera_al_llegar() {
         ("diario/hoy.md", Open::SplitRight)
     );
 }
+
+/// Deja solo las notas de `recetas/`.
+struct Recetas;
+
+impl Narrowing<&'static str> for Recetas {
+    fn fuzzy<'t>(&self, text: &'t str) -> std::borrow::Cow<'t, str> {
+        text.into()
+    }
+
+    fn filters(&self, _text: &str) -> bool {
+        true
+    }
+
+    fn keep(&self, _text: &str, items: &[&'static str]) -> Vec<usize> {
+        (0..items.len())
+            .filter(|&index| items[index].starts_with("recetas/"))
+            .collect()
+    }
+
+    fn warnings(&self, _text: &str) -> Vec<std::ops::Range<usize>> {
+        Vec::new()
+    }
+}
+
+/// Notas y tags nuevos del watcher piden una sola búsqueda, ya con los dos.
+#[test]
+fn items_y_filtro_nuevos_buscan_una_vez() {
+    let mut picker = picker();
+    type_and_run(&mut picker, "md");
+    assert_eq!(picker.len(), NOTES.len());
+    let more: Arc<[&str]> = Arc::from([NOTES.as_slice(), &["recetas/sopa.md"]].concat());
+    let job = picker.set_source(more, Arc::new(Recetas)).job.unwrap();
+    let step = picker.finish(job.run(&mut FuzzyMatcher::paths()));
+    assert!(step.job.is_none());
+    assert!(picker.is_current());
+    let mut shown = rows(&picker);
+    shown.sort_unstable();
+    assert_eq!(
+        shown,
+        ["recetas/arroz.md", "recetas/pan.md", "recetas/sopa.md"]
+    );
+}

@@ -74,19 +74,14 @@ impl<T: PickerItem> Fuzzy<T> {
         self.state.items()
     }
 
-    /// Cambia los ítems y vuelve a filtrar con lo escrito.
-    pub fn set_items(&mut self, items: Arc<[T]>, cx: &mut Context<PickerView<Self>>) {
-        let step = self.state.set_items(items);
-        self.step(step, cx);
-    }
-
-    /// Cambia lo que filtra lo escrito y vuelve a filtrar.
-    pub fn set_narrowing(
+    /// Cambia los ítems y lo que los filtra, y vuelve a filtrar una vez.
+    pub fn set_source(
         &mut self,
+        items: Arc<[T]>,
         narrowing: Arc<dyn Narrowing<T>>,
         cx: &mut Context<PickerView<Self>>,
     ) {
-        let step = self.state.set_narrowing(narrowing);
+        let step = self.state.set_source(items, narrowing);
         self.step(step, cx);
     }
 

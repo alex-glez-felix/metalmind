@@ -211,11 +211,11 @@ impl<T: AsRef<str>> PickerState<T> {
         self.settle(job)
     }
 
-    /// Cambia lo que filtra, como cuando el watcher trae otros tags.
-    pub fn set_narrowing(&mut self, narrowing: Arc<dyn Narrowing<T>>) -> Step<T> {
+    /// Cambia los ítems junto con lo que los filtra, como cuando el watcher
+    /// trae notas y tags nuevos: una sola búsqueda para los dos.
+    pub fn set_source(&mut self, items: Arc<[T]>, narrowing: Arc<dyn Narrowing<T>>) -> Step<T> {
         self.narrowing = Some(narrowing);
-        let job = self.changed();
-        self.settle(job)
+        self.set_items(items)
     }
 
     fn changed(&mut self) -> Option<Job<T>> {

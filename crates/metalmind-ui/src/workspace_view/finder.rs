@@ -162,8 +162,7 @@ impl WorkspaceView {
         if let Some(Overlay::Finder { picker, .. }) = &self.overlay {
             picker.update(cx, |picker, cx| {
                 picker.update_delegate(cx, |fuzzy, cx| {
-                    fuzzy.set_narrowing(Arc::new(TagFilter::new(tags)), cx);
-                    fuzzy.set_items(notes, cx);
+                    fuzzy.set_source(notes, Arc::new(TagFilter::new(tags)), cx);
                 });
             });
         }
