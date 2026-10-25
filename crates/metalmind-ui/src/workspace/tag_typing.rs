@@ -47,8 +47,9 @@ impl Workspace {
 
     /// Cambia lo escrito del tag que se está escribiendo por `text`, como
     /// si se tecleara: entra en el mismo paso de undo que el resto de la
-    /// pasada por Insert y `.` lo repite. Sin tag a medio escribir
-    /// ([`Workspace::typed_tag`]), no hace nada.
+    /// pasada por Insert y `.` lo repite. Como el completado de nvim, si
+    /// `text` sigue a lo escrito solo se teclea el resto. Sin tag a medio
+    /// escribir ([`Workspace::typed_tag`]), no hace nada.
     ///
     /// # Errors
     /// Si `pane` no existe o una edición no cae en el buffer.
@@ -61,10 +62,13 @@ impl Workspace {
         let Some(typed) = self.typed_tag(pane)? else {
             return Ok(());
         };
-        for _ in typed.typed.chars() {
-            self.feed(pane, Key::Backspace, clipboard)?;
+        let rest = text.strip_prefix(typed.typed.as_str());
+        if rest.is_none() {
+            for _ in typed.typed.chars() {
+                self.feed(pane, Key::Backspace, clipboard)?;
+            }
         }
-        self.type_text(pane, text, clipboard)?;
+        self.type_text(pane, rest.unwrap_or(text), clipboard)?;
         Ok(())
     }
 }
