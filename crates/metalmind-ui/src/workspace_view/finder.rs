@@ -42,6 +42,7 @@ impl FinderVault {
             view.workspace.update(cx, |workspace, _| {
                 workspace.set_message(Message::unwatched(*reason));
             });
+            cx.notify();
         });
         let (root, links, unwatched) = {
             let session = session.read(cx);
