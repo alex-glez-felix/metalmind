@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use metalmind_vault::VaultPath;
-use metalmind_vault::tags::{TagKey, TagQuery, Tags};
+use metalmind_vault::tags::{QueryWord, TagQuery, Tags};
 
 use super::Note;
 use crate::picker::Narrowing;
@@ -42,16 +42,6 @@ impl TagFilter {
         *last = Some((query.clone(), Arc::clone(&notes)));
         notes
     }
-
-    /// Si `word` nombra tags que existen: `-#` siempre.
-    fn is_known(&self, word: &str) -> bool {
-        let tag = word.strip_prefix('-').unwrap_or(word);
-        match tag.strip_prefix('#') {
-            Some("") => word.starts_with('-'),
-            Some(name) => TagKey::parse(name).is_some_and(|key| self.tags.exists(&key)),
-            None => true,
-        }
-    }
 }
 
 impl Narrowing<Note> for TagFilter {
@@ -83,27 +73,18 @@ impl Narrowing<Note> for TagFilter {
             .collect()
     }
 
-    /// Los tags que no existen en el vault y los que no son válidos: no es
-    /// un error, pero no van a encontrar nada.
+    /// Un tag inválido no deja ninguna nota; uno que no existe, incluido no
+    /// deja ninguna y excluido no quita ninguna.
     fn warnings(&self, text: &str) -> Vec<Range<usize>> {
-        words(text)
-            .filter(|&(_, word)| !self.is_known(word))
-            .map(|(start, word)| start..start + word.len())
+        TagQuery::words(text)
+            .filter(|(_, word)| match word {
+                QueryWord::Invalid => true,
+                QueryWord::Include(key) | QueryWord::Exclude(key) => !self.tags.exists(key),
+                QueryWord::Text | QueryWord::Untagged => false,
+            })
+            .map(|(range, _)| range)
             .collect()
     }
-}
-
-/// Cada palabra de `text` con el byte donde empieza.
-fn words(text: &str) -> impl Iterator<Item = (usize, &str)> {
-    let mut from = 0;
-    std::iter::from_fn(move || {
-        let start = from + text[from..].find(|c: char| !c.is_whitespace())?;
-        let end = text[start..]
-            .find(char::is_whitespace)
-            .map_or(text.len(), |len| start + len);
-        from = end;
-        Some((start, &text[start..end]))
-    })
 }
 
 #[cfg(test)]
@@ -163,6 +144,8 @@ mod tests {
     #[case::buzon("-#", &["sin-tags.md"])]
     #[case::buzon_con_fuzzy("-# sin", &["sin-tags.md"])]
     #[case::tag_que_no_existe("#nada", &[])]
+    #[case::excluir_uno_que_no_existe("-#nada viejo", &["viejo.md"])]
+    #[case::doble_numeral("##rust", &[])]
     #[case::tag_invalido("#2024/10 parser", &[])]
     #[case::sin_tags("viejo", &["viejo.md"])]
     fn filtra_por_tags_y_busca_lo_demas(#[case] text: &str, #[case] expected: &[&str]) {
@@ -181,7 +164,7 @@ mod tests {
         let mut picker = picker();
         edit(
             &mut picker,
-            LineEdit::Insert("#rust -#nada parser #a/b -# #Gpui"),
+            LineEdit::Insert("#rust -#nada parser #a/b -# #Gpui ##rust"),
         );
         let text = picker.line().text().to_owned();
         let marked: Vec<&str> = picker
@@ -189,7 +172,7 @@ mod tests {
             .into_iter()
             .map(|range| &text[range])
             .collect();
-        assert_eq!(marked, ["-#nada", "#a/b"]);
+        assert_eq!(marked, ["-#nada", "#a/b", "##rust"]);
     }
 
     #[test]

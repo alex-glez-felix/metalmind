@@ -2,6 +2,7 @@
 //! notas sin tags, el buzón (06 §9).
 
 use std::collections::HashSet;
+use std::ops::Range;
 
 use crate::path::VaultPath;
 use crate::tags::Tags;
@@ -27,32 +28,76 @@ pub struct ParsedQuery {
     pub invalid: Vec<String>,
 }
 
+/// Qué es cada palabra de una consulta escrita.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueryWord {
+    /// Texto que no es de tags: va al fuzzy.
+    Text,
+    Include(TagKey),
+    Exclude(TagKey),
+    /// `-#`: las notas sin tags.
+    Untagged,
+    /// Empieza con `#` o `-#` pero no es un tag válido (`#2024/10`).
+    Invalid,
+}
+
+impl QueryWord {
+    fn of(word: &str) -> Self {
+        let (negated, tag) = match word.strip_prefix('-') {
+            Some(rest) if rest.starts_with('#') => (true, rest),
+            _ => (false, word),
+        };
+        let Some(name) = tag.strip_prefix('#') else {
+            return Self::Text;
+        };
+        if negated && name.is_empty() {
+            return Self::Untagged;
+        }
+        if !metalmind_syntax::is_valid_tag_name(name) {
+            return Self::Invalid;
+        }
+        let key = TagKey::new(name);
+        if negated {
+            Self::Exclude(key)
+        } else {
+            Self::Include(key)
+        }
+    }
+}
+
 impl TagQuery {
+    /// Cada palabra de `text`, con sus bytes, y qué es.
+    pub fn words(text: &str) -> impl Iterator<Item = (Range<usize>, QueryWord)> + '_ {
+        let mut from = 0;
+        std::iter::from_fn(move || {
+            let start = from + text[from..].find(|c: char| !c.is_whitespace())?;
+            let end = text[start..]
+                .find(char::is_whitespace)
+                .map_or(text.len(), |len| start + len);
+            from = end;
+            Some((start..end, QueryWord::of(&text[start..end])))
+        })
+    }
+
     #[must_use]
     pub fn parse(text: &str) -> ParsedQuery {
         let mut parsed = ParsedQuery::default();
-        for word in text.split_whitespace() {
-            let (negated, tag) = match word.strip_prefix('-') {
-                Some(rest) if rest.starts_with('#') => (true, rest),
-                _ => (false, word),
-            };
-            if negated && tag == "#" {
-                parsed.query.untagged = true;
-                continue;
-            }
-            let Some(name) = tag.strip_prefix('#') else {
-                parsed.words.push(word.to_owned());
-                continue;
-            };
-            let Some(key) = metalmind_syntax::is_valid_tag_name(name).then(|| TagKey::new(name))
-            else {
-                parsed.invalid.push(word.to_owned());
-                continue;
-            };
-            let list = if negated {
-                &mut parsed.query.exclude
-            } else {
-                &mut parsed.query.include
+        for (range, word) in Self::words(text) {
+            let (list, key) = match word {
+                QueryWord::Text => {
+                    parsed.words.push(text[range].to_owned());
+                    continue;
+                }
+                QueryWord::Invalid => {
+                    parsed.invalid.push(text[range].to_owned());
+                    continue;
+                }
+                QueryWord::Untagged => {
+                    parsed.query.untagged = true;
+                    continue;
+                }
+                QueryWord::Include(key) => (&mut parsed.query.include, key),
+                QueryWord::Exclude(key) => (&mut parsed.query.exclude, key),
             };
             if !list.contains(&key) {
                 list.push(key);
