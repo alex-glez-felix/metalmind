@@ -161,7 +161,7 @@ impl Editor {
         }
     }
 
-    fn take_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn take_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus_handle, cx);
         let focused = self.update_workspace(cx, |workspace, pane, _| workspace.focus(pane));
         if let Err(error) = focused {

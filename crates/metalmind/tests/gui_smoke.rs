@@ -748,3 +748,37 @@ fn la_lista_de_tags_sigue_al_scroll_en_el_mismo_frame() {
         },
     );
 }
+
+/// Llegar con `A` tras un tag que ya estaba no abre la lista: `tab` escribe
+/// un tab en vez de aceptar una sugerencia.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn llegar_tras_un_tag_no_abre_la_lista() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "uno #ru\n");
+    smoke.write("b.md", "#rueda\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys("A<Tab>x<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "uno #ru\tx\n");
+}
+
+/// Con la lista abierta, ir al panel y volver con un clic en una sugerencia
+/// la acepta y deja el foco en el editor: lo que sigue se escribe ahí.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn un_clic_en_una_sugerencia_devuelve_el_foco_al_editor() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "hola\n");
+    smoke.write("b.md", "#rueda\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let closed = window.wait_still(TAG_COMPLETION);
+    window.type_keys("A #ru");
+    window.wait_change("la lista", TAG_COMPLETION, &closed);
+    window.click(100, 700);
+    window.click(EDITOR_LEFT + 250, TEXT_TOP + TEXT_LINE + 17);
+    window.type_keys("x<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "hola #ruedax\n");
+}

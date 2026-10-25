@@ -229,10 +229,11 @@ impl Editor {
             .transpose();
         if let Some(outcome) = outcome {
             self.handle_outcome(outcome, window, cx);
-        } else {
-            self.update_completion(cx);
-            cx.notify();
         }
+        // Solo escribir abre la lista; las teclas del motor (`A`, borrar)
+        // solo refrescan la abierta, al observar el workspace.
+        self.update_completion(cx);
+        cx.notify();
     }
 
     fn set_preedit(&mut self, preedit: Option<String>, cx: &mut Context<Self>) {
@@ -259,7 +260,6 @@ impl Editor {
             Err(error) => self.report(&error, cx),
         }
         self.synced_top = None;
-        self.update_completion(cx);
         cx.notify();
     }
 
