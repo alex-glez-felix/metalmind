@@ -5,7 +5,7 @@ use std::ops::Range;
 
 use gpui_kit::{
     AnyElement, ClickEvent, Context, Div, HighlightStyle, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, SharedString,
+    MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, SharedString, Stateful,
     StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
     prelude::FluentBuilder as _, uniform_list,
 };
@@ -17,7 +17,7 @@ use super::menu::ContextMenu;
 use super::{Sidebar, icons};
 use crate::actions::Dispatch;
 use crate::file_tree::Row;
-use crate::panel::{Fill, PanelView, Prompt, RowMarks};
+use crate::panel::{Fill, Outline as _, PanelView, Prompt, RowMarks};
 use crate::theme::Theme;
 
 impl Render for Sidebar {
@@ -129,7 +129,7 @@ impl Sidebar {
                 .into_any_element()
         };
         if self.panel.view == PanelView::Tags {
-            return empty("La vista de tags llega con el índice de tags (M2.5).");
+            return self.tag_body(theme, focused, cx);
         }
         let rows = self.panel.tree.rows().len();
         if rows == 0 {
@@ -195,10 +195,20 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         self.focus(window, cx);
-        self.panel.tree.select_row(at);
-        if let Some(row) = self.panel.tree.selected_entry() {
-            self.menu = Some(ContextMenu::new(position, row.path.clone(), row.kind));
-        }
+        self.panel.outline_mut().select_row(at);
+        self.menu = match self.panel.view {
+            PanelView::Folders => self
+                .panel
+                .tree
+                .selected_entry()
+                .map(|row| ContextMenu::new(position, row.path.clone(), row.kind)),
+            PanelView::Tags => self
+                .panel
+                .tags
+                .selected_entry()
+                .and_then(|row| row.note())
+                .map(|note| ContextMenu::on_note(position, note.clone())),
+        };
         cx.notify();
     }
 }
@@ -210,15 +220,32 @@ fn row_view(
     theme: &Theme,
     cx: &mut Context<Sidebar>,
 ) -> AnyElement {
-    let depth = u16::try_from(row.depth).unwrap_or(u16::MAX);
-    let indent = theme.layout.panel_padding_x + theme.layout.panel_indent * f32::from(depth);
     let text_color = if row.kind == EntryKind::Attachment {
         theme.ui.panel_muted
     } else {
         theme.ui.panel_foreground
     };
+    row_frame(at, row.depth, marks, theme, cx)
+        .text_color(text_color)
+        .child(icons::disclosure(row.kind, row.expanded, theme))
+        .child(icons::entry(row.kind, theme))
+        .child(div().min_w_0().truncate().child(name(row, theme)))
+        .into_any_element()
+}
+
+/// Una fila de cualquiera de las dos vistas a `depth` niveles: su fondo y
+/// borde según `marks`, el clic y el clic derecho.
+pub(super) fn row_frame(
+    at: usize,
+    depth: usize,
+    marks: RowMarks,
+    theme: &Theme,
+    cx: &mut Context<Sidebar>,
+) -> Stateful<Div> {
+    let depth = u16::try_from(depth).unwrap_or(u16::MAX);
+    let indent = theme.layout.panel_padding_x + theme.layout.panel_indent * f32::from(depth);
     div()
-        .id(("file-tree-row", at))
+        .id(("panel-row", at))
         .h(theme.panel_row_height)
         .w_full()
         .flex()
@@ -226,7 +253,6 @@ fn row_view(
         .gap(theme.layout.panel_gap)
         .pl(indent)
         .pr(theme.layout.panel_padding_x)
-        .text_color(text_color)
         .map(|element| match marks.fill {
             Some(Fill::Selection) => element.bg(theme.ui.panel_selection),
             Some(Fill::Active) => element.bg(theme.ui.panel_active),
@@ -247,10 +273,6 @@ fn row_view(
                 sidebar.open_menu(at, event.position, window, cx);
             }),
         )
-        .child(icons::disclosure(row.kind, row.expanded, theme))
-        .child(icons::entry(row.kind, theme))
-        .child(div().min_w_0().truncate().child(name(row, theme)))
-        .into_any_element()
 }
 
 /// El nombre, con las letras que coinciden con el filtro resaltadas.

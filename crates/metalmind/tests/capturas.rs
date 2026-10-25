@@ -187,6 +187,13 @@ const SCENES: &[(&str, &[Step])] = &[
         "autoguardado-cambio-en-disco",
         &[Step::Files(changed_outside)],
     ),
+    // La vista de tags del panel, al final para no cambiar las demás: las
+    // raíces, `#Rust` abierto con `#diseño` (su hijo, con ícono) abierto
+    // dentro, el buzón al final y el menú de una nota junto al borde.
+    ("tags", &[Step::Keys("<Esc><Space>t")]),
+    ("tags-abierto", &[Step::Keys("jjjjjlll")]),
+    ("tags-buzon", &[Step::Keys("GlG")]),
+    ("tags-menu-borde", &[Step::RightClickBottomRow]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

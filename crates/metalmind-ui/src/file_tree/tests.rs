@@ -4,6 +4,7 @@ use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::FileTree;
+use crate::panel::Outline as _;
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()

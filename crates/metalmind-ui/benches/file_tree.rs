@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use divan::Bencher;
-use metalmind_ui::FileTree;
+use metalmind_ui::{FileTree, Outline as _};
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 
 const SIZES: &[usize] = &[5_000, 50_000];

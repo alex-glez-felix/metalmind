@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use metalmind_vault::tags::Tags;
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
@@ -16,8 +17,14 @@ fn panel() -> Panel {
         (path("diario/hoy.md"), EntryKind::Note),
         (path("a.md"), EntryKind::Note),
     ]);
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| None);
     let tree = FileTree::with_expanded(Arc::new(index), [path("diario")]);
-    Panel::new(tree, true, PanelView::Folders)
+    Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags)),
+        true,
+        PanelView::Folders,
+    )
 }
 
 fn type_text(panel: &mut Panel, text: &str) {
@@ -316,4 +323,50 @@ fn una_pregunta_abierta_se_cierra_si_su_entrada_desaparece() {
         matches!(panel.prompt(), Some(Prompt::Filter(_))),
         "el filtro no tiene entrada"
     );
+}
+
+/// `a.md` con `#rust` y `b.md` sin tags, en la vista de tags.
+fn tags_panel() -> Panel {
+    let index = VaultIndex::from_entries([
+        (path("a.md"), EntryKind::Note),
+        (path("b.md"), EntryKind::Note),
+    ]);
+    let read = |note: &VaultPath| (note.as_str() == "a.md").then(|| "#rust".to_owned());
+    let tags = Tags::build(path("tags"), &index, read);
+    let tree = FileTree::new(Arc::new(index));
+    Panel::new(tree, TagOutline::new(Arc::new(tags)), true, PanelView::Tags)
+}
+
+/// Como en el árbol de carpetas: el clic abre o cierra un tag y abre una
+/// nota, y el doble clic le pasa el foco al editor.
+#[test]
+fn en_la_vista_de_tags_el_clic_abre_el_tag_y_la_nota() {
+    let mut panel = tags_panel();
+    assert_eq!(panel.click(0, 1), None);
+    assert_eq!(panel.tags.rows().len(), 3, "#rust, a.md y el buzón");
+    let open = |focus_editor| {
+        Some(ClickOpen {
+            path: path("a.md"),
+            focus_editor,
+        })
+    };
+    assert_eq!(panel.click(1, 1), open(false));
+    assert_eq!(panel.click(1, 2), open(true));
+    assert_eq!(panel.click(0, 1), None);
+    assert_eq!(panel.tags.rows().len(), 2, "se cerró");
+}
+
+/// Crear, renombrar, mover, borrar y filtrar son de archivos: en la vista
+/// de tags no preguntan nada, ni actúan sobre la selección escondida del
+/// árbol de carpetas.
+#[test]
+fn en_la_vista_de_tags_no_se_pregunta_por_archivos() {
+    let mut panel = tags_panel();
+    panel.start_create(NewEntry::Note);
+    panel.start_rename();
+    panel.start_move();
+    panel.start_filter();
+    panel.start_delete(path("a.md"), false);
+    assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.confirm(), None);
 }

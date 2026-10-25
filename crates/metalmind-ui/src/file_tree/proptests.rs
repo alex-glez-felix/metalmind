@@ -9,6 +9,7 @@ use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use proptest::prelude::*;
 
 use super::FileTree;
+use crate::panel::Outline as _;
 
 /// Una operación sobre el disco; los índices eligen entre lo que exista.
 #[derive(Clone, Debug)]

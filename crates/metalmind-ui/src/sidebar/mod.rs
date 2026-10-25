@@ -1,5 +1,5 @@
-//! El panel lateral: el árbol de carpetas del vault, que se actualiza con
-//! cada cambio que trae la [`VaultSession`] de la ventana, y las
+//! El panel lateral: el árbol de carpetas y el de tags del vault, que se
+//! actualizan con cada cambio que trae la [`VaultSession`] de la ventana, y las
 //! operaciones de archivo. La lógica vive en
 //! [`Panel`](crate::panel::Panel) y en el [`Workspace`]; aquí se pinta, se
 //! traduce la entrada y se ejecuta lo que el usuario confirmó.
@@ -11,6 +11,7 @@ mod menu;
 mod prompt;
 mod rail;
 mod render;
+mod tag_rows;
 
 use std::path::Path;
 use std::rc::Rc;
@@ -28,6 +29,7 @@ use crate::file_tree::FileTree;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::panel::{Panel, PanelView};
 use crate::session::PanelState;
+use crate::tag_outline::TagOutline;
 use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
@@ -66,13 +68,14 @@ impl Sidebar {
     ) -> Self {
         let vault = session.read(cx).vault();
         let tree = FileTree::with_expanded(vault.snapshot(), state.expanded());
+        let tags = TagOutline::new(session.read(cx).tags());
         let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
             sidebar.apply(update, cx);
         });
         // La nota activa se marca en el árbol: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         Self {
-            panel: Panel::new(tree, state.visible, state.view()),
+            panel: Panel::new(tree, tags, state.visible, state.view()),
             vault,
             workspace,
             focus_handle: cx.focus_handle(),
@@ -144,8 +147,9 @@ impl Sidebar {
         self.panel
             .tree
             .apply(&update.changes, Arc::clone(&update.snapshot));
+        self.panel.tags.set_tags(Arc::clone(&update.tags));
         self.panel.follow(&update.changes);
-        let selected = self.panel.tree.selected();
+        let selected = self.panel.outline().selected_path();
         if let Some(menu) = &mut self.menu
             && !menu.still_on(&update.changes, selected)
         {
@@ -156,7 +160,7 @@ impl Sidebar {
     }
 
     fn scroll_to_selection(&self) {
-        if let Some(row) = self.panel.tree.selected_row() {
+        if let Some(row) = self.panel.outline().selected_row() {
             self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
     }
