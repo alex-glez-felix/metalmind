@@ -137,6 +137,22 @@ impl Tags {
         self.notes_with(key).collect::<HashSet<_>>().len()
     }
 
+    /// Si lo único que el vault sabe de `key` es que `note` lo escribe una
+    /// vez: el tag a medio escribir de esa nota, si el autoguardado ya la
+    /// indexó.
+    #[must_use]
+    pub fn is_only_once_in(&self, key: &TagKey, note: &VaultPath) -> bool {
+        let once_in_note = self.index.tag(key).is_some_and(|entry| {
+            entry.notes.len() == 1
+                && entry.notes.contains(note)
+                && entry.spellings.values().sum::<u32>() == 1
+        });
+        once_in_note
+            && self.graph.page(key).is_none()
+            && self.graph.alias_of(key).is_none()
+            && self.graph.children(key).is_empty()
+    }
+
     /// Si `key` solo existe porque lo nombra un `parents`: ni nota ni página.
     #[must_use]
     pub fn is_only_parent(&self, key: &TagKey) -> bool {

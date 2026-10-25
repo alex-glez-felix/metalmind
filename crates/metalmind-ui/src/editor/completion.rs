@@ -6,16 +6,17 @@ use std::sync::Arc;
 
 use gpui_kit::{
     AnyElement, App, Context, Div, InteractiveElement as _, IntoElement, KeyContext, MouseButton,
-    ParentElement as _, Point, StatefulInteractiveElement as _, Styled as _, Window, anchored,
-    deferred, div, prelude::FluentBuilder as _,
+    ParentElement as _, Point, StatefulInteractiveElement as _, Styled as _, Window, anchored, div,
+    prelude::FluentBuilder as _,
 };
 use metalmind_keymap::{EditorAction, View, context};
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
-use metalmind_vault::tags::{TagCompletion, TagIcon, Tags};
+use metalmind_vault::tags::{TagCompletion, TagIcon, TagKey, Tags};
 
 use super::Editor;
 use super::cursor::cursor_position;
+use super::layout::FrameLayout;
 use crate::actions::{AppKeymap, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
 use crate::tag_completion::TagCompletions;
@@ -97,12 +98,16 @@ impl Editor {
             return;
         };
         let tags = self.session.read(cx).tags();
+        let note = self.note_path(cx);
         if matches!(typed.place, TagPlace::Aliases | TagPlace::Parents)
-            && !self.note_path(cx).is_some_and(|path| tags.is_page(&path))
+            && !note.as_ref().is_some_and(|path| tags.is_page(path))
         {
             self.completion.close();
             return;
         }
+        let only_here = note
+            .as_ref()
+            .is_some_and(|note| tags.is_only_once_in(&TagKey::new(&typed.typed), note));
         let candidates = self.completion.candidates(tags);
         if (self.completion.list.as_ref())
             .is_some_and(|list| list.is_for(&candidates, &typed.typed, typed.place))
@@ -113,6 +118,7 @@ impl Editor {
             candidates,
             &typed.typed,
             typed.place,
+            only_here,
             &mut self.completion.matcher,
         );
     }
@@ -152,15 +158,15 @@ impl Editor {
     }
 
     /// La lista bajo el nombre del tag, o encima si abajo no cabe en el
-    /// texto del panel.
+    /// texto del panel, sobre `layout`: el del frame que se está pintando.
     pub(super) fn completion_overlay(
         &self,
+        layout: &FrameLayout,
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let list = self.completion.list.as_ref()?;
         let view = self.view(cx)?;
-        let layout = self.layout.as_ref()?;
         let (laid, column) = cursor_position(&view, layout)?;
         let typed = list.typed().len().min(column);
         let x = laid.origin.x + laid.x_for_index(column - typed);
@@ -202,14 +208,11 @@ impl Editor {
             ));
         }
         Some(
-            deferred(
-                anchored()
-                    .position(Point { x, y })
-                    .snap_to_window()
-                    .child(menu),
-            )
-            .with_priority(1)
-            .into_any_element(),
+            anchored()
+                .position(Point { x, y })
+                .snap_to_window()
+                .child(menu)
+                .into_any_element(),
         )
     }
 }

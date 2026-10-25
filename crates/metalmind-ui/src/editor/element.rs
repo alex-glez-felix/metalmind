@@ -4,9 +4,9 @@
 use std::sync::Arc;
 
 use gpui_kit::{
-    AnyElement, App, Bounds, ContentMask, Corners, ElementId, ElementInputHandler, Entity,
-    GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Point,
-    ShapedLine, SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px,
+    AnyElement, App, AvailableSpace, Bounds, ContentMask, Corners, ElementId, ElementInputHandler,
+    Entity, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels,
+    Point, ShapedLine, SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px,
     relative, size,
 };
 use metalmind_syntax::{FormulaRows, Rows};
@@ -32,9 +32,10 @@ pub struct EditorElement {
 }
 
 impl EditorElement {
-    /// El tooltip de la mark o de la fórmula rota bajo el ratón, dentro del
-    /// área del editor.
-    fn show_tooltips(
+    /// Lo que flota sobre el texto de este frame: el tooltip de la mark o
+    /// de la fórmula rota bajo el ratón, dentro del área del editor, y la
+    /// lista de `#`.
+    fn show_overlays(
         &self,
         gutter: &Gutter,
         layout: &FrameLayout,
@@ -50,6 +51,14 @@ impl EditorElement {
         }
         if let Some(hover) = formula {
             formula_tooltip::show(&hover, clip, &self.theme, window, cx);
+        }
+        let completion = self.editor.update(cx, |editor, cx| {
+            editor.completion_overlay(layout, &self.theme, cx)
+        });
+        if let Some(mut completion) = completion {
+            // Va fuera del árbol del editor, así que se mide sola.
+            completion.layout_as_root(AvailableSpace::min_size(), window, cx);
+            window.defer_draw(completion, window.element_offset(), 1, None);
         }
     }
 
@@ -231,7 +240,7 @@ impl gpui_kit::Element for EditorElement {
             .with_content_mask(Some(ContentMask { bounds: clip }), |window| {
                 gutter.mark_zones(&layout, &self.editor, window, cx)
             });
-        self.show_tooltips(&gutter, &layout, clip, window, cx);
+        self.show_overlays(&gutter, &layout, clip, window, cx);
         Prepainted {
             layout,
             clip,

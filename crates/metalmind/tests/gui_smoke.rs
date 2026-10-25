@@ -12,7 +12,7 @@
 #[allow(dead_code, reason = "el smoke usa solo una parte del harness")]
 mod support;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rstest::rstest;
 use support::wait::{self, TIMEOUT};
@@ -708,4 +708,43 @@ fn la_lista_de_tags_trae_los_que_llegan_del_vault() {
     window.wait_change("la lista con ruby", TAG_COMPLETION, &with_bruma);
     window.type_keys("<Tab><Esc>:w<CR>");
     smoke.wait_contents("a.md", "hola #ruby\n");
+}
+
+/// El texto del editor, a la derecha del árbol; la ventana del smoke mide
+/// 1280x800.
+const EDITOR_TEXT: Area = Area {
+    x: EDITOR_LEFT,
+    y: 0,
+    width: 900,
+    height: 760,
+};
+
+/// Tras un scroll, la lista de `#` se pinta con el texto de ese mismo frame:
+/// otro repintado (aquí, el de una nota que llega al vault) no la mueve.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_lista_de_tags_sigue_al_scroll_en_el_mismo_frame() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", &"línea\n".repeat(200));
+    smoke.write("b.md", "#bruma\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("15GA #ru");
+    let open = window.wait_still(EDITOR_TEXT);
+    window.scroll_down(EDITOR_LEFT + 300, 300);
+    window.wait_change("el scroll", EDITOR_TEXT, &open);
+    let scrolled = window.wait_still(EDITOR_TEXT);
+    smoke.write("c.md", "otra\n");
+    wait::stays(
+        "la lista donde quedó tras el scroll",
+        Duration::from_secs(2),
+        || {
+            if window.area_pixels(EDITOR_TEXT) == scrolled {
+                Ok(())
+            } else {
+                Err("la lista se movió".to_owned())
+            }
+        },
+    );
 }
