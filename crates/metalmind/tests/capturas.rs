@@ -15,6 +15,8 @@
 
 #[path = "capturas/image.rs"]
 mod image;
+#[path = "capturas/saltos.rs"]
+mod saltos;
 #[allow(dead_code, reason = "las capturas usan solo una parte del harness")]
 mod support;
 #[path = "capturas/vault.rs"]
