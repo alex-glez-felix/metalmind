@@ -4,7 +4,7 @@
 use gpui_kit::{
     AnyElement, Context, Div, InteractiveElement as _, IntoElement, MouseButton,
     ParentElement as _, Pixels, Point, Stateful, StatefulInteractiveElement as _, Styled as _,
-    anchored, deferred, div, prelude::FluentBuilder as _,
+    Window, anchored, deferred, div, prelude::FluentBuilder as _,
 };
 use metalmind_vault::{EntryKind, VaultChange, VaultPath};
 
@@ -122,9 +122,9 @@ impl ContextMenu {
         self.selected = self.selected.saturating_sub(1);
     }
 
-    pub fn render(&self, theme: &Theme, cx: &mut Context<Sidebar>) -> AnyElement {
+    pub fn render(&self, theme: &Theme, window: &Window, cx: &mut Context<Sidebar>) -> AnyElement {
         let list = self
-            .list(theme, cx, |item, row, cx| {
+            .list(theme, window.viewport_size().width, cx, |item, row, cx| {
                 row.on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(move |sidebar, _, window, cx| {
                         sidebar.menu = None;
@@ -146,16 +146,18 @@ impl ContextMenu {
         .into_any_element()
     }
 
-    /// Las entradas con sus separadores; `wire` le pone a cada fila lo que
-    /// hace al elegirla.
+    /// Las entradas con sus separadores, en no más de `max_width`; `wire` le
+    /// pone a cada fila lo que hace al elegirla.
     fn list<V: 'static>(
         &self,
         theme: &Theme,
+        max_width: Pixels,
         cx: &mut Context<V>,
         wire: impl Fn(MenuItem, Stateful<Div>, &mut Context<V>) -> Stateful<Div>,
     ) -> Div {
         let mut list = div()
-            .min_w(theme.layout.menu_min_width)
+            .min_w(theme.layout.menu_width.min(max_width))
+            .max_w(max_width)
             .p(theme.layout.menu_padding)
             .flex()
             .flex_col()
@@ -200,7 +202,7 @@ impl ContextMenu {
             .debug_selector(|| format!("{item:?}"))
             .flex()
             .justify_between()
-            .gap(theme.layout.menu_gap)
+            .gap(theme.layout.menu_item_padding_x)
             .px(theme.layout.menu_item_padding_x)
             .h(theme.menu_row_height)
             .items_center()
@@ -211,11 +213,14 @@ impl ContextMenu {
             .child(
                 div()
                     .debug_selector(|| format!("{item:?}-label"))
+                    .min_w_0()
+                    .truncate()
                     .child(item.label()),
             )
             .child(
                 div()
                     .debug_selector(|| format!("{item:?}-keys"))
+                    .flex_none()
                     .map(|element| theme.ui_small_text(element))
                     .text_color(theme.ui.panel_muted)
                     .children(keys),
@@ -225,7 +230,7 @@ impl ContextMenu {
 
 #[cfg(test)]
 mod tests {
-    use gpui_kit::{Render, TestAppContext, Window};
+    use gpui_kit::{Bounds, Render, TestAppContext, Window, px};
     use metalmind_config::Config;
 
     use super::*;
@@ -317,46 +322,92 @@ mod tests {
         assert_eq!(keys, expected);
     }
 
-    struct MenuProbe(ContextMenu);
+    struct MenuProbe {
+        menu: ContextMenu,
+        max_width: Pixels,
+    }
 
     impl Render for MenuProbe {
         fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
             let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
-            anchored().child(self.0.list(&theme, cx, |_, row, _| row))
+            anchored().child(self.menu.list(&theme, self.max_width, cx, |_, row, _| row))
         }
     }
 
-    /// Entre la etiqueta y la tecla de cada entrada queda el hueco del tema,
-    /// y el menú es tan ancho como su fila más larga: «Abrir a la derecha»
-    /// con `ctrl-v`, que no cabe en el ancho mínimo.
-    #[test]
-    fn la_etiqueta_no_choca_con_su_tecla() {
+    /// Las cajas de cada parte de las entradas del menú sobre un archivo,
+    /// pintado en no más de `max_width`.
+    fn laid_out(max_width: Pixels) -> impl Fn(MenuItem, &str) -> Bounds<Pixels> {
         let mut cx = TestAppContext::single();
         cx.update(|cx| bind_keys(Keymap::default(), cx));
         let menu = menu_on("a.md");
         let items: Vec<MenuItem> = menu.items().collect();
-        let (_, cx) = cx.add_window_view(|_, _| MenuProbe(menu));
+        let (_, cx) = cx.add_window_view(|_, _| MenuProbe { menu, max_width });
         cx.run_until_parked();
-        let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
-        let mut bounds = |item: MenuItem, part: &str| {
-            let selector: &'static str = format!("{item:?}{part}").leak();
-            cx.debug_bounds(selector).unwrap()
-        };
-        for &item in &items {
+        let boxes: Vec<(String, Bounds<Pixels>)> = items
+            .iter()
+            .flat_map(|item| ["", "-label", "-keys"].map(|part| format!("{item:?}{part}")))
+            .map(|selector| {
+                let bounds = cx.debug_bounds(selector.clone().leak()).unwrap();
+                (selector, bounds)
+            })
+            .collect();
+        move |item, part| {
+            let selector = format!("{item:?}{part}");
+            boxes.iter().find(|(name, _)| *name == selector).unwrap().1
+        }
+    }
+
+    fn theme() -> Theme {
+        Theme::with_font(&Config::defaults().unwrap(), "Mono".into())
+    }
+
+    /// Entre la etiqueta y la tecla de cada entrada queda el aire de sus
+    /// lados, y el menú es tan ancho como su fila más larga: «Abrir a la
+    /// derecha» con `ctrl-v`, que no cabe en el ancho del tema.
+    #[test]
+    fn la_etiqueta_no_choca_con_su_tecla() {
+        let theme = theme();
+        let padding = theme.layout.menu_item_padding_x;
+        let bounds = laid_out(px(10_000.));
+        for item in menu_on("a.md").items() {
             let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
             assert!(
-                keys.left() - label.right() >= theme.layout.menu_gap,
+                keys.left() - label.right() >= padding,
                 "{item:?}: {label:?} y {keys:?}"
             );
         }
         let item = MenuItem::OpenSplitRight;
         let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
-        let padding = theme.layout.menu_item_padding_x;
-        let needed = padding + label.size.width + theme.layout.menu_gap + keys.size.width + padding;
+        let needed = padding + label.size.width + padding + keys.size.width + padding;
         assert!(
-            needed > theme.layout.menu_min_width,
-            "no cabe en el ancho mínimo"
+            needed > theme.layout.menu_width,
+            "cabe en el ancho del tema"
         );
         assert_eq!(bounds(item, "").size.width, needed);
+    }
+
+    /// En una ventana más angosta que la fila más larga, el menú no pasa de
+    /// ella: se recorta la etiqueta y la tecla se lee entera.
+    #[test]
+    fn en_una_ventana_angosta_se_recorta_la_etiqueta_y_no_la_tecla() {
+        let padding = theme().layout.menu_item_padding_x;
+        let item = MenuItem::OpenSplitRight;
+        let wide = laid_out(px(10_000.));
+        let (wide_label, wide_keys) = (wide(item, "-label"), wide(item, "-keys"));
+        let max_width = px(120.);
+        assert!(wide(item, "").size.width > max_width);
+        let narrow = laid_out(max_width);
+        let (row, label, keys) = (
+            narrow(item, ""),
+            narrow(item, "-label"),
+            narrow(item, "-keys"),
+        );
+        assert!(row.right() <= max_width, "{row:?}");
+        assert!(label.size.width < wide_label.size.width);
+        assert_eq!(keys.size, wide_keys.size);
+        assert!(
+            keys.left() - label.right() >= padding,
+            "{label:?} y {keys:?}"
+        );
     }
 }

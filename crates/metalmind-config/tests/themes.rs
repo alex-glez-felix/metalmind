@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use metalmind_config::{BUILTIN_THEMES, Color, DEFAULT_THEME, Location, Severity, Themes};
+use metalmind_config::{BUILTIN_THEMES, Color, DEFAULT_THEME, Length, Location, Severity, Themes};
 use pretty_assertions::assert_eq;
 
 fn write(dir: &Path, name: &str, text: &str) {
@@ -99,6 +99,19 @@ fn un_tema_del_usuario_reemplaza_al_embebido_del_mismo_nombre() {
         .unwrap()
         .value;
     assert_eq!(theme.ui.error.rgb, 9);
+}
+
+#[test]
+fn un_tema_del_usuario_cambia_el_ancho_del_menu() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        "mio",
+        "extends: metalmind-oscuro\nlayout:\n  menu_width: 300\n",
+    );
+    let loaded = Themes::new(dir.path().to_owned()).load("mio").unwrap();
+    assert_eq!(loaded.diagnostics, []);
+    assert_eq!(loaded.value.metrics.layout.menu_width, Length(300.));
 }
 
 #[test]
