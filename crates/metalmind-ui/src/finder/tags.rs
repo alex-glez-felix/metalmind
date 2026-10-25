@@ -179,7 +179,10 @@ mod tests {
     #[test]
     fn marca_los_tags_que_no_encuentran_nada() {
         let mut picker = picker();
-        edit(&mut picker, LineEdit::Insert("#rust -#nada parser #a/b -# #Gpui"));
+        edit(
+            &mut picker,
+            LineEdit::Insert("#rust -#nada parser #a/b -# #Gpui"),
+        );
         let text = picker.line().text().to_owned();
         let marked: Vec<&str> = picker
             .warnings()
