@@ -159,11 +159,7 @@ impl Sidebar {
 
     fn cancel(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         if self.menu.take().is_none() {
-            if self.panel.prompt().is_some() {
-                self.panel.cancel();
-            } else {
-                self.panel.tree.set_filter("");
-            }
+            self.panel.escape();
         }
         self.scroll_to_selection();
         cx.notify();

@@ -9,8 +9,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use metalmind_vault::VaultPath;
 use metalmind_vault::tags::{Scope, TagColor, TagIcon, TagKey, TagTree, Tags};
+use metalmind_vault::{VaultChange, VaultPath};
 
 use crate::panel::Outline;
 
@@ -125,6 +125,22 @@ impl TagOutline {
     /// hace falta mientras la vista no se ve.
     pub fn set_tags(&mut self, tags: Arc<Tags>) {
         self.pending = Some(tags);
+    }
+
+    /// Tras un lote del watcher, antes de sus tags: la nota seleccionada
+    /// sigue a sus renombres, así su fila sigue elegida aunque cambie de
+    /// lugar.
+    pub fn follow(&mut self, changes: &[VaultChange]) {
+        let Some(RowId::Note(_, path) | RowId::InboxNote(path)) = &mut self.selected else {
+            return;
+        };
+        for change in changes {
+            if let VaultChange::Renamed { from, to, .. } = change
+                && let Some(moved) = path.rebase(from, to)
+            {
+                *path = moved;
+            }
+        }
     }
 
     /// Rehace las filas con los últimos tags, si llegaron otros. Lo abierto

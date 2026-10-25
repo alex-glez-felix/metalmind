@@ -277,10 +277,13 @@ impl Panel {
         self.open(Prompt::ConfirmDelete { path, unsaved });
     }
 
-    /// Tras un lote del watcher: la pregunta abierta sigue a su entrada en
-    /// los renombres y, si la entrada desaparece, se cierra con un aviso.
-    /// Así confirmar nunca actúa sobre otra entrada que ocupe la ruta vieja.
+    /// Tras un lote del watcher, antes de sus tags: la nota seleccionada en
+    /// la vista de tags y la pregunta abierta siguen a su entrada en los
+    /// renombres y, si la entrada de la pregunta desaparece, se cierra con
+    /// un aviso. Así confirmar nunca actúa sobre otra entrada que ocupe la
+    /// ruta vieja.
     pub fn follow(&mut self, changes: &[VaultChange]) {
+        self.tags.follow(changes);
         let Some(target) = self.prompt.as_mut().and_then(Prompt::target_mut) else {
             return;
         };
@@ -311,7 +314,17 @@ impl Panel {
         self.prompt = Some(prompt);
     }
 
-    /// `Escape`: cierra la pregunta; en el filtro, además lo quita.
+    /// `Escape` sin menú: cierra la pregunta o, si no hay, quita el filtro
+    /// de carpetas cuando es la vista que se ve.
+    pub fn escape(&mut self) {
+        if self.prompt.is_some() {
+            self.cancel();
+        } else if self.view == PanelView::Folders {
+            self.tree.set_filter("");
+        }
+    }
+
+    /// Cierra la pregunta; en el filtro, además lo quita.
     pub fn cancel(&mut self) {
         if let Some(Prompt::Filter(_)) = self.prompt.take() {
             self.tree.set_filter("");
