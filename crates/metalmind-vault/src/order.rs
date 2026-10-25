@@ -200,6 +200,9 @@ fn pair_renames(
         else {
             continue;
         };
+        if from.ancestors().any(|folder| sources.contains(&folder)) {
+            continue;
+        }
         let moved: Vec<_> = subtree(removed, from)
             .filter(|(path, _)| !path.ancestors().any(|folder| sources.contains(&folder)))
             .filter_map(|(path, kind)| {
@@ -338,6 +341,47 @@ mod tests {
     }
 
     /// La prueba de arriba mide algo solo si cada rename del lote se empareja.
+    /// `a/x` cambió de tipo en `b/x`, así que no viajó con `a`, pero tampoco
+    /// puede salir de ahí con otro rename: ya no está en `a`.
+    #[test]
+    fn lo_de_adentro_de_un_rename_no_se_renombra_otra_vez() {
+        let entries = |paths: &[(&str, EntryKind)]| -> Entries {
+            paths.iter().map(|(p, kind)| (path(p), *kind)).collect()
+        };
+        let removed = entries(&[("a", EntryKind::Folder), ("a/x", EntryKind::Note)]);
+        let created = entries(&[
+            ("b", EntryKind::Folder),
+            ("b/x", EntryKind::Folder),
+            ("c", EntryKind::Note),
+        ]);
+        let before: HashMap<_, _> = removed.clone().into_iter().collect();
+        let after: HashMap<_, _> = created.clone().into_iter().collect();
+        let renames = [(path("a"), path("b")), (path("a/x"), path("c"))];
+        let changes = arrange(&before, &after, &removed, &created, &renames);
+        assert_eq!(
+            changes,
+            [
+                VaultChange::Removed {
+                    path: path("a/x"),
+                    kind: EntryKind::Note
+                },
+                VaultChange::Renamed {
+                    from: path("a"),
+                    to: path("b"),
+                    kind: EntryKind::Folder
+                },
+                VaultChange::Created {
+                    path: path("c"),
+                    kind: EntryKind::Note
+                },
+                VaultChange::Created {
+                    path: path("b/x"),
+                    kind: EntryKind::Folder
+                },
+            ]
+        );
+    }
+
     #[test]
     fn cada_rename_del_lote_sale_como_renamed() {
         let changes = RenameBatch::new(50).arrange();
