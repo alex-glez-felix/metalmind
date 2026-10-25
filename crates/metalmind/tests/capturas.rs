@@ -219,6 +219,12 @@ const SCENES: &[(&str, &[Step])] = &[
             "lista se abra pegada al borde y se vea que no sale de la ventana #arquitectura",
         ))],
     ),
+    // En un panel bajito no caben todas las filas ni arriba ni abajo: van
+    // las que caben, del lado con más lugar.
+    (
+        "autocompletado-panel-bajo",
+        &[Step::Keys("<Esc><C-w>o<C-w>s<C-w>s<C-w>s<C-w>sGo#r")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
