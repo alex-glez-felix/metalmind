@@ -161,6 +161,51 @@ fn targets(model: &Model) -> Vec<(VaultPath, usize, LinkTarget)> {
         .collect()
 }
 
+/// Tras aplicar el plan y renombrar `from` a `to`, cada link que resolvía a
+/// un archivo resuelve a ese mismo archivo en su ruta nueva, salvo los
+/// conflictos. Un rename que no se puede planear no tiene nada que comprobar.
+fn keeps_every_resolved_target(
+    model: &Model,
+    from: &VaultPath,
+    to: &VaultPath,
+) -> Result<(), TestCaseError> {
+    let index = build(model);
+    let Ok(plan) = index.rename_plan(from, to) else {
+        return Ok(());
+    };
+    if to.ancestors().any(|folder| model.contains_key(&folder)) {
+        return Ok(());
+    }
+    let (after, _) = execute(model, &plan);
+    let moved = |file: &VaultPath| file.rebase(from, to).unwrap_or_else(|| file.clone());
+    let now: std::collections::BTreeMap<_, _> = targets(&after)
+        .into_iter()
+        .map(|(file, ordinal, target)| ((file, ordinal), target))
+        .collect();
+    for (file, ordinal, target) in targets(model) {
+        let LinkTarget::Resolved(target) = target else {
+            continue;
+        };
+        let conflict = plan
+            .conflicts
+            .iter()
+            .any(|c| c.source == file && index.outgoing(&file)[ordinal].span == c.span);
+        // Una nota que pasa a ser adjunto ya no tiene links.
+        if conflict || kind(&moved(&file)) != EntryKind::Note {
+            continue;
+        }
+        prop_assert_eq!(
+            now.get(&(moved(&file), ordinal)),
+            Some(&LinkTarget::Resolved(moved(&target))),
+            "link {} de {} con {:?}",
+            ordinal,
+            file,
+            plan
+        );
+    }
+    Ok(())
+}
+
 fn vault() -> impl Strategy<Value = Model> {
     prop::collection::btree_map(file_path(), content(), 1..10).prop_map(|files| {
         let mut model = Model::new();
@@ -180,8 +225,7 @@ fn vault() -> impl Strategy<Value = Model> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1024))]
 
-    /// Tras aplicar el plan y renombrar, cada link que resolvía a un archivo
-    /// resuelve a ese mismo archivo en su ruta nueva, salvo los conflictos.
+    /// Ver [`keeps_every_resolved_target`].
     #[test]
     fn every_resolved_link_keeps_its_target(
         model in vault(),
@@ -191,34 +235,6 @@ proptest! {
     ) {
         let files: Vec<&VaultPath> = model.keys().collect();
         let from = folder.map_or_else(|| file.get(&files).to_owned().clone(), |folder| path(&folder));
-        let to = path(&to);
-        let index = build(&model);
-        let Ok(plan) = index.rename_plan(&from, &to) else {
-            return Ok(());
-        };
-        if to.ancestors().any(|folder| model.contains_key(&folder)) {
-            return Ok(());
-        }
-        let (after, _) = execute(&model, &plan);
-        let moved = |file: &VaultPath| file.rebase(&from, &to).unwrap_or_else(|| file.clone());
-        let now: std::collections::BTreeMap<_, _> = targets(&after)
-            .into_iter()
-            .map(|(file, ordinal, target)| ((file, ordinal), target))
-            .collect();
-        for (file, ordinal, target) in targets(&model) {
-            let LinkTarget::Resolved(target) = target else { continue };
-            let conflict = plan.conflicts.iter().any(|c| {
-                c.source == file && index.outgoing(&file)[ordinal].span == c.span
-            });
-            // Una nota que pasa a ser adjunto ya no tiene links.
-            if conflict || kind(&moved(&file)) != EntryKind::Note {
-                continue;
-            }
-            prop_assert_eq!(
-                now.get(&(moved(&file), ordinal)),
-                Some(&LinkTarget::Resolved(moved(&target))),
-                "link {} de {} con {:?}", ordinal, file, plan
-            );
-        }
+        keeps_every_resolved_target(&model, &from, &path(&to))?;
     }
 }
