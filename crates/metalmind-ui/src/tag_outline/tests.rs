@@ -152,6 +152,7 @@ fn otro_lote_conserva_lo_abierto_y_la_seleccion() {
     outline.select_row(3);
     let nueva = VaultPath::new("a nueva.md").unwrap();
     outline.set_tags(Arc::new(tags.with_unsaved([(&nueva, "#rust")])));
+    outline.refresh();
     assert_eq!(
         shown(&outline),
         [
@@ -175,6 +176,7 @@ fn si_la_seleccionada_desaparece_queda_su_lugar() {
     outline.select_row(2);
     let parser = VaultPath::new("parser.md").unwrap();
     outline.set_tags(Arc::new(tags.with_unsaved([(&parser, "sin tags ya")])));
+    outline.refresh();
     assert_eq!(shown(&outline)[2], ">    viejo.md");
 }
 

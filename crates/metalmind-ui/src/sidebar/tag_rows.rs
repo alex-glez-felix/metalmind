@@ -31,7 +31,7 @@ impl Sidebar {
                 sidebar.tag_rows(range, focused, active.as_ref(), &theme, cx)
             }),
         )
-        .track_scroll(&self.scroll)
+        .track_scroll(&self.tag_scroll)
         .flex_1()
         .into_any_element()
     }

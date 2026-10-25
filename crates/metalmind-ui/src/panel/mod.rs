@@ -7,7 +7,10 @@ mod input;
 mod marks;
 mod outline;
 
+use std::sync::Arc;
+
 use metalmind_syntax::note_name;
+use metalmind_vault::tags::Tags;
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
@@ -141,8 +144,36 @@ impl Panel {
     /// tome, como `ToggleFocus` de Zed. Devuelve si quedó visible.
     pub fn toggle(&mut self, view: PanelView, focused: bool) -> bool {
         self.visible = !(self.visible && self.view == view && focused);
-        self.view = view;
+        if self.view != view {
+            self.show(view);
+        }
+        self.refresh_shown();
         self.visible
+    }
+
+    /// `T`: la otra vista.
+    pub fn switch_view(&mut self) {
+        self.show(self.view.other());
+        self.refresh_shown();
+    }
+
+    /// Cambia de vista: lo que se estaba preguntando era sobre la otra.
+    fn show(&mut self, view: PanelView) {
+        self.cancel();
+        self.view = view;
+    }
+
+    /// Los tags de otro lote del watcher; la vista de tags se rehace solo
+    /// si se ve.
+    pub fn set_tags(&mut self, tags: Arc<Tags>) {
+        self.tags.set_tags(tags);
+        self.refresh_shown();
+    }
+
+    fn refresh_shown(&mut self) {
+        if self.visible && self.view == PanelView::Tags {
+            self.tags.refresh();
+        }
     }
 
     /// La vista que se ve.
