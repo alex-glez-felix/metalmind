@@ -112,7 +112,11 @@ fn recibir_un_lote_y_preparar_las_filas(bencher: Bencher) {
     let mut searcher = TextSearcher::new(dir.path());
     let mut probe = TextSearchState::new();
     let query = probe.edit(LineEdit::Insert(WORD)).unwrap().query;
-    let batch: Vec<NoteMatches> = searcher.search(&query).unwrap().iter().take(50).collect();
+    // La búsqueda llega en cualquier orden: ordenada, cada corrida mide las
+    // mismas 50 notas.
+    let mut batch: Vec<NoteMatches> = searcher.search(&query).unwrap().iter().collect();
+    batch.sort_by(|a, b| a.path.cmp(&b.path));
+    batch.truncate(50);
     bencher
         .with_inputs(|| {
             let mut state = TextSearchState::new();
