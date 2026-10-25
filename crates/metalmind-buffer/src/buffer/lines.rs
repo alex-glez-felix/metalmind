@@ -58,9 +58,11 @@ impl Buffer {
         let Some(line_move) = LineMove::new(&lines, below) else {
             return Ok(());
         };
+        // Primero la inserción: si cae justo donde empieza el borrado (las
+        // últimas líneas suben sobre una vacía), va antes de él.
         let edits = vec![
-            self.lines_deletion(&lines),
             self.lines_insertion(below, &self.lines_text(first..last + 1)),
+            self.lines_deletion(&lines),
         ];
         self.apply_following(edits, Some(line_move)).map(drop)
     }

@@ -114,6 +114,7 @@ use rstest_reuse::{self, apply, template};
 #[case("a\nb\nc|\nd\ne", "ma:1m4<CR>gg'a", "b\n|c\nd\na\ne")]
 #[case("a|\nb\nc", "ma:m$<CR>gg'a", "b\nc\n|a")]
 #[case("a\nb\nc|", "ma:m0<CR>G'a", "|c\na\nb")]
+#[case("a\n\nc|", "ma:m-2<CR>gg'a", "a\n|c\n")]
 #[case("a\nb|\nc\nd", "mA:2m0<CR>G'A", "|b\na\nc\nd")]
 #[case("a\nb\nc|\nd\ne", "mA:1m$<CR>gg'A", "b\n|c\nd\ne\na")]
 #[case("a\nb|\nc\nd", "G:2m0<CR>:4m2<CR><C-o>", "|b\na\nd\nc")]
