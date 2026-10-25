@@ -44,6 +44,7 @@ Theme {
         picker_selected: #7aa2f7 α0.2,
         picker_hover: #d7dae0 α0.06,
         picker_match: #7aa2f7,
+        picker_warning: #e0af68,
         picker_muted: #9aa0a6,
         panel_background: #16181d,
         panel_foreground: #d7dae0,

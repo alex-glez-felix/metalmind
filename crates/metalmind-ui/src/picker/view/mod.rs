@@ -26,6 +26,12 @@ use crate::actions::Dispatch;
 pub trait PickerDelegate: Sized + 'static {
     fn line(&self) -> &InputLine;
 
+    /// Los bytes de lo escrito que se marcan como aviso, como un tag que no
+    /// existe.
+    fn warnings(&self) -> Vec<Range<usize>> {
+        Vec::new()
+    }
+
     /// Cuántas filas tiene la lista.
     fn len(&self) -> usize;
 

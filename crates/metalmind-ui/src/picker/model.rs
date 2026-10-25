@@ -11,6 +11,7 @@ use std::sync::Arc;
 use metalmind_search::{FuzzyMatcher, Query, Ranked};
 
 use super::input_line::{InputLine, LineEdit};
+use super::narrowing::{Narrowing, Typed};
 
 /// Cómo se eligió una fila.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,17 +28,18 @@ pub enum Open {
 #[derive(Debug)]
 pub struct Job<T> {
     version: u64,
-    query: Query,
+    typed: Typed<T>,
     items: Arc<[T]>,
 }
 
 impl<T: AsRef<str>> Job<T> {
     #[must_use]
     pub fn run(self, matcher: &mut FuzzyMatcher) -> Matches {
+        let query = self.typed.query();
         Matches {
-            ranked: matcher.rank(&self.query, &self.items),
+            ranked: self.typed.rank(&query, &self.items, matcher),
             version: self.version,
-            query: self.query,
+            query,
         }
     }
 }
@@ -67,9 +69,9 @@ pub struct Step<T> {
     pub chosen: Option<Chosen>,
 }
 
-#[derive(Debug)]
 pub struct PickerState<T> {
     items: Arc<[T]>,
+    narrowing: Option<Arc<dyn Narrowing<T>>>,
     line: InputLine,
     /// Sube con cada cambio de lo escrito o de los ítems.
     version: u64,
@@ -92,6 +94,7 @@ impl<T: AsRef<str>> PickerState<T> {
         let shown = everything(0, items.len());
         Self {
             items,
+            narrowing: None,
             line: InputLine::default(),
             version: 0,
             shown,
@@ -113,9 +116,32 @@ impl<T: AsRef<str>> PickerState<T> {
         }
     }
 
+    /// Lo que filtra lo escrito antes del fuzzy, como los tags del finder.
+    #[must_use]
+    pub fn with_narrowing(mut self, narrowing: Arc<dyn Narrowing<T>>) -> Self {
+        self.narrowing = Some(narrowing);
+        self
+    }
+
     #[must_use]
     pub fn line(&self) -> &InputLine {
         &self.line
+    }
+
+    /// Los bytes de lo escrito que se marcan como aviso.
+    #[must_use]
+    pub fn warnings(&self) -> Vec<std::ops::Range<usize>> {
+        self.narrowing
+            .as_ref()
+            .map(|narrowing| narrowing.warnings(self.line.text()))
+            .unwrap_or_default()
+    }
+
+    fn typed(&self) -> Typed<T> {
+        Typed {
+            text: self.line.text().to_owned(),
+            narrowing: self.narrowing.clone(),
+        }
     }
 
     #[must_use]
@@ -185,6 +211,13 @@ impl<T: AsRef<str>> PickerState<T> {
         self.settle(job)
     }
 
+    /// Cambia lo que filtra, como cuando el watcher trae otros tags.
+    pub fn set_narrowing(&mut self, narrowing: Arc<dyn Narrowing<T>>) -> Step<T> {
+        self.narrowing = Some(narrowing);
+        let job = self.changed();
+        self.settle(job)
+    }
+
     fn changed(&mut self) -> Option<Job<T>> {
         self.version += 1;
         self.request()
@@ -196,8 +229,8 @@ impl<T: AsRef<str>> PickerState<T> {
         if !self.loaded {
             return None;
         }
-        let query = Query::new(self.line.text());
-        if query.is_empty() {
+        let typed = self.typed();
+        if typed.is_empty() {
             // Sin query no hay nada que filtrar: se muestra todo ya.
             let shown = everything(self.version, self.items.len());
             self.show(shown);
@@ -209,7 +242,7 @@ impl<T: AsRef<str>> PickerState<T> {
         self.running = true;
         Some(Job {
             version: self.version,
-            query,
+            typed,
             items: Arc::clone(&self.items),
         })
     }
@@ -281,7 +314,7 @@ impl<T: AsRef<str>> PickerState<T> {
         if !self.is_current() {
             let job = Job {
                 version: self.version,
-                query: Query::new(self.line.text()),
+                typed: self.typed(),
                 items: Arc::clone(&self.items),
             };
             let found = job.run(matcher);

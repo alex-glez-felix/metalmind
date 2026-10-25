@@ -9,7 +9,7 @@ use metalmind_keymap::{Command, Invocation};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::finder::{Note, VaultChanged, VaultSession, WatchLost};
+use crate::finder::{Note, TagFilter, VaultChanged, VaultSession, WatchLost};
 use crate::picker::{Fuzzy, Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
 use crate::workspace::{Axis, Message, Workspace, shown_path};
 
@@ -74,14 +74,16 @@ pub type Finder = PickerView<Fuzzy<Note>>;
 
 fn options() -> PickerOptions {
     PickerOptions {
-        placeholder: "Buscar una nota…".into(),
+        placeholder: "Buscar una nota… (#tag, -#tag, -# sin tags)".into(),
         splits: true,
     }
 }
 
 impl WorkspaceView {
     pub(super) fn open_finder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let state = PickerState::new(self.vault.session.read(cx).notes());
+        let session = self.vault.session.read(cx);
+        let state = PickerState::new(session.notes())
+            .with_narrowing(Arc::new(TagFilter::new(session.tags())));
         let fuzzy = Fuzzy::new(state, Haystack::Paths, "No hay notas".into());
         let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_finder_event);
@@ -155,10 +157,14 @@ impl WorkspaceView {
     }
 
     fn refresh_finder(&mut self, cx: &mut Context<Self>) {
-        let notes = self.vault.session.read(cx).notes();
+        let session = self.vault.session.read(cx);
+        let (notes, tags) = (session.notes(), session.tags());
         if let Some(Overlay::Finder { picker, .. }) = &self.overlay {
             picker.update(cx, |picker, cx| {
-                picker.update_delegate(cx, |fuzzy, cx| fuzzy.set_items(notes, cx));
+                picker.update_delegate(cx, |fuzzy, cx| {
+                    fuzzy.set_narrowing(Arc::new(TagFilter::new(tags)), cx);
+                    fuzzy.set_items(notes, cx);
+                });
             });
         }
     }

@@ -12,6 +12,7 @@ use std::{fs, thread};
 
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use metalmind_config::Paths;
+use metalmind_vault::tags::Tags;
 use metalmind_vault::{Unwatched, Vault, VaultPath, VaultUpdate};
 
 use super::writer::RecentsWriter;
@@ -39,6 +40,7 @@ pub struct VaultSession {
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
     notes: Arc<[Note]>,
+    tags: Arc<Tags>,
     unwatched: Option<Unwatched>,
     _updates: Task<()>,
     _quit: Subscription,
@@ -105,12 +107,14 @@ impl VaultSession {
             async {}
         });
         let notes = notes(&vault.snapshot(), &recents);
+        let tags = vault.tags();
         let unwatched = vault.unwatched();
         Self {
             vault: Rc::new(vault),
             recents,
             writer,
             notes,
+            tags,
             unwatched,
             _updates: updates,
             _quit: quit,
@@ -141,6 +145,12 @@ impl VaultSession {
         Arc::clone(&self.notes)
     }
 
+    /// Los tags del último lote del watcher.
+    #[must_use]
+    pub fn tags(&self) -> Arc<Tags> {
+        Arc::clone(&self.tags)
+    }
+
     /// La ruta del vault de `path`, si está dentro.
     #[must_use]
     pub fn vault_path(&self, path: &Path) -> Option<VaultPath> {
@@ -163,6 +173,7 @@ impl VaultSession {
             self.save();
         }
         self.notes = notes(&update.snapshot, &self.recents);
+        self.tags = Arc::clone(&update.tags);
         cx.emit(VaultChanged(update));
         // Se pierde al aparecer carpetas, así que llega con un lote.
         if let (None, Some(reason)) = (self.unwatched, self.vault.unwatched()) {

@@ -100,6 +100,14 @@ const SCENES: &[(&str, &[Step])] = &[
     ("finder-filtrado", &[Step::Keys("idea")]),
     ("finder-ruta-larga", &[Step::Keys("<C-u>honda")]),
     ("finder-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    // Los tags estrechan antes del fuzzy (05 §4); lo que no encuentra nada
+    // se marca.
+    ("finder-tags", &[Step::Keys("<C-u>#rust -#archivado idea")]),
+    (
+        "finder-tags-inexistentes",
+        &[Step::Keys("<C-u>#rust -#nada #2024/10 idea")],
+    ),
+    ("finder-buzon", &[Step::Keys("<C-u>-#")]),
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("buscar-cjk", &[Step::SearchAfterCjk]),
