@@ -412,7 +412,6 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     let mut seen = frame_count(&frames);
     let mark_color = gutter_mark_color(theme);
     window.resize(width.into(), height.into());
-    wait_first_paint(&window);
     let mut report = Vec::new();
     let mut titles = String::new();
     for (scene, steps) in SCENES {
@@ -631,23 +630,10 @@ fn frame_count(frames: &Path) -> usize {
     fs::read_to_string(frames).map_or(0, |log| log.lines().count())
 }
 
-/// Con lavapipe, el primer frame registrado puede no verse y el siguiente
-/// tardar más que [`QUIET`]: mientras la ventana sea de un solo color, no
-/// pintó nada todavía (#116).
-fn wait_first_paint(window: &Window<'_>) {
-    wait::until("que la ventana muestre algo", TIMEOUT, || {
-        let (_, _, rgb) = window.pixels();
-        let (pixels, _) = rgb.as_chunks::<3>();
-        if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
-            Err("de un solo color".to_owned())
-        } else {
-            Ok(())
-        }
-    });
-}
-
 /// Espera a que la ventana pinte algo después de `before` frames y deje de
-/// pintar, y devuelve lo que se ve.
+/// pintar, y devuelve lo que se ve. Con lavapipe, un frame registrado puede
+/// no verse aún y el siguiente tardar más que [`QUIET`]: una ventana de un
+/// solo color todavía no pintó (#116).
 fn settle(window: &Window<'_>, frames: &Path, before: usize) -> Image {
     wait::until("un frame nuevo", TIMEOUT, || {
         let count = frame_count(frames);
@@ -658,19 +644,21 @@ fn settle(window: &Window<'_>, frames: &Path, before: usize) -> Image {
         }
     });
     let mut last = (frame_count(frames), Instant::now());
-    wait::until("que la ventana deje de pintar", TIMEOUT, || {
+    wait::until("que la ventana pinte y deje de pintar", TIMEOUT, || {
         let count = frame_count(frames);
         if count != last.0 {
             last = (count, Instant::now());
         }
-        if last.1.elapsed() >= QUIET {
-            Ok(())
-        } else {
-            Err(format!("{count} frames"))
+        if last.1.elapsed() < QUIET {
+            return Err(format!("{count} frames"));
         }
-    });
-    let (width, height, rgb) = window.pixels();
-    Image { width, height, rgb }
+        let (width, height, rgb) = window.pixels();
+        let (pixels, _) = rgb.as_chunks::<3>();
+        if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
+            return Err("de un solo color".to_owned());
+        }
+        Ok(Image { width, height, rgb })
+    })
 }
 
 /// Una línea del resumen, y la imagen de lo que cambió si cambió algo.

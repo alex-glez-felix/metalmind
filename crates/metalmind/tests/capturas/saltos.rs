@@ -10,7 +10,7 @@ use metalmind_config::Paths;
 use rstest::rstest;
 
 use super::support::Smoke;
-use super::{compare, finish, frame_count, out_dir, prepare, settle, vault, wait_first_paint};
+use super::{compare, finish, frame_count, out_dir, prepare, settle, vault};
 
 /// Cada pantalla parte de cómo dejó la ventana la anterior.
 const SCENES: &[(&str, &str)] = &[
@@ -40,7 +40,6 @@ fn saltos(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
     );
     let mut seen = frame_count(&frames);
     window.resize(width.into(), height.into());
-    wait_first_paint(&window);
     let mut report = Vec::new();
     let mut titles = String::new();
     for (scene, keys) in SCENES {
