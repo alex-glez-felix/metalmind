@@ -2,6 +2,7 @@
 //! tag, su metadata.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use metalmind_syntax::{Frontmatter, Value, note_name};
 
@@ -154,7 +155,7 @@ pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {
 /// Qué es un archivo de la carpeta de tags.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PageFile {
-    Page(Box<TagPage>),
+    Page(Arc<TagPage>),
     /// Su nombre no es un tag válido: es una nota normal.
     InvalidName,
 }

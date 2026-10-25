@@ -162,8 +162,17 @@ impl Tags {
     /// Las ocurrencias en notas y en el cuerpo y `tags:` de las páginas. Un
     /// valor de `tags:` que queda repetido se quita de la lista.
     fn rewrite_notes(&self, rewrite: &Rewrite<'_>, edits: &mut Edits) {
-        for (path, note) in self.index.all() {
-            let tags = &note.tags;
+        let notes = self
+            .index
+            .tag(rewrite.from)
+            .into_iter()
+            .flat_map(|entry| &entry.notes);
+        // Las páginas no cuentan en el índice por tag: se miran todas.
+        let pages = self.pages.keys().filter(|path| self.is_page(path));
+        let indexed = notes
+            .chain(pages)
+            .filter_map(|path| Some((path, self.index.note(path)?)));
+        for (path, tags) in indexed {
             if !tags.occurrences.iter().any(|tag| &tag.key == rewrite.from) {
                 continue;
             }

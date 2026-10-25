@@ -1,6 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+use imbl::{HashMap, OrdSet};
 use metalmind_syntax::Property;
 
 use crate::path::VaultPath;
@@ -10,18 +11,19 @@ use crate::tags::note::NoteTags;
 /// Lo que las notas escriben: qué notas llevan cada tag, y con qué
 /// ocurrencias, para renombrar sin reescanear, y el frontmatter entero de
 /// cada una. Las páginas de tag guardan sus ocurrencias (se reescriben al
-/// renombrar) pero no cuentan en `by_tag`.
+/// renombrar) pero no cuentan en `by_tag`. Un clon comparte todo con el
+/// original y cada cambio copia solo lo que toca.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagIndex {
     by_tag: HashMap<TagKey, TagEntry>,
-    by_note: HashMap<VaultPath, IndexedNote>,
+    by_note: HashMap<VaultPath, Arc<IndexedNote>>,
 }
 
 /// Un tag tal como se escribe en las notas, antes de resolver alias o padres.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagEntry {
     /// Las que llevan este tag exacto.
-    pub notes: BTreeSet<VaultPath>,
+    pub notes: OrdSet<VaultPath>,
     /// Cada forma escrita y cuántas veces aparece.
     pub spellings: BTreeMap<String, u32>,
 }
@@ -30,8 +32,7 @@ pub struct TagEntry {
 pub(crate) struct IndexedNote {
     pub tags: NoteTags,
     pub page: bool,
-    /// Compartido: cada lote del watcher clona el índice entero.
-    pub frontmatter: Option<Arc<[Property]>>,
+    pub frontmatter: Vec<Property>,
 }
 
 impl TagIndex {
@@ -51,13 +52,13 @@ impl TagIndex {
         self.by_note.get(path).map(|note| &note.tags)
     }
 
-    /// Cada clave del frontmatter de una nota o página con su valor, en
-    /// orden; vacío si no tiene, no se pudo leer o no es un mapa.
+    /// Cada clave escalar de primer nivel del frontmatter de una nota o página
+    /// con su valor, en orden; vacío si no tiene, no se pudo leer o no es un mapa.
     #[must_use]
     pub fn frontmatter(&self, path: &VaultPath) -> &[Property] {
         self.by_note
             .get(path)
-            .and_then(|note| note.frontmatter.as_deref())
+            .map(|note| note.frontmatter.as_slice())
             .unwrap_or_default()
     }
 
@@ -71,11 +72,13 @@ impl TagIndex {
 
     /// Todas las notas y páginas indexadas, sin orden.
     pub(crate) fn all(&self) -> impl Iterator<Item = (&VaultPath, &IndexedNote)> {
-        self.by_note.iter()
+        self.by_note
+            .iter()
+            .map(|(path, note)| (path, note.as_ref()))
     }
 
     /// Reemplaza lo que había de `path` y devuelve las claves que tocó.
-    pub(crate) fn insert(&mut self, path: VaultPath, note: IndexedNote) -> BTreeSet<TagKey> {
+    pub(crate) fn insert(&mut self, path: VaultPath, note: Arc<IndexedNote>) -> BTreeSet<TagKey> {
         let mut touched = self.remove(&path);
         if !note.page {
             for occurrence in &note.tags.occurrences {
@@ -100,7 +103,10 @@ impl TagIndex {
     }
 
     /// Quita `path` y devuelve lo que tenía y las claves que tocó.
-    pub(crate) fn take(&mut self, path: &VaultPath) -> Option<(IndexedNote, BTreeSet<TagKey>)> {
+    pub(crate) fn take(
+        &mut self,
+        path: &VaultPath,
+    ) -> Option<(Arc<IndexedNote>, BTreeSet<TagKey>)> {
         let note = self.by_note.remove(path)?;
         let mut touched = BTreeSet::new();
         if !note.page {

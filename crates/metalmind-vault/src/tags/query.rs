@@ -73,9 +73,9 @@ impl TagQuery {
     pub fn notes<'t>(&self, tags: &'t Tags) -> Vec<&'t VaultPath> {
         let mut found: HashSet<&VaultPath> = match self.include.split_first() {
             Some((first, rest)) => {
-                let mut found = tags.notes_with(first);
+                let mut found: HashSet<&VaultPath> = tags.notes_with(first).collect();
                 for key in rest {
-                    let with = tags.notes_with(key);
+                    let with: HashSet<&VaultPath> = tags.notes_with(key).collect();
                     found.retain(|note| with.contains(note));
                 }
                 found

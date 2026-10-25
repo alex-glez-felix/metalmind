@@ -1,7 +1,7 @@
 //! Lo que recorre todo el vault crece lineal con las notas (docs/performance.md):
 //! N contra 16N notas, con una página de tag cada 25.
 
-use super::Fixture;
+use super::{Fixture, path};
 use crate::tags::{Scope, TagQuery, Tags};
 
 const NOTES: usize = 2_000;
@@ -63,5 +63,23 @@ fn planear_un_renombre_es_lineal() {
             .unwrap()
             .changes
             .edit_count()
+    });
+}
+
+/// Publicar los tags tras cambiar una nota copia solo esa nota (#60): con 16
+/// veces más notas cuesta casi lo mismo. La nota lleva 200 tags del vault para
+/// que escanearla pese más que lo fijo de la corrida.
+#[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
+fn publicar_una_nota_cambiada_no_depende_del_vault() {
+    let note = path("area-1/cambiada.md");
+    let text = (0..200)
+        .map(|tag| format!("#t{tag}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    metalmind_perf::assert_flat(NOTES, tags, |tags| {
+        let published = tags.with_unsaved([(&note, text.as_str())]);
+        // Soltar el vault viejo es lineal y no es parte de publicar.
+        (published, tags)
     });
 }

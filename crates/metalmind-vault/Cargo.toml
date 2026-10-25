@@ -12,6 +12,7 @@ arc-swap.workspace = true
 blake3.workspace = true
 caseless.workspace = true
 ignore.workspace = true
+imbl.workspace = true
 jiff.workspace = true
 log.workspace = true
 miniz_oxide.workspace = true

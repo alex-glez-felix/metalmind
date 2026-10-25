@@ -90,7 +90,7 @@ impl Tags {
     }
 
     fn forget(&mut self, path: &VaultPath, pages_changed: &mut bool) -> BTreeSet<TagKey> {
-        *pages_changed |= self.pages.remove(path).is_some();
+        *pages_changed |= self.drop_page(path);
         self.index.remove(path)
     }
 
@@ -103,7 +103,7 @@ impl Tags {
         touched: &mut BTreeSet<TagKey>,
         pages_changed: &mut bool,
     ) -> Settle {
-        let was_page = self.pages.remove(old).is_some();
+        let was_page = self.drop_page(old);
         *pages_changed |= was_page;
         let Some((note, keys)) = self.index.take(old) else {
             return Settle::IfMissing;
