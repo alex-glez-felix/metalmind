@@ -262,6 +262,9 @@ Theme {
             menu_item_padding_x: Length(
                 8.0,
             ),
+            completion_rows: Count(
+                8,
+            ),
             tooltip_padding_x: Length(
                 8.0,
             ),

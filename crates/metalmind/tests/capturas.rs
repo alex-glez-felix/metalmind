@@ -194,6 +194,20 @@ const SCENES: &[(&str, &[Step])] = &[
     ("tags-abierto", &[Step::Keys("jjjjjlll")]),
     ("tags-buzon", &[Step::Keys("GlG")]),
     ("tags-menu-borde", &[Step::RightClickBottomRow]),
+    // El autocompletado de `#`: la lista, por un alias, eligiendo con
+    // `ctrl-n`, aceptada con `tab` y junto al borde de abajo, donde se abre
+    // encima del tag.
+    (
+        "autocompletado",
+        &[Step::Keys("<Esc>q:e listas.md<CR>Go#r")],
+    ),
+    ("autocompletado-alias", &[Step::Keys("s")]),
+    ("autocompletado-elegir", &[Step::Keys("<BS><C-n>")]),
+    ("autocompletado-aceptado", &[Step::Keys("<Tab>")]),
+    (
+        "autocompletado-borde",
+        &[Step::Keys("<Esc>:e formulas-larga.md<CR>GA #un")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

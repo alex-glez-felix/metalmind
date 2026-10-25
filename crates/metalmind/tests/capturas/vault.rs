@@ -125,7 +125,7 @@ pub fn write(root: &Path) {
     // Las páginas dan la jerarquía y los íconos de la vista de tags.
     file(
         "tags/rust.md",
-        "---\nicon: 🦀\n---\nEl lenguaje.\n".as_bytes(),
+        "---\nicon: 🦀\naliases: [rs]\n---\nEl lenguaje.\n".as_bytes(),
     );
     file(
         "tags/diseño.md",

@@ -1,6 +1,7 @@
 //! Vista de un panel: pinta solo lo visible de su documento y le pasa la
 //! entrada al [`Workspace`], que es quien edita.
 
+mod completion;
 mod cursor;
 mod element;
 mod formula_tooltip;
@@ -22,7 +23,7 @@ mod status_bar;
 mod text;
 
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use gpui_kit::{
     App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
@@ -40,7 +41,7 @@ use self::layout::FrameLayout;
 use self::links::Links;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
-use crate::actions::{self, Dispatch, EDITOR_CONTEXT};
+use crate::actions::{self, Dispatch};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -78,6 +79,7 @@ pub struct Editor {
     synced_top: Option<usize>,
     /// La línea con marks bajo el ratón, para su tooltip.
     mark_hover: Option<self::mark_hover::MarkHover>,
+    completion: self::completion::Completion,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _formulas: Subscription,
@@ -111,6 +113,7 @@ impl Editor {
             checkbox_pressed: false,
             synced_top: None,
             mark_hover: None,
+            completion: self::completion::Completion::default(),
             _repaint: repaint,
             _vault_changed: vault_changed,
             _formulas: formulas_ready,
@@ -119,22 +122,28 @@ impl Editor {
 
     /// Con qué saber si cada link del documento lleva a algo.
     fn links(&mut self, cx: &App) -> Links {
-        let path = self
+        if self
             .view(cx)
-            .and_then(|view| view.document.path().map(Path::to_path_buf));
-        let Some(path) = path else {
+            .is_none_or(|view| view.document.path().is_none())
+        {
             return Links::default();
-        };
-        let session = self.session.read(cx);
-        let source = match &self.source {
+        }
+        let source = self.note_path(cx);
+        Links::new(self.session.read(cx).vault().links(), source)
+    }
+
+    /// La ruta en el vault del documento del panel, guardada mientras sea
+    /// el mismo archivo.
+    fn note_path(&mut self, cx: &App) -> Option<VaultPath> {
+        let path = self.view(cx)?.document.path()?.to_path_buf();
+        match &self.source {
             Some((cached, source)) if *cached == path => source.clone(),
             _ => {
-                let source = session.vault_path(&path);
+                let source = self.session.read(cx).vault_path(&path);
                 self.source = Some((path, source.clone()));
                 source
             }
-        };
-        Links::new(session.vault().links(), source)
+        }
     }
 
     #[must_use]
@@ -212,9 +221,11 @@ impl Editor {
                 workspace.type_text(pane, text, &mut SystemClipboard(cx))
             })
             .transpose();
-        match outcome {
-            Some(outcome) => self.handle_outcome(outcome, window, cx),
-            None => cx.notify(),
+        if let Some(outcome) = outcome {
+            self.handle_outcome(outcome, window, cx);
+        } else {
+            self.update_completion(cx);
+            cx.notify();
         }
     }
 
@@ -242,6 +253,7 @@ impl Editor {
             Err(error) => self.report(&error, cx),
         }
         self.synced_top = None;
+        self.update_completion(cx);
         cx.notify();
     }
 
@@ -289,21 +301,31 @@ impl Render for Editor {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let status = self.status(cx).map(|status| status_bar(status, &theme));
+        let completion = self.completion_overlay(&theme, cx);
         div()
-            .key_context(EDITOR_CONTEXT)
+            .key_context(self.key_context())
             .track_focus(&self.focus_handle)
             .size_full()
             .flex()
             .flex_col()
             .on_key_down(cx.listener(Self::on_key_down))
             .on_action(
-                cx.listener(|editor, Dispatch(invocation): &Dispatch, _, cx| {
-                    match invocation.action {
+                cx.listener(
+                    |editor, Dispatch(invocation): &Dispatch, window, cx| match invocation.action {
                         Action::Editor(EditorAction::Copy) => editor.copy(cx),
                         Action::Editor(EditorAction::Paste) => editor.paste(cx),
+                        Action::Editor(EditorAction::AcceptTagCompletion) => {
+                            editor.accept_completion(window, cx);
+                        }
+                        Action::Editor(EditorAction::NextTagCompletion) => {
+                            editor.select_next_completion(cx);
+                        }
+                        Action::Editor(EditorAction::PreviousTagCompletion) => {
+                            editor.select_previous_completion(cx);
+                        }
                         _ => cx.propagate(),
-                    }
-                }),
+                    },
+                ),
             )
             .child(
                 div()
@@ -321,5 +343,6 @@ impl Render for Editor {
                     .child(EditorElement::new(cx.entity(), theme.clone())),
             )
             .children(status)
+            .children(completion)
     }
 }
