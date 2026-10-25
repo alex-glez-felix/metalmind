@@ -2,6 +2,7 @@
 //! de `metalmind-search`, como el finder y la paleta: [`PickerState`] corre
 //! cada búsqueda en el executor de fondo de GPUI.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, SharedString, Task};
@@ -9,7 +10,7 @@ use metalmind_search::FuzzyMatcher;
 
 use super::highlight::match_ranges;
 use super::view::{Overflow, PickerDelegate, PickerRow, PickerView};
-use super::{Chosen, InputLine, LineEdit, Matches, Open, PickerState, Step};
+use super::{Chosen, InputLine, LineEdit, Matches, Narrowing, Open, PickerState, Step};
 
 /// Lo que se puede elegir en un picker difuso.
 pub trait PickerItem: AsRef<str> + Send + Sync + 'static {
@@ -79,6 +80,16 @@ impl<T: PickerItem> Fuzzy<T> {
         self.step(step, cx);
     }
 
+    /// Cambia lo que filtra lo escrito y vuelve a filtrar.
+    pub fn set_narrowing(
+        &mut self,
+        narrowing: Arc<dyn Narrowing<T>>,
+        cx: &mut Context<PickerView<Self>>,
+    ) {
+        let step = self.state.set_narrowing(narrowing);
+        self.step(step, cx);
+    }
+
     /// Corre la búsqueda que pidió el modelo y avisa si se eligió algo.
     fn step(&mut self, step: Step<T>, cx: &mut Context<PickerView<Self>>) {
         if let Some(job) = step.job {
@@ -119,6 +130,10 @@ impl<T: PickerItem> Fuzzy<T> {
 impl<T: PickerItem> PickerDelegate for Fuzzy<T> {
     fn line(&self) -> &InputLine {
         self.state.line()
+    }
+
+    fn warnings(&self) -> Vec<Range<usize>> {
+        self.state.warnings()
     }
 
     fn len(&self) -> usize {

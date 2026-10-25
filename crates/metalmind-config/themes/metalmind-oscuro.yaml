@@ -64,6 +64,7 @@ ui:
   picker_selected: { color: accent, alpha: 0.2 }
   picker_hover: { color: text, alpha: 0.06 }
   picker_match: accent
+  picker_warning: warning
   picker_muted: text_muted
   panel_background: surface
   panel_foreground: text

@@ -8,11 +8,13 @@ mod fuzzy;
 mod highlight;
 mod input_line;
 mod model;
+mod narrowing;
 mod view;
 
 pub(crate) use self::fuzzy::{Fuzzy, Haystack, PickerItem};
 pub use self::input_line::{InputLine, LineEdit};
 pub use self::model::{Chosen, Job, Matches, Open, PickerState, Step};
+pub use self::narrowing::Narrowing;
 pub(crate) use self::view::{
     Overflow, PickerDelegate, PickerEvent, PickerOptions, PickerRow, PickerView,
 };

@@ -4,9 +4,9 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, ElementInputHandler, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
-    Render, StatefulInteractiveElement as _, Styled as _, Window, canvas, div,
-    prelude::FluentBuilder as _, px, relative, uniform_list,
+    Context, ElementInputHandler, HighlightStyle, Hsla, InteractiveElement as _, IntoElement,
+    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
+    StyledText, Window, canvas, div, prelude::FluentBuilder as _, px, relative, uniform_list,
 };
 
 use super::row_line::RowLine;
@@ -54,6 +54,10 @@ impl<D: PickerDelegate> PickerView<D> {
         let line = self.delegate.line();
         let marked = self.marked.clone().unwrap_or_default();
         let (before, after) = line.text().split_at(line.cursor());
+        let warnings = self.delegate.warnings();
+        let warned = |text: &str, offset: usize| {
+            with_warnings(text, offset, &warnings, theme.ui.picker_warning)
+        };
         let empty = line.text().is_empty() && marked.is_empty();
         let entity = cx.entity();
         let focus = self.focus_handle.clone();
@@ -64,7 +68,7 @@ impl<D: PickerDelegate> PickerView<D> {
             .items_center()
             .px(theme.layout.picker_padding_x)
             .py(theme.layout.picker_input_padding_y)
-            .child(div().child(before.to_owned()))
+            .child(div().child(warned(before, 0)))
             .when(!marked.is_empty(), |input| {
                 input.child(div().underline().child(marked))
             })
@@ -81,7 +85,7 @@ impl<D: PickerDelegate> PickerView<D> {
                         .child(self.options.placeholder.clone()),
                 )
             })
-            .child(div().child(after.to_owned()))
+            .child(div().child(warned(after, before.len())))
             .children(self.delegate.status().map(|status| {
                 div()
                     .ml_auto()
@@ -158,4 +162,21 @@ impl<D: PickerDelegate> PickerView<D> {
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
             .child(line)
     }
+}
+
+/// `text`, que empieza en el byte `offset` de lo escrito, con los avisos que
+/// caen en él pintados de `color`.
+fn with_warnings(text: &str, offset: usize, warnings: &[Range<usize>], color: Hsla) -> StyledText {
+    let style = HighlightStyle {
+        color: Some(color),
+        ..HighlightStyle::default()
+    };
+    let end = offset + text.len();
+    let highlights = warnings
+        .iter()
+        .map(|warning| warning.start.max(offset)..warning.end.min(end))
+        .filter(|range| range.start < range.end)
+        .map(|range| (range.start - offset..range.end - offset, style))
+        .collect::<Vec<_>>();
+    StyledText::new(SharedString::from(text.to_owned())).with_highlights(highlights)
 }
