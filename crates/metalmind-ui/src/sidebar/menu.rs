@@ -347,9 +347,15 @@ mod tests {
     /// Las cajas de cada parte de las entradas del menú sobre un archivo,
     /// pintado en no más de `max_width`.
     fn laid_out(max_width: Pixels) -> impl Fn(MenuItem, &str) -> Bounds<Pixels> {
+        laid_out_menu(menu_on("a.md"), max_width)
+    }
+
+    fn laid_out_menu(
+        menu: ContextMenu,
+        max_width: Pixels,
+    ) -> impl Fn(MenuItem, &str) -> Bounds<Pixels> {
         let mut cx = TestAppContext::single();
         cx.update(|cx| bind_keys(Keymap::default(), cx));
-        let menu = menu_on("a.md");
         let items: Vec<MenuItem> = menu.items().collect();
         let (_, cx) = cx.add_window_view(|_, _| MenuProbe { menu, max_width });
         cx.run_until_parked();
@@ -394,6 +400,28 @@ mod tests {
             "cabe en el ancho del tema"
         );
         assert_eq!(bounds(item, "").size.width, needed);
+    }
+
+    /// El menú de una nota de la vista de tags solo tiene las dos entradas
+    /// de abrir en un split: su ancho sale de «Abrir a la derecha» con
+    /// `ctrl-v`, no de `menu_width`.
+    #[test]
+    fn en_el_menu_de_una_nota_de_tags_la_etiqueta_no_choca_con_su_tecla() {
+        let theme = theme();
+        let padding = theme.layout.menu_item_padding_x;
+        let menu = ContextMenu::on_note(Point::default(), path("a.md"));
+        let bounds = laid_out_menu(menu, px(10_000.));
+        let item = MenuItem::OpenSplitRight;
+        let (row, label, keys) = (
+            bounds(item, ""),
+            bounds(item, "-label"),
+            bounds(item, "-keys"),
+        );
+        assert!(
+            keys.left() - label.right() >= padding,
+            "{label:?} y {keys:?}"
+        );
+        assert!(row.size.width > theme.layout.menu_width, "{row:?}");
     }
 
     /// En una ventana más angosta que la fila más larga, el menú no pasa de
