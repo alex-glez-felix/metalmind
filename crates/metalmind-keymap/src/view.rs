@@ -81,6 +81,20 @@ named_actions! {
     }
 }
 
+named_actions! {
+    /// De la vista previa de un cambio de tags (05 §5).
+    pub enum TagChangeAction {
+        SelectNext = "tag_change::select_next",
+        SelectPrevious = "tag_change::select_previous",
+        /// Quita el cambio elegido de lo que se aplica, o lo devuelve.
+        ToggleChange = "tag_change::toggle_change",
+        /// Escribe lo que queda en el vault.
+        Apply = "tag_change::apply",
+        /// Cierra la vista previa sin tocar nada.
+        Cancel = "tag_change::cancel",
+    }
+}
+
 /// Los identificadores que cada vista pone en su contexto de teclas.
 pub mod context {
     /// La vista de editor, en cualquier modo de vim.
@@ -98,6 +112,8 @@ pub mod context {
     pub const TAG_COMPLETION: &str = "TagCompletion";
     /// Cualquier picker.
     pub const PICKER: &str = "Picker";
+    /// La vista previa de un cambio de tags.
+    pub const TAG_CHANGE: &str = "TagChange";
     /// Lo que se agrega al de un picker si abre en un split.
     pub const SPLITS: &str = "splits";
 }
@@ -115,6 +131,7 @@ pub enum View {
     Picker,
     /// Un picker que abre en un split, como el finder.
     PickerWithSplits,
+    TagChange,
 }
 
 impl View {
@@ -130,6 +147,7 @@ impl View {
             Self::FileTreeMenu => context::FILE_TREE_MENU,
             Self::Picker => context::PICKER,
             Self::PickerWithSplits => "Picker && splits",
+            Self::TagChange => context::TAG_CHANGE,
         }
     }
 }

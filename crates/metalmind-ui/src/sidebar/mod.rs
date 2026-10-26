@@ -29,11 +29,12 @@ use crate::file_tree::FileTree;
 use crate::finder::{VaultChanged, VaultSession};
 use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
+use crate::tag_change::TagRequest;
 use crate::tag_outline::TagOutline;
 use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SidebarEvent {
     /// Se abrió un archivo en el panel de edición enfocado; con
     /// `focus_editor`, el foco pasa ahí y si no se queda en el árbol.
@@ -43,6 +44,9 @@ pub enum SidebarEvent {
     /// Se cerraron paneles de edición (al borrar lo que mostraban); el
     /// foco se queda en el panel lateral.
     PanesChanged,
+    /// Renombrar o fusionar un tag: la ventana arma el plan y muestra su
+    /// vista previa.
+    ChangeTags(TagRequest),
 }
 
 pub struct Sidebar {
@@ -162,8 +166,9 @@ impl Sidebar {
         self.panel.follow(&update.changes);
         self.panel.set_tags(Arc::clone(&update.tags));
         let selected = self.panel.outline().selected_path();
+        let selected_tag = self.panel.selected_tag();
         if let Some(menu) = &mut self.menu
-            && !menu.still_on(&update.changes, selected)
+            && !menu.still_on(&update.changes, selected, selected_tag.as_deref())
         {
             self.menu = None;
         }

@@ -16,9 +16,10 @@ use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
 use crate::panel::PanelView;
+use crate::tag_change::TagRequest;
 
 /// Lo que la ventana tiene que hacer tras un comando.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
 pub enum Effect {
     Stay,
@@ -37,6 +38,11 @@ pub enum Effect {
     /// Una acción que no es un comando, como las del panel lateral: la
     /// ventana se la lleva a su vista.
     Dispatch(Action),
+    /// `:tagrename` o `:tagmerge`: la ventana, que tiene los tags del vault,
+    /// arma el plan y muestra su vista previa.
+    ChangeTags(TagRequest),
+    /// `:tagundo`: la ventana deshace el último cambio de tags que aplicó.
+    UndoTagChange,
 }
 
 impl Workspace {
@@ -131,6 +137,9 @@ impl Workspace {
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
             Command::FollowLink => self.follow_link(),
+            Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
+            Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
+            Command::UndoTagChange => Ok(Effect::UndoTagChange),
         }
     }
 

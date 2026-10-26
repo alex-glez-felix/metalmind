@@ -19,9 +19,11 @@ pub(super) fn reroute(owner: Owner, sidebar_visible: bool, overlay_open: bool) -
     match owner {
         Owner::Panel if sidebar_visible => Reroute::Sidebar,
         Owner::Editor if !overlay_open => Reroute::Editor,
-        // Un picker abierto ya tiene el foco; la raíz atiende las de la
-        // ventana antes de llegar aquí.
-        Owner::Panel | Owner::Editor | Owner::Picker | Owner::Window => Reroute::Nowhere,
+        // Un picker o la vista previa de tags abiertos ya tienen el foco; la
+        // raíz atiende las de la ventana antes de llegar aquí.
+        Owner::Panel | Owner::Editor | Owner::Picker | Owner::TagChange | Owner::Window => {
+            Reroute::Nowhere
+        }
     }
 }
 

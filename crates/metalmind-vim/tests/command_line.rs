@@ -44,6 +44,7 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":sp<CR>", Command::SplitDown)]
 #[case(":on<CR>", Command::Only)]
 #[case(":set<CR>", Command::Set)]
+#[case(":tagundo<CR>", Command::UndoTagChange)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]
@@ -78,6 +79,25 @@ fn e_lleva_la_ruta() {
         KeyOutcome::Dispatch(Invocation {
             action: ActionName::new(Command::Edit.name()),
             argument: Some("notas/otra nota.md".to_owned()),
+        })
+    );
+    assert_eq!(text, "ab|c");
+}
+
+#[rstest]
+#[case(":tagrename #rust #Rust<CR>", Command::RenameTag, "#rust #Rust")]
+#[case(":tagmerge #rs #rust<CR>", Command::MergeTag, "#rs #rust")]
+fn los_de_tags_llevan_sus_dos_tags(
+    #[case] keys: &str,
+    #[case] command: Command,
+    #[case] argument: &str,
+) {
+    let (outcome, _, text) = submit(keys);
+    assert_eq!(
+        outcome,
+        KeyOutcome::Dispatch(Invocation {
+            action: ActionName::new(command.name()),
+            argument: Some(argument.to_owned()),
         })
     );
     assert_eq!(text, "ab|c");

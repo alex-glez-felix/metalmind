@@ -57,6 +57,7 @@ pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
 use crate::disk::{Disk, Files};
 use crate::document::{Document, Editable};
+use crate::tag_change::RequestError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceError {
@@ -70,6 +71,8 @@ pub enum WorkspaceError {
     NoDocument(DocumentId),
     #[error(transparent)]
     UnknownAction(#[from] UnknownAction),
+    #[error(transparent)]
+    TagRequest(#[from] RequestError),
 }
 
 /// Lo que muestra un panel.

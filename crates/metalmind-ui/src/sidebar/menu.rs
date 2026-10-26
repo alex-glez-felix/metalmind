@@ -23,6 +23,8 @@ pub enum MenuItem {
     Rename,
     Move,
     Delete,
+    /// En la vista de tags, lo que `Move` es en la de carpetas.
+    MergeTag,
 }
 
 impl MenuItem {
@@ -35,6 +37,7 @@ impl MenuItem {
             Self::Rename => "Renombrar",
             Self::Move => "Mover",
             Self::Delete => "Mandar a la papelera",
+            Self::MergeTag => "Fusionar con…",
         }
     }
 
@@ -50,7 +53,7 @@ impl MenuItem {
             Self::OpenSplitRight => PanelAction::OpenSplitRight,
             Self::OpenSplitDown => PanelAction::OpenSplitDown,
             Self::Rename => PanelAction::Rename,
-            Self::Move => PanelAction::Move,
+            Self::Move | Self::MergeTag => PanelAction::Move,
             Self::Delete => PanelAction::Delete,
         }
     }
@@ -67,11 +70,18 @@ impl MenuItem {
     }
 }
 
+/// Sobre qué se abrió el menú: sus acciones van sobre la selección del
+/// panel, que tiene que seguir siendo esto.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum MenuTarget {
+    Entry(VaultPath),
+    /// Un tag de la vista de tags, por su forma establecida.
+    Tag(String),
+}
+
 pub struct ContextMenu {
     position: Point<Pixels>,
-    /// La entrada sobre la que se abrió: las acciones del menú van sobre
-    /// la selección del árbol, que tiene que seguir siendo ella.
-    target: VaultPath,
+    target: MenuTarget,
     groups: Vec<&'static [MenuItem]>,
     selected: usize,
 }
@@ -80,7 +90,7 @@ impl ContextMenu {
     pub fn new(position: Point<Pixels>, target: VaultPath, kind: EntryKind) -> Self {
         Self {
             position,
-            target,
+            target: MenuTarget::Entry(target),
             groups: MenuItem::groups(kind),
             selected: 0,
         }
@@ -90,30 +100,49 @@ impl ContextMenu {
     pub fn on_note(position: Point<Pixels>, target: VaultPath) -> Self {
         Self {
             position,
-            target,
+            target: MenuTarget::Entry(target),
             groups: vec![&[MenuItem::OpenSplitRight, MenuItem::OpenSplitDown]],
             selected: 0,
         }
     }
 
+    /// Sobre un tag de la vista de tags: renombrarlo o fusionarlo (05 §5).
+    pub fn on_tag(position: Point<Pixels>, tag: String) -> Self {
+        Self {
+            position,
+            target: MenuTarget::Tag(tag),
+            groups: vec![&[MenuItem::Rename, MenuItem::MergeTag]],
+            selected: 0,
+        }
+    }
+
     /// Tras un lote del watcher: sigue a su entrada en los renombres y dice
-    /// si el menú todavía vale, es decir, si su entrada existe y sigue
-    /// seleccionada. Si no, una acción caería sobre otra entrada.
-    pub fn still_on(&mut self, changes: &[VaultChange], selected: Option<&VaultPath>) -> bool {
+    /// si el menú todavía vale, es decir, si su entrada o su tag existe y
+    /// sigue elegido. Si no, una acción caería sobre otra fila.
+    pub fn still_on(
+        &mut self,
+        changes: &[VaultChange],
+        selected: Option<&VaultPath>,
+        selected_tag: Option<&str>,
+    ) -> bool {
+        let target = match &mut self.target {
+            MenuTarget::Tag(tag) => return selected_tag == Some(tag.as_str()),
+            MenuTarget::Entry(target) => target,
+        };
         for change in changes {
             match change {
                 VaultChange::Renamed { from, to, .. } => {
-                    if let Some(moved) = self.target.rebase(from, to) {
-                        self.target = moved;
+                    if let Some(moved) = target.rebase(from, to) {
+                        *target = moved;
                     }
                 }
-                VaultChange::Removed { path, .. } if self.target.starts_with(path) => {
+                VaultChange::Removed { path, .. } if target.starts_with(path) => {
                     return false;
                 }
                 _ => {}
             }
         }
-        selected == Some(&self.target)
+        selected == Some(&*target)
     }
 
     fn items(&self) -> impl Iterator<Item = MenuItem> + '_ {
@@ -239,213 +268,5 @@ impl ContextMenu {
 }
 
 #[cfg(test)]
-mod tests {
-    use gpui_kit::{Bounds, Render, TestAppContext, Window, px};
-    use metalmind_config::Config;
-
-    use super::*;
-    use crate::actions::bind_keys;
-
-    fn path(path: &str) -> VaultPath {
-        VaultPath::new(path).unwrap()
-    }
-
-    fn menu_on(target: &str) -> ContextMenu {
-        ContextMenu::new(Point::default(), path(target), EntryKind::Note)
-    }
-
-    /// Si la entrada del menú se borra fuera de la app, la selección pasa a
-    /// otra fila: el menú no puede seguir abierto sobre ella.
-    #[test]
-    fn el_menu_se_cierra_si_su_entrada_desaparece() {
-        let mut menu = menu_on("notas/a.md");
-        let removed = VaultChange::Removed {
-            path: path("notas"),
-            kind: EntryKind::Folder,
-        };
-        assert!(!menu.still_on(&[removed], Some(&path("b.md"))));
-    }
-
-    #[test]
-    fn el_menu_sigue_a_su_entrada_renombrada() {
-        let mut menu = menu_on("notas/a.md");
-        let renamed = VaultChange::Renamed {
-            from: path("notas"),
-            to: path("archivo"),
-            kind: EntryKind::Folder,
-        };
-        assert!(menu.still_on(&[renamed], Some(&path("archivo/a.md"))));
-        assert!(
-            !menu.still_on(&[], Some(&path("notas/a.md"))),
-            "ya no es esa"
-        );
-    }
-
-    #[test]
-    fn el_menu_se_cierra_si_la_seleccion_ya_no_es_su_entrada() {
-        let mut menu = menu_on("a.md");
-        let other = VaultChange::Created {
-            path: path("c.md"),
-            kind: EntryKind::Note,
-        };
-        assert!(menu.still_on(std::slice::from_ref(&other), Some(&path("a.md"))));
-        assert!(!menu.still_on(std::slice::from_ref(&other), Some(&path("b.md"))));
-        assert!(!menu.still_on(&[other], None));
-    }
-
-    #[test]
-    fn una_carpeta_no_ofrece_abrir_en_split() {
-        let point = Point::default();
-        let file: Vec<MenuItem> = ContextMenu::new(point, path("a.md"), EntryKind::Note)
-            .items()
-            .collect();
-        assert!(file.contains(&MenuItem::OpenSplitRight));
-        let folder: Vec<MenuItem> = ContextMenu::new(point, path("d"), EntryKind::Folder)
-            .items()
-            .collect();
-        assert!(!folder.contains(&MenuItem::OpenSplitRight));
-        assert_eq!(folder.last(), Some(&MenuItem::Delete));
-    }
-
-    #[test]
-    fn el_teclado_no_sale_del_menu() {
-        let mut menu = ContextMenu::new(Point::default(), path("d"), EntryKind::Folder);
-        menu.select_previous();
-        assert_eq!(menu.selected_item(), Some(MenuItem::NewNote));
-        for _ in 0..10 {
-            menu.select_next();
-        }
-        assert_eq!(menu.selected_item(), Some(MenuItem::Delete));
-    }
-
-    /// Cada entrada muestra la tecla que hace lo mismo en el árbol.
-    #[test]
-    fn cada_entrada_muestra_la_tecla_de_su_accion() {
-        let keymap = Keymap::default();
-        let keys: Vec<Option<String>> =
-            ContextMenu::new(Point::default(), path("a.md"), EntryKind::Note)
-                .items()
-                .map(|item| item.keys(&keymap))
-                .collect();
-        let expected =
-            ["a", "A", "ctrl-v", "ctrl-s", "r", "m", "d"].map(|key| Some(key.to_owned()));
-        assert_eq!(keys, expected);
-    }
-
-    struct MenuProbe {
-        menu: ContextMenu,
-        max_width: Pixels,
-    }
-
-    impl Render for MenuProbe {
-        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
-            anchored().child(self.menu.list(&theme, self.max_width, cx, |_, row, _| row))
-        }
-    }
-
-    /// Las cajas de cada parte de las entradas del menú sobre un archivo,
-    /// pintado en no más de `max_width`.
-    fn laid_out(max_width: Pixels) -> impl Fn(MenuItem, &str) -> Bounds<Pixels> {
-        laid_out_menu(menu_on("a.md"), max_width)
-    }
-
-    fn laid_out_menu(
-        menu: ContextMenu,
-        max_width: Pixels,
-    ) -> impl Fn(MenuItem, &str) -> Bounds<Pixels> {
-        let mut cx = TestAppContext::single();
-        cx.update(|cx| bind_keys(Keymap::default(), cx));
-        let items: Vec<MenuItem> = menu.items().collect();
-        let (_, cx) = cx.add_window_view(|_, _| MenuProbe { menu, max_width });
-        cx.run_until_parked();
-        let boxes: Vec<(String, Bounds<Pixels>)> = items
-            .iter()
-            .flat_map(|item| ["", "-label", "-keys"].map(|part| format!("{item:?}{part}")))
-            .map(|selector| {
-                let bounds = cx.debug_bounds(selector.clone().leak()).unwrap();
-                (selector, bounds)
-            })
-            .collect();
-        move |item, part| {
-            let selector = format!("{item:?}{part}");
-            boxes.iter().find(|(name, _)| *name == selector).unwrap().1
-        }
-    }
-
-    fn theme() -> Theme {
-        Theme::with_font(&Config::defaults().unwrap(), "Mono".into())
-    }
-
-    /// Entre la etiqueta y la tecla de cada entrada queda el aire de sus
-    /// lados, y el menú es tan ancho como su fila más larga: «Abrir a la
-    /// derecha» con `ctrl-v`, que no cabe en el ancho del tema.
-    #[test]
-    fn la_etiqueta_no_choca_con_su_tecla() {
-        let theme = theme();
-        let padding = theme.layout.menu_item_padding_x;
-        let bounds = laid_out(px(10_000.));
-        for item in menu_on("a.md").items() {
-            let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
-            assert!(
-                keys.left() - label.right() >= padding,
-                "{item:?}: {label:?} y {keys:?}"
-            );
-        }
-        let item = MenuItem::OpenSplitRight;
-        let (label, keys) = (bounds(item, "-label"), bounds(item, "-keys"));
-        let needed = padding + label.size.width + padding + keys.size.width + padding;
-        assert!(
-            needed > theme.layout.menu_width,
-            "cabe en el ancho del tema"
-        );
-        assert_eq!(bounds(item, "").size.width, needed);
-    }
-
-    /// El menú de una nota de la vista de tags solo tiene las dos entradas
-    /// de abrir en un split: su ancho sale de «Abrir a la derecha» con
-    /// `ctrl-v`, no de `menu_width`.
-    #[test]
-    fn en_el_menu_de_una_nota_de_tags_la_etiqueta_no_choca_con_su_tecla() {
-        let theme = theme();
-        let padding = theme.layout.menu_item_padding_x;
-        let menu = ContextMenu::on_note(Point::default(), path("a.md"));
-        let bounds = laid_out_menu(menu, px(10_000.));
-        let item = MenuItem::OpenSplitRight;
-        let (row, label, keys) = (
-            bounds(item, ""),
-            bounds(item, "-label"),
-            bounds(item, "-keys"),
-        );
-        assert!(
-            keys.left() - label.right() >= padding,
-            "{label:?} y {keys:?}"
-        );
-        assert!(row.size.width > theme.layout.menu_width, "{row:?}");
-    }
-
-    /// En una ventana más angosta que la fila más larga, el menú no pasa de
-    /// ella: se recorta la etiqueta y la tecla se lee entera.
-    #[test]
-    fn en_una_ventana_angosta_se_recorta_la_etiqueta_y_no_la_tecla() {
-        let padding = theme().layout.menu_item_padding_x;
-        let item = MenuItem::OpenSplitRight;
-        let wide = laid_out(px(10_000.));
-        let (wide_label, wide_keys) = (wide(item, "-label"), wide(item, "-keys"));
-        let max_width = px(120.);
-        assert!(wide(item, "").size.width > max_width);
-        let narrow = laid_out(max_width);
-        let (row, label, keys) = (
-            narrow(item, ""),
-            narrow(item, "-label"),
-            narrow(item, "-keys"),
-        );
-        assert!(row.right() <= max_width, "{row:?}");
-        assert!(label.size.width < wide_label.size.width);
-        assert_eq!(keys.size, wide_keys.size);
-        assert!(
-            keys.left() - label.right() >= padding,
-            "{label:?} y {keys:?}"
-        );
-    }
-}
+#[path = "menu_tests.rs"]
+mod tests;

@@ -89,6 +89,11 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "el tope de la caché en bytes de memoria, no una medida de la UI",
     ),
     (
+        "src/tag_change/view.rs",
+        "relative(0.9)",
+        "el mismo tope que el picker, sobre el que flota igual",
+    ),
+    (
         "src/picker/view/render.rs",
         "relative(0.9)",
         "tope del picker en una ventana angosta, como fracción de la ventana; es una pregunta abierta de la auditoría",

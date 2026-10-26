@@ -73,15 +73,23 @@ fn owns_focus(owner: Owner, active: impl Fn(View) -> bool) -> bool {
         .into_iter()
         .any(active),
         Owner::Picker => active(View::Picker),
+        Owner::TagChange => active(View::TagChange),
     }
 }
 
 /// Sin argumento, `:w!` pisa el disco, `:e` relee y `:e!` descarta los
-/// cambios, cosas que su nombre no avisa; `:set` se queja.
+/// cambios, cosas que su nombre no avisa; `:set` y los de tags se quejan.
 fn needs_argument_in_palette(action: Action) -> bool {
     matches!(
         action,
-        Action::Command(Command::ForceSave | Command::Edit | Command::ForceEdit | Command::Set)
+        Action::Command(
+            Command::ForceSave
+                | Command::Edit
+                | Command::ForceEdit
+                | Command::Set
+                | Command::RenameTag
+                | Command::MergeTag
+        )
     )
 }
 
@@ -171,6 +179,8 @@ mod tests {
             Command::Edit,
             Command::ForceEdit,
             Command::Set,
+            Command::RenameTag,
+            Command::MergeTag,
         ];
         let expected: Vec<Command> = Command::ALL
             .iter()

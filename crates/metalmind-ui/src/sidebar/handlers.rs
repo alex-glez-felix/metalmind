@@ -222,6 +222,10 @@ impl Sidebar {
                 });
                 trashed.map(|()| cx.emit(SidebarEvent::PanesChanged))
             }
+            Request::ChangeTags(request) => {
+                cx.emit(SidebarEvent::ChangeTags(request));
+                Ok(())
+            }
         };
         if let Err(error) = result {
             log::error!("{error}");

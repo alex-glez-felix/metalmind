@@ -119,6 +119,12 @@ impl Workspace {
         Ok(())
     }
 
+    /// El vault renombró `old` a `new` por su cuenta, como al renombrar la
+    /// página de un tag: los documentos abiertos lo siguen.
+    pub fn file_moved(&mut self, old: &Path, new: &Path) {
+        self.moved(old, new);
+    }
+
     /// `old` (un archivo o una carpeta) pasó a llamarse `new`: sus
     /// documentos abiertos, con sus cambios, su lugar en la jumplist y sus
     /// marks `A`–`Z` lo siguen.

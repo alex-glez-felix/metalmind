@@ -17,6 +17,7 @@ pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
 use crate::file_tree::FileTree;
+use crate::tag_change::TagRequest;
 use crate::tag_outline::TagOutline;
 
 /// Las dos vistas del panel (05 §3).
@@ -85,14 +86,32 @@ pub enum Prompt {
         /// Algún buffer de lo que se borra tiene cambios sin guardar.
         unsaved: bool,
     },
+    /// El nombre nuevo del tag elegido en la vista de tags.
+    RenameTag {
+        tag: String,
+        input: LineInput,
+    },
+    /// El tag con que se fusiona el elegido.
+    MergeTag {
+        tag: String,
+        input: LineInput,
+    },
 }
 
 impl Prompt {
+    /// La vista que pregunta esto.
+    fn view(&self) -> PanelView {
+        match self {
+            Self::RenameTag { .. } | Self::MergeTag { .. } => PanelView::Tags,
+            _ => PanelView::Folders,
+        }
+    }
+
     /// La entrada sobre la que actúa: la que se renombra, mueve o borra, o
     /// la carpeta donde se crea. El filtro no tiene.
     fn target_mut(&mut self) -> Option<&mut VaultPath> {
         match self {
-            Self::Filter(_) => None,
+            Self::Filter(_) | Self::RenameTag { .. } | Self::MergeTag { .. } => None,
             Self::Create { parent, .. } => Some(parent),
             Self::Rename { path, .. }
             | Self::Move { path, .. }
@@ -106,8 +125,13 @@ impl Prompt {
 pub enum Request {
     CreateNote(VaultPath),
     CreateFolder(VaultPath),
-    Rename { from: VaultPath, to: VaultPath },
+    Rename {
+        from: VaultPath,
+        to: VaultPath,
+    },
     Trash(VaultPath),
+    /// Renombrar o fusionar un tag: la ventana muestra su vista previa.
+    ChangeTags(TagRequest),
 }
 
 #[derive(Clone, Debug)]
@@ -240,7 +264,9 @@ impl Panel {
             Prompt::Filter(input)
             | Prompt::Create { input, .. }
             | Prompt::Rename { input, .. }
-            | Prompt::Move { input, .. } => Some(input),
+            | Prompt::Move { input, .. }
+            | Prompt::RenameTag { input, .. }
+            | Prompt::MergeTag { input, .. } => Some(input),
             Prompt::ConfirmDelete { .. } => None,
         }
     }
@@ -273,7 +299,16 @@ impl Panel {
 
     /// El nombre con el cursor antes de la extensión, para cambiar solo el
     /// nombre.
+    /// En la vista de tags, renombra el tag elegido; en la de carpetas, la
+    /// entrada elegida.
     pub fn start_rename(&mut self) {
+        if self.view == PanelView::Tags {
+            if let Some(tag) = self.selected_tag() {
+                let input = LineInput::new(&tag);
+                self.open(Prompt::RenameTag { tag, input });
+            }
+            return;
+        }
         let Some(path) = self.tree.selected().cloned() else {
             return;
         };
@@ -283,12 +318,32 @@ impl Panel {
         self.open(Prompt::Rename { path, input });
     }
 
+    /// En la vista de tags, fusiona el tag elegido con otro; en la de
+    /// carpetas, mueve la entrada elegida.
     pub fn start_move(&mut self) {
+        if self.view == PanelView::Tags {
+            if let Some(tag) = self.selected_tag() {
+                self.open(Prompt::MergeTag {
+                    tag,
+                    input: LineInput::new(""),
+                });
+            }
+            return;
+        }
         let Some(path) = self.tree.selected().cloned() else {
             return;
         };
         let input = LineInput::new(path.as_str());
         self.open(Prompt::Move { path, input });
+    }
+
+    /// La forma establecida del tag de la fila elegida en la vista de tags.
+    #[must_use]
+    pub fn selected_tag(&self) -> Option<String> {
+        self.tags
+            .selected_entry()
+            .and_then(|row| row.tag_name())
+            .map(str::to_owned)
     }
 
     /// `unsaved`: si algún buffer de lo que se borraría tiene cambios.
@@ -325,8 +380,9 @@ impl Panel {
     }
 
     /// Las preguntas son de archivos: en la vista de tags no se abren.
+    /// Solo en la vista de la que es la pregunta.
     fn open(&mut self, prompt: Prompt) {
-        if self.view != PanelView::Folders {
+        if self.view != prompt.view() {
             return;
         }
         self.error = None;
@@ -396,7 +452,26 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, InvalidPath> {
             )
         }
         Prompt::ConfirmDelete { path, .. } => Some(Request::Trash(path.clone())),
+        Prompt::RenameTag { tag, input } => other_tag(tag, input).map(|to| {
+            Request::ChangeTags(TagRequest::Rename {
+                from: tag.clone(),
+                to,
+            })
+        }),
+        Prompt::MergeTag { tag, input } => other_tag(tag, input).map(|into| {
+            Request::ChangeTags(TagRequest::Merge {
+                from: tag.clone(),
+                into,
+            })
+        }),
     })
+}
+
+/// Lo escrito como otro tag, sin `#`; vacío o igual a `tag`, ninguno.
+fn other_tag(tag: &str, input: &LineInput) -> Option<String> {
+    let text = input.text().trim();
+    let name = text.strip_prefix('#').unwrap_or(text);
+    (!name.is_empty() && name != tag).then(|| name.to_owned())
 }
 
 /// Como en los exploradores de nvim, un nombre que termina en `/` es una
