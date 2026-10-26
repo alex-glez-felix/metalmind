@@ -78,6 +78,12 @@ named_actions! {
         MergeTag = "tags::merge",
         /// `:tagundo`: deshace el último cambio de tags aplicado.
         UndoTagChange = "tags::undo",
+        /// `space n`, `:template [plantilla [nombre]]`: una nota nueva desde
+        /// una plantilla; lo que falte se elige en un picker.
+        NewNoteFromTemplate = "notes::new_from_template",
+        /// `space d`, `:today`: abre la nota del día, creándola con su
+        /// plantilla si todavía no existe.
+        OpenDailyNote = "notes::open_daily",
     }
 }
 
@@ -105,6 +111,8 @@ const EX: &[(&str, usize, Command)] = &[
     ("tagrename", 9, Command::RenameTag),
     ("tagmerge", 8, Command::MergeTag),
     ("tagundo", 7, Command::UndoTagChange),
+    ("template", 8, Command::NewNoteFromTemplate),
+    ("today", 5, Command::OpenDailyNote),
 ];
 
 impl Command {
@@ -121,6 +129,7 @@ impl Command {
                 | Self::Set
                 | Self::RenameTag
                 | Self::MergeTag
+                | Self::NewNoteFromTemplate
         )
     }
 
@@ -137,7 +146,9 @@ impl Command {
             | Self::Set
             | Self::RenameTag
             | Self::MergeTag
-            | Self::UndoTagChange => RangeRule::NotAllowed,
+            | Self::UndoTagChange
+            | Self::NewNoteFromTemplate
+            | Self::OpenDailyNote => RangeRule::NotAllowed,
             _ => RangeRule::Unsupported,
         }
     }

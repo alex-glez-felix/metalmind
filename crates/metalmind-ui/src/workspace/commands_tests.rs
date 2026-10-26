@@ -533,6 +533,29 @@ fn space_f_space_barra_y_space_p_piden_el_finder_la_busqueda_y_la_paleta() {
     assert_eq!(session.text(), "xuno\n", "space no deja nada pendiente");
 }
 
+#[test]
+fn las_notas_nuevas_las_pide_la_ventana() {
+    let mut session = Session::new("uno\n");
+    let asked = |template: Option<&str>, name: Option<&str>| {
+        Effect::NewNote(NoteRequest {
+            template: template.map(str::to_owned),
+            name: name.map(str::to_owned),
+        })
+    };
+    session.keys(" n");
+    assert_eq!(session.effect, asked(None, None));
+    session.keys(":template entrevista entrevistas/Backend senior⏎");
+    assert_eq!(
+        session.effect,
+        asked(Some("entrevista"), Some("entrevistas/Backend senior"))
+    );
+    session.keys(" d");
+    assert_eq!(session.effect, Effect::OpenDailyNote);
+    session.keys(":today⏎");
+    assert_eq!(session.effect, Effect::OpenDailyNote);
+    assert_eq!(session.text(), "uno\n");
+}
+
 /// El picker se lleva las teclas: lo que quede de la macro no sigue.
 #[test]
 fn abrir_el_finder_corta_la_macro() {

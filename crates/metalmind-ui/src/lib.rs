@@ -12,6 +12,7 @@ mod finder;
 mod frames;
 mod ime;
 pub mod math;
+mod new_note;
 mod palette;
 mod panel;
 pub mod picker;

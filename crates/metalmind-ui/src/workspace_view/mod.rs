@@ -8,6 +8,7 @@
 mod autosave;
 mod finder;
 mod link_choice;
+mod new_note;
 mod overlay;
 mod palette;
 mod reroute;
@@ -30,6 +31,7 @@ use crate::editor::Editor;
 use crate::finder::VaultSession;
 use crate::frames::FrameClock;
 use crate::math::Formulas;
+use crate::new_note::NoteSettings;
 use crate::panel::PanelView;
 use crate::session::VaultState;
 use crate::sidebar::{self, Sidebar, SidebarEvent};
@@ -56,6 +58,7 @@ pub struct WorkspaceView {
     overlay: Option<Overlay>,
     autosave: Option<AutosaveTimer>,
     last_tag_change: Option<LastTagChange>,
+    notes: NoteSettings,
     _subscriptions: [Subscription; 3],
 }
 
@@ -65,6 +68,7 @@ impl WorkspaceView {
         sidebar: Entity<Sidebar>,
         session: Entity<VaultSession>,
         paths: Option<Paths>,
+        notes: NoteSettings,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -101,6 +105,7 @@ impl WorkspaceView {
             overlay: None,
             autosave: None,
             last_tag_change: None,
+            notes,
             _subscriptions: [repaint, events, activation],
         }
     }
@@ -203,6 +208,14 @@ impl WorkspaceView {
                 self.undo_tag_change(cx);
                 self.focus(window, cx);
             }
+            Effect::NewNote(request) => {
+                self.sync_editors(cx);
+                self.new_note(request, window, cx);
+            }
+            Effect::OpenDailyNote => {
+                self.sync_editors(cx);
+                self.open_daily_note(window, cx);
+            }
         }
     }
 
@@ -254,6 +267,7 @@ impl WorkspaceView {
             SidebarEvent::PanesChanged => self.sync_editors(cx),
             SidebarEvent::FocusEditor => self.focus(window, cx),
             SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
+            SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
         }
         cx.notify();
     }

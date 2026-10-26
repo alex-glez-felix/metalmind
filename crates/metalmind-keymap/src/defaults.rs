@@ -66,6 +66,8 @@ const LEADER: &[(char, Command, bool)] = &[
     ('p', Command::OpenCommandPalette, false),
     ('e', Command::ToggleFolders, true),
     ('t', Command::ToggleTags, true),
+    ('n', Command::NewNoteFromTemplate, true),
+    ('d', Command::OpenDailyNote, true),
 ];
 
 fn leader() -> impl Iterator<Item = Binding> {

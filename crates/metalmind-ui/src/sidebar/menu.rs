@@ -25,6 +25,8 @@ pub enum MenuItem {
     Delete,
     /// En la vista de tags, lo que `Move` es en la de carpetas.
     MergeTag,
+    /// En la vista de tags, lo que `NewNote` es en la de carpetas.
+    NewTaggedNote,
 }
 
 impl MenuItem {
@@ -38,6 +40,7 @@ impl MenuItem {
             Self::Move => "Mover",
             Self::Delete => "Mandar a la papelera",
             Self::MergeTag => "Fusionar con…",
+            Self::NewTaggedNote => "Nueva nota con este tag",
         }
     }
 
@@ -48,7 +51,7 @@ impl MenuItem {
 
     pub fn action(self) -> PanelAction {
         match self {
-            Self::NewNote => PanelAction::NewNote,
+            Self::NewNote | Self::NewTaggedNote => PanelAction::NewNote,
             Self::NewFolder => PanelAction::NewFolder,
             Self::OpenSplitRight => PanelAction::OpenSplitRight,
             Self::OpenSplitDown => PanelAction::OpenSplitDown,
@@ -106,12 +109,16 @@ impl ContextMenu {
         }
     }
 
-    /// Sobre un tag de la vista de tags: renombrarlo o fusionarlo (05 §5).
+    /// Sobre un tag de la vista de tags: una nota nueva con él, o
+    /// renombrarlo o fusionarlo (05 §5).
     pub fn on_tag(position: Point<Pixels>, tag: String) -> Self {
         Self {
             position,
             target: MenuTarget::Tag(tag),
-            groups: vec![&[MenuItem::Rename, MenuItem::MergeTag]],
+            groups: vec![
+                &[MenuItem::NewTaggedNote],
+                &[MenuItem::Rename, MenuItem::MergeTag],
+            ],
             selected: 0,
         }
     }

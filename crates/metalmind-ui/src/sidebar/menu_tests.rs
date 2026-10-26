@@ -65,10 +65,10 @@ fn el_menu_de_un_tag_se_cierra_si_ya_no_es_el_elegido() {
     assert!(!menu.still_on(&[], None, None));
 }
 
-/// Renombrar y fusionar un tag muestran las teclas que hacen lo mismo en la
-/// vista de tags: `r` y `m`.
+/// Una nota con el tag, renombrarlo y fusionarlo muestran las teclas que
+/// hacen lo mismo en la vista de tags: `a`, `r` y `m`.
 #[test]
-fn el_menu_de_un_tag_renombra_y_fusiona() {
+fn el_menu_de_un_tag_crea_renombra_y_fusiona() {
     let keymap = Keymap::default();
     let menu = ContextMenu::on_tag(Point::default(), "Rust".to_owned());
     let items: Vec<(&str, Option<String>)> = menu
@@ -76,6 +76,7 @@ fn el_menu_de_un_tag_renombra_y_fusiona() {
         .map(|item| (item.label(), item.keys(&keymap)))
         .collect();
     let expected = [
+        ("Nueva nota con este tag", Some("a".to_owned())),
         ("Renombrar", Some("r".to_owned())),
         ("Fusionar con…", Some("m".to_owned())),
     ];

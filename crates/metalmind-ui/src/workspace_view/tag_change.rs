@@ -207,7 +207,7 @@ impl WorkspaceView {
         });
     }
 
-    fn tell(&mut self, message: Message, cx: &mut Context<Self>) {
+    pub(super) fn tell(&mut self, message: Message, cx: &mut Context<Self>) {
         self.workspace.update(cx, |workspace, cx| {
             workspace.set_message(message);
             cx.notify();

@@ -45,6 +45,8 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":on<CR>", Command::Only)]
 #[case(":set<CR>", Command::Set)]
 #[case(":tagundo<CR>", Command::UndoTagChange)]
+#[case(":template<CR>", Command::NewNoteFromTemplate)]
+#[case(":today<CR>", Command::OpenDailyNote)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]
@@ -62,6 +64,8 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(" p", Command::OpenCommandPalette)]
 #[case(" e", Command::ToggleFolders)]
 #[case(" t", Command::ToggleTags)]
+#[case(" n", Command::NewNoteFromTemplate)]
+#[case(" d", Command::OpenDailyNote)]
 #[case("gd", Command::FollowLink)]
 #[case("<CR>", Command::FollowLink)]
 fn envia_el_comando(#[case] keys: &str, #[case] command: Command) {
@@ -87,7 +91,12 @@ fn e_lleva_la_ruta() {
 #[rstest]
 #[case(":tagrename #rust #Rust<CR>", Command::RenameTag, "#rust #Rust")]
 #[case(":tagmerge #rs #rust<CR>", Command::MergeTag, "#rs #rust")]
-fn los_de_tags_llevan_sus_dos_tags(
+#[case(
+    ":template entrevista Backend senior<CR>",
+    Command::NewNoteFromTemplate,
+    "entrevista Backend senior"
+)]
+fn llevan_lo_escrito_tras_el_nombre(
     #[case] keys: &str,
     #[case] command: Command,
     #[case] argument: &str,
