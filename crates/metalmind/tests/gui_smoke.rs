@@ -735,6 +735,41 @@ fn un_tag_que_llega_deja_la_fila_elegida() {
     smoke.wait_contents("a.md", "hola #ruta\n");
 }
 
+/// Como en las capturas: `ctrl-n` justo después de borrar elige en la
+/// lista de lo que queda escrito (con `#rus` solo está `rust`; tras `<BS>`,
+/// `#ru` trae también `rueda`), y el autoguardado que llega después no le
+/// quita la fila elegida: `tab` escribe `rueda`.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn ctrl_n_tras_borrar_sigue_elegido_tras_el_autoguardado() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "hola\n");
+    smoke.write("b.md", "#rust\n");
+    smoke.write("c.md", "#rust #rueda\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let closed = window.wait_still(TAG_COMPLETION);
+    window.type_keys("A #rus");
+    window.wait_change("la lista", TAG_COMPLETION, &closed);
+    window.wait_still(TAG_COMPLETION);
+    window.type_keys("<BS><C-n>");
+    let chosen = window.wait_still(TAG_COMPLETION);
+    smoke.wait_contents("a.md", "hola #ru\n");
+    wait::stays(
+        "la fila elegida tras el autoguardado",
+        Duration::from_secs(2),
+        || {
+            if window.area_pixels(TAG_COMPLETION) == chosen {
+                Ok(())
+            } else {
+                Err("la lista cambió".to_owned())
+            }
+        },
+    );
+    window.type_keys("<Tab><Esc>");
+    smoke.wait_contents("a.md", "hola #rueda\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {
