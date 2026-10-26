@@ -131,7 +131,9 @@ impl WorkspaceView {
                     })
                     .collect();
                 self.follow_renames(&vault, back.iter(), cx);
-                self.reread(&vault, report.restored.iter().cloned(), cx);
+                // Donde haya quedado cada archivo, aunque un renombre no se
+                // haya podido deshacer.
+                self.reread(&vault, last.applied.touched(), cx);
                 undone(&last.title, &report)
             }
             Err(error) => {

@@ -109,12 +109,13 @@ fn renaming_a_tag_with_page_and_undoing_it() {
         touched,
         [
             "nota.md",
+            "tags/a.md",
             "tags/b.md",
             "tags/b.md",
             "tags/b2.md",
             "tags/hijo.md"
         ],
-        "la página reescrita y movida está en su ruta nueva"
+        "la página reescrita y movida, en su ruta nueva y en la de antes"
     );
     assert!(!applied.is_empty());
 

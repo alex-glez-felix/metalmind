@@ -65,12 +65,14 @@ impl Applied {
         self.files.is_empty() && self.created.is_empty() && self.renamed.is_empty()
     }
 
-    /// Los archivos que reescribió, creó o movió, donde están ahora.
+    /// Las rutas que tocó, también al deshacerlo: lo que reescribió o creó,
+    /// donde está ahora, y las dos puntas de cada renombre.
     pub fn touched(&self) -> impl Iterator<Item = VaultPath> + '_ {
         let written = self.rewritten().chain(self.created());
-        written
-            .map(|path| self.now(path))
-            .chain(self.renamed().map(|rename| rename.to.clone()))
+        let ends = self
+            .renamed()
+            .flat_map(|rename| [rename.from.clone(), rename.to.clone()]);
+        written.map(|path| self.now(path)).chain(ends)
     }
 
     /// Dónde está ahora lo que estaba en `path` antes de aplicar.
