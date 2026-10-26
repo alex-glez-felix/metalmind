@@ -192,6 +192,10 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   un aviso en la barra.
 - La nota con cambios sin guardar queda abierta en segundo plano, como vim
   con `hidden`.
+- En Insert, `[[` abre la lista de notas del vault, como la de `#`: con nada
+  escrito, las recientes primero; al escribir, filtra por la ruta. `tab` o
+  un clic escriben el nombre más corto que llega a esa nota sin empatar (con
+  la carpeta si hace falta) y cierran el link con `]]`.
 
 #### Vault y panel lateral (M2)
 
