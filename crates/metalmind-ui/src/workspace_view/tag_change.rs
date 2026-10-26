@@ -140,7 +140,7 @@ impl WorkspaceView {
         self.workspace.update(cx, |workspace, cx| {
             for rename in renames {
                 let (from, to) = (rename.from.as_str(), rename.to.as_str());
-                workspace.file_moved(&root.join(from), &root.join(to));
+                workspace.moved(&root.join(from), &root.join(to));
             }
             cx.notify();
         });

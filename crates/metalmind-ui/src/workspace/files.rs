@@ -119,16 +119,11 @@ impl Workspace {
         Ok(())
     }
 
-    /// El vault renombró `old` a `new` por su cuenta, como al renombrar la
-    /// página de un tag: los documentos abiertos lo siguen.
-    pub fn file_moved(&mut self, old: &Path, new: &Path) {
-        self.moved(old, new);
-    }
-
-    /// `old` (un archivo o una carpeta) pasó a llamarse `new`: sus
-    /// documentos abiertos, con sus cambios, su lugar en la jumplist y sus
-    /// marks `A`–`Z` lo siguen.
-    pub(super) fn moved(&mut self, old: &Path, new: &Path) {
+    /// `old` (un archivo o una carpeta) pasó a llamarse `new`, aquí o por
+    /// el vault, como al renombrar la página de un tag: sus documentos
+    /// abiertos, con sus cambios, su lugar en la jumplist y sus marks `A`–`Z`
+    /// lo siguen.
+    pub fn moved(&mut self, old: &Path, new: &Path) {
         for (id, rest) in self.documents_within(old) {
             if let Some(document) = self.documents.get_mut(id) {
                 let path = if rest.as_os_str().is_empty() {

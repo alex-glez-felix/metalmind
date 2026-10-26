@@ -5,7 +5,7 @@
 mod preview;
 mod view;
 
-use metalmind_vault::tags::{PlanError, TagPlan, Tags};
+use metalmind_vault::tags::{PlanError, TagPlan, Tags, tag_name};
 
 pub use self::preview::{Blocked, TagChangePreview};
 pub use self::view::{TagChangeEvent, TagChangeView};
@@ -64,7 +64,9 @@ impl TagRequest {
 }
 
 fn two_tags(argument: Option<&str>, usage: &'static str) -> Result<(String, String), RequestError> {
-    let bare = |word: &str| word.strip_prefix('#').unwrap_or(word).to_owned();
+    // Sin `#` si es un nombre válido; si no, como se escribió, para que el
+    // plan diga por qué no vale.
+    let bare = |word: &str| tag_name(word).unwrap_or(word).to_owned();
     let words: Vec<&str> = argument.unwrap_or_default().split_whitespace().collect();
     match words.as_slice() {
         [first, second] => Ok((bare(first), bare(second))),
