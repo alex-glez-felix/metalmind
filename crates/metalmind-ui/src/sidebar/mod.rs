@@ -47,6 +47,9 @@ pub enum SidebarEvent {
     /// Renombrar o fusionar un tag: la ventana arma el plan y muestra su
     /// vista previa.
     ChangeTags(TagRequest),
+    /// Una nota nueva con este tag: la ventana pregunta su nombre y usa la
+    /// plantilla que pida su página.
+    NewTaggedNote(String),
 }
 
 pub struct Sidebar {

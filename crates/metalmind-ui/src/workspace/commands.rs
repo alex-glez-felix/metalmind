@@ -15,6 +15,7 @@ use super::options;
 use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
+use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
 use crate::tag_change::TagRequest;
 
@@ -43,6 +44,11 @@ pub enum Effect {
     ChangeTags(TagRequest),
     /// `:tagundo`: la ventana deshace el último cambio de tags que aplicó.
     UndoTagChange,
+    /// `:template`: la ventana, que tiene el vault, lee las plantillas y
+    /// pregunta lo que falte.
+    NewNote(NoteRequest),
+    /// `:today`
+    OpenDailyNote,
 }
 
 impl Workspace {
@@ -140,6 +146,8 @@ impl Workspace {
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
             Command::UndoTagChange => Ok(Effect::UndoTagChange),
+            Command::NewNoteFromTemplate => Ok(Effect::NewNote(NoteRequest::parse(argument))),
+            Command::OpenDailyNote => Ok(Effect::OpenDailyNote),
         }
     }
 

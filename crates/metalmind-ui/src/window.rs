@@ -16,6 +16,7 @@ use crate::disk::VaultDisk;
 use crate::document::Document;
 use crate::finder::{Prepared, SessionError, VaultSession};
 use crate::frames::FrameClock;
+use crate::new_note::NoteSettings;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
@@ -116,6 +117,10 @@ pub fn open_window(
     };
     let autosave = editor.autosave.then_some(editor.autosave_delay_ms.get());
     let file = document.path().map(ToOwned::to_owned);
+    let notes = NoteSettings {
+        templates_folder: config.settings.templates_folder.clone(),
+        daily: config.settings.daily.clone(),
+    };
     cx.open_window(options, move |window, cx| {
         let session = cx.new(|cx| VaultSession::new(prepared, cx));
         let disk = Rc::new(VaultDisk::new(session.read(cx).vault()));
@@ -131,8 +136,17 @@ pub fn open_window(
         if let Some(file) = &file {
             sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
         }
-        let view =
-            cx.new(|cx| WorkspaceView::new(workspace, sidebar.clone(), session, paths, window, cx));
+        let view = cx.new(|cx| {
+            WorkspaceView::new(
+                workspace,
+                sidebar.clone(),
+                session,
+                paths,
+                notes,
+                window,
+                cx,
+            )
+        });
         view.update(cx, |view, cx| {
             if file.is_none() && sidebar.read(cx).is_visible() {
                 view.focus_sidebar(window, cx);

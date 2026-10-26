@@ -260,6 +260,39 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Esc>:tagrename #archivado #guardado<CR><CR>")],
     ),
     ("renombrar-tag-deshecho", &[Step::Keys(":tagundo<CR>")]),
+    // Notas nuevas desde plantillas (06 §11). Las plantillas llegan aquí,
+    // como de otro programa, para no cambiar las pantallas de antes: el menú
+    // de un tag con su nota nueva, la pregunta del nombre desde el tag, el
+    // picker de plantillas con los tags que las piden, uno vacío, el nombre
+    // tomado, una ruta larga, la nota creada y la nota del día.
+    (
+        "tags-menu-nueva-nota",
+        &[
+            Step::Files(vault::write_templates),
+            Step::Keys("<Esc><Esc><C-w>o<C-w>h"),
+            Step::RightClickRow(0),
+        ],
+    ),
+    ("tags-nueva-nota", &[Step::Keys("<CR>")]),
+    (
+        "tags-nueva-nota-creada",
+        &[Step::Keys(
+            "notas de rust/un borrador del capitulo sobre el borrow checker y sus reglas<CR>",
+        )],
+    ),
+    ("plantillas", &[Step::Keys("<Esc><Space>n")]),
+    ("plantillas-filtradas", &[Step::Keys("entre")]),
+    ("plantillas-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    ("plantilla-nombre", &[Step::Keys("<C-u>entrevista<CR>")]),
+    ("plantilla-nombre-tomado", &[Step::Keys("otra")]),
+    (
+        "plantilla-nombre-largo",
+        &[Step::Keys(
+            "<C-u>entrevistas/2026/octubre/una entrevista con un nombre larguisimo para ver como se recorta la ruta en la fila del picker",
+        )],
+    ),
+    ("plantilla-creada", &[Step::Keys("<CR>")]),
+    ("nota-del-dia", &[Step::Keys("<Esc>:today<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -505,7 +538,9 @@ fn prepare(smoke: &Smoke, theme: &str) {
     fs::write(
         config.join("config.yaml"),
         // Un delay corto: el autoguardado actúa antes de que la ventana se calme.
-        format!("theme: metalmind-{theme}\neditor:\n  autosave_delay_ms: 100\n"),
+        format!(
+            "theme: metalmind-{theme}\neditor:\n  autosave_delay_ms: 100\ndaily:\n  enabled: true\n  format: '[hoy]'\n  template: diario\n"
+        ),
     )
     .unwrap();
     let paths = Paths::from_xdg(|_| None, &home);

@@ -9,6 +9,8 @@
 //! `cargo nextest run -p metalmind --test gui_smoke --run-ignored only`
 //! (ver `docs/testing.md`).
 
+#[path = "gui_smoke/new_note.rs"]
+mod new_note;
 #[allow(dead_code, reason = "el smoke usa solo una parte del harness")]
 mod support;
 #[path = "gui_smoke/tag_change.rs"]

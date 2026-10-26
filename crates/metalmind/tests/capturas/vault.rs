@@ -136,6 +136,49 @@ pub fn write(root: &Path) {
     file(LONG_FORMULAS, long_formulas().as_bytes());
 }
 
+/// Las plantillas: la de entrevista de `docs/plantillas.md`, otra que pide
+/// `#rust`, una de nombre largo en subcarpetas y muchas para llenar el picker.
+pub fn write_templates(root: &Path) {
+    let file = |path: &str, contents: &str| {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().expect("la ruta tiene carpeta"))
+            .expect("crear la carpeta");
+        fs::write(path, contents).expect("escribir el archivo");
+    };
+    file("plantillas/entrevista.md", interview());
+    file(
+        "plantillas/rust/capitulo.md",
+        "# {{title}}\n\nEmpezado el {{date:dddd D [de] MMMM}}.\n\n## Idea\n\n## Ejemplos\n",
+    );
+    file(
+        "plantillas/diario.md",
+        "# {{date:dddd D [de] MMMM [de] YYYY}}\n\n## Pendientes\n\n## Notas\n",
+    );
+    file(
+        "plantillas/trabajo/reuniones/una plantilla de reunion semanal con un nombre que no cabe en el picker.md",
+        "# {{title}}\n\n## Asistentes\n\n## Acuerdos\n",
+    );
+    for topic in TOPICS {
+        file(&format!("plantillas/temas/{topic}.md"), "# {{title}}\n\n");
+    }
+    file(
+        "tags/rust.md",
+        "---\nicon: 🦀\naliases: [rs]\ntemplate: rust/capitulo\n---\nEl lenguaje.\n",
+    );
+    file("tags/diario.md", "---\ntemplate: diario\n---\n");
+}
+
+/// La plantilla de ejemplo, tal como la muestra la documentación.
+fn interview() -> &'static str {
+    let docs = include_str!("../../../../docs/plantillas.md");
+    let start = docs
+        .find("```markdown\n")
+        .expect("el ejemplo de la documentación")
+        + 12;
+    let end = start + docs[start..].find("```\n").expect("el cierre del ejemplo");
+    &docs[start..end]
+}
+
 /// Los tags de una idea: unas sin ninguno (el buzón), otras con varios, y
 /// uno con un nombre que no cabe.
 fn idea_tags(index: usize) -> String {
