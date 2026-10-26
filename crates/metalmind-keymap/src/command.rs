@@ -89,7 +89,8 @@ named_actions! {
         /// `:tagtemplate #tag [plantilla]`: la plantilla de sus notas nuevas
         /// (06 §11); sin plantilla, la quita.
         SetTagTemplate = "tags::set_template",
-        /// `:tagpage #tag`: abre la página del tag, que se crea al guardarla.
+        /// `:tagpage #tag`: abre la página del tag; si no existe, la crea
+        /// vacía con su carpeta.
         OpenTagPage = "tags::open_page",
         /// `space n`, `:template [plantilla [nombre]]`: una nota nueva desde
         /// una plantilla; lo que falte se elige en un picker.

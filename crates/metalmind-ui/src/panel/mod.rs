@@ -419,8 +419,9 @@ impl Panel {
         }
     }
 
-    /// Cierra la pregunta; en el filtro, además lo quita.
+    /// Cierra la pregunta y su error; en el filtro, además lo quita.
     pub fn cancel(&mut self) {
+        self.error = None;
         if let Some(Prompt::Filter(_)) = self.prompt.take() {
             self.tree.set_filter("");
         }
