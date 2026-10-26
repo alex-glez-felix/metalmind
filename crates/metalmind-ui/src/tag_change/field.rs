@@ -36,9 +36,9 @@ impl TagField {
     #[must_use]
     pub fn hint(self) -> &'static str {
         match self {
-            Self::Aliases | Self::Parents => "tags separados por coma o espacio",
-            Self::Icon => "un emoji o set:nombre",
-            Self::Template => "su nombre en la carpeta de plantillas",
+            Self::Aliases | Self::Parents => "separados por coma",
+            Self::Icon => "emoji o set:nombre",
+            Self::Template => "nombre de la plantilla",
         }
     }
 
