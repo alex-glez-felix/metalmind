@@ -198,7 +198,7 @@ Se quieren y no condicionan nada de lo que se escriba hoy:
 
 ### Plantillas y nota del día, en el núcleo
 
-Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR #56: la carpeta, las variables, las fechas en español, la plantilla por tag con su regla de choque y la nota del día apagada en `diario/YYYY-MM-DD`.
+Hecho en `metalmind-template`, con su UI desde el 2026-10-26 (abajo). Decidido el 2026-10-18 en la PR #56: la carpeta, las variables, las fechas en español, la plantilla por tag con su regla de choque y la nota del día apagada en `diario/YYYY-MM-DD`.
 
 - **Plantillas**: notas markdown en `plantillas/` (clave `templates_folder` de `config.yaml`), con subcarpetas. El nombre de una plantilla es su ruta dentro de la carpeta sin `.md`: `trabajo/semanal`, exacto, con mayúsculas.
 - **Variables**: solo las básicas, `{{title}}`, `{{date}}` (`YYYY-MM-DD`) y `{{time}}` (`HH:mm`), más `{{date:FORMATO}}` y `{{time:FORMATO}}` para otra forma de la fecha. Se quedan **porque son simples**: cubren lo que una nota nueva necesita y se aprenden de un vistazo. No es por compatibilidad con Obsidian, que no es requisito; que se escriban igual que allá es una coincidencia que no obliga a seguirlo. Se aceptan espacios dentro de las llaves. Sin condicionales, bucles ni escapes.
