@@ -51,6 +51,27 @@ pub fn tag_template<'g>(graph: &'g TagGraph, tags: &[String]) -> TagChoice<'g> {
     }
 }
 
+/// Los tags cuya página pide `template`, por su nombre de página: los que
+/// se le ponen a una nota creada desde ella.
+#[must_use]
+pub fn tags_asking_for<'g>(graph: &'g TagGraph, template: &str) -> Vec<&'g str> {
+    graph
+        .pages()
+        .filter(|page| page.template.as_deref() == Some(template))
+        .map(|page| page.name.as_str())
+        .collect()
+}
+
+/// El tag que se le pone a una nota creada desde `template`: el de la
+/// única página que la pide. Si la piden varias, ninguno; elegir adivinaría.
+#[must_use]
+pub fn tag_of_template<'g>(graph: &'g TagGraph, template: &str) -> Option<&'g str> {
+    match tags_asking_for(graph, template).as_slice() {
+        [tag] => Some(tag),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
@@ -102,6 +123,26 @@ mod tests {
     fn choice(#[case] names: &[&str], #[case] expected: TagChoice) {
         let pages = pages();
         assert_eq!(tag_template(&pages, &tags(names)), expected);
+    }
+
+    #[rstest]
+    #[case::two_tags_ask_for_it("reunión", &["reunion", "trabajo"])]
+    #[case::one_with_aliases("diario", &["Diario"])]
+    #[case::none("semanal", &[])]
+    #[case::exact_name("Diario", &[])]
+    fn asking_for(#[case] template: &str, #[case] expected: &[&str]) {
+        let pages = pages();
+        let mut asking = tags_asking_for(&pages, template);
+        asking.sort_unstable();
+        assert_eq!(asking, expected);
+    }
+
+    #[rstest]
+    #[case::one("diario", Some("Diario"))]
+    #[case::two_is_a_guess("reunión", None)]
+    #[case::none("semanal", None)]
+    fn tag_of(#[case] template: &str, #[case] expected: Option<&str>) {
+        assert_eq!(tag_of_template(&pages(), template), expected);
     }
 
     #[test]
