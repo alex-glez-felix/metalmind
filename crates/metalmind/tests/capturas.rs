@@ -53,6 +53,9 @@ enum Step {
     Search,
     /// Cambia algo en el disco del vault, como otro programa.
     Files(fn(&Path)),
+    /// Espera a que la ventana pinte lo último que cambió y se calme, como
+    /// las filas que agrega el watcher, antes de hacer clic donde estaban.
+    Settle,
     /// Deja el ratón sobre una mark hasta que sale su tooltip.
     HoverMark(MarkAt),
     /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
@@ -270,8 +273,10 @@ const SCENES: &[(&str, &[Step])] = &[
         "tags-menu-nueva-nota",
         &[
             Step::Files(vault::write_templates),
+            Step::Settle,
             Step::Keys("<Esc><Esc><C-w>o<C-w>h"),
-            Step::RightClickRow(0),
+            // `#Rust`, cuya página pide `rust/capitulo`.
+            Step::RightClickRow(9),
         ],
     ),
     ("tags-nueva-nota", &[Step::Keys("<CR>")]),
@@ -396,6 +401,10 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                     }
                 }
                 Step::Files(change) => change(&smoke.notes()),
+                Step::Settle => {
+                    settle(&window, &frames, seen);
+                    seen = frame_count(&frames);
+                }
             }
         }
         if !matches!(
