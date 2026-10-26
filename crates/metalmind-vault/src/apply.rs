@@ -119,6 +119,9 @@ pub struct UndoReport {
     pub failed: Vec<(VaultPath, AccessError)>,
     /// Los renombres que no se pudieron deshacer.
     pub renames: Vec<FileOpError>,
+    /// Los renombres deshechos, como se habían hecho: lo de `to` volvió a
+    /// `from`.
+    pub moved_back: Vec<Rename>,
 }
 
 /// Comprueba todos los cambios contra el disco y los aplica en orden:
@@ -315,7 +318,10 @@ pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpE
     }
     for renamed in moved_back.into_iter().rev() {
         match ops::rename(root, &renamed.rename.to, &renamed.rename.from) {
-            Ok(()) => ops::remove_empty(root, &renamed.folders),
+            Ok(()) => {
+                ops::remove_empty(root, &renamed.folders);
+                report.moved_back.push(renamed.rename.clone());
+            }
             Err(error) => report.renames.push(error),
         }
     }
