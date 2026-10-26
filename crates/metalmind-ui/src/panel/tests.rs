@@ -401,6 +401,22 @@ fn en_la_vista_de_tags_se_renombra_y_se_fusiona_el_tag() {
     assert_eq!(panel.confirm(), Some(Request::ChangeTags(merge)));
 }
 
+/// Un nombre que no es de tag deja la pregunta abierta con el error, como
+/// un nombre de archivo inválido.
+#[test]
+fn un_nombre_de_tag_invalido_deja_la_pregunta_abierta() {
+    let mut panel = tags_panel();
+    panel.click(0, 1);
+    panel.start_rename();
+    panel.input_mut().unwrap().insert("/otro");
+    assert_eq!(panel.confirm(), None);
+    assert!(matches!(panel.prompt(), Some(Prompt::RenameTag { .. })));
+    assert_eq!(
+        panel.error(),
+        Some("`rust/otro` no es un nombre de tag válido")
+    );
+}
+
 /// El mismo nombre, o nada, no cambia nada.
 #[test]
 fn renombrar_un_tag_a_su_mismo_nombre_no_pide_nada() {

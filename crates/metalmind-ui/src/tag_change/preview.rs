@@ -51,8 +51,13 @@ pub enum Blocked<'a> {
 
 impl TagChangePreview {
     /// `unsaved` dice si un archivo del vault tiene cambios sin guardar.
+    /// `None` si el plan no tiene nada que mostrar: ni cambios ni avisos.
+    /// Un aviso que bloquea se muestra aunque no haya cambios.
     #[must_use]
-    pub fn new(title: String, plan: TagPlan, unsaved: impl Fn(&VaultPath) -> bool) -> Self {
+    pub fn new(title: String, plan: TagPlan, unsaved: impl Fn(&VaultPath) -> bool) -> Option<Self> {
+        if plan.changes.is_empty() && plan.notices.is_empty() {
+            return None;
+        }
         let changes = &plan.changes;
         let edits = changes.edits.iter().enumerate().flat_map(|(file, edits)| {
             (0..edits.edits.len()).map(move |edit| Change::Edit { file, edit })
@@ -70,7 +75,7 @@ impl TagChangePreview {
             unsaved: BTreeSet::new(),
         };
         preview.set_unsaved(unsaved);
-        preview
+        Some(preview)
     }
 
     /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como

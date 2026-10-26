@@ -38,7 +38,7 @@ fn blocked_merge() -> TagChangePreview {
         into: "go".to_owned(),
     };
     let plan = request.plan(&tags).unwrap();
-    TagChangePreview::new(request.title(), plan, |_| false)
+    TagChangePreview::new(request.title(), plan, |_| false).unwrap()
 }
 
 /// Un aviso que no cabe en una línea se parte: lo que dice es por qué no se
