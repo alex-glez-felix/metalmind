@@ -27,13 +27,13 @@ pub fn first_gap(text: &str) -> usize {
         .iter()
         .zip(next_levels)
         .find_map(|(heading, next)| gap_under(text, heading, next))
-        .or_else(|| empty_line_from(text, body))
-        .unwrap_or_else(|| text.trim_end_matches('\n').len())
+        .or_else(|| blank_line_from(text, body))
+        .unwrap_or_else(|| text.trim_end_matches(['\n', '\r']).len())
 }
 
 /// Dónde escribir bajo `heading` si su sección, hasta `next`, está vacía y
-/// `next` no es una subsección suya: la línea vacía que lo sigue o, si no
-/// hay, el final de su línea.
+/// `next` no es una subsección suya: la línea en blanco que lo sigue o, si
+/// no hay, el final de su línea.
 fn gap_under(text: &str, heading: &Heading, next: Option<&Heading>) -> Option<usize> {
     let start = line_after(text, heading.span.end);
     let end = next.map_or(text.len(), |next| next.span.start);
@@ -42,18 +42,30 @@ fn gap_under(text: &str, heading: &Heading, next: Option<&Heading>) -> Option<us
     if !empty || container {
         return None;
     }
-    Some(if text[start..].starts_with('\n') {
+    Some(if is_blank_line(text, start) {
         start
     } else {
         heading.span.end
     })
 }
 
-fn empty_line_from(text: &str, from: usize) -> Option<usize> {
-    if text[from..].starts_with('\n') {
-        return Some(from);
+/// El inicio de la primera línea en blanco desde `from`.
+fn blank_line_from(text: &str, mut from: usize) -> Option<usize> {
+    while from < text.len() {
+        if is_blank_line(text, from) {
+            return Some(from);
+        }
+        from = line_after(text, from);
     }
-    text[from..].find("\n\n").map(|at| from + at + 1)
+    None
+}
+
+/// Si la línea que empieza en `start` existe y está en blanco: vacía, con
+/// espacios o con el `\r` de un salto CRLF.
+fn is_blank_line(text: &str, start: usize) -> bool {
+    let line = &text[start..];
+    let line = line.find('\n').map_or(line, |end| &line[..end]);
+    start < text.len() && line.trim().is_empty()
 }
 
 /// El inicio de la línea que sigue a la que termina en `end`.
@@ -98,6 +110,11 @@ mod tests {
     #[case::heading_in_code_is_not_a_heading("```\n# no\n\n```\n# Sí\n|\n")]
     #[case::deeper_after_blank_lines("# Plan\n\n\n### Detalle\n|\n")]
     #[case::utf8("# Reunión\n|\n")]
+    #[case::crlf_under_a_heading("## Resumen\r\n|\r\n## Notas\r\n")]
+    #[case::spaces_under_a_heading("## Resumen\n|  \n## Notas\n")]
+    #[case::crlf_without_headings("Texto\r\n|\r\nmás\r\n")]
+    #[case::spaces_without_headings("Texto\n|\t\nmás\n")]
+    #[case::crlf_at_the_end("Texto\r\nmás|\r\n")]
     fn gap(#[case] marked: &str) {
         let at = marked.find('|').unwrap();
         let text = marked.replacen('|', "", 1);
