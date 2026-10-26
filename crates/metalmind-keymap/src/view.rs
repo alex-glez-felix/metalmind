@@ -45,6 +45,13 @@ named_actions! {
         NewFolder = "file_tree::new_folder",
         Rename = "file_tree::rename",
         Move = "file_tree::move",
+        /// En la vista de tags, preguntan el campo de la página del tag
+        /// elegido con lo que tiene ahora, y la abren.
+        EditTagAliases = "file_tree::edit_tag_aliases",
+        EditTagParents = "file_tree::edit_tag_parents",
+        SetTagIcon = "file_tree::set_tag_icon",
+        SetTagTemplate = "file_tree::set_tag_template",
+        OpenTagPage = "file_tree::open_tag_page",
         /// Manda a la papelera del vault, tras confirmar.
         Delete = "file_tree::delete",
         /// Acepta lo escrito o el borrado.

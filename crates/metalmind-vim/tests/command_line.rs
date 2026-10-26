@@ -47,6 +47,7 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":tagundo<CR>", Command::UndoTagChange)]
 #[case(":template<CR>", Command::NewNoteFromTemplate)]
 #[case(":today<CR>", Command::OpenDailyNote)]
+#[case(":tagpage<CR>", Command::OpenTagPage)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]

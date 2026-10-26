@@ -89,6 +89,11 @@ fn needs_argument_in_palette(action: Action) -> bool {
                 | Command::Set
                 | Command::RenameTag
                 | Command::MergeTag
+                | Command::EditTagAliases
+                | Command::EditTagParents
+                | Command::SetTagIcon
+                | Command::SetTagTemplate
+                | Command::OpenTagPage
         )
     )
 }
@@ -181,6 +186,11 @@ mod tests {
             Command::Set,
             Command::RenameTag,
             Command::MergeTag,
+            Command::EditTagAliases,
+            Command::EditTagParents,
+            Command::SetTagIcon,
+            Command::SetTagTemplate,
+            Command::OpenTagPage,
         ];
         let expected: Vec<Command> = Command::ALL
             .iter()

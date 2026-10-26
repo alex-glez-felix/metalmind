@@ -7,6 +7,7 @@ use metalmind_keymap::{Action, PanelAction};
 use super::{Sidebar, SidebarEvent};
 use crate::actions::Dispatch;
 use crate::panel::{NewEntry, Outline, PanelView, Request};
+use crate::tag_change::TagField;
 use crate::workspace::{Axis, Placement};
 
 impl Sidebar {
@@ -39,6 +40,11 @@ impl Sidebar {
             PanelAction::NewFolder => self.new_folder(window, cx),
             PanelAction::Rename => self.rename(window, cx),
             PanelAction::Move => self.move_entry(window, cx),
+            PanelAction::EditTagAliases => self.tag_field(TagField::Aliases, cx),
+            PanelAction::EditTagParents => self.tag_field(TagField::Parents, cx),
+            PanelAction::SetTagIcon => self.tag_field(TagField::Icon, cx),
+            PanelAction::SetTagTemplate => self.tag_field(TagField::Template, cx),
+            PanelAction::OpenTagPage => self.open_tag_page(cx),
             PanelAction::Delete => self.delete(window, cx),
             PanelAction::Confirm => self.confirm(window, cx),
             PanelAction::Cancel => self.cancel(window, cx),
@@ -137,6 +143,22 @@ impl Sidebar {
     fn move_entry(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_move();
+        cx.notify();
+    }
+
+    fn tag_field(&mut self, field: TagField, cx: &mut Context<Self>) {
+        self.menu = None;
+        self.panel.start_tag_field(field);
+        cx.notify();
+    }
+
+    fn open_tag_page(&mut self, cx: &mut Context<Self>) {
+        self.menu = None;
+        if self.panel.view == PanelView::Tags
+            && let Some(tag) = self.panel.selected_tag()
+        {
+            cx.emit(SidebarEvent::OpenTagPage(tag));
+        }
         cx.notify();
     }
 

@@ -5,12 +5,12 @@
 use std::collections::{BTreeSet, HashSet};
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::{Applied, ApplyError, Rename, UndoReport, Vault, VaultPath};
+use metalmind_vault::{Applied, ApplyError, FileOpError, Rename, UndoReport, Vault, VaultPath};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::tag_change::{TagChangeEvent, TagChangePreview, TagChangeView, TagRequest};
-use crate::workspace::Message;
+use crate::workspace::{Message, shown_path};
 
 /// El último cambio de tags aplicado, para `:tagundo`.
 pub(super) struct LastTagChange {
@@ -98,6 +98,26 @@ impl WorkspaceView {
             Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
         };
         self.tell(message, cx);
+    }
+
+    /// `:tagpage`: la página de `tag`, o la de su tag si es un alias. Si no
+    /// existe se crea vacía, con su carpeta, como "Agregar descripción"
+    /// (05 §7).
+    pub(super) fn open_tag_page(&mut self, tag: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let session = self.session.read(cx);
+        let (vault, root) = (session.vault(), session.root().to_owned());
+        let created = session
+            .tags()
+            .page_path(tag)
+            .map_err(|error| error.to_string())
+            .and_then(|page| match vault.create_note(&page, "") {
+                Ok(()) | Err(FileOpError::AlreadyExists(_)) => Ok(page),
+                Err(error) => Err(error.to_string()),
+            });
+        match created {
+            Ok(page) => self.edit_note(&shown_path(&root.join(page.as_str())), window, cx),
+            Err(error) => self.tell(Message::Error(error), cx),
+        }
     }
 
     pub(super) fn undo_tag_change(&mut self, cx: &mut Context<Self>) {

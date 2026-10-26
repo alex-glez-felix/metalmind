@@ -1,4 +1,4 @@
-use metalmind_vault::tags::{PlanNotice, TagPlan, Tags};
+use metalmind_vault::tags::{PageChange, PlanNotice, TagPlan, Tags};
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
@@ -231,4 +231,93 @@ fn elegir_da_la_vuelta() {
     assert_eq!(preview.selected(), 0);
     preview.select(1);
     assert_eq!(preview.selected(), 1);
+}
+
+fn page(field: TagField, argument: &str) -> Result<TagRequest, RequestError> {
+    TagRequest::page(field, Some(argument))
+}
+
+/// `:tagaliases #rust rs, rustlang` y los demás: el tag y el valor nuevo,
+/// que vacío quita el campo.
+#[test]
+fn los_campos_de_la_pagina_se_piden_con_el_tag_y_su_valor() {
+    let aliases = page(TagField::Aliases, "#rust rs, rustlang").unwrap();
+    assert_eq!(
+        aliases,
+        TagRequest::Page {
+            tag: "rust".to_owned(),
+            field: TagField::Aliases,
+            change: PageChange::Aliases(vec!["rs".to_owned(), "rustlang".to_owned()]),
+        }
+    );
+    assert_eq!(aliases.title(), "Alias de #rust");
+    let no_icon = page(TagField::Icon, "rust").unwrap();
+    assert!(matches!(
+        no_icon,
+        TagRequest::Page {
+            change: PageChange::Icon(None),
+            ..
+        }
+    ));
+    assert_eq!(
+        page(TagField::Template, "#reunion").unwrap().title(),
+        "Plantilla de #reunion"
+    );
+    let usage = TagRequest::page(TagField::Parents, None).unwrap_err();
+    assert_eq!(usage.to_string(), "uso: :tagparents #tag [padre…]");
+    let icon = page(TagField::Icon, "#rust libro").unwrap_err();
+    assert_eq!(
+        icon.to_string(),
+        "`libro` no es un ícono: va un emoji o `set:nombre`"
+    );
+}
+
+/// Sin página, el plan la crea con el campo; con página, edita solo el
+/// campo.
+#[test]
+fn el_plan_crea_la_pagina_o_edita_su_campo() {
+    let request = page(TagField::Icon, "#rust 🦀").unwrap();
+    let plan = request.plan(&rust_notes()).unwrap();
+    let created: Vec<(&str, &str)> = plan
+        .changes
+        .creates
+        .iter()
+        .map(|file| (file.path.as_str(), file.text.as_str()))
+        .collect();
+    assert_eq!(created, [("tags/rust.md", "---\nicon: 🦀\n---\n")]);
+
+    let with_page = tags(&[
+        ("a.md", "#rust\n"),
+        (
+            "tags/rust.md",
+            "---\nicon: 🦀\naliases: [rs]\n---\nEl lenguaje.\n",
+        ),
+    ]);
+    let request = page(TagField::Template, "#rust rust/capitulo").unwrap();
+    let plan = request.plan(&with_page).unwrap();
+    assert_eq!(plan.changes.creates, []);
+    assert_eq!(plan.changes.edits.len(), 1);
+    assert_eq!(plan.changes.edits[0].path.as_str(), "tags/rust.md");
+}
+
+/// El valor de ahora, como lo pide la pregunta del panel.
+#[test]
+fn lo_que_tiene_cada_campo() {
+    let with_page = tags(&[
+        ("a.md", "#rust\n"),
+        (
+            "tags/rust.md",
+            "---\naliases: [rs, Rustlang]\nicon: lucide:book\ntemplate: rust/capitulo\n---\n",
+        ),
+    ]);
+    let current = |field: TagField, tag: &str| field.current(&with_page, tag);
+    assert_eq!(current(TagField::Aliases, "rust"), "rs, Rustlang");
+    assert_eq!(current(TagField::Icon, "#rust"), "lucide:book");
+    assert_eq!(
+        current(TagField::Template, "rs"),
+        "rust/capitulo",
+        "un alias es su tag"
+    );
+    assert_eq!(current(TagField::Parents, "rust"), "");
+    assert_eq!(current(TagField::Aliases, "otro"), "");
 }

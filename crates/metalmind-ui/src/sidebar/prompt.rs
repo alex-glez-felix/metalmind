@@ -39,6 +39,10 @@ impl Sidebar {
             Prompt::Move { path, input } => (format!("Mover {path} a"), input),
             Prompt::RenameTag { tag, input } => (format!("Renombrar #{tag}"), input),
             Prompt::MergeTag { tag, input } => (format!("Fusionar #{tag} con"), input),
+            Prompt::TagField { tag, field, input } => {
+                let label = format!("{} de #{tag}: {}", field.label(), field.hint());
+                (label, input)
+            }
             Prompt::ConfirmDelete { path, unsaved } => {
                 return Some(frame.child(confirm_delete(path, *unsaved, theme, cx)));
             }

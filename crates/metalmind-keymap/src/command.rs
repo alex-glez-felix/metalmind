@@ -78,6 +78,19 @@ named_actions! {
         MergeTag = "tags::merge",
         /// `:tagundo`: deshace el último cambio de tags aplicado.
         UndoTagChange = "tags::undo",
+        /// `:tagaliases #tag [alias…]`: la vista previa de dejar esos alias
+        /// en la página del tag; sin ninguno, de quitarlos.
+        EditTagAliases = "tags::edit_aliases",
+        /// `:tagparents #tag [padre…]`
+        EditTagParents = "tags::edit_parents",
+        /// `:tagicon #tag [ícono]`: un emoji o `set:nombre`; sin ícono, lo
+        /// quita.
+        SetTagIcon = "tags::set_icon",
+        /// `:tagtemplate #tag [plantilla]`: la plantilla de sus notas nuevas
+        /// (06 §11); sin plantilla, la quita.
+        SetTagTemplate = "tags::set_template",
+        /// `:tagpage #tag`: abre la página del tag, que se crea al guardarla.
+        OpenTagPage = "tags::open_page",
         /// `space n`, `:template [plantilla [nombre]]`: una nota nueva desde
         /// una plantilla; lo que falte se elige en un picker.
         NewNoteFromTemplate = "notes::new_from_template",
@@ -111,6 +124,11 @@ const EX: &[(&str, usize, Command)] = &[
     ("tagrename", 9, Command::RenameTag),
     ("tagmerge", 8, Command::MergeTag),
     ("tagundo", 7, Command::UndoTagChange),
+    ("tagaliases", 10, Command::EditTagAliases),
+    ("tagparents", 10, Command::EditTagParents),
+    ("tagicon", 7, Command::SetTagIcon),
+    ("tagtemplate", 11, Command::SetTagTemplate),
+    ("tagpage", 7, Command::OpenTagPage),
     ("template", 8, Command::NewNoteFromTemplate),
     ("today", 5, Command::OpenDailyNote),
 ];
@@ -130,6 +148,11 @@ impl Command {
                 | Self::RenameTag
                 | Self::MergeTag
                 | Self::NewNoteFromTemplate
+                | Self::EditTagAliases
+                | Self::EditTagParents
+                | Self::SetTagIcon
+                | Self::SetTagTemplate
+                | Self::OpenTagPage
         )
     }
 
@@ -148,7 +171,12 @@ impl Command {
             | Self::MergeTag
             | Self::UndoTagChange
             | Self::NewNoteFromTemplate
-            | Self::OpenDailyNote => RangeRule::NotAllowed,
+            | Self::OpenDailyNote
+            | Self::EditTagAliases
+            | Self::EditTagParents
+            | Self::SetTagIcon
+            | Self::SetTagTemplate
+            | Self::OpenTagPage => RangeRule::NotAllowed,
             _ => RangeRule::Unsupported,
         }
     }
