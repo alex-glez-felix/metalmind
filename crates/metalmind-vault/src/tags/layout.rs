@@ -10,10 +10,12 @@ use crate::tags::note::Lines;
 /// Cómo está escrito el frontmatter de una página.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PageLayout {
-    /// Sin frontmatter: se agrega uno en `at`, tras el BOM si lo hay.
-    Bare { at: usize, crlf: bool },
+    /// Sin frontmatter: se agrega uno en `at`, tras el BOM si lo hay. El
+    /// texto que sigue lo comprueba la edición: si cambió (otro cambio ya le
+    /// puso frontmatter), no se aplica.
+    Bare { at: usize, body: String, crlf: bool },
     /// Un mapa en bloque: un campo nuevo va en `end`, la línea del `---` de
-    /// cierre.
+    /// cierre, que la edición comprueba.
     Block {
         entries: Vec<PageEntry>,
         end: usize,
@@ -42,14 +44,18 @@ impl PageLayout {
             .next()
             .is_some_and(|line| line.ends_with('\r'));
         match frontmatter {
-            None => Self::Bare {
-                at: if text.starts_with('\u{FEFF}') {
+            None => {
+                let at = if text.starts_with('\u{FEFF}') {
                     '\u{FEFF}'.len_utf8()
                 } else {
                     0
-                },
-                crlf,
-            },
+                };
+                Self::Bare {
+                    at,
+                    body: text[at..].to_owned(),
+                    crlf,
+                }
+            }
             Some(Frontmatter {
                 entries: Some(entries),
                 yaml,

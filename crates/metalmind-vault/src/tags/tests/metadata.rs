@@ -268,3 +268,24 @@ fn invalid_requests() {
         );
     }
 }
+
+/// Un plan armado antes de otro cambio a la misma página no escribe en un
+/// lugar que ya no es el suyo: agregar un campo se ancla en el `---` de
+/// cierre, y agregarle frontmatter a una página sin él, en todo su texto.
+#[test]
+fn a_plan_made_before_another_change_is_stale() {
+    let fixture = fixture();
+    let tags = fixture.tags();
+    let icon = PageChange::Icon(Some(TagIcon::Emoji("🦀".into())));
+    let cases = [
+        ("crlf", PageChange::Aliases(names(&["az"])), icon.clone()),
+        ("sin-frontmatter", named("azul"), icon.clone()),
+    ];
+    for (tag, first, second) in cases {
+        let first = tags.plan_page_change(tag, &first).unwrap();
+        let stale = tags.plan_page_change(tag, &second).unwrap();
+        let files = applied(&fixture, &first);
+        let edit = &stale.changes.edits[0];
+        assert!(edit.apply(&files[&edit.path]).is_err(), "{tag}: {files:?}");
+    }
+}

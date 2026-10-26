@@ -190,12 +190,12 @@ fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<Ta
     let edits = match (&page.layout, value) {
         (PageLayout::Unreadable, _) => return Err(PlanError::UneditablePage(page.path.clone())),
         (PageLayout::Bare { .. }, None) => Vec::new(),
-        (&PageLayout::Bare { at, crlf }, Some(value)) => {
-            let eol = eol(crlf);
+        (PageLayout::Bare { at, body, crlf }, Some(value)) => {
+            let eol = eol(*crlf);
             vec![TextEdit {
-                range: at..at,
-                old: String::new(),
-                new: format!("---{eol}{key}: {value}{eol}---{eol}"),
+                range: *at..at + body.len(),
+                old: body.clone(),
+                new: format!("---{eol}{key}: {value}{eol}---{eol}{body}"),
                 line: 0,
             }]
         }
@@ -224,6 +224,10 @@ fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<Ta
     Ok(plan)
 }
 
+/// El `---` que cierra el frontmatter: un campo nuevo lo reemplaza por sí
+/// mismo y él, así la edición comprueba que sigue ahí.
+const CLOSE: &str = "---";
+
 /// En un mapa en bloque, `line` reemplaza el campo o va antes del `---` de
 /// cierre (`end`, con su línea); `None` lo quita. Una clave repetida es YAML
 /// inválido, así que hay a lo sumo una.
@@ -241,9 +245,9 @@ fn block_edit(
             line: entry.line,
         }),
         (None, Some(new)) => Some(TextEdit {
-            range: end..end,
-            old: String::new(),
-            new,
+            range: end..end + CLOSE.len(),
+            old: CLOSE.to_owned(),
+            new: format!("{new}{CLOSE}"),
             line: end_line,
         }),
         (None, None) => None,
