@@ -22,6 +22,7 @@ mod files;
 mod gutter_marks;
 mod jumps;
 mod line_numbers;
+mod link_typing;
 mod links;
 mod message;
 mod options;
@@ -50,11 +51,13 @@ use self::file_ids::FileIds;
 pub use self::files::{LinePosition, Placement, shown_path};
 pub use self::gutter_marks::{GutterMarks, MarkLabel};
 pub use self::line_numbers::LineNumbers;
+pub use self::link_typing::TypedLink;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
+pub use self::tag_typing::TypedTag;
 use crate::disk::{Disk, Files};
 use crate::document::{Document, Editable};
 use crate::tag_change::RequestError;
@@ -527,6 +530,8 @@ fn clamp_cursor(buffer: &Buffer, offset: ByteOffset, mode: Mode) -> ByteOffset {
     }
 }
 
+#[cfg(test)]
+mod link_typing_tests;
 #[cfg(test)]
 mod panes_oracle;
 #[cfg(test)]

@@ -123,6 +123,27 @@ impl Workspace {
         Ok(last)
     }
 
+    /// Cambia `typed`, lo que acaba de escribirse antes del cursor, por
+    /// `text`, como si se tecleara: entra en el mismo paso de undo que el
+    /// resto de la pasada por Insert y `.` lo repite. Como el completado de
+    /// nvim, si `text` sigue a lo escrito solo se teclea el resto.
+    pub(super) fn type_over(
+        &mut self,
+        pane: PaneId,
+        typed: &str,
+        text: &str,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        let rest = text.strip_prefix(typed);
+        if rest.is_none() {
+            for _ in typed.chars() {
+                self.feed(pane, Key::Backspace, clipboard)?;
+            }
+        }
+        self.type_text(pane, rest.unwrap_or(text), clipboard)?;
+        Ok(())
+    }
+
     /// Selección hecha con el ratón, con `head` exclusivo. Un clic en Normal
     /// no deja el cursor sobre el salto de línea, y en Insert descarta la
     /// repetición del count, como en vim. Como vim al arrastrar, muestra el

@@ -320,13 +320,13 @@ impl Render for Editor {
                     |editor, Dispatch(invocation): &Dispatch, window, cx| match invocation.action {
                         Action::Editor(EditorAction::Copy) => editor.copy(cx),
                         Action::Editor(EditorAction::Paste) => editor.paste(cx),
-                        Action::Editor(EditorAction::AcceptTagCompletion) => {
+                        Action::Editor(EditorAction::AcceptCompletion) => {
                             editor.accept_completion(window, cx);
                         }
-                        Action::Editor(EditorAction::NextTagCompletion) => {
+                        Action::Editor(EditorAction::NextCompletion) => {
                             editor.select_next_completion(cx);
                         }
-                        Action::Editor(EditorAction::PreviousTagCompletion) => {
+                        Action::Editor(EditorAction::PreviousCompletion) => {
                             editor.select_previous_completion(cx);
                         }
                         _ => cx.propagate(),

@@ -70,8 +70,13 @@ impl Smoke {
         self.dir.path().join("notas")
     }
 
+    /// Con las carpetas que falten.
     pub fn write(&self, name: &str, contents: &str) {
-        fs::write(self.notes().join(name), contents).expect("escribir la nota");
+        let path = self.notes().join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("crear la carpeta de la nota");
+        }
+        fs::write(path, contents).expect("escribir la nota");
     }
 
     pub fn read(&self, name: &str) -> String {

@@ -685,8 +685,8 @@ fn el_tooltip_de_una_formula_rota_no_sigue_en_otra_nota() {
     });
 }
 
-/// Bajo la primera línea, donde se abre la lista de `#`.
-const TAG_COMPLETION: Area = Area {
+/// Bajo la primera línea, donde se abren las listas de `#` y `[[`.
+const COMPLETION: Area = Area {
     x: EDITOR_LEFT,
     y: TEXT_TOP + TEXT_LINE,
     width: 600,
@@ -704,12 +704,12 @@ fn la_lista_de_tags_trae_los_que_llegan_del_vault() {
     smoke.write("b.md", "#bruma\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    let closed = window.wait_still(TAG_COMPLETION);
+    let closed = window.wait_still(COMPLETION);
     window.type_keys("A #ru");
-    window.wait_change("la lista con bruma", TAG_COMPLETION, &closed);
-    let with_bruma = window.wait_still(TAG_COMPLETION);
+    window.wait_change("la lista con bruma", COMPLETION, &closed);
+    let with_bruma = window.wait_still(COMPLETION);
     smoke.write("c.md", "#ruby\n");
-    window.wait_change("la lista con ruby", TAG_COMPLETION, &with_bruma);
+    window.wait_change("la lista con ruby", COMPLETION, &with_bruma);
     window.type_keys("<Tab><Esc>:w<CR>");
     smoke.wait_contents("a.md", "hola #ruby\n");
 }
@@ -726,15 +726,15 @@ fn un_tag_que_llega_deja_la_fila_elegida() {
     smoke.write("c.md", "#rueda #ruta\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    let closed = window.wait_still(TAG_COMPLETION);
+    let closed = window.wait_still(COMPLETION);
     window.type_keys("A #ru");
-    window.wait_change("la lista", TAG_COMPLETION, &closed);
-    let open = window.wait_still(TAG_COMPLETION);
+    window.wait_change("la lista", COMPLETION, &closed);
+    let open = window.wait_still(COMPLETION);
     window.type_keys("<C-n>");
-    window.wait_change("ruta elegida", TAG_COMPLETION, &open);
-    let chosen = window.wait_still(TAG_COMPLETION);
+    window.wait_change("ruta elegida", COMPLETION, &open);
+    let chosen = window.wait_still(COMPLETION);
     smoke.write("d.md", "#rubí\n");
-    window.wait_change("la lista con rubí", TAG_COMPLETION, &chosen);
+    window.wait_change("la lista con rubí", COMPLETION, &chosen);
     window.type_keys("<Tab><Esc>:w<CR>");
     smoke.wait_contents("a.md", "hola #ruta\n");
 }
@@ -752,18 +752,18 @@ fn ctrl_n_tras_borrar_sigue_elegido_tras_el_autoguardado() {
     smoke.write("c.md", "#rust #rueda\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    let closed = window.wait_still(TAG_COMPLETION);
+    let closed = window.wait_still(COMPLETION);
     window.type_keys("A #rus");
-    window.wait_change("la lista", TAG_COMPLETION, &closed);
-    window.wait_still(TAG_COMPLETION);
+    window.wait_change("la lista", COMPLETION, &closed);
+    window.wait_still(COMPLETION);
     window.type_keys("<BS><C-n>");
-    let chosen = window.wait_still(TAG_COMPLETION);
+    let chosen = window.wait_still(COMPLETION);
     smoke.wait_contents("a.md", "hola #ru\n");
     wait::stays(
         "la fila elegida tras el autoguardado",
         Duration::from_secs(2),
         || {
-            if window.area_pixels(TAG_COMPLETION) == chosen {
+            if window.area_pixels(COMPLETION) == chosen {
                 Ok(())
             } else {
                 Err("la lista cambió".to_owned())
@@ -772,6 +772,27 @@ fn ctrl_n_tras_borrar_sigue_elegido_tras_el_autoguardado() {
     );
     window.type_keys("<Tab><Esc>");
     smoke.wait_contents("a.md", "hola #rueda\n");
+}
+
+/// `[[` abre la lista de notas y `tab` escribe con qué nombre llega el
+/// link a la elegida: dos `plan.md` empatan por nombre, así que va la
+/// carpeta, y el `]]` que lo cierra.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_lista_de_links_escribe_el_destino_que_no_empata() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "hola\n");
+    smoke.write("archivo/plan.md", "viejo\n");
+    smoke.write("proyectos/plan.md", "nuevo\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let closed = window.wait_still(COMPLETION);
+    window.type_keys("A [[pla");
+    window.wait_change("la lista de notas", COMPLETION, &closed);
+    window.wait_still(COMPLETION);
+    window.type_keys("<C-n><Tab> y<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "hola [[proyectos/plan]] y\n");
 }
 
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
@@ -838,9 +859,9 @@ fn un_clic_en_una_sugerencia_devuelve_el_foco_al_editor() {
     smoke.write("b.md", "#rueda\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    let closed = window.wait_still(TAG_COMPLETION);
+    let closed = window.wait_still(COMPLETION);
     window.type_keys("A #ru");
-    window.wait_change("la lista", TAG_COMPLETION, &closed);
+    window.wait_change("la lista", COMPLETION, &closed);
     window.click(100, 700);
     window.click(EDITOR_LEFT + 250, TEXT_TOP + TEXT_LINE + 17);
     window.type_keys("x<Esc>:w<CR>");

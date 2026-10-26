@@ -65,6 +65,14 @@ impl Message {
         })
     }
 
+    /// Un wikilink no puede nombrar `path`: lleva `#`, `|` o `]]`.
+    #[must_use]
+    pub fn unnameable(path: &str) -> Self {
+        Self::Error(format!(
+            "un wikilink no puede nombrar {path}: su ruta lleva #, | o ]]"
+        ))
+    }
+
     /// `:e` sin ruta, que releería el archivo y perdería cambios.
     #[must_use]
     pub fn unsaved() -> Self {

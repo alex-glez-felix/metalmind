@@ -7,7 +7,7 @@
 
 use metalmind_buffer::ByteOffset;
 use metalmind_syntax::{LineKind, Styles, TagPlace, TagSpot};
-use metalmind_vim::{Clipboard, Key, Mode};
+use metalmind_vim::{Clipboard, Mode};
 
 use super::{PaneId, PaneView, Workspace, WorkspaceError};
 
@@ -46,9 +46,7 @@ impl Workspace {
     }
 
     /// Cambia lo escrito del tag que se está escribiendo por `text`, como
-    /// si se tecleara: entra en el mismo paso de undo que el resto de la
-    /// pasada por Insert y `.` lo repite. Como el completado de nvim, si
-    /// `text` sigue a lo escrito solo se teclea el resto. Sin tag a medio
+    /// si se tecleara (ver [`Workspace::type_over`]). Sin tag a medio
     /// escribir ([`Workspace::typed_tag`]), no hace nada.
     ///
     /// # Errors
@@ -59,17 +57,10 @@ impl Workspace {
         text: &str,
         clipboard: &mut dyn Clipboard,
     ) -> Result<(), WorkspaceError> {
-        let Some(typed) = self.typed_tag(pane)? else {
-            return Ok(());
-        };
-        let rest = text.strip_prefix(typed.typed.as_str());
-        if rest.is_none() {
-            for _ in typed.typed.chars() {
-                self.feed(pane, Key::Backspace, clipboard)?;
-            }
+        match self.typed_tag(pane)? {
+            Some(typed) => self.type_over(pane, &typed.typed, text, clipboard),
+            None => Ok(()),
         }
-        self.type_text(pane, rest.unwrap_or(text), clipboard)?;
-        Ok(())
     }
 }
 
