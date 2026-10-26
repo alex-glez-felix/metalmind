@@ -225,6 +225,41 @@ const SCENES: &[(&str, &[Step])] = &[
         "autocompletado-panel-bajo",
         &[Step::Keys("<Esc><C-w>o<C-w>s<C-w>s<C-w>s<C-w>sGo#r")],
     ),
+    // Renombrar y fusionar tags (05 §5): el menú de un tag y su pregunta en
+    // el panel, la vista previa con muchas filas y rutas largas, una fila
+    // quitada, el final de la lista (la página y el `parents` de otra), una
+    // fusión bloqueada y los avisos al aplicar y deshacer.
+    (
+        "tags-menu-tag",
+        &[
+            Step::Keys("<Esc><Esc><C-w>o<Space>tgg"),
+            Step::RightClickRow(0),
+        ],
+    ),
+    ("tags-renombrar-pregunta", &[Step::Keys("<CR>")]),
+    (
+        "renombrar-tag",
+        &[Step::Keys(
+            "<Esc><C-w>l:tagrename #rust #lenguaje-de-programacion-con-un-nombre-larguisimo-que-no-cabe<CR>",
+        )],
+    ),
+    ("renombrar-tag-quitado", &[Step::Keys("jjx")]),
+    ("renombrar-tag-final", &[Step::Keys("kkk")]),
+    // `#diseño` por su alias largo: XTest no teclea la `ñ`.
+    (
+        "fusionar-tag-bloqueado",
+        &[Step::Keys(concat!(
+            "<Esc>:tagmerge #rs #arquitectura-de-la-interfaz-y-sus-principios-a-largo-plazo-",
+            "con-un-alias-que-no-cabe-ni-en-la-ventana-mas-ancha-que-hay-porque-sigue-y-sigue-",
+            "sin-parar-por-mucho-que-uno-quiera-leerlo-entero-de-una-sola-vez-en-la-lista-de-",
+            "tags-del-autocompletado<CR>",
+        ))],
+    ),
+    (
+        "renombrar-tag-aplicado",
+        &[Step::Keys("<Esc>:tagrename #archivado #guardado<CR><CR>")],
+    ),
+    ("renombrar-tag-deshecho", &[Step::Keys(":tagundo<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
