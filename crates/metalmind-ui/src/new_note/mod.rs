@@ -5,6 +5,7 @@
 mod question;
 
 use std::fmt::Write as _;
+use std::fs;
 
 use jiff::Zoned;
 use metalmind_config::Daily;
@@ -204,8 +205,8 @@ pub enum DailyOpenError {
     Create(#[from] FileOpError),
 }
 
-/// La nota del día de `now`: la abre si existe y si no, la crea con su
-/// plantilla. Las plantillas se leen solo si la pide.
+/// La nota del día de `now`: la abre si existe en disco y si no, la crea
+/// con su plantilla. Las plantillas se leen solo si la pide.
 ///
 /// # Errors
 /// Si las notas del día están apagadas o mal configuradas, o no se pudo
@@ -230,10 +231,12 @@ pub fn open_daily(
         cursor: None,
         problems: Vec::new(),
     };
-    if index.contains(&note.path) {
+    // El disco y no el índice, que va un paso detrás: una nota borrada
+    // desde fuera se vuelve a crear con su plantilla.
+    if fs::symlink_metadata(vault.root().join(note.path.as_str())).is_ok() {
         return Ok(existing());
     }
-    // El índice va un paso detrás del disco: crear tampoco pisa.
+    // Si aparece mientras tanto, crear no la pisa.
     match vault.create_note(&note.path, &note.draft.text) {
         Ok(()) => Ok(Landing::created(note.path.clone(), &note.draft)),
         Err(FileOpError::AlreadyExists(_)) => Ok(existing()),
