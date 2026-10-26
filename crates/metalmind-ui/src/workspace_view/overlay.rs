@@ -1,6 +1,6 @@
-//! El picker que flota sobre los paneles: el finder, la búsqueda de texto,
-//! la paleta o las notas de un link que empata, uno a la vez, centrado
-//! arriba como en Zed.
+//! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
+//! paleta, las notas de un link que empata o la vista previa de un cambio
+//! de tags, uno a la vez, centrado arriba como en Zed.
 
 use gpui_kit::{
     AnyElement, App, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
@@ -11,6 +11,7 @@ use super::finder::Finder;
 use super::link_choice::LinkChoicePicker;
 use super::palette::Palette;
 use super::text_search::TextSearchPicker;
+use crate::tag_change::TagChangeView;
 use crate::theme::Theme;
 
 pub enum Overlay {
@@ -31,6 +32,11 @@ pub enum Overlay {
         picker: Entity<LinkChoicePicker>,
         _events: Subscription,
     },
+    /// La vista previa de renombrar o fusionar tags.
+    TagChange {
+        view: Entity<TagChangeView>,
+        _events: Subscription,
+    },
 }
 
 impl Overlay {
@@ -41,6 +47,7 @@ impl Overlay {
             }
             Self::TextSearch { picker, .. } => picker.focus_handle(cx),
             Self::Palette { picker, .. } => picker.focus_handle(cx),
+            Self::TagChange { view, .. } => view.focus_handle(cx),
         }
     }
 
@@ -52,6 +59,7 @@ impl Overlay {
             }
             Self::TextSearch { picker, .. } => picker.clone().into_any_element(),
             Self::Palette { picker, .. } => picker.clone().into_any_element(),
+            Self::TagChange { view, .. } => view.clone().into_any_element(),
         };
         div()
             .absolute()

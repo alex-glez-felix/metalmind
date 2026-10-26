@@ -55,6 +55,15 @@ pub enum RowKind {
 }
 
 impl Row {
+    /// La forma establecida del tag de la fila, si es uno.
+    #[must_use]
+    pub fn tag_name(&self) -> Option<&str> {
+        match &self.kind {
+            RowKind::Tag { name, .. } => Some(name),
+            RowKind::Note | RowKind::Inbox { .. } => None,
+        }
+    }
+
     /// La nota de la fila, si es una.
     #[must_use]
     pub fn note(&self) -> Option<&VaultPath> {

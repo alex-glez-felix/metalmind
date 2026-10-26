@@ -3,7 +3,7 @@
 //! lista y cómo busca lo pone su delegado: [`Fuzzy`] filtra una lista con
 //! [`PickerState`], sin GPUI.
 
-mod fit;
+pub(crate) mod fit;
 mod fuzzy;
 mod highlight;
 mod input_line;

@@ -3,7 +3,7 @@
 
 use metalmind_vim::Action as VimAction;
 
-use crate::{Command, EditorAction, PanelAction, PickerAction};
+use crate::{Command, EditorAction, PanelAction, PickerAction, TagChangeAction};
 
 /// Una acción con nombre, de cualquier parte de la app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +14,7 @@ pub enum Action {
     Editor(EditorAction),
     Panel(PanelAction),
     Picker(PickerAction),
+    TagChange(TagChangeAction),
 }
 
 /// Quién atiende una acción: solo se puede invocar con su vista en el foco.
@@ -24,6 +25,7 @@ pub enum Owner {
     Editor,
     Panel,
     Picker,
+    TagChange,
 }
 
 impl Action {
@@ -35,6 +37,7 @@ impl Action {
             Self::Editor(action) => action.name(),
             Self::Panel(action) => action.name(),
             Self::Picker(action) => action.name(),
+            Self::TagChange(action) => action.name(),
         }
     }
 
@@ -50,7 +53,12 @@ impl Action {
         let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
         let picker = PickerAction::ALL.iter().copied().map(Self::Picker);
-        vim.chain(commands).chain(editor).chain(panel).chain(picker)
+        let tag_change = TagChangeAction::ALL.iter().copied().map(Self::TagChange);
+        vim.chain(commands)
+            .chain(editor)
+            .chain(panel)
+            .chain(picker)
+            .chain(tag_change)
     }
 
     #[must_use]
@@ -60,6 +68,7 @@ impl Action {
             Self::Editor(_) => Owner::Editor,
             Self::Panel(_) => Owner::Panel,
             Self::Picker(_) => Owner::Picker,
+            Self::TagChange(_) => Owner::TagChange,
         }
     }
 }
@@ -85,6 +94,12 @@ impl From<PanelAction> for Action {
 impl From<PickerAction> for Action {
     fn from(action: PickerAction) -> Self {
         Self::Picker(action)
+    }
+}
+
+impl From<TagChangeAction> for Action {
+    fn from(action: TagChangeAction) -> Self {
+        Self::TagChange(action)
     }
 }
 

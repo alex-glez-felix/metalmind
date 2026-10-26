@@ -70,6 +70,14 @@ named_actions! {
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",
+        /// `:tagrename #viejo #nuevo`: la vista previa de renombrar un tag o
+        /// un alias en todo el vault; si el nuevo ya existe, se fusionan.
+        RenameTag = "tags::rename",
+        /// `:tagmerge #a #b`: la vista previa de pasar las notas de `#a` a
+        /// `#b`.
+        MergeTag = "tags::merge",
+        /// `:tagundo`: deshace el último cambio de tags aplicado.
+        UndoTagChange = "tags::undo",
     }
 }
 
@@ -94,6 +102,9 @@ const EX: &[(&str, usize, Command)] = &[
     ("vsplit", 2, Command::SplitRight),
     ("only", 2, Command::Only),
     ("set", 2, Command::Set),
+    ("tagrename", 9, Command::RenameTag),
+    ("tagmerge", 8, Command::MergeTag),
+    ("tagundo", 7, Command::UndoTagChange),
 ];
 
 impl Command {
@@ -108,6 +119,8 @@ impl Command {
                 | Self::Edit
                 | Self::ForceEdit
                 | Self::Set
+                | Self::RenameTag
+                | Self::MergeTag
         )
     }
 
@@ -121,7 +134,10 @@ impl Command {
             | Self::SaveAllAndQuit
             | Self::Edit
             | Self::ForceEdit
-            | Self::Set => RangeRule::NotAllowed,
+            | Self::Set
+            | Self::RenameTag
+            | Self::MergeTag
+            | Self::UndoTagChange => RangeRule::NotAllowed,
             _ => RangeRule::Unsupported,
         }
     }

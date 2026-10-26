@@ -1,0 +1,173 @@
+//! `:tagrename`, `:tagmerge` y `:tagundo` en la ventana: arma el plan con
+//! los tags del vault, muestra su vista previa, aplica lo que quedó con
+//! [`Vault::apply`] y guarda lo aplicado para deshacerlo (05 §5).
+
+use std::collections::HashSet;
+
+use gpui_kit::{AppContext as _, Context, Entity, Window};
+use metalmind_vault::{Applied, ApplyError, Rename, UndoReport, Vault, VaultPath};
+
+use super::WorkspaceView;
+use super::overlay::Overlay;
+use crate::tag_change::{TagChangeEvent, TagChangePreview, TagChangeView, TagRequest};
+use crate::workspace::Message;
+
+/// El último cambio de tags aplicado, para `:tagundo`.
+pub(super) struct LastTagChange {
+    title: String,
+    applied: Applied,
+}
+
+impl WorkspaceView {
+    pub(super) fn change_tags(
+        &mut self,
+        request: &TagRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let plan = match request.plan(&self.session.read(cx).tags()) {
+            Ok(plan) => plan,
+            Err(error) => return self.tell(Message::Error(error.to_string()), cx),
+        };
+        if plan.changes.is_empty() {
+            let text = format!("{}: no hay nada que cambiar", request.title());
+            return self.tell(Message::Info(text), cx);
+        }
+        let session = self.session.read(cx);
+        let unsaved: HashSet<VaultPath> = self
+            .workspace
+            .read(cx)
+            .unsaved_files()
+            .filter_map(|(file, _)| session.vault_path(file))
+            .collect();
+        let preview = TagChangePreview::new(request.title(), plan, |path| unsaved.contains(path));
+        let view = cx.new(|cx| TagChangeView::new(preview, cx));
+        let events = cx.subscribe_in(&view, window, |this, view, event, window, cx| {
+            this.on_tag_change_event(view, *event, window, cx);
+        });
+        self.show(
+            Overlay::TagChange {
+                view,
+                _events: events,
+            },
+            window,
+            cx,
+        );
+    }
+
+    fn on_tag_change_event(
+        &mut self,
+        view: &Entity<TagChangeView>,
+        event: TagChangeEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let apply = (event == TagChangeEvent::Apply).then(|| {
+            let preview = view.read(cx).preview();
+            (
+                preview.title().to_owned(),
+                preview.summary(),
+                preview.changes(),
+            )
+        });
+        self.close_overlay(window, cx);
+        let Some((title, summary, changes)) = apply else {
+            return;
+        };
+        let vault = self.session.read(cx).vault();
+        let message = match vault.apply(&changes) {
+            Ok(applied) => {
+                self.follow_renames(&vault, applied.renamed(), cx);
+                self.last_tag_change = Some(LastTagChange {
+                    title: title.clone(),
+                    applied,
+                });
+                // Corto: la barra recorta lo que no cabe, y el título ya se vio.
+                Message::Info(format!("{summary}; :tagundo lo deshace"))
+            }
+            Err(ApplyError::Interrupted { applied, cause }) => {
+                self.follow_renames(&vault, applied.renamed(), cx);
+                self.last_tag_change = Some(LastTagChange {
+                    title: title.clone(),
+                    applied: *applied,
+                });
+                Message::Error(format!(
+                    "{title} se paró a medias ({cause}). :tagundo deshace lo hecho"
+                ))
+            }
+            Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
+        };
+        self.tell(message, cx);
+    }
+
+    pub(super) fn undo_tag_change(&mut self, cx: &mut Context<Self>) {
+        let Some(last) = self.last_tag_change.take() else {
+            let text = "no hay ningún cambio de tags que deshacer".to_owned();
+            return self.tell(Message::Error(text), cx);
+        };
+        let vault = self.session.read(cx).vault();
+        let message = match vault.undo(&last.applied) {
+            Ok(report) => {
+                let back: Vec<Rename> = report
+                    .moved_back
+                    .iter()
+                    .map(|rename| Rename {
+                        from: rename.to.clone(),
+                        to: rename.from.clone(),
+                    })
+                    .collect();
+                self.follow_renames(&vault, back.iter(), cx);
+                undone(&last.title, &report)
+            }
+            Err(error) => {
+                let text = format!("no se deshizo {}: {error}", last.title);
+                self.last_tag_change = Some(last);
+                Message::Error(text)
+            }
+        };
+        self.tell(message, cx);
+    }
+
+    /// Los documentos abiertos de lo que renombró el vault pasan a su ruta
+    /// nueva.
+    fn follow_renames<'r>(
+        &self,
+        vault: &Vault,
+        renames: impl Iterator<Item = &'r Rename>,
+        cx: &mut Context<Self>,
+    ) {
+        let root = vault.root();
+        self.workspace.update(cx, |workspace, cx| {
+            for rename in renames {
+                let (from, to) = (rename.from.as_str(), rename.to.as_str());
+                workspace.file_moved(&root.join(from), &root.join(to));
+            }
+            cx.notify();
+        });
+    }
+
+    fn tell(&mut self, message: Message, cx: &mut Context<Self>) {
+        self.workspace.update(cx, |workspace, cx| {
+            workspace.set_message(message);
+            cx.notify();
+        });
+    }
+}
+
+fn undone(title: &str, report: &UndoReport) -> Message {
+    let mut skipped: Vec<String> = report
+        .changed
+        .iter()
+        .chain(report.failed.iter().map(|(path, _)| path))
+        .map(|path| path.as_str().to_owned())
+        .collect();
+    skipped.extend(report.renames.iter().map(ToString::to_string));
+    if skipped.is_empty() {
+        Message::Info(format!("se deshizo {title}"))
+    } else {
+        let skipped = skipped.join(", ");
+        Message::Error(format!(
+            "se deshizo {title} salvo lo que cambió después o falló: {skipped}"
+        ))
+    }
+}

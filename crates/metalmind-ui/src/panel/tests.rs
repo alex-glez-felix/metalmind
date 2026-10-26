@@ -5,6 +5,7 @@ use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::tag_change::TagRequest;
 use crate::tag_outline::RowKind;
 
 fn path(path: &str) -> VaultPath {
@@ -357,18 +358,57 @@ fn en_la_vista_de_tags_el_clic_abre_el_tag_y_la_nota() {
     assert_eq!(panel.tags.rows().len(), 2, "se cerró");
 }
 
-/// Crear, renombrar, mover, borrar y filtrar son de archivos: en la vista
-/// de tags no preguntan nada, ni actúan sobre la selección escondida del
-/// árbol de carpetas.
+/// Crear, borrar y filtrar son de archivos: en la vista de tags no
+/// preguntan nada, ni actúan sobre la selección escondida del árbol de
+/// carpetas. Renombrar y mover sobre una nota tampoco.
 #[test]
 fn en_la_vista_de_tags_no_se_pregunta_por_archivos() {
     let mut panel = tags_panel();
     panel.start_create(NewEntry::Note);
-    panel.start_rename();
-    panel.start_move();
     panel.start_filter();
     panel.start_delete(path("a.md"), false);
+    panel.click(0, 1);
+    panel.click(1, 1);
+    panel.start_rename();
+    panel.start_move();
     assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.confirm(), None);
+}
+
+/// `r` sobre un tag pregunta su nombre nuevo, escrito ya con el de ahora, y
+/// `m` con qué tag fusionarlo; confirmar pide la vista previa (05 §5).
+#[test]
+fn en_la_vista_de_tags_se_renombra_y_se_fusiona_el_tag() {
+    let mut panel = tags_panel();
+    panel.click(0, 1);
+    panel.start_rename();
+    let Some(Prompt::RenameTag { tag, input }) = panel.prompt() else {
+        panic!("{:?}", panel.prompt());
+    };
+    assert_eq!((tag.as_str(), input.text()), ("rust", "rust"));
+    panel.input_mut().unwrap().insert("lang");
+    let rename = TagRequest::Rename {
+        from: "rust".to_owned(),
+        to: "rustlang".to_owned(),
+    };
+    assert_eq!(panel.confirm(), Some(Request::ChangeTags(rename)));
+    panel.start_move();
+    panel.input_mut().unwrap().insert("#go");
+    let merge = TagRequest::Merge {
+        from: "rust".to_owned(),
+        into: "go".to_owned(),
+    };
+    assert_eq!(panel.confirm(), Some(Request::ChangeTags(merge)));
+}
+
+/// El mismo nombre, o nada, no cambia nada.
+#[test]
+fn renombrar_un_tag_a_su_mismo_nombre_no_pide_nada() {
+    let mut panel = tags_panel();
+    panel.click(0, 1);
+    panel.start_rename();
+    assert_eq!(panel.confirm(), None);
+    panel.start_move();
     assert_eq!(panel.confirm(), None);
 }
 

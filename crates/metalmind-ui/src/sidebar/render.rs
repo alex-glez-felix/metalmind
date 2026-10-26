@@ -202,12 +202,13 @@ impl Sidebar {
                 .tree
                 .selected_entry()
                 .map(|row| ContextMenu::new(position, row.path.clone(), row.kind)),
-            PanelView::Tags => self
-                .panel
-                .tags
-                .selected_entry()
-                .and_then(|row| row.note())
-                .map(|note| ContextMenu::on_note(position, note.clone())),
+            PanelView::Tags => self.panel.tags.selected_entry().and_then(|row| {
+                match (row.note(), row.tag_name()) {
+                    (Some(note), _) => Some(ContextMenu::on_note(position, note.clone())),
+                    (None, Some(tag)) => Some(ContextMenu::on_tag(position, tag.to_owned())),
+                    (None, None) => None,
+                }
+            }),
         };
         cx.notify();
     }

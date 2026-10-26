@@ -11,6 +11,8 @@
 
 #[allow(dead_code, reason = "el smoke usa solo una parte del harness")]
 mod support;
+#[path = "gui_smoke/tag_change.rs"]
+mod tag_change;
 
 use std::time::{Duration, Instant};
 

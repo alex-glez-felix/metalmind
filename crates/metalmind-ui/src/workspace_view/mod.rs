@@ -11,6 +11,7 @@ mod link_choice;
 mod overlay;
 mod palette;
 mod reroute;
+mod tag_change;
 mod text_search;
 
 use std::collections::HashMap;
@@ -39,6 +40,7 @@ use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
 use self::reroute::{Reroute, reroute};
+use self::tag_change::LastTagChange;
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -53,6 +55,7 @@ pub struct WorkspaceView {
     formulas: Entity<Formulas>,
     overlay: Option<Overlay>,
     autosave: Option<AutosaveTimer>,
+    last_tag_change: Option<LastTagChange>,
     _subscriptions: [Subscription; 3],
 }
 
@@ -71,7 +74,7 @@ impl WorkspaceView {
         });
         let activation = cx.observe_window_activation(window, Self::on_activation);
         let events = cx.subscribe_in(&sidebar, window, |view, _, event, window, cx| {
-            view.on_sidebar_event(*event, window, cx);
+            view.on_sidebar_event(event.clone(), window, cx);
         });
         let pane = workspace.read(cx).focused();
         let formulas = cx.new(|_| Formulas::default());
@@ -96,6 +99,7 @@ impl WorkspaceView {
             formulas,
             overlay: None,
             autosave: None,
+            last_tag_change: None,
             _subscriptions: [repaint, events, activation],
         }
     }
@@ -189,6 +193,15 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 window.dispatch_action(Box::new(Dispatch(action.into())), cx);
             }
+            Effect::ChangeTags(request) => {
+                self.sync_editors(cx);
+                self.change_tags(&request, window, cx);
+            }
+            Effect::UndoTagChange => {
+                self.sync_editors(cx);
+                self.undo_tag_change(cx);
+                self.focus(window, cx);
+            }
         }
     }
 
@@ -239,6 +252,7 @@ impl WorkspaceView {
             }
             SidebarEvent::PanesChanged => self.sync_editors(cx),
             SidebarEvent::FocusEditor => self.focus(window, cx),
+            SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
         }
         cx.notify();
     }
