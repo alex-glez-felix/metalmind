@@ -12,7 +12,7 @@ use std::fs;
 use std::path::Path;
 
 use metalmind_vault::tags::{PageChange, TagColor};
-use metalmind_vault::{AccessError, ApplyError, FileOpError, Vault, VaultPath};
+use metalmind_vault::{AccessError, ApplyError, Changes, FileOpError, Vault, VaultPath};
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
@@ -99,6 +99,24 @@ fn renaming_a_tag_with_page_and_undoing_it() {
         ]
     );
     assert!(!after.contains_key("tags/a.md"));
+
+    let mut touched: Vec<String> = applied
+        .touched()
+        .map(|path| path.as_str().to_owned())
+        .collect();
+    touched.sort();
+    assert_eq!(
+        touched,
+        [
+            "nota.md",
+            "tags/b.md",
+            "tags/b.md",
+            "tags/b2.md",
+            "tags/hijo.md"
+        ],
+        "la página reescrita y movida está en su ruta nueva"
+    );
+    assert!(!applied.is_empty());
 
     let report = vault.undo(&applied).unwrap();
     assert_eq!(contents(dir.path()), before);
@@ -231,4 +249,14 @@ fn undoing_a_move_into_new_folders_removes_them() {
     assert!(dir.path().join("nuevo/sub/plan.md").is_file());
     vault.undo(&applied).unwrap();
     assert_eq!(contents(dir.path()), before);
+}
+
+#[test]
+fn nothing_to_apply_applies_nothing() {
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), RENAME);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let applied = vault.apply(&Changes::default()).unwrap();
+    assert!(applied.is_empty());
+    assert_eq!(applied.touched().count(), 0);
 }

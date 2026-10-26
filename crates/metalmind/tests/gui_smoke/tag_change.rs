@@ -89,3 +89,40 @@ fn r_en_la_vista_de_tags_renombra_el_tag() {
     smoke.wait_contents("a.md", "uno #lang\n");
     smoke.wait_contents("b.md", "#lang dos\n");
 }
+
+/// `:tagundo` no escribe debajo de un buffer con cambios sin guardar; una
+/// vez guardado, deshace lo demás y deja esa nota como quedó.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn tagundo_no_pisa_un_buffer_sin_guardar() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagrename #rust #lang<CR><CR>");
+    smoke.wait_contents("a.md", "uno #lang\n");
+    smoke.wait_contents("b.md", "#lang dos\n");
+    window.type_keys("Gox<Esc>:tagundo<CR>:w<CR>");
+    smoke.wait_contents("a.md", "uno #lang\nx\n");
+    assert_eq!(smoke.read("b.md"), "#lang dos\n");
+    window.type_keys(":tagundo<CR>");
+    smoke.wait_contents("b.md", "#rust dos\n");
+    assert_eq!(smoke.read("a.md"), "uno #lang\nx\n");
+}
+
+/// Con la vista previa bloqueada por un buffer sin guardar, el autoguardado
+/// la desbloquea sin cerrarla.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn el_autoguardado_desbloquea_la_vista_previa() {
+    let smoke = Smoke::new();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("Gox<Esc>:tagrename #rust #lang<CR>");
+    smoke.wait_contents("a.md", "uno #rust\nx\n");
+    window.type_keys("<CR>");
+    smoke.wait_contents("a.md", "uno #lang\nx\n");
+    smoke.wait_contents("b.md", "#lang dos\n");
+}

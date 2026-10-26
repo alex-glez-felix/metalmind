@@ -52,6 +52,10 @@ impl TagChangeView {
         &self.preview
     }
 
+    pub fn preview_mut(&mut self) -> &mut TagChangePreview {
+        &mut self.preview
+    }
+
     fn on_dispatch(
         &mut self,
         Dispatch(invocation): &Dispatch,
@@ -191,7 +195,7 @@ impl TagChangeView {
         let text = format!("{} → {}", change.before, change.after);
         let color = if change.dropped {
             theme.ui.picker_muted
-        } else if change.unsaved {
+        } else if change.unsaved.is_some() {
             theme.ui.error
         } else {
             theme.ui.foreground

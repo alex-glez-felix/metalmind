@@ -58,6 +58,21 @@ impl Applied {
         self.renamed.iter().map(|renamed| &renamed.rename)
     }
 
+    /// Si no cambió nada, como un aplicar que se paró antes de la primera
+    /// escritura.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty() && self.created.is_empty() && self.renamed.is_empty()
+    }
+
+    /// Los archivos que reescribió, creó o movió, donde están ahora.
+    pub fn touched(&self) -> impl Iterator<Item = VaultPath> + '_ {
+        let written = self.rewritten().chain(self.created());
+        written
+            .map(|path| self.now(path))
+            .chain(self.renamed().map(|rename| rename.to.clone()))
+    }
+
     /// Dónde está ahora lo que estaba en `path` antes de aplicar.
     fn now(&self, path: &VaultPath) -> VaultPath {
         self.renamed().fold(path.clone(), |path, rename| {

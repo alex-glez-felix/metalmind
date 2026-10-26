@@ -2,7 +2,7 @@
 //! los tags del vault, muestra su vista previa, aplica lo que quedó con
 //! [`Vault::apply`] y guarda lo aplicado para deshacerlo (05 §5).
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
 use metalmind_vault::{Applied, ApplyError, Rename, UndoReport, Vault, VaultPath};
@@ -33,13 +33,7 @@ impl WorkspaceView {
             let text = format!("{}: no hay nada que cambiar", request.title());
             return self.tell(Message::Info(text), cx);
         }
-        let session = self.session.read(cx);
-        let unsaved: HashSet<VaultPath> = self
-            .workspace
-            .read(cx)
-            .unsaved_files()
-            .filter_map(|(file, _)| session.vault_path(file))
-            .collect();
+        let unsaved = self.unsaved_paths(cx);
         let preview = TagChangePreview::new(request.title(), plan, |path| unsaved.contains(path));
         let view = cx.new(|cx| TagChangeView::new(preview, cx));
         let events = cx.subscribe_in(&view, window, |this, view, event, window, cx| {
@@ -78,6 +72,7 @@ impl WorkspaceView {
         let message = match vault.apply(&changes) {
             Ok(applied) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
+                self.reread(&vault, applied.touched(), cx);
                 self.last_tag_change = Some(LastTagChange {
                     title: title.clone(),
                     applied,
@@ -85,8 +80,12 @@ impl WorkspaceView {
                 // Corto: la barra recorta lo que no cabe, y el título ya se vio.
                 Message::Info(format!("{summary}; :tagundo lo deshace"))
             }
+            Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
+                Message::Error(format!("{title}: no se cambió nada: {cause}"))
+            }
             Err(ApplyError::Interrupted { applied, cause }) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
+                self.reread(&vault, applied.touched(), cx);
                 self.last_tag_change = Some(LastTagChange {
                     title: title.clone(),
                     applied: *applied,
@@ -105,6 +104,21 @@ impl WorkspaceView {
             let text = "no hay ningún cambio de tags que deshacer".to_owned();
             return self.tell(Message::Error(text), cx);
         };
+        let unsaved = self.unsaved_paths(cx);
+        let busy: BTreeSet<VaultPath> = last
+            .applied
+            .touched()
+            .filter(|path| unsaved.contains(path))
+            .collect();
+        if !busy.is_empty() {
+            let paths: Vec<&str> = busy.iter().map(VaultPath::as_str).collect();
+            let text = format!(
+                "no se deshizo: {} tiene cambios sin guardar; guárdalos antes de :tagundo",
+                paths.join(", ")
+            );
+            self.last_tag_change = Some(last);
+            return self.tell(Message::Error(text), cx);
+        }
         let vault = self.session.read(cx).vault();
         let message = match vault.undo(&last.applied) {
             Ok(report) => {
@@ -117,6 +131,7 @@ impl WorkspaceView {
                     })
                     .collect();
                 self.follow_renames(&vault, back.iter(), cx);
+                self.reread(&vault, report.restored.iter().cloned(), cx);
                 undone(&last.title, &report)
             }
             Err(error) => {
@@ -126,6 +141,31 @@ impl WorkspaceView {
             }
         };
         self.tell(message, cx);
+    }
+
+    /// Con la vista previa abierta, lo que se guardó desde que se abrió deja
+    /// de bloquear, como con el autoguardado.
+    pub(super) fn refresh_tag_change(&mut self, cx: &mut Context<Self>) {
+        let Some(Overlay::TagChange { view, .. }) = &self.overlay else {
+            return;
+        };
+        let view = view.clone();
+        let unsaved = self.unsaved_paths(cx);
+        view.update(cx, |view, cx| {
+            view.preview_mut()
+                .set_unsaved(|path| unsaved.contains(path));
+            cx.notify();
+        });
+    }
+
+    /// Los archivos del vault con cambios sin guardar en un buffer.
+    fn unsaved_paths(&self, cx: &Context<Self>) -> HashSet<VaultPath> {
+        let session = self.session.read(cx);
+        self.workspace
+            .read(cx)
+            .unsaved_files()
+            .filter_map(|(file, _)| session.vault_path(file))
+            .collect()
     }
 
     /// Los documentos abiertos de lo que renombró el vault pasan a su ruta
@@ -141,6 +181,24 @@ impl WorkspaceView {
             for rename in renames {
                 let (from, to) = (rename.from.as_str(), rename.to.as_str());
                 workspace.moved(&root.join(from), &root.join(to));
+            }
+            cx.notify();
+        });
+    }
+
+    /// Los documentos abiertos sin cambios de lo que se escribió se releen
+    /// ya, sin esperar al watcher: lo que se teclee enseguida va sobre el
+    /// texto nuevo.
+    fn reread(
+        &self,
+        vault: &Vault,
+        paths: impl Iterator<Item = VaultPath>,
+        cx: &mut Context<Self>,
+    ) {
+        let root = vault.root();
+        self.workspace.update(cx, |workspace, cx| {
+            for path in paths {
+                workspace.file_changed(&root.join(path.as_str()));
             }
             cx.notify();
         });
