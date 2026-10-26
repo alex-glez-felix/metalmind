@@ -244,8 +244,8 @@ fn la_nota_del_dia_se_crea_una_vez_y_despues_se_abre() {
     assert_eq!(read(dir.path(), path), "escrita\n");
 }
 
-/// La que ya está en el índice se abre sin escribir nada: también en una
-/// carpeta sin permiso de escritura.
+/// La que ya existe se abre sin escribir nada: también en una carpeta sin
+/// permiso de escritura.
 #[test]
 fn la_nota_del_dia_que_existe_se_abre_sin_escribir() {
     let (dir, vault) = vault(&[("diario/2026-10-26.md", "ya\n")]);
@@ -255,6 +255,19 @@ fn la_nota_del_dia_que_existe_se_abre_sin_escribir() {
     fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(opened.unwrap().cursor, None);
     assert_eq!(read(dir.path(), "diario/2026-10-26.md"), "ya\n");
+}
+
+/// Borrada desde fuera, aunque el índice todavía la tenga, se vuelve a
+/// crear con su plantilla.
+#[test]
+fn la_nota_del_dia_borrada_se_vuelve_a_crear() {
+    let (dir, vault) = standard();
+    let path = "diario/2026-10-26.md";
+    open_daily(&vault, &daily(Some("diario")), &now()).unwrap();
+    fs::remove_file(dir.path().join(path)).unwrap();
+    let again = open_daily(&vault, &daily(Some("diario")), &now()).unwrap();
+    assert!(again.cursor.is_some());
+    assert_eq!(read(dir.path(), path), "# lunes 26 de octubre\n\n");
 }
 
 #[test]
