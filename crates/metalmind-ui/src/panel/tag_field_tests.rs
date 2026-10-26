@@ -156,3 +156,17 @@ fn en_la_vista_de_carpetas_no_se_pregunta() {
     panel.start_tag_field(TagField::Aliases);
     assert_eq!(panel.prompt(), None);
 }
+
+/// Cerrar la pregunta con `esc` se lleva su error.
+#[test]
+fn cerrar_la_pregunta_quita_su_error() {
+    let mut panel = panel();
+    panel.start_tag_field(TagField::Icon);
+    panel.input_mut().unwrap().clear_before();
+    panel.input_mut().unwrap().insert("libro");
+    assert_eq!(panel.confirm(), None);
+    assert!(panel.error().is_some());
+    panel.escape();
+    assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.error(), None);
+}

@@ -5,7 +5,6 @@
 mod question;
 
 use std::fmt::Write as _;
-use std::fs;
 
 use jiff::Zoned;
 use metalmind_config::Daily;
@@ -226,20 +225,14 @@ pub fn open_daily(
         None => Templates::default(),
     };
     let note = daily_note(daily, now, &templates)?.ok_or(DailyOpenError::Disabled)?;
-    let existing = || Landing {
-        path: note.path.clone(),
-        cursor: None,
-        problems: Vec::new(),
-    };
-    // El disco y no el índice, que va un paso detrás: una nota borrada
-    // desde fuera se vuelve a crear con su plantilla.
-    if fs::symlink_metadata(vault.root().join(note.path.as_str())).is_ok() {
-        return Ok(existing());
-    }
-    // Si aparece mientras tanto, crear no la pisa.
+    // Crear mira el disco, no el índice, y si ya existe no escribe nada.
     match vault.create_note(&note.path, &note.draft.text) {
-        Ok(()) => Ok(Landing::created(note.path.clone(), &note.draft)),
-        Err(FileOpError::AlreadyExists(_)) => Ok(existing()),
+        Ok(()) => Ok(Landing::created(note.path, &note.draft)),
+        Err(FileOpError::AlreadyExists(path)) => Ok(Landing {
+            path,
+            cursor: None,
+            problems: Vec::new(),
+        }),
         Err(error) => Err(error.into()),
     }
 }

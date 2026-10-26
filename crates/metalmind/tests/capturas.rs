@@ -315,10 +315,7 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("tags-alias-vista-previa", &[Step::Keys("<CR>")]),
     ("tags-alias-aplicado", &[Step::Keys("<CR>")]),
-    (
-        "tags-icono-invalido",
-        &[Step::Keys("<C-w>hi<BS>libro<CR>")],
-    ),
+    ("tags-icono-invalido", &[Step::Keys("<C-w>hi<BS>libro<CR>")]),
     ("tags-pagina", &[Step::Keys("<Esc>P")]),
 ];
 

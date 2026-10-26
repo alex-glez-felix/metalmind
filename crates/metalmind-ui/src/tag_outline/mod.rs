@@ -129,15 +129,16 @@ impl TagOutline {
         self.rows.get(self.selected_row?)
     }
 
+    /// Los tags del último lote del watcher, aunque las filas todavía no se
+    /// hayan rehecho con ellos.
+    #[must_use]
+    pub fn tags(&self) -> &Tags {
+        self.pending.as_deref().unwrap_or(&self.tags)
+    }
+
     /// Los tags de otro lote del watcher. Las filas no cambian hasta
     /// [`TagOutline::refresh`]: armar el árbol cuesta lo que el vault, y no
     /// hace falta mientras la vista no se ve.
-    /// Los tags del último lote del watcher.
-    #[must_use]
-    pub fn tags(&self) -> &Tags {
-        &self.tags
-    }
-
     pub fn set_tags(&mut self, tags: Arc<Tags>) {
         self.pending = Some(tags);
     }
