@@ -1,13 +1,14 @@
 //! Crear, renombrar/mover y borrar desde el árbol. Nada toca el índice: el
 //! watcher ve el cambio en disco y lo publica como cualquier otro.
 
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use metalmind_syntax::note_name;
 use rustix::fs::{CWD, RenameFlags, renameat_with};
 
+use crate::file;
 use crate::index::EntryKind;
 use crate::path::VaultPath;
 
@@ -40,17 +41,18 @@ pub enum FileOpError {
     },
 }
 
-pub(crate) fn create_note(root: &Path, path: &VaultPath) -> Result<(), FileOpError> {
+pub(crate) fn create_note(root: &Path, path: &VaultPath, text: &str) -> Result<(), FileOpError> {
     if EntryKind::of_file(path) != EntryKind::Note {
         return Err(FileOpError::NotANote(path.clone()));
     }
     let target = prepare_target(root, path, "crear")?;
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(target)
-        .map(drop)
-        .map_err(|source| io_error("crear", path, source))
+    file::create(&target, |out| out.write_all(text.as_bytes())).map_err(|source| {
+        if source.kind() == io::ErrorKind::AlreadyExists {
+            FileOpError::AlreadyExists(path.clone())
+        } else {
+            io_error("crear", path, source)
+        }
+    })
 }
 
 /// Dónde guardar la nota `path`. Sus carpetas no se crean: como el `E212`

@@ -87,7 +87,10 @@ pub fn create_atomic(
     })
 }
 
-fn create(path: &Path, contents: impl FnOnce(&mut dyn Write) -> io::Result<()>) -> io::Result<()> {
+pub(crate) fn create(
+    path: &Path,
+    contents: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+) -> io::Result<()> {
     let dir = parent_dir(path);
     let mut temp = Builder::new()
         .prefix(".metalmind-")

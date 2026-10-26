@@ -27,7 +27,7 @@ fn read(root: &Path, path: &str) -> String {
 fn crear_nota_y_carpeta() {
     let dir = TempDir::new().unwrap();
     let (vault, updates) = Vault::open(dir.path()).unwrap();
-    vault.create_note(&path("nueva/hondo/a.md")).unwrap();
+    vault.create_note(&path("nueva/hondo/a.md"), "").unwrap();
     vault.create_folder(&path("vacia")).unwrap();
     settle(
         &vault,
@@ -43,12 +43,27 @@ fn crear_nota_y_carpeta() {
 }
 
 #[test]
+fn una_nota_nace_con_su_texto() {
+    let dir = TempDir::new().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    vault
+        .create_note(&path("diario/2026-10-26.md"), "# 2026-10-26\n")
+        .unwrap();
+    assert_eq!(read(dir.path(), "diario/2026-10-26.md"), "# 2026-10-26\n");
+    let leftovers: Vec<_> = fs::read_dir(dir.path().join("diario"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(leftovers.len(), 1, "sin temporales: {leftovers:?}");
+}
+
+#[test]
 fn crear_no_pisa_lo_que_existe() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["a.md", "sub/"]);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert!(matches!(
-        vault.create_note(&path("a.md")),
+        vault.create_note(&path("a.md"), "pisada"),
         Err(FileOpError::AlreadyExists(p)) if p == path("a.md")
     ));
     assert!(matches!(
@@ -64,7 +79,7 @@ fn crear_o_mover_bajo_un_archivo_nombra_el_archivo() {
     make_tree(dir.path(), &["a.md", "b.md"]);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let blocked_by_a = |result: Result<(), FileOpError>| matches!(result, Err(FileOpError::NotAFolder(p)) if p == path("a.md"));
-    assert!(blocked_by_a(vault.create_note(&path("a.md/x.md"))));
+    assert!(blocked_by_a(vault.create_note(&path("a.md/x.md"), "")));
     assert!(blocked_by_a(vault.create_folder(&path("a.md/hondo/c"))));
     assert!(blocked_by_a(
         vault.rename(&path("b.md"), &path("a.md/b.md"))
@@ -77,7 +92,7 @@ fn una_nota_tiene_que_ser_md() {
     let dir = TempDir::new().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert!(matches!(
-        vault.create_note(&path("imagen.png")),
+        vault.create_note(&path("imagen.png"), ""),
         Err(FileOpError::NotANote(_))
     ));
     assert_eq!(entries(dir.path()), Vec::<String>::new());
@@ -185,7 +200,7 @@ fn nada_sale_del_vault_por_un_enlace() {
     symlink(outside.path(), dir.path().join("enlace")).unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let escapes = |result: Result<_, FileOpError>| matches!(result, Err(FileOpError::Symlink(_)));
-    assert!(escapes(vault.create_note(&path("enlace/nueva.md"))));
+    assert!(escapes(vault.create_note(&path("enlace/nueva.md"), "")));
     assert!(escapes(vault.create_folder(&path("enlace/hondo/c"))));
     assert!(escapes(vault.rename(&path("a.md"), &path("enlace/a.md"))));
     assert!(escapes(
