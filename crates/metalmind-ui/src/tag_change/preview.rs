@@ -29,8 +29,10 @@ enum Change {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreviewRow<'a> {
     pub path: &'a VaultPath,
-    /// Desde 1; `None` en un archivo nuevo o un renombre.
+    /// Desde 1, la primera que cambia; `None` en un archivo nuevo o un
+    /// renombre.
     pub line: Option<usize>,
+    /// Solo las líneas que cambian, sin el salto final: puede tener varias.
     pub before: &'a str,
     pub after: &'a str,
     pub dropped: bool,
@@ -122,8 +124,8 @@ impl TagChangePreview {
             Change::Edit { file, edit } => {
                 let file = changes.edits.get(file)?;
                 let edit = file.edits.get(edit)?;
-                let line = Some(edit.line + 1);
-                let (before, after) = (edit.old.as_str(), edit.new.as_str());
+                let (before, after, skipped) = changed_lines(&edit.old, &edit.new);
+                let line = Some(edit.line + skipped + 1);
                 (&file.path, line, before, after, unsaved(&file.path))
             }
             Change::Create(index) => {
@@ -241,4 +243,29 @@ fn plural(count: usize, one: &str, many: &str) -> String {
     } else {
         format!("{count} {many}")
     }
+}
+
+/// Lo que cambia de `before` a `after` sin las líneas iguales del principio
+/// ni del final, y cuántas se saltaron al principio. Agregar un campo antes
+/// del `---` de cierre (que la edición reemplaza para comprobarlo) se ve como
+/// la línea nueva.
+fn changed_lines<'a>(before: &'a str, after: &'a str) -> (&'a str, &'a str, usize) {
+    let lines = |text: &'a str| text.split_inclusive('\n').collect::<Vec<_>>();
+    let (old, new) = (lines(before), lines(after));
+    let prefix = old.iter().zip(&new).take_while(|(a, b)| a == b).count();
+    let suffix = old[prefix..]
+        .iter()
+        .rev()
+        .zip(new[prefix..].iter().rev())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let middle = |text: &'a str, lines: &[&str]| {
+        let start: usize = lines[..prefix].iter().map(|line| line.len()).sum();
+        let end: usize = lines[lines.len() - suffix..]
+            .iter()
+            .map(|line| line.len())
+            .sum();
+        text[start..text.len() - end].trim_end_matches(['\n', '\r'])
+    };
+    (middle(before, &old), middle(after, &new), prefix)
 }

@@ -321,3 +321,46 @@ fn lo_que_tiene_cada_campo() {
     assert_eq!(current(TagField::Parents, "rust"), "");
     assert_eq!(current(TagField::Aliases, "otro"), "");
 }
+
+/// La fila de un campo de la página muestra solo las líneas que cambian:
+/// el campo nuevo sin el `---` en que se ancla, el frontmatter nuevo sin la
+/// primera línea de la descripción.
+#[test]
+fn la_fila_muestra_solo_las_lineas_que_cambian() {
+    let pages = tags(&[
+        ("a.md", "#rust #go\n"),
+        ("tags/rust.md", "---\naliases: [rs]\n---\nEl lenguaje.\n"),
+        ("tags/go.md", "Otro lenguaje.\nSegunda línea.\n"),
+    ]);
+    let shown = |request: &str| {
+        let (field, argument) = request.split_once(' ').unwrap();
+        let field = match field {
+            "aliases" => TagField::Aliases,
+            "icon" => TagField::Icon,
+            _ => TagField::Template,
+        };
+        let preview = preview(&page(field, argument).unwrap(), &pages);
+        let row = preview.row(0).unwrap();
+        (row.line, row.before.to_owned(), row.after.to_owned())
+    };
+    assert_eq!(
+        shown("aliases #rust rs, rustlang"),
+        (
+            Some(2),
+            "aliases: [rs]".to_owned(),
+            "aliases: [rs, rustlang]".to_owned()
+        )
+    );
+    assert_eq!(
+        shown("template #rust rust/capitulo"),
+        (Some(3), String::new(), "template: rust/capitulo".to_owned())
+    );
+    assert_eq!(
+        shown("icon #go lucide:book"),
+        (
+            Some(1),
+            String::new(),
+            "---\nicon: lucide:book\n---".to_owned()
+        )
+    );
+}
