@@ -481,3 +481,28 @@ fn abrir_en_la_nota_que_se_ve_termina_insert_y_visual() {
         assert_eq!(session.cursor().get(), 5);
     }
 }
+
+/// Como `:e +N` en nvim con 20 filas: si la línea ya se ve desde arriba, la
+/// ventana no se mueve; si no, lo mínimo para que se vea.
+#[rstest::rstest]
+#[case::cabe(9, 1)]
+#[case::abajo(24, 6)]
+fn abrir_en_una_linea_mueve_la_ventana_como_nvim(#[case] line: usize, #[case] top: usize) {
+    let (_dir, vault, mut session) = vault();
+    let text: String = (1..=30)
+        .map(|n| format!("línea {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(file(&vault, "b.md"), text).unwrap();
+    let pane = session.pane();
+    session
+        .workspace
+        .resize(pane, 20, metalmind_syntax::Rows::uniform(1))
+        .unwrap();
+    session
+        .workspace
+        .open_file_at(&file(&vault, "b.md"), Placement::Current, at(line, 0))
+        .unwrap();
+    assert_eq!(session.line(pane), line + 1);
+    assert_eq!(session.top(pane), top);
+}
