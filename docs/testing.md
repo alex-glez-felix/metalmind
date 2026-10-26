@@ -45,6 +45,8 @@ METALMIND_SMOKE_DISPLAY=97 cargo nextest run -p metalmind --test gui_smoke --run
 
 No hace falta `xvfb-run` ni un `DISPLAY`: el harness abre su servidor. `metalmind` corre con `HOME` y `XDG_*` apuntando a una carpeta vacía (config por defecto) y sin `WAYLAND_DISPLAY` ni `WAYLAND_SOCKET`, para que GPUI use X11 y no abra nada en tu escritorio. Si un test falla, la salida trae el log de `metalmind` con `RUST_LOG=info`, que dice qué adaptador eligió GPUI. Los logs de `metalmind` y de Xvfb quedan en la carpeta temporal del test mientras corre.
 
+Con un `CARGO_TARGET_DIR` compartido entre varios checkouts, `target/debug/metalmind` es el del último que compiló: `METALMIND_BIN=/ruta/a/metalmind` hace que el smoke y las capturas lancen ese binario. Las capturas usan una carpeta fija en el directorio temporal (`TMPDIR`), así que dos corridas a la vez necesitan un `TMPDIR` distinto cada una.
+
 ### Nunca sobre tu pantalla
 
 El smoke teclea con XTest, que manda teclas al servidor X entero: corrido sobre tu escritorio, escribiría en lo que tengas enfocado. El harness (`support/xvfb.rs`) lo hace imposible:
