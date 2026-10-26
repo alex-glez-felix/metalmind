@@ -53,8 +53,8 @@ impl Workspace {
     }
 
     /// `pane` pasa a mostrar `id`, con el cursor de un panel que ya lo
-    /// muestra o, si estaba oculto, del último que lo mostró; sus números y
-    /// su jumplist se quedan. El documento de antes queda oculto y, con
+    /// muestra o, si estaba oculto, del último que lo mostró; sus números,
+    /// su jumplist y el tamaño de su ventana se quedan. El documento de antes queda oculto y, con
     /// autoguardado, se guarda.
     pub(super) fn show_document(
         &mut self,
@@ -69,8 +69,13 @@ impl Workspace {
             return Ok(());
         }
         let (numbers, jumps) = (current.numbers, current.state.jumps.clone());
+        let window = &current.state.viewport;
+        let (height, row) = (window.height(), window.row());
         let mut shown = self.pane_on(id, numbers)?;
         shown.state.jumps = jumps;
+        // El tamaño es del panel, como en vim: quien mueva el cursor antes
+        // del próximo layout ya ve la ventana con su alto.
+        shown.state.viewport.resize(height, row);
         self.message = Some(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
         if let Some(old) = self.panes.insert(pane, shown) {
