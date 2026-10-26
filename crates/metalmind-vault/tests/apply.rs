@@ -104,6 +104,12 @@ fn renaming_a_tag_with_page_and_undoing_it() {
     assert_eq!(contents(dir.path()), before);
     assert_eq!(report.changed, []);
     assert_eq!(report.restored.len(), 4);
+    let moved_back: Vec<(&str, &str)> = report
+        .moved_back
+        .iter()
+        .map(|rename| (rename.from.as_str(), rename.to.as_str()))
+        .collect();
+    assert_eq!(moved_back, [("tags/a.md", "tags/b.md")]);
 }
 
 #[test]
@@ -199,6 +205,7 @@ fn undo_leaves_a_moved_page_that_changed_where_it_is() {
 
     let report = vault.undo(&applied).unwrap();
     assert_eq!(report.changed, [path("tags/a.md")]);
+    assert_eq!(report.moved_back, []);
     assert_eq!(
         fs::read_to_string(dir.path().join("tags/b.md")).unwrap(),
         edited
