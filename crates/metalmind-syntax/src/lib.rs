@@ -29,7 +29,7 @@ pub use resolve::{
 };
 pub use style::{
     Conceal, Decorations, FencePart, FormulaRows, LineKind, LineStyle, Lines, LinkSpot, MathPlace,
-    MathSpot, Role, Rows, Span, Style, Styles, TextLines, Token, is_thematic_break,
+    MathSpot, Role, Rows, Span, Style, Styles, TextLines, Token, TypedWikilink, is_thematic_break,
     quote_prefix_len,
 };
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};

@@ -18,6 +18,7 @@ mod paragraph;
 mod pieces;
 mod region;
 mod rows;
+mod typed_link;
 
 #[cfg(test)]
 mod tests;
@@ -29,6 +30,7 @@ use crate::{TagPlace, TagSpot};
 
 pub use cache::Styles;
 pub use rows::{FormulaRows, Rows};
+pub use typed_link::TypedWikilink;
 
 /// Dónde termina el prefijo de cita de `line` (`> `, `> > `), como lo ve
 /// el estilo; 0 si no es una cita.
