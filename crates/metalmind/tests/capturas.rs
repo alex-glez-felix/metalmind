@@ -236,7 +236,8 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::RightClickRow(0),
         ],
     ),
-    ("tags-renombrar-pregunta", &[Step::Keys("<CR>")]),
+    // La primera entrada es la nota nueva con el tag; `j` baja a renombrar.
+    ("tags-renombrar-pregunta", &[Step::Keys("j<CR>")]),
     (
         "renombrar-tag",
         &[Step::Keys(
