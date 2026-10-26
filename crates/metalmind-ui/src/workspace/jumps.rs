@@ -97,7 +97,10 @@ impl Workspace {
         }
     }
 
-    fn file_changed(&mut self, path: &Path) {
+    /// `path` cambió en disco, avisado por el watcher o por quien lo
+    /// escribió por fuera de un buffer, como al aplicar un cambio de tags:
+    /// su documento se relee si no tiene cambios ([`Workspace::disk_changed`]).
+    pub fn file_changed(&mut self, path: &Path) {
         if let Some(id) = self.documents.find(path) {
             self.disk_changed(id);
         }

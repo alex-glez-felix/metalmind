@@ -70,6 +70,7 @@ impl WorkspaceView {
     ) -> Self {
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
+            view.refresh_tag_change(cx);
             cx.notify();
         });
         let activation = cx.observe_window_activation(window, Self::on_activation);

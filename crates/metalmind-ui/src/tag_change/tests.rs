@@ -126,13 +126,43 @@ fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
     let request = rename("rust", "lang");
     let plan = request.plan(&rust_notes()).unwrap();
     let mut preview = TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md");
-    assert!(preview.row(0).unwrap().unsaved);
+    assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
     assert_eq!(
         preview.blocked(),
         Some(Blocked::Unsaved(vec![&path("a.md")]))
     );
     preview.toggle_selected();
     assert_eq!(preview.blocked(), None);
+}
+
+/// Si se guarda con la vista previa abierta, como al autoguardar, deja de
+/// bloquear.
+#[test]
+fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
+    let request = rename("rust", "lang");
+    let plan = request.plan(&rust_notes()).unwrap();
+    let mut preview = TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md");
+    assert!(preview.blocked().is_some());
+    preview.set_unsaved(|_| false);
+    assert_eq!(preview.blocked(), None);
+}
+
+/// Un buffer sin guardar en el destino de un renombre de página también
+/// bloquea: quedarían dos documentos en la misma ruta.
+#[test]
+fn un_buffer_sin_guardar_en_el_destino_bloquea() {
+    let tags = tags(&[("a.md", "#rust\n"), ("tags/rust.md", "Del lenguaje.\n")]);
+    let request = rename("rust", "lang");
+    let plan = request.plan(&tags).unwrap();
+    let preview = TagChangePreview::new(request.title(), plan, |file| {
+        file.as_str() == "tags/lang.md"
+    });
+    let last = preview.row(preview.len() - 1).unwrap();
+    assert_eq!(last.unsaved, Some(&path("tags/lang.md")));
+    assert_eq!(
+        preview.blocked(),
+        Some(Blocked::Unsaved(vec![&path("tags/lang.md")]))
+    );
 }
 
 /// Renombrar un tag con página la renombra en la última fila, sin línea.

@@ -34,7 +34,9 @@ pub struct PreviewRow<'a> {
     pub before: &'a str,
     pub after: &'a str,
     pub dropped: bool,
-    pub unsaved: bool,
+    /// El archivo con cambios sin guardar que pisaría: el que edita, o el
+    /// origen o el destino de un renombre.
+    pub unsaved: Option<&'a VaultPath>,
 }
 
 /// Por qué no se puede aplicar.
@@ -59,22 +61,31 @@ impl TagChangePreview {
             .chain((0..changes.creates.len()).map(Change::Create))
             .chain((0..changes.renames.len()).map(Change::Rename))
             .collect();
-        let unsaved = changes
-            .edits
-            .iter()
-            .map(|file| &file.path)
-            .chain(changes.renames.iter().map(|rename| &rename.from))
-            .filter(|path| unsaved(path))
-            .cloned()
-            .collect();
-        Self {
+        let mut preview = Self {
             title,
             plan,
             rows,
             dropped: BTreeSet::new(),
             selected: 0,
-            unsaved,
-        }
+            unsaved: BTreeSet::new(),
+        };
+        preview.set_unsaved(unsaved);
+        preview
+    }
+
+    /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como
+    /// tras un autoguardado con la vista previa abierta.
+    pub fn set_unsaved(&mut self, unsaved: impl Fn(&VaultPath) -> bool) {
+        let changes = &self.plan.changes;
+        let renames = changes.renames.iter();
+        self.unsaved = changes
+            .edits
+            .iter()
+            .map(|file| &file.path)
+            .chain(renames.flat_map(|rename| [&rename.from, &rename.to]))
+            .filter(|path| unsaved(path))
+            .cloned()
+            .collect();
     }
 
     #[must_use]
@@ -101,21 +112,25 @@ impl TagChangePreview {
     #[must_use]
     pub fn row(&self, row: usize) -> Option<PreviewRow<'_>> {
         let changes = &self.plan.changes;
-        let (path, line, before, after) = match *self.rows.get(row)? {
+        let unsaved = |path: &VaultPath| self.unsaved.get(path);
+        let (path, line, before, after, unsaved) = match *self.rows.get(row)? {
             Change::Edit { file, edit } => {
                 let file = changes.edits.get(file)?;
                 let edit = file.edits.get(edit)?;
                 let line = Some(edit.line + 1);
-                (&file.path, line, edit.old.as_str(), edit.new.as_str())
+                let (before, after) = (edit.old.as_str(), edit.new.as_str());
+                (&file.path, line, before, after, unsaved(&file.path))
             }
             Change::Create(index) => {
                 let create = changes.creates.get(index)?;
-                (&create.path, None, "", create.path.as_str())
+                let path = &create.path;
+                (path, None, "", path.as_str(), unsaved(path))
             }
             Change::Rename(index) => {
                 let rename = changes.renames.get(index)?;
                 let (from, to) = (&rename.from, &rename.to);
-                (from, None, from.as_str(), to.as_str())
+                let busy = unsaved(from).or_else(|| unsaved(to));
+                (from, None, from.as_str(), to.as_str(), busy)
             }
         };
         Some(PreviewRow {
@@ -124,7 +139,7 @@ impl TagChangePreview {
             before,
             after,
             dropped: self.dropped.contains(&row),
-            unsaved: self.unsaved.contains(path),
+            unsaved,
         })
     }
 
@@ -180,10 +195,7 @@ impl TagChangePreview {
                 .filter_map(|row| self.row(row))
                 .filter(|row| !row.dropped)
         };
-        let unsaved: BTreeSet<&VaultPath> = kept()
-            .filter(|row| row.unsaved)
-            .map(|row| row.path)
-            .collect();
+        let unsaved: BTreeSet<&VaultPath> = kept().filter_map(|row| row.unsaved).collect();
         if !unsaved.is_empty() {
             return Some(Blocked::Unsaved(unsaved.into_iter().collect()));
         }
