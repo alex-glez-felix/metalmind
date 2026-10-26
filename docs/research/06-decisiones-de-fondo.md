@@ -212,7 +212,7 @@ Hecho en `metalmind-template`, sin UI todavía. Decidido el 2026-10-18 en la PR 
 - **Una plantilla elegida a mano trae el tag que la pide**, si lo pide la página de un solo tag (`tag_of_template`); si la piden varias, ninguno, por la misma razón que el choque de arriba. Elegirla a mano sigue ganando sobre las de los tags.
 - **El cursor** de la nota nueva queda bajo el primer heading con la sección vacía, sin contar uno cuyo contenido son solo subsecciones (`Draft::cursor`). Sin una variable `{{cursor}}`: la regla acierta con las plantillas de secciones, y otra variable sería más lenguaje.
 - **Crear no pisa nunca**: `Vault::create_note` escribe el texto de una vez, crea las carpetas que falten y falla si la nota aparece mientras tanto. La nota del día que ya existe se abre en vez de crearse por ese mismo fallo, sin mirar antes el índice.
-- **Pendiente**: que el finder, el buzón y los conteos no traten las plantillas como notas normales (lo mismo que las páginas de tag, 05 §7) y `metalmind add --template`.
+- **Pendiente**: que el finder, el buzón y los conteos no traten las plantillas como notas normales (lo mismo que las páginas de tag, 05 §7) y `metalmind add --template` ([#145](https://github.com/alex-glez-felix/metalmind/issues/145)).
 
 ## 12. Fuera de alcance
 
