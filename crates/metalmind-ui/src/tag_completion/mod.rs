@@ -21,6 +21,8 @@ pub struct TagCompletions {
     place: TagPlace,
     shown: Vec<Shown>,
     selected: usize,
+    /// Si `selected` la eligió el usuario; si no, es la mejor coincidencia.
+    chosen: bool,
     /// La primera fila que se ve.
     first: usize,
 }
@@ -53,6 +55,7 @@ impl TagCompletions {
             place,
             shown,
             selected: 0,
+            chosen: false,
             first: 0,
         })
     }
@@ -61,7 +64,39 @@ impl TagCompletions {
     /// misma lista.
     #[must_use]
     pub fn is_for(&self, candidates: &Arc<[TagCompletion]>, typed: &str, place: TagPlace) -> bool {
-        Arc::ptr_eq(&self.candidates, candidates) && self.typed == typed && self.place == place
+        Arc::ptr_eq(&self.candidates, candidates) && self.is_typing(typed, place)
+    }
+
+    /// Si es la lista de `typed` en `place`, entre los tags que sean.
+    #[must_use]
+    pub fn is_typing(&self, typed: &str, place: TagPlace) -> bool {
+        self.typed == typed && self.place == place
+    }
+
+    /// Esta lista entre los `candidates` de un lote nuevo del vault, con lo
+    /// mismo escrito: el tag que eligió el usuario sigue elegido si todavía
+    /// coincide; si no eligió, la primera fila.
+    #[must_use]
+    pub fn with_candidates(
+        &self,
+        candidates: Arc<[TagCompletion]>,
+        only_here: bool,
+        matcher: &mut FuzzyMatcher,
+    ) -> Option<Self> {
+        let mut list = Self::open(candidates, &self.typed, self.place, only_here, matcher)?;
+        if !self.chosen {
+            return Some(list);
+        }
+        let chosen = &self.candidates[self.shown[self.selected].index].key;
+        let row = list
+            .rows()
+            .position(|(completion, _)| completion.key == *chosen);
+        if let Some(row) = row {
+            list.selected = row;
+            list.chosen = true;
+            list.first = self.first;
+        }
+        Some(list)
     }
 
     /// Cada tag de la lista con el alias por el que coincidió, en orden.
@@ -98,15 +133,18 @@ impl TagCompletions {
     /// La siguiente, y tras la última la primera.
     pub fn select_next(&mut self) {
         self.selected = (self.selected + 1) % self.shown.len();
+        self.chosen = true;
     }
 
     /// La anterior, y antes de la primera la última.
     pub fn select_previous(&mut self) {
         self.selected = self.selected.checked_sub(1).unwrap_or(self.shown.len() - 1);
+        self.chosen = true;
     }
 
     pub fn select(&mut self, row: usize) {
         self.selected = row.min(self.shown.len() - 1);
+        self.chosen = true;
     }
 
     /// Lo que escribe aceptar en lugar de lo escrito: la forma establecida

@@ -84,8 +84,8 @@ impl Editor {
 
     /// Tras escribir texto: abre, filtra o cierra la lista según el tag que
     /// se está escribiendo. `aliases` y `parents` solo nombran tags en una
-    /// página de tag. Si lo escrito y los tags no cambiaron, la lista se
-    /// queda como está, con su fila elegida.
+    /// página de tag. Si lo escrito no cambió, el tag que eligió el usuario
+    /// sigue elegido.
     pub(super) fn update_completion(&mut self, cx: &App) {
         let typed = self
             .workspace
@@ -110,18 +110,14 @@ impl Editor {
             .as_ref()
             .is_some_and(|note| tags.is_only_once_in(&TagKey::new(&typed.typed), note));
         let candidates = self.completion.candidates(tags);
-        if (self.completion.list.as_ref())
-            .is_some_and(|list| list.is_for(&candidates, &typed.typed, typed.place))
-        {
-            return;
-        }
-        self.completion.list = TagCompletions::open(
-            candidates,
-            &typed.typed,
-            typed.place,
-            only_here,
-            &mut self.completion.matcher,
-        );
+        let matcher = &mut self.completion.matcher;
+        self.completion.list = match self.completion.list.take() {
+            Some(list) if list.is_for(&candidates, &typed.typed, typed.place) => Some(list),
+            Some(list) if list.is_typing(&typed.typed, typed.place) => {
+                list.with_candidates(candidates, only_here, matcher)
+            }
+            _ => TagCompletions::open(candidates, &typed.typed, typed.place, only_here, matcher),
+        };
     }
 
     /// Cambia lo escrito por el tag elegido y cierra la lista: lo que queda

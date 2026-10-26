@@ -120,6 +120,50 @@ fn es_la_misma_lista_solo_con_lo_mismo() {
     assert!(!list.is_for(&vault(), "ru", TagPlace::Inline));
 }
 
+/// Un lote del vault trae otros tags con lo mismo escrito, como al
+/// autoguardar la nota: sigue elegido el mismo tag aunque cambie de fila.
+#[test]
+fn tags_nuevos_dejan_elegido_el_mismo_tag() {
+    let mut list = open("ru", TagPlace::Inline).unwrap();
+    list.select_next();
+    assert_eq!(list.accept(), "rueda");
+    let mut more = vault().to_vec();
+    more.insert(0, tag("ruido", 40, &[]));
+    let list = list
+        .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
+        .unwrap();
+    assert_eq!((list.selected(), list.accept()), (2, "rueda".to_owned()));
+}
+
+/// Sin una fila elegida por el usuario, queda la primera: la mejor
+/// coincidencia entre los tags nuevos.
+#[test]
+fn sin_elegir_queda_la_mejor_coincidencia() {
+    let list = open("ru", TagPlace::Inline).unwrap();
+    let mut more = vault().to_vec();
+    more.insert(0, tag("ruido", 40, &[]));
+    let list = list
+        .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
+        .unwrap();
+    assert_eq!((list.selected(), list.accept()), (0, "ruido".to_owned()));
+}
+
+/// Si el tag elegido ya no está, queda elegida la primera fila.
+#[test]
+fn sin_el_tag_elegido_vuelve_a_la_primera_fila() {
+    let mut list = open("ru", TagPlace::Inline).unwrap();
+    list.select_next();
+    let without: Vec<TagCompletion> = vault()
+        .iter()
+        .filter(|completion| completion.name != "rueda")
+        .cloned()
+        .collect();
+    let list = list
+        .with_candidates(Arc::from(without), false, &mut FuzzyMatcher::text())
+        .unwrap();
+    assert_eq!((list.selected(), list.accept()), (0, "Rust".to_owned()));
+}
+
 /// Lo escrito y los nombres se pliegan igual, también cuando el plegado de
 /// una letra son dos: `ß` es `ss`.
 #[test]
