@@ -175,6 +175,7 @@ layout:
   picker_input_padding_y: md
   picker_gap: lg
   picker_detail_share: 0.4  # fracción de la fila que se queda el detalle si el texto no cabe
+  tag_change_detail_lines: 4  # el cambio elegido, entero, bajo la vista previa de un cambio de tags
   panel_padding_x: sm
   panel_padding_y: 6
   panel_gap: 6
