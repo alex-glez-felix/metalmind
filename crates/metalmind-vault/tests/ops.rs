@@ -7,7 +7,7 @@
 mod support;
 
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{PermissionsExt as _, symlink};
 use std::path::Path;
 
 use metalmind_vault::{FileOpError, SaveError, SaveKind, Vault, VaultPath};
@@ -55,6 +55,24 @@ fn una_nota_nace_con_su_texto() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(leftovers.len(), 1, "sin temporales: {leftovers:?}");
+}
+
+/// Una nota que ya existe da `AlreadyExists` sin escribir nada, ni el
+/// temporal: también en una carpeta sin permiso de escritura.
+#[test]
+fn crear_una_nota_que_existe_no_escribe_nada() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["tags/rust.md"]);
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let folder = dir.path().join("tags");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+    let created = vault.create_note(&path("tags/rust.md"), "pisada");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(
+        matches!(created, Err(FileOpError::AlreadyExists(_))),
+        "{created:?}"
+    );
+    assert_eq!(read(dir.path(), "tags/rust.md"), "tags/rust.md");
 }
 
 #[test]

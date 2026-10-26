@@ -190,12 +190,19 @@ fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<Ta
     let edits = match (&page.layout, value) {
         (PageLayout::Unreadable, _) => return Err(PlanError::UneditablePage(page.path.clone())),
         (PageLayout::Bare { .. }, None) => Vec::new(),
-        (PageLayout::Bare { at, body, crlf }, Some(value)) => {
+        (
+            PageLayout::Bare {
+                at,
+                first_line,
+                crlf,
+            },
+            Some(value),
+        ) => {
             let eol = eol(*crlf);
             vec![TextEdit {
-                range: *at..at + body.len(),
-                old: body.clone(),
-                new: format!("---{eol}{key}: {value}{eol}---{eol}{body}"),
+                range: *at..at + first_line.len(),
+                old: first_line.clone(),
+                new: format!("---{eol}{key}: {value}{eol}---{eol}{first_line}"),
                 line: 0,
             }]
         }
@@ -238,6 +245,8 @@ fn block_edit(
     line: Option<String>,
 ) -> Option<TextEdit> {
     match (entries.iter().find(|entry| entry.key == key), line) {
+        // Lo mismo que ya dice: nada que cambiar ni que deshacer.
+        (Some(entry), Some(line)) if entry.text == line => None,
         (Some(entry), line) => Some(TextEdit {
             range: entry.span.clone(),
             old: entry.text.clone(),

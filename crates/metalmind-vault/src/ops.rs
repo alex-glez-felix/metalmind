@@ -45,6 +45,9 @@ pub(crate) fn create_note(root: &Path, path: &VaultPath, text: &str) -> Result<(
     if EntryKind::of_file(path) != EntryKind::Note {
         return Err(FileOpError::NotANote(path.clone()));
     }
+    // Si ya existe no se escribe nada, ni el temporal: abrir lo que ya está
+    // no pide permiso de escritura en su carpeta.
+    check_free(root, path)?;
     let target = prepare_target(root, path, "crear")?;
     file::create(&target, |out| out.write_all(text.as_bytes())).map_err(|source| {
         if source.kind() == io::ErrorKind::AlreadyExists {

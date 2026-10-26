@@ -271,7 +271,7 @@ fn invalid_requests() {
 
 /// Un plan armado antes de otro cambio a la misma página no escribe en un
 /// lugar que ya no es el suyo: agregar un campo se ancla en el `---` de
-/// cierre, y agregarle frontmatter a una página sin él, en todo su texto.
+/// cierre, y agregarle frontmatter a una página sin él, en su primera línea.
 #[test]
 fn a_plan_made_before_another_change_is_stale() {
     let fixture = fixture();
@@ -288,4 +288,18 @@ fn a_plan_made_before_another_change_is_stale() {
         let edit = &stale.changes.edits[0];
         assert!(edit.apply(&files[&edit.path]).is_err(), "{tag}: {files:?}");
     }
+}
+
+/// Poner lo que el campo ya dice no edita nada: confirmar sin cambiar no
+/// deja un cambio vacío que pise el último deshacer.
+#[test]
+fn the_same_value_is_an_empty_plan() {
+    let fixture = fixture();
+    let tags = fixture.tags();
+    let same = tags.plan_page_change("crlf", &named("azul")).unwrap();
+    assert!(same.changes.is_empty(), "{:?}", same.changes);
+    let aliases = tags
+        .plan_page_change("rust", &PageChange::Aliases(names(&["rs"])))
+        .unwrap();
+    assert!(aliases.changes.is_empty(), "{:?}", aliases.changes);
 }
