@@ -398,13 +398,15 @@ impl Vault {
         }
     }
 
-    /// Crea una nota vacía, con las carpetas que le falten. El índice se
-    /// entera por el watcher, como de cualquier otro cambio en disco.
+    /// Crea una nota con `text`, de una vez y con las carpetas que le
+    /// falten; nunca pisa una que exista, aunque aparezca mientras se
+    /// escribe. El índice se entera por el watcher, como de cualquier otro
+    /// cambio en disco.
     ///
     /// # Errors
     /// Si no termina en `.md`, ya existe o pasa por un enlace simbólico.
-    pub fn create_note(&self, path: &VaultPath) -> Result<(), FileOpError> {
-        ops::create_note(&self.root, path)
+    pub fn create_note(&self, path: &VaultPath, text: &str) -> Result<(), FileOpError> {
+        ops::create_note(&self.root, path, text)
     }
 
     /// Crea una carpeta vacía, con las que le falten.

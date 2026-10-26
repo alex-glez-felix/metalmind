@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c6f4ab0b38b393a59c79388fa4336f44a013c576793e1b955798a77bece00ab4 # shrinks to ops = [SaveAtomic("a"), CreateDir(".h/b"), CreateDir("z.png/z.png"), Remove("x.md"), SaveAtomic("b"), CreateDir("x.md/x.md"), WriteFile("b"), Remove(".h/b"), Remove("b/z.png/x.md"), WriteFile("x.md/.h/a"), Rename("b", ".h"), CreateDir(".h/z.png/x.md"), WriteFile("z.png/z.png"), WriteFile(".h/.h/Y.md"), Remove("Y.md/a/.h"), WriteFile(".h/z.png/Y.md"), Remove(".h"), Rename("Y.md/b", "b"), WriteFile("a/x.md/.h"), WriteFile("x.md/z.png")]

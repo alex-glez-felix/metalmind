@@ -6,7 +6,7 @@ use metalmind_keymap::{Action, PanelAction};
 
 use super::{Sidebar, SidebarEvent};
 use crate::actions::Dispatch;
-use crate::panel::{NewEntry, Outline, Request};
+use crate::panel::{NewEntry, Outline, PanelView, Request};
 use crate::workspace::{Axis, Placement};
 
 impl Sidebar {
@@ -109,9 +109,16 @@ impl Sidebar {
         cx.notify();
     }
 
+    /// En la vista de tags, con el tag elegido.
     fn new_note(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
-        self.panel.start_create(NewEntry::Note);
+        if self.panel.view == PanelView::Tags {
+            if let Some(tag) = self.panel.selected_tag() {
+                cx.emit(SidebarEvent::NewTaggedNote(tag));
+            }
+        } else {
+            self.panel.start_create(NewEntry::Note);
+        }
         cx.notify();
     }
 
@@ -198,7 +205,7 @@ impl Sidebar {
     /// nueva se abre para escribirla.
     fn execute(&mut self, request: Request, cx: &mut Context<Self>) {
         let result = match request {
-            Request::CreateNote(path) => self.vault.create_note(&path).map(|()| {
+            Request::CreateNote(path) => self.vault.create_note(&path, "").map(|()| {
                 self.panel.tree.reveal(path.clone());
                 self.open(&path, Placement::Current, true, cx);
             }),
