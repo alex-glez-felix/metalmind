@@ -425,8 +425,17 @@ impl Panel {
     }
 }
 
+/// Por qué no se acepta lo escrito: la pregunta sigue abierta con esto.
+#[derive(Debug, thiserror::Error)]
+enum PromptError {
+    #[error(transparent)]
+    Path(#[from] InvalidPath),
+    #[error("`{0}` no es un nombre de tag válido")]
+    TagName(String),
+}
+
 /// `Ok(None)` si no hay nada que hacer: un nombre vacío o el mismo.
-fn request(prompt: &Prompt) -> Result<Option<Request>, InvalidPath> {
+fn request(prompt: &Prompt) -> Result<Option<Request>, PromptError> {
     Ok(match prompt {
         Prompt::Filter(_) => None,
         Prompt::Create {
@@ -452,13 +461,13 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, InvalidPath> {
             )
         }
         Prompt::ConfirmDelete { path, .. } => Some(Request::Trash(path.clone())),
-        Prompt::RenameTag { tag, input } => other_tag(tag, input).map(|to| {
+        Prompt::RenameTag { tag, input } => other_tag(tag, input)?.map(|to| {
             Request::ChangeTags(TagRequest::Rename {
                 from: tag.clone(),
                 to,
             })
         }),
-        Prompt::MergeTag { tag, input } => other_tag(tag, input).map(|into| {
+        Prompt::MergeTag { tag, input } => other_tag(tag, input)?.map(|into| {
             Request::ChangeTags(TagRequest::Merge {
                 from: tag.clone(),
                 into,
@@ -468,10 +477,13 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, InvalidPath> {
 }
 
 /// Lo escrito como otro tag, sin `#`; vacío o igual a `tag`, ninguno.
-fn other_tag(tag: &str, input: &LineInput) -> Option<String> {
+fn other_tag(tag: &str, input: &LineInput) -> Result<Option<String>, PromptError> {
     let text = input.text().trim();
-    let name = tag_name(text).unwrap_or(text);
-    (!name.is_empty() && name != tag).then(|| name.to_owned())
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let name = tag_name(text).ok_or_else(|| PromptError::TagName(text.to_owned()))?;
+    Ok((name != tag).then(|| name.to_owned()))
 }
 
 /// Como en los exploradores de nvim, un nombre que termina en `/` es una

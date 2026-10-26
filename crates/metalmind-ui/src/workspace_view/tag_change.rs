@@ -29,12 +29,13 @@ impl WorkspaceView {
             Ok(plan) => plan,
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),
         };
-        if plan.changes.is_empty() {
+        let unsaved = self.unsaved_paths(cx);
+        let Some(preview) =
+            TagChangePreview::new(request.title(), plan, |path| unsaved.contains(path))
+        else {
             let text = format!("{}: no hay nada que cambiar", request.title());
             return self.tell(Message::Info(text), cx);
-        }
-        let unsaved = self.unsaved_paths(cx);
-        let preview = TagChangePreview::new(request.title(), plan, |path| unsaved.contains(path));
+        };
         let view = cx.new(|cx| TagChangeView::new(preview, cx));
         let events = cx.subscribe_in(&view, window, |this, view, event, window, cx| {
             this.on_tag_change_event(view, *event, window, cx);

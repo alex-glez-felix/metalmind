@@ -1,4 +1,4 @@
-use metalmind_vault::tags::{PlanNotice, Tags};
+use metalmind_vault::tags::{PlanNotice, TagPlan, Tags};
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
@@ -32,7 +32,7 @@ fn rust_notes() -> Tags {
 
 fn preview(request: &TagRequest, tags: &Tags) -> TagChangePreview {
     let plan = request.plan(tags).unwrap();
-    TagChangePreview::new(request.title(), plan, |_| false)
+    TagChangePreview::new(request.title(), plan, |_| false).unwrap()
 }
 
 fn rename(from: &str, to: &str) -> TagRequest {
@@ -125,7 +125,8 @@ fn sin_cambios_no_se_aplica() {
 fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
     let request = rename("rust", "lang");
     let plan = request.plan(&rust_notes()).unwrap();
-    let mut preview = TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md");
+    let mut preview =
+        TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md").unwrap();
     assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
     assert_eq!(
         preview.blocked(),
@@ -141,7 +142,8 @@ fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
 fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
     let request = rename("rust", "lang");
     let plan = request.plan(&rust_notes()).unwrap();
-    let mut preview = TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md");
+    let mut preview =
+        TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md").unwrap();
     assert!(preview.blocked().is_some());
     preview.set_unsaved(|_| false);
     assert_eq!(preview.blocked(), None);
@@ -156,7 +158,8 @@ fn un_buffer_sin_guardar_en_el_destino_bloquea() {
     let plan = request.plan(&tags).unwrap();
     let preview = TagChangePreview::new(request.title(), plan, |file| {
         file.as_str() == "tags/lang.md"
-    });
+    })
+    .unwrap();
     let last = preview.row(preview.len() - 1).unwrap();
     assert_eq!(last.unsaved, Some(&path("tags/lang.md")));
     assert_eq!(
@@ -176,6 +179,25 @@ fn la_pagina_se_renombra_en_su_fila() {
         ("tags/rust.md", None, "tags/rust.md", "tags/lang.md")
     );
     assert_eq!(preview.changes().renames.len(), 1);
+}
+
+/// Fusionar dos tags que solo tienen página no tiene ediciones, pero se
+/// muestra igual: dice por qué no se puede. Sin cambios ni avisos, no hay
+/// vista previa.
+#[test]
+fn un_bloqueo_sin_cambios_se_muestra_y_nada_no() {
+    let pages = tags(&[("tags/a.md", "A\n"), ("tags/b.md", "B\n")]);
+    let request = TagRequest::Merge {
+        from: "a".to_owned(),
+        into: "b".to_owned(),
+    };
+    let plan = request.plan(&pages).unwrap();
+    let preview = TagChangePreview::new(request.title(), plan, |_| false).unwrap();
+    assert!(matches!(
+        preview.blocked(),
+        Some(Blocked::Notice(PlanNotice::BothHavePages { .. }))
+    ));
+    assert!(TagChangePreview::new(String::new(), TagPlan::default(), |_| false).is_none());
 }
 
 /// Si los dos tags tienen página, el plan lo marca y no se aplica.
