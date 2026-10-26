@@ -126,3 +126,23 @@ fn el_autoguardado_desbloquea_la_vista_previa() {
     smoke.wait_contents("a.md", "uno #lang\nx\n");
     smoke.wait_contents("b.md", "#lang dos\n");
 }
+
+/// Tras renombrar `#rust`, su página se va a `tags/lang.md`; una nota nueva
+/// sin guardar en `tags/rust.md` hace que `:tagundo` no la traiga de
+/// vuelta encima.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn tagundo_no_devuelve_una_pagina_sobre_un_buffer_sin_guardar() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    two_notes(&smoke);
+    std::fs::create_dir(smoke.notes().join("tags")).unwrap();
+    smoke.write("tags/rust.md", "Del lenguaje.\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagrename #rust #lang<CR><CR>");
+    smoke.wait_contents("tags/lang.md", "Del lenguaje.\n");
+    window.type_keys(":e tags/rust.md<CR>ix<Esc>:tagundo<CR>:w<CR>");
+    smoke.wait_contents("tags/rust.md", "x\n");
+    assert_eq!(smoke.read("tags/lang.md"), "Del lenguaje.\n");
+}
