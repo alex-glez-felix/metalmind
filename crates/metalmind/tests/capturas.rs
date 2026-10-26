@@ -356,6 +356,24 @@ const SCENES: &[(&str, &[Step])] = &[
             "lista se abra pegada al borde y se vea que no sale de [[tampoco cabe",
         ))],
     ),
+    // Tablas (#151): una llenada a mano, `editor::format_table` en la
+    // paleta, sin tecla, y la tabla alineada con el cursor en su celda; al
+    // final, `:tableformat` en un registro de más de mil filas. La nota llega
+    // aquí, como de otro programa, para no cambiar las pantallas de antes.
+    (
+        "tabla-desalineada",
+        &[
+            Step::Files(vault::write_tables),
+            Step::Settle,
+            Step::Keys("<Esc><Esc><C-w>o:e tablas.md<CR>:set nornu<CR>/Comunic<CR>"),
+        ],
+    ),
+    ("tabla-paleta", &[Step::Keys("<C-S-p>format table")]),
+    ("tabla-alineada", &[Step::Keys("<CR>")]),
+    (
+        "tabla-larga-alineada",
+        &[Step::Keys("/evento-final<CR>:tableformat<CR>")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
