@@ -75,6 +75,8 @@ pub(crate) enum Change {
     Block(BlockChange, BlockSize),
     /// `editor::toggle_checkbox`, en tantas líneas como diga el count.
     ToggleCheckbox,
+    /// `editor::format_table`, en la tabla donde esté el cursor.
+    FormatTable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

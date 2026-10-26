@@ -127,6 +127,8 @@ pub enum CommandError {
     UnsupportedFlag(char),
     #[error("Metalmind no soporta {0} en el reemplazo de :s")]
     UnsupportedReplacement(String),
+    #[error("El cursor no está en una tabla")]
+    NotInTable,
     #[error("Metalmind no soporta el flag {0} de :sort")]
     UnsupportedSortFlag(char),
     /// `'<` y `'>` son la última selección de Visual, que en Metalmind no se

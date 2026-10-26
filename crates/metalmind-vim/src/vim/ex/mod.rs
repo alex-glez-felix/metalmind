@@ -164,6 +164,11 @@ impl Vim {
                 return self.global(&command, range, lines, t);
             }
             ExCommand::DeleteMarks(marks) => self.delete_marks(marks, t)?,
+            ExCommand::FormatTable => {
+                if !Self::align_tables(t)? {
+                    return Err(CommandError::NotInTable.into());
+                }
+            }
         }
         Ok(done())
     }

@@ -17,6 +17,7 @@ mod resolve;
 mod scanner;
 mod sink;
 mod style;
+mod table;
 mod tag;
 
 use std::ops::Range;
@@ -32,6 +33,7 @@ pub use style::{
     MathSpot, Role, Rows, Span, Style, Styles, TextLines, Token, TypedWikilink, is_thematic_break,
     quote_prefix_len,
 };
+pub use table::{Align, CellPos, CellSpot, Formatted, Table};
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.

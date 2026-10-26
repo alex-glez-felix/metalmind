@@ -124,6 +124,8 @@ pub enum Action {
     /// Marca o desmarca el checkbox de un ítem de lista (`- [ ]` ↔
     /// `- [x]`), o le pone uno; con count, en tantas líneas.
     ToggleCheckbox,
+    /// Alinea las columnas de la tabla del cursor (`:tableformat`).
+    FormatTable,
 }
 
 impl Action {
@@ -291,6 +293,7 @@ impl Action {
         Self::HistoryPrevious,
         Self::HistoryNext,
         Self::ToggleCheckbox,
+        Self::FormatTable,
     ];
 
     #[must_use]
@@ -360,6 +363,7 @@ impl Action {
             Self::HistoryPrevious => "vim::history_previous",
             Self::HistoryNext => "vim::history_next",
             Self::ToggleCheckbox => "editor::toggle_checkbox",
+            Self::FormatTable => "editor::format_table",
         }
     }
 }

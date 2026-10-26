@@ -52,6 +52,7 @@ impl Vim {
                 self.repeat_block(change, size, t)?;
             }
             Change::ToggleCheckbox => self.toggle_checkbox(t)?,
+            Change::FormatTable => self.format_table(t)?,
         }
         if self.mode != Mode::Insert {
             return Ok(());

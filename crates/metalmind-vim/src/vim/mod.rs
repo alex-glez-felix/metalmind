@@ -15,6 +15,7 @@ mod repeat;
 mod scroll;
 mod search;
 mod substitute;
+mod table;
 mod visual;
 
 use std::collections::HashSet;

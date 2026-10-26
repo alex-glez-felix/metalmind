@@ -135,6 +135,7 @@ impl Vim {
             (Action::Later, Mode::Normal) => self.travel(Travel::Later, t)?,
             (Action::CommandLine, Mode::Normal) => self.open_command_line(Prompt::Command),
             (Action::ToggleCheckbox, Mode::Normal) => self.toggle_checkbox(t)?,
+            (Action::FormatTable, Mode::Normal) => self.format_table(t)?,
             _ => self.reset(),
         }
         Ok(KeyOutcome::Executed(action))

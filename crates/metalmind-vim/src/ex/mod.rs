@@ -67,6 +67,8 @@ pub(crate) enum ExCommand {
     Global(GlobalCommand),
     Sort(SortOptions),
     DeleteMarks(DeleteMarks),
+    /// `:tableformat`: alinea la tabla del cursor.
+    FormatTable,
 }
 
 /// Los comandos que corre el motor, con cuántas letras bastan para
@@ -85,6 +87,7 @@ enum Name {
     VGlobal,
     Sort,
     DeleteMarks,
+    FormatTable,
 }
 
 const NAMES: &[(&str, usize, Name)] = &[
@@ -101,6 +104,7 @@ const NAMES: &[(&str, usize, Name)] = &[
     ("vglobal", 1, Name::VGlobal),
     ("sort", 3, Name::Sort),
     ("delmarks", 4, Name::DeleteMarks),
+    ("tableformat", 6, Name::FormatTable),
 ];
 
 impl ParsedLine {
@@ -126,7 +130,7 @@ impl ParsedLine {
         };
         let without_range = matches!(
             command,
-            ExCommand::ClearSearchHighlight | ExCommand::DeleteMarks(_)
+            ExCommand::ClearSearchHighlight | ExCommand::DeleteMarks(_) | ExCommand::FormatTable
         );
         if range.is_some() && without_range {
             return Err(CommandError::NoRangeAllowed);
@@ -173,6 +177,11 @@ fn parse_command(text: &str) -> Result<Option<ExCommand>, CommandError> {
             no_bang(bang)?;
             args::no_trailing(args)?;
             ExCommand::ClearSearchHighlight
+        }
+        Name::FormatTable => {
+            no_bang(bang)?;
+            args::no_trailing(args)?;
+            ExCommand::FormatTable
         }
         Name::Delete => ExCommand::Delete(register_and_count(bang, args)?),
         Name::Yank => ExCommand::Yank(register_and_count(bang, args)?),
