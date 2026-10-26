@@ -168,6 +168,17 @@ pub fn write_templates(root: &Path) {
     file("tags/diario.md", "---\ntemplate: diario\n---\n");
 }
 
+/// Dos `plan.md` que empatan por nombre, una en la carpeta de nombre
+/// larguísimo: el link a cualquiera de las dos lleva su carpeta.
+pub fn write_link_notes(root: &Path) {
+    for folder in ["Proyectos/Metalmind", LONG_FOLDER] {
+        let path = root.join(folder).join("plan.md");
+        fs::create_dir_all(path.parent().expect("la ruta tiene carpeta"))
+            .expect("crear la carpeta");
+        fs::write(path, "# Plan\n").expect("escribir el archivo");
+    }
+}
+
 /// La plantilla de ejemplo, tal como la muestra la documentación.
 fn interview() -> &'static str {
     let docs = include_str!("../../../../docs/plantillas.md");
