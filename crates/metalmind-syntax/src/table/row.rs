@@ -1,13 +1,17 @@
 //! Una línea de tabla partida en celdas. Un `|` separa celdas salvo
 //! escapado (`\|`) o dentro de código, una fórmula o un wikilink: partirlo
-//! ahí cambiaría lo que dice la celda.
+//! ahí cambiaría lo que dice la celda. Los blancos que se quitan de los
+//! lados son espacios y tabs, como en GFM: un espacio duro es contenido.
 
 use std::ops::Range;
 
-use crate::code::CodeSpans;
+use crate::anchor::heading_at;
+use crate::code::{self, CodeSpans};
 use crate::link::wikilink_at;
 use crate::math::InlineMath;
-use crate::style::quote_prefix_len;
+use crate::style::{BlockKind, block_line, quote_prefix_len};
+
+const BLANKS: [char; 2] = [' ', '\t'];
 
 /// Una celda, en bytes sobre su línea.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,16 +27,26 @@ pub(super) struct Cell {
 pub(super) struct Row {
     /// La sangría y los `>` de una cita.
     pub prefix: Range<usize>,
+    /// Cuántas citas la contienen: una fila de otra cita es otro bloque.
+    pub quotes: usize,
     pub cells: Vec<Cell>,
 }
 
 impl Row {
-    /// `None` si la línea no tiene ningún `|` que separe celdas.
+    /// `None` si la línea no tiene ningún `|` que separe celdas o empieza
+    /// otro bloque: un heading, un ítem de lista, una regla o una cerca.
     pub(super) fn parse(line: &str) -> Option<Self> {
+        let block = block_line(line);
         let quote = quote_prefix_len(line);
-        let body = line[quote..].trim_start_matches([' ', '\t']);
+        let starts_block = block.kind != BlockKind::Paragraph
+            || heading_at(line, quote).is_some()
+            || code::fence(line).is_some();
+        if starts_block {
+            return None;
+        }
+        let body = line[quote..].trim_start_matches(BLANKS);
         let start = line.len() - body.len();
-        let end = start + body.trim_end().len();
+        let end = start + body.trim_end_matches([' ', '\t', '\r']).len();
         let pipes = pipes(line, start..end);
         let (&first, &last) = (pipes.first()?, pipes.last()?);
         let leading = first == start;
@@ -59,6 +73,7 @@ impl Row {
             .collect();
         Some(Self {
             prefix: 0..start,
+            quotes: block.quotes.len(),
             cells,
         })
     }
@@ -130,7 +145,7 @@ fn pipes(line: &str, span: Range<usize>) -> Vec<usize> {
 
 fn trimmed(line: &str, range: Range<usize>) -> Range<usize> {
     let text = &line[range.clone()];
-    let start = range.start + (text.len() - text.trim_start().len());
-    let end = range.start + text.trim_end().len();
+    let start = range.start + (text.len() - text.trim_start_matches(BLANKS).len());
+    let end = range.start + text.trim_end_matches(BLANKS).len();
     start..end.max(start)
 }

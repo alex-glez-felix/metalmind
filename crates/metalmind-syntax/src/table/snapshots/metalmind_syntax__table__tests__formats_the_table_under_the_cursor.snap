@@ -208,3 +208,93 @@ x | y‸
 ---‸
 ▼
 (sin tabla)
+
+── los espacios duros son contenido
+| a | b |
+|-|-|
+| uno‸ | 　備考 |
+▼
+| a     | b      |
+| ----- | ------ |
+|  uno‸  | 　備考 |
+
+── termina donde empieza otro bloque
+| a | b |
+|-|-|
+| uno‸ | dos |
+- ítem | con pipe
+| no | es |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+- ítem | con pipe
+| no | es |
+
+── termina en un heading
+| a | b |
+|-|-|
+| uno‸ | dos |
+# título | con pipe
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+# título | con pipe
+
+── termina en una cerca
+| a | b |
+|-|-|
+| uno‸ | dos |
+```a|b
+| no | es |
+```
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+```a|b
+| no | es |
+```
+
+── termina al salir de la cita
+> | a | b |
+> |-|-|
+> | uno‸ | dos |
+fuera | de la cita
+▼
+> | a   | b   |
+> | --- | --- |
+> | uno‸ | dos |
+fuera | de la cita
+
+── termina en una cita más honda
+> | a | b |
+> |-|-|
+> | uno‸ | dos |
+> > | otra | cita |
+▼
+> | a   | b   |
+> | --- | --- |
+> | uno‸ | dos |
+> > | otra | cita |
+
+── no entra en la cita de abajo
+| a | b |
+|-|-|
+| uno‸ | dos |
+> | otra | cita |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+> | otra | cita |
+
+── separadoras cortas, como prettier
+| a | b | c |
+|:-|:-:|-:|
+| x‸ | y | z |
+▼
+| a   |  b  |   c |
+| :-- | :-: | --: |
+| x‸   |  y  |   z |

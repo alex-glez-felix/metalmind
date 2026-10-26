@@ -68,6 +68,38 @@ const CASES: &[(&str, &str)] = &[
         "x | y‸\n\n| a | b |\n|-|-|",
     ),
     ("no es tabla: una regla", "---‸"),
+    (
+        "los espacios duros son contenido",
+        "| a | b |\n|-|-|\n|\u{a0}uno‸\u{a0}| \u{3000}備考 |",
+    ),
+    (
+        "termina donde empieza otro bloque",
+        "| a | b |\n|-|-|\n| uno‸ | dos |\n- ítem | con pipe\n| no | es |",
+    ),
+    (
+        "termina en un heading",
+        "| a | b |\n|-|-|\n| uno‸ | dos |\n# título | con pipe",
+    ),
+    (
+        "termina en una cerca",
+        "| a | b |\n|-|-|\n| uno‸ | dos |\n```a|b\n| no | es |\n```",
+    ),
+    (
+        "termina al salir de la cita",
+        "> | a | b |\n> |-|-|\n> | uno‸ | dos |\nfuera | de la cita",
+    ),
+    (
+        "termina en una cita más honda",
+        "> | a | b |\n> |-|-|\n> | uno‸ | dos |\n> > | otra | cita |",
+    ),
+    (
+        "no entra en la cita de abajo",
+        "| a | b |\n|-|-|\n| uno‸ | dos |\n> | otra | cita |",
+    ),
+    (
+        "separadoras cortas, como prettier",
+        "| a | b | c |\n|:-|:-:|-:|\n| x‸ | y | z |",
+    ),
 ];
 
 /// La nota con la tabla del cursor alineada y el cursor donde queda.
@@ -163,7 +195,7 @@ fn contents(table: &Table) -> Vec<Vec<String>> {
 fn written_table() -> impl Strategy<Value = String> {
     let cell = "[ a:\\-|\\\\`$\\[\\]é東]{0,6}";
     let header = "[a:é東][ a:é東]{0,5}";
-    let delimiter = "[ ]{0,2}:?-{1,4}:?[ ]{0,2}";
+    let delimiter = "[ ]{0,2}:?-{1,4}:?";
     (1usize..4).prop_flat_map(move |columns| {
         (
             prop::collection::vec(header, columns),

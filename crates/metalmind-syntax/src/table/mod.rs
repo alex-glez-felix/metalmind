@@ -3,8 +3,8 @@
 //!
 //! Una tabla es una fila de encabezado seguida de la separadora (`|---|`)
 //! con tantas celdas como ella, y las filas que siguen mientras tengan algún
-//! `|`. Celdas y cursor se miden en bytes; el ancho de una columna, en
-//! columnas de pantalla.
+//! `|`, estén en la misma cita y no empiecen otro bloque. Celdas y cursor se
+//! miden en bytes; el ancho de una columna, en columnas de pantalla.
 
 mod row;
 
@@ -20,7 +20,7 @@ use crate::style::Lines;
 pub use row::Align;
 use row::Row;
 
-/// Un separador `---` más corto deja de leerse como tal.
+/// El ancho mínimo de una columna, el de `---` y `:-:`, como prettier.
 const MIN_WIDTH: usize = 3;
 
 /// Una tabla, con el texto de sus filas.
@@ -52,10 +52,12 @@ impl Table {
     /// La tabla que contiene la línea `line`, si la hay.
     #[must_use]
     pub fn around(lines: &impl Lines, line: usize) -> Option<Self> {
-        let is_row = |index: usize| Row::parse(&lines.line(index)).is_some();
-        if line >= lines.line_count() || !is_row(line) {
+        if line >= lines.line_count() {
             return None;
         }
+        let quotes = Row::parse(&lines.line(line))?.quotes;
+        let is_row =
+            |index: usize| Row::parse(&lines.line(index)).is_some_and(|row| row.quotes == quotes);
         let first = (0..line)
             .rev()
             .take_while(|&i| is_row(i))

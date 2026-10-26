@@ -28,6 +28,7 @@ use std::ops::Range;
 
 use crate::{TagPlace, TagSpot};
 
+pub(crate) use block::{BlockKind, block_line};
 pub use cache::Styles;
 pub use rows::{FormulaRows, Rows};
 pub use typed_link::TypedWikilink;
