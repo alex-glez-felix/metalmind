@@ -141,6 +141,9 @@ impl PickerDelegate for NameQuestion {
     fn empty(&self) -> SharedString {
         match self.answer() {
             Ok(_) => SharedString::default(),
+            Err(NameProblem::Name(NameError::Empty)) => {
+                SharedString::new_static("Escribe el nombre; enter crea la nota y la abre")
+            }
             Err(problem) => problem.to_string().into(),
         }
     }
