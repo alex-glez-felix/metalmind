@@ -96,6 +96,7 @@ impl TagChangeView {
 
     fn render_header(&self, theme: &Theme) -> impl IntoElement {
         div()
+            .flex_none()
             .flex()
             .items_center()
             .gap(theme.layout.picker_gap)
@@ -139,6 +140,7 @@ impl TagChangeView {
         let lines: Vec<_> = notices.chain(blocked).collect();
         (!lines.is_empty()).then(|| {
             div()
+                .flex_none()
                 .flex()
                 .flex_col()
                 .px(theme.layout.picker_padding_x)
@@ -158,8 +160,11 @@ impl TagChangeView {
         );
         let theme = theme.clone();
         let toggle_keys = keys(TagChangeAction::ToggleChange, cx);
+        // En una ventana baja se encoge la lista (los demás son `flex_none`),
+        // no el detalle ni los botones.
         div()
             .h(px(height))
+            .min_h_0()
             .border_t(theme.stroke.border)
             .border_color(theme.ui.picker_border)
             .child(
@@ -240,11 +245,13 @@ impl TagChangeView {
     }
 
     /// El cambio elegido entero, en varias líneas: en la fila se recorta, y
-    /// en un campo de la página el valor nuevo es lo que se confirma. Su
-    /// alto es fijo para que moverse entre filas no corra los botones.
+    /// en un campo de la página el valor nuevo es lo que se confirma, así
+    /// que va primero y lo de antes después. Su alto es fijo para que
+    /// moverse entre filas no corra los botones.
     fn render_detail(&self, theme: &Theme) -> impl IntoElement {
         let detail = div()
             .debug_selector(|| "tag-change-detail".to_owned())
+            .flex_none()
             .h(theme.tag_change_detail_height())
             .overflow_hidden()
             .px(theme.layout.picker_padding_x)
@@ -254,22 +261,32 @@ impl TagChangeView {
         let Some(change) = self.preview.row(self.preview.selected()) else {
             return detail;
         };
+        let after = if change.after.is_empty() {
+            "→ se quita".to_owned()
+        } else {
+            format!("→ {}", change.after)
+        };
         detail
             .text_color(change_color(&change, theme))
             .when(change.dropped, Styled::line_through)
+            .child(
+                div()
+                    .debug_selector(|| "tag-change-detail-after".to_owned())
+                    .child(after),
+            )
             .when(!change.before.is_empty(), |detail| {
                 detail.child(
                     div()
                         .text_color(theme.ui.picker_muted)
-                        .child(change.before.to_owned()),
+                        .child(format!("antes: {}", change.before)),
                 )
             })
-            .child(format!("→ {}", change.after))
     }
 
     fn render_footer(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let blocked = self.preview.blocked().is_some();
         div()
+            .flex_none()
             .flex()
             .justify_end()
             .gap(theme.layout.picker_gap)
@@ -304,6 +321,7 @@ impl Render for TagChangeView {
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(TagChangeEvent::Cancel)))
             .w(theme.layout.picker_width)
             .max_w(relative(0.9))
+            .max_h(relative(1.))
             .flex()
             .flex_col()
             .overflow_hidden()
