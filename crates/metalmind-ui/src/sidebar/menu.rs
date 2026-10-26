@@ -27,6 +27,11 @@ pub enum MenuItem {
     MergeTag,
     /// En la vista de tags, lo que `NewNote` es en la de carpetas.
     NewTaggedNote,
+    OpenTagPage,
+    TagAliases,
+    TagParents,
+    TagIcon,
+    TagTemplate,
 }
 
 impl MenuItem {
@@ -41,6 +46,11 @@ impl MenuItem {
             Self::Delete => "Mandar a la papelera",
             Self::MergeTag => "Fusionar con…",
             Self::NewTaggedNote => "Nueva nota con este tag",
+            Self::OpenTagPage => "Abrir su página",
+            Self::TagAliases => "Alias…",
+            Self::TagParents => "Padres…",
+            Self::TagIcon => "Ícono…",
+            Self::TagTemplate => "Plantilla…",
         }
     }
 
@@ -58,6 +68,11 @@ impl MenuItem {
             Self::Rename => PanelAction::Rename,
             Self::Move | Self::MergeTag => PanelAction::Move,
             Self::Delete => PanelAction::Delete,
+            Self::OpenTagPage => PanelAction::OpenTagPage,
+            Self::TagAliases => PanelAction::EditTagAliases,
+            Self::TagParents => PanelAction::EditTagParents,
+            Self::TagIcon => PanelAction::SetTagIcon,
+            Self::TagTemplate => PanelAction::SetTagTemplate,
         }
     }
 
@@ -109,14 +124,20 @@ impl ContextMenu {
         }
     }
 
-    /// Sobre un tag de la vista de tags: una nota nueva con él, o
-    /// renombrarlo o fusionarlo (05 §5).
+    /// Sobre un tag de la vista de tags: una nota nueva con él, su página,
+    /// los campos de la página (05 §3) y renombrarlo o fusionarlo (05 §5).
     pub fn on_tag(position: Point<Pixels>, tag: String) -> Self {
         Self {
             position,
             target: MenuTarget::Tag(tag),
             groups: vec![
-                &[MenuItem::NewTaggedNote],
+                &[MenuItem::NewTaggedNote, MenuItem::OpenTagPage],
+                &[
+                    MenuItem::TagAliases,
+                    MenuItem::TagParents,
+                    MenuItem::TagIcon,
+                    MenuItem::TagTemplate,
+                ],
                 &[MenuItem::Rename, MenuItem::MergeTag],
             ],
             selected: 0,

@@ -146,3 +146,74 @@ fn tagundo_no_devuelve_una_pagina_sobre_un_buffer_sin_guardar() {
     smoke.wait_contents("tags/rust.md", "x\n");
     assert_eq!(smoke.read("tags/lang.md"), "Del lenguaje.\n");
 }
+
+/// `:tagaliases` crea la página con el campo, pasando por la vista previa,
+/// y `:tagundo` la quita.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn tagaliases_crea_la_pagina_y_tagundo_la_quita() {
+    let smoke = Smoke::new();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagaliases #rust rs, rustlang<CR><CR>");
+    smoke.wait_contents("tags/rust.md", "---\naliases: [rs, rustlang]\n---\n");
+    window.type_keys(":tagundo<CR>");
+    smoke.wait_files(&["a.md", "b.md", "tags"]);
+}
+
+/// `rust.md` con un padre y su página, con `#rust` dentro de `#lenguajes`
+/// en la vista de tags.
+fn page_with_parent(smoke: &Smoke) {
+    two_notes(smoke);
+    std::fs::create_dir(smoke.notes().join("tags")).unwrap();
+    smoke.write(
+        "tags/rust.md",
+        "---\nparents: [lenguajes]\n---\nDel lenguaje.\n",
+    );
+}
+
+/// Desde la vista de tags, `p` pregunta los padres con los de ahora y
+/// `enter` pasa por la vista previa; solo cambia ese campo de la página.
+/// `l` abre `#lenguajes` y baja a `#rust`.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn p_en_la_vista_de_tags_cambia_los_padres() {
+    let smoke = Smoke::new();
+    page_with_parent(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys(" tggllp, sistemas<CR><CR>");
+    smoke.wait_contents(
+        "tags/rust.md",
+        "---\nparents: [lenguajes, sistemas]\n---\nDel lenguaje.\n",
+    );
+}
+
+/// `t` pone la plantilla de sus notas nuevas (06 §11) antes del `---`.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn t_en_la_vista_de_tags_pone_la_plantilla() {
+    let smoke = Smoke::new();
+    page_with_parent(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys(" tgglltrust/capitulo<CR><CR>");
+    smoke.wait_contents(
+        "tags/rust.md",
+        "---\nparents: [lenguajes]\ntemplate: rust/capitulo\n---\nDel lenguaje.\n",
+    );
+}
+
+/// `:tagpage` crea vacía la página que todavía no existe, con su carpeta,
+/// y la abre.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn tagpage_crea_la_pagina_y_la_abre() {
+    let smoke = Smoke::new();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagpage #Rust<CR>");
+    window.wait_title("de la página", |title| title.starts_with("tags/rust.md"));
+    window.type_keys("iEl lenguaje.<Esc>:w<CR>");
+    smoke.wait_contents("tags/rust.md", "El lenguaje.\n");
+}

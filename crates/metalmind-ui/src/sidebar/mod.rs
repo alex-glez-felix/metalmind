@@ -50,6 +50,8 @@ pub enum SidebarEvent {
     /// Una nota nueva con este tag: la ventana pregunta su nombre y usa la
     /// plantilla que pida su página.
     NewTaggedNote(String),
+    /// Abrir la página de este tag.
+    OpenTagPage(String),
 }
 
 pub struct Sidebar {

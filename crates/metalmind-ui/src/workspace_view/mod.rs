@@ -216,6 +216,10 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.open_daily_note(window, cx);
             }
+            Effect::OpenTagPage(tag) => {
+                self.sync_editors(cx);
+                self.open_tag_page(&tag, window, cx);
+            }
         }
     }
 
@@ -268,6 +272,7 @@ impl WorkspaceView {
             SidebarEvent::FocusEditor => self.focus(window, cx),
             SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
+            SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
         }
         cx.notify();
     }

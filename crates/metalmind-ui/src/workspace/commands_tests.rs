@@ -556,6 +556,34 @@ fn las_notas_nuevas_las_pide_la_ventana() {
     assert_eq!(session.text(), "uno\n");
 }
 
+#[test]
+fn los_campos_y_la_pagina_de_un_tag_los_pide_la_ventana() {
+    let mut session = Session::new("uno\n");
+    session.keys(":tagaliases #rust rs rustlang⏎");
+    assert_eq!(
+        session.effect,
+        Effect::ChangeTags(TagRequest::Page {
+            tag: "rust".to_owned(),
+            field: TagField::Aliases,
+            change: metalmind_vault::tags::PageChange::Aliases(vec![
+                "rs".to_owned(),
+                "rustlang".to_owned(),
+            ]),
+        })
+    );
+    session.keys(":tagpage #rust⏎");
+    assert_eq!(session.effect, Effect::OpenTagPage("#rust".to_owned()));
+    session.keys(":tagpage⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(error(&session), Some("uso: :tagpage #tag"));
+    session.keys(":tagicon #rust libro⏎");
+    assert_eq!(session.effect, Effect::Stay);
+    assert_eq!(
+        error(&session),
+        Some("`libro` no es un ícono: va un emoji o `set:nombre`")
+    );
+}
+
 /// El picker se lleva las teclas: lo que quede de la macro no sigue.
 #[test]
 fn abrir_el_finder_corta_la_macro() {

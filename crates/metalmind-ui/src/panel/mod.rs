@@ -17,7 +17,7 @@ pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
 use crate::file_tree::FileTree;
-use crate::tag_change::TagRequest;
+use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
 
 /// Las dos vistas del panel (05 §3).
@@ -96,13 +96,21 @@ pub enum Prompt {
         tag: String,
         input: LineInput,
     },
+    /// Un campo de la página del tag elegido, con lo que tiene ahora.
+    TagField {
+        tag: String,
+        field: TagField,
+        input: LineInput,
+    },
 }
 
 impl Prompt {
     /// La vista que pregunta esto.
     fn view(&self) -> PanelView {
         match self {
-            Self::RenameTag { .. } | Self::MergeTag { .. } => PanelView::Tags,
+            Self::RenameTag { .. } | Self::MergeTag { .. } | Self::TagField { .. } => {
+                PanelView::Tags
+            }
             _ => PanelView::Folders,
         }
     }
@@ -111,7 +119,10 @@ impl Prompt {
     /// la carpeta donde se crea. El filtro no tiene.
     fn target_mut(&mut self) -> Option<&mut VaultPath> {
         match self {
-            Self::Filter(_) | Self::RenameTag { .. } | Self::MergeTag { .. } => None,
+            Self::Filter(_)
+            | Self::RenameTag { .. }
+            | Self::MergeTag { .. }
+            | Self::TagField { .. } => None,
             Self::Create { parent, .. } => Some(parent),
             Self::Rename { path, .. }
             | Self::Move { path, .. }
@@ -266,7 +277,8 @@ impl Panel {
             | Prompt::Rename { input, .. }
             | Prompt::Move { input, .. }
             | Prompt::RenameTag { input, .. }
-            | Prompt::MergeTag { input, .. } => Some(input),
+            | Prompt::MergeTag { input, .. }
+            | Prompt::TagField { input, .. } => Some(input),
             Prompt::ConfirmDelete { .. } => None,
         }
     }
@@ -335,6 +347,14 @@ impl Panel {
         };
         let input = LineInput::new(path.as_str());
         self.open(Prompt::Move { path, input });
+    }
+
+    /// En la vista de tags, pregunta `field` del tag elegido.
+    pub fn start_tag_field(&mut self, field: TagField) {
+        if let Some(tag) = self.selected_tag() {
+            let input = LineInput::new(&field.current(self.tags.tags(), &tag));
+            self.open(Prompt::TagField { tag, field, input });
+        }
     }
 
     /// La forma establecida del tag de la fila elegida en la vista de tags.
@@ -432,6 +452,8 @@ enum PromptError {
     Path(#[from] InvalidPath),
     #[error("`{0}` no es un nombre de tag válido")]
     TagName(String),
+    #[error(transparent)]
+    Field(#[from] FieldError),
 }
 
 /// `Ok(None)` si no hay nada que hacer: un nombre vacío o el mismo.
@@ -467,6 +489,11 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, PromptError> {
                 to,
             })
         }),
+        Prompt::TagField { tag, field, input } => Some(Request::ChangeTags(TagRequest::Page {
+            tag: tag.clone(),
+            field: *field,
+            change: field.change(input.text())?,
+        })),
         Prompt::MergeTag { tag, input } => other_tag(tag, input)?.map(|into| {
             Request::ChangeTags(TagRequest::Merge {
                 from: tag.clone(),
@@ -525,5 +552,7 @@ fn renamed(from: &VaultPath, to: Option<VaultPath>) -> Option<Request> {
     })
 }
 
+#[cfg(test)]
+mod tag_field_tests;
 #[cfg(test)]
 mod tests;

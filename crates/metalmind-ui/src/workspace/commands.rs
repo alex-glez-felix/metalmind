@@ -17,7 +17,7 @@ use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor
 use crate::document::{Document, SaveError};
 use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
-use crate::tag_change::TagRequest;
+use crate::tag_change::{RequestError, TagField, TagRequest};
 
 /// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,6 +49,12 @@ pub enum Effect {
     NewNote(NoteRequest),
     /// `:today`
     OpenDailyNote,
+    /// `:tagpage #tag`: la ventana, que tiene los tags, abre su página.
+    OpenTagPage(String),
+}
+
+fn page_change(field: TagField, argument: Option<&str>) -> Result<Effect, WorkspaceError> {
+    Ok(Effect::ChangeTags(TagRequest::page(field, argument)?))
 }
 
 impl Workspace {
@@ -148,6 +154,14 @@ impl Workspace {
             Command::UndoTagChange => Ok(Effect::UndoTagChange),
             Command::NewNoteFromTemplate => Ok(Effect::NewNote(NoteRequest::parse(argument))),
             Command::OpenDailyNote => Ok(Effect::OpenDailyNote),
+            Command::EditTagAliases => page_change(TagField::Aliases, argument),
+            Command::EditTagParents => page_change(TagField::Parents, argument),
+            Command::SetTagIcon => page_change(TagField::Icon, argument),
+            Command::SetTagTemplate => page_change(TagField::Template, argument),
+            Command::OpenTagPage => match argument.map(str::trim) {
+                Some(tag) if !tag.is_empty() => Ok(Effect::OpenTagPage(tag.to_owned())),
+                _ => Err(RequestError::Usage(":tagpage #tag").into()),
+            },
         }
     }
 

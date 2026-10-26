@@ -141,7 +141,7 @@ impl WorkspaceView {
         self.touch_focused(cx);
     }
 
-    fn edit_note(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn edit_note(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
         let Some(argument) = path.to_str().map(str::to_owned) else {
             let error = format!("{} no es una ruta UTF-8", path.display());
             self.workspace.update(cx, |workspace, _| {
