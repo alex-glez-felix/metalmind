@@ -710,6 +710,31 @@ fn la_lista_de_tags_trae_los_que_llegan_del_vault() {
     smoke.wait_contents("a.md", "hola #ruby\n");
 }
 
+/// Un tag que llega del vault con una fila elegida con `ctrl-n` no la
+/// cambia: `ruta` sigue elegida aunque entre `rubí`, y `tab` la escribe.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn un_tag_que_llega_deja_la_fila_elegida() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "hola\n");
+    smoke.write("b.md", "#rueda\n");
+    smoke.write("c.md", "#rueda #ruta\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let closed = window.wait_still(TAG_COMPLETION);
+    window.type_keys("A #ru");
+    window.wait_change("la lista", TAG_COMPLETION, &closed);
+    let open = window.wait_still(TAG_COMPLETION);
+    window.type_keys("<C-n>");
+    window.wait_change("ruta elegida", TAG_COMPLETION, &open);
+    let chosen = window.wait_still(TAG_COMPLETION);
+    smoke.write("d.md", "#rubí\n");
+    window.wait_change("la lista con rubí", TAG_COMPLETION, &chosen);
+    window.type_keys("<Tab><Esc>:w<CR>");
+    smoke.wait_contents("a.md", "hola #ruta\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {
