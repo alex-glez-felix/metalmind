@@ -9,6 +9,7 @@ use metalmind_vault::{InvalidPath, VaultPath};
 
 use crate::draft::{Draft, NewNote, Pick, Templates, draft};
 use crate::format::{DateFormat, FormatError};
+use crate::note_path::NotePath;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DailyNote {
@@ -47,11 +48,10 @@ pub fn daily_note(
     } else {
         note_name::with_extension(&format!("{folder}/{name}"))
     };
-    let path = VaultPath::new(&path)?;
-    let title = name.rsplit('/').next().unwrap_or(&name);
+    let NotePath { path, title } = NotePath::from_file(VaultPath::new(&path)?);
     let pick = daily.template.as_deref().map_or(Pick::Blank, Pick::Named);
     let note = NewNote {
-        title,
+        title: &title,
         tags: &[],
         pick,
         now,

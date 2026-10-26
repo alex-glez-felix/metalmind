@@ -9,7 +9,9 @@
 mod daily;
 mod draft;
 mod format;
+mod gap;
 mod load;
+mod note_path;
 mod render;
 mod tags;
 mod tags_field;
@@ -20,6 +22,7 @@ pub use daily::{DailyError, DailyNote, daily_note};
 pub use draft::{Draft, DraftProblem, NewNote, Pick, Templates, draft};
 pub use format::{DateFormat, FormatError};
 pub use load::Loaded;
+pub use note_path::{NameError, NotePath};
 pub use render::{Context, Rendered, VariableProblem, render};
-pub use tags::{TagChoice, tag_template};
+pub use tags::{TagChoice, tag_of_template, tag_template, tags_asking_for};
 pub use tags_field::TagsNotAdded;

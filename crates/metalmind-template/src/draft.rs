@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use jiff::Zoned;
 
+use crate::gap::first_gap;
 use crate::render::{Context, VariableProblem, render};
 use metalmind_vault::tags::TagGraph;
 
@@ -57,6 +58,8 @@ pub struct Draft {
     pub text: String,
     /// La plantilla que se usó.
     pub template: Option<String>,
+    /// Dónde empezar a escribir, en bytes de `text` ([`first_gap`]).
+    pub cursor: usize,
     pub problems: Vec<DraftProblem>,
 }
 
@@ -104,6 +107,7 @@ pub fn draft(note: &NewNote, templates: &Templates, tags: &TagGraph) -> Draft {
         body
     });
     Draft {
+        cursor: first_gap(&text),
         text,
         template: template.map(|(name, _)| name.to_owned()),
         problems,
@@ -198,6 +202,16 @@ mod tests {
             draft.text,
             "---\ntags: [reunion, trabajo]\n---\n# Plan (2026-10-18)\n"
         );
+    }
+
+    #[test]
+    fn the_cursor_goes_under_the_title() {
+        let draft = drafted(&[], Pick::Named("reunion"));
+        assert_eq!(
+            draft.text,
+            "---\ntags: [reunion]\n---\n# Plan (2026-10-18)\n"
+        );
+        assert_eq!(draft.cursor, draft.text.len() - 1);
     }
 
     #[test]
