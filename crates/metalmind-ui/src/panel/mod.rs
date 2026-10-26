@@ -10,7 +10,7 @@ mod outline;
 use std::sync::Arc;
 
 use metalmind_syntax::note_name;
-use metalmind_vault::tags::Tags;
+use metalmind_vault::tags::{Tags, tag_name};
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
@@ -470,7 +470,7 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, InvalidPath> {
 /// Lo escrito como otro tag, sin `#`; vacío o igual a `tag`, ninguno.
 fn other_tag(tag: &str, input: &LineInput) -> Option<String> {
     let text = input.text().trim();
-    let name = text.strip_prefix('#').unwrap_or(text);
+    let name = tag_name(text).unwrap_or(text);
     (!name.is_empty() && name != tag).then(|| name.to_owned())
 }
 
