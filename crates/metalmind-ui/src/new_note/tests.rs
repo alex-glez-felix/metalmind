@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 
 use jiff::Timestamp;
@@ -100,12 +101,24 @@ fn las_plantillas_listan_los_tags_que_las_piden() {
     );
 }
 
-#[test]
-fn una_carpeta_de_plantillas_invalida_es_error() {
+#[rstest]
+#[case::fuera("../fuera")]
+#[case::raiz_absoluta("/")]
+#[case::dos_barras("//")]
+#[case::absoluta("/plantillas/")]
+fn una_carpeta_de_plantillas_invalida_es_error(#[case] folder: &str) {
     let (_dir, vault) = standard();
-    assert!(load_templates(&vault, &vault.snapshot(), "../fuera").is_err());
-    let none = load_templates(&vault, &vault.snapshot(), "no-existe").unwrap();
-    assert_eq!(none.names().count(), 0);
+    assert!(load_templates(&vault, &vault.snapshot(), folder).is_err());
+}
+
+#[rstest]
+#[case::sin_barra("plantillas", 3)]
+#[case::con_barra("plantillas/", 3)]
+#[case::no_existe("no-existe", 0)]
+fn carpetas_de_plantillas(#[case] folder: &str, #[case] count: usize) {
+    let (_dir, vault) = standard();
+    let templates = load_templates(&vault, &vault.snapshot(), folder).unwrap();
+    assert_eq!(templates.names().count(), count);
 }
 
 #[test]
@@ -199,44 +212,79 @@ fn los_problemas_de_la_plantilla_llegan_con_la_nota() {
     );
 }
 
-fn daily(template: Option<&str>) -> Daily {
-    Daily {
-        enabled: true,
-        template: template.map(str::to_owned),
-        ..Daily::default()
+fn daily(template: Option<&str>) -> NoteSettings {
+    NoteSettings {
+        templates_folder: "plantillas".to_owned(),
+        daily: Daily {
+            enabled: true,
+            template: template.map(str::to_owned),
+            ..Daily::default()
+        },
+    }
+}
+
+fn with_folder(settings: NoteSettings, folder: &str) -> NoteSettings {
+    NoteSettings {
+        templates_folder: folder.to_owned(),
+        ..settings
     }
 }
 
 #[test]
 fn la_nota_del_dia_se_crea_una_vez_y_despues_se_abre() {
     let (dir, vault) = standard();
-    let templates = templates(&vault);
-    let first = open_daily(&vault, &daily(Some("diario")), &templates, &now()).unwrap();
+    let first = open_daily(&vault, &daily(Some("diario")), &now()).unwrap();
     assert_eq!(first.path.as_str(), "diario/2026-10-26.md");
     assert_eq!(first.cursor, Some(LinePosition { line: 1, column: 0 }));
     let path = "diario/2026-10-26.md";
     assert_eq!(read(dir.path(), path), "# lunes 26 de octubre\n\n");
     fs::write(dir.path().join(path), "escrita\n").unwrap();
-    let again = open_daily(&vault, &daily(Some("diario")), &templates, &now()).unwrap();
+    let again = open_daily(&vault, &daily(Some("diario")), &now()).unwrap();
     assert_eq!(again.cursor, None);
     assert_eq!(read(dir.path(), path), "escrita\n");
+}
+
+/// La que ya está en el índice se abre sin escribir nada: también en una
+/// carpeta sin permiso de escritura.
+#[test]
+fn la_nota_del_dia_que_existe_se_abre_sin_escribir() {
+    let (dir, vault) = vault(&[("diario/2026-10-26.md", "ya\n")]);
+    let folder = dir.path().join("diario");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o555)).unwrap();
+    let opened = open_daily(&vault, &daily(None), &now());
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(opened.unwrap().cursor, None);
+    assert_eq!(read(dir.path(), "diario/2026-10-26.md"), "ya\n");
 }
 
 #[test]
 fn la_nota_del_dia_esta_apagada_por_defecto() {
     let (_dir, vault) = standard();
-    let error = open_daily(&vault, &Daily::default(), &templates(&vault), &now()).unwrap_err();
+    let settings = NoteSettings {
+        templates_folder: "/".to_owned(),
+        daily: Daily::default(),
+    };
+    let error = open_daily(&vault, &settings, &now()).unwrap_err();
     assert!(matches!(error, DailyOpenError::Disabled), "{error}");
+}
+
+/// Una carpeta de plantillas inválida solo importa si la nota del día usa
+/// plantilla.
+#[test]
+fn la_carpeta_de_plantillas_solo_cuenta_con_plantilla() {
+    let (_dir, vault) = standard();
+    let plain = open_daily(&vault, &with_folder(daily(None), "/"), &now()).unwrap();
+    assert!(plain.cursor.is_some());
+    let error = open_daily(&vault, &with_folder(daily(Some("diario")), "/"), &now()).unwrap_err();
+    assert!(matches!(error, DailyOpenError::Folder(_)), "{error}");
 }
 
 #[test]
 fn un_formato_de_dia_invalido_es_error() {
     let (_dir, vault) = standard();
-    let settings = Daily {
-        format: String::new(),
-        ..daily(None)
-    };
-    let error = open_daily(&vault, &settings, &templates(&vault), &now()).unwrap_err();
+    let mut settings = daily(None);
+    settings.daily.format = String::new();
+    let error = open_daily(&vault, &settings, &now()).unwrap_err();
     assert!(matches!(error, DailyOpenError::Settings(_)), "{error}");
 }
 

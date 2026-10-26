@@ -98,6 +98,11 @@ impl Origin {
     }
 }
 
+/// `templates_folder` de la config no es una carpeta del vault.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("`templates_folder` de config.yaml: {0}")]
+pub struct FolderError(InvalidPath);
+
 /// Las plantillas del vault, de la carpeta `folder` de la config.
 ///
 /// # Errors
@@ -106,8 +111,13 @@ pub fn load_templates(
     vault: &Vault,
     index: &VaultIndex,
     folder: &str,
-) -> Result<Templates, InvalidPath> {
-    let folder = VaultPath::new(folder.trim_end_matches('/'))?;
+) -> Result<Templates, FolderError> {
+    // Solo se quita una `/` final: `/` y `//` tienen que fallar como absolutas.
+    let folder = match folder.strip_suffix('/') {
+        Some(rest) if !rest.is_empty() => rest,
+        _ => folder,
+    };
+    let folder = VaultPath::new(folder).map_err(FolderError)?;
     let loaded = Templates::load(vault.root(), index, &folder);
     for error in loaded.errors {
         log::warn!("no se leyó una plantilla: {error}");
@@ -187,30 +197,46 @@ pub enum DailyOpenError {
     #[error("la nota del día está apagada: se prende con `daily.enabled: true` en config.yaml")]
     Disabled,
     #[error(transparent)]
+    Folder(#[from] FolderError),
+    #[error(transparent)]
     Settings(#[from] DailyError),
     #[error(transparent)]
     Create(#[from] FileOpError),
 }
 
-/// La nota del día de `now`: la crea con su plantilla si no existe.
+/// La nota del día de `now`: la abre si existe y si no, la crea con su
+/// plantilla. Las plantillas se leen solo si la pide.
 ///
 /// # Errors
 /// Si las notas del día están apagadas o mal configuradas, o no se pudo
 /// crear.
 pub fn open_daily(
     vault: &Vault,
-    daily: &Daily,
-    templates: &Templates,
+    settings: &NoteSettings,
     now: &Zoned,
 ) -> Result<Landing, DailyOpenError> {
-    let note = daily_note(daily, now, templates)?.ok_or(DailyOpenError::Disabled)?;
+    let daily = &settings.daily;
+    if !daily.enabled {
+        return Err(DailyOpenError::Disabled);
+    }
+    let index = vault.snapshot();
+    let templates = match daily.template {
+        Some(_) => load_templates(vault, &index, &settings.templates_folder)?,
+        None => Templates::default(),
+    };
+    let note = daily_note(daily, now, &templates)?.ok_or(DailyOpenError::Disabled)?;
+    let existing = || Landing {
+        path: note.path.clone(),
+        cursor: None,
+        problems: Vec::new(),
+    };
+    if index.contains(&note.path) {
+        return Ok(existing());
+    }
+    // El índice va un paso detrás del disco: crear tampoco pisa.
     match vault.create_note(&note.path, &note.draft.text) {
-        Ok(()) => Ok(Landing::created(note.path, &note.draft)),
-        Err(FileOpError::AlreadyExists(_)) => Ok(Landing {
-            path: note.path,
-            cursor: None,
-            problems: Vec::new(),
-        }),
+        Ok(()) => Ok(Landing::created(note.path.clone(), &note.draft)),
+        Err(FileOpError::AlreadyExists(_)) => Ok(existing()),
         Err(error) => Err(error.into()),
     }
 }

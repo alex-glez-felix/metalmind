@@ -67,11 +67,8 @@ impl WorkspaceView {
     }
 
     pub(super) fn open_daily_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(templates) = self.templates(cx) else {
-            return;
-        };
         let vault = self.session.read(cx).vault();
-        match new_note::open_daily(&vault, &self.notes.daily, &templates, &Zoned::now()) {
+        match new_note::open_daily(&vault, &self.notes, &Zoned::now()) {
             Ok(landing) => self.land(&landing, Placement::Current, window, cx),
             Err(error) => self.tell(Message::Error(error.to_string()), cx),
         }
@@ -86,8 +83,7 @@ impl WorkspaceView {
         match new_note::load_templates(&vault, &vault.snapshot(), folder) {
             Ok(templates) => Some(templates),
             Err(error) => {
-                let text = format!("`templates_folder` de config.yaml: {error}");
-                self.tell(Message::Error(text), cx);
+                self.tell(Message::Error(error.to_string()), cx);
                 None
             }
         }
