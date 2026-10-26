@@ -239,8 +239,8 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::RightClickRow(0),
         ],
     ),
-    // La primera entrada es la nota nueva con el tag; `j` baja a renombrar.
-    ("tags-renombrar-pregunta", &[Step::Keys("j<CR>")]),
+    // Renombrar es la séptima entrada del menú de un tag.
+    ("tags-renombrar-pregunta", &[Step::Keys("jjjjjj<CR>")]),
     (
         "renombrar-tag",
         &[Step::Keys(
@@ -299,6 +299,27 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("plantilla-creada", &[Step::Keys("<CR>")]),
     ("nota-del-dia", &[Step::Keys("<Esc>:today<CR>")]),
+    // El resto del menú de un tag (05 §3): el menú entero sobre `#Rust`, la
+    // pregunta de sus alias con los de ahora y una lista larga, su vista
+    // previa y aplicada, un ícono que no vale y la página abierta.
+    (
+        "tags-menu-completo",
+        &[Step::Keys("<C-w>h"), Step::RightClickRow(9)],
+    ),
+    ("tags-alias-pregunta", &[Step::Keys("<Esc>e")]),
+    (
+        "tags-alias-largos",
+        &[Step::Keys(
+            ", rustlang, ferris-el-cangrejo, el-lenguaje-de-sistemas-con-un-alias-que-no-cabe-en-el-panel",
+        )],
+    ),
+    ("tags-alias-vista-previa", &[Step::Keys("<CR>")]),
+    ("tags-alias-aplicado", &[Step::Keys("<CR>")]),
+    (
+        "tags-icono-invalido",
+        &[Step::Keys("<C-w>hi<BS>libro<CR>")],
+    ),
+    ("tags-pagina", &[Step::Keys("<Esc>P")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
