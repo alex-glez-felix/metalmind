@@ -163,6 +163,14 @@ impl Theme {
         self.ui_line().max(detail) + self.rows.picker_padding * 2.
     }
 
+    /// Alto del cambio elegido bajo la vista previa de un cambio de tags:
+    /// sus líneas de texto con el aire del input del picker.
+    #[must_use]
+    pub fn tag_change_detail_height(&self) -> Pixels {
+        let lines = f32::from(self.layout.tag_change_detail_lines);
+        self.ui_line() * lines + self.layout.picker_input_padding_y * 2.
+    }
+
     /// El lado corto de los íconos provisionales del panel, que no son
     /// cuadrados; se van con los de Tabler (#41).
     #[must_use]

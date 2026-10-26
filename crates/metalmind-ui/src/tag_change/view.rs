@@ -5,7 +5,7 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    AnyElement, App, Context, EventEmitter, FocusHandle, Focusable, InteractiveElement as _,
+    AnyElement, App, Context, EventEmitter, FocusHandle, Focusable, Hsla, InteractiveElement as _,
     IntoElement, KeyContext, ParentElement as _, Pixels, Render, ScrollStrategy, SharedString,
     StatefulInteractiveElement as _, Styled, UniformListScrollHandle, Window, div,
     prelude::FluentBuilder as _, px, relative, uniform_list,
@@ -13,6 +13,7 @@ use gpui_kit::{
 use metalmind_keymap::{Action, TagChangeAction, View, context};
 use metalmind_vault::tags::PlanNotice;
 
+use super::preview::PreviewRow;
 use super::{Blocked, TagChangePreview};
 use crate::actions::{AppKeymap, Dispatch};
 use crate::picker::fit;
@@ -192,14 +193,8 @@ impl TagChangeView {
         let hover = theme.ui.picker_hover;
         // Un renombre ya dice su ruta en el cambio.
         let place = change.line.map(|line| format!("{}:{line}", change.path));
-        let text = format!("{} → {}", change.before, change.after);
-        let color = if change.dropped {
-            theme.ui.picker_muted
-        } else if change.unsaved.is_some() {
-            theme.ui.error
-        } else {
-            theme.ui.foreground
-        };
+        let text = one_line(&change);
+        let color = change_color(&change, theme);
         div()
             .id(row)
             .debug_selector(move || format!("tag-change-row-{row}"))
@@ -213,8 +208,10 @@ impl TagChangeView {
             .when(selected, |row| row.bg(theme.ui.picker_selected))
             .when(!selected, |row| row.hover(move |style| style.bg(hover)))
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
+            // El cambio se queda el ancho; la ruta se recorta antes.
             .child(
                 div()
+                    .flex_1()
                     .min_w_0()
                     .truncate()
                     .when(change.dropped, Styled::line_through)
@@ -222,8 +219,8 @@ impl TagChangeView {
             )
             .child(
                 div()
-                    .flex_1()
-                    .min_w(relative(theme.layout.picker_detail_share))
+                    .flex_none()
+                    .max_w(relative(theme.layout.picker_detail_share))
                     .truncate()
                     .text_ellipsis_start()
                     .map(|element| theme.ui_small_text(element))
@@ -240,6 +237,34 @@ impl TagChangeView {
                 )
             })
             .into_any_element()
+    }
+
+    /// El cambio elegido entero, en varias líneas: en la fila se recorta, y
+    /// en un campo de la página el valor nuevo es lo que se confirma. Su
+    /// alto es fijo para que moverse entre filas no corra los botones.
+    fn render_detail(&self, theme: &Theme) -> impl IntoElement {
+        let detail = div()
+            .debug_selector(|| "tag-change-detail".to_owned())
+            .h(theme.tag_change_detail_height())
+            .overflow_hidden()
+            .px(theme.layout.picker_padding_x)
+            .py(theme.layout.picker_input_padding_y)
+            .border_t(theme.stroke.border)
+            .border_color(theme.ui.picker_border);
+        let Some(change) = self.preview.row(self.preview.selected()) else {
+            return detail;
+        };
+        detail
+            .text_color(change_color(&change, theme))
+            .when(change.dropped, Styled::line_through)
+            .when(!change.before.is_empty(), |detail| {
+                detail.child(
+                    div()
+                        .text_color(theme.ui.picker_muted)
+                        .child(change.before.to_owned()),
+                )
+            })
+            .child(format!("→ {}", change.after))
     }
 
     fn render_footer(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
@@ -289,7 +314,29 @@ impl Render for TagChangeView {
             .child(self.render_header(&theme))
             .children(self.render_notices(&theme))
             .child(self.render_list(&theme, cx))
+            .child(self.render_detail(&theme))
             .child(self.render_footer(&theme, cx))
+    }
+}
+
+/// El cambio en una línea: los saltos se ven como `⏎`.
+fn one_line(change: &PreviewRow<'_>) -> String {
+    let flat = |text: &str| text.replace('\n', " ⏎ ");
+    if change.before.is_empty() {
+        format!("→ {}", flat(change.after))
+    } else {
+        format!("{} → {}", flat(change.before), flat(change.after))
+    }
+}
+
+/// Apagado si se quitó; en rojo si pisaría cambios sin guardar.
+fn change_color(change: &PreviewRow<'_>, theme: &Theme) -> Hsla {
+    if change.dropped {
+        theme.ui.picker_muted
+    } else if change.unsaved.is_some() {
+        theme.ui.error
+    } else {
+        theme.ui.foreground
     }
 }
 
