@@ -664,6 +664,7 @@ mod tests {
             ("datos/ventas.csv".to_owned(), None)
         );
         assert_eq!(file("[[spec.docx]]"), ("spec.docx".to_owned(), None));
+        assert_eq!(file("[[report.json]]"), ("report.json".to_owned(), None));
         assert_eq!(
             file("[[diario/2026.10.26]]"),
             ("diario/2026.10.26.md".to_owned(), None)
