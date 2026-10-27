@@ -172,16 +172,19 @@ impl Theme {
     }
 
     /// Alto de una fila de la lista de notas: el título, las líneas del
-    /// extracto y la de tags y carpeta, en la letra secundaria, con su aire.
+    /// extracto y la de tags y carpeta, en la letra secundaria, con su aire
+    /// y su separador.
     /// Todas iguales, para virtualizarla.
     #[must_use]
     pub fn list_row_height(&self) -> Pixels {
         let small = self.ui_small_font_size * self.text.ui_sm.line_height;
         let lines = f32::from(self.layout.list_excerpt_lines) + 1.;
-        self.ui_line()
+        // El título comparte línea con la fecha, que va en la letra secundaria.
+        self.ui_line().max(small)
             + small * lines
             + self.layout.list_row_gap * 2.
             + self.layout.list_row_padding_y * 2.
+            + self.stroke.border
     }
 
     /// El lado corto de los íconos provisionales del panel, que no son

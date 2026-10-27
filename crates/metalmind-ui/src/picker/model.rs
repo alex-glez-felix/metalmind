@@ -69,6 +69,16 @@ pub struct Step<T> {
     pub chosen: Option<Chosen>,
 }
 
+/// Nada que hacer.
+impl<T> Default for Step<T> {
+    fn default() -> Self {
+        Self {
+            job: None,
+            chosen: None,
+        }
+    }
+}
+
 pub struct PickerState<T> {
     items: Arc<[T]>,
     narrowing: Option<Arc<dyn Narrowing<T>>>,

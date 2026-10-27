@@ -209,32 +209,23 @@ fn row_view(
         .unwrap_or_default();
     let small_line = theme.ui_small_font_size * theme.text.ui_sm.line_height;
     let excerpt_lines = f32::from(theme.layout.list_excerpt_lines);
-    div()
-        .id(("list-row", row))
-        .h(theme.list_row_height())
-        .w_full()
+    // GPUI da un solo color de borde por elemento: el separador va en la
+    // fila y el contorno de la elegida sin foco, en lo de adentro.
+    let card = div()
+        .size_full()
         .flex()
         .flex_col()
         .gap(theme.layout.list_row_gap)
         .px(theme.layout.panel_padding_x)
         .py(theme.layout.list_row_padding_y)
         .overflow_hidden()
-        .border_b(theme.stroke.border)
-        .border_color(theme.ui.panel_border)
-        .map(|element| match marks.fill {
-            Some(Fill::Selection) => element.bg(theme.ui.panel_selection),
-            Some(Fill::Active) => element.bg(theme.ui.panel_active),
-            None => element.hover(|element| element.bg(theme.ui.panel_hover)),
-        })
         .border_l(theme.stroke.caret)
         .border_color(if marks.outline {
             theme.ui.panel_selection_unfocused
         } else {
             gpui_kit::transparent_black()
-        })
-        .on_click(cx.listener(move |view, event: &ClickEvent, window, cx| {
-            view.click(row, event.click_count(), window, cx);
-        }))
+        });
+    let content = card
         .child(
             div()
                 .flex()
@@ -280,7 +271,22 @@ fn row_view(
                         .text_color(theme.ui.panel_muted)
                         .child(folder),
                 ),
-        )
+        );
+    div()
+        .id(("list-row", row))
+        .h(theme.list_row_height())
+        .w_full()
+        .border_b(theme.stroke.border)
+        .border_color(theme.ui.panel_border)
+        .map(|element| match marks.fill {
+            Some(Fill::Selection) => element.bg(theme.ui.panel_selection),
+            Some(Fill::Active) => element.bg(theme.ui.panel_active),
+            None => element.hover(|element| element.bg(theme.ui.panel_hover)),
+        })
+        .on_click(cx.listener(move |view, event: &ClickEvent, window, cx| {
+            view.click(row, event.click_count(), window, cx);
+        }))
+        .child(content)
         .into_any_element()
 }
 

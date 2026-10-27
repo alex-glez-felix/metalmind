@@ -228,3 +228,37 @@ fn la_fila_y_la_carpeta_de_la_fuente_siguen_a_un_renombre() {
     assert_eq!(folder.source(), &ListSource::Folder("e".into()));
     assert_eq!(rows(&folder), ["e/sin.md"]);
 }
+
+#[test]
+fn un_lote_antes_de_las_tarjetas_no_muestra_la_lista_sin_orden() {
+    let fixture = Fixture::new();
+    let mut list = NoteList::new(
+        ListSource::All,
+        "",
+        fixture.vault.snapshot(),
+        fixture.vault.tags(),
+    );
+    let (step, _unread) = list.apply(&fixture.update("nueva.md"));
+    run(&mut list, step);
+    assert!(list.is_empty());
+    assert!(!list.is_current());
+    let paths = list
+        .source()
+        .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
+    let step = list.set_cards(read_all(fixture.dir.path(), &paths));
+    run(&mut list, step);
+    assert_eq!(
+        rows(&list),
+        ["nueva.md", "media.md", "d/sin.md", "vieja.md"]
+    );
+    assert_eq!(list.selected_note().unwrap().as_str(), "nueva.md");
+}
+
+#[test]
+fn la_fuente_sigue_a_su_tag_renombrado() {
+    let fixture = Fixture::new();
+    let mut list = fixture.list(ListSource::Tag("rust".into()), "");
+    let step = list.rename_tag("#rust", "#lenguaje");
+    run(&mut list, step);
+    assert_eq!(list.source(), &ListSource::Tag("lenguaje".into()));
+}

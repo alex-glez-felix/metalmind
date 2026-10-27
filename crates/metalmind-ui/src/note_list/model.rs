@@ -27,6 +27,8 @@ pub struct NoteList {
     index: Arc<VaultIndex>,
     tags: Arc<Tags>,
     cards: Cards,
+    /// Ya llegaron las primeras tarjetas: antes no se muestra nada.
+    cards_ready: bool,
     /// Las notas de la fuente en orden y lo que deja el filtro.
     filter: PickerState<Note>,
     /// La nota de la fila elegida: la fila la sigue cuando la lista cambia.
@@ -49,6 +51,7 @@ impl NoteList {
             index,
             tags,
             cards: Cards::default(),
+            cards_ready: false,
             filter: state,
             selected: None,
             prompt: None,
@@ -139,6 +142,7 @@ impl NoteList {
                 .into_iter()
                 .filter(|(path, _)| index.kind(path) == Some(EntryKind::Note)),
         );
+        self.cards_ready = true;
         self.refill()
     }
 
@@ -153,9 +157,20 @@ impl NoteList {
             .take()
             .map(|selected| renamed(selected, &update.changes));
         let stale = self.cards.apply(&update.changes, &self.index);
-        let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
-        let step = self.filter.set_source(self.ordered(), narrowing);
-        (self.follow(step), stale)
+        if !self.cards_ready {
+            // Sin fechas no hay orden: se muestra al llegar las tarjetas.
+            return (Step::default(), stale);
+        }
+        (self.refill(), stale)
+    }
+
+    /// Un tag que se renombró o fusionó desde la app sigue siendo la fuente
+    /// con su nombre nuevo.
+    pub fn rename_tag(&mut self, from: &str, to: &str) -> Step<Note> {
+        if !self.source.rename_tag(from, to) {
+            return Step::default();
+        }
+        self.refill()
     }
 
     /// Otra fuente: el filtro se queda y la fila vuelve a la primera.
@@ -167,7 +182,8 @@ impl NoteList {
     }
 
     fn refill(&mut self) -> Step<Note> {
-        let step = self.filter.set_items(self.ordered());
+        let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
+        let step = self.filter.set_source(self.ordered(), narrowing);
         self.follow(step)
     }
 

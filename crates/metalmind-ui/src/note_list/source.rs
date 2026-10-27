@@ -1,7 +1,9 @@
 //! De dónde salen las notas de la lista: el buzón, todas, un tag con sus
 //! descendientes o una carpeta con sus subcarpetas.
 
-use metalmind_vault::tags::{TagQuery, Tags};
+use std::collections::BTreeSet;
+
+use metalmind_vault::tags::{TagKey, TagQuery, Tags};
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +63,19 @@ impl ListSource {
         }
     }
 
+    /// Si la fuente es `#from`, pasa a ser `#to`; devuelve si cambió.
+    pub fn rename_tag(&mut self, from: &str, to: &str) -> bool {
+        let Self::Tag(tag) = self else {
+            return false;
+        };
+        let bare = |name: &str| name.trim_start_matches('#').to_owned();
+        if TagKey::new(&bare(tag)) != TagKey::new(&bare(from)) {
+            return false;
+        }
+        *tag = bare(to);
+        true
+    }
+
     /// Una carpeta renombrada sigue siendo la fuente con su nombre nuevo.
     pub fn follow(&mut self, changes: &[VaultChange]) {
         let Self::Folder(folder) = self else {
@@ -83,9 +98,16 @@ impl ListSource {
     /// cada tag y cada carpeta, en ese orden.
     #[must_use]
     pub fn choices(index: &VaultIndex, tags: &Tags) -> Vec<Self> {
-        let mut tag_names: Vec<String> = tags
+        // También los que solo tienen página o son padres de otros: traen
+        // las notas de sus descendientes.
+        let keys: BTreeSet<&TagKey> = tags
             .index()
             .keys()
+            .chain(tags.graph().pages().map(|page| &page.key))
+            .chain(tags.graph().parent_keys())
+            .collect();
+        let mut tag_names: Vec<String> = keys
+            .into_iter()
             .map(|key| tags.display_name(key).unwrap_or(key.as_str()).to_owned())
             .collect();
         tag_names.sort_by_key(|name| name.to_lowercase());
@@ -206,6 +228,36 @@ mod tests {
         let mut tag = ListSource::Tag("ui".into());
         tag.follow(&[renamed("ui", "vista")]);
         assert_eq!(tag, ListSource::Tag("ui".into()));
+    }
+
+    #[test]
+    fn un_padre_sin_notas_propias_tambien_se_elige() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("tags")).unwrap();
+        fs::write(dir.path().join("a.md"), "#hijo").unwrap();
+        fs::write(
+            dir.path().join("tags/hijo.md"),
+            "---\nparents: [padre]\n---\n",
+        )
+        .unwrap();
+        let (vault, _updates) = Vault::open(dir.path()).unwrap();
+        let choices = ListSource::choices(&vault.snapshot(), &vault.tags());
+        let padre = ListSource::Tag("padre".into());
+        assert!(choices.contains(&padre), "{choices:?}");
+        assert_eq!(
+            sorted(&padre.notes(&vault.snapshot(), &vault.tags())),
+            ["a.md"]
+        );
+    }
+
+    #[test]
+    fn un_tag_renombrado_sigue_siendo_la_fuente() {
+        let mut source = ListSource::Tag("Rust".into());
+        assert!(!source.rename_tag("#gpui", "#ui"));
+        assert!(source.rename_tag("#rust", "#lenguaje"));
+        assert_eq!(source, ListSource::Tag("lenguaje".into()));
+        let mut inbox = ListSource::Inbox;
+        assert!(!inbox.rename_tag("rust", "x"));
     }
 
     #[test]
