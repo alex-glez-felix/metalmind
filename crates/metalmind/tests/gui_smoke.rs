@@ -906,7 +906,14 @@ fn los_links_sin_destino_abren_la_nota_en_el_link() {
     smoke.write("a.md", "uno\nver [[falta]] y [[b]]\n");
     smoke.write("b.md", "nada\n");
     let mut metalmind = smoke.launch(&["b.md"]);
-    metalmind.window().type_keys("<Space>u<CR>iX<Esc>:w<CR>");
+    let window = metalmind.window();
+    let closed = window.wait_still(EDITOR_TEXT);
+    // La lista se arma aparte: lo que se teclee antes de que llegue va al
+    // campo del picker.
+    window.type_keys("<Space>u");
+    window.wait_change("la lista", EDITOR_TEXT, &closed);
+    window.wait_still(EDITOR_TEXT);
+    window.type_keys("<CR>iX<Esc>:w<CR>");
     smoke.wait_contents("a.md", "uno\nver X[[falta]] y [[b]]\n");
 }
 
