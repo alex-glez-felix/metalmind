@@ -32,6 +32,10 @@ pub enum MenuItem {
     TagParents,
     TagIcon,
     TagTemplate,
+    /// Sobre una carpeta o un tag: ponerlo como focus, o quitarlo si ya es
+    /// el focus.
+    Focus,
+    Unfocus,
 }
 
 impl MenuItem {
@@ -51,6 +55,8 @@ impl MenuItem {
             Self::TagParents => "Padres…",
             Self::TagIcon => "Ícono…",
             Self::TagTemplate => "Plantilla…",
+            Self::Focus => "Enfocar",
+            Self::Unfocus => "Salir del focus",
         }
     }
 
@@ -73,6 +79,7 @@ impl MenuItem {
             Self::TagParents => PanelAction::EditTagParents,
             Self::TagIcon => PanelAction::SetTagIcon,
             Self::TagTemplate => PanelAction::SetTagTemplate,
+            Self::Focus | Self::Unfocus => PanelAction::ToggleFocus,
         }
     }
 
@@ -142,6 +149,23 @@ impl ContextMenu {
             ],
             selected: 0,
         }
+    }
+
+    /// Sobre una carpeta o un tag: enfocarlo, o salir si ya es el focus
+    /// (`active`). Va al final, salvo la papelera, que siempre es lo último.
+    #[must_use]
+    pub fn with_focus(mut self, active: bool) -> Self {
+        let item: &'static [MenuItem] = if active {
+            &[MenuItem::Unfocus]
+        } else {
+            &[MenuItem::Focus]
+        };
+        let at = match self.groups.last() {
+            Some(&[MenuItem::Delete]) => self.groups.len() - 1,
+            _ => self.groups.len(),
+        };
+        self.groups.insert(at, item);
+        self
     }
 
     /// Tras un lote del watcher: sigue a su entrada en los renombres y dice

@@ -163,9 +163,13 @@ impl Worker {
             }
         };
         let mut found = Vec::new();
+        let scope = search.query.scope.as_deref();
         for (path, text) in &self.open {
             if self.latest.load(Ordering::Relaxed) != search.version {
                 return None;
+            }
+            if scope.is_some_and(|scope| !scope.contains(path)) {
+                continue;
             }
             match matcher.find(text) {
                 Ok(lines) if !lines.is_empty() => found.push(NoteMatches {
@@ -321,6 +325,29 @@ mod tests {
         let (worker, events) = spawn(&dir, open);
         worker.search(search(1, "idea"));
         assert_eq!(found(&events, 1), ["a.md:1", "b.md:3"]);
+    }
+
+    /// Con focus, ni el disco ni las notas con cambios de fuera del alcance:
+    /// así un alcance nuevo vale también para lo que no está guardado.
+    #[test]
+    fn con_focus_solo_busca_en_su_alcance() {
+        let dir = vault();
+        let buffer = Buffer::from("una idea sin guardar");
+        let open = vec![OpenNote {
+            path: VaultPath::new("b.md").unwrap(),
+            text: buffer.snapshot(),
+        }];
+        let (worker, events) = spawn(&dir, open);
+        let in_scope = |version: u64, notes: &[&str]| {
+            let mut search = search(version, "idea");
+            let scope = notes.iter().map(|note| VaultPath::new(note).unwrap());
+            search.query.scope = Some(Arc::new(scope.collect()));
+            search
+        };
+        worker.search(in_scope(1, &["a.md"]));
+        assert_eq!(found(&events, 1), ["a.md:1"]);
+        worker.search(in_scope(2, &["b.md"]));
+        assert_eq!(found(&events, 2), ["b.md:1"]);
     }
 
     #[test]

@@ -10,13 +10,14 @@ mod outline;
 use std::sync::Arc;
 
 use metalmind_syntax::note_name;
-use metalmind_vault::tags::{Tags, tag_name};
+use metalmind_vault::tags::{Scope, Tags, tag_name};
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
 use crate::file_tree::FileTree;
+use crate::focus::{Focus, InScope};
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
 
@@ -154,6 +155,8 @@ pub struct Panel {
     prompt: Option<Prompt>,
     /// El último error de una operación, hasta la próxima.
     error: Option<String>,
+    /// La carpeta del focus: lo que se crea va dentro de ella.
+    focus_folder: Option<VaultPath>,
 }
 
 impl Panel {
@@ -166,6 +169,7 @@ impl Panel {
             tags,
             prompt: None,
             error: None,
+            focus_folder: None,
         };
         panel.refresh_shown();
         panel
@@ -295,12 +299,17 @@ impl Panel {
         self.open(Prompt::Filter(LineInput::new(self.tree.filter())));
     }
 
-    /// Dentro de la carpeta seleccionada, o junto al archivo seleccionado.
+    /// Dentro de la carpeta seleccionada, o junto al archivo seleccionado;
+    /// en focus de carpeta, nunca fuera de ella.
     pub fn start_create(&mut self, kind: NewEntry) {
-        let parent = match self.tree.selected_entry() {
+        let selected = match self.tree.selected_entry() {
             Some(row) if row.kind == EntryKind::Folder => row.path.clone(),
             Some(row) => row.path.parent().unwrap_or_default(),
             None => VaultPath::root(),
+        };
+        let parent = match &self.focus_folder {
+            Some(folder) if !selected.starts_with(folder) => folder.clone(),
+            _ => selected,
         };
         self.open(Prompt::Create {
             parent,
@@ -354,6 +363,28 @@ impl Panel {
         if let Some(tag) = self.selected_tag() {
             let input = LineInput::new(&field.current(self.tags.tags(), &tag));
             self.open(Prompt::TagField { tag, field, input });
+        }
+    }
+
+    /// Otro focus, o el mismo con otro índice: las dos vistas lo siguen.
+    pub fn set_focus(&mut self, scope: Scope, in_scope: Option<Arc<InScope>>) {
+        self.focus_folder.clone_from(&scope.folder);
+        self.tree.set_scope(in_scope);
+        self.tags.set_scope(scope);
+        self.refresh_shown();
+    }
+
+    /// El focus de la fila elegida: una carpeta o un tag. Un archivo no es
+    /// un alcance.
+    #[must_use]
+    pub fn selected_focus(&self) -> Option<Focus> {
+        match self.view {
+            PanelView::Folders => self
+                .tree
+                .selected_entry()
+                .filter(|row| row.is_folder())
+                .map(|row| Focus::folder(row.path.clone())),
+            PanelView::Tags => self.selected_tag().as_deref().map(Focus::tag),
         }
     }
 
@@ -553,6 +584,8 @@ fn renamed(from: &VaultPath, to: Option<VaultPath>) -> Option<Request> {
     })
 }
 
+#[cfg(test)]
+mod focus_tests;
 #[cfg(test)]
 mod tag_field_tests;
 #[cfg(test)]

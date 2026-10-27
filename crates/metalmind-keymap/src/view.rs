@@ -52,6 +52,9 @@ named_actions! {
         SetTagIcon = "file_tree::set_tag_icon",
         SetTagTemplate = "file_tree::set_tag_template",
         OpenTagPage = "file_tree::open_tag_page",
+        /// Pone el focus en la carpeta o el tag elegido; si ya es el focus,
+        /// lo quita (05 §3).
+        ToggleFocus = "panel::toggle_focus",
         /// Manda a la papelera del vault, tras confirmar.
         Delete = "file_tree::delete",
         /// Acepta lo escrito o el borrado.

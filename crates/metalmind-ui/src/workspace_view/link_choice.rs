@@ -18,6 +18,7 @@ fn options() -> PickerOptions {
     PickerOptions {
         placeholder: "El link empata: elegir la nota…".into(),
         splits: false,
+        focus: None,
     }
 }
 

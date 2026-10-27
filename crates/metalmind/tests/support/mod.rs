@@ -415,8 +415,15 @@ impl Window<'_> {
 
 /// El `metalmind` que se lanza: el de `METALMIND_BIN` si se da, porque con
 /// un target compartido entre checkouts el de cargo puede ser de otra rama.
-fn binary() -> std::ffi::OsString {
-    std::env::var_os(BIN_VAR).unwrap_or_else(|| env!("CARGO_BIN_EXE_metalmind").into())
+/// Una ruta relativa se vuelve absoluta aquí, contra el directorio del test:
+/// `launch_with_env` lanza el proceso con otro `current_dir`, y ahí ya no
+/// apuntaría al binario.
+fn binary() -> PathBuf {
+    let Some(bin) = std::env::var_os(BIN_VAR) else {
+        return env!("CARGO_BIN_EXE_metalmind").into();
+    };
+    std::path::absolute(&bin)
+        .unwrap_or_else(|err| panic!("{BIN_VAR}={}: {err}", Path::new(&bin).display()))
 }
 
 const BIN_VAR: &str = "METALMIND_BIN";

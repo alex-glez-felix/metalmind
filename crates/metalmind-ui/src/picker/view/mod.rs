@@ -97,6 +97,9 @@ pub struct PickerOptions {
     pub placeholder: SharedString,
     /// Si `ctrl-v` y `ctrl-s` eligen abriendo en un split.
     pub splits: bool,
+    /// El focus que reduce lo que se busca, antes de lo escrito (05 §3).
+    /// Si es largo se recorta, así nunca tapa lo que se escribe.
+    pub focus: Option<SharedString>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

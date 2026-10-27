@@ -2,12 +2,15 @@
 //! que cancela la búsqueda anterior y lanza la nueva. En el hilo de la UI
 //! solo se valida el patrón y se reciben los resultados, de a lotes.
 
+use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use gpui_kit::{Context, SharedString, Task};
+use metalmind_vault::VaultPath;
 
 use super::context::row_text;
-use super::model::{MAX_HITS, Status, TextSearchState};
+use super::model::{MAX_HITS, Search, Status, TextSearchState};
 use super::worker::{Event, SearchWorker};
 use super::{Hit, OpenNote};
 use crate::picker::{
@@ -22,9 +25,15 @@ pub struct TextSearch {
 }
 
 impl TextSearch {
-    /// Busca en las notas del vault de raíz `root`; las de `open` tienen
-    /// cambios sin guardar y se buscan en memoria.
-    pub fn new(root: &Path, open: Vec<OpenNote>, cx: &mut Context<PickerView<Self>>) -> Self {
+    /// Busca en las notas del vault de raíz `root`, o solo en las de
+    /// `scope` si hay focus; las de `open` tienen cambios sin guardar y se
+    /// buscan en memoria.
+    pub fn new(
+        root: &Path,
+        open: Vec<OpenNote>,
+        scope: Option<Arc<HashSet<VaultPath>>>,
+        cx: &mut Context<PickerView<Self>>,
+    ) -> Self {
         let (sender, events) = async_channel::unbounded();
         let worker = SearchWorker::spawn(root.to_owned(), open, sender)
             .map_err(|error| format!("no se pudo lanzar el hilo de búsqueda: {error}"));
@@ -45,8 +54,12 @@ impl TextSearch {
                 }
             }
         });
+        let state = TextSearchState::new();
         Self {
-            state: TextSearchState::new(),
+            state: match scope {
+                Some(scope) => state.with_scope(scope),
+                None => state,
+            },
             worker,
             _events: events,
         }
@@ -55,6 +68,21 @@ impl TextSearch {
     #[must_use]
     pub fn hit(&self, item: usize) -> Option<&Hit> {
         self.state.hit(item)
+    }
+
+    /// Las notas del focus de otro lote del watcher: lo escrito se vuelve a
+    /// buscar si cambiaron.
+    pub fn set_scope(&mut self, scope: Option<Arc<HashSet<VaultPath>>>) {
+        if let Some(search) = self.state.set_scope(scope) {
+            self.launch(search);
+        }
+    }
+
+    fn launch(&mut self, search: Search) {
+        match &self.worker {
+            Ok(worker) => worker.search(search),
+            Err(error) => self.state.failed(search.version, error.clone()),
+        }
     }
 
     fn handle(&mut self, event: Event, cx: &mut Context<PickerView<Self>>) {
@@ -96,12 +124,8 @@ impl PickerDelegate for TextSearch {
     }
 
     fn edit(&mut self, edit: LineEdit<'_>, _cx: &mut Context<PickerView<Self>>) {
-        let Some(search) = self.state.edit(edit) else {
-            return;
-        };
-        match &self.worker {
-            Ok(worker) => worker.search(search),
-            Err(error) => self.state.failed(search.version, error.clone()),
+        if let Some(search) = self.state.edit(edit) {
+            self.launch(search);
         }
     }
 

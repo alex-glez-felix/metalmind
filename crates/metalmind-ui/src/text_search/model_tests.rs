@@ -278,3 +278,49 @@ fn con_el_motor_de_metalmind_search() {
     assert_eq!(b.line.matches, [5..9, 18..22]);
     assert_eq!(b.column(), 5);
 }
+
+/// En focus, cada búsqueda va solo a sus notas (05 §3).
+#[test]
+fn en_focus_cada_busqueda_lleva_sus_notas() {
+    let scope = Arc::new(HashSet::from([path("a.md")]));
+    let mut state = TextSearchState::new().with_scope(Arc::clone(&scope));
+    let search = typed(&mut state, "idea");
+    assert!(
+        search
+            .query
+            .scope
+            .is_some_and(|sent| Arc::ptr_eq(&sent, &scope))
+    );
+    assert!(
+        typed(&mut TextSearchState::new(), "idea")
+            .query
+            .scope
+            .is_none()
+    );
+}
+
+/// Otro lote del watcher cambia qué notas están en el focus: lo escrito se
+/// vuelve a buscar solo si cambiaron y hay algo escrito.
+#[test]
+fn otras_notas_del_focus_vuelven_a_buscar_lo_escrito() {
+    let scope = |notes: &[&str]| Some(Arc::new(notes.iter().map(|note| path(note)).collect()));
+    let mut state = TextSearchState::new().with_scope(scope(&["a.md"]).unwrap());
+    assert!(
+        state.set_scope(scope(&["b.md"])).is_none(),
+        "sin nada escrito"
+    );
+    let first = typed(&mut state, "idea");
+    assert!(
+        state.set_scope(scope(&["b.md"])).is_none(),
+        "las mismas notas"
+    );
+    let again = state.set_scope(scope(&["a.md", "b.md"])).unwrap();
+    assert!(again.version > first.version);
+    assert_eq!(again.query.pattern, "idea");
+    assert_eq!(again.query.scope, scope(&["a.md", "b.md"]));
+    assert_eq!(state.status(), Status::Searching);
+    assert!(
+        state.set_scope(None).unwrap().query.scope.is_none(),
+        "sin focus"
+    );
+}

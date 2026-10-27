@@ -14,6 +14,7 @@ use std::sync::Arc;
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 
 use self::filter::Matches;
+use crate::focus::InScope;
 use crate::panel::Outline;
 
 /// Una fila visible del árbol.
@@ -51,6 +52,9 @@ pub struct FileTree {
     /// nota recién creada desde el panel.
     reveal: Option<VaultPath>,
     filter: String,
+    /// Con focus, lo que se ve: las carpetas sin nada del alcance se
+    /// esconden (05 §3).
+    in_scope: Option<Arc<InScope>>,
     rows: Vec<Row>,
     selected_row: Option<usize>,
 }
@@ -75,6 +79,7 @@ impl FileTree {
             selected: None,
             reveal: None,
             filter: String::new(),
+            in_scope: None,
             rows: Vec::new(),
             selected_row: None,
         };
@@ -186,12 +191,34 @@ impl FileTree {
         self.retry_reveal();
     }
 
+    /// Lo que deja ver el focus, o todo con `None`, cuando cambia el focus;
+    /// con otro índice llega en [`FileTree::apply`].
+    pub fn set_scope(&mut self, in_scope: Option<Arc<InScope>>) {
+        let same = match (&in_scope, &self.in_scope) {
+            (Some(new), Some(old)) => Arc::ptr_eq(new, old),
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return;
+        }
+        self.in_scope = in_scope;
+        self.refresh_keeping_selection();
+        self.retry_reveal();
+    }
+
     /// Aplica lo que publicó el watcher: `index` ya incluye `changes`, que
-    /// vienen en un orden que se puede aplicar uno a uno. Las carpetas
-    /// abiertas y la selección siguen a sus renombres; si lo seleccionado
-    /// desaparece o queda dentro de una carpeta cerrada, queda seleccionada
-    /// la fila que ocupaba su lugar.
-    pub fn apply(&mut self, changes: &[VaultChange], index: Arc<VaultIndex>) {
+    /// vienen en un orden que se puede aplicar uno a uno, e `in_scope` es lo
+    /// que el focus deja ver en él. Las carpetas abiertas y la selección
+    /// siguen a sus renombres; si lo seleccionado desaparece o queda dentro
+    /// de una carpeta cerrada, queda seleccionada la fila que ocupaba su
+    /// lugar.
+    pub fn apply(
+        &mut self,
+        changes: &[VaultChange],
+        index: Arc<VaultIndex>,
+        in_scope: Option<Arc<InScope>>,
+    ) {
         for change in changes {
             match change {
                 VaultChange::Renamed { from, to, .. } => self.follow_rename(from, to),
@@ -200,6 +227,7 @@ impl FileTree {
             }
         }
         self.index = index;
+        self.in_scope = in_scope;
         self.refresh_keeping_selection();
         self.retry_reveal();
     }
@@ -253,7 +281,9 @@ impl FileTree {
     }
 
     fn rebuild(&mut self) {
-        let matches = (!self.filter.is_empty()).then(|| Matches::find(&self.index, &self.filter));
+        let in_scope = self.in_scope.as_deref();
+        let matches =
+            (!self.filter.is_empty()).then(|| Matches::find(&self.index, &self.filter, in_scope));
         let mut rows = Vec::with_capacity(self.rows.len());
         self.push_children(&VaultPath::root(), 0, matches.as_ref(), &mut rows);
         self.rows = rows;
@@ -271,6 +301,13 @@ impl FileTree {
         rows: &mut Vec<Row>,
     ) {
         for entry in self.index.children(dir) {
+            if self
+                .in_scope
+                .as_ref()
+                .is_some_and(|in_scope| !in_scope.shows(entry.path))
+            {
+                continue;
+            }
             let highlights = match matches {
                 Some(matches) => match matches.get(entry.path) {
                     Some(highlights) => highlights.to_vec(),

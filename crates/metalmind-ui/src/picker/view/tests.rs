@@ -1,5 +1,5 @@
 //! El input del picker con un texto que no cabe (#147): el texto se corre y
-//! el cursor siempre queda dentro de la caja.
+//! el cursor siempre queda dentro de la caja; un focus largo se recorta.
 
 use gpui_kit::{Bounds, Entity, Pixels, TestAppContext, VisualTestContext};
 use metalmind_config::Config;
@@ -51,7 +51,10 @@ impl PickerDelegate for Typing {
     }
 }
 
-fn picker(cx: &mut TestAppContext) -> (Entity<PickerView<Typing>>, &mut VisualTestContext) {
+fn picker<'a>(
+    cx: &'a mut TestAppContext,
+    focus: Option<&str>,
+) -> (Entity<PickerView<Typing>>, &'a mut VisualTestContext) {
     cx.update(|cx| {
         bind_keys(Keymap::default(), cx);
         cx.set_global(Theme::with_font(
@@ -62,6 +65,7 @@ fn picker(cx: &mut TestAppContext) -> (Entity<PickerView<Typing>>, &mut VisualTe
     let options = PickerOptions {
         placeholder: "Escribe…".into(),
         splits: false,
+        focus: focus.map(|focus| SharedString::from(focus.to_owned())),
     };
     cx.add_window_view(|_, cx| PickerView::new(Typing::default(), options, cx))
 }
@@ -91,7 +95,7 @@ fn assert_visible(cx: &mut VisualTestContext) {
 #[test]
 fn el_cursor_se_ve_al_final_de_un_texto_largo_y_al_volver_al_principio() {
     let mut cx = TestAppContext::single();
-    let (view, cx) = picker(&mut cx);
+    let (view, cx) = picker(&mut cx, None);
     cx.run_until_parked();
     let long = "entrevistas/2026/octubre/una entrevista con un nombre larguísimo ".repeat(6);
     edit(&view, cx, LineEdit::Insert(&long));
@@ -110,5 +114,26 @@ fn el_cursor_se_ve_al_final_de_un_texto_largo_y_al_volver_al_principio() {
     );
     edit(&view, cx, LineEdit::End);
     edit(&view, cx, LineEdit::DeleteToStart);
+    assert_visible(cx);
+}
+
+/// Un focus más ancho que el picker se queda con su parte de la fila y lo
+/// escrito, tras él, sigue a la vista.
+#[test]
+fn un_focus_largo_no_tapa_lo_escrito() {
+    let mut cx = TestAppContext::single();
+    let long = format!(
+        "focus: Ideas/ #rust{}",
+        " -#un-tag-con-nombre-largo".repeat(12)
+    );
+    let (view, cx) = picker(&mut cx, Some(&long));
+    edit(&view, cx, LineEdit::Insert("zeta"));
+    let theme = cx.update(|_, cx| Theme::get(cx).clone());
+    let focus = cx.debug_bounds("picker-focus").unwrap();
+    let input = cx.debug_bounds("picker-input").unwrap();
+    assert!(
+        focus.size.width <= input.size.width * theme.layout.picker_detail_share,
+        "{focus:?} en {input:?}"
+    );
     assert_visible(cx);
 }

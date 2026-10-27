@@ -189,7 +189,7 @@ proptest! {
 
         for batch in &batches {
             let changes: Vec<VaultChange> = batch.iter().flat_map(|op| disk.apply(op)).collect();
-            tree.apply(&changes, disk.index());
+            tree.apply(&changes, disk.index(), None);
             check_selection(&tree, &disk, selected_id)?;
             // Si cayó en otra fila, desde aquí se sigue a la nueva.
             selected_id = tree.selected().and_then(|path| disk.id_of(path));

@@ -9,7 +9,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use metalmind_vault::tags::{Scope, TagColor, TagIcon, TagKey, TagTree, Tags};
+use metalmind_vault::tags::{Scope, ScopeFilter, TagColor, TagIcon, TagKey, TagTree, Tags};
 use metalmind_vault::{VaultChange, VaultPath};
 
 use crate::panel::Outline;
@@ -96,6 +96,8 @@ pub struct TagOutline {
     tree: TagTree,
     /// Los tags que llegaron y todavía no están en las filas.
     pending: Option<Arc<Tags>>,
+    /// El focus: solo sus tags, con el conteo dentro de él (05 §3).
+    scope: Scope,
     expanded: BTreeSet<RowId>,
     selected: Option<RowId>,
     rows: Vec<Row>,
@@ -112,6 +114,7 @@ impl TagOutline {
             tags: Arc::clone(&tags),
             tree: TagTree::default(),
             pending: Some(tags),
+            scope: Scope::default(),
             expanded: BTreeSet::new(),
             selected: None,
             rows: Vec::new(),
@@ -143,6 +146,18 @@ impl TagOutline {
         self.pending = Some(tags);
     }
 
+    /// Otro focus; como con otros tags, las filas cambian en
+    /// [`TagOutline::refresh`].
+    pub fn set_scope(&mut self, scope: Scope) {
+        if scope == self.scope {
+            return;
+        }
+        self.scope = scope;
+        if self.pending.is_none() {
+            self.pending = Some(Arc::clone(&self.tags));
+        }
+    }
+
     /// Tras un lote del watcher, antes de sus tags: la nota seleccionada
     /// sigue a sus renombres, así su fila sigue elegida aunque cambie de
     /// lugar.
@@ -166,7 +181,7 @@ impl TagOutline {
         let Some(tags) = self.pending.take() else {
             return;
         };
-        self.tree = tags.tree(&Scope::default().filter(&tags));
+        self.tree = tags.tree(&self.scope.filter(&tags));
         self.tags = tags;
         let previous_row = self.selected_row;
         self.rebuild();
@@ -178,8 +193,9 @@ impl TagOutline {
 
     fn rebuild(&mut self) {
         let mut rows = Vec::with_capacity(self.rows.len());
+        let scope = self.scope.filter(&self.tags);
         for root in self.tree.roots() {
-            self.push_tag(std::slice::from_ref(root), &mut rows);
+            self.push_tag(std::slice::from_ref(root), &scope, &mut rows);
         }
         let inbox = self.tree.inbox();
         let expanded = !inbox.is_empty() && self.expanded.contains(&RowId::Inbox);
@@ -206,7 +222,7 @@ impl TagOutline {
     }
 
     /// El tag al final de `route` y, si está abierto, sus hijos y sus notas.
-    fn push_tag(&self, route: &[TagKey], rows: &mut Vec<Row>) {
+    fn push_tag(&self, route: &[TagKey], scope: &ScopeFilter<'_>, rows: &mut Vec<Row>) {
         let Some((key, ancestors)) = route.split_last() else {
             return;
         };
@@ -236,11 +252,9 @@ impl TagOutline {
         for child in &node.children {
             let mut child_route = route.to_vec();
             child_route.push(child.clone());
-            self.push_tag(&child_route, rows);
+            self.push_tag(&child_route, scope, rows);
         }
-        let notes = self
-            .tags
-            .tagged_notes(key, &Scope::default().filter(&self.tags));
+        let notes = self.tags.tagged_notes(key, scope);
         rows.extend(notes.into_iter().map(|path| Row {
             id: RowId::Note(route.to_vec(), path),
             depth: route.len(),

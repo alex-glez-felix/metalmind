@@ -45,6 +45,7 @@ impl Sidebar {
             PanelAction::SetTagIcon => self.tag_field(TagField::Icon, cx),
             PanelAction::SetTagTemplate => self.tag_field(TagField::Template, cx),
             PanelAction::OpenTagPage => self.open_tag_page(cx),
+            PanelAction::ToggleFocus => self.toggle_focus(cx),
             PanelAction::Delete => self.delete(window, cx),
             PanelAction::Confirm => self.confirm(window, cx),
             PanelAction::Cancel => self.cancel(window, cx),
@@ -162,6 +163,15 @@ impl Sidebar {
         cx.notify();
     }
 
+    fn toggle_focus(&mut self, cx: &mut Context<Self>) {
+        self.menu = None;
+        if let Some(focus) = self.panel.selected_focus() {
+            self.session
+                .update(cx, |session, cx| session.toggle_focus(focus, cx));
+        }
+        cx.notify();
+    }
+
     fn delete(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let Some(path) = self.panel.tree.selected().cloned() else {
@@ -227,10 +237,11 @@ impl Sidebar {
     /// nueva se abre para escribirla.
     fn execute(&mut self, request: Request, cx: &mut Context<Self>) {
         let result = match request {
-            Request::CreateNote(path) => self.vault.create_note(&path, "").map(|()| {
+            Request::CreateNote(path) => {
                 self.panel.tree.reveal(path.clone());
-                self.open(&path, Placement::Current, true, cx);
-            }),
+                cx.emit(SidebarEvent::CreateNote(path));
+                Ok(())
+            }
             Request::CreateFolder(path) => self
                 .vault
                 .create_folder(&path)

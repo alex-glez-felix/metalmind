@@ -12,7 +12,9 @@ use std::sync::Arc;
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 pub use self::recents::Recents;
-pub use self::session::{Prepared, SessionError, VaultChanged, VaultSession, WatchLost};
+pub use self::session::{
+    FocusChanged, Prepared, SessionError, VaultChanged, VaultSession, WatchLost,
+};
 pub(crate) use self::session::{canonical, relative_to};
 pub use self::tags::TagFilter;
 use crate::picker::PickerItem;

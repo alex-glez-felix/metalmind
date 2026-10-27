@@ -120,7 +120,7 @@ fn aplicar_un_rename(bencher: Bencher, notes: usize) {
     let (there, back) = (rename("area", "zona"), rename("zona", "area"));
     let mut tree = expanded(notes);
     bencher.bench_local(|| {
-        tree.apply(&there, Arc::clone(&after));
-        tree.apply(&back, Arc::clone(&before));
+        tree.apply(&there, Arc::clone(&after), None);
+        tree.apply(&back, Arc::clone(&before), None);
     });
 }

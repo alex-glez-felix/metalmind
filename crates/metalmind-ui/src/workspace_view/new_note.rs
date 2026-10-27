@@ -12,8 +12,9 @@ use metalmind_template::Templates;
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use metalmind_template::{Draft, NotePath};
-use metalmind_vault::FileOpError;
+use metalmind_vault::{FileOpError, VaultPath};
 
+use crate::focus::FocusedNote;
 use crate::new_note::{
     self, Landing, NameProblem, NameQuestion, NoteRequest, Origin, TemplateItem, template_items,
 };
@@ -91,7 +92,41 @@ impl WorkspaceView {
 
     fn question(&self, origin: Origin, templates: Templates, cx: &Context<Self>) -> NameQuestion {
         let index = self.session.read(cx).vault().snapshot();
-        NameQuestion::new(origin, templates, index)
+        NameQuestion::new(origin, templates, index).in_focus(self.focused_note(cx))
+    }
+
+    /// Dónde y con qué tags nace una nota nueva en el focus de ahora.
+    fn focused_note(&self, cx: &Context<Self>) -> FocusedNote {
+        let session = self.session.read(cx);
+        session
+            .focus()
+            .map(|focus| focus.new_note(&session.tags()))
+            .unwrap_or_default()
+    }
+
+    /// `a` en el panel lateral: lo que salga mal se dice en el panel, donde
+    /// se pidió.
+    pub(super) fn create_panel_note(
+        &mut self,
+        path: &VaultPath,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let session = self.session.read(cx);
+        let created = new_note::create_in_panel(
+            &session.vault(),
+            &self.notes,
+            path,
+            &self.focused_note(cx),
+            session.tags().graph(),
+            &Zoned::now(),
+        );
+        match created {
+            Ok(landing) => self.land(&landing, Placement::Current, window, cx),
+            Err(error) => self
+                .sidebar
+                .update(cx, |sidebar, cx| sidebar.report(&error, cx)),
+        }
     }
 
     fn choose_template(
@@ -108,6 +143,7 @@ impl WorkspaceView {
         let options = PickerOptions {
             placeholder: "Nota nueva desde la plantilla…".into(),
             splits: false,
+            focus: None,
         };
         let picker = cx.new(|cx| PickerView::new(fuzzy, options, cx));
         let events = cx.subscribe_in(&picker, window, move |this, picker, event, window, cx| {
@@ -155,6 +191,7 @@ impl WorkspaceView {
             )
             .into(),
             splits: true,
+            focus: None,
         };
         let picker = cx.new(|cx| PickerView::new(question, options, cx));
         let events = cx.subscribe_in(&picker, window, Self::on_name_event);

@@ -9,12 +9,13 @@ use std::fmt::Write as _;
 use jiff::Zoned;
 use metalmind_config::Daily;
 use metalmind_template::{
-    DailyError, Draft, NewNote, NotePath, Pick, Templates, daily_note, draft, tag_of_template,
-    tags_asking_for, templates_folder,
+    DailyError, Draft, NameError, NewNote, NotePath, Pick, Templates, daily_note, draft,
+    tag_of_template, tags_asking_for, templates_folder,
 };
-use metalmind_vault::tags::TagGraph;
+use metalmind_vault::tags::{TagGraph, TagKey};
 use metalmind_vault::{FileOpError, InvalidPath, Vault, VaultIndex, VaultPath};
 
+use crate::focus::FocusedNote;
 use crate::picker::PickerItem;
 use crate::workspace::LinePosition;
 
@@ -58,27 +59,42 @@ pub enum Origin {
     Template(String),
     /// Una nota nueva con este tag, con la plantilla que pida su página.
     Tag(String),
+    /// Una nota del panel lateral: vacía, o con la plantilla que pidan los
+    /// tags del focus.
+    Blank,
 }
 
 impl Origin {
+    /// En `focus` (05 §3), además de los suyos lleva los tags incluidos, y
+    /// una plantilla elegida no le pone un tag que el focus excluye: si no,
+    /// la nota desaparecería del focus en cuanto se crea.
     #[must_use]
     pub fn draft(
         &self,
         title: &str,
+        focus: &FocusedNote,
         templates: &Templates,
         graph: &TagGraph,
         now: &Zoned,
     ) -> Draft {
-        let (tags, pick) = match self {
+        let (mut tags, pick): (Vec<String>, Pick<'_>) = match self {
             Self::Template(name) => (
                 tag_of_template(graph, name)
+                    .filter(|tag| !focus.excludes(graph, tag))
                     .map(str::to_owned)
                     .into_iter()
                     .collect(),
                 Pick::Named(name),
             ),
             Self::Tag(tag) => (vec![tag.clone()], Pick::ByTags),
+            Self::Blank => (Vec::new(), Pick::ByTags),
         };
+        for tag in &focus.tags {
+            let key = TagKey::new(tag);
+            if !tags.iter().any(|own| TagKey::new(own) == key) {
+                tags.push(tag.clone());
+            }
+        }
         let note = NewNote {
             title,
             tags: &tags,
@@ -94,6 +110,7 @@ impl Origin {
         match self {
             Self::Template(name) => format!("plantilla {name}"),
             Self::Tag(tag) => format!("#{tag}"),
+            Self::Blank => "nota nueva".to_owned(),
         }
     }
 }
@@ -188,6 +205,41 @@ pub fn create(vault: &Vault, note: &NotePath, draft: &Draft) -> Result<Landing, 
 }
 
 #[derive(Debug, thiserror::Error)]
+pub enum PanelNoteError {
+    #[error(transparent)]
+    Folder(#[from] FolderError),
+    #[error(transparent)]
+    Name(#[from] NameError),
+    #[error(transparent)]
+    Create(#[from] FileOpError),
+}
+
+/// `a` en el panel lateral, que ya eligió la ruta: la nota nace vacía o, en
+/// focus de tags, con ellos y la plantilla que pida alguno. Sin tags
+/// ninguna plantilla aplica, así que no se leen.
+///
+/// # Errors
+/// Si la ruta no es de una nota, ya existe o no se pudo escribir, o si hay
+/// tags y la carpeta de plantillas de la config no vale.
+pub fn create_in_panel(
+    vault: &Vault,
+    settings: &NoteSettings,
+    path: &VaultPath,
+    focus: &FocusedNote,
+    graph: &TagGraph,
+    now: &Zoned,
+) -> Result<Landing, PanelNoteError> {
+    let note = NotePath::parse(path.as_str())?;
+    let templates = if focus.tags.is_empty() {
+        Templates::default()
+    } else {
+        load_templates(vault, &vault.snapshot(), &settings.templates_folder)?
+    };
+    let draft = Origin::Blank.draft(&note.title, focus, &templates, graph, now);
+    Ok(create(vault, &note, &draft)?)
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum DailyOpenError {
     #[error("la nota del día está apagada: se prende con `daily.enabled: true` en config.yaml")]
     Disabled,
@@ -242,5 +294,7 @@ fn line_position(text: &str, at: usize) -> LinePosition {
     }
 }
 
+#[cfg(test)]
+mod focus_tests;
 #[cfg(test)]
 mod tests;

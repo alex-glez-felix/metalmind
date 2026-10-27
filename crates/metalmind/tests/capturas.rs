@@ -376,6 +376,36 @@ const SCENES: &[(&str, &[Step])] = &[
         "tabla-larga-alineada",
         &[Step::Keys("/evento-final<CR>:tableformat<CR>")],
     ),
+    // El modo focus (05 §3), al salir de las tablas: el panel en sus dos vistas, el menú de una
+    // carpeta, el finder y la búsqueda con el alcance, uno largo, uno que
+    // no deja nada, y el que pone y quita `F` desde el panel. La fila del
+    // focus bajo el encabezado corre las del árbol una más abajo.
+    (
+        "focus-tags",
+        &[Step::Keys(
+            "<Esc><Esc><C-w>l:focus #rust -#archivado<CR><C-w>h",
+        )],
+    ),
+    ("focus-carpetas", &[Step::Keys("Tgg")]),
+    ("focus-menu", &[Step::RightClickRow(1)]),
+    ("focus-finder", &[Step::Keys("<Esc><C-w>l<Space>f")]),
+    ("focus-buscar", &[Step::Keys("<Esc><Space>/idea 0")]),
+    (
+        "focus-largo",
+        &[Step::Keys(
+            "<Esc>:focus Ideas/ #rust -#archivado -#un-tag-que-no-existe-con-un-nombre-muy-largo-para-ver-el-corte<CR>",
+        )],
+    ),
+    // En el finder, un focus largo se recorta y deja ver lo escrito.
+    ("focus-largo-finder", &[Step::Keys("<Space>fidea")]),
+    ("focus-vacio", &[Step::Keys("<Esc>:focus #nada<CR>")]),
+    ("focus-finder-vacio", &[Step::Keys("<Space>f")]),
+    (
+        "focus-desde-el-panel",
+        &[Step::Keys("<Esc>:unfocus<CR><C-w>hTggF")],
+    ),
+    ("focus-menu-salir", &[Step::RightClickRow(1)]),
+    ("sin-focus", &[Step::Keys("<Esc>F")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

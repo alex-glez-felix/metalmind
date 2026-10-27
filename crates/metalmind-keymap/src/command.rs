@@ -98,6 +98,12 @@ named_actions! {
         /// `space d`, `:today`: abre la nota del día, creándola con su
         /// plantilla si todavía no existe.
         OpenDailyNote = "notes::open_daily",
+        /// `:focus proyectos/ #rust -#archivado`: reduce el finder, la
+        /// búsqueda y el panel a ese alcance (05 §3); sin alcance, dice el de
+        /// ahora.
+        Focus = "workspace::focus",
+        /// `:unfocus`, o un clic en el indicador de la barra de estado.
+        ClearFocus = "workspace::clear_focus",
     }
 }
 
@@ -132,6 +138,8 @@ const EX: &[(&str, usize, Command)] = &[
     ("tagpage", 7, Command::OpenTagPage),
     ("template", 8, Command::NewNoteFromTemplate),
     ("today", 5, Command::OpenDailyNote),
+    ("focus", 5, Command::Focus),
+    ("unfocus", 7, Command::ClearFocus),
 ];
 
 impl Command {
@@ -154,6 +162,7 @@ impl Command {
                 | Self::SetTagIcon
                 | Self::SetTagTemplate
                 | Self::OpenTagPage
+                | Self::Focus
         )
     }
 
@@ -177,7 +186,9 @@ impl Command {
             | Self::EditTagParents
             | Self::SetTagIcon
             | Self::SetTagTemplate
-            | Self::OpenTagPage => RangeRule::NotAllowed,
+            | Self::OpenTagPage
+            | Self::Focus
+            | Self::ClearFocus => RangeRule::NotAllowed,
             _ => RangeRule::Unsupported,
         }
     }

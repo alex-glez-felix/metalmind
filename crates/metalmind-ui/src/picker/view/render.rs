@@ -100,11 +100,22 @@ impl<D: PickerDelegate> PickerView<D> {
             })
             .child(piece().child(warned(after, before.len())));
         div()
+            .debug_selector(|| "picker-input".to_owned())
             .relative()
             .flex()
             .items_center()
             .px(theme.layout.picker_padding_x)
             .py(theme.layout.picker_input_padding_y)
+            .children(self.options.focus.clone().map(|focus| {
+                div()
+                    .debug_selector(|| "picker-focus".to_owned())
+                    .flex_none()
+                    .max_w(relative(theme.layout.picker_detail_share))
+                    .truncate()
+                    .mr(theme.layout.picker_gap)
+                    .text_color(theme.ui.focus_indicator)
+                    .child(focus)
+            }))
             .child(text)
             .children(self.delegate.status().map(|status| {
                 div()
