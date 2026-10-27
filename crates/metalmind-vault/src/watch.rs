@@ -26,15 +26,15 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
             .iter()
             .map(|path| relevant(root, path))
             .collect();
-        // Un archivo de reglas no es del índice: renombrarlo relee su carpeta,
-        // pero no mueve nada a ella.
-        let rules = event
+        // Las rutas mismas, no la carpeta que relee un archivo de reglas:
+        // renombrar un `.gitignore` relee su carpeta pero no mueve nada a ella.
+        let renamed: Vec<Option<VaultPath>> = event
             .paths
             .iter()
-            .any(|path| ruled_by(root, path).is_some());
+            .map(|path| VaultPath::from_fs(root, path))
+            .collect();
         if let (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) =
-            (event.kind, paths.as_slice())
-            && !rules
+            (event.kind, renamed.as_slice())
         {
             touched.renames.push((from.clone(), to.clone()));
         }
@@ -164,6 +164,23 @@ mod tests {
         let touched = touched(root, &events);
         assert_eq!(paths(&touched), [""]);
         assert_eq!(touched.renames, []);
+    }
+
+    /// Una carpeta que se llama como un archivo de reglas sigue siendo del
+    /// vault: su rename se anota.
+    #[test]
+    fn renombrar_una_carpeta_llamada_como_reglas_es_un_rename() {
+        let root = Path::new("/v");
+        let events = [event(
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+            &["/v/CACHEDIR.TAG", "/v/otra"],
+        )];
+        let renames = touched(root, &events).renames;
+        let pairs: Vec<(&str, &str)> = renames
+            .iter()
+            .map(|(from, to)| (from.as_str(), to.as_str()))
+            .collect();
+        assert_eq!(pairs, [("CACHEDIR.TAG", "otra")]);
     }
 
     #[test]
