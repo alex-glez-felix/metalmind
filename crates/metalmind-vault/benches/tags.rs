@@ -8,7 +8,7 @@
 )]
 
 use divan::Bencher;
-use metalmind_vault::tags::{Scope, TagQuery, Tags};
+use metalmind_vault::tags::{Scope, ScopeWord, TagQuery, Tags};
 use metalmind_vault::{Vault, VaultPath};
 use tempfile::TempDir;
 
@@ -65,7 +65,7 @@ fn panel_de_tags(bencher: Bencher, notes: usize) {
 
 #[divan::bench(args = SIZES)]
 fn panel_en_focus(bencher: Bencher, notes: usize) {
-    let scope = Scope::parse("area-1/ #t1").unwrap();
+    let scope = Scope::from_words(["area-1/", "#t1"].map(ScopeWord::of)).unwrap();
     with_tags(bencher, notes, |tags| {
         tags.tree(&scope.filter(tags)).roots().len()
     });

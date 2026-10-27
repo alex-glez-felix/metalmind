@@ -21,6 +21,7 @@ mod visual;
 use std::collections::HashSet;
 
 use self::awaiting::Awaiting;
+pub use self::command_line::TypedArgument;
 use self::ex::GlobalRun;
 use self::macros::{Playback, Recording, Replay};
 pub use self::outcome::KeyOutcome;

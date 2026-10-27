@@ -2,9 +2,11 @@
 //! si hay cambios sin guardar (o, con autoguardado, si está guardado), el
 //! último mensaje o la línea de comandos, el focus y la posición del cursor. Modo,
 //! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
+//! Sobre la línea de comandos va la lista del autocompletado de su argumento.
 
 use gpui_kit::{
-    Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _, relative,
+    AnyElement, Div, ParentElement as _, SharedString, Styled as _, div,
+    prelude::FluentBuilder as _, relative,
 };
 use metalmind_vim::{Mode, VisualKind};
 
@@ -59,7 +61,8 @@ impl Middle {
     }
 }
 
-pub fn status_bar(status: Status, theme: &Theme) -> Div {
+/// `menu` es la lista del autocompletado de lo que se teclea tras `:`.
+pub fn status_bar(status: Status, menu: Option<AnyElement>, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let foreground = if status.mode.is_some() {
         theme.ui.status_foreground
@@ -87,7 +90,7 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
             bar.child(fixed().child(format!("grabando @{register}")))
         })
         .child(match Middle::of(status.command_line, status.message) {
-            Middle::Typing(line) => command_line(line, theme),
+            Middle::Typing(line) => command_line(line, menu, theme),
             Middle::Note(message) => note(status.file, mark, message, theme),
         })
         .children(status.focus.map(|label| {
@@ -167,8 +170,9 @@ impl CommandLine {
 }
 
 /// Si no cabe, se recorta el principio de lo escrito: el preedit y el cursor,
-/// que es donde se escribe, siempre se ven.
-fn command_line(line: CommandLine, theme: &Theme) -> Div {
+/// que es donde se escribe, siempre se ven. `menu` se pinta desde su
+/// principio.
+fn command_line(line: CommandLine, menu: Option<AnyElement>, theme: &Theme) -> Div {
     let text = line.text();
     let preedit = line.preedit;
     div()
@@ -177,6 +181,7 @@ fn command_line(line: CommandLine, theme: &Theme) -> Div {
         .flex_grow_1()
         .min_w_0()
         .text_color(theme.ui.foreground)
+        .children(menu)
         .child(
             div()
                 .min_w_0()

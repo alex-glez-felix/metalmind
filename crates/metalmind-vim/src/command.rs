@@ -201,6 +201,20 @@ pub(crate) fn parse<'a>(
     }))
 }
 
+/// El comando ajeno de `line` que acepta argumento y dónde empieza este,
+/// en bytes, si ya se escribió el espacio tras el nombre: `:focus #ru` da
+/// `focus` y 7. Como [`parse`], ignora espacios y `:` de más.
+pub(crate) fn argument_start<'a>(
+    line: &str,
+    commands: &'a [HostCommand],
+) -> Option<(&'a HostCommand, usize)> {
+    let typed = line.trim_start_matches([' ', ':']);
+    let (name, rest) = split_name(typed);
+    let command = find(name, commands).filter(|command| command.takes_argument)?;
+    let argument = rest.trim_start();
+    (argument.len() < rest.len()).then(|| (command, line.len() - argument.len()))
+}
+
 fn find<'a>(name: &str, commands: &'a [HostCommand]) -> Option<&'a HostCommand> {
     commands
         .iter()
@@ -289,6 +303,18 @@ mod tests {
             invocation("q otro.md"),
             Err(CommandError::TrailingCharacters("otro.md".to_owned()))
         );
+    }
+
+    #[test]
+    fn el_argumento_empieza_tras_el_nombre_y_un_espacio() {
+        let start =
+            |line| argument_start(line, COMMANDS).map(|(command, start)| (command.name, start));
+        assert_eq!(start("w notas/a"), Some(("write", 2)));
+        assert_eq!(start(" :wr   notas/a"), Some(("write", 7)));
+        assert_eq!(start("w "), Some(("write", 2)));
+        assert_eq!(start("w"), None);
+        assert_eq!(start("q x"), None);
+        assert_eq!(start("x a"), None);
     }
 
     #[test]

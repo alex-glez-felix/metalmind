@@ -6,7 +6,7 @@ use std::collections::HashSet;
 
 use crate::path::VaultPath;
 use crate::tags::Tags;
-use crate::tags::query::TagQuery;
+use crate::tags::query::{ParsedQuery, TagQuery};
 
 /// `:focus proyectos/ #rust -#archivado`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -25,15 +25,42 @@ pub enum ScopeError {
     TwoFolders(String, String),
 }
 
+/// Una palabra de un alcance, ya separada de las demás: quien la lee (la
+/// línea de `:focus`) decide cómo se escribe un espacio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScopeWord<'w> {
+    /// `#rust`, `-#archivado` o `-#`.
+    Tag(&'w str),
+    /// La carpeta; su `/` final es opcional.
+    Folder(&'w str),
+}
+
+impl<'w> ScopeWord<'w> {
+    /// Lo que empieza con `#` o `-#` es de tags; lo demás, la carpeta.
+    #[must_use]
+    pub fn of(word: &'w str) -> Self {
+        if word.starts_with('#') || word.starts_with("-#") {
+            Self::Tag(word)
+        } else {
+            Self::Folder(word)
+        }
+    }
+}
+
 impl Scope {
-    /// Lo que no empieza con `#` ni `-#` es la carpeta; su `/` final es
-    /// opcional.
-    ///
     /// # Errors
     /// Si un tag no es válido, la carpeta no es una ruta del vault o hay más
     /// de una carpeta.
-    pub fn parse(text: &str) -> Result<Self, ScopeError> {
-        let parsed = TagQuery::parse(text);
+    pub fn from_words<'w>(
+        words: impl IntoIterator<Item = ScopeWord<'w>>,
+    ) -> Result<Self, ScopeError> {
+        let mut parsed = ParsedQuery::default();
+        for word in words {
+            match word {
+                ScopeWord::Tag(tag) => parsed.push(tag),
+                ScopeWord::Folder(folder) => parsed.words.push(folder.to_owned()),
+            }
+        }
         if let Some(invalid) = parsed.invalid.into_iter().next() {
             return Err(ScopeError::InvalidTag(invalid));
         }

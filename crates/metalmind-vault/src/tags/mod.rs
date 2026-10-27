@@ -35,7 +35,7 @@ pub use note::{FrontmatterSpot, NoteTags, Snippet, TagOccurrence, TagSource};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage, parse_template};
 pub use query::{ParsedQuery, QueryWord, TagQuery};
 pub use refactor::{PlanError, PlanNotice, TagPlan};
-pub use scope::{Scope, ScopeError, ScopeFilter};
+pub use scope::{Scope, ScopeError, ScopeFilter, ScopeWord};
 pub use tree::{TagNode, TagTree};
 
 use crate::index::{EntryKind, VaultIndex};

@@ -1,7 +1,7 @@
 //! El modo focus (05 §3) en la app real: con focus, el finder ofrece solo
 //! las notas del alcance.
 
-use super::support::Smoke;
+use super::support::{Area, Smoke, Window};
 
 /// `a.md` abierta y sin tags, `b.md` sin tags y `c.md` con `#rust`: sin
 /// focus, el primero del finder es otra nota que `c.md`.
@@ -34,4 +34,43 @@ fn f_en_el_panel_enfoca_el_tag_elegido() {
     let window = metalmind.window();
     window.type_keys("<Space>tggF<C-w>l<Space>f<CR>");
     window.wait_title("de c.md", |title| title.starts_with("c.md"));
+}
+
+/// Sobre la barra de estado, donde se abre la lista del argumento de `:`.
+fn argument_list(window: &Window<'_>) -> Area {
+    let (_, height, _) = window.pixels();
+    Area {
+        x: 0,
+        y: i16::try_from(height).unwrap() - 260,
+        width: 400,
+        height: 220,
+    }
+}
+
+/// `:focus` completa carpetas, con sus espacios escapados, y tags (#156):
+/// `tab` escribe `Mis\ notas/` y `#rust`, y el finder ofrece solo la nota
+/// de esa carpeta con ese tag.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn focus_completa_carpetas_con_espacios_y_tags() {
+    let smoke = Smoke::new();
+    notes(&smoke);
+    smoke.write("Mis notas/d.md", "#rust cuatro\n");
+    smoke.write("Mis notas/e.md", "cinco\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let list = argument_list(&window);
+    let closed = window.wait_still(list);
+    window.type_keys(":focus Mis");
+    window.wait_change("la lista de carpetas", list, &closed);
+    window.wait_still(list);
+    window.type_keys("<Tab>");
+    let accepted = window.wait_still(list);
+    window.type_keys(" #ru");
+    window.wait_change("la lista de tags", list, &accepted);
+    window.wait_still(list);
+    window.type_keys("<Tab><CR><Space>f<CR>");
+    window.wait_title("de Mis notas/d.md", |title| {
+        title.starts_with("Mis notas/d.md")
+    });
 }

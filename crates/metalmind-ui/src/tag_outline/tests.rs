@@ -1,6 +1,7 @@
 use std::fs;
 
 use metalmind_vault::Vault;
+use metalmind_vault::tags::ScopeWord;
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -265,7 +266,7 @@ fn la_nota_seleccionada_sigue_a_su_renombre() {
 #[test]
 fn en_focus_quedan_sus_tags_con_el_conteo_de_dentro() {
     let mut outline = outline_of(tags_of(FILES));
-    outline.set_scope(Scope::parse("#ui").unwrap());
+    outline.set_scope(Scope::from_words([ScopeWord::Tag("#ui")]).unwrap());
     outline.refresh();
     outline.expand_or_enter();
     assert_eq!(

@@ -1,7 +1,7 @@
 //! Lo que recorre todo el vault crece lineal con las notas (docs/performance.md):
 //! N contra 16N notas, con una página de tag cada 25.
 
-use super::{Fixture, path};
+use super::{Fixture, path, scope};
 use crate::tags::{Scope, TagQuery, Tags};
 
 const NOTES: usize = 2_000;
@@ -43,7 +43,7 @@ fn armar_el_panel_es_lineal() {
 #[test]
 #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
 fn armar_el_panel_en_focus_es_lineal() {
-    let scope = Scope::parse("area-1/ #t1").unwrap();
+    let scope = scope("area-1/ #t1").unwrap();
     metalmind_perf::assert_linear(NOTES, tags, |tags| {
         tags.tree(&scope.filter(&tags)).roots().len()
     });

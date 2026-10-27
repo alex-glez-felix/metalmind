@@ -13,6 +13,7 @@
 //! la UI lo resalte.
 
 mod action;
+mod argument;
 mod block;
 mod columns;
 mod command;
@@ -54,6 +55,7 @@ mod visual;
 mod word;
 
 pub use action::{Action, InsertAt, PasteSide};
+pub use argument::{ArgumentWord, argument_words, escape_argument};
 pub use block::VisualBlock;
 pub use command::{ActionName, CommandError, HostCommand, Invocation, RangeRule};
 pub use doc::DocState;
@@ -76,4 +78,4 @@ pub use search::{Pattern, SearchError, Wrap};
 pub use substitute::Substitution;
 pub use target::Target;
 pub use text_object::TextObject;
-pub use vim::{KeyOutcome, Vim};
+pub use vim::{KeyOutcome, TypedArgument, Vim};

@@ -28,6 +28,31 @@ pub struct ParsedQuery {
     pub invalid: Vec<String>,
 }
 
+impl ParsedQuery {
+    /// Agrega una palabra ya separada de las demás.
+    pub fn push(&mut self, word: &str) {
+        let (list, key) = match QueryWord::of(word) {
+            QueryWord::Text => {
+                self.words.push(word.to_owned());
+                return;
+            }
+            QueryWord::Invalid => {
+                self.invalid.push(word.to_owned());
+                return;
+            }
+            QueryWord::Untagged => {
+                self.query.untagged = true;
+                return;
+            }
+            QueryWord::Include(key) => (&mut self.query.include, key),
+            QueryWord::Exclude(key) => (&mut self.query.exclude, key),
+        };
+        if !list.contains(&key) {
+            list.push(key);
+        }
+    }
+}
+
 /// Qué es cada palabra de una consulta escrita.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QueryWord {
@@ -82,26 +107,8 @@ impl TagQuery {
     #[must_use]
     pub fn parse(text: &str) -> ParsedQuery {
         let mut parsed = ParsedQuery::default();
-        for (range, word) in Self::words(text) {
-            let (list, key) = match word {
-                QueryWord::Text => {
-                    parsed.words.push(text[range].to_owned());
-                    continue;
-                }
-                QueryWord::Invalid => {
-                    parsed.invalid.push(text[range].to_owned());
-                    continue;
-                }
-                QueryWord::Untagged => {
-                    parsed.query.untagged = true;
-                    continue;
-                }
-                QueryWord::Include(key) => (&mut parsed.query.include, key),
-                QueryWord::Exclude(key) => (&mut parsed.query.exclude, key),
-            };
-            if !list.contains(&key) {
-                list.push(key);
-            }
+        for (range, _) in Self::words(text) {
+            parsed.push(&text[range]);
         }
         parsed
     }
