@@ -129,26 +129,35 @@ impl Builder<'_, '_> {
         self.laid.formulas.push(placed);
     }
 
-    /// Lo que ocupa en su fila la fuente de una fórmula que no compone.
+    /// Lo que ocupa en cada fila la fuente de una fórmula que no compone:
+    /// el ratón muestra su mensaje en cualquiera de ellas.
     pub(super) fn error(&mut self, spot: &MathSpot, error: &MathError) {
-        let Some(row) = self.laid.row_of(spot.range.start) else {
-            return;
-        };
-        let origin = self.laid.row_origin(row);
-        let left = row.x_for_index(spot.range.start);
-        let right = if spot.range.end <= row.source.end {
-            row.x_for_index(spot.range.end)
-        } else {
-            row.width()
-        };
-        let bounds = Bounds::new(
-            point(origin.x + left, origin.y),
-            size(right - left, row.height),
-        );
-        self.laid.errors.push(FormulaError {
-            bounds,
-            message: error.to_string().into(),
-        });
+        let message: SharedString = error.to_string().into();
+        let range = &spot.range;
+        let touched = self
+            .laid
+            .rows
+            .iter()
+            .filter(|row| row.source.start < range.end && range.start < row.source.end);
+        let errors: Vec<FormulaError> = touched
+            .map(|row| {
+                let origin = self.laid.row_origin(row);
+                let left = row.x_for_index(range.start.max(row.source.start));
+                let right = if range.end <= row.source.end {
+                    row.x_for_index(range.end)
+                } else {
+                    row.width()
+                };
+                FormulaError {
+                    bounds: Bounds::new(
+                        point(origin.x + left, origin.y),
+                        size(right - left, row.height),
+                    ),
+                    message: message.clone(),
+                }
+            })
+            .collect();
+        self.laid.errors.extend(errors);
     }
 }
 
