@@ -49,6 +49,12 @@ impl<D: PickerDelegate> Render for PickerView<D> {
     }
 }
 
+/// Un tramo del texto del input: nunca se parte ni se encoge, así lo que no
+/// cabe se corre en vez de encimarse.
+fn piece() -> gpui_kit::Div {
+    div().flex_none().whitespace_nowrap()
+}
+
 impl<D: PickerDelegate> PickerView<D> {
     fn render_input(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let line = self.delegate.line();
@@ -62,33 +68,46 @@ impl<D: PickerDelegate> PickerView<D> {
         let entity = cx.entity();
         let focus = self.focus_handle.clone();
         let caret_height = theme.ui_line();
+        let caret = 1 + usize::from(!marked.is_empty());
+        self.input_scroll.scroll_to_item(caret);
+        let text = div()
+            .id("picker-input-text")
+            .debug_selector(|| "picker-input-text".to_owned())
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .items_center()
+            .overflow_x_scroll()
+            .track_scroll(&self.input_scroll)
+            .child(piece().child(warned(before, 0)))
+            .when(!marked.is_empty(), |text| {
+                text.child(piece().underline().child(marked))
+            })
+            .child(
+                div()
+                    .debug_selector(|| "picker-caret".to_owned())
+                    .flex_none()
+                    .w(theme.stroke.caret)
+                    .h(caret_height)
+                    .bg(theme.cursor.insert),
+            )
+            .when(empty, |text| {
+                text.child(
+                    piece()
+                        .text_color(theme.ui.picker_muted)
+                        .child(self.options.placeholder.clone()),
+                )
+            })
+            .child(piece().child(warned(after, before.len())));
         div()
             .relative()
             .flex()
             .items_center()
             .px(theme.layout.picker_padding_x)
             .py(theme.layout.picker_input_padding_y)
-            .child(div().child(warned(before, 0)))
-            .when(!marked.is_empty(), |input| {
-                input.child(div().underline().child(marked))
-            })
-            .child(
-                div()
-                    .w(theme.stroke.caret)
-                    .h(caret_height)
-                    .bg(theme.cursor.insert),
-            )
-            .when(empty, |input| {
-                input.child(
-                    div()
-                        .text_color(theme.ui.picker_muted)
-                        .child(self.options.placeholder.clone()),
-                )
-            })
-            .child(div().child(warned(after, before.len())))
+            .child(text)
             .children(self.delegate.status().map(|status| {
                 div()
-                    .ml_auto()
                     .pl(theme.layout.picker_gap)
                     .flex_none()
                     .map(|element| theme.ui_small_text(element))
