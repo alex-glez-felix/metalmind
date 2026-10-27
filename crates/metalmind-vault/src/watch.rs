@@ -21,20 +21,13 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
         if matches!(event.kind, EventKind::Access(_)) {
             continue;
         }
-        let paths: Vec<Option<VaultPath>> = event
-            .paths
-            .iter()
-            .map(|path| relevant(root, path))
-            .collect();
-        // Las rutas mismas, no la carpeta que relee un archivo de reglas:
-        // renombrar un `.gitignore` relee su carpeta pero no mueve nada a ella.
-        let renamed: Vec<Option<VaultPath>> = event
+        let named: Vec<Option<VaultPath>> = event
             .paths
             .iter()
             .map(|path| VaultPath::from_fs(root, path))
             .collect();
         if let (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) =
-            (event.kind, renamed.as_slice())
+            (event.kind, named.as_slice())
         {
             touched.renames.push((from.clone(), to.clone()));
         }
@@ -42,12 +35,15 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
             event.kind,
             EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any)
         ) {
-            touched.written.extend(paths.iter().flatten().cloned());
+            touched.written.extend(named.iter().flatten().cloned());
         }
+        // Un archivo de reglas también relee la parte del vault que decide.
+        let ruled = event.paths.iter().filter_map(|path| ruled_by(root, path));
+        let paths = named.into_iter().flatten().chain(ruled);
         if matches!(event.kind, EventKind::Modify(ModifyKind::Metadata(_))) {
-            touched.reread.extend(paths.into_iter().flatten());
+            touched.reread.extend(paths);
         } else {
-            touched.paths.extend(paths.into_iter().flatten());
+            touched.paths.extend(paths);
         }
     }
     touched
@@ -62,20 +58,13 @@ pub(crate) fn touched_by_errors(root: &Path, errors: &[notify::Error]) -> Touche
         if error.paths.is_empty() {
             touched.paths.insert(VaultPath::root());
         }
-        touched.paths.extend(
-            error
-                .paths
-                .iter()
-                .map(|path| relevant(root, path).unwrap_or_else(VaultPath::root)),
-        );
+        touched.paths.extend(error.paths.iter().map(|path| {
+            ruled_by(root, path)
+                .or_else(|| VaultPath::from_fs(root, path))
+                .unwrap_or_else(VaultPath::root)
+        }));
     }
     touched
-}
-
-/// La ruta del vault que hay que releer por un evento en `path`, si alguna.
-fn relevant(root: &Path, path: &Path) -> Option<VaultPath> {
-    // Un oculto (temporal de un guardado, algo en `.git/`) no está en el índice.
-    ruled_by(root, path).or_else(|| VaultPath::from_fs(root, path))
 }
 
 #[cfg(test)]
@@ -190,7 +179,10 @@ mod tests {
             EventKind::Create(CreateKind::File),
             &["/v/sub/target/CACHEDIR.TAG"],
         )];
-        assert_eq!(paths(&touched(root, &events)), ["sub/target"]);
+        assert_eq!(
+            paths(&touched(root, &events)),
+            ["sub/target", "sub/target/CACHEDIR.TAG"]
+        );
     }
 
     #[test]
