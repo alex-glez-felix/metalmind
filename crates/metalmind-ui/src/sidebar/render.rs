@@ -210,7 +210,11 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         self.focus(window, cx);
-        if let Some(click) = self.panel.click(at, event.click_count()) {
+        // Una fila cortada por el borde se ve entera al elegirla, como con
+        // `j` y `k`.
+        let click = self.panel.click(at, event.click_count());
+        self.scroll_to_selection();
+        if let Some(click) = click {
             let placement = crate::workspace::Placement::Current;
             self.open(&click.path, click.at, placement, click.focus_editor, cx);
         }
@@ -226,6 +230,7 @@ impl Sidebar {
     ) {
         self.focus(window, cx);
         self.panel.outline_mut().select_row(at);
+        self.scroll_to_selection();
         let focus = self.selected_is_focus(cx);
         self.menu = match self.panel.view {
             PanelView::Folders => self.panel.tree.selected_entry().map(|row| {
