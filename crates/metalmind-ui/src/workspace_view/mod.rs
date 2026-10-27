@@ -337,6 +337,10 @@ impl WorkspaceView {
                 self.touch_focused(cx);
             }
             SidebarEvent::PanesChanged => self.sync_editors(cx),
+            // A la derecha del panel está la lista, si se ve.
+            SidebarEvent::FocusEditor if self.list.read(cx).is_visible() => {
+                self.focus_list(window, cx);
+            }
             SidebarEvent::FocusEditor => self.focus(window, cx),
             SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),

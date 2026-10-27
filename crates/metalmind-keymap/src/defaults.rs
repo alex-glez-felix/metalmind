@@ -106,7 +106,10 @@ const PANES: &[(char, Command)] = &[
 
 /// Desde el árbol y la lista, que están a la izquierda de los paneles.
 const PANES_FROM_TREE: &[(char, PanelAction)] = &[('l', PanelAction::FocusEditor)];
-const PANES_FROM_LIST: &[(char, ListAction)] = &[('l', ListAction::FocusEditor)];
+const PANES_FROM_LIST: &[(char, ListAction)] = &[
+    ('l', ListAction::FocusEditor),
+    ('h', ListAction::FocusSidebar),
+];
 
 fn panes() -> impl Iterator<Item = Binding> {
     let editor = PANES.iter().flat_map(|&(key, command)| {

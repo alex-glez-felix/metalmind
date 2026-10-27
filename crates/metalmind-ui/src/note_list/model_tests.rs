@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use metalmind_search::FuzzyMatcher;
-use metalmind_vault::{Vault, VaultChange};
+use metalmind_vault::{EntryKind, Vault, VaultChange, VaultIndex};
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -187,4 +187,44 @@ fn etiquetar_pide_una_nota_y_separa_los_tags() {
 
     let mut empty = fixture.list(ListSource::Tag("nada".into()), "");
     assert!(!empty.start_tagging());
+}
+
+#[test]
+fn la_fila_y_la_carpeta_de_la_fuente_siguen_a_un_renombre() {
+    let fixture = Fixture::new();
+    let renamed_index = VaultIndex::from_entries(
+        [
+            ("vieja.md", EntryKind::Note),
+            ("nueva.md", EntryKind::Note),
+            ("media.md", EntryKind::Note),
+            ("e", EntryKind::Folder),
+            ("e/sin.md", EntryKind::Note),
+        ]
+        .map(|(name, kind)| (VaultPath::new(name).unwrap(), kind)),
+    );
+    let update = VaultUpdate {
+        changes: vec![VaultChange::Renamed {
+            from: VaultPath::new("d").unwrap(),
+            to: VaultPath::new("e").unwrap(),
+            kind: EntryKind::Folder,
+        }],
+        snapshot: Arc::new(renamed_index),
+        ..fixture.update("nueva.md")
+    };
+    for source in [ListSource::All, ListSource::Folder("d".into())] {
+        let mut list = fixture.list(source, "");
+        assert!(list.reveal(&VaultPath::new("d/sin.md").unwrap()).is_some());
+        let (step, _unread) = list.apply(&update);
+        run(&mut list, step);
+        assert_eq!(list.selected_note().unwrap().as_str(), "e/sin.md");
+        assert_eq!(
+            list.card(list.selected_row().unwrap()).unwrap().title,
+            "sin"
+        );
+    }
+    let mut folder = fixture.list(ListSource::Folder("d".into()), "");
+    let (step, _unread) = folder.apply(&update);
+    run(&mut folder, step);
+    assert_eq!(folder.source(), &ListSource::Folder("e".into()));
+    assert_eq!(rows(&folder), ["e/sin.md"]);
 }

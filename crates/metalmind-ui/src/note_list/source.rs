@@ -2,7 +2,7 @@
 //! descendientes o una carpeta con sus subcarpetas.
 
 use metalmind_vault::tags::{TagQuery, Tags};
-use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
+use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -59,6 +59,24 @@ impl ListSource {
                 Err(_) => Vec::new(),
             },
         }
+    }
+
+    /// Una carpeta renombrada sigue siendo la fuente con su nombre nuevo.
+    pub fn follow(&mut self, changes: &[VaultChange]) {
+        let Self::Folder(folder) = self else {
+            return;
+        };
+        let Ok(mut path) = VaultPath::new(folder) else {
+            return;
+        };
+        for change in changes {
+            if let VaultChange::Renamed { from, to, .. } = change
+                && let Some(moved) = path.rebase(from, to)
+            {
+                path = moved;
+            }
+        }
+        path.as_str().clone_into(folder);
     }
 
     /// Lo que se puede elegir como fuente en este vault: el buzón, todas,
@@ -173,6 +191,21 @@ mod tests {
                 "ui/hondo/",
             ]
         );
+    }
+
+    #[test]
+    fn una_carpeta_renombrada_sigue_siendo_la_fuente() {
+        let renamed = |from: &str, to: &str| VaultChange::Renamed {
+            from: VaultPath::new(from).unwrap(),
+            to: VaultPath::new(to).unwrap(),
+            kind: EntryKind::Folder,
+        };
+        let mut source = ListSource::Folder("ui/hondo".into());
+        source.follow(&[renamed("otra", "nada"), renamed("ui", "vista")]);
+        assert_eq!(source, ListSource::Folder("vista/hondo".into()));
+        let mut tag = ListSource::Tag("ui".into());
+        tag.follow(&[renamed("ui", "vista")]);
+        assert_eq!(tag, ListSource::Tag("ui".into()));
     }
 
     #[test]

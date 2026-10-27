@@ -8,7 +8,7 @@ use std::thread;
 use std::time::SystemTime;
 
 use metalmind_syntax::note_name;
-use metalmind_vault::{EntryKind, Summary, VaultChange, VaultPath};
+use metalmind_vault::{EntryKind, Summary, VaultChange, VaultIndex, VaultPath};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Card {
@@ -84,28 +84,31 @@ impl Cards {
     }
 
     /// Quita lo borrado y mueve lo renombrado; devuelve las notas que hay que
-    /// volver a leer.
-    pub fn apply(&mut self, changes: &[VaultChange]) -> Vec<VaultPath> {
+    /// volver a leer. `index` es el del lote, ya con los cambios.
+    pub fn apply(&mut self, changes: &[VaultChange], index: &VaultIndex) -> Vec<VaultPath> {
         let mut stale = Vec::new();
         for change in changes {
             match change {
-                VaultChange::Created { path, kind } if *kind == EntryKind::Note => {
-                    stale.push(path.clone());
+                VaultChange::Created { path, .. } | VaultChange::Modified { path } => {
+                    if index.kind(path) == Some(EntryKind::Note) {
+                        stale.push(path.clone());
+                    }
                 }
-                VaultChange::Created { .. } => {}
-                VaultChange::Modified { path } => stale.push(path.clone()),
                 VaultChange::Removed { path, .. } => {
                     self.0.retain(|note, _| !note.starts_with(path));
                 }
-                VaultChange::Renamed { from, to, .. } => self.rename(from, to, &mut stale),
+                VaultChange::Renamed { from, to, .. } => {
+                    self.rename(from, to);
+                    stale.extend(notes_under(index, to));
+                }
             }
         }
         stale
     }
 
-    /// Una carpeta renombrada lleva sus notas; una nota cambia de nombre, que
-    /// es su título si no tiene `# `: se vuelve a leer.
-    fn rename(&mut self, from: &VaultPath, to: &VaultPath, stale: &mut Vec<VaultPath>) {
+    /// Lo leído de una carpeta renombrada se mueve con ella mientras se
+    /// relee: su nombre, que es el título si no tiene `# `, cambió.
+    fn rename(&mut self, from: &VaultPath, to: &VaultPath) {
         let moved: Vec<VaultPath> = self
             .0
             .keys()
@@ -113,13 +116,22 @@ impl Cards {
             .cloned()
             .collect();
         for old in moved {
-            let (Some(card), Some(new)) = (self.0.remove(&old), old.rebase(from, to)) else {
-                continue;
-            };
-            stale.push(new.clone());
-            self.0.insert(new, card);
+            if let (Some(card), Some(new)) = (self.0.remove(&old), old.rebase(from, to)) {
+                self.0.insert(new, card);
+            }
         }
     }
+}
+
+/// `path` si es una nota, o las notas de la carpeta `path`.
+fn notes_under<'i>(
+    index: &'i VaultIndex,
+    path: &'i VaultPath,
+) -> impl Iterator<Item = VaultPath> + 'i {
+    index
+        .files()
+        .filter(move |entry| entry.kind == EntryKind::Note && entry.path.starts_with(path))
+        .map(|entry| entry.path.clone())
 }
 
 #[cfg(test)]
@@ -176,29 +188,47 @@ mod tests {
         cards.insert_all([
             (path("a.md"), card("a")),
             (path("d/b.md"), card("b")),
-            (path("d/c.md"), card("c")),
             (path("borrada.md"), card("x")),
         ]);
-        let stale = cards.apply(&[
-            VaultChange::Modified { path: path("a.md") },
-            VaultChange::Created {
-                path: path("nueva.md"),
-                kind: EntryKind::Note,
-            },
-            VaultChange::Created {
-                path: path("img.png"),
-                kind: EntryKind::Attachment,
-            },
-            VaultChange::Removed {
-                path: path("borrada.md"),
-                kind: EntryKind::Note,
-            },
-            VaultChange::Renamed {
-                from: path("d"),
-                to: path("e"),
-                kind: EntryKind::Folder,
-            },
-        ]);
+        // `e/c.md` llegó con la carpeta antes de tener tarjeta.
+        let index = VaultIndex::from_entries(
+            [
+                ("a.md", EntryKind::Note),
+                ("nueva.md", EntryKind::Note),
+                ("img.png", EntryKind::Attachment),
+                ("e", EntryKind::Folder),
+                ("e/b.md", EntryKind::Note),
+                ("e/c.md", EntryKind::Note),
+                ("e/foto.png", EntryKind::Attachment),
+            ]
+            .map(|(name, kind)| (path(name), kind)),
+        );
+        let stale = cards.apply(
+            &[
+                VaultChange::Modified { path: path("a.md") },
+                VaultChange::Modified {
+                    path: path("img.png"),
+                },
+                VaultChange::Created {
+                    path: path("nueva.md"),
+                    kind: EntryKind::Note,
+                },
+                VaultChange::Created {
+                    path: path("img.png"),
+                    kind: EntryKind::Attachment,
+                },
+                VaultChange::Removed {
+                    path: path("borrada.md"),
+                    kind: EntryKind::Note,
+                },
+                VaultChange::Renamed {
+                    from: path("d"),
+                    to: path("e"),
+                    kind: EntryKind::Folder,
+                },
+            ],
+            &index,
+        );
         let mut stale: Vec<&str> = stale.iter().map(VaultPath::as_str).collect();
         stale.sort_unstable();
         assert_eq!(stale, ["a.md", "e/b.md", "e/c.md", "nueva.md"]);

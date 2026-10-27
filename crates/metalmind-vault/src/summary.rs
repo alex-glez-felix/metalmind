@@ -43,47 +43,32 @@ impl Summary {
 }
 
 /// Las líneas de prosa desde `from`, unidas con un espacio y recortadas a
-/// [`EXCERPT_CHARS`].
+/// [`EXCERPT_CHARS`]. Los bloques cercados se saltan con las reglas del
+/// scanner.
 fn excerpt(text: &str, from: usize, headings: &[Range<usize>]) -> String {
     let mut excerpt = String::new();
-    let mut fence: Option<&str> = None;
-    let mut start = from;
-    for line in text[from..].split_inclusive('\n') {
-        let at = start;
-        start += line.len();
-        let trimmed = line.trim();
-        if let Some(open) = fence {
-            if trimmed.starts_with(open) {
-                fence = None;
+    let mut at = from;
+    while at < text.len() && excerpt.chars().count() < EXCERPT_CHARS {
+        if let Some(end) = metalmind_syntax::fenced_block_end(text, at) {
+            at = end;
+            continue;
+        }
+        let end = text[at..]
+            .find('\n')
+            .map_or(text.len(), |newline| at + newline + 1);
+        let line = text[at..end].trim();
+        if !line.is_empty() && !headings.iter().any(|span| span.start == at) {
+            if !excerpt.is_empty() {
+                excerpt.push(' ');
             }
-            continue;
+            excerpt.push_str(line);
         }
-        if let Some(open) = fence_marker(trimmed) {
-            fence = Some(open);
-            continue;
-        }
-        if trimmed.is_empty() || headings.iter().any(|span| span.start == at) {
-            continue;
-        }
-        if !excerpt.is_empty() {
-            excerpt.push(' ');
-        }
-        excerpt.push_str(trimmed);
-        if excerpt.chars().count() >= EXCERPT_CHARS {
-            break;
-        }
+        at = end;
     }
     match excerpt.char_indices().nth(EXCERPT_CHARS) {
         Some((cut, _)) => excerpt[..cut].to_owned(),
         None => excerpt,
     }
-}
-
-/// El marcador de una cerca de código que abre en esta línea.
-fn fence_marker(line: &str) -> Option<&'static str> {
-    ["```", "~~~"]
-        .into_iter()
-        .find(|marker| line.starts_with(marker))
 }
 
 #[cfg(test)]
@@ -117,6 +102,12 @@ mod tests {
         "Antes Después"
     )]
     #[case::un_heading_en_codigo_no_es_titulo("```\n# no\n```\n", None, "")]
+    #[case::una_cerca_mas_corta_no_cierra(
+        "````md\n```\ncódigo\n```\n````\nTexto.\n",
+        None,
+        "Texto."
+    )]
+    #[case::una_cerca_sin_cerrar_llega_al_final("Antes\n```\nnada más\n", None, "Antes")]
     #[case::vacia("", None, "")]
     fn titulo_y_extracto(#[case] text: &str, #[case] title: Option<&str>, #[case] excerpt: &str) {
         let summary = Summary::of(text);
