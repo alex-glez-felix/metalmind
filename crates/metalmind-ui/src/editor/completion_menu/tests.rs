@@ -103,6 +103,16 @@ fn la_tecla_tiene_su_columna(#[case] selected: usize) {
         keys.left() - detail.right() >= theme.layout.menu_item_padding_x,
         "{detail:?} {keys:?}"
     );
+    // La columna va contra el borde derecho, en las dos filas.
+    for row in ["completion-0", "completion-1"] {
+        let bounds = cx.debug_bounds(row).unwrap();
+        let keys = cx.debug_bounds(format!("{row}-keys").leak()).unwrap();
+        assert_eq!(
+            keys.right(),
+            bounds.right() - theme.layout.menu_item_padding_x,
+            "{row}"
+        );
+    }
     let mut other = TestAppContext::single();
     let (_, other) = other.add_window_view(|_, _| NotesProbe {
         selected: 1 - selected,

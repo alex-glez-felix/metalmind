@@ -60,7 +60,7 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
     ),
     (
         "src/editor/completion_menu.rs",
-        "gpui_kit::transparent_black()",
+        "keys.text_color(gpui_kit::transparent_black())",
         "la tecla de una fila no elegida guarda su columna, transparente: si no, la lista se ensancharía al elegir y la tecla se pegaría al detalle",
     ),
     (
