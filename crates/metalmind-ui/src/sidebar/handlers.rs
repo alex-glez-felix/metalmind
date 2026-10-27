@@ -237,6 +237,7 @@ impl Sidebar {
     fn toggle_view(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let moved = self.panel.switch_view();
+        self.release_backlinks(cx);
         self.reveal_tag_row(moved);
         cx.notify();
     }

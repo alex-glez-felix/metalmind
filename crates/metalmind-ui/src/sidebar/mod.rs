@@ -156,6 +156,14 @@ impl Sidebar {
         }
     }
 
+    /// Otra vista: la lista de backlinks deja de quedarse en su nota.
+    fn release_backlinks(&mut self, cx: &App) {
+        if self.holding_backlinks && self.panel.view != PanelView::Backlinks {
+            self.holding_backlinks = false;
+            self.follow_active(cx);
+        }
+    }
+
     /// Abre o cierra la nota de la fila `at` de los backlinks, sin abrirla.
     fn toggle_backlink_note(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus_handle, cx);
@@ -217,6 +225,7 @@ impl Sidebar {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
         let shown = self.panel.toggle(view, focused);
+        self.release_backlinks(cx);
         self.reveal_tag_row(shown.moved);
         cx.notify();
         shown.visible

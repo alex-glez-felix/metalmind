@@ -873,6 +873,29 @@ fn un_clic_en_un_backlink_deja_recorrer_la_lista() {
     smoke.wait_contents("c.md", "y X[[a]]\n");
 }
 
+/// Tras abrir un backlink con un clic, cambiar de vista suelta la lista: al
+/// volver muestra los backlinks de la nota abierta. Aquí `b.md` tiene uno
+/// de `c.md`, así que `enter` lo abre.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn cambiar_de_vista_suelta_la_lista_de_backlinks() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "# A\n");
+    smoke.write("b.md", "ver [[a]]\n");
+    smoke.write("c.md", "y [[b]]\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>b");
+    let (x, y) = tree_row(1);
+    window.click(x, y);
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("TTTj<CR>");
+    window.wait_title("de c.md", |title| title.starts_with("c.md"));
+    window.type_keys("iX<Esc>:w<CR>");
+    smoke.wait_contents("c.md", "y X[[b]]\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {
