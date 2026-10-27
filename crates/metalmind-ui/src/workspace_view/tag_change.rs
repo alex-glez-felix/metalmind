@@ -18,9 +18,10 @@ use crate::workspace::{Message, shown_path};
 pub(super) struct LastTagChange {
     title: String,
     applied: Applied,
-    /// El tag del que la lista de notas pasó a otro, y a cuál: deshacer el
-    /// cambio la devuelve.
-    list_followed: Option<(String, String)>,
+    /// El tag del que la lista de notas pasó a otro, a cuál y cuántas
+    /// fuentes había elegido el usuario: deshacer el cambio la devuelve si
+    /// no eligió otra después.
+    list_followed: Option<(String, String, u64)>,
 }
 
 impl WorkspaceView {
@@ -88,7 +89,8 @@ impl WorkspaceView {
                 .update(cx, |list, cx| list.rename_tag(from, to, cx))
             && let Some(last) = &mut self.last_tag_change
         {
-            last.list_followed = Some((from.clone(), to.clone()));
+            let choices = self.list.read(cx).source_choices();
+            last.list_followed = Some((from.clone(), to.clone(), choices));
         }
     }
 
@@ -193,8 +195,9 @@ impl WorkspaceView {
                 // Donde haya quedado cada archivo, aunque un renombre no se
                 // haya podido deshacer.
                 self.reread(&vault, last.applied.touched(), cx);
-                if let Some((from, to)) = &last.list_followed {
-                    // Si el usuario no eligió otra fuente mientras tanto.
+                if let Some((from, to, choices)) = &last.list_followed
+                    && self.list.read(cx).source_choices() == *choices
+                {
                     self.list
                         .update(cx, |list, cx| list.rename_tag(to, from, cx));
                 }

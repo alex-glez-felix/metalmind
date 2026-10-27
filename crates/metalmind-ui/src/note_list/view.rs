@@ -6,21 +6,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, KeyDownEvent, Pixels,
-    ScrollStrategy, Subscription, Task, UniformListScrollHandle, Window,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Pixels, ScrollStrategy,
+    Subscription, Task, UniformListScrollHandle, Window,
 };
-use metalmind_keymap::{Action, ListAction, context};
+use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
 use metalmind_vault::{EntryKind, VaultPath};
 
 use super::cards::read_all;
 use super::model::{NoteList, Prompt};
 use super::source::ListSource;
-use crate::actions::Dispatch;
 use crate::finder::{Note, VaultChanged, VaultSession};
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
-use crate::workspace::{Axis, Placement, Workspace, shown_path};
+use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por la lista.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,15 +57,20 @@ pub struct NoteListView {
     /// nueva de la misma nota; lo que llega mientras tanto espera aquí.
     reading: Option<Task<()>>,
     unread: Vec<VaultPath>,
+    /// El preedit del IME o de una tecla muerta en el campo que se escribe.
+    pub(super) marked: Option<String>,
     /// Al llegar las primeras tarjetas se elige la nota activa.
     reveal_on_load: bool,
+    /// Cuántas veces eligió el usuario una fuente: `:tagundo` no deshace una
+    /// fuente que se eligió después del cambio.
+    source_choices: u64,
     /// Las tarjetas se leen la primera vez que la lista se ve: plegada no
     /// le cuesta nada a la ventana.
     started: bool,
     /// Lo mostrado cambió porque el usuario lo pidió (escribió en el
     /// filtro, cambió la fuente): al llegar, la vista va a la fila elegida.
     /// Un lote del watcher no mueve el scroll.
-    scroll_on_show: bool,
+    pub(super) scroll_on_show: bool,
     _changes: Subscription,
     _workspace: Subscription,
 }
@@ -111,7 +115,9 @@ impl NoteListView {
             search: None,
             reading: None,
             unread: Vec::new(),
+            marked: None,
             reveal_on_load: true,
+            source_choices: 0,
             started: false,
             scroll_on_show: false,
             _changes: changes,
@@ -198,9 +204,17 @@ impl NoteListView {
     pub fn set_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
         self.chosen = Some(true);
         self.start(cx);
+        // Lo elegido gana a la nota activa que se iba a elegir al cargar.
+        self.reveal_on_load = false;
+        self.source_choices += 1;
         self.scroll_on_show = true;
         let step = self.list.set_source(source);
         self.step(step, cx);
+    }
+
+    #[must_use]
+    pub fn source_choices(&self) -> u64 {
+        self.source_choices
     }
 
     /// Un tag renombrado o fusionado desde la app: si era la fuente, la
@@ -253,7 +267,7 @@ impl NoteListView {
     }
 
     /// Corre la búsqueda que pidió el modelo, como el finder.
-    fn step(&mut self, step: Step<Note>, cx: &mut Context<Self>) {
+    pub(super) fn step(&mut self, step: Step<Note>, cx: &mut Context<Self>) {
         if self.scroll_on_show && self.list.is_current() {
             self.scroll_on_show = false;
             self.scroll_to_selection();
@@ -277,7 +291,7 @@ impl NoteListView {
         }));
     }
 
-    fn scroll_to_selection(&self) {
+    pub(super) fn scroll_to_selection(&self) {
         if let Some(row) = self.list.selected_row() {
             self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
@@ -290,65 +304,20 @@ impl NoteListView {
         }
     }
 
-    /// Las acciones de la lista; las demás siguen hacia la raíz de la ventana.
-    pub(super) fn on_dispatch(
-        &mut self,
-        Dispatch(invocation): &Dispatch,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Action::List(action) = invocation.action else {
-            cx.propagate();
-            return;
-        };
-        window.focus(&self.focus_handle, cx);
-        match action {
-            ListAction::SelectNext => self.list.select_next(1),
-            ListAction::SelectPrevious => self.list.select_previous(1),
-            ListAction::SelectFirst => self.list.select_first(),
-            ListAction::SelectLast => self.list.select_last(),
-            ListAction::Open => self.open_selected(Placement::Current, true, cx),
-            ListAction::OpenSplitRight => {
-                self.open_selected(Placement::Split(Axis::Row), true, cx);
-            }
-            ListAction::OpenSplitDown => {
-                self.open_selected(Placement::Split(Axis::Column), true, cx);
-            }
-            ListAction::Filter => self.list.start_filter(),
-            ListAction::Tag => {
-                self.list.start_tagging();
-            }
-            ListAction::Confirm => self.confirm(cx),
-            ListAction::Cancel => self.cancel(cx),
-            ListAction::FocusEditor => cx.emit(NoteListEvent::FocusEditor),
-            ListAction::FocusSidebar => cx.emit(NoteListEvent::FocusSidebar),
-        }
-        self.scroll_to_selection();
-        cx.notify();
-    }
-
-    fn confirm(&mut self, cx: &mut Context<Self>) {
+    /// Edita el campo de la pregunta abierta.
+    pub(super) fn edit_prompt(&mut self, edit: LineEdit<'_>, cx: &mut Context<Self>) {
         match self.list.prompt() {
-            Some(Prompt::Filter) | None => self.list.close_prompt(),
-            Some(Prompt::Tag) => {
-                if let Some((note, tags)) = self.list.take_tags() {
-                    cx.emit(NoteListEvent::TagNote { note, tags });
-                }
+            Some(Prompt::Filter) => {
+                self.scroll_on_show = true;
+                let step = self.list.edit_filter(edit);
+                self.step(step, cx);
             }
+            Some(Prompt::Tag) => {
+                self.list.edit_tag_line(edit);
+                cx.notify();
+            }
+            None => {}
         }
-    }
-
-    /// Cierra la pregunta; sin pregunta, quita el filtro.
-    fn cancel(&mut self, cx: &mut Context<Self>) {
-        if self.list.prompt().is_some() {
-            self.list.close_prompt();
-            return;
-        }
-        self.scroll_on_show = true;
-        // Al final, borrar hasta el principio es borrarlo todo.
-        let _ = self.list.edit_filter(LineEdit::End);
-        let step = self.list.edit_filter(LineEdit::DeleteToStart);
-        self.step(step, cx);
     }
 
     /// La fila `row`, con el ratón: se elige y se abre; con doble clic, el
@@ -366,7 +335,12 @@ impl NoteListView {
         cx.notify();
     }
 
-    fn open_selected(&mut self, placement: Placement, focus_editor: bool, cx: &mut Context<Self>) {
+    pub(super) fn open_selected(
+        &mut self,
+        placement: Placement,
+        focus_editor: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(note) = self.list.selected_note() else {
             return;
         };
@@ -384,60 +358,6 @@ impl NoteListView {
             cx.emit(NoteListEvent::Opened { focus_editor });
         }
     }
-
-    /// Lo que se teclea en el filtro o en los tags; `enter` y `esc` son
-    /// acciones del registro.
-    pub(super) fn on_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(prompt) = self.list.prompt() else {
-            return;
-        };
-        let Some(edit) = line_edit(&event.keystroke) else {
-            return;
-        };
-        cx.stop_propagation();
-        match prompt {
-            Prompt::Filter => {
-                self.scroll_on_show = true;
-                let step = self.list.edit_filter(edit);
-                self.step(step, cx);
-            }
-            Prompt::Tag => {
-                self.list.edit_tag_line(edit);
-                cx.notify();
-            }
-        }
-    }
-}
-
-/// La edición de una línea que pide `keystroke`, como en readline.
-fn line_edit(keystroke: &gpui_kit::Keystroke) -> Option<LineEdit<'_>> {
-    let modifiers = keystroke.modifiers;
-    if modifiers.alt || modifiers.platform || modifiers.function {
-        return None;
-    }
-    if modifiers.control {
-        return match keystroke.key.as_str() {
-            "u" => Some(LineEdit::DeleteToStart),
-            "w" | "backspace" => Some(LineEdit::DeleteWordBackward),
-            "a" => Some(LineEdit::Home),
-            "e" => Some(LineEdit::End),
-            _ => None,
-        };
-    }
-    Some(match keystroke.key.as_str() {
-        "backspace" => LineEdit::DeleteBackward,
-        "delete" => LineEdit::DeleteForward,
-        "left" => LineEdit::Left,
-        "right" => LineEdit::Right,
-        "home" => LineEdit::Home,
-        "end" => LineEdit::End,
-        _ => LineEdit::Insert(keystroke.key_char.as_deref()?),
-    })
 }
 
 #[cfg(test)]

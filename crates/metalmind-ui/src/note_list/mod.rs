@@ -6,6 +6,8 @@
 mod cards;
 mod date;
 mod field;
+mod handlers;
+mod input;
 mod model;
 mod render;
 mod source;
