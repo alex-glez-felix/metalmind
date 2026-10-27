@@ -278,9 +278,7 @@ fn interrupted(applied: Applied, cause: Interruption) -> Result<Applied, ApplyEr
 
 /// Devuelve cada archivo a como estaba, borra los creados y deshace los
 /// renombres, salvo lo que cambió desde que se aplicó. Como al aplicar, los
-/// textos van antes que los renombres: guardar encima del destino de un
-/// rename en el mismo lote del watcher le hace perder el origen a
-/// `notify-debouncer-full` 0.7 (#54).
+/// textos van antes que los renombres.
 pub(crate) fn undo(root: &Path, applied: &Applied) -> Result<UndoReport, FileOpError> {
     for rename in applied.renamed() {
         ops::check_free(root, &rename.from)?;

@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
 use std::time::SystemTime;
 
 use arc_swap::ArcSwap;
-use notify_debouncer_full::DebounceEventResult;
 
+use crate::debounce::Batch;
 use crate::file;
 use crate::history::{History, HistoryError, VersionId};
 use crate::index::{EntryKind, VaultIndex};
@@ -23,7 +23,7 @@ use crate::watch::{touched, touched_by_errors};
 use crate::watcher::{Watch, before_reading};
 
 pub(crate) enum Message {
-    Disk(DebounceEventResult),
+    Disk(Batch),
     Save(Save),
     /// Avisa cuando ya se registraron los guardados que llegaron antes.
     Flush(mpsc::Sender<()>),
@@ -66,7 +66,7 @@ impl Worker {
         let mut inbox = Inbox::new(messages);
         while let Some(message) = inbox.next() {
             match message {
-                Message::Disk(first) => self.on_disk(&mut indexes, first, &mut inbox),
+                Message::Disk(first) => self.on_disk(&mut indexes, &first, &mut inbox),
                 Message::Save(save) => self.record(&save),
                 // Quien espera puede haberse ido.
                 Message::Flush(done) => drop(done.send(())),
@@ -77,10 +77,10 @@ impl Worker {
     }
 
     /// Relee de una vez los eventos de disco seguidos que esperan.
-    fn on_disk(&self, indexes: &mut Indexes, first: DebounceEventResult, inbox: &mut Inbox) {
+    fn on_disk(&self, indexes: &mut Indexes, first: &Batch, inbox: &mut Inbox) {
         let mut touched = self.touched(first);
         while let Some(more) = inbox.next_disk() {
-            touched.merge(self.touched(more));
+            touched.merge(self.touched(&more));
         }
         if self.stop.load(Ordering::Acquire) {
             return;
@@ -259,16 +259,13 @@ impl Worker {
         self.watch.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn touched(&self, result: DebounceEventResult) -> Touched {
-        match result {
-            Ok(events) => touched(&self.root, &events),
-            Err(errors) => {
-                for error in &errors {
-                    log::warn!("watcher de {}: {error}", self.root.display());
-                }
-                touched_by_errors(&self.root, &errors)
-            }
+    fn touched(&self, batch: &Batch) -> Touched {
+        for error in &batch.errors {
+            log::warn!("watcher de {}: {error}", self.root.display());
         }
+        let mut touched = touched(&self.root, &batch.events);
+        touched.merge(touched_by_errors(&self.root, &batch.errors));
+        touched
     }
 }
 
@@ -329,7 +326,7 @@ impl<'a> Inbox<'a> {
     }
 
     /// El siguiente evento de disco si es lo próximo que espera, sin bloquear.
-    fn next_disk(&mut self) -> Option<DebounceEventResult> {
+    fn next_disk(&mut self) -> Option<Batch> {
         let message = match self.queue.pop_front() {
             Some(message) => message,
             None => self.receiver.try_recv().ok()?,

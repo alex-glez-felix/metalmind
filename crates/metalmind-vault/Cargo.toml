@@ -17,7 +17,6 @@ jiff.workspace = true
 log.workspace = true
 miniz_oxide.workspace = true
 notify.workspace = true
-notify-debouncer-full.workspace = true
 metalmind-syntax.workspace = true
 rustix.workspace = true
 serde.workspace = true

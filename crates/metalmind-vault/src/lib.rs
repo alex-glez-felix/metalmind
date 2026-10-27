@@ -9,6 +9,7 @@ mod attachment;
 mod capture;
 mod cause;
 mod changes;
+mod debounce;
 mod edit;
 mod file;
 mod fingerprint;

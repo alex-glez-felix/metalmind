@@ -43,7 +43,7 @@ pub enum VaultChange {
 #[derive(Debug, Default)]
 pub(crate) struct Touched {
     pub paths: BTreeSet<VaultPath>,
-    /// Pares `(de, a)` que el debouncer pudo emparejar.
+    /// Pares `(de, a)` que inotify emparejó por su cookie.
     pub renames: Vec<(VaultPath, VaultPath)>,
     /// Las rutas donde se escribió contenido: un archivo movido en el mismo
     /// lote también cuenta como modificado.
@@ -71,6 +71,10 @@ pub(crate) fn refresh(
     on_folder: Option<BeforeReading>,
 ) -> Vec<VaultChange> {
     let all: BTreeSet<VaultPath> = touched.paths.union(&touched.reread).cloned().collect();
+    // Sin rutas, el walk igual abriría la raíz.
+    if all.is_empty() {
+        return Vec::new();
+    }
     let dirty = dirty_roots(index, &all);
     let before = subtrees(index, &dirty);
     for path in &dirty {
@@ -193,11 +197,10 @@ fn modified(
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::time::Instant;
+    use std::sync::Arc;
 
     use notify::event::{CreateKind, DataChange, ModifyKind, RemoveKind, RenameMode};
     use notify::{Event, EventKind};
-    use notify_debouncer_full::DebouncedEvent;
     use pretty_assertions::assert_eq;
     use proptest::prelude::*;
     use tempfile::TempDir;
@@ -231,10 +234,9 @@ mod tests {
     fn apply(root: &Path, op: &Op) -> Touched {
         let at = |path: &str| root.join(path);
         let event = |kind, paths: &[&str]| {
-            let event = paths
+            paths
                 .iter()
-                .fold(Event::new(kind), |event, path| event.add_path(at(path)));
-            DebouncedEvent::new(event, Instant::now())
+                .fold(Event::new(kind), |event, path| event.add_path(at(path)))
         };
         let (_, events) = match op {
             Op::WriteFile(path) => {
@@ -402,10 +404,20 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn sin_nada_que_releer_no_recorre_el_vault() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("a.md"), "").unwrap();
+        let mut index = scan(dir.path(), None);
+        let walked: BeforeReading = Arc::new(|dir: &Path| panic!("leyó {}", dir.display()));
+        let changes = refresh(&mut index, dir.path(), &Touched::default(), Some(walked));
+        assert_eq!(changes, []);
+    }
+
     /// Reindexar a pedazos da el mismo índice que un walk completo, y los
     /// cambios emitidos llevan de un índice al otro, con el contenido de
     /// cada archivo. Varias operaciones pueden caer en un mismo lote, como
-    /// cuando el debouncer las junta.
+    /// en una ventana del debounce.
     fn incremental_matches_full_walk(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
