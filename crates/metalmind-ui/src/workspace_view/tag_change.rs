@@ -55,6 +55,7 @@ impl WorkspaceView {
         self.show(
             Overlay::ChangePreview {
                 view,
+                rename: None,
                 _events: events,
             },
             window,

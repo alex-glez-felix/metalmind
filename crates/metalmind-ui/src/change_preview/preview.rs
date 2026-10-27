@@ -111,6 +111,32 @@ impl ChangePreview {
         self
     }
 
+    /// Esta vista previa, armada de nuevo, deja quitadas las filas que se
+    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo) y la
+    /// elegida donde estaba.
+    pub fn carry_over(&mut self, old: &Self) {
+        let key = |preview: &Self, row: usize| {
+            preview.row(row).map(|row| {
+                (
+                    row.path.clone(),
+                    row.before.to_owned(),
+                    row.after.to_owned(),
+                )
+            })
+        };
+        let dropped: HashSet<_> = old
+            .dropped
+            .iter()
+            .filter_map(|&row| key(old, row))
+            .collect();
+        self.dropped = (0..self.rows.len())
+            .filter(|&row| {
+                !self.is_fixed(row) && key(self, row).is_some_and(|key| dropped.contains(&key))
+            })
+            .collect();
+        self.selected = old.selected.min(self.rows.len().saturating_sub(1));
+    }
+
     /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como
     /// tras un autoguardado con la vista previa abierta.
     pub fn set_unsaved(&mut self, unsaved: impl Fn(&VaultPath) -> bool) {

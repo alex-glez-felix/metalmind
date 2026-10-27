@@ -5,10 +5,11 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
-use gpui_kit::{AppContext as _, Context, Entity, Window};
+use gpui_kit::{AppContext as _, Context, Entity, Task, Window};
 use metalmind_vault::{
-    ApplyError, Changes, RenameConflict, RenamePlan, UndoReport, Vault, VaultPath,
+    ApplyError, Changes, LinkIndex, RenameConflict, RenamePlan, UndoReport, Vault, VaultPath,
 };
 
 use super::WorkspaceView;
@@ -16,7 +17,24 @@ use super::overlay::Overlay;
 use crate::change_preview::{ChangePreview, ChangePreviewEvent, ChangePreviewView, Notice};
 use crate::workspace::Message;
 
+/// Un renombre con su vista previa abierta: qué se renombra, el índice de
+/// links con que se armó y lo que la rehace cuando llega otro.
+pub(super) struct RenamePreview {
+    from: VaultPath,
+    to: VaultPath,
+    index: Arc<LinkIndex>,
+    rebuild: Option<Task<()>>,
+}
+
+/// El plan de un renombre y sus ediciones en líneas enteras.
+pub(super) struct RenameBuild {
+    plan: RenamePlan,
+    changes: Changes,
+}
+
 impl WorkspaceView {
+    /// Arma el plan fuera del hilo de la interfaz (lee cada archivo que se
+    /// edita) y después renombra o muestra la vista previa.
     pub(super) fn rename_entry(
         &mut self,
         from: &VaultPath,
@@ -25,19 +43,42 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         let vault = self.session.read(cx).vault();
-        let plan = match vault.links().rename_plan(from, to) {
-            Ok(plan) => plan,
-            Err(error) => return self.rename_failed(error.to_string(), cx),
-        };
-        if plan.files.is_empty() && plan.conflicts.is_empty() {
-            return self.rename_now(&vault, from, to, cx);
-        }
-        let changes = match on_whole_lines(plan.changes(), vault.root()) {
-            Ok(changes) => changes,
+        let (index, root) = (vault.links(), vault.root().to_owned());
+        let (from, to) = (from.clone(), to.clone());
+        self.renaming = Some(cx.spawn_in(window, async move |view, cx| {
+            let building = (Arc::clone(&index), root, from.clone(), to.clone());
+            let built = cx
+                .background_executor()
+                .spawn(async move { build(&building.0, &building.1, &building.2, &building.3) })
+                .await;
+            // Si la ventana se cerró, no hay nada que mostrar.
+            let _ = view.update_in(cx, |view, window, cx| {
+                view.renaming = None;
+                view.show_rename(index, &from, &to, built, window, cx);
+            });
+        }));
+    }
+
+    fn show_rename(
+        &mut self,
+        index: Arc<LinkIndex>,
+        from: &VaultPath,
+        to: &VaultPath,
+        built: Result<RenameBuild, String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let vault = self.session.read(cx).vault();
+        let built = match built {
+            Ok(built) => built,
             Err(error) => return self.rename_failed(error, cx),
         };
+        if built.plan.files.is_empty() && built.plan.conflicts.is_empty() {
+            return self.rename_now(&vault, from, to, cx);
+        }
         let unsaved = self.unsaved_paths(cx);
-        let Some(preview) = preview(&plan, changes, |path| unsaved.contains(path)) else {
+        let Some(preview) = preview(&built.plan, built.changes, |path| unsaved.contains(path))
+        else {
             return self.rename_now(&vault, from, to, cx);
         };
         let view = cx.new(|cx| ChangePreviewView::new(preview, cx));
@@ -45,14 +86,98 @@ impl WorkspaceView {
         let events = cx.subscribe_in(&view, window, move |this, view, event, window, cx| {
             this.on_rename_event(view, *event, &renamed, window, cx);
         });
+        let rename = RenamePreview {
+            from: from.clone(),
+            to: to.clone(),
+            index,
+            rebuild: None,
+        };
         self.show(
             Overlay::ChangePreview {
                 view,
+                rename: Some(rename),
                 _events: events,
             },
             window,
             cx,
         );
+    }
+
+    /// Con la vista previa de un renombre abierta, un lote del vault que
+    /// trae otro índice de links (como el autoguardado de un archivo que la
+    /// bloqueaba) la rehace con los textos de ahora: si no, aplicar
+    /// encontraría los archivos cambiados. Lo quitado sigue quitado.
+    pub(super) fn refresh_rename_preview(
+        &mut self,
+        latest: &Arc<LinkIndex>,
+        cx: &mut Context<Self>,
+    ) {
+        let root = self.session.read(cx).root().to_owned();
+        let Some(Overlay::ChangePreview {
+            rename: Some(rename),
+            ..
+        }) = &mut self.overlay
+        else {
+            return;
+        };
+        if Arc::ptr_eq(&rename.index, latest) {
+            return;
+        }
+        rename.index = Arc::clone(latest);
+        let building = (
+            Arc::clone(latest),
+            root,
+            rename.from.clone(),
+            rename.to.clone(),
+        );
+        let latest = Arc::clone(latest);
+        // Reemplazar la tarea cancela la del índice anterior, si no terminó.
+        rename.rebuild = Some(cx.spawn(async move |view, cx| {
+            let built = cx
+                .background_executor()
+                .spawn(async move { build(&building.0, &building.1, &building.2, &building.3) })
+                .await;
+            let _ = view.update(cx, |view, cx| view.show_rebuilt(&latest, built, cx));
+        }));
+    }
+
+    /// Pone la vista previa rehecha para `built_for`, si sigue abierta para
+    /// ese índice.
+    fn show_rebuilt(
+        &mut self,
+        built_for: &Arc<LinkIndex>,
+        built: Result<RenameBuild, String>,
+        cx: &mut Context<Self>,
+    ) {
+        let unsaved = self.unsaved_paths(cx);
+        let Some(Overlay::ChangePreview {
+            view,
+            rename: Some(rename),
+            ..
+        }) = &self.overlay
+        else {
+            return;
+        };
+        if !Arc::ptr_eq(&rename.index, built_for) {
+            return;
+        }
+        let view = view.clone();
+        let rebuilt = built.and_then(|built| {
+            preview(&built.plan, built.changes, |path| unsaved.contains(path))
+                .ok_or_else(|| "ya no hay nada que renombrar".to_owned())
+        });
+        match rebuilt {
+            Ok(mut fresh) => view.update(cx, |view, cx| {
+                fresh.carry_over(view.preview());
+                *view.preview_mut() = fresh;
+                cx.notify();
+            }),
+            Err(error) => {
+                self.overlay = None;
+                self.rename_failed(error, cx);
+                cx.notify();
+            }
+        }
     }
 
     /// Sin links que cambien: los documentos abiertos siguen al archivo.
@@ -138,6 +263,22 @@ impl WorkspaceView {
             .update(cx, |sidebar, cx| sidebar.reveal_entry(to.clone(), cx));
         self.sync_editors(cx);
     }
+}
+
+/// El plan para renombrar `from` a `to` con `index`, con sus ediciones en
+/// líneas enteras: lee cada archivo que se edita, así que va fuera del hilo
+/// de la interfaz.
+fn build(
+    index: &LinkIndex,
+    root: &Path,
+    from: &VaultPath,
+    to: &VaultPath,
+) -> Result<RenameBuild, String> {
+    let plan = index
+        .rename_plan(from, to)
+        .map_err(|error| error.to_string())?;
+    let changes = on_whole_lines(plan.changes(), root)?;
+    Ok(RenameBuild { plan, changes })
 }
 
 /// Cada edición de `changes` en sus líneas enteras, para ver el link en su
@@ -320,5 +461,27 @@ mod tests {
         );
         assert!(!notice.blocks);
         assert_eq!(conflicts_notice(&[], &path("b.md")), None);
+    }
+
+    /// `build` lee los archivos del disco: arma las líneas con el texto de
+    /// ahora, y si un archivo ya no dice lo que el índice cree, falla en vez
+    /// de armar ediciones que después no se aplicarían.
+    #[test]
+    fn el_plan_se_arma_con_los_archivos_de_ahora() {
+        let notes = [("a.md", "uno\nver [[b]]\n"), ("b.md", "# B\n")];
+        let dir = tempfile::tempdir().unwrap();
+        for (name, text) in notes {
+            std::fs::write(dir.path().join(name), text).unwrap();
+        }
+        let built = build(&index(&notes), dir.path(), &path("b.md"), &path("d.md")).unwrap();
+        let lines: Vec<(&str, &str)> = built.changes.edits[0]
+            .edits
+            .iter()
+            .map(|edit| (edit.old.as_str(), edit.new.as_str()))
+            .collect();
+        assert_eq!(lines, [("ver [[b]]", "ver [[d]]")]);
+        std::fs::write(dir.path().join("a.md"), "otra cosa\n").unwrap();
+        let error = build(&index(&notes), dir.path(), &path("b.md"), &path("d.md"));
+        assert!(error.is_err());
     }
 }

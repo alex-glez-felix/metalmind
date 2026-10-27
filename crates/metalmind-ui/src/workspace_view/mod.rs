@@ -27,7 +27,7 @@ use std::path::Path;
 
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Subscription, Window, div,
+    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
     prelude::FluentBuilder as _,
 };
 use metalmind_config::Paths;
@@ -70,6 +70,8 @@ pub struct WorkspaceView {
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
     last_tag_change: Option<LastTagChange>,
+    /// El plan de un renombre que se está armando, antes de su vista previa.
+    renaming: Option<Task<()>>,
     notes: NoteSettings,
     _subscriptions: [Subscription; 4],
 }
@@ -126,6 +128,7 @@ impl WorkspaceView {
             autosave: None,
             toast_timers: ToastTimers::default(),
             last_tag_change: None,
+            renaming: None,
             notes,
             _subscriptions: [repaint, events, list_events, activation],
         }

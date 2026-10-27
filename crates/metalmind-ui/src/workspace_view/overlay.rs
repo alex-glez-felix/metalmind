@@ -17,6 +17,7 @@ use super::messages::MessagesPicker;
 use super::new_note::{NamePicker, TemplatePicker};
 use super::note_list::SourcePicker;
 use super::palette::Palette;
+use super::rename::RenamePreview;
 use super::text_search::TextSearchPicker;
 use super::unresolved::UnresolvedPicker;
 use crate::change_preview::ChangePreviewView;
@@ -72,6 +73,8 @@ pub enum Overlay {
     /// tags, o renombrar una nota con sus links.
     ChangePreview {
         view: Entity<ChangePreviewView>,
+        /// Si es la de un renombre, lo que hace falta para rehacerla.
+        rename: Option<RenamePreview>,
         _events: Subscription,
     },
 }

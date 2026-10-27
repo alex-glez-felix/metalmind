@@ -92,6 +92,33 @@ fn cada_ocurrencia_es_una_fila() {
 }
 
 /// `x` quita una fila de lo que se aplica y la vuelve a poner.
+/// Armada de nuevo con otros textos (una nota que se guardó con la vista
+/// previa abierta), sigue quitado lo que se había quitado y elegida la
+/// misma fila, aunque cambie de línea.
+#[test]
+fn armarla_de_nuevo_deja_lo_quitado() {
+    let request = rename("rust", "lang");
+    let mut old = preview(&request, &rust_notes());
+    old.select(2);
+    old.toggle_selected();
+    let quitada = old.row(2).unwrap();
+    let (path, before) = (quitada.path.clone(), quitada.before.to_owned());
+    let saved = tags(&[
+        ("a.md", "nueva línea\nuno #rust\n"),
+        ("b.md", "#rust\ndos #Rust\n"),
+    ]);
+    let mut new = preview(&request, &saved);
+    new.carry_over(&old);
+    let dropped: Vec<(String, String)> = (0..new.len())
+        .filter_map(|row| new.row(row))
+        .filter(|row| row.dropped)
+        .map(|row| (row.path.as_str().to_owned(), row.before.to_owned()))
+        .collect();
+    assert_eq!(dropped, [(path.as_str().to_owned(), before)]);
+    assert_eq!(new.selected(), 2);
+    assert_eq!(new.row(0).unwrap().line, Some(2), "a.md cambió de línea");
+}
+
 #[test]
 fn quitar_una_fila_la_saca_de_lo_que_se_aplica() {
     let mut preview = preview(&rename("rust", "lang"), &rust_notes());

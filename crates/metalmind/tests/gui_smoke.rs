@@ -995,7 +995,11 @@ fn renombrar_una_nota_actualiza_sus_links() {
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
     window.type_keys("<C-w>hj");
+    let tree = window.wait_still(EDITOR_TEXT);
+    // La vista previa se arma aparte: se espera a verla antes de aplicar.
     window.type_keys("r<BS>d<CR>");
+    window.wait_change("la vista previa", EDITOR_TEXT, &tree);
+    window.wait_still(EDITOR_TEXT);
     window.type_keys("<CR>");
     smoke.wait_contents("a.md", "ver [[d]] y [[d#Meta]]\n");
     assert_eq!(smoke.read("d.md"), "# B\n");
@@ -1025,7 +1029,10 @@ fn un_renombre_que_falla_devuelve_los_links() {
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
     window.type_keys("<C-w>hj");
+    let tree = window.wait_still(EDITOR_TEXT);
     window.type_keys("m<C-u>ro/b.md<CR>");
+    window.wait_change("la vista previa", EDITOR_TEXT, &tree);
+    window.wait_still(EDITOR_TEXT);
     window.type_keys("<CR>");
     wait::until("que se escriba a.md", TIMEOUT, || {
         if modified() == before {
@@ -1045,6 +1052,25 @@ fn un_renombre_que_falla_devuelve_los_links() {
     });
     assert_eq!(smoke.read("b.md"), "# B\n");
     std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// Con la vista previa del renombre abierta y bloqueada por una línea sin
+/// guardar antes del link, el autoguardado la destraba y la rehace con el
+/// texto guardado: `enter` aplica en vez de encontrar el archivo cambiado.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn guardar_con_el_renombre_abierto_rehace_su_vista_previa() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "ver [[b]]\n");
+    smoke.write("b.md", "# B\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("Onueva<Esc><C-w>hjr<BS>d<CR>");
+    smoke.wait_contents("a.md", "nueva\nver [[b]]\n");
+    window.wait_still(EDITOR_TEXT);
+    window.type_keys("<CR>");
+    smoke.wait_contents("a.md", "nueva\nver [[d]]\n");
+    assert_eq!(smoke.read("d.md"), "# B\n");
 }
 
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
