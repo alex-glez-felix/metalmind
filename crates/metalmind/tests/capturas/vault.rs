@@ -141,6 +141,43 @@ pub fn write(root: &Path) {
     file(LONG_FORMULAS, long_formulas().as_bytes());
 }
 
+/// Cada nota vuelve a su texto con una fecha fija de 2025, como la traería
+/// un programa de sincronización: la lista ordena y fecha por el `mtime`, y
+/// con la hora de la corrida no saldrían los mismos píxeles. Se reescribe
+/// el texto para que el watcher vea el cambio y la lista relea la fecha.
+pub fn age_notes(root: &Path) {
+    let mut notes = Vec::new();
+    collect_notes(root, &mut notes);
+    notes.sort();
+    // El 1 de enero de 2025 a mediodía UTC, en horas desde 1970.
+    let start = std::time::UNIX_EPOCH + std::time::Duration::from_hours(482_148);
+    let count = notes.len();
+    for (index, path) in notes.iter().enumerate() {
+        let text = fs::read(path).expect("leer la nota");
+        fs::write(path, text).expect("reescribir la nota");
+        // Mezcladas, para que la lista no salga en el orden de las rutas.
+        let place = index * 37 % count;
+        let hours = u64::try_from(place).expect("pocas notas") * 31;
+        let at = start + std::time::Duration::from_secs(hours * 3600);
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .and_then(|file| file.set_modified(at))
+            .expect("fechar la nota");
+    }
+}
+
+fn collect_notes(dir: &Path, notes: &mut Vec<std::path::PathBuf>) {
+    for entry in fs::read_dir(dir).expect("leer la carpeta") {
+        let path = entry.expect("una entrada").path();
+        if path.is_dir() {
+            collect_notes(&path, notes);
+        } else if path.extension().is_some_and(|extension| extension == "md") {
+            notes.push(path);
+        }
+    }
+}
+
 /// Las plantillas: la de entrevista de `docs/plantillas.md`, otra que pide
 /// `#rust`, una de nombre largo en subcarpetas y muchas para llenar el picker.
 pub fn write_templates(root: &Path) {

@@ -474,6 +474,37 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("sin-wrap", &[Step::Keys("<Esc>:set nowrap<CR>$")]),
     ("sin-wrap-palabra", &[Step::Keys("j$")]),
+    // La lista de notas (#164), al final porque etiqueta una nota. Las notas
+    // vuelven a fechas fijas para que la lista salga igual en cada corrida:
+    // el buzón, el picker de fuentes, un tag con sus descendientes, el filtro
+    // en su lugar y vacío, una nota abierta desde la lista y la nota larga
+    // con la lista abierta, plegada y otra vez abierta (no se mueve), y `t`.
+    (
+        "lista-buzon",
+        &[
+            Step::Files(vault::age_notes),
+            Step::Settle,
+            Step::Keys("<Esc><Esc><C-w>o<C-w>hq<Space>l"),
+        ],
+    ),
+    ("lista-fuente", &[Step::Keys("<Space>v")]),
+    ("lista-tag", &[Step::Keys("#rust<CR>")]),
+    ("lista-filtro", &[Step::Keys("<Space>f-#archivado idea")]),
+    ("lista-filtro-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    ("lista-nota", &[Step::Keys("<Esc><Esc>jj<CR>")]),
+    // Con `wrap`, el de fábrica: plegar cambia el ancho y las filas
+    // partidas, pero la nota sigue en la misma línea y con el cursor.
+    (
+        "lista-nota-larga",
+        &[Step::Keys("<Space>festr<CR>:set wrap<CR>1000Gzz")],
+    ),
+    ("lista-plegada", &[Step::Keys("<Space>l")]),
+    ("lista-desplegada", &[Step::Keys("<Space>l")]),
+    (
+        "lista-etiquetar",
+        &[Step::Keys("<Space>vbuz<CR>jt#ideas rust")],
+    ),
+    ("lista-etiquetada", &[Step::Keys("<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -741,7 +772,10 @@ fn prepare(smoke: &Smoke, theme: &str) {
     }
     fs::write(
         state.join("ui.yaml"),
-        format!("panel:\n  visible: true\n  view: folders\n  expanded:\n{expanded}"),
+        // La lista empieza plegada: las pantallas de antes no la tienen.
+        format!(
+            "panel:\n  visible: true\n  view: folders\n  expanded:\n{expanded}list:\n  visible: false\n"
+        ),
     )
     .unwrap();
 }
