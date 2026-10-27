@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use metalmind_vault::{EntryKind, VaultPath, VaultRoot};
 use serde::Serialize;
 
-use super::{CliError, print, root_text, vault_root};
+use super::{CliError, Config, print, root_text};
 use crate::cli::OpenArgs;
 use crate::target::Target;
 
@@ -42,7 +42,7 @@ impl Note {
 /// # Errors
 /// Si no hay vault o `args.path` no es una nota que exista en él.
 pub fn open(args: &OpenArgs) -> Result<Note, CliError> {
-    let root = vault_root(&args.common)?;
+    let root = Config::load().vault_root(&args.common)?;
     let path = note_in(&root, &args.path)?;
     Ok(Note {
         vault: root_text(root.path()).into_owned(),

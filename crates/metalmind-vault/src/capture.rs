@@ -55,6 +55,18 @@ const MAX_SLUG_CHARS: usize = 50;
 /// `nombre.md`, `nombre-2.md`, … hasta aquí.
 const MAX_ATTEMPT: u32 = 999;
 
+/// Lo que la captura ya decidió antes de escribir, para armar el texto de
+/// la nota.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Capture<'a> {
+    /// Sin `#` ni repetidos, en el orden en que se pidieron.
+    pub tags: &'a [String],
+    pub title: Option<&'a str>,
+    /// El nombre del archivo sin `.md` ni el `-2` de un nombre tomado.
+    pub stem: &'a str,
+    pub text: &'a str,
+}
+
 /// Escribe `note` en la raíz de `root` como `slug.md`, sin pisar
 /// nada: si el nombre está tomado, prueba `-2`, `-3`, … Sin slug (el texto
 /// no tiene letras ni números), el nombre es la fecha y la hora de `now`.
@@ -63,20 +75,38 @@ pub(crate) fn capture(
     note: &NewNote,
     now: DateTime,
 ) -> Result<Captured, CaptureError> {
+    let (frontmatter, body) = split_frontmatter(&note.text);
+    capture_with(root, note, now, |capture| {
+        if note.text.trim().is_empty() && capture.title.is_none() {
+            return Err(CaptureError::Empty);
+        }
+        if frontmatter.is_some() && !capture.tags.is_empty() {
+            return Err(CaptureError::FrontmatterWithTags);
+        }
+        Ok(contents(frontmatter, capture.tags, capture.title, body))
+    })
+}
+
+/// Como [`capture`], con el texto de la nota armado por `fill`.
+pub(crate) fn capture_with(
+    root: &Path,
+    note: &NewNote,
+    now: DateTime,
+    fill: impl FnOnce(Capture<'_>) -> Result<String, CaptureError>,
+) -> Result<Captured, CaptureError> {
     let tags = tags(&note.tags)?;
     let title = title(note.title.as_deref())?;
-    let (frontmatter, body) = split_frontmatter(&note.text);
-    if note.text.trim().is_empty() && title.is_none() {
-        return Err(CaptureError::Empty);
-    }
-    if frontmatter.is_some() && !tags.is_empty() {
-        return Err(CaptureError::FrontmatterWithTags);
-    }
-    let contents = contents(frontmatter, &tags, title, body);
+    let (_, body) = split_frontmatter(&note.text);
     let stem = match title.map_or_else(|| first_slug(body), slug) {
         slug if slug.is_empty() => now.strftime("%Y-%m-%d-%H%M%S").to_string(),
         slug => slug,
     };
+    let contents = fill(Capture {
+        tags: &tags,
+        title,
+        stem: &stem,
+        text: &note.text,
+    })?;
     let path = create_unique(root, &stem, &contents)?;
     Ok(Captured { path, tags })
 }

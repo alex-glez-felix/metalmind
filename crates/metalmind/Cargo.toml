@@ -17,6 +17,7 @@ log.workspace = true
 metalmind-config.workspace = true
 metalmind-search.workspace = true
 metalmind-syntax.workspace = true
+metalmind-template.workspace = true
 metalmind-ui.workspace = true
 metalmind-vault.workspace = true
 serde.workspace = true

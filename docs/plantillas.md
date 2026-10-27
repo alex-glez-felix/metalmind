@@ -18,6 +18,7 @@ Los códigos de formato son los más comunes de moment.js (`YYYY MM DD dddd HH m
 - **`space n`**, la paleta (`notes: new from template`) o **`:template`**: un picker con las plantillas; a la derecha de cada una, los tags cuya página la pide. Al elegir, se pregunta el nombre de la nota: relativo a la raíz del vault, con `/` para carpetas, que se crean si faltan. La fila muestra la ruta que se va a crear; si el nombre está tomado o no vale, lo dice y la pregunta sigue abierta. `enter` la crea y la abre; `ctrl-v` y `ctrl-s`, en un split.
 - **`:template entrevista Backend senior`** hace lo mismo sin preguntar: la primera palabra es la plantilla y el resto, el nombre. Con solo la plantilla, pregunta el nombre.
 - **Desde un tag**: en la vista de tags del panel lateral, `a` o "Nueva nota con este tag" en su menú. La nota nace con el tag y con la plantilla que pida su página (`template: entrevista` en `tags/entrevista.md`, [05](research/05-tags.md) §7).
+- **Desde la terminal**: `metalmind add --template entrevista --title "Backend senior" "Sabe Rust"` crea `backend-senior.md` con el texto donde iría el cursor, y `metalmind add -t entrevista …` usa la plantilla que pida la página del tag ([cli](cli.md)).
 
 Una plantilla elegida a mano trae los tags de su propio frontmatter y, si la pide la página de **un solo** tag, también ese tag. Si la piden varias, no se pone ninguno: elegir uno adivinaría.
 

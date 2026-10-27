@@ -17,6 +17,9 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 use tempfile::TempDir;
 
+#[path = "commands/templates.rs"]
+mod templates;
+
 /// Un `HOME` y un `XDG_*` vacíos, para que nada del usuario se cuele, y un vault.
 struct Sandbox {
     home: TempDir,
@@ -184,6 +187,8 @@ fn add_json_con_tags_y_titulo() {
             ("vault", Value::is_string),
             ("path", Value::is_string),
             ("tags", is_string_array),
+            ("template", Value::is_null),
+            ("problems", is_string_array),
         ],
     );
     assert_eq!(value["vault"], canonical(&sandbox.vault));

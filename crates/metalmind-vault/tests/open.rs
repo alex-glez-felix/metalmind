@@ -197,6 +197,41 @@ fn la_raiz_sola_lista_lo_mismo_que_open() {
     assert_eq!(listing(&root.files()), listing(&opened.snapshot()));
 }
 
+/// Solo esas carpetas, con las reglas de todo el vault (el `.gitignore` de la
+/// raíz también vale dentro) y las carpetas de arriba que las cuelgan.
+#[test]
+fn files_within_lee_solo_esas_carpetas() {
+    let dir = TempDir::new().unwrap();
+    make_tree(
+        dir.path(),
+        &[
+            "meta/plantillas/a.md",
+            "meta/plantillas/sub/b.md",
+            "meta/plantillas/borrador.md",
+            "meta/otra.md",
+            "tags/rust.md",
+            "notas/c.md",
+            "plantillas.md",
+        ],
+    );
+    fs::write(dir.path().join(".gitignore"), "borrador.md\n").unwrap();
+    let root = VaultRoot::new(dir.path()).unwrap();
+    let folders =
+        ["meta/plantillas", "tags", "no/existe"].map(|path| VaultPath::new(path).unwrap());
+    assert_eq!(
+        listing(&root.files_within(&folders)),
+        [
+            "meta/",
+            "meta/plantillas/",
+            "meta/plantillas/sub/",
+            "meta/plantillas/sub/b.md (nota)",
+            "meta/plantillas/a.md (nota)",
+            "tags/",
+            "tags/rust.md (nota)",
+        ]
+    );
+}
+
 #[test]
 fn una_raiz_que_no_se_puede_leer_no_es_un_vault_vacio() {
     let dir = TempDir::new().unwrap();

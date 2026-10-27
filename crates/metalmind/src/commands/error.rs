@@ -3,6 +3,7 @@
 use std::io::{self, Write as _};
 use std::path::PathBuf;
 
+use metalmind_template::AddError;
 use metalmind_vault::{CaptureError, VaultError};
 
 use crate::gui::StartError;
@@ -53,7 +54,7 @@ pub enum CliError {
     #[error("{} no es una nota del vault", .0.display())]
     NotANote(PathBuf),
     #[error(transparent)]
-    Capture(#[from] CaptureError),
+    Add(#[from] AddError),
     #[error("no se pudo leer stdin: {0}")]
     Stdin(io::Error),
     #[error("no se pudo escribir la salida: {0}")]
@@ -67,15 +68,20 @@ impl CliError {
         match self {
             Self::Usage(_)
             | Self::NotANote(_)
-            | Self::Capture(
-                CaptureError::Empty
-                | CaptureError::MultilineTitle
-                | CaptureError::InvalidTag(_)
-                | CaptureError::FrontmatterWithTags,
+            | Self::Add(
+                AddError::Capture(
+                    CaptureError::Empty
+                    | CaptureError::MultilineTitle
+                    | CaptureError::InvalidTag(_)
+                    | CaptureError::FrontmatterWithTags,
+                )
+                | AddError::MissingTemplate { .. }
+                | AddError::FrontmatterWithTemplate
+                | AddError::TemplatesFolder(_),
             ) => ErrorKind::Usage,
             Self::Stdin(error) if error.kind() == io::ErrorKind::InvalidData => ErrorKind::Usage,
             Self::NoVault | Self::Target(_) | Self::Vault(_) => ErrorKind::Vault,
-            Self::Capture(_) | Self::Stdin(_) | Self::Output(_) | Self::Start(_) => ErrorKind::Io,
+            Self::Add(_) | Self::Stdin(_) | Self::Output(_) | Self::Start(_) => ErrorKind::Io,
         }
     }
 

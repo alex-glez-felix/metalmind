@@ -14,7 +14,7 @@ use crate::apply::{self, Applied, ApplyError, UndoReport};
 use crate::attachment::{
     self, AttachmentError, DEFAULT_ATTACHMENTS_FOLDER, NewAttachment, SavedAttachment,
 };
-use crate::capture::{self, CaptureError, Captured, NewNote};
+use crate::capture::{self, Capture, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
 use crate::file::{FileError, create_atomic, write_atomic};
 use crate::history::{History, HistoryError, Retention, VersionId};
@@ -25,7 +25,7 @@ use crate::links::RenamePlan;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
-use crate::scan::scan;
+use crate::scan::{scan, scan_within};
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
 use crate::watcher::{FolderWatch, Unwatched, before_reading};
 use crate::worker::{Message, Save, Worker, read_note};
@@ -157,6 +157,14 @@ impl VaultRoot {
         scan(&self.0, None)
     }
 
+    /// Lo que hay en `folders` y sus subcarpetas, con las reglas de
+    /// [`Vault::open`], sin recorrer el resto del vault ni leer ninguna nota:
+    /// lo que necesita quien solo mira las plantillas o las páginas de tag.
+    #[must_use]
+    pub fn files_within(&self, folders: &[VaultPath]) -> VaultIndex {
+        scan_within(&self.0, folders)
+    }
+
     /// Crea en la raíz una nota con `note` como `slug.md`, que nunca pisa
     /// otra; `now` solo nombra la que no tiene slug. Es lo que hace `metalmind add`.
     ///
@@ -165,6 +173,21 @@ impl VaultRoot {
     /// escritura.
     pub fn capture(&self, note: &NewNote, now: DateTime) -> Result<Captured, CaptureError> {
         capture::capture(&self.0, note, now)
+    }
+
+    /// Como [`VaultRoot::capture`], pero el texto de la nota lo arma `fill`
+    /// con lo que la captura decidió: los tags limpios, el título y el
+    /// nombre. Es lo que hace `metalmind add` con una plantilla.
+    ///
+    /// # Errors
+    /// Si `note` tiene un tag o un título inválido, o si falla la escritura.
+    pub fn capture_with(
+        &self,
+        note: &NewNote,
+        now: DateTime,
+        fill: impl FnOnce(Capture<'_>) -> String,
+    ) -> Result<Captured, CaptureError> {
+        capture::capture_with(&self.0, note, now, |capture| Ok(fill(capture)))
     }
 }
 

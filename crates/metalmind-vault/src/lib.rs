@@ -32,7 +32,7 @@ pub use apply::{AccessError, Applied, ApplyError, Interruption, UndoReport};
 pub use attachment::{
     AttachmentError, DEFAULT_ATTACHMENTS_FOLDER, FileKind, NewAttachment, SavedAttachment,
 };
-pub use capture::{CaptureError, Captured, NewNote};
+pub use capture::{Capture, CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};
 pub use edit::{FileEdits, StaleEdit, TextEdit};
 pub use file::{FileError, create_atomic, read, write_atomic};

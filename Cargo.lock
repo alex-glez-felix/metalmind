@@ -3953,6 +3953,7 @@ dependencies = [
  "metalmind-perf",
  "metalmind-search",
  "metalmind-syntax",
+ "metalmind-template",
  "metalmind-ui",
  "metalmind-vault",
  "png 0.18.1",

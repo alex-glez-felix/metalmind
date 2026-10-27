@@ -7,7 +7,7 @@ use metalmind_search::{FuzzyMatcher, Query};
 use metalmind_vault::{EntryKind, VaultPath};
 use serde::Serialize;
 
-use super::{CliError, print, root_text, vault_root};
+use super::{CliError, Config, print, root_text};
 use crate::cli::SearchArgs;
 
 #[derive(Serialize)]
@@ -33,7 +33,7 @@ pub fn search(args: &SearchArgs) -> Result<(), CliError> {
             "`{tag}`: la búsqueda por tags todavía no existe; por ahora solo se buscan rutas"
         )));
     }
-    let vault = vault_root(&args.common)?;
+    let vault = Config::load().vault_root(&args.common)?;
     let index = vault.files();
     let mut files: Vec<_> = index.files().collect();
     // El índice no tiene orden; a igual puntaje gana el orden de entrada.
