@@ -59,6 +59,58 @@ fn un_alias_largo_se_recorta_y_no_pasa_del_ancho() {
     assert!(narrow("-keys").right() <= narrow("").right());
 }
 
+/// Dos notas sin conteo, como en la lista de `[[`, con la elegida en
+/// `selected`, en una ventana ancha.
+struct NotesProbe {
+    selected: usize,
+}
+
+impl Render for NotesProbe {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
+        let row = |name: &str| MenuRow {
+            icon: div(),
+            name: name.to_owned(),
+            detail: Some("Ideas".to_owned()),
+            count: None,
+        };
+        let menu = CompletionMenu {
+            rows: vec![row("idea 005 — café crème"), row("idea 011")],
+            visible: 0..2,
+            selected: self.selected,
+            accept_keys: Some("tab".to_owned()),
+            max_width: px(10_000.),
+        };
+        anchored().child(menu.render(&theme, cx, |_, row, _| row))
+    }
+}
+
+/// La lista le guarda su columna a la tecla en todas las filas: mide lo
+/// mismo con cualquier fila elegida, y entre el detalle de la fila más
+/// ancha y la tecla queda el aire de las entradas del menú.
+#[rstest::rstest]
+#[case::la_mas_ancha(0)]
+#[case::otra(1)]
+fn la_tecla_tiene_su_columna(#[case] selected: usize) {
+    let mut cx = TestAppContext::single();
+    let (_, cx) = cx.add_window_view(|_, _| NotesProbe { selected });
+    cx.run_until_parked();
+    let menu = cx.debug_bounds("completion-0").unwrap();
+    let detail = cx.debug_bounds("completion-0-detail").unwrap();
+    let keys = cx.debug_bounds("completion-0-keys").unwrap();
+    let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
+    assert!(
+        keys.left() - detail.right() >= theme.layout.menu_item_padding_x,
+        "{detail:?} {keys:?}"
+    );
+    let mut other = TestAppContext::single();
+    let (_, other) = other.add_window_view(|_, _| NotesProbe {
+        selected: 1 - selected,
+    });
+    other.run_until_parked();
+    assert_eq!(other.debug_bounds("completion-0").unwrap().size, menu.size);
+}
+
 /// Filas de 10 px con 2 px de marco arriba y abajo: `n` filas miden
 /// `10 * n + 4`. La línea mide 10 px desde `top` y el área va de 0 a
 /// `height`.

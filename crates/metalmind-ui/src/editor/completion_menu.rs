@@ -51,9 +51,9 @@ impl CompletionMenu {
             .map(|element| theme.ui_text(element));
         for (row, shown) in self.visible.zip(self.rows) {
             let selected = row == self.selected;
-            let keys = selected.then(|| self.accept_keys.clone()).flatten();
-            // El conteo, o si no hay, la tecla, van contra el borde derecho.
-            let keys_pushed = shown.count.is_none();
+            // El detalle, o si no hay ni detalle ni conteo el nombre, toma lo
+            // que sobra: lo de después va contra el borde derecho.
+            let name_grows = shown.detail.is_none() && shown.count.is_none();
             let muted = |part: &'static str, text: String| {
                 div()
                     .debug_selector(move || format!("completion-{row}-{part}"))
@@ -79,6 +79,7 @@ impl CompletionMenu {
                         .debug_selector(move || format!("completion-{row}-name"))
                         .min_w_0()
                         .truncate()
+                        .when(name_grows, |name| name.flex_1())
                         .child(shown.name),
                 )
                 .children(shown.detail.map(|detail| {
@@ -90,10 +91,15 @@ impl CompletionMenu {
                         .count
                         .map(|count| muted("count", count).flex_none().ml_auto()),
                 )
-                .children(keys.map(|keys| {
+                // En todas las filas, y solo se ve en la elegida: así la lista
+                // le guarda su columna y no se pega a lo de antes.
+                .children(self.accept_keys.clone().map(|keys| {
                     muted("keys", keys)
                         .flex_none()
-                        .when(keys_pushed, Styled::ml_auto)
+                        .ml(theme.layout.menu_item_padding_x)
+                        .when(!selected, |keys| {
+                            keys.text_color(gpui_kit::transparent_black())
+                        })
                 }));
             menu = menu.child(wire(row, element, cx));
         }

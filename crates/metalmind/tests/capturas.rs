@@ -438,6 +438,16 @@ const SCENES: &[(&str, &[Step])] = &[
     ("sin-destino-filtrado", &[Step::Keys("tarea 1")]),
     ("sin-destino-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("sin-destino-abierto", &[Step::Keys("<C-u>informe<CR>")]),
+    // Listas angostas, de `#` y de `[[`: la tecla de la fila elegida tiene
+    // su columna y no se pega al conteo ni al detalle.
+    (
+        "autocompletado-angosto",
+        &[Step::Keys("<Esc><Esc><C-w>l:e formulas-larga.md<CR>GA #ar")],
+    ),
+    (
+        "links-autocompletado-angosto",
+        &[Step::Keys("<Esc>A [[idea 0")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
