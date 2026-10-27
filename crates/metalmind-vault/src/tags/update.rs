@@ -304,6 +304,81 @@ mod tests {
         .unwrap();
     }
 
+    /// Dos carpetas se cruzan en un lote: la nota que queda en `a/rs.md` es
+    /// otra y se relee (#70).
+    #[test]
+    fn dos_carpetas_se_cruzan() {
+        check(&[
+            vec![Op::Write("a/rs.md".into(), "")],
+            vec![Op::Write("rs.md/rs.md".into(), "#rust")],
+            vec![
+                Op::Rename("a".into(), "rust.md".into()),
+                Op::Rename("rs.md".into(), "a".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
+    /// Una nota pisa a otra que acaba de llegar con su carpeta (#70).
+    #[test]
+    fn pisar_una_nota_que_llego_con_su_carpeta() {
+        check(&[
+            vec![
+                Op::Write("x y.md".into(), ""),
+                Op::Write("rust.md/a.md".into(), "#rust"),
+            ],
+            vec![
+                Op::Rename("rust.md".into(), "rs.md".into()),
+                Op::Rename("x y.md".into(), "rs.md/a.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
+    /// Se borra una carpeta y otra toma su nombre: sus notas se releen (#71).
+    #[test]
+    fn borrar_una_carpeta_y_renombrar_otra_encima() {
+        check(&[
+            vec![Op::Write("a/x y.md".into(), "")],
+            vec![Op::CreateDir("rs.md/tags".into())],
+            vec![Op::Write("x y.md/x y.md".into(), "#rust")],
+            vec![
+                Op::Remove("x y.md".into()),
+                Op::Rename("a".into(), "x y.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
+    /// Dos carpetas se cruzan y una es la de tags (#82).
+    #[test]
+    fn la_carpeta_de_tags_se_cruza_con_otra() {
+        check(&[
+            vec![Op::Write("tags/a.md".into(), "#rust")],
+            vec![Op::Write("a.md/a.md".into(), "#Rust #gpui")],
+            vec![
+                Op::Rename("a.md".into(), "a".into()),
+                Op::Rename("tags".into(), "a.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
+    /// Dos renames al mismo destino, el segundo de una nota escrita en el
+    /// mismo lote: queda su contenido (#103).
+    #[test]
+    fn dos_renames_al_mismo_destino_con_una_nota_nueva() {
+        check(&[
+            vec![Op::Write("rs.md".into(), "")],
+            vec![
+                Op::Rename("rs.md".into(), "x y.md".into()),
+                Op::Write("rust.md".into(), "#rust"),
+                Op::Rename("rust.md".into(), "x y.md".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
     /// El frontmatter entero sigue a la nota: cambia al editarla y se va con
     /// ella al renombrarla, sin releerla.
     #[test]
