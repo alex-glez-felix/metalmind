@@ -8,7 +8,6 @@ use std::time::{Duration, SystemTime};
 
 use arc_swap::ArcSwap;
 use jiff::civil::DateTime;
-use notify_debouncer_full::new_debouncer;
 
 use crate::apply::{self, Applied, ApplyError, UndoReport};
 use crate::attachment::{
@@ -16,6 +15,7 @@ use crate::attachment::{
 };
 use crate::capture::{self, Capture, CaptureError, Captured, NewNote};
 use crate::changes::Changes;
+use crate::debounce::Debouncer;
 use crate::file::{FileError, create_atomic, write_atomic};
 use crate::history::{History, HistoryError, Retention, VersionId};
 use crate::index::VaultIndex;
@@ -242,9 +242,9 @@ impl Vault {
         let root = canonical_dir(root.as_ref())?;
         let (messages, inbox) = mpsc::channel();
         let disk = messages.clone();
-        let debouncer = new_debouncer(DEBOUNCE, None, move |result| {
+        let debouncer = Debouncer::new(DEBOUNCE, move |batch| {
             // Si el hilo ya terminó, el vault se está cerrando.
-            let _ = disk.send(Message::Disk(result));
+            let _ = disk.send(Message::Disk(batch));
         })?;
         let unwatched = Arc::new(OnceLock::new());
         // La raíz antes del walk: lo que cambie mientras tanto llega como evento.

@@ -104,6 +104,34 @@ fn sacar_una_carpeta_del_vault_la_borra() {
     settle(&vault, &updates, &["b.md (nota)"]);
 }
 
+/// Mover y borrar el destino enseguida, a algo del vault o a algo oculto:
+/// la carpeta vieja sale del índice aunque ningún evento la nombre al final
+/// (#43, #166).
+#[test]
+fn mover_una_carpeta_y_borrarla_enseguida_la_saca_del_indice() {
+    for destination in ["a", ".h"] {
+        let dir = TempDir::new().unwrap();
+        make_tree(dir.path(), &["a.md", "b/c.md", "b/d/e.png"]);
+        let (vault, updates) = open(dir.path());
+        fs::rename(dir.path().join("b"), dir.path().join(destination)).unwrap();
+        fs::remove_dir_all(dir.path().join(destination)).unwrap();
+        settle(&vault, &updates, &["a.md (nota)"]);
+    }
+}
+
+/// Mover una nota y guardar encima del destino enseguida no deja el origen
+/// en el índice (#54).
+#[test]
+fn guardar_encima_de_lo_recien_movido_no_deja_el_origen() {
+    let dir = TempDir::new().unwrap();
+    make_tree(dir.path(), &["n/P.md", "v/"]);
+    let (vault, updates) = open(dir.path());
+    let plan = dir.path().join("v/plan.md");
+    fs::rename(dir.path().join("n/P.md"), &plan).unwrap();
+    write_atomic(&plan, |out| out.write_all(b"b")).unwrap();
+    settle(&vault, &updates, &["n/", "v/", "v/plan.md (nota)"]);
+}
+
 #[test]
 fn el_guardado_atomico_es_una_modificacion() {
     let dir = TempDir::new().unwrap();

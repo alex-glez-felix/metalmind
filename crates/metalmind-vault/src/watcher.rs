@@ -9,9 +9,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
-use notify::{ErrorKind, RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{Debouncer, RecommendedCache};
+use notify::ErrorKind;
 
+use crate::debounce::Debouncer;
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
 use crate::scan::{BeforeReading, vault_rule_dirs};
@@ -31,22 +31,8 @@ pub(crate) trait Watches {
     fn stop(self);
 }
 
-impl Watches for Debouncer<RecommendedWatcher, RecommendedCache> {
-    fn watch(&mut self, dir: &Path) -> notify::Result<()> {
-        Self::watch(self, dir, RecursiveMode::NonRecursive)
-    }
-
-    fn unwatch(&mut self, dir: &Path) -> notify::Result<()> {
-        Self::unwatch(self, dir)
-    }
-
-    fn stop(self) {
-        Self::stop(self);
-    }
-}
-
 /// Lo que vigila un vault abierto.
-pub(crate) type Watch = FolderWatch<Debouncer<RecommendedWatcher, RecommendedCache>>;
+pub(crate) type Watch = FolderWatch<Debouncer>;
 
 pub(crate) struct FolderWatch<W> {
     root: PathBuf,

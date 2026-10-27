@@ -1,12 +1,12 @@
 use std::fs;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use notify::EventKind;
 use notify::event::{ModifyKind, RenameMode};
-use notify_debouncer_full::{DebouncedEvent, new_debouncer};
 use tempfile::TempDir;
 
 use super::*;
+use crate::debounce::{Batch, Debouncer};
 use crate::history::TEST_RETENTION;
 use crate::scan::scan;
 use crate::watcher::FolderWatch;
@@ -31,7 +31,7 @@ fn worker(root: &Path, history: &Arc<History>) -> Worker {
 }
 
 fn watch(root: &Path) -> Watch {
-    let debouncer = new_debouncer(Duration::from_millis(10), None, |_| {}).unwrap();
+    let debouncer = Debouncer::new(Duration::from_millis(10), |_| {}).unwrap();
     FolderWatch::start(root, debouncer, Arc::default()).unwrap()
 }
 
@@ -189,7 +189,10 @@ fn renamed(root: &Path, from: &VaultPath, to: &VaultPath) -> Message {
     let event = notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
         .add_path(from.to_fs(root))
         .add_path(to.to_fs(root));
-    Message::Disk(Ok(vec![DebouncedEvent::new(event, Instant::now())]))
+    Message::Disk(Batch {
+        events: vec![event],
+        errors: Vec::new(),
+    })
 }
 
 #[test]

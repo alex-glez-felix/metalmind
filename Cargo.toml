@@ -53,7 +53,6 @@ log = "0.4.34"
 # Deflate sin C para los snapshots del historial; GPUI ya lo trae.
 miniz_oxide = "0.9.1"
 notify = "8.2.0"
-notify-debouncer-full = "0.7.0"
 nucleo-matcher = "0.3.1"
 # RaTeX, fijado como gpui-kit: es 0.1.x y lo publica casi una sola persona (08 §6).
 ratex-layout = "=0.1.15"

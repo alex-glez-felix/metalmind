@@ -1,24 +1,25 @@
 //! De los eventos de `notify` a [`Touched`]: qué rutas del vault releer.
 
+use std::collections::HashSet;
 use std::path::Path;
 
-use notify::EventKind;
 use notify::event::{ModifyKind, RenameMode};
-use notify_debouncer_full::DebouncedEvent;
+use notify::{Event, EventKind};
 
 use crate::path::VaultPath;
 use crate::refresh::Touched;
 use crate::scan::ruled_by;
 
-pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
+pub(crate) fn touched(root: &Path, events: &[Event]) -> Touched {
+    let paired: HashSet<usize> = events
+        .iter()
+        .filter(|event| event.kind == EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+        .filter_map(|event| event.attrs.tracker())
+        .collect();
     let mut touched = Touched::default();
     for event in events {
         if event.need_rescan() {
             touched.paths.insert(VaultPath::root());
-            continue;
-        }
-        // Abrir o leer no cambia qué hay en el vault.
-        if matches!(event.kind, EventKind::Access(_)) {
             continue;
         }
         let named: Vec<Option<VaultPath>> = event
@@ -26,10 +27,24 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
             .iter()
             .map(|path| VaultPath::from_fs(root, path))
             .collect();
-        if let (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) =
-            (event.kind, named.as_slice())
-        {
-            touched.renames.push((from.clone(), to.clone()));
+        match (event.kind, named.as_slice()) {
+            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) => {
+                touched.renames.push((from.clone(), to.clone()));
+            }
+            // Movido desde lo que el vault no ve (el temporal oculto de un
+            // guardado atómico, otra carpeta): el destino tiene contenido nuevo.
+            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [None, Some(to)]) => {
+                touched.written.insert(to.clone());
+            }
+            (EventKind::Modify(ModifyKind::Name(RenameMode::To)), [Some(to)])
+                if event
+                    .attrs
+                    .tracker()
+                    .is_none_or(|tracker| !paired.contains(&tracker)) =>
+            {
+                touched.written.insert(to.clone());
+            }
+            _ => {}
         }
         if matches!(
             event.kind,
@@ -70,19 +85,16 @@ pub(crate) fn touched_by_errors(root: &Path, errors: &[notify::Error]) -> Touche
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::time::Instant;
 
-    use notify::Event;
-    use notify::event::{AccessKind, CreateKind, DataChange, Flag, MetadataKind};
+    use notify::event::{CreateKind, DataChange, Flag, MetadataKind};
     use pretty_assertions::assert_eq;
 
     use super::*;
 
-    fn event(kind: EventKind, paths: &[&str]) -> DebouncedEvent {
-        let event = paths.iter().fold(Event::new(kind), |event, path| {
+    fn event(kind: EventKind, paths: &[&str]) -> Event {
+        paths.iter().fold(Event::new(kind), |event, path| {
             event.add_path(PathBuf::from(path))
-        });
-        DebouncedEvent::new(event, Instant::now())
+        })
     }
 
     fn paths(touched: &Touched) -> Vec<&str> {
@@ -98,7 +110,6 @@ mod tests {
                 &["/v/.metalmind-x.tmp"],
             ),
             event(EventKind::Create(CreateKind::File), &["/v/.git/index"]),
-            event(EventKind::Access(AccessKind::Read), &["/v/a.md"]),
             event(
                 EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
                 &["/v/b.md"],
@@ -125,6 +136,38 @@ mod tests {
         )];
         let touched = touched(root, &events);
         assert_eq!(paths(&touched), ["a.md", "sub/b.md"]);
+        assert_eq!(touched.renames.len(), 1);
+    }
+
+    fn renamed(mode: RenameMode, paths: &[&str], cookie: usize) -> Event {
+        event(EventKind::Modify(ModifyKind::Name(mode)), paths).set_tracker(cookie)
+    }
+
+    fn written(touched: &Touched) -> Vec<&str> {
+        touched.written.iter().map(VaultPath::as_str).collect()
+    }
+
+    #[test]
+    fn lo_movido_desde_lo_que_el_vault_no_ve_es_contenido_nuevo() {
+        let root = Path::new("/v");
+        // El guardado atómico: un temporal oculto renombrado encima.
+        let atomic = [
+            renamed(RenameMode::From, &["/v/.tmp"], 1),
+            renamed(RenameMode::To, &["/v/a.md"], 1),
+            renamed(RenameMode::Both, &["/v/.tmp", "/v/a.md"], 1),
+        ];
+        assert_eq!(written(&touched(root, &atomic)), ["a.md"]);
+        // Desde fuera del vault no hay `From`, ni par.
+        let moved_in = [renamed(RenameMode::To, &["/v/b.md"], 2)];
+        assert_eq!(written(&touched(root, &moved_in)), ["b.md"]);
+        // Un rename dentro del vault mueve el contenido, no lo escribe.
+        let inside = [
+            renamed(RenameMode::From, &["/v/a.md"], 3),
+            renamed(RenameMode::To, &["/v/b.md"], 3),
+            renamed(RenameMode::Both, &["/v/a.md", "/v/b.md"], 3),
+        ];
+        let touched = touched(root, &inside);
+        assert_eq!(written(&touched), Vec::<&str>::new());
         assert_eq!(touched.renames.len(), 1);
     }
 
@@ -220,7 +263,7 @@ mod tests {
     #[test]
     fn rescan_relee_todo() {
         let event = Event::new(EventKind::Other).set_flag(Flag::Rescan);
-        let events = [DebouncedEvent::new(event, Instant::now())];
+        let events = [event];
         assert_eq!(paths(&touched(Path::new("/v"), &events)), [""]);
     }
 }
