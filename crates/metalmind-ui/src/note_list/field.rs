@@ -6,7 +6,7 @@ use std::ops::Range;
 use gpui_kit::{
     Context, Div, ElementInputHandler, HighlightStyle, InteractiveElement as _, IntoElement,
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
-    canvas, div,
+    canvas, div, prelude::FluentBuilder as _,
 };
 use metalmind_keymap::ListAction;
 
@@ -43,7 +43,12 @@ impl NoteListView {
                 .child(
                     input_box(theme)
                         .relative()
-                        .child(line_with_caret(self.list.tag_line(), &[], theme))
+                        .child(line_with_caret(
+                            self.list.tag_line(),
+                            &[],
+                            self.marked(),
+                            theme,
+                        ))
                         .child(self.input_handler(cx)),
                 );
         }
@@ -52,7 +57,7 @@ impl NoteListView {
         let content = if editing || !line.text().is_empty() {
             let warnings = self.list.warnings();
             let shown = if editing {
-                line_with_caret(line, &warnings, theme)
+                line_with_caret(line, &warnings, self.marked(), theme)
             } else {
                 div().child(input_text(line.text(), &warnings, theme))
             };
@@ -123,8 +128,14 @@ fn input_text(text: &str, warnings: &[Range<usize>], theme: &Theme) -> StyledTex
     StyledText::new(SharedString::from(text.to_owned())).with_highlights(highlights)
 }
 
-/// La línea con el cursor de barra, como la línea de comandos.
-fn line_with_caret(line: &InputLine, warnings: &[Range<usize>], theme: &Theme) -> Div {
+/// La línea con el cursor de barra, como la línea de comandos, y el preedit
+/// del IME subrayado antes del cursor, como en el picker.
+fn line_with_caret(
+    line: &InputLine,
+    warnings: &[Range<usize>],
+    marked: &str,
+    theme: &Theme,
+) -> Div {
     let (before, after) = line.text().split_at(line.cursor());
     let after_warnings: Vec<Range<usize>> = warnings
         .iter()
@@ -135,6 +146,9 @@ fn line_with_caret(line: &InputLine, warnings: &[Range<usize>], theme: &Theme) -
         .flex()
         .items_center()
         .child(input_text(before, warnings, theme))
+        .when(!marked.is_empty(), |text| {
+            text.child(div().underline().child(marked.to_owned()))
+        })
         .child(
             div()
                 .w(theme.stroke.caret)

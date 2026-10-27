@@ -196,6 +196,7 @@ impl NoteListView {
             self.reveal_active(cx);
         } else {
             self.list.close_prompt();
+            self.marked = None;
         }
         cx.notify();
         visible
@@ -210,6 +211,11 @@ impl NoteListView {
         self.scroll_on_show = true;
         let step = self.list.set_source(source);
         self.step(step, cx);
+    }
+
+    /// El preedit del IME en el campo que se escribe.
+    pub(super) fn marked(&self) -> &str {
+        self.marked.as_deref().unwrap_or("")
     }
 
     #[must_use]

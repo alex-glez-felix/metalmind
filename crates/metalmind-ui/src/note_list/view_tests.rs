@@ -266,3 +266,28 @@ fn el_filtro_recibe_el_texto_del_ime() {
         .read_with(cx, |view, _| view.list.filter().text().to_owned());
     assert_eq!(text, "é");
 }
+
+#[test]
+fn cerrar_la_pregunta_suelta_el_preedit() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture(&mut cx);
+    fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
+    cx.simulate_keystrokes("t");
+    fixture.list.update_in(cx, |view, window, cx| {
+        view.replace_and_mark_text_in_range(None, "´", None, window, cx);
+    });
+    assert_eq!(
+        fixture
+            .list
+            .read_with(cx, |view, _| view.marked().to_owned()),
+        "´"
+    );
+    cx.simulate_keystrokes("escape");
+    assert_eq!(
+        fixture
+            .list
+            .read_with(cx, |view, _| view.marked().to_owned()),
+        ""
+    );
+}

@@ -279,3 +279,26 @@ fn los_tags_van_a_la_nota_de_la_pregunta_aunque_la_fila_cambie() {
     let (note, _tags) = list.take_tags().unwrap();
     assert_eq!(note.as_str(), "nueva.md");
 }
+
+#[test]
+fn otra_fuente_antes_de_las_tarjetas_tampoco_muestra_la_lista_sin_orden() {
+    let fixture = Fixture::new();
+    let mut list = NoteList::new(
+        ListSource::Inbox,
+        "",
+        fixture.vault.snapshot(),
+        fixture.vault.tags(),
+    );
+    let step = list.set_source(ListSource::All);
+    run(&mut list, step);
+    assert!(list.is_empty() && !list.is_current());
+    let paths = list
+        .source()
+        .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
+    let step = list.set_cards(read_all(fixture.dir.path(), &paths));
+    run(&mut list, step);
+    assert_eq!(
+        rows(&list),
+        ["nueva.md", "media.md", "d/sin.md", "vieja.md"]
+    );
+}

@@ -195,7 +195,13 @@ impl WorkspaceView {
                 // Donde haya quedado cada archivo, aunque un renombre no se
                 // haya podido deshacer.
                 self.reread(&vault, last.applied.touched(), cx);
+                // Solo si se deshizo todo: lo que cambió después sigue con el
+                // tag nuevo, y la lista se quedaría sin esas notas.
+                let whole = report.changed.is_empty()
+                    && report.failed.is_empty()
+                    && report.renames.is_empty();
                 if let Some((from, to, choices)) = &last.list_followed
+                    && whole
                     && self.list.read(cx).source_choices() == *choices
                 {
                     self.list
