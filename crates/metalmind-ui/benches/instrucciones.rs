@@ -138,7 +138,7 @@ fn arbol_filtrar(mut tree: FileTree) -> FileTree {
 fn arbol_aplicar_un_rename(
     (mut tree, changes, after): (FileTree, Vec<VaultChange>, Arc<VaultIndex>),
 ) -> FileTree {
-    tree.apply(&changes, after);
+    tree.apply(&changes, after, None);
     black_box(tree)
 }
 
