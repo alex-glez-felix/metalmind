@@ -1,7 +1,10 @@
 //! Lo que el panel le pregunta al usuario, arriba del árbol: un nombre,
 //! el filtro o confirmar un borrado.
 
-use gpui_kit::{Context, Div, ParentElement as _, Styled as _, div, prelude::FluentBuilder as _};
+use gpui_kit::{
+    Context, Div, InteractiveElement as _, ParentElement as _, Styled as _, div,
+    prelude::FluentBuilder as _,
+};
 use metalmind_vault::VaultPath;
 
 use super::Sidebar;
@@ -63,10 +66,31 @@ fn folder_name(path: &VaultPath) -> String {
     }
 }
 
-/// El texto con el cursor de barra, como la línea de comandos.
+/// El texto con el cursor de barra. Si no cabe, se recorta como en la
+/// línea de comandos: primero lo que sigue al cursor y luego el principio de
+/// lo que lo antecede, así el cursor siempre se ve.
 fn input_field(input: &LineInput, theme: &Theme) -> Div {
     let (before, after) = input.text().split_at(input.cursor());
+    let up_to_caret = div()
+        .flex()
+        .items_center()
+        .min_w_0()
+        .child(
+            clipped()
+                .debug_selector(|| "panel-input-before".to_owned())
+                .text_ellipsis_start()
+                .child(before.to_owned()),
+        )
+        .child(
+            div()
+                .debug_selector(|| "panel-caret".to_owned())
+                .w(theme.stroke.caret)
+                .h(theme.ui_font_size)
+                .flex_none()
+                .bg(theme.cursor.insert),
+        );
     div()
+        .debug_selector(|| "panel-input".to_owned())
         .flex()
         .items_center()
         .h(theme.panel_row_height)
@@ -75,17 +99,20 @@ fn input_field(input: &LineInput, theme: &Theme) -> Div {
         .border(theme.stroke.border)
         .border_color(theme.ui.panel_border)
         .rounded(theme.radius.md)
-        .whitespace_nowrap()
         .overflow_hidden()
-        .child(before.to_owned())
+        .child(up_to_caret)
+        // Sin ancho propio: solo ocupa lo que deja lo anterior al cursor.
         .child(
-            div()
-                .w(theme.stroke.caret)
-                .h(theme.ui_font_size)
-                .flex_none()
-                .bg(theme.cursor.insert),
+            clipped()
+                .debug_selector(|| "panel-input-after".to_owned())
+                .flex_1()
+                .text_ellipsis()
+                .child(after.to_owned()),
         )
-        .child(after.to_owned())
+}
+
+fn clipped() -> Div {
+    div().min_w_0().overflow_hidden().whitespace_nowrap()
 }
 
 fn confirm_delete(
@@ -126,3 +153,7 @@ fn confirm_delete(
                 )),
         )
 }
+
+#[cfg(test)]
+#[path = "prompt_tests.rs"]
+mod tests;

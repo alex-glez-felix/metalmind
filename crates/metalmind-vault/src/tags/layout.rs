@@ -11,11 +11,13 @@ use crate::tags::note::Lines;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PageLayout {
     /// Sin frontmatter: se agrega uno en `at`, tras el BOM si lo hay. La
-    /// primera línea que sigue, con su salto, la comprueba la edición: si
-    /// cambió (otro cambio ya le puso frontmatter), no se aplica.
+    /// edición comprueba la primera línea que sigue, con su salto, y el
+    /// largo del texto (`len`): si otro cambio ya le puso frontmatter, aunque
+    /// la página estuviera vacía, no se aplica.
     Bare {
         at: usize,
         first_line: String,
+        len: usize,
         crlf: bool,
     },
     /// Un mapa en bloque: un campo nuevo va en `end`, la línea del `---` de
@@ -59,6 +61,7 @@ impl PageLayout {
                 Self::Bare {
                     at,
                     first_line: first_line.to_owned(),
+                    len: text.len(),
                     crlf,
                 }
             }

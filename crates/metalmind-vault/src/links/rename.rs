@@ -118,7 +118,11 @@ impl LinkIndex {
             to: to.clone(),
             files: files
                 .into_iter()
-                .map(|(path, edits)| FileEdits { path, edits })
+                .map(|(path, edits)| FileEdits {
+                    path,
+                    edits,
+                    base_len: None,
+                })
                 .collect(),
             conflicts,
         })

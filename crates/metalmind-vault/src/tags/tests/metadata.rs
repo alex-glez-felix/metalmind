@@ -14,6 +14,7 @@ fn fixture() -> Fixture {
         ),
         ("tags/sin-frontmatter.md", "De qué trata.\n"),
         ("tags/bom.md", "\u{FEFF}Con BOM.\n"),
+        ("tags/vacia.md", ""),
         ("tags/crlf.md", "---\r\ncolor: azul\r\n---\r\n"),
         ("tags/roto.md", "---\ncolor: [rojo\n---\n"),
         ("tags/flujo.md", "---\n{color: rojo}\n---\n"),
@@ -271,7 +272,8 @@ fn invalid_requests() {
 
 /// Un plan armado antes de otro cambio a la misma página no escribe en un
 /// lugar que ya no es el suyo: agregar un campo se ancla en el `---` de
-/// cierre, y agregarle frontmatter a una página sin él, en su primera línea.
+/// cierre, y agregarle frontmatter a una página sin él, en su primera línea
+/// y su largo, que es lo único que tiene una página vacía.
 #[test]
 fn a_plan_made_before_another_change_is_stale() {
     let fixture = fixture();
@@ -280,6 +282,7 @@ fn a_plan_made_before_another_change_is_stale() {
     let cases = [
         ("crlf", PageChange::Aliases(names(&["az"])), icon.clone()),
         ("sin-frontmatter", named("azul"), icon.clone()),
+        ("vacia", named("azul"), icon.clone()),
     ];
     for (tag, first, second) in cases {
         let first = tags.plan_page_change(tag, &first).unwrap();

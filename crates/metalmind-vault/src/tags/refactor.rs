@@ -83,7 +83,11 @@ impl Edits {
             .into_iter()
             .map(|(path, mut edits)| {
                 edits.sort_by_key(|edit| edit.range.start);
-                FileEdits { path, edits }
+                FileEdits {
+                    path,
+                    edits,
+                    base_len: None,
+                }
             })
             .collect()
     }

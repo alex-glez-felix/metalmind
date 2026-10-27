@@ -224,6 +224,7 @@ impl TagChangePreview {
                 (!edits.is_empty()).then(|| FileEdits {
                     path: file.path.clone(),
                     edits,
+                    base_len: file.base_len,
                 })
             })
             .collect();
