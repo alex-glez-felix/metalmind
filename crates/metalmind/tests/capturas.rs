@@ -386,7 +386,7 @@ const SCENES: &[(&str, &[Step])] = &[
             "<Esc><Esc><C-w>l:focus #rust -#archivado<CR><C-w>h",
         )],
     ),
-    ("focus-carpetas", &[Step::Keys("Tgg")]),
+    ("focus-carpetas", &[Step::Keys("<Space>egg")]),
     ("focus-menu", &[Step::RightClickRow(1)]),
     ("focus-finder", &[Step::Keys("<Esc><C-w>l<Space>f")]),
     ("focus-buscar", &[Step::Keys("<Esc><Space>/idea 0")]),
