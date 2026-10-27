@@ -422,7 +422,8 @@ fn binary() -> PathBuf {
     let Some(bin) = std::env::var_os(BIN_VAR) else {
         return env!("CARGO_BIN_EXE_metalmind").into();
     };
-    std::path::absolute(&bin).unwrap_or_else(|err| panic!("{BIN_VAR}={bin:?}: {err}"))
+    std::path::absolute(&bin)
+        .unwrap_or_else(|err| panic!("{BIN_VAR}={}: {err}", Path::new(&bin).display()))
 }
 
 const BIN_VAR: &str = "METALMIND_BIN";
