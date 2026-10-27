@@ -12,7 +12,7 @@ use super::Editor;
 use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
-use super::scroll::{f32_of, units};
+use super::scroll::{Anchor, sideways};
 use crate::clipboard::SystemClipboard;
 
 impl Editor {
@@ -41,8 +41,9 @@ impl Editor {
             (delta.x, delta.y)
         };
         if across != px(0.) && !view.wrap {
-            let left = (f32_of(view.viewport.left()) - f32::from(across)).max(0.);
-            self.scroll_sideways_to(units(left), cx);
+            let (left, rest) = sideways(view.viewport.left(), self.across, -f32::from(across));
+            self.across = rest;
+            self.scroll_sideways_to(left, cx);
         }
         if down == px(0.) {
             return;
@@ -57,8 +58,10 @@ impl Editor {
             |line| f64::from(lines::line_height(&view, line)),
         );
         let top = self.scroll.first_full_line();
-        if self.synced_top != Some(top) {
-            self.synced_top = Some(top);
+        // Mover la ventana deja sin filas ocultas la primera línea.
+        let anchor = Anchor { top, skip: 0 };
+        if self.synced != Some(anchor) {
+            self.synced = Some(anchor);
             let scrolled =
                 self.update_workspace(cx, |workspace, pane, _| workspace.scroll_to(pane, top));
             if let Err(error) = scrolled {

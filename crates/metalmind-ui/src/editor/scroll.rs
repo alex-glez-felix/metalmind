@@ -1,6 +1,14 @@
 //! Posición de scroll en líneas, no en píxeles: con un millón de líneas la
 //! altura total pasa de 2^24 px y un `f32` ya no distingue un píxel.
 
+/// Dónde dejó el motor la ventana: su primera línea y lo que oculta arriba
+/// de ella si es más alta que la ventana (`Viewport::skip`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Anchor {
+    pub top: usize,
+    pub skip: usize,
+}
+
 /// Primera línea visible, con fracción para el scroll suave.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Scroll {
@@ -22,16 +30,17 @@ impl Scroll {
         Self { top: top.max(0.0) }
     }
 
-    /// El scroll para pintar si el motor dejó la ventana en `top`, con
-    /// `skip` de esa línea oculto arriba (una línea más alta que la ventana
-    /// con el cursor abajo). Solo se conserva la fracción de la rueda si es
-    /// la misma línea que se le dio (`synced`); `None` alinea a las filas
-    /// del motor, que si no contaría como visible una fila recortada abajo.
-    pub fn follow(self, top: usize, skip: f64, synced: Option<usize>) -> Self {
-        if synced == Some(top) {
+    /// El scroll para pintar si el motor dejó la ventana en `anchor`, con
+    /// `hidden` de su primera línea oculto arriba, como fracción de su alto.
+    /// Solo se conserva la fracción de la rueda si el motor sigue donde se
+    /// le dejó (`synced`); si no, se alinea a sus filas, que si no contaría
+    /// como visible una fila recortada abajo, y mostraría otra fila de una
+    /// línea alta que la del cursor.
+    pub fn follow(self, anchor: Anchor, hidden: f64, synced: Option<Anchor>) -> Self {
+        if synced == Some(anchor) {
             self
         } else {
-            Self::at(to_f64(top) + skip.clamp(0.0, 1.0 - f64::EPSILON))
+            Self::at(to_f64(anchor.top) + hidden.clamp(0.0, 1.0 - f64::EPSILON))
         }
     }
 
@@ -73,12 +82,36 @@ pub fn units(pixels: f32) -> usize {
     pixels.max(0.).floor() as usize
 }
 
+/// Sin `wrap`, a dónde lleva la rueda la ventana que se corrió `left`
+/// píxeles al correrla `delta` más, con `rest`, lo que quedó de menos de un
+/// píxel de las anteriores: el motor solo guarda píxeles enteros, y si no
+/// muchos toques cortos de un trackpad no la moverían. Devuelve `left` y lo
+/// que vuelve a quedar.
+pub fn sideways(left: usize, rest: f32, delta: f32) -> (usize, f32) {
+    let target = (f32_of(left) + rest + delta).max(0.);
+    (units(target), target - target.floor())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn at(top: f64) -> Scroll {
         Scroll { top }
+    }
+
+    #[test]
+    fn los_toques_cortos_de_la_rueda_se_suman() {
+        let (mut left, mut rest) = (0, 0.);
+        for _ in 0..4 {
+            (left, rest) = sideways(left, rest, 0.5);
+        }
+        assert_eq!(left, 2, "cuatro medios píxeles a la derecha");
+        for _ in 0..4 {
+            (left, rest) = sideways(left, rest, -0.5);
+        }
+        assert_eq!(left, 0, "y de vuelta, lo mismo");
+        assert_eq!(sideways(3, 0., -10.).0, 0, "no pasa del principio");
     }
 
     #[test]
@@ -89,13 +122,20 @@ mod tests {
 
     #[test]
     fn la_fraccion_de_la_rueda_dura_mientras_el_motor_no_mueva() {
-        assert_eq!(at(10.25).follow(11, 0.0, Some(11)), at(10.25));
-        assert_eq!(at(10.25).follow(14, 0.0, Some(11)), at(14.0));
-        assert_eq!(at(10.25).follow(11, 0.0, None), at(11.0));
+        let line = |top| Anchor { top, skip: 0 };
+        assert_eq!(at(10.25).follow(line(11), 0.0, Some(line(11))), at(10.25));
+        assert_eq!(at(10.25).follow(line(14), 0.0, Some(line(11))), at(14.0));
+        assert_eq!(at(10.25).follow(line(11), 0.0, None), at(11.0));
+        let hidden = Anchor { top: 11, skip: 40 };
         assert_eq!(
-            at(10.25).follow(11, 0.5, None),
+            at(10.25).follow(hidden, 0.5, None),
             at(11.5),
             "lo que el motor oculta arriba de una línea alta"
+        );
+        assert_eq!(
+            at(11.25).follow(hidden, 0.5, Some(line(11))),
+            at(11.5),
+            "en la misma línea, el cursor bajó a otra fila: se sigue al motor"
         );
     }
 

@@ -182,6 +182,8 @@ impl Viewport {
         heights: &dyn LineHeights,
     ) -> bool {
         let head = selections.primary().head;
+        // La rueda manda sobre las filas ocultas de una línea alta.
+        self.skip = 0;
         let mut window = self.window(buffer, head, scrolloff, heights);
         let top = top.min(window.lines - 1);
         if top == window.top {
@@ -241,6 +243,9 @@ impl Viewport {
     }
 
     pub(crate) fn apply(&mut self, window: &Window<'_>) {
+        if window.top != self.top {
+            self.skip = 0;
+        }
         self.top = window.top;
         self.settled = window.settled;
         self.bottom = window.bottom();

@@ -55,8 +55,9 @@ impl Rows {
     /// Lo que mide cada una de las `rows` filas de una línea partida, con
     /// cada byte en la fila que dice `row_of` (en la app, la de su
     /// [`ScreenLine`](crate::ScreenLine)): la fila de una fórmula alta crece
-    /// con ella, y la de un bloque suma debajo de la última. Sin estilo
-    /// calculado, cada fila mide como texto.
+    /// con ella (si no quedó partida en filas: entonces se ve su fuente), y
+    /// la de un bloque suma debajo de la última. Sin estilo calculado, cada
+    /// fila mide como texto.
     #[must_use]
     pub fn line_rows(
         &self,
@@ -70,9 +71,12 @@ impl Rows {
             below: 0,
         };
         for (formula, height) in style.into_iter().flat_map(|style| self.formulas(style)) {
+            let row = row_of(formula.range.start);
+            // Partida en filas, se ve su fuente, que mide como texto.
+            let whole = row == row_of(formula.range.end.saturating_sub(1));
             if formula.below() {
                 rows.below = rows.below.saturating_add(height);
-            } else if let Some(row) = rows.rows.get_mut(row_of(formula.range.start)) {
+            } else if let Some(row) = rows.rows.get_mut(row).filter(|_| whole) {
                 *row = (*row).max(height);
             }
         }
@@ -194,6 +198,8 @@ mod tests {
         );
         assert_eq!((measured.height(), measured.top(2)), (9, 7));
         assert_eq!(rows.line_rows(None, 3, |_| 0).rows, [2, 2, 2]);
+        let split = rows.line_rows(style, 3, |byte| usize::from(byte >= 9));
+        assert_eq!(split.rows, [2, 2, 2], "partida, se ve su fuente");
     }
 
     #[test]
