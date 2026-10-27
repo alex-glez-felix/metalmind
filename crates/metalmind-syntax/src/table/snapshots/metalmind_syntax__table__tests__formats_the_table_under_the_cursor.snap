@@ -1,0 +1,300 @@
+---
+source: crates/metalmind-syntax/src/table/tests.rs
+expression: out
+---
+── desalineada
+| Criterio | Nota |
+|-|-|
+| Comunicación clara | 4‸ |
+| Código | 5 |
+▼
+| Criterio           | Nota |
+| ------------------ | ---- |
+| Comunicación clara | 4‸    |
+| Código             | 5    |
+
+── alineados declarados
+| a | b | c | d |
+|:-|:-:|-:|---|
+| izq‸uierda | centro | 7 | x |
+| i | c | 1234 | y |
+▼
+| a         |   b    |    c | d   |
+| :-------- | :----: | ---: | --- |
+| izq‸uierda | centro |    7 | x   |
+| i         |   c    | 1234 | y   |
+
+── ancho en columnas, no bytes
+| nombre | x |
+|---|---|
+| José‸ | 1 |
+| 東京 | 2 |
+| 🦀 | 3 |
+▼
+| nombre | x   |
+| ------ | --- |
+| José‸   | 1   |
+| 東京   | 2   |
+| 🦀     | 3   |
+
+── pipes que no parten
+| qué | cómo |
+|---|---|
+| `a | b`‸ | código |
+| a \| b | escapado |
+| [[nota|alias]] | wikilink |
+| $|x|$ | fórmula |
+▼
+| qué            | cómo     |
+| -------------- | -------- |
+| `a | b`‸        | código   |
+| a \| b         | escapado |
+| [[nota|alias]] | wikilink |
+| $|x|$          | fórmula  |
+
+── filas cortas y largas
+| a | b | c |
+|---|---|---|
+| 1‸ |
+| 1 | 2 | 3 | 4 | 5 |
+▼
+| a   | b   | c   |
+| --- | --- | --- |
+| 1‸   |     |     |
+| 1   | 2   | 3   | 4 | 5 |
+
+── sin pipes en los bordes
+a | b
+--|--
+uno‸ | dos
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+
+── cursor en la separadora
+| a | b |
+|-‸|:-|
+| x | y |
+▼
+| a   | b   |
+| -‸-- | :-- |
+| x   | y   |
+
+── cursor en un pipe
+| ab |‸ cd |
+|-|-|
+▼
+| ab  | ‸cd  |
+| --- | --- |
+
+── cursor tras el último pipe
+| ab | cd |  ‸
+|-|-|
+▼
+| ab  | cd‸  |
+| --- | --- |
+
+── cursor en el relleno
+|   ‸   ab | cd |
+|-|-|
+▼
+| ‸ab  | cd  |
+| --- | --- |
+
+── celdas vacías
+|  | b |
+|-|-|
+|‸| |
+▼
+|     | b   |
+| --- | --- |
+| ‸    |     |
+
+── en una cita
+> | a | b |
+> |-|-|
+> | uno‸ | dos |
+▼
+> | a   | b   |
+> | --- | --- |
+> | uno‸ | dos |
+
+── sangrada en una lista
+- ítem
+
+    | a | b |
+    |-|-|
+    | uno‸ | dos |
+▼
+- ítem
+
+    | a   | b   |
+    | --- | --- |
+    | uno‸ | dos |
+
+── el párrafo de arriba no es la tabla
+texto | suelto
+| a | b |
+|-|-|
+| uno‸ | dos |
+▼
+texto | suelto
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+
+── termina en la línea sin pipe
+| a | b |
+|-|-|
+| uno‸ | dos |
+fin
+| no | es |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+fin
+| no | es |
+
+── solo la del cursor
+| a | b |
+|-|-|
+| uno | dos |
+
+| c |
+|-|
+| tres‸ |
+▼
+| a | b |
+|-|-|
+| uno | dos |
+
+| c    |
+| ---- |
+| tres‸ |
+
+── ya alineada no cambia
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+
+── no es tabla: la separadora no cuadra
+| a | b |
+|-|
+| uno‸ | dos |
+▼
+(sin tabla)
+
+── no es tabla: sin separadora
+| a | b |
+| uno‸ | dos |
+▼
+(sin tabla)
+
+── no es tabla: el cursor arriba del encabezado
+x | y‸
+
+| a | b |
+|-|-|
+▼
+(sin tabla)
+
+── no es tabla: una regla
+---‸
+▼
+(sin tabla)
+
+── los espacios duros son contenido
+| a | b |
+|-|-|
+| uno‸ | 　備考 |
+▼
+| a     | b      |
+| ----- | ------ |
+|  uno‸  | 　備考 |
+
+── termina donde empieza otro bloque
+| a | b |
+|-|-|
+| uno‸ | dos |
+- ítem | con pipe
+| no | es |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+- ítem | con pipe
+| no | es |
+
+── termina en un heading
+| a | b |
+|-|-|
+| uno‸ | dos |
+# título | con pipe
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+# título | con pipe
+
+── termina en una cerca
+| a | b |
+|-|-|
+| uno‸ | dos |
+```a|b
+| no | es |
+```
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+```a|b
+| no | es |
+```
+
+── termina al salir de la cita
+> | a | b |
+> |-|-|
+> | uno‸ | dos |
+fuera | de la cita
+▼
+> | a   | b   |
+> | --- | --- |
+> | uno‸ | dos |
+fuera | de la cita
+
+── termina en una cita más honda
+> | a | b |
+> |-|-|
+> | uno‸ | dos |
+> > | otra | cita |
+▼
+> | a   | b   |
+> | --- | --- |
+> | uno‸ | dos |
+> > | otra | cita |
+
+── no entra en la cita de abajo
+| a | b |
+|-|-|
+| uno‸ | dos |
+> | otra | cita |
+▼
+| a   | b   |
+| --- | --- |
+| uno‸ | dos |
+> | otra | cita |
+
+── separadoras cortas, como prettier
+| a | b | c |
+|:-|:-:|-:|
+| x‸ | y | z |
+▼
+| a   |  b  |   c |
+| :-- | :-: | --: |
+| x‸   |  y  |   z |

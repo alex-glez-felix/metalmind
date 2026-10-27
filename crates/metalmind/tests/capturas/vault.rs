@@ -16,6 +16,11 @@ pub const NOTE: &str = "estrés del layout — una nota con un nombre bastante l
 /// varias líneas al final.
 pub const FORMULAS: &str = "formulas.md";
 
+/// La nota de [`write_tables`].
+pub const TABLES: &str = "tablas.md";
+/// Las filas del registro de [`write_tables`]: más de mil, como una nota larga.
+const TABLE_ROWS: usize = 1200;
+
 /// Una nota de 1 300 líneas con fórmulas en párrafos largos y en bloques, y
 /// una zona de prueba en la línea [`FORMULAS_ZONE`]: el cursor va dentro de
 /// la fórmula con `aqui` y la línea de [`FORMULAS_BROKEN`] lleva fórmulas
@@ -178,6 +183,35 @@ pub fn write_link_notes(root: &Path) {
             .expect("crear la carpeta");
         fs::write(path, "# Plan\n").expect("escribir el archivo");
     }
+}
+
+/// Una nota con tablas sin alinear, como quedan llenadas a mano: anchos en
+/// columnas de pantalla (acentos, CJK, emoji), `|` que no parten celdas,
+/// filas cortas y largas, una cita y un registro de [`TABLE_ROWS`] filas.
+pub fn write_tables(root: &Path) {
+    let mut note = String::from(concat!(
+        "# Evaluación de la entrevista\n\n",
+        "| Criterio | Peso | Nota | Comentario |\n",
+        "|:-|:-:|-:|-|\n",
+        "| Comunicación clara | 2 | 4 | explicó el diseño sin jerga |\n",
+        "| Código | 3 | 5 | `match a | b` en los patrones, y `\\|` escapado |\n",
+        "| Diseño de sistemas | 3 | 3 | [[entrevistas/2026/octubre/notas del panel|ver notas]] |\n",
+        "| 日本語の資料 | 1 | 🦀 | un comentario larguísimo que no cabe en la ventana ni alineado ni sin alinear, ",
+        "porque sigue y sigue con detalles de la entrevista que nadie va a leer completos |\n",
+        "| Total |\n",
+        "| Extra | 1 | 2 | 3 | sobra | y otra más |\n\n",
+        "> | Cita | En una cita |\n> |-|-|\n> | dentro | sigue en la cita |\n\n",
+        "## Registro\n\n",
+        "| # | Fecha | Evento | Detalle |\n|---|:-:|---|--:|\n",
+    ));
+    for row in 1..=TABLE_ROWS {
+        let event = ["alta", "revisión de seguimiento", "baja", "nota"][row % 4];
+        let detail = "x".repeat(row % 37);
+        let day = row % 28 + 1;
+        writeln!(note, "| {row} | 2026-10-{day:02} | {event} | {detail} |").expect("escribir");
+    }
+    note.push_str("| fin | | evento-final | |\n");
+    fs::write(root.join(TABLES), note).expect("escribir la nota de tablas");
 }
 
 /// La plantilla de ejemplo, tal como la muestra la documentación.

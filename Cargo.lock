@@ -4047,6 +4047,7 @@ dependencies = [
  "serde-saphyr",
  "thiserror 2.0.21",
  "unicode-properties",
+ "unicode-width",
 ]
 
 [[package]]

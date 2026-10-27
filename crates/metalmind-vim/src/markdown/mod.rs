@@ -1,5 +1,6 @@
 //! Edición consciente de markdown sobre el motor: continuar listas, alternar
-//! checkboxes, ir entre headings y la sección como text object. Lo que es
+//! checkboxes, ir entre headings, la sección como text object y alinear
+//! tablas. Lo que es
 //! un heading o un bloque de código lo decide el estilo de
 //! `metalmind-syntax`, el mismo con que el editor pinta la nota.
 
@@ -8,6 +9,7 @@ mod heading;
 mod list;
 mod newline;
 mod section;
+mod table;
 
 use std::cell::{OnceCell, RefCell};
 
@@ -21,6 +23,7 @@ pub(crate) use heading::{next_heading, previous_heading};
 pub(crate) use list::{ListItem, indent_of};
 pub(crate) use newline::{After, Newline, opened_item, renumber_items};
 pub(crate) use section::{section, select_section};
+pub(crate) use table::TableFormat;
 
 /// Qué partes de la edición de markdown están encendidas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

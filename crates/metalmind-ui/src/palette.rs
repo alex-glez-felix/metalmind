@@ -165,6 +165,8 @@ mod tests {
             Some("ctrl-shift-p")
         );
         assert!(entry(&entries, PanelAction::SelectNext).is_none());
+        let table = entry(&entries, Action::Vim(VimAction::FormatTable)).unwrap();
+        assert_eq!(table.label, "editor: format table");
         let labels: HashSet<&str> = entries.iter().map(|entry| entry.label.as_str()).collect();
         assert_eq!(labels.len(), entries.len());
     }
