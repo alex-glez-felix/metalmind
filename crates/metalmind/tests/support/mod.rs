@@ -248,16 +248,24 @@ impl<'a> Metalmind<'a> {
             .collect()
     }
 
-    /// Espera la primera ventana, o falla si el proceso termina antes.
+    /// Espera la primera ventana, ya pintada, o falla si el proceso termina
+    /// antes. Lo que se mire después no puede ser el negro de antes del primer
+    /// frame, que con lavapipe se queda en pantalla un rato (#116, #128).
     pub fn window(&mut self) -> Window<'a> {
-        wait::until("la ventana de Metalmind", WINDOW_TIMEOUT, || {
+        wait::until("la ventana de Metalmind, pintada", WINDOW_TIMEOUT, || {
             if let Some(status) = self.try_exit() {
                 panic!("metalmind terminó con {status} sin abrir la ventana");
             }
-            self.windows()
+            let window = self
+                .windows()
                 .into_iter()
                 .next()
-                .ok_or_else(|| "ninguna ventana".to_owned())
+                .ok_or_else(|| "ninguna ventana".to_owned())?;
+            if one_color(&window.pixels().2) {
+                Err("la ventana es de un solo color".to_owned())
+            } else {
+                Ok(window)
+            }
         })
     }
 
@@ -293,6 +301,13 @@ impl Drop for Metalmind<'_> {
             eprintln!("--- log de metalmind ---\n{log}--- fin del log ---");
         }
     }
+}
+
+/// Si todos los píxeles de `rgb` son iguales: una ventana que todavía no
+/// muestra lo que pintó la app.
+pub fn one_color(rgb: &[u8]) -> bool {
+    let (pixels, _) = rgb.as_chunks::<3>();
+    pixels.iter().all(|pixel| Some(pixel) == pixels.first())
 }
 
 /// Un rectángulo de la ventana, en píxeles desde su esquina.
