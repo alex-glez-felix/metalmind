@@ -2,7 +2,9 @@
 //! panel y entre archivos. Port de `setpcmark`, `cleanup_jumplist` y
 //! `get_jumplist` de `mark.c` de nvim 0.12.6, con `jumpoptions=clean`.
 
-use metalmind_buffer::{Point, Splice};
+use metalmind_buffer::{Buffer, Point, Splice};
+
+use crate::DocState;
 
 /// Como el `JUMPLISTSIZE` de vim.
 pub const CAPACITY: usize = 100;
@@ -64,9 +66,41 @@ pub(crate) struct Step {
 }
 
 impl JumpList {
+    /// Una con `entries`, de la más vieja a la más nueva, como al
+    /// recuperarla de una sesión anterior: sin retroceder, y con las últimas
+    /// [`CAPACITY`] si son más.
+    #[must_use]
+    pub fn restored(entries: impl IntoIterator<Item = Jump>) -> Self {
+        let mut list = Self::default();
+        for jump in entries {
+            list.push(jump);
+        }
+        list
+    }
+
     #[must_use]
     pub fn entries(&self) -> &[Jump] {
         &self.entries
+    }
+
+    /// Las entradas, de la más vieja a la más nueva, con lo editado en
+    /// `file`, el archivo del panel, que todavía no siguieron. Es lo que se
+    /// guarda entre sesiones.
+    #[must_use]
+    pub fn followed(&self, file: FileId, doc: &DocState, buffer: &Buffer) -> Vec<Jump> {
+        self.entries
+            .iter()
+            .map(|jump| {
+                if jump.file == file {
+                    Jump {
+                        point: doc.follow(buffer, jump.point),
+                        ..*jump
+                    }
+                } else {
+                    *jump
+                }
+            })
+            .collect()
     }
 
     #[must_use]

@@ -12,8 +12,8 @@
 )]
 mod support;
 
-use metalmind_buffer::{ByteOffset, Edit, Selection, Selections};
-use metalmind_vim::{FileId, PlacedMark};
+use metalmind_buffer::{ByteOffset, Edit, Point, Selection, Selections};
+use metalmind_vim::{FileId, Jump, PlacedMark};
 use pretty_assertions::assert_eq;
 
 /// Una mark es una sola posición: saltar a ella deja un solo cursor.
@@ -92,4 +92,49 @@ fn the_placed_marks_follow_edits_and_delm() {
         [('a', 0), ('z', 1), ('A', 2), ('B', 1)],
         "el undo devuelve la z, como en vim, y las A–Z siguen al texto"
     );
+}
+
+/// Lo que se guarda entre sesiones ya sigue lo editado, aunque el motor
+/// todavía no lo haya visto; de un archivo sin documento abierto queda tal cual.
+#[test]
+fn the_saved_file_marks_follow_unseen_edits() {
+    let mut editor = support::Editor::new("ab\nc|d");
+    editor.keys("mA");
+    let other = Jump {
+        file: FileId::new(7),
+        point: Point::new(4, 1),
+    };
+    editor.vim.restore_file_mark('C', other);
+    let selections = editor.selections.clone();
+    editor.buffer.begin_transaction(selections.clone()).unwrap();
+    editor
+        .buffer
+        .apply(vec![Edit::insert(ByteOffset::ZERO, "pegado\n")])
+        .unwrap();
+    editor.buffer.commit_transaction(selections).unwrap();
+    let open = |file: FileId| (file == editor.file).then_some((&editor.doc, &editor.buffer));
+    let saved: Vec<(char, Jump)> = editor.vim.file_marks(open).collect();
+    let here = Jump {
+        file: FileId::default(),
+        point: Point::new(2, 1),
+    };
+    assert_eq!(saved, [('A', here), ('C', other)]);
+}
+
+/// Una mark recuperada de otra sesión vale como si se hubiera puesto aquí.
+#[test]
+fn a_restored_file_mark_is_a_mark() {
+    let mut editor = support::Editor::new("|ab\ncd\nef");
+    let jump = Jump {
+        file: FileId::default(),
+        point: Point::new(2, 1),
+    };
+    editor.vim.restore_file_mark('K', jump);
+    editor.vim.restore_file_mark('k', jump);
+    editor.vim.restore_file_mark('1', jump);
+    assert_eq!(placed(&editor, FileId::default()), [('K', 2)]);
+    editor.keys("`K");
+    assert_eq!(editor.cursors(), "ab\ncd\ne|f");
+    editor.keys("'k");
+    assert_eq!(editor.cursors(), "ab\ncd\ne|f", "`k` no se recuperó: E20");
 }

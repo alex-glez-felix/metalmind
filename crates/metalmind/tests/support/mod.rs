@@ -174,6 +174,18 @@ impl Smoke {
             .sum()
     }
 
+    /// Los archivos `saltos` del directorio de estado, uno por vault.
+    pub fn saved_jumps(&self) -> Vec<String> {
+        let vaults = self.home().join(".local/state/metalmind/vaults");
+        let Ok(vaults) = fs::read_dir(vaults) else {
+            return Vec::new();
+        };
+        vaults
+            .map(|vault| vault.expect("leer la carpeta del vault").path())
+            .filter_map(|vault| fs::read_to_string(vault.join("saltos")).ok())
+            .collect()
+    }
+
     /// Como `launch`, pero los loaders de Vulkan y de EGL no encuentran
     /// ningún driver: GPUI no tiene con qué dibujar la ventana.
     pub fn launch_without_gpu(&self, args: &[&str]) -> Metalmind<'_> {

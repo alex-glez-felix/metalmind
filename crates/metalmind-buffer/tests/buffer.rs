@@ -124,6 +124,24 @@ fn edits_across_chunk_boundaries_and_undoes_them() {
     assert_eq!(buffer.to_string(), text);
 }
 
+/// Lo que sobra se acota al texto, hasta una columna de `usize::MAX` como
+/// la que traería un archivo de saltos dañado.
+#[test]
+fn offset_at_point_clamps_to_the_text() {
+    let buffer = Buffer::from("añb\ncd");
+    let cases = [
+        (Point::new(0, 0), 0),
+        (Point::new(0, 2), 1),
+        (Point::new(0, 99), 4),
+        (Point::new(0, usize::MAX), 4),
+        (Point::new(1, 1), 6),
+        (Point::new(usize::MAX, usize::MAX), 7),
+    ];
+    for (point, offset) in cases {
+        assert_eq!(buffer.offset_at_point(point), at(offset), "{point:?}");
+    }
+}
+
 #[test]
 fn columns_count_characters_not_bytes() {
     let buffer = Buffer::from("añb\ncd");

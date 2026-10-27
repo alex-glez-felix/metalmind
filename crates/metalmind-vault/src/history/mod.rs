@@ -53,6 +53,10 @@ impl ContentHash {
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
+
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
 }
 
 impl fmt::Debug for ContentHash {

@@ -1,7 +1,7 @@
 //! `m{a-zA-Z}`, `'{a-zA-Z}` y `` `{a-zA-Z} ``, y `''` y ` `` ` para volver.
 //! Las `A`–`Z` llevan también el archivo y valen desde cualquier buffer.
 
-use metalmind_buffer::{Buffer, ByteOffset, Goal, Point, Selection, Selections};
+use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection, Selections};
 
 use super::Vim;
 use crate::dot::{MarkJump, Subject};
@@ -54,11 +54,31 @@ impl Vim {
             .in_file(file)
             .map(move |(letter, jump)| PlacedMark {
                 name: char::from(b'A' + letter),
-                line: followed(jump.point, doc, buffer)
-                    .line
-                    .min(buffer.last_line()),
+                line: doc.follow(buffer, jump.point).line.min(buffer.last_line()),
             });
         named.chain(of_file)
+    }
+
+    /// Las marks `A`–`Z` puestas, en orden, con lo editado que todavía no
+    /// siguieron: `open` da el documento abierto de cada archivo. Es lo que
+    /// se guarda entre sesiones.
+    pub fn file_marks<'a>(
+        &'a self,
+        open: impl Fn(FileId) -> Option<(&'a DocState, &'a Buffer)> + 'a,
+    ) -> impl Iterator<Item = (char, Jump)> + 'a {
+        self.file_marks.all().map(move |(letter, jump)| {
+            let point =
+                open(jump.file).map_or(jump.point, |(doc, buffer)| doc.follow(buffer, jump.point));
+            (char::from(b'A' + letter), Jump { point, ..jump })
+        })
+    }
+
+    /// Pone la mark `name`, de `A` a `Z`, en `jump`, como al recuperarla
+    /// de una sesión anterior; con otra letra no hace nada.
+    pub fn restore_file_mark(&mut self, name: char, jump: Jump) {
+        if let Some(MarkName::File(letter)) = MarkName::parse(name) {
+            self.file_marks.set(letter, jump);
+        }
     }
 
     /// Dónde está la mark en este buffer; `None` si no se puso, se borró su
@@ -67,7 +87,7 @@ impl Vim {
         match name {
             MarkName::File(letter) => {
                 let jump = self.file_marks.get(letter)?;
-                let point = followed(jump.point, t.doc, t.buffer);
+                let point = t.doc.follow(t.buffer, jump.point);
                 (jump.file == t.file).then(|| t.buffer.offset_at_point(point))
             }
             name => t.doc.marks.get(t.buffer, name.of_buffer()?),
@@ -147,12 +167,4 @@ impl Vim {
         self.jumped(t)?;
         Ok(Some(KeyOutcome::SwitchFile(landing)))
     }
-}
-
-/// `point` de una mark `A`–`Z` tras lo editado que todavía no siguió, como
-/// un rango de `:g` a medio correr.
-fn followed(point: Point, doc: &DocState, buffer: &Buffer) -> Point {
-    doc.unfollowed(buffer)
-        .iter()
-        .fold(point, |point, splice| splice.lines.keep(point))
 }

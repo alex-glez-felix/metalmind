@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Capturas de cada pantalla (editor con markdown, árbol, menú contextual,
-# split, línea de comandos, finder, búsqueda de texto y paleta) en los dos
-# temas de fábrica y en ventanas de 1920x1080 y 1280x720, sobre un vault que
-# estresa el layout. Corre el test `capturas` de `metalmind` en un Xvfb
-# propio, nunca en el display del entorno (ver docs/testing.md).
+# split, línea de comandos, finder, búsqueda de texto, paleta y saltos de
+# una sesión anterior) en los dos temas de fábrica y en ventanas de
+# 1920x1080 y 1280x720, sobre un vault que estresa el layout. Corre el test
+# `capturas` de `metalmind` en un Xvfb propio, nunca en el display del
+# entorno (ver docs/testing.md).
 #
 #   scripts/capturas.sh [salida] [--antes carpeta]
 #
@@ -41,7 +42,7 @@ if [[ -z "${VK_DRIVER_FILES:-}${VK_ICD_FILENAMES:-}" ]]; then
 fi
 
 status=0
-(cd "$root" && cargo nextest run -p metalmind --test capturas --run-ignored only -E 'test(/^capturas::/)') || status=$?
+(cd "$root" && cargo nextest run -p metalmind --test capturas --run-ignored only -E 'test(/^(capturas|saltos)::/)') || status=$?
 
 {
   echo "| Captura | Píxeles distintos |"

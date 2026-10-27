@@ -1,5 +1,6 @@
 //! Lo que Metalmind recuerda entre sesiones, en el directorio de estado (06 §8):
-//! el último vault abierto y, de cada vault, cómo quedó el panel lateral.
+//! el último vault abierto y, de cada vault, cómo quedó el panel lateral y
+//! dónde van sus saltos ([`metalmind_vault::SavedJumps`]).
 //! Nada de esto es del usuario: si falta o está roto, se empieza de cero.
 
 use std::fs;
@@ -13,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::panel::PanelView;
 
 const VAULT_STATE: &str = "ui.yaml";
+const JUMPS: &str = "saltos";
 
 #[derive(Debug, thiserror::Error)]
 pub enum StateError {
@@ -119,6 +121,12 @@ impl VaultState {
         let text = serde_saphyr::to_string(self)?;
         write(&paths.vault_state(root).join(VAULT_STATE), &text)
     }
+}
+
+/// Dónde van la jumplist y las marks `A`–`Z` del vault en `root`.
+#[must_use]
+pub fn jumps_file(paths: &Paths, root: &Path) -> PathBuf {
+    paths.vault_state(root).join(JUMPS)
 }
 
 /// El último vault que se abrió, si se anotó alguno.

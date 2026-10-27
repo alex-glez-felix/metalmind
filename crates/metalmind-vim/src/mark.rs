@@ -159,12 +159,16 @@ impl FileMarks {
         self.0[usize::from(letter)] = None;
     }
 
-    /// Las de `file`, en orden.
-    pub fn in_file(&self, file: FileId) -> impl Iterator<Item = (u8, Jump)> + '_ {
+    /// Las puestas, en orden.
+    pub fn all(&self) -> impl Iterator<Item = (u8, Jump)> + '_ {
         (0..)
             .zip(&self.0)
-            .filter_map(move |(letter, jump)| Some((letter, (*jump)?)))
-            .filter(move |(_, jump)| jump.file == file)
+            .filter_map(|(letter, jump)| Some((letter, (*jump)?)))
+    }
+
+    /// Las de `file`, en orden.
+    pub fn in_file(&self, file: FileId) -> impl Iterator<Item = (u8, Jump)> + '_ {
+        self.all().filter(move |(_, jump)| jump.file == file)
     }
 
     pub fn adjust(&mut self, file: FileId, splices: &[Splice]) {

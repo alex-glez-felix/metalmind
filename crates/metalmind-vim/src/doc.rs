@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use metalmind_buffer::{Buffer, BufferError, ByteOffset, Splice};
+use metalmind_buffer::{Buffer, BufferError, ByteOffset, Point, Splice};
 use metalmind_syntax::{Lines, Rows, Styles};
 
 use crate::mark::Marks;
@@ -141,6 +141,14 @@ impl DocState {
     /// marks `A`–`Z`.
     pub(crate) fn unfollowed<'b>(&self, buffer: &'b Buffer) -> &'b [Splice] {
         buffer.splices_since(self.followed)
+    }
+
+    /// `point` de la jumplist o de una mark `A`–`Z` tras lo editado en
+    /// `buffer` que todavía no siguió, como un rango de `:g` a medio correr.
+    pub(crate) fn follow(&self, buffer: &Buffer, point: Point) -> Point {
+        self.unfollowed(buffer)
+            .iter()
+            .fold(point, |point, splice| splice.lines.keep(point))
     }
 
     /// Ya siguieron todo lo editado en `buffer`.
