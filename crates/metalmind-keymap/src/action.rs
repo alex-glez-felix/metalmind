@@ -3,7 +3,7 @@
 
 use metalmind_vim::Action as VimAction;
 
-use crate::{Command, EditorAction, PanelAction, PickerAction, TagChangeAction};
+use crate::{Command, EditorAction, ListAction, PanelAction, PickerAction, TagChangeAction};
 
 /// Una acción con nombre, de cualquier parte de la app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,6 +13,7 @@ pub enum Action {
     Command(Command),
     Editor(EditorAction),
     Panel(PanelAction),
+    List(ListAction),
     Picker(PickerAction),
     TagChange(TagChangeAction),
 }
@@ -24,6 +25,7 @@ pub enum Owner {
     Window,
     Editor,
     Panel,
+    List,
     Picker,
     TagChange,
 }
@@ -36,6 +38,7 @@ impl Action {
             Self::Command(command) => command.name(),
             Self::Editor(action) => action.name(),
             Self::Panel(action) => action.name(),
+            Self::List(action) => action.name(),
             Self::Picker(action) => action.name(),
             Self::TagChange(action) => action.name(),
         }
@@ -52,11 +55,13 @@ impl Action {
         let commands = Command::ALL.iter().copied().map(Self::Command);
         let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
+        let list = ListAction::ALL.iter().copied().map(Self::List);
         let picker = PickerAction::ALL.iter().copied().map(Self::Picker);
         let tag_change = TagChangeAction::ALL.iter().copied().map(Self::TagChange);
         vim.chain(commands)
             .chain(editor)
             .chain(panel)
+            .chain(list)
             .chain(picker)
             .chain(tag_change)
     }
@@ -67,6 +72,7 @@ impl Action {
             Self::Vim(_) | Self::Command(_) => Owner::Window,
             Self::Editor(_) => Owner::Editor,
             Self::Panel(_) => Owner::Panel,
+            Self::List(_) => Owner::List,
             Self::Picker(_) => Owner::Picker,
             Self::TagChange(_) => Owner::TagChange,
         }
@@ -88,6 +94,12 @@ impl From<EditorAction> for Action {
 impl From<PanelAction> for Action {
     fn from(action: PanelAction) -> Self {
         Self::Panel(action)
+    }
+}
+
+impl From<ListAction> for Action {
+    fn from(action: ListAction) -> Self {
+        Self::List(action)
     }
 }
 

@@ -5,7 +5,9 @@
 use std::collections::{BTreeSet, HashSet};
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::{Applied, ApplyError, FileOpError, Rename, UndoReport, Vault, VaultPath};
+use metalmind_vault::{
+    Applied, ApplyError, Changes, FileOpError, Rename, UndoReport, Vault, VaultPath,
+};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
@@ -66,18 +68,26 @@ impl WorkspaceView {
             )
         });
         self.close_overlay(window, cx);
-        let Some((title, summary, changes)) = apply else {
-            return;
-        };
+        if let Some((title, summary, changes)) = apply {
+            self.apply_tag_changes(title, &summary, &changes, cx);
+        }
+    }
+
+    /// Aplica `changes` y lo guarda para `:tagundo`; `summary` es el aviso si
+    /// todo sale bien.
+    pub(super) fn apply_tag_changes(
+        &mut self,
+        title: String,
+        summary: &str,
+        changes: &Changes,
+        cx: &mut Context<Self>,
+    ) {
         let vault = self.session.read(cx).vault();
-        let message = match vault.apply(&changes) {
+        let message = match vault.apply(changes) {
             Ok(applied) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
-                self.last_tag_change = Some(LastTagChange {
-                    title: title.clone(),
-                    applied,
-                });
+                self.last_tag_change = Some(LastTagChange { title, applied });
                 // Corto: la barra recorta lo que no cabe, y el título ya se vio.
                 Message::Info(format!("{summary}; :tagundo lo deshace"))
             }
@@ -87,13 +97,14 @@ impl WorkspaceView {
             Err(ApplyError::Interrupted { applied, cause }) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
+                let message = Message::Error(format!(
+                    "{title} se paró a medias ({cause}). :tagundo deshace lo hecho"
+                ));
                 self.last_tag_change = Some(LastTagChange {
-                    title: title.clone(),
+                    title,
                     applied: *applied,
                 });
-                Message::Error(format!(
-                    "{title} se paró a medias ({cause}). :tagundo deshace lo hecho"
-                ))
+                message
             }
             Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
         };
@@ -182,7 +193,7 @@ impl WorkspaceView {
     }
 
     /// Los archivos del vault con cambios sin guardar en un buffer.
-    fn unsaved_paths(&self, cx: &Context<Self>) -> HashSet<VaultPath> {
+    pub(super) fn unsaved_paths(&self, cx: &Context<Self>) -> HashSet<VaultPath> {
         let session = self.session.read(cx);
         self.workspace
             .read(cx)
@@ -212,7 +223,7 @@ impl WorkspaceView {
     /// Los documentos abiertos sin cambios de lo que se escribió se releen
     /// ya, sin esperar al watcher: lo que se teclee enseguida va sobre el
     /// texto nuevo.
-    fn reread(
+    pub(super) fn reread(
         &self,
         vault: &Vault,
         paths: impl Iterator<Item = VaultPath>,

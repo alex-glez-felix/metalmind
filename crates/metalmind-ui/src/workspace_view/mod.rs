@@ -1,5 +1,5 @@
-//! La raíz de la ventana: la barra de botones, el panel lateral y el árbol
-//! de paneles, un [`Editor`] por hoja. Ejecuta los comandos de `:`,
+//! La raíz de la ventana: la barra de botones, el panel lateral, la lista de
+//! notas y el árbol de paneles, un [`Editor`] por hoja. Ejecuta los comandos de `:`,
 //! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
 //! workspace y en el panel; aquí solo se crean y sueltan editores y se
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
@@ -10,6 +10,7 @@ mod finder;
 mod focus;
 mod link_choice;
 mod new_note;
+mod note_list;
 mod overlay;
 mod palette;
 mod reroute;
@@ -35,6 +36,7 @@ use crate::finder::VaultSession;
 use crate::frames::FrameClock;
 use crate::math::Formulas;
 use crate::new_note::NoteSettings;
+use crate::note_list::NoteListView;
 use crate::panel::PanelView;
 use crate::session::{self, VaultState};
 use crate::sidebar::{self, Sidebar, SidebarEvent};
@@ -50,6 +52,7 @@ use self::tag_change::LastTagChange;
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
     sidebar: Entity<Sidebar>,
+    list: Entity<NoteListView>,
     editors: HashMap<PaneId, Entity<Editor>>,
     title: String,
     /// Dónde guardar el estado de cada vault; `None` si no hay `HOME`.
@@ -62,19 +65,23 @@ pub struct WorkspaceView {
     autosave: Option<AutosaveTimer>,
     last_tag_change: Option<LastTagChange>,
     notes: NoteSettings,
-    _subscriptions: [Subscription; 3],
+    _subscriptions: [Subscription; 4],
 }
 
 impl WorkspaceView {
+    /// El panel lateral y la lista como los dejó `state`.
     pub fn new(
         workspace: Entity<Workspace>,
-        sidebar: Entity<Sidebar>,
         session: Entity<VaultSession>,
+        state: &VaultState,
         paths: Option<Paths>,
         notes: NoteSettings,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let sidebar =
+            cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), window, cx));
+        let list = cx.new(|cx| NoteListView::new(&session, &state.list, workspace.clone(), cx));
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
             view.refresh_tag_change(cx);
@@ -83,6 +90,9 @@ impl WorkspaceView {
         let activation = cx.observe_window_activation(window, Self::on_activation);
         let events = cx.subscribe_in(&sidebar, window, |view, _, event, window, cx| {
             view.on_sidebar_event(event.clone(), window, cx);
+        });
+        let list_events = cx.subscribe_in(&list, window, |view, _, event, window, cx| {
+            view.on_list_event(event.clone(), window, cx);
         });
         let pane = workspace.read(cx).focused();
         let formulas = cx.new(|_| Formulas::default());
@@ -99,6 +109,7 @@ impl WorkspaceView {
         Self {
             workspace,
             sidebar,
+            list,
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
             paths,
@@ -109,7 +120,7 @@ impl WorkspaceView {
             autosave: None,
             last_tag_change: None,
             notes,
-            _subscriptions: [repaint, events, activation],
+            _subscriptions: [repaint, events, list_events, activation],
         }
     }
 
@@ -125,6 +136,17 @@ impl WorkspaceView {
             let handle = editor.read(cx).focus_handle().clone();
             window.focus(&handle, cx);
         }
+    }
+
+    /// Selecciona `file` en el árbol del panel lateral.
+    pub fn reveal(&self, file: &std::path::Path, cx: &mut Context<Self>) {
+        self.sidebar
+            .update(cx, |sidebar, cx| sidebar.reveal(file, cx));
+    }
+
+    #[must_use]
+    pub fn sidebar_visible(&self, cx: &Context<Self>) -> bool {
+        self.sidebar.read(cx).is_visible()
     }
 
     pub fn focus_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) {
@@ -156,6 +178,7 @@ impl WorkspaceView {
         let root = sidebar.root();
         let state = VaultState {
             panel: sidebar.state(),
+            list: self.list.read(cx).state(),
         };
         if let Err(error) = state.save(paths, root) {
             log::warn!("no se guardó el estado del vault: {error}");
@@ -209,6 +232,14 @@ impl WorkspaceView {
                 self.open_unresolved_links(window, cx);
             }
             Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
+            Effect::ToggleNoteList => self.toggle_list(window, cx),
+            Effect::ChooseListSource => {
+                self.sync_editors(cx);
+                self.choose_list_source(window, cx);
+            }
+            Effect::FocusPastEdge(Direction::Left) if self.list.read(cx).is_visible() => {
+                self.focus_list(window, cx);
+            }
             Effect::FocusPastEdge(Direction::Left) if self.sidebar.read(cx).is_visible() => {
                 self.focus_sidebar(window, cx);
             }
@@ -256,8 +287,15 @@ impl WorkspaceView {
     /// Una acción que llegó a la raíz sin que la atendiera su vista.
     fn reroute(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
         let sidebar = self.sidebar.read(cx).is_visible();
-        match reroute(invocation.action.owner(), sidebar, self.overlay.is_some()) {
+        let list = self.list.read(cx).is_visible();
+        match reroute(
+            invocation.action.owner(),
+            sidebar,
+            list,
+            self.overlay.is_some(),
+        ) {
             Reroute::Sidebar => self.focus_sidebar(window, cx),
+            Reroute::List => self.focus_list(window, cx),
             Reroute::Editor => self.focus(window, cx),
             Reroute::Nowhere => {
                 let name = invocation.action.name();
@@ -396,6 +434,10 @@ impl Render for WorkspaceView {
             .update(cx, |formulas, _| formulas.next_frame());
         self.update_title(window, cx);
         let theme = Theme::get(cx).clone();
+        let width = window.viewport_size().width;
+        self.list.update(cx, |list, _| {
+            list.settle_visibility(width, theme.layout.list_open_min_width);
+        });
         let root = self.workspace.read(cx).tree().root().clone();
         let element = div()
             .size_full()
@@ -415,16 +457,17 @@ impl Render for WorkspaceView {
                     }
                 }),
             );
-        let sidebar = self.sidebar.read(cx);
-        let shown = sidebar.shown();
+        let shown = self.sidebar.read(cx).shown();
+        let list = self.list.read(cx).is_visible();
         element
             .relative()
             .flex()
             .flex_row()
-            .child(sidebar::rail(shown, &theme))
+            .child(sidebar::rail(shown, list, &theme))
             .when(shown.is_some(), |element| {
                 element.child(self.sidebar.clone())
             })
+            .when(list, |element| element.child(self.list.clone()))
             .child(
                 div()
                     .flex_1()

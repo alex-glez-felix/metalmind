@@ -170,6 +170,7 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 - `TagQuery` (05 §4) expresa "sin tags" con `-#`; `-#a` excluye un tag concreto.
 - El nodo **Sin tags** que 05 §3 proponía al final del panel es el buzón, y se llama así en la UI.
+- La lista de notas ([05](05-tags.md) §2, "Estado") muestra el buzón como fuente por defecto, y `t` etiqueta la nota elegida para sacarla de ahí.
 - La captura nunca pone tags por su cuenta (ni `#inbox` ni similares): eso rompería la definición.
 - Las páginas de tag (`tags/<nombre>.md`, 05 §7) no son notas del buzón aunque no tengan tags, y "sin tags" en `TagQuery` no las devuelve.
 - En focus del buzón, una nota nueva nace sin tags, que es justo lo que ya dice 05 §3 para el focus de tags.

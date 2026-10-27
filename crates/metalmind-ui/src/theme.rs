@@ -171,6 +171,19 @@ impl Theme {
         self.ui_line() * lines + self.layout.picker_input_padding_y * 2.
     }
 
+    /// Alto de una fila de la lista de notas: el título, las líneas del
+    /// extracto y la de tags y carpeta, en la letra secundaria, con su aire.
+    /// Todas iguales, para virtualizarla.
+    #[must_use]
+    pub fn list_row_height(&self) -> Pixels {
+        let small = self.ui_small_font_size * self.text.ui_sm.line_height;
+        let lines = f32::from(self.layout.list_excerpt_lines) + 1.;
+        self.ui_line()
+            + small * lines
+            + self.layout.list_row_gap * 2.
+            + self.layout.list_row_padding_y * 2.
+    }
+
     /// El lado corto de los íconos provisionales del panel, que no son
     /// cuadrados; se van con los de Tabler (#41).
     #[must_use]

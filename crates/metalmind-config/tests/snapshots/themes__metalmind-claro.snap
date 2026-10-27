@@ -258,6 +258,21 @@ Theme {
             rail_button_size: Length(
                 28.0,
             ),
+            list_width: Length(
+                360.0,
+            ),
+            list_row_padding_y: Length(
+                8.0,
+            ),
+            list_row_gap: Length(
+                2.0,
+            ),
+            list_excerpt_lines: Count(
+                2,
+            ),
+            list_open_min_width: Length(
+                1600.0,
+            ),
             menu_width: Length(
                 240.0,
             ),

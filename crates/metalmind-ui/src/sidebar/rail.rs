@@ -1,6 +1,6 @@
 //! La barra angosta a la izquierda de la ventana, con un botón por vista
-//! del panel lateral: el ratón llega a lo mismo que `space e`, `space t` y
-//! `space b`.
+//! del panel lateral y otro para la lista de notas: el ratón llega a lo
+//! mismo que `space e`, `space t`, `space b` y `space l`.
 
 use gpui_kit::{
     AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -14,8 +14,9 @@ use crate::actions::Dispatch;
 use crate::panel::PanelView;
 use crate::theme::Theme;
 
-/// `shown`: la vista que se ve, si el panel está visible.
-pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
+/// `shown`: la vista que se ve, si el panel está visible; `list`, si se ve
+/// la lista de notas.
+pub fn rail(shown: Option<PanelView>, list: bool, theme: &Theme) -> Div {
     div()
         .w(theme.layout.rail_width)
         .h_full()
@@ -47,6 +48,13 @@ pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
             shown == Some(PanelView::Backlinks),
             div().child("↩"),
             Command::ToggleBacklinks,
+            theme,
+        ))
+        .child(rail_button(
+            "rail-list",
+            list,
+            div().child("≡"),
+            Command::ToggleNoteList,
             theme,
         ))
 }

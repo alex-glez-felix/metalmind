@@ -4,11 +4,13 @@
 
 use metalmind_vim::{Context as VimContext, Key};
 
-use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, PanelAction};
-use crate::{PickerAction, TagChangeAction, View};
+use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, ListAction};
+use crate::{PanelAction, PickerAction, TagChangeAction, View};
 
 pub(crate) fn bindings() -> Vec<Binding> {
-    let mut bindings = Vec::new();
+    // `q` pliega la lista, como `space l`; va antes para que la lista muestre
+    // `space l`, el último que se declara.
+    let mut bindings = vec![in_view(View::NoteList, &[k('q')], Command::ToggleNoteList)];
     bindings.extend(leader());
     bindings.extend(panes());
     bindings.extend(links());
@@ -21,6 +23,8 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(table(View::Picker, PICKER));
     bindings.extend(table(View::PickerWithSplits, PICKER_SPLITS));
     bindings.extend(table(View::TagChange, TAG_CHANGE));
+    bindings.extend(table(View::NoteList, LIST));
+    bindings.extend(table(View::NoteListInput, LIST_INPUT));
     bindings
 }
 
@@ -58,8 +62,8 @@ fn table<A: Into<Action> + Copy>(
         .map(move |&(keys, action)| in_view(view, keys, action))
 }
 
-/// `space` y una tecla, en Normal (03 §3). Con `also_in_tree`, la misma
-/// tecla vale en el árbol del panel lateral.
+/// `space` y una tecla, en Normal (03 §3). Con `also_in_panels`, la misma
+/// tecla vale en el árbol del panel lateral y en la lista de notas.
 const LEADER: &[(char, Command, bool)] = &[
     ('f', Command::OpenFinder, false),
     ('/', Command::OpenTextSearch, false),
@@ -68,15 +72,20 @@ const LEADER: &[(char, Command, bool)] = &[
     ('t', Command::ToggleTags, true),
     ('b', Command::ToggleBacklinks, true),
     ('u', Command::OpenUnresolvedLinks, true),
+    ('l', Command::ToggleNoteList, true),
+    ('v', Command::ChooseListSource, true),
     ('n', Command::NewNoteFromTemplate, true),
     ('d', Command::OpenDailyNote, true),
 ];
 
 fn leader() -> impl Iterator<Item = Binding> {
-    LEADER.iter().flat_map(|&(key, command, also_in_tree)| {
+    LEADER.iter().flat_map(|&(key, command, also_in_panels)| {
         let editor = in_normal(vec![Key::Char(' '), Key::Char(key)], command);
-        let tree = also_in_tree.then(|| in_view(View::FileTree, &[k(' '), k(key)], command));
-        std::iter::once(editor).chain(tree)
+        let panels = [View::FileTree, View::NoteList]
+            .into_iter()
+            .filter(move |_| also_in_panels)
+            .map(move |view| in_view(view, &[k(' '), k(key)], command));
+        std::iter::once(editor).chain(panels)
     })
 }
 
@@ -95,8 +104,9 @@ const PANES: &[(char, Command)] = &[
     ('o', Command::Only),
 ];
 
-/// Desde el árbol, que está a la izquierda de los paneles.
+/// Desde el árbol y la lista, que están a la izquierda de los paneles.
 const PANES_FROM_TREE: &[(char, PanelAction)] = &[('l', PanelAction::FocusEditor)];
+const PANES_FROM_LIST: &[(char, ListAction)] = &[('l', ListAction::FocusEditor)];
 
 fn panes() -> impl Iterator<Item = Binding> {
     let editor = PANES.iter().flat_map(|&(key, command)| {
@@ -105,7 +115,10 @@ fn panes() -> impl Iterator<Item = Binding> {
     let tree = PANES_FROM_TREE.iter().flat_map(|&(key, action)| {
         [k(key), ctrl(key)].map(|next| in_view(View::FileTree, &[ctrl('w'), next], action))
     });
-    editor.chain(tree)
+    let list = PANES_FROM_LIST.iter().flat_map(|&(key, action)| {
+        [k(key), ctrl(key)].map(|next| in_view(View::NoteList, &[ctrl('w'), next], action))
+    });
+    editor.chain(tree).chain(list)
 }
 
 fn links() -> impl Iterator<Item = Binding> {
@@ -187,6 +200,37 @@ const TREE_MENU: &[(&[Keystroke], PanelAction)] = &[
     (&[named(KeyName::Up)], PanelAction::MenuPrevious),
     (&[named(KeyName::Enter)], PanelAction::Confirm),
     (&[named(KeyName::Escape)], PanelAction::Cancel),
+];
+
+/// Como el árbol; `/` y `space f` filtran la lista en su lugar con la
+/// consulta del finder, y `t` etiqueta la nota para vaciar el buzón. De dos
+/// teclas para lo mismo, la lista muestra la última.
+const LIST: &[(&[Keystroke], ListAction)] = &[
+    (&[k('j')], ListAction::SelectNext),
+    (&[named(KeyName::Down)], ListAction::SelectNext),
+    (&[k('k')], ListAction::SelectPrevious),
+    (&[named(KeyName::Up)], ListAction::SelectPrevious),
+    (&[k('g'), k('g')], ListAction::SelectFirst),
+    (&[k('G')], ListAction::SelectLast),
+    (&[k('o')], ListAction::Open),
+    (&[named(KeyName::Enter)], ListAction::Open),
+    (&[ctrl('v')], ListAction::OpenSplitRight),
+    (&[ctrl('s')], ListAction::OpenSplitDown),
+    (&[k('/')], ListAction::Filter),
+    (&[k(' '), k('f')], ListAction::Filter),
+    (&[k('t')], ListAction::Tag),
+    (&[named(KeyName::Escape)], ListAction::Cancel),
+];
+
+/// Mientras se escribe, las flechas y `ctrl-n`/`ctrl-p` siguen moviendo la
+/// fila, como en un picker.
+const LIST_INPUT: &[(&[Keystroke], ListAction)] = &[
+    (&[named(KeyName::Enter)], ListAction::Confirm),
+    (&[named(KeyName::Escape)], ListAction::Cancel),
+    (&[named(KeyName::Down)], ListAction::SelectNext),
+    (&[ctrl('n')], ListAction::SelectNext),
+    (&[named(KeyName::Up)], ListAction::SelectPrevious),
+    (&[ctrl('p')], ListAction::SelectPrevious),
 ];
 
 const PICKER: &[(&[Keystroke], PickerAction)] = &[
