@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metalmind · cuatro direcciones de UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ============ página (fuera de los mockups) ============ */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--pg-bg);color:var(--pg-text);-webkit-font-smoothing:antialiased}
+body.pg-oscuro{--pg-bg:#0c0d0f;--pg-bar:#121316;--pg-text:#d8dbe0;--pg-muted:#8a9099;--pg-border:#24262b;--pg-btn:#1a1c20;--pg-on:#e8ebf0;--pg-on-text:#111}
+body.pg-claro{--pg-bg:#ebebe8;--pg-bar:#f7f7f5;--pg-text:#24272c;--pg-muted:#6b717a;--pg-border:#d6d6d2;--pg-btn:#ffffff;--pg-on:#24272c;--pg-on-text:#fff}
+#top{position:sticky;top:0;z-index:100;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;min-height:48px;padding:7px 16px;background:var(--pg-bar);border-bottom:1px solid var(--pg-border)}
+#top .brand{font-weight:700;letter-spacing:.02em;font-size:14px;margin-right:4px}
+#top .brand small{font-weight:400;color:var(--pg-muted);margin-left:6px}
+.seg{display:flex;flex-wrap:wrap;align-items:center;gap:0;border:1px solid var(--pg-border);border-radius:4px;overflow:hidden}
+.seg .lbl{font-size:11px;color:var(--pg-muted);padding:0 8px;text-transform:uppercase;letter-spacing:.06em}
+.seg button{font:inherit;font-size:12.5px;border:0;border-left:1px solid var(--pg-border);background:var(--pg-btn);color:var(--pg-text);padding:6px 10px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--pg-on);color:var(--pg-on-text)}
+.seg button kbd{font-family:"JetBrains Mono",monospace;font-size:10px;opacity:.55;margin-left:5px}
+#top .hint{font-size:11.5px;color:var(--pg-muted);margin-left:auto}
+#stagewrap{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+#stage{min-width:1200px;height:calc(100vh - 49px);min-height:660px;position:relative}
+#about{max-width:1180px;margin:0 auto;padding:28px 20px 60px;line-height:1.6;font-size:15px}
+#about h2{font-size:22px;margin:0 0 4px}
+#about .tag{color:var(--pg-muted);font-size:13px;margin-bottom:14px}
+#about h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--pg-muted);margin:22px 0 6px}
+#about p{margin:0 0 10px}
+#about ul{margin:4px 0 10px;padding-left:20px}
+#about table{border-collapse:collapse;width:100%;font-size:13.5px;margin-top:6px}
+#about th,#about td{border:1px solid var(--pg-border);padding:6px 9px;text-align:left;vertical-align:top}
+#about th{background:var(--pg-bar);font-weight:600}
+#about tr.cur td{background:color-mix(in srgb,var(--pg-on) 9%,transparent)}
+#about code{font-family:"JetBrains Mono",monospace;font-size:.88em;background:var(--pg-bar);border:1px solid var(--pg-border);padding:0 4px;border-radius:3px}
+.cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+@media (max-width:1560px){#top .hint{display:none}#top .brand small{display:none}.seg .lbl{display:none}.seg button{padding:6px 8px}}
+@media (max-width:860px){.cols{grid-template-columns:1fr}#top .hint{display:none}#stage{height:720px}}
+
+/* ============ base común de los mockups ============ */
+.app{position:absolute;inset:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--ui);font-size:var(--ui-size,13px);line-height:1.4;container-type:inline-size}
+.app svg.i{width:var(--icon,14px);height:var(--icon,14px);flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app .mono{font-family:var(--mono)}
+.app kbd{font-family:var(--mono);font-size:.86em;color:var(--muted);border:1px solid var(--border);border-radius:3px;padding:0 4px;background:var(--surface)}
+.app .faint{color:var(--faint)} .app .muted{color:var(--muted)}
+
+/* Un solo tema para las cuatro: metalmind-oscuro / metalmind-claro de crates/metalmind-config/themes/ */
+.app{--ui:Inter,system-ui,sans-serif;--mono:"JetBrains Mono",monospace;--ed:"JetBrains Mono",monospace;--ed-size:14.5px;--ed-lh:1.6;--ui-size:13px;--row-h:26px;--indent:14px}
+.app.th-oscuro{--bg:#1c1f24;--surface:#16181d;--raised:#21252b;--text:#d7dae0;--muted:#9aa0a6;--faint:#5c6370;--inactive:#5c6370;--border:#2a2e36;--border-strong:#3b414c;--pane:#5c6370;
+ --accent:#7aa2f7;--accent-text:#16181d;--sel:rgba(122,162,247,.3);--sel-soft:rgba(122,162,247,.2);--active:rgba(215,218,224,.08);--hover:#21252b;--link:#7dcfff;--link-unres:#ff9e64;
+ --codebg:#16181d;--inlinecode:#21252b;--code-fg:#e0af68;--caret:rgba(122,162,247,.5);--caret-text:#d7dae0;--curline:#21252b;--markup:#4b5263;--quote:#9aa0a6;--list:#7aa2f7;--fm-key:#7aa2f7;
+ --syn-kw:#bb9af7;--syn-ty:#e0af68;--syn-st:#9ece6a;--syn-fn:#7aa2f7;--warn:#e0af68;--danger:#f7768e;--saved:#5c6370;--match:#ff9e64;
+ --g-edge:#2a2e36;--g-parent:#5c6370;--g-link:rgba(122,162,247,.55);--g-note:#9aa0a6;
+ --c-naranja:#ff9e64;--c-azul:#7aa2f7;--c-violeta:#bb9af7;--c-verde:#9ece6a;--c-amarillo:#e0af68;--c-gris:#5c6370;--c-cian:#7dcfff;--c-rojo:#f7768e;--c-ninguno:#9aa0a6}
+.app.th-claro{--bg:#f5f6f8;--surface:#e6e8ec;--raised:#eceef2;--text:#2b2f36;--muted:#5f6670;--faint:#8a909a;--inactive:#8a909a;--border:#d2d6dc;--border-strong:#b9bec6;--pane:#8a909a;
+ --accent:#2e5cd6;--accent-text:#fff;--sel:rgba(46,92,214,.2);--sel-soft:rgba(46,92,214,.14);--active:rgba(43,47,54,.07);--hover:#eceef2;--link:#0f7a99;--link-unres:#b35a00;
+ --codebg:#eceef2;--inlinecode:#e6e8ec;--code-fg:#b35a00;--caret:rgba(46,92,214,.4);--caret-text:#2b2f36;--curline:#eceef2;--markup:#a0a6b0;--quote:#5f6670;--list:#2e5cd6;--fm-key:#2e5cd6;
+ --syn-kw:#8a3fc4;--syn-ty:#8f6400;--syn-st:#3f7a1e;--syn-fn:#2e5cd6;--warn:#8f6400;--danger:#c4304f;--saved:#8a909a;--match:#b35a00;
+ --g-edge:#d2d6dc;--g-parent:#8a909a;--g-link:rgba(46,92,214,.5);--g-note:#5f6670;
+ --c-naranja:#b35a00;--c-azul:#2e5cd6;--c-violeta:#8a3fc4;--c-verde:#3f7a1e;--c-amarillo:#8f6400;--c-gris:#8a909a;--c-cian:#0f7a99;--c-rojo:#c4304f;--c-ninguno:#5f6670}
+
+/* árbol */
+.tree{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:var(--row-gap,7px);height:var(--row-h,26px);padding:0 10px 0 calc(10px + var(--d,0) * var(--indent,14px));white-space:nowrap;overflow:hidden;color:var(--text);cursor:default;border:1px solid transparent}
+.row .nm{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.row .cnt{color:var(--faint);font-variant-numeric:tabular-nums;font-size:.92em}
+.row .tw{width:10px;color:var(--faint);flex:none;text-align:center;font-size:9px}
+.row.note .nm{color:var(--muted)}
+.row.more .nm{color:var(--faint);font-style:italic}
+.row.active{background:var(--active);border-color:var(--sel-border,transparent)}
+.row.active .nm{color:var(--text)}
+.row.cursor{background:var(--sel);border-color:transparent}
+.row .multi{font-size:10.5px;color:var(--faint)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--tc);flex:none}
+.hash{color:var(--tc);font-family:var(--mono);font-weight:600;flex:none;width:10px;text-align:center}
+.emo{font-size:12px;flex:none;width:14px;text-align:center;line-height:1}
+.row.inbox .nm{color:var(--text)}
+
+/* editor */
+.ed{font-family:var(--ed);font-size:var(--ed-size,14.5px);line-height:var(--ed-lh,1.6);color:var(--text)}
+.ln{display:flex;min-height:calc(var(--ed-size,14.5px) * var(--ed-lh,1.6))}
+.ln .gut{width:var(--gut-w,38px);flex:none;text-align:right;padding-right:14px;color:var(--faint);font-family:var(--mono);font-size:.84em;user-select:none;font-variant-numeric:tabular-nums;padding-top:.18em}
+.ln.is-cur .gut{color:var(--muted)}
+.ln.is-cur{background:var(--curline,transparent)}
+.ln .tx{white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;flex:1;min-width:0}
+.ln.l-code .tx{white-space:pre;overflow-wrap:normal}
+.ln.l-h1 .tx{font-size:1.6em;font-weight:700;line-height:1.35;padding:.25em 0 .1em}
+.ln.l-h2 .tx{font-size:1.22em;font-weight:650;padding-top:.45em}
+.ln.l-h1 .gut,.ln.l-h2 .gut{padding-top:.75em}
+.ln.l-fm .tx{color:var(--muted);font-family:var(--mono);font-size:.86em}
+.ln.l-code{background:var(--codebg)}
+.ln.l-code .tx{font-family:var(--mono);font-size:.88em;padding-left:12px}
+.ln.l-quote .tx{border-left:2px solid var(--border-strong);padding-left:12px;color:var(--quote);font-style:italic}
+.md-mark{color:var(--markup)}
+.md-code{font-family:var(--mono);font-size:.9em;color:var(--code-fg);background:var(--inlinecode);padding:0 3px;border-radius:3px}
+.md-link{color:var(--link);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--link) 40%,transparent);text-underline-offset:3px}
+.md-tag{color:var(--tc)}
+.md-bullet{color:var(--list)}
+.fm-chip{display:inline-block;font-family:var(--ui);font-size:.82em;padding:0 6px;margin-right:5px;border-radius:3px;color:var(--tc);background:color-mix(in srgb,var(--tc) 14%,transparent);line-height:1.6}
+.kw{color:var(--syn-kw)} .ty{color:var(--syn-ty)} .st{color:var(--syn-st)} .cm{color:var(--faint);font-style:italic} .fnn{color:var(--syn-fn)}
+.cur{background:var(--caret);color:var(--caret-text);border-radius:1px}
+
+/* picker / finder */
+.picker{position:absolute;z-index:20;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--pk-radius,8px);overflow:hidden;box-shadow:var(--pk-shadow,none)}
+.pk-in{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:14px}
+.pk-in .q-tag{color:var(--tc)}
+.pk-in .q-neg{color:var(--faint);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--faint) 60%,transparent)}
+.pk-in .caretbar{display:inline-block;width:2px;height:17px;background:var(--accent);vertical-align:-3px;margin-left:1px}
+.pk-in .scope{margin-left:auto;font-family:var(--ui);font-size:11.5px;color:var(--muted)}
+.pk-row{display:flex;align-items:center;gap:10px;padding:6px 14px;white-space:nowrap}
+.pk-row .p{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.pk-row .p b{color:var(--accent);font-weight:700}
+.pk-row .p .fn{color:var(--text)}
+.pk-row.on{background:var(--sel-soft)}
+.pk-row .chips{display:flex;gap:5px;flex:none}
+.chip{font-size:11px;padding:0 6px;border-radius:3px;color:var(--tc);background:color-mix(in srgb,var(--tc) 13%,transparent);line-height:18px;white-space:nowrap}
+.pk-foot{display:flex;gap:14px;padding:7px 14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
+.pk-foot span:first-child{margin-right:auto}
+
+/* grafo */
+.graph{display:block;width:100%;height:100%}
+.graph .e{stroke:var(--g-edge);stroke-width:1}
+.graph .e.parent{stroke:var(--g-parent);stroke-width:1.4;stroke-dasharray:4 3}
+.graph .e.link{stroke:var(--g-link);stroke-width:1.2}
+.graph .e.dim{opacity:.14}
+.graph .n-note{fill:var(--g-note)}
+.graph .n-tag{fill:var(--tc);fill-opacity:var(--g-tag-fill,.9);stroke:var(--tc);stroke-width:1.5}
+.graph .n-inbox{fill:none;stroke:var(--faint);stroke-dasharray:3 3;stroke-width:1.3}
+.graph .dim{opacity:.16}
+.graph .hl.n-note{fill:var(--text)}
+.graph .sel{fill:none;stroke:var(--accent);stroke-width:2}
+.graph text{font-family:var(--g-font,var(--ui));font-size:var(--g-fs,11px);fill:var(--muted);paint-order:stroke;stroke:var(--bg);stroke-width:3px;stroke-linejoin:round}
+.graph text.t{fill:var(--text);font-weight:600;font-size:var(--g-tfs,12px)}
+.graph text.t.dim{opacity:.3}
+
+/* =====================================================================
+   A · Silencio  (Zed / iA Writer)
+   ===================================================================== */
+.dir-A{--gut-w:52px}
+.A-grid{position:absolute;inset:0;display:grid;grid-template-columns:248px 1fr;grid-template-rows:1fr 28px}
+.A-side{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;padding-top:10px}
+.A-head{display:flex;align-items:center;justify-content:space-between;padding:0 12px 6px 20px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.A-head .sw{display:flex;gap:10px;text-transform:none;letter-spacing:0;font-size:11.5px}
+.A-head .sw .on{color:var(--text)}
+.A-side .row{padding-left:calc(14px + var(--d,0) * 14px)}
+.A-sep{height:1px;background:var(--border);margin:8px 14px}
+.A-views .row .q{font-family:var(--mono);font-size:11px;color:var(--faint);overflow:hidden;text-overflow:ellipsis}
+.A-main{position:relative;overflow:hidden}
+.A-crumb{position:absolute;top:12px;right:22px;font-size:11.5px;color:var(--faint);font-family:var(--mono)}
+.A-col{max-width:760px;margin:0 auto;padding:46px 24px 0 0;--gut-w:52px}
+.A-back{margin:26px 0 0 52px;padding-top:14px;border-top:1px solid var(--border)}
+.A-back h4{margin:0 0 10px;font-weight:500;font-size:12px;color:var(--faint);letter-spacing:.02em}
+.A-bl{padding:5px 0 7px;font-size:13px}
+.A-bl .t{color:var(--text)} .A-bl .t small{color:var(--faint);font-family:var(--mono);font-size:11px;margin-left:8px}
+.A-bl .c{color:var(--muted);font-family:var(--ed);font-size:12.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.A-bl .c em{font-style:normal;color:var(--link)}
+.A-status{grid-column:1/-1;display:flex;align-items:center;gap:18px;padding:0 14px 0 20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);white-space:nowrap}
+.A-status .mode{color:var(--accent);font-weight:600;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em}
+.A-status .sp{margin-left:auto}
+.A-status .ok{color:var(--saved)}
+.A-status .fc{color:var(--warn);font-family:var(--mono);font-size:11.5px}
+.A-graph{position:absolute;inset:0}
+.A-graph .cap{position:absolute;left:24px;top:18px;font-size:12px;color:var(--muted)}
+.A-graph .cap b{color:var(--text);font-weight:600}
+.A-graph .keys{position:absolute;left:24px;bottom:16px;font-size:11.5px;color:var(--faint);display:flex;gap:14px}
+.dir-A .picker{left:50%;transform:translateX(-50%);top:70px;width:min(700px,70%)}
+
+/* =====================================================================
+   B · Taller  (IDE denso, docks)
+   ===================================================================== */
+.dir-B{--icon:15px;--gut-w:44px}
+.B-grid{position:absolute;inset:0;display:grid;grid-template-columns:40px 272px 1fr 318px;grid-template-rows:1fr 24px}
+.B-act{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:6px;gap:2px}
+.B-act .ab{width:30px;height:30px;display:grid;place-items:center;color:var(--faint);border-radius:4px;position:relative}
+.B-act .ab.on{color:var(--text);background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.B-act .ab .k{position:absolute;right:-1px;bottom:0;font-size:8px;font-family:var(--mono);color:var(--faint)}
+.B-act .grow{flex:1}
+.B-side{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
+.B-sec{display:flex;align-items:center;gap:6px;height:26px;padding:0 10px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border)}
+.B-sec:first-child{border-top:0}
+.B-sec .k{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none}
+.B-sec .chev{font-size:9px;color:var(--faint);width:9px}
+.B-filter{margin:4px 8px 4px;display:flex;align-items:center;gap:6px;height:24px;padding:0 7px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--faint);font-family:var(--mono);font-size:11.5px}
+.B-views .row .q{font-family:var(--mono);font-size:10.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.B-focus{margin-top:auto;border-top:1px solid var(--border);padding:7px 10px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--warn);font-family:var(--mono);white-space:nowrap}
+.B-focus .x{margin-left:auto;color:var(--faint)}
+.B-main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.B-tabs{display:flex;height:33px;background:var(--surface);border-bottom:1px solid var(--border);flex:none}
+.B-tab{display:flex;align-items:center;gap:7px;padding:0 12px;border-right:1px solid var(--border);color:var(--muted);white-space:nowrap;font-size:12.5px}
+.B-tab.on{background:var(--bg);color:var(--text);box-shadow:inset 0 2px 0 var(--accent)}
+.B-tab .dotm{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.B-tab .x{color:var(--faint);font-size:11px}
+.B-tabs .tail{margin-left:auto;display:flex;align-items:center;gap:10px;padding:0 10px;color:var(--faint)}
+.B-panes{flex:1;display:grid;grid-template-columns:1fr 1fr;min-height:0}
+.B-pane{overflow:hidden;min-width:0;position:relative;padding-top:8px}
+.B-pane + .B-pane{border-left:2px solid var(--pane)}
+.B-pane.inactive .ln .tx{opacity:.96}
+.B-crumbs{display:flex;align-items:center;gap:5px;height:24px;padding:0 12px;font-size:11.5px;color:var(--faint);border-bottom:1px solid var(--border);margin-top:-8px;margin-bottom:8px;white-space:nowrap;overflow:hidden}
+.B-crumbs b{color:var(--muted);font-weight:500}
+.B-tagview{padding:0 18px}
+.B-tagview .hd{display:flex;align-items:center;gap:10px;margin:6px 0 2px}
+.B-tagview .hd .big{font-size:22px;font-weight:700;color:var(--tc)}
+.B-tagview .meta{display:grid;grid-template-columns:70px 1fr;gap:3px 10px;font-size:12px;margin:10px 0 12px}
+.B-tagview .meta span:nth-child(odd){color:var(--faint)}
+.B-tagview .desc{font-family:var(--ed);font-size:13px;line-height:1.6;color:var(--text);border-left:2px solid var(--tc);padding:2px 0 2px 10px;margin-bottom:14px}
+.B-tagview h5{margin:0 0 4px;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.B-nl{display:grid;grid-template-columns:1fr auto;gap:0 10px;font-size:12.5px}
+.B-nl div{padding:4px 0;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.B-nl .d{color:var(--faint);font-family:var(--mono);font-size:11px}
+.B-dock{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.B-dtabs{display:flex;height:33px;border-bottom:1px solid var(--border);flex:none}
+.B-dtabs div{display:flex;align-items:center;gap:6px;padding:0 11px;color:var(--muted);font-size:12px;white-space:nowrap}
+.B-dtabs div.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.B-dtabs .n{color:var(--faint);font-size:11px}
+.B-bl{padding:7px 12px;border-bottom:1px solid var(--border)}
+.B-bl .t{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);white-space:nowrap}
+.B-bl .t small{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:10.5px}
+.B-bl .c{font-family:var(--ed);font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.B-bl .c em{font-style:normal;color:var(--link);background:color-mix(in srgb,var(--link) 12%,transparent)}
+.B-out{padding:6px 12px;font-size:11.5px;color:var(--faint);border-bottom:1px solid var(--border)}
+.B-dsec{display:flex;align-items:center;gap:6px;height:28px;padding:0 12px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border);flex:none}
+.B-dsec .k{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0}
+.B-mini{height:230px;flex:none;border-bottom:1px solid var(--border)}
+.B-chips{display:flex;flex-wrap:wrap;gap:5px;padding:8px 12px}
+.B-status{grid-column:1/-1;display:flex;align-items:stretch;font-size:11.5px;background:var(--surface);border-top:1px solid var(--border);white-space:nowrap;color:var(--muted)}
+.B-status > span{display:flex;align-items:center;padding:0 10px;border-right:1px solid var(--border)}
+.B-status .mode{background:var(--accent);color:var(--accent-text);font-weight:700;font-family:var(--mono);letter-spacing:.05em;border-right:0}
+.B-status .fc{color:var(--warn);font-family:var(--mono)}
+.B-status .grow{flex:1;border-right:0}
+.B-status .ok{color:var(--saved)}
+.B-graphv{position:relative;flex:1;min-height:0}
+.B-gctl{position:absolute;left:12px;top:12px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-size:11.5px;display:grid;grid-template-columns:auto auto;gap:5px 14px;color:var(--muted)}
+.B-gctl b{color:var(--text);font-weight:500}
+.dir-B .picker{left:50%;transform:translateX(-50%);top:46px;width:min(980px,78%);--pk-radius:6px}
+.dir-B .picker.two{display:grid;grid-template-columns:1.1fr .9fr}
+.dir-B .picker .pv{border-left:1px solid var(--border);background:var(--bg);overflow:hidden;--ed-size:12px;--gut-w:30px;padding-top:6px}
+.dir-B .picker .pv .pvh{font-size:11px;color:var(--faint);padding:2px 12px 6px;font-family:var(--mono)}
+@container (max-width:1500px){
+  .B-grid{grid-template-columns:40px 248px 1fr 286px}
+  .B-panes{grid-template-columns:1fr}
+  .B-pane.second{display:none}
+}
+
+/* =====================================================================
+   C · Constelación  (grafo como vista principal)
+   ===================================================================== */
+.dir-C{--gut-w:34px}
+.C-grid{position:absolute;inset:0;display:grid;grid-template-columns:292px 1fr 540px;grid-template-rows:1fr 26px}
+.C-grid.nodrawer{grid-template-columns:292px 1fr 0}
+.C-rail{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column}
+.C-q{margin:12px;border:1px solid var(--border-strong);border-radius:6px;padding:9px 11px;font-family:var(--mono);font-size:13.5px;background:var(--bg)}
+.C-q .lab{display:block;font-family:var(--ui);font-size:10.5px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.C-q .q-tag{color:var(--tc)} .C-q .q-neg{color:var(--faint);text-decoration:line-through}
+.C-q .caretbar{display:inline-block;width:2px;height:16px;background:var(--accent);vertical-align:-3px}
+.C-q .res{display:block;font-family:var(--ui);font-size:11.5px;color:var(--muted);margin-top:5px}
+.C-h{font-size:10.5px;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;padding:8px 14px 5px;display:flex}
+.C-h .k{margin-left:auto;text-transform:none;letter-spacing:0}
+.C-views{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px}
+.C-view{border:1px solid var(--border-strong);border-radius:4px;padding:3px 8px;font-size:12px;color:var(--muted);white-space:nowrap}
+.C-view b{color:var(--text);font-weight:500}
+.C-view.on{border-color:var(--accent);color:var(--text)}
+.C-view .n{color:var(--faint);margin-left:4px}
+.C-leg .row{--row-h:24px;padding-right:12px}
+.C-leg .bar{width:54px;height:4px;background:var(--border);border-radius:2px;position:relative;flex:none}
+.C-leg .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--tc);border-radius:2px}
+.C-leg .row.dimr{opacity:.38}
+.C-inbox{margin:auto 12px 12px;border:1px dashed var(--border-strong);border-radius:6px;padding:9px 11px;font-size:12px;color:var(--muted)}
+.C-inbox b{color:var(--text)}
+.C-inbox .k{display:block;margin-top:4px;font-size:11px;color:var(--faint)}
+.C-gwrap{position:relative;overflow:hidden;min-width:0}
+.C-hud{position:absolute;left:14px;top:12px;display:flex;gap:8px;font-size:11.5px;color:var(--muted)}
+.C-hud span{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px}
+.C-stats{position:absolute;left:14px;bottom:12px;font-size:11.5px;color:var(--faint)}
+.C-card{position:absolute;background:var(--raised);border:1px solid var(--border-strong);border-radius:6px;padding:10px 12px;width:240px;font-size:12px}
+.C-card .tt{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--tc);margin-bottom:6px}
+.C-card .m{display:grid;grid-template-columns:58px 1fr;gap:3px 8px;color:var(--text)}
+.C-card .m span:nth-child(odd){color:var(--faint)}
+.C-card .ks{margin-top:8px;color:var(--faint);font-size:11px}
+.C-drawer{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.C-dh{display:flex;align-items:center;gap:8px;padding:10px 14px 8px;border-bottom:1px solid var(--border)}
+.C-dh .tt{font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.C-dh .p{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:auto;white-space:nowrap}
+.C-tags{display:flex;gap:5px;padding:8px 14px 2px;flex-wrap:wrap}
+.C-ed{flex:1;overflow:hidden;padding-top:6px}
+.C-bl{border-top:1px solid var(--border);padding:8px 14px 10px;flex:none}
+.C-bl h4{margin:0 0 6px;font-size:10.5px;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;font-weight:600;display:flex}
+.C-bl h4 span{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:400}
+.C-bl .it{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:12.5px;white-space:nowrap;overflow:hidden}
+.C-bl .it .c{color:var(--muted);overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.C-bl .it .c em{font-style:normal;color:var(--link)}
+.C-dstat{display:flex;align-items:center;gap:12px;height:24px;padding:0 14px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--muted);flex:none}
+.C-dstat .mode{color:var(--accent);font-weight:700}
+.C-dstat .sp{margin-left:auto}
+.C-status{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 14px;border-top:1px solid var(--border);background:var(--surface);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.C-status .mode{color:var(--accent);font-weight:700;font-family:var(--mono)}
+.C-status .fc{color:var(--warn);font-family:var(--mono)}
+.C-status .sp{margin-left:auto}
+.dir-C .picker{left:calc(50% - 120px);transform:translateX(-50%);top:62px;width:min(620px,56%)}
+.dir-C .graph text{--g-fs:10.5px;--g-tfs:12.5px}
+@container (max-width:1500px){
+  .C-grid{grid-template-columns:256px 1fr 440px}
+  .C-grid.nodrawer{grid-template-columns:256px 1fr 0}
+  .dir-C .picker{left:calc(50% - 90px)}
+}
+
+/* =====================================================================
+   D · Bandeja  (lista primero, tres columnas)
+   ===================================================================== */
+.dir-D{--gut-w:40px}
+.D-grid{position:absolute;inset:0;display:grid;grid-template-columns:232px 404px 1fr;grid-template-rows:1fr 26px}
+.D-src{background:var(--surface);border-right:1px solid var(--border);overflow:hidden;padding-top:8px}
+.D-sh{display:flex;align-items:center;padding:8px 14px 4px;font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.D-sh .k{margin-left:auto;text-transform:none;letter-spacing:0}
+.D-src .row{padding-left:calc(12px + var(--d,0) * 14px)}
+.D-src .row.src-on{background:var(--sel)}
+.D-list{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.D-lh{padding:12px 16px 0;flex:none}
+.D-lt{display:flex;align-items:baseline;gap:8px}
+.D-lt b{font-size:15px;font-weight:650}
+.D-lt .q{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.D-lt .n{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.D-modes{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border)}
+.D-modes span{padding:0 0 7px;white-space:nowrap}
+.D-modes span.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.D-modes span i{font-style:normal;color:var(--faint);margin-left:4px}
+.D-modes .sort{margin-left:auto;color:var(--faint)}
+.D-filter{display:flex;align-items:center;gap:8px;margin:10px 16px 6px;height:30px;padding:0 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);font-family:var(--mono);font-size:12.5px;color:var(--faint);flex:none}
+.D-filter.on{border-color:var(--accent);color:var(--text)}
+.D-filter .q-tag{color:var(--tc)} .D-filter .q-neg{color:var(--faint);text-decoration:line-through}
+.D-filter .caretbar{display:inline-block;width:2px;height:15px;background:var(--accent);vertical-align:-3px}
+.D-filter .r{margin-left:auto;font-family:var(--ui);font-size:11.5px;color:var(--muted)}
+.D-items{flex:1;overflow:hidden}
+.D-item{position:relative;padding:10px 16px 10px 18px;border-bottom:1px solid var(--border)}
+.D-item.on{background:var(--sel-soft)}
+.D-item.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.D-item .t{display:flex;gap:10px;align-items:baseline;font-weight:600;font-size:13.5px;white-space:nowrap}
+.D-item .t span:first-child{overflow:hidden;text-overflow:ellipsis}
+.D-item .t b{color:var(--match);font-weight:700}
+.D-item .t .d{margin-left:auto;font-weight:400;font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;flex:none}
+.D-item .x{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.D-item .x b{color:var(--match);font-weight:600}
+.D-item .m{display:flex;align-items:center;gap:5px;margin-top:6px;white-space:nowrap;overflow:hidden}
+.D-item .m .p{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--faint);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.D-item .m .bl{font-size:11px;color:var(--faint);display:flex;align-items:center;gap:3px}
+.D-item .m .bl svg{width:11px;height:11px}
+.D-lf{display:flex;gap:12px;white-space:nowrap;overflow:hidden;padding:7px 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);flex:none}
+.D-note{display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative}
+.D-nh{display:flex;align-items:center;gap:10px;height:40px;padding:0 20px;border-bottom:1px solid var(--border);flex:none;white-space:nowrap}
+.D-nh .p{font-family:var(--mono);font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.D-nh .p b{color:var(--text);font-weight:500}
+.D-nh .chips{display:flex;gap:5px;margin-left:auto}
+.D-ed{flex:1;overflow:hidden;padding:14px 28px 0 0;max-width:900px}
+.D-bl{flex:none;border-top:1px solid var(--border);padding:10px 20px 12px;background:var(--surface)}
+.D-bl h4{display:flex;margin:0 0 6px;font-size:11px;font-weight:500;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.D-bl h4 span{margin-left:auto;text-transform:none;letter-spacing:0}
+.D-bl .it{display:grid;grid-template-columns:240px 1fr;gap:12px;padding:3px 0;font-size:12.5px;white-space:nowrap}
+.D-bl .it span{overflow:hidden;text-overflow:ellipsis}
+.D-bl .it .c{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.D-bl .it .c em{font-style:normal;color:var(--link)}
+.D-graph{flex:1;position:relative;min-height:0}
+.D-graph .cap{position:absolute;left:20px;top:14px;font-size:12px;color:var(--muted)}
+.D-graph .cap b{color:var(--text);font-weight:600}
+.D-status{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:0 14px;background:var(--surface);border-top:1px solid var(--border);font-size:12px;color:var(--muted);white-space:nowrap}
+.D-status .mode{color:var(--accent);font-weight:700;font-family:var(--mono);font-size:11.5px}
+.D-status .fc{color:var(--warn);font-family:var(--mono);font-size:11.5px}
+.D-status .sp{margin-left:auto}
+.D-status .ok{color:var(--saved)}
+@container (max-width:1500px){
+  .D-grid{grid-template-columns:208px 340px 1fr}
+  .D-bl .it{grid-template-columns:170px 1fr}
+}
+
+/* =====================================================================
+   Variantes D1 · D2 · A1 · A2  (misma paleta y tipografía)
+   ===================================================================== */
+/* panel de nota reutilizable (splits) */
+.vp{display:flex;flex-direction:column;overflow:hidden;min-width:0;min-height:0;position:relative}
+.vp + .vp{border-left:1px solid var(--border)}
+.vp-h{display:flex;align-items:center;gap:10px;height:36px;padding:0 16px;border-bottom:1px solid var(--border);flex:none;white-space:nowrap;font-size:12px}
+.vp-h .p{font-family:var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vp-h .p b{color:var(--muted);font-weight:500}
+.vp-h .chips{display:flex;gap:5px;margin-left:auto;flex:none}
+.vp-h .pn{font-family:var(--mono);font-size:10.5px;color:var(--faint);border:1px solid var(--border);border-radius:3px;padding:0 4px;line-height:16px;flex:none}
+.vp.on .vp-h{box-shadow:inset 0 -1px 0 var(--accent)}
+.vp.on .vp-h .p b{color:var(--text)}
+.vp.on .vp-h .pn{color:var(--text);border-color:var(--border-strong)}
+.vp:not(.on) .ed{opacity:.72}
+.vp-ed{flex:1;overflow:hidden;padding:12px 18px 0 0;min-height:0}
+.vp .ln.l-code .tx{white-space:pre-wrap;overflow-wrap:anywhere}
+.vp-foot{flex:none;display:flex;gap:10px;align-items:center;height:30px;padding:0 16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
+.vp-foot b{color:var(--muted);font-weight:500;flex:none}
+.vp-foot .ls{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.vp-foot kbd{flex:none}
+/* cabecera de lista sin columna de fuentes */
+.vl-h{padding:12px 16px 2px;flex:none}
+.vl-src{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.vl-src b{font-size:15px;font-weight:650}
+.vl-src .n{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.vl-q{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vl-q kbd{font-size:10px}
+.D-item .pn{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--muted);border:1px solid var(--border-strong);border-radius:3px;padding:0 4px;line-height:15px;flex:none}
+.D-item.open::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--border-strong)}
+/* tira plegada (lista a íconos) */
+.vstrip{display:none;background:var(--surface);border-right:1px solid var(--border);flex-direction:column;align-items:center;padding-top:10px;gap:6px;overflow:hidden}
+.vstrip .ab{width:30px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;color:var(--faint);border-radius:4px;font-size:10px;font-variant-numeric:tabular-nums}
+.vstrip .ab.on{color:var(--text);background:var(--active)}
+.vstrip .grow{flex:1}
+.vstrip .ab.key{font-family:var(--mono);font-size:9.5px;line-height:1.25;text-align:center;padding-bottom:10px}
+/* D1 */
+.D1-grid{position:absolute;inset:0;display:grid;grid-template-columns:360px 1fr 1fr;grid-template-rows:1fr 26px}
+.D1-grid .D-list{grid-column:1}
+@container (max-width:1500px){
+  .D1-grid{grid-template-columns:40px 1fr 1fr}
+  .D1-grid .D-list{display:none}
+  .D1-grid .vstrip{display:flex}
+}
+/* D2 */
+.D2-grid{position:absolute;inset:0;display:grid;grid-template-columns:300px 1fr 380px;grid-template-rows:1fr 26px}
+.D2-grid .vp-ed{max-width:900px}
+.vl-rows{flex:1;overflow:hidden;padding-top:4px}
+.vl-row{position:relative;display:flex;align-items:center;gap:8px;height:30px;padding:0 14px 0 16px;white-space:nowrap;font-size:13px}
+.vl-row .t{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;color:var(--muted)}
+.vl-row .dots{display:flex;gap:3px;flex:none;width:23px}
+.vl-row .dots .dot{width:6px;height:6px}
+.vl-row .d{font-size:11px;color:var(--faint);flex:none;font-variant-numeric:tabular-nums}
+.vl-row.on{background:var(--sel-soft)}
+.vl-row.on .t{color:var(--text)}
+.vl-row.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
+.ctx{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.ctx-h{display:flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);flex:none;white-space:nowrap}
+.ctx-h b{color:var(--text);font-weight:600}
+.ctx-h .k{margin-left:auto}
+.ctx-tabs{display:flex;gap:16px;padding:10px 14px 0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);flex:none}
+.ctx-tabs span{padding-bottom:7px;white-space:nowrap}
+.ctx-tabs span.on{color:var(--text);box-shadow:inset 0 -2px 0 var(--accent)}
+.ctx-tabs i{font-style:normal;color:var(--faint);margin-left:4px}
+.ctx-bl{padding:8px 14px 8px;border-bottom:1px solid var(--border)}
+.ctx-bl .t{display:flex;gap:8px;font-size:12.5px;color:var(--text);white-space:nowrap}
+.ctx-bl .t span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ctx-bl .t small{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:10.5px;flex:none}
+.ctx-bl .c{font-family:var(--ed);font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ctx-bl .c em{font-style:normal;color:var(--link)}
+.ctx-bl.on{background:var(--sel-soft)}
+.ctx-more{padding:7px 14px;font-size:11.5px;color:var(--faint);flex:none}
+.ctx-sec{display:flex;align-items:center;font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;padding:9px 14px 6px;border-top:1px solid var(--border);flex:none}
+.ctx-sec span{margin-left:auto;text-transform:none;letter-spacing:0}
+.ctx-g{flex:1;min-height:0;position:relative}
+@container (max-width:1500px){
+  .D2-grid{grid-template-columns:44px 1fr 330px}
+  .D2-grid .D-list{display:none}
+  .D2-grid .vstrip{display:flex}
+}
+/* A1 */
+.A1-seg{display:flex;align-items:center;gap:2px;margin:2px 12px 10px 14px;padding:2px;border:1px solid var(--border);border-radius:5px;font-size:12px}
+.A1-seg span{flex:1;text-align:center;padding:3px 0;border-radius:3px;color:var(--faint)}
+.A1-seg span.on{background:var(--active);color:var(--text)}
+.A1-seg kbd{margin:0 4px 0 2px}
+.A-side .row.dimf{opacity:.42}
+.A1-note{margin:10px 14px 0 20px;font-size:11.5px;color:var(--faint);line-height:1.5}
+.A1-note .q-tag{font-family:var(--mono)}
+/* A2 */
+.A2-crumb{display:flex;align-items:center;gap:4px;margin:0 0 2px 47px;font-family:var(--mono);font-size:12px;color:var(--faint);white-space:nowrap}
+.A2-crumb .s{padding:1px 5px;border-radius:3px;color:var(--muted)}
+.A2-crumb .s.on{background:var(--sel-soft);color:var(--text)}
+.A2-crumb .f{padding:1px 5px;color:var(--faint)}
+.A2-crumb .k{margin-left:auto;font-family:var(--ui);font-size:11.5px}
+.dir-A .picker.A2-tree{top:96px;width:min(600px,62%)}
+.A2-tree .pk-in .lab{font-family:var(--ui);font-size:12px;color:var(--faint)}
+.A2-tree .pk-in .pth{color:var(--text)}
+.A2-tree .tree{padding:4px 0}
+.A2-tree .pk-foot span{white-space:nowrap}
+.A2-tree .row.cursor .nm{color:var(--text)}
+.A2-tree .row.active .nm{color:var(--text)}
+</style>
+</head>
+<body class="pg-oscuro">
+<div id="top">
+  <div class="brand">Metalmind <small>propuestas de UI · 2026-10-26</small></div>
+  <div class="seg" id="segD"><span class="lbl">Dirección</span></div>
+  <div class="seg" id="segT"><span class="lbl">Tema</span></div>
+  <div class="seg" id="segS"><span class="lbl">Escena</span></div>
+  <div class="hint">teclas: <b>1–8</b> dirección · <b>t</b> tema · <b>e f g c</b> escena</div>
+</div>
+<div id="stagewrap"><div id="stage"></div></div>
+<div id="about"></div>
+
+<script>
+/* ===================================================================
+   datos del vault de ejemplo
+   =================================================================== */
+const TAGS = {
+  archivado:{name:'archivado',icon:'🗄️',color:'gris',count:64,parents:[]},
+  'diseño':{name:'diseño',icon:'🎨',color:'violeta',count:23,parents:[]},
+  principios:{name:'principios',color:'violeta',count:4,parents:['diseño']},
+  'tipografía':{name:'tipografía',color:'violeta',count:6,parents:['diseño']},
+  ui:{name:'ui',color:'violeta',count:14,parents:['diseño']},
+  idea:{name:'idea',icon:'💡',color:'amarillo',count:19,parents:[]},
+  lectura:{name:'lectura',icon:'📚',color:'cian',count:15,parents:[]},
+  rust:{name:'Rust',icon:'🦀',color:'naranja',count:42,parents:[]},
+  async:{name:'async',color:'naranja',count:7,parents:['rust']},
+  crates:{name:'crates',icon:'📦',color:'naranja',count:9,parents:['rust']},
+  gpui:{name:'gpui',icon:'▦',color:'azul',count:18,parents:['rust','ui']},
+  render:{name:'render',color:'azul',count:5,parents:['gpui']},
+  trabajo:{name:'trabajo',icon:'💼',color:'verde',count:31,parents:[]},
+  das:{name:'das',color:'verde',count:8,parents:['trabajo']},
+  entrevistas:{name:'entrevistas',icon:'🎙️',color:'verde',count:12,parents:['trabajo']},
+  ferrum:{name:'ferrum',color:'verde',count:4,parents:['entrevistas']},
+  gs:{name:'gs',color:'verde',count:11,parents:['trabajo']},
+};
+const colorOf = k => (TAGS[k]||{}).color || 'ninguno';
+
+const NOTES = [
+  {id:'n1',t:'El render loop de GPUI',f:'proyectos/metalmind/gpui-render-loop.md',tags:['rust','gpui','diseño'],links:['n2','n3']},
+  {id:'n2',t:'Entrevista Ferrum — ronda 2',f:'trabajo/entrevistas/ferrum-ronda-2.md',tags:['ferrum','rust'],links:['n1','n13']},
+  {id:'n3',t:'Zed — cómo pinta el editor',f:'lecturas/zed-como-pinta-el-editor.md',tags:['lectura','gpui'],links:['n1','n4']},
+  {id:'n4',t:'Render del editor',f:'proyectos/metalmind/render-del-editor.md',tags:['render'],links:[]},
+  {id:'n5',t:'Tablero de diseño',f:'proyectos/metalmind/tablero-de-diseño.md',tags:['diseño','ui'],links:['n1','n6','n7','n19']},
+  {id:'n6',t:'Tokens del tema',f:'proyectos/metalmind/tokens-del-tema.md',tags:['ui'],links:[]},
+  {id:'n7',t:'El contenido manda',f:'notas/el-contenido-manda.md',tags:['principios'],links:[]},
+  {id:'n8',t:'Entidades y contexto en GPUI',f:'proyectos/metalmind/entidades-y-contexto.md',tags:['gpui'],links:['n1']},
+  {id:'n9',t:'uniform_list y el árbol',f:'proyectos/metalmind/uniform-list.md',tags:['render'],links:['n4']},
+  {id:'n10',t:'Async sin tokio en la UI',f:'notas/async-sin-tokio.md',tags:['async'],links:['n8']},
+  {id:'n11',t:'Crates verificados',f:'proyectos/metalmind/crates-verificados.md',tags:['crates'],links:[]},
+  {id:'n12',t:'Entrevista Ferrum — ronda 1',f:'trabajo/entrevistas/ferrum-ronda-1.md',tags:['ferrum'],links:['n2']},
+  {id:'n13',t:'Preguntas para entrevistar seniors',f:'trabajo/entrevistas/preguntas-seniors.md',tags:['entrevistas'],links:[]},
+  {id:'n14',t:'GS — migración a .NET 10',f:'trabajo/gs/migracion-net10.md',tags:['gs'],links:[]},
+  {id:'n15',t:'GS — retro sprint 42',f:'trabajo/gs/retro-42.md',tags:['gs','archivado'],links:['n14']},
+  {id:'n16',t:'DAS — onboarding',f:'trabajo/das/onboarding.md',tags:['das'],links:[]},
+  {id:'n17',t:'Tipografía para leer código',f:'lecturas/tipografia-codigo.md',tags:['tipografía','lectura'],links:[]},
+  {id:'n18',t:'Captura rápida desde la bandeja',f:'ideas/captura-rapida.md',tags:['idea'],links:[]},
+  {id:'n19',t:'Grafo por tags',f:'ideas/grafo-por-tags.md',tags:['idea','diseño'],links:['n5']},
+  {id:'n20',t:'Rust for Rustaceans — cap. 8',f:'lecturas/rust-for-rustaceans-8.md',tags:['lectura','async'],links:['n10']},
+  {id:'n21',t:'Notas sueltas del martes',f:'notas-sueltas-martes.md',tags:[],links:[]},
+  {id:'n22',t:'Link que mandó Ana',f:'link-de-ana.md',tags:[],links:[]},
+  {id:'n23',t:'Pendiente: leer sobre CRDTs',f:'crdts.md',tags:[],links:[]},
+  {id:'n24',t:'Archivo: tablero 2025',f:'archivo/tablero-2025.md',tags:['archivado','diseño'],links:[]},
+  {id:'n25',t:'Lifetimes en closures',f:'notas/lifetimes-closures.md',tags:['rust'],links:['n20']},
+];
+const NOTE = Object.fromEntries(NOTES.map(n=>[n.id,n]));
+
+const VIEWS = [
+  {n:'buzón',q:'-#',c:7,inbox:1},
+  {n:'rust vivo',q:'#rust -#archivado',c:38},
+  {n:'gs',q:'#gs -#archivado',c:9},
+  {n:'ferrum',q:'#entrevistas #ferrum',c:4},
+];
+
+const BACKLINKS = [
+  {id:'n3',ln:12,c:['…antes de tocar el gutter, compararlo con ','El render loop de GPUI',' y medir otra vez.']},
+  {id:'n2',ln:31,c:['Me preguntaron cómo repinta; contesté con lo de ','El render loop de GPUI',', lo de cx.notify().']},
+  {id:'n5',ln:8,c:['Rendimiento: ver ','El render loop de GPUI',' · nada de spinners.']},
+  {id:'n8',ln:4,c:['Las entidades sobreviven al frame (','El render loop de GPUI',').']},
+];
+
+const SRC = [
+  '---',
+  'tags: [rust, gpui, diseño]',
+  '---',
+  '# El render loop de GPUI',
+  '',
+  'Cada frame, GPUI llama a `render` de las vistas sucias y arma un árbol de elementos nuevo. No hay *retained mode*: lo que dura son las **entidades**, no los elementos.',
+  '',
+  '## Lo que aprendí hoy',
+  '- `\u0001cx.notify()` marca la entidad como sucia; sin eso no se repinta nada.',
+  '- `uniform_list` solo pinta las filas visibles: por eso el árbol aguanta 50 k notas.',
+  '- Medir texto es lo caro: cachear el `ShapedLine` por línea y versión del buffer.',
+  '',
+  '## Pendiente de entender',
+  'Por qué `prepaint` corre antes que los tooltips. Lo pregunté en [[Entrevista Ferrum — ronda 2]] y me mandaron a [[Zed — cómo pinta el editor]].',
+  '',
+  '```rust',
+  'fn render(&mut self, _w: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {',
+  '    // nada de estado aquí: todo vive en la entidad',
+  '    div().flex().child(self.editor.clone())',
+  '}',
+  '```',
+  '',
+  '> Regla de la casa: si es bonito pero lento, no entra. #principios',
+];
+const CUR = 8;
+
+const FINDER = [
+  {f:'proyectos/metalmind/gpui-render-loop.md',tags:['rust','gpui']},
+  {f:'proyectos/metalmind/render-del-editor.md',tags:['render']},
+  {f:'lecturas/zed-como-pinta-el-editor.md',tags:['lectura','gpui']},
+  {f:'trabajo/entrevistas/ferrum-ronda-2.md',tags:['ferrum','rust']},
+  {f:'proyectos/metalmind/uniform-list.md',tags:['render'],m:'render en el texto'},
+  {f:'ideas/renderer-de-formulas-ratex.md',tags:['idea','crates']},
+  {f:'notas/render-sin-spinners.md',tags:['principios','rust']},
+];
+const FINDER_IDS = new Set(['n1','n4','n3','n2','n9']);
+
+const FOLDERS = [
+  {d:0,n:'adjuntos',dir:1,c:12},
+  {d:0,n:'diario',dir:1,c:0},
+  {d:0,n:'ideas',dir:1,c:19},
+  {d:0,n:'lecturas',dir:1,c:15},
+  {d:0,n:'notas',dir:1,c:27},
+  {d:0,n:'plantillas',dir:1,c:4},
+  {d:0,n:'proyectos',dir:1,open:1},
+  {d:1,n:'gs',dir:1,c:6},
+  {d:1,n:'metalmind',dir:1,open:1},
+  {d:2,n:'crates-verificados.md'},
+  {d:2,n:'entidades-y-contexto.md'},
+  {d:2,n:'gpui-render-loop.md',active:1},
+  {d:2,n:'render-del-editor.md'},
+  {d:2,n:'tablero-de-diseño.md'},
+  {d:2,n:'tokens-del-tema.md'},
+  {d:2,n:'uniform-list.md'},
+  {d:0,n:'tags',dir:1,c:9,hint:'páginas de tag'},
+  {d:0,n:'trabajo',dir:1,open:1},
+  {d:1,n:'das',dir:1,c:8},
+  {d:1,n:'entrevistas',dir:1,c:12},
+  {d:1,n:'gs',dir:1,c:11},
+  {d:0,n:'crdts.md'},
+  {d:0,n:'link-de-ana.md'},
+  {d:0,n:'notas-sueltas-martes.md'},
+];
+
+/* filas del árbol de tags (padres → hijos, luego notas; alfabético) */
+const TREE = [
+  {d:0,t:'archivado'},
+  {d:0,t:'diseño',open:1},
+  {d:1,t:'principios'},
+  {d:1,t:'tipografía'},
+  {d:1,t:'ui',open:1},
+  {d:2,t:'gpui',multi:'también bajo Rust'},
+  {d:2,note:'Tokens del tema'},
+  {d:1,note:'Tablero de diseño'},
+  {d:0,t:'idea'},
+  {d:0,t:'lectura'},
+  {d:0,t:'rust',open:1},
+  {d:1,t:'async'},
+  {d:1,t:'crates'},
+  {d:1,t:'gpui',open:1,cursor:1},
+  {d:2,t:'render'},
+  {d:2,note:'El render loop de GPUI',active:1},
+  {d:2,note:'Entidades y contexto en GPUI'},
+  {d:2,note:'Zed — cómo pinta el editor'},
+  {d:2,more:'15 notas más'},
+  {d:0,t:'trabajo',open:1},
+  {d:1,t:'das'},
+  {d:1,t:'entrevistas'},
+  {d:1,t:'gs'},
+  {d:0,inbox:1},
+];
+
+/* ===================================================================
+   íconos (trazos al estilo Tabler)
+   =================================================================== */
+const P = {
+  hash:'<path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16"/>',
+  folder:'<path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2"/>',
+  file:'<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/>',
+  bookmark:'<path d="M18 7v14l-6-4-6 4V7a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4z"/>',
+  search:'<circle cx="10" cy="10" r="7"/><path d="m21 21-6-6"/>',
+  graph:'<circle cx="6" cy="6" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="9" cy="18" r="2"/><path d="M8 7l8 1M7 8l1.5 8M17 10l-6.5 7"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+  inbox:'<path d="M4 4h16v12H4z"/><path d="M4 13h4l2 3h4l2-3h4"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  split:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+  link:'<path d="M9 15l6-6"/><path d="M11 6l.5-.5a5 5 0 0 1 7 7l-.5.5M13 18l-.4.5a5 5 0 0 1-7-7l.4-.5"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11M5 6v.01M5 12v.01M5 18v.01"/>',
+  history:'<path d="M12 8v4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 20v-5h5"/>',
+};
+const I = k => `<svg class="i" viewBox="0 0 24 24">${P[k]}</svg>`;
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const tc = k => `--tc:var(--c-${colorOf(k)})`;
+
+/* ===================================================================
+   markdown con live preview (la línea del cursor muestra la fuente)
+   =================================================================== */
+function mk(x,cur){return cur?`<span class="md-mark">${esc(x)}</span>`:''}
+function inline(s,cur){
+  const re=/(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*)|(\[\[[^\]]+\]\])|((?<=^|\s)#[\p{L}\d_-]+)/gu;
+  let out='',last=0;
+  for(const m of s.matchAll(re)){
+    out+=esc(s.slice(last,m.index)); const t=m[0];
+    if(m[1]) out+=mk('`',cur)+`<span class="md-code">${esc(t.slice(1,-1))}</span>`+mk('`',cur);
+    else if(m[2]) out+=mk('**',cur)+`<b>${esc(t.slice(2,-2))}</b>`+mk('**',cur);
+    else if(m[3]) out+=mk('*',cur)+`<i>${esc(t.slice(1,-1))}</i>`+mk('*',cur);
+    else if(m[4]) out+=mk('[[',cur)+`<span class="md-link">${esc(t.slice(2,-2))}</span>`+mk(']]',cur);
+    else if(m[5]) out+=`<span class="md-tag" style="${tc(t.slice(1).toLowerCase())}">${esc(t)}</span>`;
+    last=m.index+t.length;
+  }
+  return out+esc(s.slice(last));
+}
+function rust(s){
+  let h=esc(s);
+  if(/^\s*\/\//.test(s)) return `<span class="cm">${h}</span>`;
+  h=h.replace(/\b(fn|mut|impl|let|self|pub|use|struct)\b/g,'<span class="kw">$1</span>')
+     .replace(/\b([A-Z][A-Za-z]+)\b/g,'<span class="ty">$1</span>')
+     .replace(/\b([a-z_]+)(?=\()/g,'<span class="fnn">$1</span>');
+  return h;
+}
+function lines(src, cur, opt={}){
+  const out=[]; let inFm=false, inCode=false;
+  src.forEach((s,i)=>{
+    const isCur=i===cur; let cls='', html='';
+    if(i===0 && s==='---'){inFm=true; cls='l-fm'; html=isCur?'---':'<span class="md-mark">---</span>';}
+    else if(inFm){
+      cls='l-fm';
+      if(s==='---'){inFm=false; html='<span class="md-mark">---</span>';}
+      else if(!isCur && /^tags:/.test(s) && opt.chips!==false){
+        const ts=s.replace(/^tags:\s*\[|\]$/g,'').split(',').map(x=>x.trim());
+        html='<span style="color:var(--fm-key)">tags</span>&nbsp;&nbsp;'+ts.map(t=>`<span class="fm-chip" style="${tc(t)}">${esc(t)}</span>`).join('');
+      } else html=esc(s);
+    }
+    else if(s.startsWith('```')){
+      inCode=!inCode; cls='l-code';
+      html = isCur ? esc(s) : `<span class="md-mark">${inCode?esc(s.slice(3)):''}</span>`;
+    }
+    else if(inCode){cls='l-code'; html=rust(s);}
+    else if(/^#{1,6} /.test(s)){const n=s.indexOf(' '); cls='l-h'+n; html=mk(s.slice(0,n+1),isCur)+inline(s.slice(n+1),isCur);}
+    else if(s.startsWith('- ')){html=(isCur?'<span class="md-mark">- </span>':'<span class="md-bullet">•&nbsp;</span>')+inline(s.slice(2),isCur);}
+    else if(s.startsWith('> ')){cls='l-quote'; html=mk('> ',isCur)+inline(s.slice(2),isCur);}
+    else html=inline(s,isCur);
+    html=html.replace(/\u0001(&[a-z]+;|<[^>]+>|.)/u,'<span class="cur">$1</span>');
+    out.push({cls,html,isCur,i});
+  });
+  return out;
+}
+function editorHTML(o={}){
+  const src=o.src||SRC, cur=o.cur??CUR;
+  const L=lines(src,cur,o);
+  return `<div class="ed ${o.cls||''}">`+L.map(l=>{
+    const num = o.numbers===false ? '' : (l.isCur? (l.i+1) : Math.abs(l.i-cur));
+    return `<div class="ln ${l.cls} ${l.isCur?'is-cur':''}"><span class="gut">${num}</span><span class="tx">${l.html||' '}</span></div>`;
+  }).join('')+`</div>`;
+}
+
+/* ===================================================================
+   piezas comunes
+   =================================================================== */
+function tagMark(k,style){
+  const T=TAGS[k];
+  if(style==='emoji') return T.icon?`<span class="emo">${T.icon}</span>`:`<span class="hash" style="${tc(k)}">#</span>`;
+  if(style==='hash') return `<span class="hash" style="${tc(k)}">#</span>`;
+  if(style==='ink') return `<span class="ink" style="${tc(k)}"></span>`;
+  return `<span class="dot" style="${tc(k)}"></span>`;
+}
+function tagTree(o={}){
+  const style=o.style||'dot', rows=o.rows||TREE;
+  return `<div class="tree">`+rows.map(r=>{
+    const d=`--d:${r.d}`;
+    if(r.inbox) return `<div class="row inbox" style="${d}">${o.tw!==false?'<span class="tw"></span>':''}${style==='ink'?'':I('inbox')}<span class="nm">${o.inboxName||'Sin tags'}</span>${o.lead?'<span class="lead"></span>':''}<span class="cnt">7</span></div>`;
+    if(r.more) return `<div class="row more note" style="${d}">${o.tw!==false?'<span class="tw"></span>':''}<span class="nm">${r.more}</span></div>`;
+    if(r.note) return `<div class="row note ${r.active?'active':''}" style="${d}">${o.tw!==false?'<span class="tw"></span>':''}${style==='ink'?'':I('file')}<span class="nm">${esc(r.note)}</span></div>`;
+    const T=TAGS[r.t]; const hasKids = TREE.some((x,i)=>false);
+    const tw = o.tw===false?'':`<span class="tw">${r.open?'▾':'▸'}</span>`;
+    return `<div class="row ${r.cursor&&o.cursor!==false?'cursor':''} ${r.d?'sub':''}" style="${d}">${tw}${tagMark(r.t,style)}<span class="nm ${style==='ink'?'tg':''}" style="${style==='ink'?tc(r.t):''}">${esc(T.name)}</span>${r.multi&&o.multi!==false?`<span class="multi">⇄</span>`:''}${o.lead?'<span class="lead"></span>':''}<span class="cnt">${T.count}</span></div>`;
+  }).join('')+`</div>`;
+}
+function folderTree(o={}){
+  return `<div class="tree">`+FOLDERS.map(r=>{
+    const d=`--d:${r.d}`;
+    const tw=o.tw===false?'':`<span class="tw">${r.dir?(r.open?'▾':'▸'):''}</span>`;
+    const ic=o.icons===false?'':I(r.dir?'folder':'file');
+    return `<div class="row ${r.dir?'':'note'} ${r.active?'active':''}" style="${d}">${tw}${ic}<span class="nm">${esc(r.n)}${r.dir&&o.slash!==false?'/':''}${r.hint?` <span class="faint">· ${r.hint}</span>`:''}</span>${o.lead&&r.c!==undefined?'<span class="lead"></span>':''}${r.c!==undefined?`<span class="cnt">${r.c}</span>`:''}</div>`;
+  }).join('')+`</div>`;
+}
+function viewsList(o={}){
+  return `<div class="tree">`+VIEWS.map(v=>`<div class="row" style="--d:${o.d||0}">${o.tw!==false?'<span class="tw"></span>':''}${o.icon===false?'':I(v.inbox?'inbox':'bookmark')}<span class="nm" style="flex:none">${v.n}</span><span class="q">${esc(v.q)}</span><span style="flex:1"></span><span class="cnt">${v.c}</span></div>`).join('')+`</div>`;
+}
+function queryHTML(withText=true){
+  return `<span class="q-tag" style="${tc('rust')}">#rust</span> <span class="q-neg">-#archivado</span>${withText?' render':''}<span class="caretbar"></span>`;
+}
+function hl(path, word){
+  const i=path.lastIndexOf('/'); const dir=path.slice(0,i+1), fn=path.slice(i+1);
+  const mark=s=>esc(s).replace(new RegExp(word,'g'),`<b>${word}</b>`);
+  return `${mark(dir)}<span class="fn">${mark(fn)}</span>`;
+}
+function finderHTML(o={}){
+  const rows=FINDER.map((r,i)=>`<div class="pk-row ${i===0?'on':''}"><span class="p">${hl(r.f,'render')}</span><span class="chips">${r.tags.map(t=>`<span class="chip" style="${tc(t)}">#${t}</span>`).join('')}</span></div>`).join('');
+  const body=`<div class="pk-in">${o.icon===false?'':I('search')} ${queryHTML()}<span class="scope">7 de 38</span></div>${rows}<div class="pk-foot"><span>en <b>#rust -#archivado</b> · 1 palabra fuzzy</span><span><kbd>enter</kbd> abrir</span><span><kbd>ctrl-v</kbd> split</span><span><kbd>ctrl-s</kbd> abajo</span></div>`;
+  return body;
+}
+function backlinkCtx(b){return `${esc(b.c[0])}<em>${esc(b.c[1])}</em>${esc(b.c[2])}`}
+
+/* ===================================================================
+   grafo: layout de fuerzas propio, determinista, en SVG
+   =================================================================== */
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const GCACHE={};
+function graphModel(sub){
+  const key=sub?[...sub].sort().join(','):'all';
+  if(GCACHE[key]) return GCACHE[key];
+  const nodes=[], edges=[], seen=new Set();
+  const want=id=>!sub||sub.has(id);
+  for(const k in TAGS) if(want('t:'+k)) nodes.push({id:'t:'+k,type:'tag',k,count:TAGS[k].count});
+  const anyInbox = NOTES.some(n=>!n.tags.length && want(n.id));
+  if(anyInbox && want('inbox')) nodes.push({id:'inbox',type:'inbox'});
+  for(const n of NOTES) if(want(n.id)) nodes.push({id:n.id,type:'note',n});
+  const has=new Set(nodes.map(n=>n.id));
+  const add=(a,b,type)=>{const kk=[a,b].sort().join('|')+type; if(has.has(a)&&has.has(b)&&!seen.has(kk)){seen.add(kk);edges.push({a,b,type})}};
+  for(const k in TAGS) for(const p of TAGS[k].parents) add('t:'+k,'t:'+p,'parent');
+  for(const n of NOTES){ for(const t of n.tags) add(n.id,'t:'+t,'tag'); for(const l of n.links) add(n.id,l,'link'); if(!n.tags.length) add(n.id,'inbox','tag'); }
+  // fuerzas
+  const r=rng(sub?7:3); const ix=new Map(nodes.map((n,i)=>[n.id,i]));
+  nodes.forEach(n=>{n.x=r()-.5;n.y=r()-.5;n.vx=0;n.vy=0});
+  const N=nodes.length;
+  for(let it=0;it<700;it++){
+    const a=1-it/700*.9;
+    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+      const A=nodes[i],B=nodes[j]; let dx=A.x-B.x, dy=A.y-B.y; let d2=dx*dx+dy*dy+1e-4;
+      const w=(A.type==='tag'?1.8:1)*(B.type==='tag'?1.8:1);
+      const f=0.0013*w/d2*a; const d=Math.sqrt(d2);
+      A.vx+=dx/d*f; A.vy+=dy/d*f; B.vx-=dx/d*f; B.vy-=dy/d*f;
+    }
+    for(const e of edges){
+      const A=nodes[ix.get(e.a)],B=nodes[ix.get(e.b)]; let dx=B.x-A.x, dy=B.y-A.y; const d=Math.sqrt(dx*dx+dy*dy)+1e-6;
+      const L=e.type==='parent'?0.2:e.type==='link'?0.17:0.11; const f=(d-L)*0.06*a;
+      A.vx+=dx/d*f; A.vy+=dy/d*f; B.vx-=dx/d*f; B.vy-=dy/d*f;
+    }
+    for(const n of nodes){ n.vx-=n.x*0.012*a; n.vy-=n.y*0.012*a; n.vx*=.82; n.vy*=.82; n.x+=Math.max(-.03,Math.min(.03,n.vx)); n.y+=Math.max(-.03,Math.min(.03,n.vy)); }
+  }
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  nodes.forEach(n=>{x0=Math.min(x0,n.x);x1=Math.max(x1,n.x);y0=Math.min(y0,n.y);y1=Math.max(y1,n.y)});
+  nodes.forEach(n=>{n.u=(n.x-x0)/(x1-x0||1);n.v=(n.y-y0)/(y1-y0||1)});
+  return GCACHE[key]={nodes,edges,ix};
+}
+const GSLOTS=[];
+function graphSVG(o){
+  if(!o.measured){GSLOTS.push(o);return `<div class="gslot" data-g="${GSLOTS.length-1}" style="width:100%;height:100%"></div>`}
+  const {w,h}=o, pad=o.pad||[60,40], M=graphModel(o.sub);
+  const X=n=>pad[0]+n.u*(w-2*pad[0]), Y=n=>pad[1]+n.v*(h-2*pad[1]);
+  const hlset=o.hl, isHl=id=>!hlset||hlset.has(id);
+  let s=`<svg class="graph" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">`;
+  for(const e of M.edges){
+    const A=M.nodes[M.ix.get(e.a)],B=M.nodes[M.ix.get(e.b)];
+    const dim=hlset&&!(isHl(e.a)&&isHl(e.b));
+    s+=`<line class="e ${e.type} ${dim?'dim':''}" x1="${X(A).toFixed(1)}" y1="${Y(A).toFixed(1)}" x2="${X(B).toFixed(1)}" y2="${Y(B).toFixed(1)}"/>`;
+  }
+  const scale=o.scale||1, labels=[], boxes=[], fs=o.fs||11.5;
+  // etiquetas sin encimarse: se prueba arriba/abajo (tags) o derecha/izquierda (notas) y si no cabe, no se pone
+  const place=(cands,txt,cls,w,hh)=>{
+    for(const [x,y,anchor] of cands){
+      const bx = anchor==='middle'? x-w/2 : anchor==='end'? x-w : x;
+      const b=[bx-2,y-hh,bx+w+2,y+3];
+      if(b[0]<2||b[2]>o.w-2) continue;
+      if(!boxes.some(q=>!(b[2]<q[0]||b[0]>q[2]||b[3]<q[1]||b[1]>q[3]))){boxes.push(b);labels.push(`<text class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${txt}</text>`);return true}
+    } return false;
+  };
+  const order=[...M.nodes].sort((a,b)=>(b.type==='tag')-(a.type==='tag')||(b.id===o.sel)-(a.id===o.sel));
+  for(const n of M.nodes){ const x=X(n),y=Y(n);
+    if(n.type==='tag'){ const r=(3.5+Math.sqrt(n.count)*1.05)*scale; boxes.push([x-r,y-r,x+r,y+r]); }
+    else boxes.push([x-4,y-4,x+4,y+4]);
+  }
+  for(const n of M.nodes){
+    const x=X(n).toFixed(1), y=Y(n).toFixed(1), dim=!isHl(n.id)?'dim':'hl';
+    if(n.type==='tag'){
+      const r=(3.5+Math.sqrt(n.count)*1.05)*scale;
+      s+=`<circle class="n-tag ${dim}" style="${tc(n.k)}" cx="${x}" cy="${y}" r="${r.toFixed(1)}"/>`;
+    } else if(n.type==='inbox'){
+      s+=`<circle class="n-inbox" cx="${x}" cy="${y}" r="${(9*scale).toFixed(1)}"/>`;
+    } else {
+      const r=(n.id===o.sel?5:3.3)*scale;
+      s+=`<circle class="n-note ${dim}" cx="${x}" cy="${y}" r="${r}"/>`;
+      if(n.id===o.sel) s+=`<circle class="sel" cx="${x}" cy="${y}" r="${(r+5).toFixed(1)}"/>`;
+    }
+  }
+  if(o.labels!=='none') for(const n of order){
+    const x=X(n), y=Y(n), dim=!isHl(n.id)?'dim':'';
+    if(n.type==='tag'){
+      const r=(3.5+Math.sqrt(n.count)*1.05)*scale, txt=(o.hashLabels?'#':'')+esc(TAGS[n.k].name), w=txt.length*fs*.62;
+      place([[x,y-r-5,'middle'],[x,y+r+fs+2,'middle'],[x+r+4,y+4,'start']],txt,'t '+dim,w,fs+1);
+    } else if(n.type==='inbox'){
+      place([[x,y-13*scale,'middle'],[x,y+13*scale+fs,'middle']],'Sin tags',hlset&&!isHl('inbox')?'dim':'',8*fs*.55,fs);
+    } else {
+      const showL = o.labels==='all' || (o.labels==='hl' && hlset && hlset.has(n.id)) || n.id===o.sel;
+      if(!showL) continue;
+      const txt=esc(n.n.t), w=n.n.t.length*fs*.53;
+      place([[x+9,y+4,'start'],[x-11,y+4,'end'],[x,y-8,'middle'],[x,y+fs+6,'middle']],txt,dim,w,fs);
+    }
+  }
+  return s+labels.join('')+`</svg>`;
+}
+const LOCAL = new Set(['n1','n2','n3','n5','n8','t:rust','t:gpui','t:diseño','t:ui','t:ferrum','n13','n4']);
+const RUSTQ = (()=>{ // notas que cumplen #rust -#archivado (con descendientes)
+  const desc=new Set(['rust']); let ch=true; while(ch){ch=false; for(const k in TAGS) if(!desc.has(k)&&TAGS[k].parents.some(p=>desc.has(p))){desc.add(k);ch=true}}
+  const s=new Set(); for(const k of desc) s.add('t:'+k);
+  for(const n of NOTES) if(n.tags.some(t=>desc.has(t)) && !n.tags.includes('archivado')) s.add(n.id);
+  return s;
+})();
+
+/* ===================================================================
+   A · Silencio
+   =================================================================== */
+function renderA(sc){
+  const side = sc==='carpetas'
+    ? `<div class="A-head"><span>Carpetas</span><span class="sw"><span>tags</span><span class="on">carpetas</span></span></div>${folderTree({tw:true})}`
+    : `<div class="A-head"><span>Vistas</span></div><div class="A-views">${viewsList({tw:false,icon:false})}</div><div class="A-sep"></div>
+       <div class="A-head"><span>Tags</span><span class="sw"><span class="on">tags</span><span>carpetas <kbd>T</kbd></span></span></div>${tagTree({style:'dot'})}`;
+  let main;
+  if(sc==='grafo'){
+    main=`<div class="A-graph">${graphSVG({w:1400,h:900,sel:'n1',hl:LOCAL,labels:'hl',pad:[90,70]})}
+      <div class="cap"><b>Grafo</b> · alrededor de «El render loop de GPUI» · lo demás atenuado</div>
+      <div class="keys"><span><kbd>hjkl</kbd> vecino</span><span><kbd>enter</kbd> abrir</span><span><kbd>a</kbd> todo el vault</span><span><kbd>esc</kbd> volver a la nota</span></div></div>`;
+  } else {
+    main=`<div class="A-crumb">proyectos / metalmind / gpui-render-loop.md</div>
+     <div class="A-col">${editorHTML({cls:'A-ed'})}
+       <div class="A-back"><h4>4 notas enlazan aquí · 1 fuera de focus</h4>
+       ${BACKLINKS.map(b=>`<div class="A-bl"><div class="t">${esc(NOTE[b.id].t)}<small>${esc(NOTE[b.id].f.split('/').slice(0,-1).join('/'))}/</small></div><div class="c">${backlinkCtx(b)}</div></div>`).join('')}
+       </div></div>`;
+    if(sc==='finder') main+=`<div class="picker">${finderHTML({icon:false})}</div>`;
+  }
+  return `<div class="A-grid"><aside class="A-side">${side}</aside><main class="A-main">${main}</main>
+    <div class="A-status"><span class="mode">NORMAL</span><span>gpui-render-loop.md</span><span class="ok">guardado</span>
+      <span class="sp"></span><span class="fc">${sc==='finder'?'':''}</span><span class="faint"><kbd>space f</kbd> buscar · <kbd>space g</kbd> grafo · <kbd>space t</kbd> tags</span><span>9:3</span></div></div>`;
+}
+
+/* ===================================================================
+   B · Taller
+   =================================================================== */
+const SRC_FERRUM=['---','tags: [ferrum, rust]','---','# Entrevista Ferrum — ronda 2','','Con Lucía (staff) y Omar (EM). 55 min, en vivo.','','## Preguntas','- Cómo repinta un framework de UI inmediato','- Un bug de lifetimes que te costó un día'];
+function renderB(sc){
+  const act=`<div class="B-act">
+    <div class="ab ${sc!=='carpetas'?'on':''}">${I('hash')}<span class="k">t</span></div>
+    <div class="ab ${sc==='carpetas'?'on':''}">${I('folder')}<span class="k">e</span></div>
+    <div class="ab">${I('search')}<span class="k">/</span></div>
+    <div class="ab ${sc==='grafo'?'on':''}">${I('graph')}<span class="k">g</span></div>
+    <div class="ab">${I('history')}</div>
+    <div class="grow"></div><div class="ab">${I('settings')}</div></div>`;
+  const tagsOpen=sc!=='carpetas';
+  const side=`<div class="B-side">
+    <div class="B-sec"><span class="chev">▾</span>Vistas guardadas<span class="k"><kbd>+</kbd></span></div>
+    <div class="B-views">${viewsList({tw:false})}</div>
+    <div class="B-sec"><span class="chev">${tagsOpen?'▾':'▸'}</span>Tags <span class="faint" style="font-weight:400">17</span><span class="k"><kbd>space t</kbd></span></div>
+    ${tagsOpen?`<div class="B-filter">${I('search')}<span>filtrar  /</span></div>${tagTree({style:'emoji'})}`:''}
+    <div class="B-sec"><span class="chev">${tagsOpen?'▸':'▾'}</span>Carpetas <span class="faint" style="font-weight:400">131</span><span class="k"><kbd>space e</kbd></span></div>
+    ${tagsOpen?'':folderTree({tw:true})}
+    <div class="B-focus">${I('graph')}focus: #rust -#archivado<span class="x">✕</span></div></div>`;
+  const tabs=`<div class="B-tabs">
+    <div class="B-tab ${sc==='grafo'?'':'on'}">${I('file')}gpui-render-loop.md<span class="dotm"></span></div>
+    <div class="B-tab">${I('file')}ferrum-ronda-2.md<span class="x">✕</span></div>
+    <div class="B-tab"><span class="hash" style="${tc('gpui')}">#</span>gpui<span class="x">✕</span></div>
+    <div class="B-tab ${sc==='grafo'?'on':''}">${I('graph')}Grafo<span class="x">✕</span></div>
+    <div class="tail">${I('split')}<span class="mono" style="font-size:11px">ctrl-w v</span></div></div>`;
+  let center;
+  if(sc==='grafo'){
+    center=`<div class="B-graphv">${graphSVG({w:1100,h:760,sel:'n1',hl:RUSTQ,labels:'hl',pad:[70,50]})}
+      <div class="B-gctl"><span>alcance</span><b>focus #rust -#archivado</b><span>profundidad</span><b>todo · <kbd>1</kbd>–<kbd>3</kbd></b><span>mostrar</span><b>tags ✓ notas ✓ padres ✓</b><span>teclas</span><b><kbd>hjkl</kbd> <kbd>enter</kbd> <kbd>F</kbd> focus</b></div></div>`;
+  } else {
+    center=`<div class="B-panes">
+      <div class="B-pane"><div class="B-crumbs">proyectos › metalmind › <b>gpui-render-loop.md</b> › Lo que aprendí hoy</div>${editorHTML({})}</div>
+      <div class="B-pane second inactive"><div class="B-crumbs">tags › <b>gpui</b> · página <span class="mono">tags/gpui.md</span></div>
+        <div class="B-tagview" style="${tc('gpui')}"><div class="hd"><span class="emo" style="font-size:20px;width:22px">▦</span><span class="big">gpui</span><span class="faint">18 notas</span></div>
+        <div class="meta"><span>padres</span><span><span class="md-tag" style="${tc('rust')}">#rust</span> · <span class="md-tag" style="${tc('ui')}">#ui</span></span><span>alias</span><span>—</span><span>color</span><span>azul</span><span>plantilla</span><span class="mono">notas/gpui</span></div>
+        <div class="desc">El framework de UI de Zed. Aquí va lo que aprendo de GPUI para Metalmind: entidades, elementos, el loop de render y el texto.</div>
+        <h5>Notas · 18</h5><div class="B-nl">
+        ${['El render loop de GPUI|hoy','Entidades y contexto en GPUI|ayer','Zed — cómo pinta el editor|24 oct','uniform_list y el árbol|22 oct','Render del editor|19 oct','Medir texto con ShapedLine|17 oct','Tooltips en prepaint|15 oct'].map(x=>{const[a,b]=x.split('|');return `<div>${a}</div><div class="d">${b}</div>`}).join('')}
+        </div></div></div></div>`;
+  }
+  const finder= sc==='finder'?`<div class="picker two"><div>${finderHTML()}</div><div class="pv"><div class="pvh">vista previa · gpui-render-loop.md</div>${editorHTML({src:SRC.slice(3,14),cur:-1,numbers:false})}</div></div>`:'';
+  const dock=`<div class="B-dock">
+    <div class="B-dtabs"><div class="on">${I('link')}Backlinks <span class="n">4</span></div><div>Salientes <span class="n">2</span></div><div>Esquema</div></div>
+    ${BACKLINKS.map(b=>`<div class="B-bl"><div class="t">${I('file')}${esc(NOTE[b.id].t)}<small>:${b.ln}</small></div><div class="c">${backlinkCtx(b)}</div></div>`).join('')}
+    <div class="B-out">+ 1 fuera de focus · <kbd>enter</kbd> mostrar</div>
+    <div class="B-dsec">Grafo local<span class="k"><kbd>space g</kbd></span></div>
+    <div class="B-mini">${graphSVG({w:318,h:230,sub:LOCAL,sel:'n1',labels:'hl',pad:[40,24],scale:.85})}</div>
+    <div class="B-dsec">Tags de esta nota</div>
+    <div class="B-chips">${['rust','gpui','diseño'].map(t=>`<span class="chip" style="${tc(t)}">${TAGS[t].icon||''} #${t}</span>`).join('')}<span class="chip" style="--tc:var(--muted)">+ agregar</span></div></div>`;
+  return `<div class="B-grid">${act}${side}<div class="B-main">${tabs}${center}</div>${dock}
+    <div class="B-status"><span class="mode">NORMAL</span><span>proyectos/metalmind/gpui-render-loop.md</span><span class="fc">focus: #rust -#archivado</span><span class="grow"></span><span class="ok">● guardado</span><span>markdown</span><span>lf · utf-8</span><span>9:3</span><span>37%</span></div></div>`
+    + finder;
+}
+
+/* ===================================================================
+   C · Constelación
+   =================================================================== */
+function renderC(sc){
+  const drawer = sc!=='grafo';
+  const legRows=TREE.filter(r=>r.t&&!(r.t==='gpui'&&r.multi)).map(r=>r);
+  const inQ=k=>RUSTQ.has('t:'+k);
+  const legend = sc==='carpetas' ? folderTree({tw:true}) :
+    `<div class="tree">`+legRows.map(r=>{const T=TAGS[r.t]; return `<div class="row ${inQ(r.t)?'':'dimr'} ${r.t==='gpui'&&sc==='grafo'?'active':''}" style="--d:${r.d}">${tagMark(r.t,'dot')}<span class="nm">${esc(T.name)}</span><span class="bar" style="${tc(r.t)}"><i style="width:${Math.min(100,T.count/64*100)}%"></i></span><span class="cnt">${T.count}</span></div>`}).join('')+`</div>`;
+  const rail=`<div class="C-rail">
+    <div class="C-q"><span class="lab">consulta · filtra el grafo en vivo</span>${queryHTML(false)}<span class="res">38 notas · 7 tags · gpui vive bajo Rust y ui</span></div>
+    <div class="C-h">Vistas guardadas<span class="k"><kbd>space v</kbd></span></div>
+    <div class="C-views">${VIEWS.map((v,i)=>`<span class="C-view ${i===1?'on':''}"><b>${v.n}</b><span class="n">${v.c}</span></span>`).join('')}</div>
+    <div class="C-h">${sc==='carpetas'?'Carpetas':'Tags'}<span class="k">${sc==='carpetas'?'<kbd>T</kbd> tags':'<kbd>T</kbd> carpetas'}</span></div>
+    <div class="C-leg">${legend}</div>
+    <div class="C-inbox">${I('inbox')} <b>Buzón · 7 sin tags</b><span class="k">flotan solas en el grafo; <kbd>space i</kbd> para categorizarlas una por una</span></div></div>`;
+  const W=drawer?1000:1500;
+  const g=graphSVG({w:W,h:900,sel:'n1',hl:sc==='finder'?FINDER_IDS:RUSTQ,labels:'hl',pad:[80,60],scale:1.35});
+  const card = sc==='grafo' ? `<div class="C-card" style="${tc('gpui')};left:58%;top:22%"><div class="tt"><span>▦</span>gpui</div><div class="m"><span>notas</span><span>18 (5 vía #render)</span><span>padres</span><span>Rust, ui</span><span>hijos</span><span>render</span><span>página</span><span class="mono">tags/gpui.md</span></div><div class="ks"><kbd>enter</kbd> vista del tag · <kbd>F</kbd> focus · <kbd>r</kbd> renombrar</div></div>`:'';
+  const gwrap=`<div class="C-gwrap">${g}
+    <div class="C-hud"><span><kbd>hjkl</kbd> vecino</span><span><kbd>enter</kbd> abrir</span><span><kbd>-</kbd>/<kbd>+</kbd> zoom</span><span><kbd>space f</kbd> buscar</span></div>
+    <div class="C-stats">25 notas visibles · 17 tags · líneas punteadas = padres · grises = fuera de la consulta</div>${card}
+    ${sc==='finder'?`<div class="picker">${finderHTML()}</div>`:''}</div>`;
+  const dr = drawer?`<div class="C-drawer">
+    <div class="C-dh"><span class="tt">El render loop de GPUI</span><span class="p">proyectos/metalmind/</span></div>
+    <div class="C-ed">${editorHTML({src:SRC.slice(3),cur:CUR-3})}</div>
+    <div class="C-bl"><h4>Enlazan aquí · 4<span>1 fuera de focus</span></h4>${BACKLINKS.slice(0,3).map(b=>`<div class="it"><span>${esc(NOTE[b.id].t)}</span><span class="c">${backlinkCtx(b)}</span></div>`).join('')}</div>
+    <div class="C-dstat"><span class="mode">NORMAL</span><span>guardado</span><span class="sp"></span><span>6:3</span></div></div>`:'';
+  const tagsBar = drawer?'':'';
+  return `<div class="C-grid ${drawer?'':'nodrawer'}">${rail}${gwrap}${dr}
+    <div class="C-status"><span class="mode">${sc==='finder'?'FINDER':'GRAFO'}</span><span class="fc">focus: #rust -#archivado</span><span>seleccionada: ${sc==='grafo'?'#gpui':'El render loop de GPUI'}</span><span class="sp"></span><span class="muted"><kbd>o</kbd> abrir en cajón · <kbd>ctrl-w l</kbd> ir al cajón · <kbd>space g</kbd> volver al grafo</span></div></div>`;
+}
+
+/* ===================================================================
+   D · Bandeja
+   =================================================================== */
+const META={
+ n1:['hoy 23:10','Cada frame, GPUI llama a render de las vistas sucias y arma un árbol de elementos nuevo. Lo que dura son las entidades.',4],
+ n8:['hoy 18:42','Una entidad vive en el App; el Context<T> es el préstamo que te deja tocarla y avisar con cx.notify().',1],
+ n25:['ayer','Un closure que captura &self no puede vivir más que la vista. move + clone de la entidad, siempre.',0],
+ n2:['ayer','Con Lucía (staff) y Omar (EM). 55 min en vivo. Me preguntaron cómo repinta un framework de UI inmediato.',2],
+ n3:['24 oct','Zed no repinta todo: pinta las líneas visibles y cachea el texto ya medido por versión del buffer.',2],
+ n9:['22 oct','uniform_list asume filas de alto fijo y con eso solo pide las visibles; el árbol de 50 k notas cabe en 8 ms.',1],
+ n4:['19 oct','El editor es un solo elemento propio: prepaint coloca tooltips y bloques, paint pinta las filas medidas.',2],
+ n10:['17 oct','En la UI no hay tokio: el executor de GPUI alcanza para el watcher y la búsqueda con canales.',1],
+ n11:['15 oct','nucleo, ignore, notify, ropey, tantivy (por si acaso), insta. Versiones verificadas en crates.io.',0],
+ n20:['12 oct','Capítulo 8: async por dentro. Pin, wakers y por qué un future no hace nada hasta que lo sondeas.',1],
+ n12:['10 oct','Primera ronda: system design de un servicio de búsqueda. Fue bien; pidieron una segunda con código.',1],
+};
+function dItems(ids,word){
+  return ids.map((id,i)=>{const n=NOTE[id],m=META[id]; const mark=t=>word?esc(t).replace(new RegExp(word,'gi'),x=>`<b>${x}</b>`):esc(t);
+    return `<div class="D-item ${i===0?'on':''}"><div class="t"><span>${mark(n.t)}</span><span class="d">${m[0]}</span></div>
+      <div class="x">${mark(m[1])}</div>
+      <div class="m">${n.tags.map(t=>`<span class="chip" style="${tc(t)}">#${t}</span>`).join('')}${m[2]?`<span class="bl">${I('link')}${m[2]}</span>`:''}<span class="p">${esc(n.f.split('/').slice(0,-1).join('/'))}/</span></div></div>`}).join('');
+}
+function renderD(sc){
+  const src = sc==='carpetas'
+    ? `<div class="D-sh">Carpetas<span class="k"><kbd>T</kbd> tags</span></div>${folderTree({tw:true}).replace('gpui-render-loop.md</span>','gpui-render-loop.md</span>')}`
+    : `<div class="D-sh">Vistas<span class="k"><kbd>space v</kbd></span></div>
+       <div class="tree">${VIEWS.map((v,i)=>`<div class="row ${i===1?'src-on':''}">${I(v.inbox?'inbox':'bookmark')}<span class="nm">${v.n}</span><span class="cnt">${v.c}</span></div>`).join('')}</div>
+       <div class="D-sh" style="margin-top:6px">Tags<span class="k"><kbd>T</kbd> carpetas</span></div>${tagTree({style:'dot',cursor:false,rows:TREE.filter(r=>!r.note&&!r.more)})}`;
+  const RES=['n1','n8','n25','n2','n3','n9','n4','n10','n11','n20','n12'];
+  const FOUND=['n1','n4','n9','n3','n2'];
+  const FOLD=['n1','n4','n9','n8','n11','n5','n6'];
+  META.n5=META.n5||['20 oct','Rendimiento, densidad, nada de spinners. Lo visible se decide aquí antes de abrir la PR.',3];
+  META.n6=META.n6||['19 oct','Todo color y medida sale del tema; un test vigila que metalmind-ui no escriba ni un píxel.',0];
+  let head, filter, items;
+  if(sc==='carpetas'){
+    head=`<div class="D-lt"><b>metalmind/</b><span class="q">proyectos/metalmind/</span><span class="n">7 notas</span></div>`;
+    filter=`<div class="D-filter">${I('search')}<span>filtrar  /</span></div>`; items=dItems(FOLD);
+  } else if(sc==='finder'){
+    head=`<div class="D-lt"><b>rust vivo</b><span class="q">#rust -#archivado</span><span class="n">5 de 38</span></div>`;
+    filter=`<div class="D-filter on">${I('search')}<span>${queryHTML()}</span><span class="r">filtra la lista, sin modal</span></div>`; items=dItems(FOUND,'render');
+  } else {
+    head=`<div class="D-lt"><b>rust vivo</b><span class="q">#rust -#archivado</span><span class="n">38 notas</span></div>`;
+    filter=`<div class="D-filter">${I('search')}<span>filtrar  <kbd>space f</kbd></span></div>`; items=dItems(RES);
+  }
+  const list=`<div class="D-list"><div class="D-lh">${head}
+     <div class="D-modes"><span class="on">Notas<i>${sc==='finder'?5:sc==='carpetas'?7:38}</i></span><span>Enlazan aquí<i>4</i></span><span>Salientes<i>2</i></span><span class="sort">modificada ↓</span></div></div>
+     ${filter}<div class="D-items">${items}</div>
+     <div class="D-lf"><span><kbd>j</kbd><kbd>k</kbd> mover</span><span><kbd>enter</kbd> editar</span><span><kbd>t</kbd> etiquetar</span><span><kbd>gb</kbd> enlazan aquí</span></div></div>`;
+  const nh=`<div class="D-nh"><span class="p">proyectos/metalmind/<b>gpui-render-loop.md</b></span><span class="chips">${['rust','gpui','diseño'].map(t=>`<span class="chip" style="${tc(t)}">#${t}</span>`).join('')}</span></div>`;
+  const note = sc==='grafo'
+    ? `<div class="D-note">${nh}<div class="D-graph">${graphSVG({w:1000,h:820,sub:new Set([...RUSTQ,'t:diseño','t:ui','n5']),sel:'n1',hl:RUSTQ,labels:'all',pad:[150,60],scale:1.2})}<div class="cap"><b>Grafo de la lista</b> · las 38 notas de «rust vivo» y sus tags · <kbd>esc</kbd> volver a la nota</div></div></div>`
+    : `<div class="D-note">${nh}<div class="D-ed">${editorHTML({})}</div>
+       <div class="D-bl"><h4>Enlazan aquí · 4<span><kbd>gb</kbd> abrir en la lista · 1 fuera de focus</span></h4>${BACKLINKS.slice(0,3).map(b=>`<div class="it"><span>${esc(NOTE[b.id].t)}</span><span class="c">${backlinkCtx(b)}</span></div>`).join('')}</div></div>`;
+  return `<div class="D-grid"><aside class="D-src">${src}</aside>${list}${note}
+    <div class="D-status"><span class="mode">${sc==='finder'?'FILTRO':'NORMAL'}</span><span>lista 1/${sc==='finder'?5:38}</span><span>gpui-render-loop.md</span><span class="ok">guardado</span><span class="fc">focus: #rust -#archivado</span><span class="sp"></span><span class="faint"><kbd>ctrl-w h</kbd> lista · <kbd>ctrl-w l</kbd> nota</span><span>9:3</span></div></div>`;
+}
+
+/* ===================================================================
+   textos de cada dirección
+   =================================================================== */
+const DIRS = {
+ A:{name:'A · Silencio',sub:'minimal tipo Zed / iA Writer: casi sin cromo',render:renderA,
+  phil:`La nota ocupa la ventana: una columna de unos 72 caracteres centrada, con el panel lateral como único cromo y separado por un borde de 1 px. Los tags son un punto de color, no un ícono; las vistas guardadas van arriba del árbol, sin encabezados gruesos. Los backlinks no viven en otro panel: son la continuación del texto, al pie de la nota, donde termina el scroll. El grafo es una escena pasajera (<code>space g</code>) que se cierra con <code>esc</code>, y el finder es el picker de hoy, solo que ordenado.`,
+  pros:['Es la que mejor cumple los cinco principios de <code>docs/design.md</code>: el contenido manda, nada brinca, todo es borde de 1 px.','Es una evolución de lo que ya existe (panel, picker, barra de estado), no una reescritura.','Funciona igual de bien a 1280 que a 1920; lee como iA Writer.'],
+  cons:['Descubre poco: el grafo, el focus y los backlinks fuera de focus quedan escondidos detrás de teclas.','A 1920 sobra espacio a los lados de la columna.','Con un solo panel lateral, cambiar entre tags y carpetas es más frecuente.'],
+  cost:`<b>Bajo.</b> La columna centrada es un <code>max_w</code> más el padding calculado en <code>editor/rows.rs</code>. Lo nuevo de verdad son los backlinks como bloque no editable al final del scroll (un tipo de fila extra en el modelo de alturas que ya mide cada línea) y la escena de grafo: un elemento propio que pinta círculos y líneas con <code>paint_quad</code>/<code>PathBuilder</code>, con el layout de fuerzas en el executor de fondo. Todo cabe en los tokens que ya existen (<code>spacing</code>, <code>rows</code>, <code>layout</code>).`},
+ B:{name:'B · Taller',sub:'denso tipo IDE, con docks y pestañas',render:renderB,
+  phil:`Todo a la vista a la vez, como un IDE de JetBrains o Zed con todos los docks abiertos: barra de actividad, panel lateral con secciones apilables (Vistas, Tags, Carpetas), pestañas, splits de <code>ctrl-w</code> y un dock derecho con Backlinks, Salientes, Esquema, el grafo local y los tags de la nota. La barra de estado es de las de vim con <i>lualine</i>: el modo en un bloque de color y el focus siempre escrito. El finder trae vista previa a la derecha.`,
+  pros:['Aprovecha 1920: cada cosa del roadmap (backlinks, grafo, focus, vista del tag) tiene un lugar fijo.','Encaja con lo que ya hay: splits, documentos ocultos y la vista de tag de 05 §7 caben como pestañas.','Lo más fácil de enseñar: cada botón muestra su tecla (principio 3).'],
+  cons:['Ruido: va contra «la interfaz se calla» si los docks arrancan abiertos; el default tendría que ser cerrado.','A 1280 aprieta: el segundo split y el dock compiten (aquí se esconde el split).','Pestañas y buffers: <code>:ls</code>/<code>:b</code> todavía están pendientes, y las pestañas son un modelo más que mantener junto a los paneles.'],
+  cost:`<b>Medio-alto.</b> Hace falta un sistema de docks propio (Zed tiene <code>Dock</code>/<code>Panel</code> en su crate <code>workspace</code>, que no se puede usar): redimensionar, abrir y cerrar, recordar el estado por vault en <code>ui.yaml</code>. Las pestañas, la barra de actividad y el finder con vista previa (#77) son trabajo de vista. El grafo local del dock es la misma pieza que en A, en chico. Es la que más tokens nuevos de <code>layout</code> pide.`},
+ C:{name:'C · Constelación',sub:'el grafo de notas y tags como vista principal',render:renderC,
+  phil:`Abre en el mapa del vault: los tags son nodos grandes con su color, las notas son puntos, los padres son líneas punteadas y los links, líneas azules. La consulta (<code>#rust -#archivado</code>) está arriba a la izquierda y filtra el grafo en vivo: lo que no entra se atenúa en lugar de desaparecer. Las notas sin tags flotan alrededor de «Sin tags», el buzón, como recordatorio. La nota se edita en un cajón a la derecha con su propia barra de vim; el grafo se navega con <code>hjkl</code> entre vecinos.`,
+  pros:['Es la que más dice «los tags son el eje»: se ve que <code>gpui</code> cuelga de Rust y de ui a la vez, cosa que ninguna carpeta muestra.','El buzón se vuelve visible y da ganas de vaciarlo.','Ninguna otra app de notas en Linux se ve así; la identidad es fuerte.'],
+  cons:['El grafo es prioridad baja (06 §11) y con mil notas se vuelve una bola de pelos sin agrupar por tag.','Escribir pasa a segundo plano: choca con «el contenido manda».','Navegar un grafo con teclado no tiene un estándar; hay que inventarlo y enseñarlo.'],
+  cost:`<b>Alto.</b> Layout de fuerzas incremental en un hilo de fondo (y estable entre frames para que nada brinque), pintado de miles de nodos y aristas en GPUI, hit-testing propio, etiquetas con <i>culling</i>, zoom y paneo, y la navegación <code>hjkl</code> por vecinos. El cajón del editor es un split con ancho fijo. Lo bueno: todo sale del <code>TagGraph</code> y del índice de links que ya existen, sin tocar el núcleo.`},
+ D:{name:'D · Bandeja',sub:'lista primero, en tres columnas (Bear, nvALT, un cliente de correo)',render:renderD,
+  phil:`Aquí lo principal es una <b>lista de notas</b>, no una nota (A), ni un espacio de trabajo (B), ni un mapa (C). A la izquierda se elige de dónde sale la lista: una vista guardada, un tag, una carpeta o el buzón. En medio va la lista, con título, extracto, tags, número de backlinks y fecha, y se recorre con <code>j</code>/<code>k</code> como un correo. A la derecha está la nota. <code>space f</code> no abre un modal: escribe en el filtro de la lista, como nvALT, y la misma lista cambia a «Enlazan aquí» o «Salientes» con una tecla. Está hecha para el flujo de 06 §9: capturar al buzón y vaciarlo etiquetando (<code>t</code>) una nota tras otra.`,
+  pros:['Vaciar el buzón es natural: abres «buzón», bajas con <code>j</code> y etiquetas con <code>t</code> sin perder la lista de vista.','Ves muchas notas con contexto (extracto, tags, fecha, backlinks) sin abrirlas, y el filtro sobre la lista evita abrir y cerrar el picker.','Un solo componente para muchas cosas: resultados, notas de un tag, backlinks y salientes son la misma lista.'],
+  cons:['Tres columnas ocupan mucho ancho: a 1280 la nota queda en unos 650 px.','La columna de fuentes y la lista se parecen al árbol de tags de las otras; hay dos lugares que listan notas.','Los extractos exigen leer el primer párrafo de cada nota para el índice: más trabajo y más memoria con 50 k notas.'],
+  cost:`<b>Medio.</b> La lista es una <code>uniform_list</code> con filas de alto fijo (tres líneas), como el árbol. El extracto, el número de backlinks y el <code>mtime</code> salen del índice (el extracto, cacheado por versión del archivo). El filtro dentro de la lista reutiliza <code>PickerState</code> y <code>nucleo</code> sin la ventana flotante. El modo «enlazan aquí» lee el índice de links de M3. El grafo de la lista es el mismo elemento que en A, alimentado con el conjunto de la lista.`},
+};
+
+/* ===================================================================
+   variantes: D1 · D2 (varios paneles) y A1 · A2 (carpetas)
+   =================================================================== */
+const SRC_ZED=[
+  '---',
+  'tags: [lectura, gpui]',
+  '---',
+  '# Zed — cómo pinta el editor',
+  '',
+  'Notas de leer `editor/element.rs` con calma. Zed no repinta la ventana entera: pide al **DisplayMap** solo las filas visibles y las mide una vez.',
+  '',
+  '## El orden de un frame',
+  '- `request_layout` decide cuánto mide el editor; no toca el texto.',
+  '- `prepaint` mide las líneas visibles y coloca bloques, gutter y tooltips.',
+  '- `paint` solo pinta lo que ya está medido: quads, glifos y el cursor.',
+  '',
+  '## Lo que me llevo a Metalmind',
+  'Cachear el `ShapedLine` por línea y por versión del buffer, como en [[El render loop de GPUI]]. Si cambia una letra, se mide otra vez esa línea y nada más.',
+  '',
+  '```rust',
+  'let shaped = cache.entry((row, buffer.version()))',
+  '    .or_insert_with(|| window.text_system().shape_line(text, size, &runs));',
+  '```',
+  '',
+  '> Pendiente: cómo pinta el *inlay hint* sin mover el cursor. #lectura',
+];
+const LDATE={n5:'20 oct',n6:'19 oct',n7:'18 oct',n13:'9 oct',n17:'8 oct',n19:'6 oct'};
+const dateOf=id=>(META[id]&&META[id][0])||LDATE[id]||'oct';
+const EXTRA=[
+  ['Medir texto con ShapedLine','5 oct',['render']],['Tooltips en prepaint','4 oct',['gpui']],['Pin sin miedo','3 oct',['async']],
+  ['Watcher con notify','2 oct',['crates']],['Bench del árbol con 50 k notas','1 oct',['render']],['nucleo: cómo puntúa','30 sep',['crates']],
+  ['Ropey para el buffer','29 sep',['crates']],['Snapshot tests con insta','27 sep',['crates']],['Errores: thiserror o anyhow','25 sep',['rust']],
+  ['Clippy pedante: lo que sí activo','24 sep',['rust']],['Cargo workspaces en Metalmind','22 sep',['crates']],['Iteradores y lifetimes','20 sep',['rust']],
+  ['Canales en el executor de GPUI','18 sep',['async','gpui']],['Rust en el trabajo: propuesta GS','15 sep',['rust','gs']],
+];
+function paneHead(f,tags,num){
+  const i=f.lastIndexOf('/');
+  return `<div class="vp-h">${num?`<span class="pn">${num}</span>`:''}<span class="p">${esc(f.slice(0,i+1))}<b>${esc(f.slice(i+1))}</b></span><span class="chips">${tags.map(t=>`<span class="chip" style="${tc(t)}">#${t}</span>`).join('')}</span></div>`;
+}
+function vPane(o){
+  return `<div class="vp ${o.on?'on':''}">${paneHead(o.f,o.tags,o.num)}
+    <div class="vp-ed">${editorHTML({src:o.src,cur:o.cur})}</div>
+    <div class="vp-foot">${I('link')}<b>Enlazan aquí · ${o.blN||o.bl.length}</b><span class="ls">${o.bl.map(esc).join(' · ')}</span>${o.key||'<kbd>gb</kbd>'}</div></div>`;
+}
+function vStrip(){
+  return `<div class="vstrip"><div class="ab on">${I('list')}<span>38</span></div><div class="ab">${I('search')}</div><div class="ab">${I('hash')}</div><div class="ab">${I('inbox')}<span>7</span></div>
+    <div class="grow"></div><div class="ab key">ctrl<br>w h</div></div>`;
+}
+function vListHead(n){
+  return `<div class="vl-h"><div class="vl-src"><b>rust vivo</b><span class="faint">▾</span><span class="n">${n} notas</span></div>
+    <div class="vl-q">#rust -#archivado · <kbd>space v</kbd> fuente</div></div>`;
+}
+function dItemsPanes(ids,panes){
+  return ids.map(id=>{const n=NOTE[id],m=META[id]; const p=panes[id];
+    return `<div class="D-item ${p===1?'on':p?'open':''}"><div class="t"><span>${esc(n.t)}</span><span class="d">${m[0]}</span>${p?`<span class="pn">${p}</span>`:''}</div>
+      <div class="x">${esc(m[1])}</div>
+      <div class="m">${n.tags.map(t=>`<span class="chip" style="${tc(t)}">#${t}</span>`).join('')}${m[2]?`<span class="bl">${I('link')}${m[2]}</span>`:''}<span class="p">${esc(n.f.split('/').slice(0,-1).join('/'))}/</span></div></div>`}).join('');
+}
+
+function renderD1(){
+  const RES=['n1','n8','n25','n2','n3','n9','n4','n10','n11','n20','n12'];
+  const list=`<div class="D-list">${vListHead(38)}
+     <div class="D-filter">${I('search')}<span>filtrar  <kbd>space f</kbd></span><span class="r"><kbd>ctrl-v</kbd> abrir al lado</span></div>
+     <div class="D-items">${dItemsPanes(RES,{n1:1,n3:2})}</div>
+     <div class="D-lf"><span><kbd>enter</kbd> en el panel activo</span><span><kbd>ctrl-v</kbd> split</span><span><kbd>ctrl-s</kbd> abajo</span></div></div>`;
+  const p1=vPane({on:1,num:1,f:'proyectos/metalmind/gpui-render-loop.md',tags:['rust','gpui','diseño'],src:SRC,cur:CUR,
+    bl:['Zed — cómo pinta el editor','Entrevista Ferrum — ronda 2','Tablero de diseño','Entidades y contexto en GPUI']});
+  const p2=vPane({num:2,f:'lecturas/zed-como-pinta-el-editor.md',tags:['lectura','gpui'],src:SRC_ZED,cur:13,
+    bl:['El render loop de GPUI','Render del editor']});
+  return `<div class="D1-grid">${list}${vStrip()}${p1}${p2}
+    <div class="D-status"><span class="mode">NORMAL</span><span>ventana 1 de 2</span><span>gpui-render-loop.md</span><span class="ok">guardado</span><span class="fc">focus: #rust -#archivado</span><span class="sp"></span><span class="faint"><kbd>ctrl-w l</kbd> otra nota · <kbd>ctrl-w o</kbd> solo esta · <kbd>ctrl-w h</kbd> lista</span><span>9:3</span></div></div>`;
+}
+
+function renderD2(){
+  const ids=['n1','n8','n25','n2','n3','n9','n4','n10','n11','n20','n12'];
+  const rows=ids.map((id,i)=>{const n=NOTE[id]; return `<div class="vl-row ${i===0?'on':''}"><span class="dots">${n.tags.slice(0,3).map(t=>`<span class="dot" style="${tc(t)}"></span>`).join('')}</span><span class="t">${esc(n.t)}</span><span class="d">${dateOf(id)}</span></div>`}).join('')
+    + EXTRA.map(([t,d,tags])=>`<div class="vl-row"><span class="dots">${tags.map(x=>`<span class="dot" style="${tc(x)}"></span>`).join('')}</span><span class="t">${esc(t)}</span><span class="d">${d}</span></div>`).join('');
+  const list=`<div class="D-list">${vListHead(38)}
+     <div class="D-filter">${I('search')}<span>filtrar  <kbd>space f</kbd></span></div>
+     <div class="vl-rows">${rows}</div>
+     <div class="D-lf"><span><kbd>j</kbd><kbd>k</kbd> mover</span><span><kbd>t</kbd> etiquetar</span><span><kbd>space l</kbd> plegar</span></div></div>`;
+  const note=vPane({on:1,f:'proyectos/metalmind/gpui-render-loop.md',tags:['rust','gpui','diseño'],src:SRC,cur:CUR,
+    blN:4,bl:['en el panel de contexto, a la derecha'],key:'<kbd>space b</kbd>'});
+  const ctx=`<div class="ctx">
+    <div class="ctx-h"><b>Contexto</b><span>de esta nota</span><span class="k"><kbd>space b</kbd> / <kbd>esc</kbd> cerrar</span></div>
+    <div class="ctx-tabs"><span class="on">Enlazan aquí<i>4</i></span><span>Salientes<i>2</i></span></div>
+    ${BACKLINKS.map((b,i)=>`<div class="ctx-bl ${i===0?'on':''}"><div class="t"><span>${esc(NOTE[b.id].t)}</span><small>:${b.ln}</small></div><div class="c">${backlinkCtx(b)}</div></div>`).join('')}
+    <div class="ctx-more">+ 1 fuera de focus · <kbd>enter</kbd> abrir · <kbd>ctrl-v</kbd> al lado</div>
+    <div class="ctx-sec">Grafo local · 1 salto<span><kbd>space g</kbd> grande</span></div>
+    <div class="ctx-g">${graphSVG({w:380,h:420,sub:LOCAL,sel:'n1',labels:'all',pad:[46,30],scale:.95,fs:11})}</div></div>`;
+  return `<div class="D2-grid">${list}${vStrip()}${note}${ctx}
+    <div class="D-status"><span class="mode">NORMAL</span><span>lista 1/38</span><span>gpui-render-loop.md</span><span class="ok">guardado</span><span class="fc">focus: #rust -#archivado</span><span class="sp"></span><span class="faint"><kbd>space l</kbd> lista · <kbd>space b</kbd> contexto</span><span>9:3</span></div></div>`;
+}
+
+function aNote(o={}){
+  return `${o.crumb===false?'':'<div class="A-crumb">proyectos / metalmind / gpui-render-loop.md</div>'}
+   <div class="A-col" style="${o.colStyle||''}">${o.pre||''}${editorHTML({cls:'A-ed'})}
+     <div class="A-back"><h4>4 notas enlazan aquí · 1 fuera de focus</h4>
+     ${BACKLINKS.map(b=>`<div class="A-bl"><div class="t">${esc(NOTE[b.id].t)}<small>${esc(NOTE[b.id].f.split('/').slice(0,-1).join('/'))}/</small></div><div class="c">${backlinkCtx(b)}</div></div>`).join('')}
+     </div></div>`;
+}
+function aStatus(hint){
+  return `<div class="A-status"><span class="mode">NORMAL</span><span>gpui-render-loop.md</span><span class="ok">guardado</span><span class="sp"></span><span class="faint">${hint}</span><span>9:3</span></div>`;
+}
+const FDIM=new Set([0,1,5,7,16,18,20,21,22,23]); // sin notas dentro del focus #rust -#archivado
+function foldersDim(o={}){
+  return `<div class="tree">`+FOLDERS.map((r,i)=>{
+    const tw=`<span class="tw">${r.dir?(r.open?'▾':'▸'):''}</span>`;
+    const cls=[r.dir?'':'note',r.active?'active':'',o.dim&&FDIM.has(i)?'dimf':'',o.cursor===i?'cursor':''].join(' ');
+    return `<div class="row ${cls}" style="--d:${r.d}">${tw}${I(r.dir?'folder':'file')}<span class="nm">${esc(r.n)}${r.dir?'/':''}${r.hint?` <span class="faint">· ${r.hint}</span>`:''}</span>${r.c!==undefined?`<span class="cnt">${r.c}</span>`:''}</div>`;
+  }).join('')+`</div>`;
+}
+function renderA1(){
+  const side=`<div class="A1-seg"><span>Tags</span><span class="on">Carpetas</span><kbd>T</kbd></div>
+    ${foldersDim({dim:1})}
+    <div class="A1-note">Atenuadas: sin notas en el focus <span class="q-tag" style="${tc('rust')};color:var(--tc)">#rust</span> <span class="mono">-#archivado</span></div>`;
+  return `<div class="A-grid"><aside class="A-side">${side}</aside><main class="A-main">${aNote()}</main>
+    ${aStatus('<kbd>T</kbd> tags/carpetas · <kbd>space f</kbd> buscar · <kbd>space g</kbd> grafo')}</div>`;
+}
+function renderA2(){
+  const side=`<div class="A-head"><span>Vistas</span></div><div class="A-views">${viewsList({tw:false,icon:false})}</div><div class="A-sep"></div>
+    <div class="A-head"><span>Tags</span><span class="sw"><span>carpetas <kbd>space e</kbd></span></span></div>${tagTree({style:'dot',cursor:false})}`;
+  const crumb=`<div class="A2-crumb"><span class="s">proyectos</span><span class="faint">/</span><span class="s on">metalmind</span><span class="faint">/</span><span class="f">gpui-render-loop.md</span><span class="k"><kbd>space e</kbd> árbol</span></div>`;
+  const tree=`<div class="picker A2-tree"><div class="pk-in">${I('folder')}<span class="lab">carpetas</span><span class="pth">proyectos/metalmind/</span><span class="caretbar"></span><span class="scope">131 notas · 12 carpetas</span></div>
+    ${foldersDim({cursor:13})}
+    <div class="pk-foot"><span>escribe para filtrar</span><span><kbd>h</kbd><kbd>l</kbd> plegar</span><span><kbd>enter</kbd> abrir</span><span><kbd>ctrl-v</kbd> split</span><span><kbd>esc</kbd></span></div></div>`;
+  return `<div class="A-grid"><aside class="A-side">${side}</aside><main class="A-main">${aNote({crumb:false,colStyle:'padding-top:22px',pre:crumb})}${tree}</main>
+    ${aStatus('<kbd>space e</kbd> carpetas · <kbd>space f</kbd> buscar · <kbd>space g</kbd> grafo')}</div>`;
+}
+
+Object.assign(DIRS,{
+ D1:{name:'D1 · Split',sub:'D con dos notas lado a lado (ctrl-w v), sin volverse un IDE',render:renderD1,variant:1,base:'D',
+  phil:`Abrir una segunda nota desde la lista con <code>ctrl-v</code> (o <code>ctrl-w v</code> desde la nota) parte la zona de la nota en dos, como en vim. Para hacer sitio, la columna de fuentes desaparece: la fuente se vuelve el título de la lista («rust vivo ▾», <code>space v</code> para cambiarla). Cada panel lleva una sola cabecera de una línea con su ruta y una franja de backlinks plegada; no hay pestañas ni docks. El panel activo se distingue por la línea bajo la cabecera y por el texto a opacidad completa; el otro se atenúa un poco. En la lista, un número chico dice en qué panel está abierta cada nota. A 1280 la lista se pliega a una tira de íconos de 40 px (<code>ctrl-w h</code> la despliega) y cada nota queda en unos 620 px.`,
+  pros:['Es el modelo de ventanas de vim que ya usas: <code>ctrl-w v/s/o/h/l</code>, nada que aprender.','Comparar o copiar entre dos notas (la lectura y la nota técnica) sin perder la lista.','Sigue callado: cero pestañas, una cabecera por panel, lo demás es texto.'],
+  cons:['A 1920 con la lista abierta cada nota tiene unos 780 px: alcanza, pero no hay sitio para un tercer panel.','Dos cursores: hay que decidir qué panel recibe el <code>enter</code> de la lista (aquí, el activo).','<code>ctrl-w s</code> (arriba/abajo) con notas largas deja mitades cortas; es mejor para notas breves.'],
+  cost:`<b>Medio-bajo si D ya existe.</b> Los splits de <code>ctrl-w</code> ya están en el repo. Lo nuevo: (1) el layout que, en <code>render</code>, lee <code>window.bounds()</code> y elige lista completa o tira; (2) a qué panel va el <code>enter</code> de la lista y el número de panel en cada fila; (3) la franja de backlinks por panel, que es el bloque al pie de A en versión de una línea. No hay docks ni pestañas: en <code>ui.yaml</code> solo se guarda el ancho de la lista.`},
+ D2:{name:'D2 · Contexto',sub:'lista estrecha + una nota + panel de backlinks y grafo local que solo aparece al pedirlo',render:renderD2,variant:1,base:'D',
+  phil:`La lista se estrecha a títulos de una línea (sin extracto), con los tags como puntos, y absorbe la columna de fuentes en su título. La nota se queda con el centro. A la derecha, el panel de contexto —enlazan aquí, salientes y el grafo local a un salto— solo existe mientras lo pides con <code>space b</code>; cerrado, la nota vuelve a su franja de backlinks de una línea. <code>space l</code> pliega la lista. A 1280 la lista ya arranca plegada como tira de íconos (vista, buscar, tags, buzón) y el contexto queda en 330 px.`,
+  pros:['La nota manda y el contexto no estorba: aparece cuando estás conectando ideas y se va con <code>esc</code>.','El grafo local entra sin pagar el grafo grande: 10–20 nodos alrededor de la nota.','La lista de una línea muestra 25 notas a la vez: buena para vaciar el buzón con <code>j</code>/<code>k</code>/<code>t</code>.'],
+  cons:['Pierde el extracto de cada nota en la lista, que era lo especial de D (se puede volver con un modo «lista ancha»).','El panel de contexto es lo más parecido a un dock: si se deja abierto siempre, la ventana se vuelve B.','En 380 px, con 20 backlinks y el grafo, el panel necesita scroll.'],
+  cost:`<b>Medio.</b> La lista de una línea es la misma <code>uniform_list</code> con filas de 30 px, y más barata que la de D: no necesita extractos en el índice. El panel de contexto es una columna opcional con un booleano en el estado de la ventana. El grafo local es el elemento propio de A (<code>paint_quad</code> + <code>PathBuilder</code>) con un layout de fuerzas tan chico que se puede calcular en el mismo frame; es la pieza más cara y se puede posponer dejando solo los backlinks.`},
+ A1:{name:'A1 · Tags | Carpetas',sub:'A con un segmento en el panel lateral para alternar el árbol',render:renderA1,variant:1,base:'A',
+  phil:`El panel lateral de A lleva arriba un segmento de dos opciones, Tags | Carpetas, que hace lo mismo que la <code>T</code> de hoy pero dice en qué modo estás. En Carpetas el árbol revela la nota abierta (<code>proyectos/metalmind/gpui-render-loop.md</code>) y atenúa las carpetas sin nada dentro del focus, para que el focus siga mandando aunque cambies de árbol. Las vistas guardadas se quedan en el modo Tags. Lo demás no cambia: la nota sigue sola en su columna, con los backlinks al pie.`,
+  pros:['Es lo que ya existe (<code>T</code>) con una etiqueta visible: casi gratis y más fácil de descubrir.','Un panel, una columna de nota: A no pierde el silencio.','Las carpetas atenuadas por focus hacen que el focus no se rompa al cambiar de árbol.'],
+  cons:['Sigue siendo uno u otro: no ves a la vez los tags y la carpeta de una nota.','El segmento es cromo, aunque chico, arriba del panel.','Hay que decidir si el modo se recuerda por vault o por sesión.'],
+  cost:`<b>Bajo.</b> Los dos árboles ya existen; quedan detrás de un <code>enum</code> en el estado del panel. El segmento son dos <code>div</code> con <code>on_click</code> más la <code>T</code> que ya hay. Revelar la nota abierta es expandir sus ancestros y llamar <code>scroll_to_item</code> en la <code>uniform_list</code>. Atenuar por focus sale del conjunto que el focus ya calcula. El modo se guarda en <code>ui.yaml</code>.`},
+ A2:{name:'A2 · Migas + árbol en overlay',sub:'A sin modo carpetas en el panel: ruta navegable sobre la nota y el árbol en space e',render:renderA2,variant:1,base:'A',
+  phil:`El panel lateral se queda con Vistas y Tags y nada más. Las carpetas aparecen de dos formas: la ruta de la nota, arriba del título, es una miga de pan donde cada carpeta se abre (clic, o <code>space e</code> desde la carpeta de la nota); y el árbol completo vive en un overlay con forma de picker, que se abre ya desplegado en esa carpeta, se navega con <code>hjkl</code> y se cierra con <code>esc</code>. Escribir en el overlay filtra el árbol, así que tampoco hace falta un finder de archivos aparte.`,
+  pros:['La más silenciosa: las carpetas solo ocupan pantalla cuando las pides.','La miga dice dónde vive la nota sin un panel (y reemplaza la ruta que A tenía arriba a la derecha).','El overlay reusa el picker: mismo <code>esc</code>, mismos <code>ctrl-v</code>/<code>ctrl-s</code>.'],
+  cons:['No hay vista persistente de carpetas: reorganizar archivos (mover varios) en un overlay es incómodo.','Dos caminos a las carpetas (miga y overlay) que hay que enseñar.','Un picker con árbol (plegar y desplegar) es un tipo de picker nuevo: hoy es una lista plana.'],
+  cost:`<b>Bajo-medio.</b> La miga es una fila de <code>div</code> con <code>on_click</code> sobre la ruta relativa. El overlay es un <code>PickerState</code> nuevo cuyas filas son el árbol de carpetas aplanado (nivel y abierto/cerrado), pintado con <code>deferred(anchored())</code> como el picker de hoy. Lo nuevo de verdad: <code>h</code>/<code>l</code> para plegar dentro del picker y filtrar sin perder la jerarquía (mostrar los ancestros de cada coincidencia).`},
+});
+const RECO=`<b>A1 + los splits de D1, con la miga de A2 como cabecera de cada panel.</b> A es la base porque el día a día es escribir una nota, y A1 casi no cuesta: hace visible la <code>T</code> que ya existe sin agregar paneles. Cuando necesitas dos notas, el split de D1 es vim puro (<code>ctrl-w v</code>), sin pestañas ni docks; cada panel necesita decir qué archivo es, y la miga de A2 hace ese trabajo y de paso navega carpetas. La lista de D se queda como columna que se invoca (<code>space l</code>) para vaciar el buzón, y el panel de contexto de D2 puede llegar después, cuando exista el grafo local.`;
+
+/* ===================================================================
+   montaje
+   =================================================================== */
+const S={d:'A',t:'oscuro',s:'editor'};
+function readHash(){const p=new URLSearchParams(location.hash.slice(1)); if(DIRS[p.get('d')])S.d=p.get('d'); if(['oscuro','claro'].includes(p.get('t')))S.t=p.get('t'); if(['editor','finder','grafo','carpetas'].includes(p.get('s')))S.s=p.get('s');}
+function writeHash(){history.replaceState(null,'',`#d=${S.d}&t=${S.t}&s=${S.s}`)}
+function seg(id,items,key){
+  const el=document.getElementById(id); el.querySelectorAll('button').forEach(b=>b.remove());
+  items.forEach(([v,label,k])=>{const b=document.createElement('button'); b.innerHTML=label+(k?`<kbd>${k}</kbd>`:''); if(S[key]===v)b.className='on'; b.onclick=()=>{S[key]=v;draw()}; el.appendChild(b);});
+}
+function draw(){
+  writeHash();
+  document.body.className='pg-'+S.t;
+  seg('segD',[['A','A · Silencio','1'],['B','B · Taller','2'],['C','C · Constelación','3'],['D','D · Bandeja','4'],['D1','D1 · split','5'],['D2','D2 · contexto','6'],['A1','A1 · tags/carpetas','7'],['A2','A2 · migas','8']],'d');
+  seg('segT',[['oscuro','Oscuro'],['claro','Claro']],'t');
+  seg('segS',[['editor','Editor','e'],['finder','Finder <span class="mono">space f</span>','f'],['grafo','Grafo','g'],['carpetas','Carpetas','c']],'s');
+  const D=DIRS[S.d];
+  document.getElementById('segS').style.display=D.variant?'none':'';
+  const top=document.getElementById('top'), st=document.getElementById('stage');
+  if(innerWidth>860) st.style.height=`calc(100vh - ${top.offsetHeight}px)`; else st.style.height='';
+  GSLOTS.length=0;
+  st.innerHTML=`<div class="app dir-${D.base||S.d} th-${S.t}">${D.render(S.s)}</div>`;
+  st.querySelectorAll('.gslot').forEach(el=>{const o=GSLOTS[+el.dataset.g]; const r=el.getBoundingClientRect(); const w=Math.round(r.width)||o.w, h=Math.round(r.height)||o.h;
+    const k=Math.min(w/o.w,h/o.h); const pad=(o.pad||[60,40]).map(v=>Math.max(14,v*Math.min(1,k*1.2)));
+    el.outerHTML=graphSVG({...o,w,h,pad,measured:1});});
+  const row=(k,x)=>`<tr class="${k===S.d?'cur':''}"><td><b>${DIRS[k].name}</b></td>${x.map(c=>`<td>${c}</td>`).join('')}</tr>`;
+  if(D.variant){
+    const vr=(k,x)=>`<tr class="${k===S.d?'cur':''}"><td><b>${DIRS[k].name}</b></td>${x.map(c=>`<td>${c}</td>`).join('')}</tr>`;
+    document.getElementById('about').innerHTML=`
+     <h2>${D.name}</h2><div class="tag">${D.sub}</div>
+     <p>${D.phil}</p>
+     <div class="cols"><div><h3>A favor</h3><ul>${D.pros.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+     <div><h3>En contra</h3><ul>${D.cons.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+     <div><h3>Costo en GPUI</h3><p>${D.cost}</p></div></div>
+     <h3>Las cuatro variantes, lado a lado</h3>
+     <table><tr><th></th><th>Resuelve</th><th>Qué se ve</th><th>A 1280</th><th>Cromo que agrega</th><th>Costo</th></tr>
+     ${vr('D1',['varias notas en D','lista + dos notas lado a lado','la lista se pliega a una tira de íconos; notas de ~620 px','una cabecera de una línea por panel','medio-bajo'])}
+     ${vr('D2',['varias cosas a la vez en D','lista de títulos + nota + contexto a pedido','lista en íconos; contexto en 330 px','un panel derecho, solo con <code>space b</code>','medio'])}
+     ${vr('A1',['carpetas en A','nota sola; panel con Tags | Carpetas','igual que A','un segmento de dos opciones','bajo'])}
+     ${vr('A2',['carpetas en A','nota sola; carpetas en la miga y en un overlay','igual que A','una línea de ruta sobre el título','bajo-medio'])}
+     </table>
+     <h3>Recomendación</h3><p>${RECO}</p>
+     <p class="tag">Variantes de las direcciones A y D (B quedó descartada). Mismo tema, misma tipografía y mismo vault de ejemplo; la escena es fija en cada variante. Teclas <b>5–8</b>.</p>`;
+    return;
+  }
+  document.getElementById('about').innerHTML=`
+   <h2>${D.name}</h2><div class="tag">${D.sub}</div>
+   <p>${D.phil}</p>
+   <div class="cols"><div><h3>A favor</h3><ul>${D.pros.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+   <div><h3>En contra</h3><ul>${D.cons.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+   <div><h3>Costo en GPUI</h3><p>${D.cost}</p></div></div>
+   <h3>Las cuatro, lado a lado</h3>
+   <table><tr><th></th><th>Vista principal</th><th>Densidad</th><th>Dónde viven los tags</th><th>Backlinks</th><th>Grafo</th><th>Cumple design.md</th><th>Costo</th></tr>
+   ${row('A',['la nota','baja','árbol con punto de color, vistas arriba','al pie de la nota','escena con <code>space g</code>','al pie de la letra','bajo'])}
+   ${row('B',['varias notas a la vez','alta','sección del panel, con emoji/ícono y filtro','dock derecho con contexto','pestaña + mini en el dock','si los docks arrancan cerrados','medio-alto'])}
+   ${row('C',['el grafo','media','leyenda con barras de conteo; el grafo mismo','al pie del cajón','vista principal','no del todo: el grafo manda, no el texto','alto'])}
+   ${row('D',['una lista de notas','media-alta','fuente de la lista (vista, tag, carpeta, buzón)','modo de la lista + franja bajo la nota','el de la lista actual','sí','medio'])}
+   </table>
+   <h3>Qué es igual en las cuatro</h3>
+   <p><b>El tema es el mismo:</b> las cuatro usan la paleta de fábrica del repo (<code>metalmind-oscuro</code> y <code>metalmind-claro</code>: fondo <code>#1c1f24</code>, acento <code>#7aa2f7</code>, los tags en los colores de esa paleta), los mismos tamaños, filas de 26 px y bordes de 1 px, Inter en la interfaz y JetBrains Mono en el editor. Lo que cambia entre ellas es la estructura: qué vista es la principal, cómo se reparte la ventana y cómo se navega. Oscuro y claro solo cambian el tema.</p>
+   <p>Todas salen del mismo vault de ejemplo y respetan las decisiones de fondo: los tags son el eje y la vista por defecto del panel (05 §3), la jerarquía sale de <code>parents</code> y es un grafo (<code>gpui</code> aparece bajo Rust y bajo ui), el buzón es «Sin tags» al final (06 §9), las vistas guardadas son consultas de tags con nombre (06 §10), el focus siempre está escrito en la barra de estado (05 §3), no hay vista previa aparte sino live preview en el mismo editor: la línea del cursor muestra la fuente y las demás el resultado (06 §14), y nada de esto es una base de datos: la «vista del tag» de B es la página <code>tags/gpui.md</code> más su lista de notas. Cambia el <b>Tema</b> arriba para ver el claro; <b>Escena</b> muestra el finder con <code>#rust -#archivado render</code>, el grafo y la vista de carpetas de cada dirección.</p>`;
+}
+readHash(); draw();
+addEventListener('hashchange',()=>{readHash();draw()});
+let rz; addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(draw,150)});
+addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const m={'1':['d','A'],'2':['d','B'],'3':['d','C'],'4':['d','D'],'5':['d','D1'],'6':['d','D2'],'7':['d','A1'],'8':['d','A2'],e:['s','editor'],f:['s','finder'],g:['s','grafo'],c:['s','carpetas']};
+  if(e.key==='t'){S.t=S.t==='oscuro'?'claro':'oscuro';draw();return}
+  if(m[e.key]){S[m[e.key][0]]=m[e.key][1];draw()}
+});
+</script>
+</body>
+</html>
