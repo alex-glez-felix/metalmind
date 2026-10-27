@@ -382,7 +382,9 @@ const SCENES: &[(&str, &[Step])] = &[
     // focus bajo el encabezado corre las del árbol una más abajo.
     (
         "focus-tags",
-        &[Step::Keys("<Esc><Esc><C-w>l:focus #rust -#archivado<CR><C-w>h")],
+        &[Step::Keys(
+            "<Esc><Esc><C-w>l:focus #rust -#archivado<CR><C-w>h",
+        )],
     ),
     ("focus-carpetas", &[Step::Keys("Tgg")]),
     ("focus-menu", &[Step::RightClickRow(1)]),
