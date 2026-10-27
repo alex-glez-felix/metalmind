@@ -23,7 +23,8 @@ use super::cursor::cursor_position;
 use super::layout::FrameLayout;
 use crate::actions::{AppKeymap, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
-use crate::completion::{LinkCompletions, Selection, TagCompletions};
+use crate::completion::{LinkCompletions, NoteCandidates, Selection, TagCompletions};
+use crate::finder::Note;
 use crate::theme::Theme;
 use crate::workspace::{Message, PaneId, TypedLink, TypedTag, Workspace, WorkspaceError};
 
@@ -70,6 +71,8 @@ pub(super) struct Completion {
     list: Option<List>,
     /// Los candidatos de unos tags: se arman de nuevo solo si llegan otros.
     tags: Option<(Arc<Tags>, Arc<[TagCompletion]>)>,
+    /// Las notas de `[[`: se arman de nuevo solo si cambian.
+    notes: Option<Arc<NoteCandidates>>,
     /// Para nombres de tags.
     names: FuzzyMatcher,
     /// Para rutas de notas.
@@ -81,6 +84,7 @@ impl Default for Completion {
         Self {
             list: None,
             tags: None,
+            notes: None,
             names: FuzzyMatcher::text(),
             paths: FuzzyMatcher::paths(),
         }
@@ -102,6 +106,21 @@ impl Completion {
             _ => {
                 let candidates: Arc<[TagCompletion]> = tags.completions().into();
                 self.tags = Some((tags, Arc::clone(&candidates)));
+                candidates
+            }
+        }
+    }
+}
+
+impl Completion {
+    /// Un lote del vault trae otra lista de notas aunque no cambie (un
+    /// autoguardado): convertirlas para filtrar se hace solo si cambió.
+    fn note_candidates(&mut self, notes: Arc<[Note]>) -> Arc<NoteCandidates> {
+        match &self.notes {
+            Some(cached) if cached.has(&notes) => Arc::clone(cached),
+            _ => {
+                let candidates = Arc::new(NoteCandidates::new(notes));
+                self.notes = Some(Arc::clone(&candidates));
                 candidates
             }
         }
@@ -147,12 +166,18 @@ impl Editor {
     /// calcula cómo nombrar a las demás.
     fn link_list(&mut self, typed: &TypedLink, cx: &App) -> Option<List> {
         let source = self.note_path(cx)?;
-        let candidates = self.session.read(cx).notes();
+        let notes = self.session.read(cx).notes();
+        let candidates = self.completion.note_candidates(notes);
         let matcher = &mut self.completion.paths;
         match self.completion.list.take() {
-            Some(List::Links(list)) if list.is_for(&candidates, &typed.typed) => Some(list),
-            Some(List::Links(list)) if list.typed() == typed.typed => {
-                list.with_candidates(candidates, &source, matcher)
+            Some(List::Links(list)) if list.is_for(&candidates, &typed.typed, &source) => {
+                Some(list)
+            }
+            Some(List::Links(list)) if list.is_among(&candidates, &source) => {
+                list.retyped(&typed.typed, matcher)
+            }
+            Some(List::Links(list)) if list.typed() == typed.typed && *list.source() == source => {
+                list.with_candidates(candidates, matcher)
             }
             _ => LinkCompletions::open(candidates, &typed.typed, &source, matcher),
         }

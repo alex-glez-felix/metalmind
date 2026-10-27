@@ -38,7 +38,10 @@ impl Workspace {
         };
         let start = buffer.line_start(line);
         let text = view.document.line_text(line)?;
-        let Some(found) = style.typed_wikilink(&text, cursor.get() - start.get()) else {
+        let Some(found) = style
+            .typed_wikilink(&text, cursor.get() - start.get())
+            .filter(|found| self.can_type_over(start + found.target.start))
+        else {
             return Ok(None);
         };
         Ok(Some(TypedLink {

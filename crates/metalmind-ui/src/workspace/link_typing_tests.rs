@@ -120,3 +120,19 @@ fn aceptar_sin_link_a_medio_escribir_no_cambia_nada() {
     accept(&mut session, "plan");
     assert_eq!(session.text(), "hola [[pla\n");
 }
+
+/// En Insert sobre un bloque, lo escrito en la pasada se completa y `⎋` lo
+/// repite ya completado; lo que ya estaba antes no, porque borrarlo no se
+/// repetiría en las demás líneas.
+#[test]
+fn en_insert_por_bloque_solo_lo_escrito_en_la_pasada() {
+    let mut session = Session::new("a\nb\n");
+    session.keys("⌃vj$A [[pl");
+    assert_eq!(typed(&session), Some(open("pl")));
+    accept(&mut session, "plan");
+    session.keys("⎋");
+    assert_eq!(session.text(), "a [[plan]]\nb [[plan]]\n");
+    let mut session = Session::new("a [[pl\nb\n");
+    session.keys("⌃vj$A");
+    assert_eq!(typed(&session), None);
+}

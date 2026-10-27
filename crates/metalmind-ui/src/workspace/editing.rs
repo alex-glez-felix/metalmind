@@ -123,6 +123,15 @@ impl Workspace {
         Ok(last)
     }
 
+    /// Si al completar se puede borrar desde `start`: en Insert sobre un
+    /// bloque, solo lo escrito en esta pasada, porque lo de antes no se
+    /// repetiría en las demás líneas.
+    pub(super) fn can_type_over(&self, start: ByteOffset) -> bool {
+        self.vim
+            .block_insert_start()
+            .is_none_or(|inserted| start >= inserted)
+    }
+
     /// Cambia `typed`, lo que acaba de escribirse antes del cursor, por
     /// `text`, como si se tecleara: entra en el mismo paso de undo que el
     /// resto de la pasada por Insert y `.` lo repite. Como el completado de

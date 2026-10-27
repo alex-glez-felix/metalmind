@@ -107,6 +107,15 @@ fn en_insert_por_bloque() {
     assert_eq!(session.text(), "hola #Rust\nchao #Rust\n");
 }
 
+/// Un tag que ya estaba antes de un Insert sobre un bloque no se completa:
+/// borrarlo no se repetiría en las demás líneas.
+#[test]
+fn en_insert_por_bloque_no_lo_que_ya_estaba() {
+    let mut session = Session::new("hola #ru\nchao\n");
+    session.keys("⌃vj$A");
+    assert_eq!(typed(&session), None);
+}
+
 /// Aceptar mira el tag de ahora: si ya no se escribe uno (otro panel, fuera
 /// de Insert), no cambia nada.
 #[test]

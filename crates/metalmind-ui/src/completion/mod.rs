@@ -5,6 +5,6 @@ mod links;
 mod selection;
 mod tags;
 
-pub use self::links::LinkCompletions;
+pub use self::links::{LinkCompletions, NoteCandidates};
 pub use self::selection::Selection;
 pub use self::tags::TagCompletions;
