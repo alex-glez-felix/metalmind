@@ -9,6 +9,7 @@ use std::path::Path;
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::order::{Entries, arrange};
+use crate::origin::Origins;
 use crate::path::VaultPath;
 use crate::scan::{BeforeReading, scan_partial};
 
@@ -134,25 +135,9 @@ fn diff(
 ) -> Vec<VaultChange> {
     let mut removed = Entries::new();
     let mut created = Entries::new();
-    let mut modified = BTreeSet::new();
-    // Lo que queda dentro de una carpeta que llegó por rename a donde había
-    // otra es otro archivo con la misma ruta.
-    let targets: BTreeSet<&VaultPath> = touched.renames.iter().map(|(_, to)| to).collect();
-    let arrived_inside =
-        |path: &VaultPath| path.ancestors().any(|folder| targets.contains(&folder));
     for (path, kind) in before {
-        match after.get(path) {
-            Some(new) if new == kind => {
-                if *kind != EntryKind::Folder
-                    && (touched.paths.contains(path) || arrived_inside(path))
-                    && !unread.contains_key(path)
-                {
-                    modified.insert(path.clone());
-                }
-            }
-            _ => {
-                removed.insert(path.clone(), *kind);
-            }
+        if after.get(path) != Some(kind) {
+            removed.insert(path.clone(), *kind);
         }
     }
     for (path, kind) in after {
@@ -161,49 +146,48 @@ fn diff(
         }
     }
     let mut changes = arrange(before, after, &removed, &created, &touched.renames);
-    // Un archivo que llega por rename y pisa otro también trae contenido nuevo.
-    let replaced = touched.renames.iter().map(|(_, to)| to).filter(|to| {
-        before
-            .get(*to)
-            .is_some_and(|kind| *kind != EntryKind::Folder)
-    });
-    let arrived: BTreeSet<VaultPath> = touched.written.iter().chain(replaced).cloned().collect();
-    modified.extend(edited_while_moving(&changes, after, &arrived));
+    let modified = modified(&changes, before, after, touched);
     changes.extend(
         modified
             .into_iter()
+            .filter(|path| !unread.contains_key(path))
             .map(|path| VaultChange::Modified { path }),
     );
     changes
 }
 
-/// Los archivos que un `Renamed` lleva a su destino y cuyo contenido cambió
-/// en el lote (se escribieron o les llegó otro por rename), antes o después
-/// de moverse.
-fn edited_while_moving(
+/// Los archivos que siguen en el índice tras `changes` (en su sitio o
+/// movidos por un `Renamed`) pero cuyo contenido ya no es el que `changes`
+/// les atribuye.
+fn modified(
     changes: &[VaultChange],
+    before: &HashMap<VaultPath, EntryKind>,
     after: &HashMap<VaultPath, EntryKind>,
-    written: &BTreeSet<VaultPath>,
-) -> Vec<VaultPath> {
-    let mut edited = Vec::new();
+    touched: &Touched,
+) -> BTreeSet<VaultPath> {
+    let origins = Origins::trace(before, touched);
+    let mut modified = BTreeSet::new();
+    for (path, kind) in after {
+        let stayed = *kind != EntryKind::Folder && before.get(path) == Some(kind);
+        if stayed && (touched.paths.contains(path) || !origins.kept(path, path)) {
+            modified.insert(path.clone());
+        }
+    }
     for change in changes {
         let VaultChange::Renamed { from, to, .. } = change else {
             continue;
         };
-        edited.extend(
-            after
-                .iter()
-                .filter(|(path, kind)| **kind != EntryKind::Folder && path.starts_with(to))
-                .filter(|(path, _)| {
-                    written.contains(*path)
-                        || path
-                            .rebase(to, from)
-                            .is_some_and(|old| written.contains(&old))
-                })
-                .map(|(path, _)| path.clone()),
-        );
+        let carried = after.iter().filter_map(|(path, kind)| {
+            let old = path.rebase(to, from)?;
+            (*kind != EntryKind::Folder && before.get(&old) == Some(kind)).then_some((path, old))
+        });
+        for (path, old) in carried {
+            if !origins.kept(path, &old) {
+                modified.insert(path.clone());
+            }
+        }
     }
-    edited
+    modified
 }
 
 #[cfg(test)]
@@ -255,10 +239,10 @@ mod tests {
         let (_, events) = match op {
             Op::WriteFile(path) => {
                 let _ = fs::create_dir_all(at(path).parent().unwrap());
-                let contents: &[u8] = if path.ends_with(CACHEDIR_TAG) {
-                    CACHEDIR_SIGNATURE
+                let contents = if path.ends_with(CACHEDIR_TAG) {
+                    CACHEDIR_SIGNATURE.to_vec()
                 } else {
-                    b""
+                    unique_contents()
                 };
                 (
                     fs::write(at(path), contents),
@@ -290,7 +274,62 @@ mod tests {
         touched(root, &events)
     }
 
+    /// Cada escritura deja un contenido distinto, para que el proptest vea
+    /// de qué archivo viene cada uno.
+    fn unique_contents() -> Vec<u8> {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static WRITES: AtomicUsize = AtomicUsize::new(0);
+        WRITES
+            .fetch_add(1, Ordering::Relaxed)
+            .to_string()
+            .into_bytes()
+    }
+
     type Mirror = HashMap<VaultPath, EntryKind>;
+    type Contents = HashMap<VaultPath, Vec<u8>>;
+
+    fn contents(root: &Path, index: &VaultIndex) -> Contents {
+        index
+            .iter()
+            .filter(|entry| entry.kind != EntryKind::Folder)
+            .map(|entry| {
+                (
+                    entry.path.clone(),
+                    fs::read(entry.path.to_fs(root)).unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    /// Lo que haría quien guarda el contenido de cada archivo: lo relee al
+    /// crearse o modificarse y lo lleva consigo en un rename.
+    fn follow(contents: &mut Contents, root: &Path, changes: &[VaultChange]) {
+        for change in changes {
+            match change {
+                VaultChange::Created { path, kind } if *kind != EntryKind::Folder => {
+                    contents.insert(path.clone(), fs::read(path.to_fs(root)).unwrap());
+                }
+                VaultChange::Modified { path } => {
+                    contents.insert(path.clone(), fs::read(path.to_fs(root)).unwrap());
+                }
+                VaultChange::Removed { path, .. } => {
+                    contents.remove(path);
+                }
+                VaultChange::Renamed { from, to, .. } => {
+                    let moved: Vec<_> = contents
+                        .keys()
+                        .filter(|path| path.starts_with(from))
+                        .cloned()
+                        .collect();
+                    for path in moved {
+                        let bytes = contents.remove(&path).unwrap();
+                        contents.insert(path.rebase(from, to).unwrap(), bytes);
+                    }
+                }
+                VaultChange::Created { .. } => {}
+            }
+        }
+    }
 
     fn mirror(index: &VaultIndex) -> Mirror {
         index
@@ -364,13 +403,15 @@ mod tests {
     }
 
     /// Reindexar a pedazos da el mismo índice que un walk completo, y los
-    /// cambios emitidos llevan de un índice al otro. Varias operaciones
-    /// pueden caer en un mismo lote, como cuando el debouncer las junta.
+    /// cambios emitidos llevan de un índice al otro, con el contenido de
+    /// cada archivo. Varias operaciones pueden caer en un mismo lote, como
+    /// cuando el debouncer las junta.
     fn incremental_matches_full_walk(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
         let mut index = scan(&root, None);
         let mut copy = mirror(&index);
+        let mut copied = contents(&root, &index);
         for batch in batches {
             let mut touched = Touched::default();
             for op in batch {
@@ -378,6 +419,14 @@ mod tests {
             }
             let changes = refresh(&mut index, &root, &touched, None);
             replay(&mut copy, &changes);
+            follow(&mut copied, &root, &changes);
+            prop_assert_eq!(
+                &copied,
+                &contents(&root, &index),
+                "contenidos tras {:?}: {:?}",
+                batch,
+                changes
+            );
             prop_assert_eq!(&index, &scan(&root, None), "tras {:?}", batch);
             prop_assert_eq!(
                 &copy,

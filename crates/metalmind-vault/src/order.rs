@@ -226,7 +226,7 @@ fn pair_renames(
 
 /// `root` y lo que tiene dentro. En orden de cadena, el contenido de `a` va
 /// seguido desde `a/`, así que es un rango y no hace falta recorrer el resto.
-fn subtree<'a, V>(
+pub(crate) fn subtree<'a, V>(
     entries: &'a BTreeMap<VaultPath, V>,
     root: &VaultPath,
 ) -> impl Iterator<Item = (&'a VaultPath, &'a V)> {
