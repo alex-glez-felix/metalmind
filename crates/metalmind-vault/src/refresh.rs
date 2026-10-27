@@ -135,11 +135,16 @@ fn diff(
     let mut removed = Entries::new();
     let mut created = Entries::new();
     let mut modified = BTreeSet::new();
+    // Lo que queda dentro de una carpeta que llegó por rename a donde había
+    // otra es otro archivo con la misma ruta.
+    let targets: BTreeSet<&VaultPath> = touched.renames.iter().map(|(_, to)| to).collect();
+    let arrived_inside =
+        |path: &VaultPath| path.ancestors().any(|folder| targets.contains(&folder));
     for (path, kind) in before {
         match after.get(path) {
             Some(new) if new == kind => {
                 if *kind != EntryKind::Folder
-                    && touched.paths.contains(path)
+                    && (touched.paths.contains(path) || arrived_inside(path))
                     && !unread.contains_key(path)
                 {
                     modified.insert(path.clone());
@@ -526,6 +531,41 @@ mod tests {
                 },
                 VaultChange::Modified {
                     path: path("b/x.md")
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn una_carpeta_que_toma_el_lugar_de_otra_avisa_sus_archivos() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::write(root.join("a/x.md"), "vieja").unwrap();
+        fs::create_dir_all(root.join("b")).unwrap();
+        fs::write(root.join("b/x.md"), "nueva").unwrap();
+        let mut index = scan(&root, None);
+        fs::remove_dir_all(root.join("a")).unwrap();
+        fs::rename(root.join("b"), root.join("a")).unwrap();
+        let path = |path: &str| VaultPath::new(path).unwrap();
+        let touched = Touched {
+            paths: [path("a"), path("b")].into(),
+            renames: vec![(path("b"), path("a"))],
+            ..Touched::default()
+        };
+        assert_eq!(
+            refresh(&mut index, &root, &touched, None),
+            [
+                VaultChange::Removed {
+                    path: path("b/x.md"),
+                    kind: EntryKind::Note
+                },
+                VaultChange::Removed {
+                    path: path("b"),
+                    kind: EntryKind::Folder
+                },
+                VaultChange::Modified {
+                    path: path("a/x.md")
                 },
             ]
         );

@@ -288,6 +288,22 @@ mod tests {
         .unwrap();
     }
 
+    /// Se borra la carpeta de tags y otra toma su nombre en el mismo lote:
+    /// la página que queda en la misma ruta es otra y se relee. Lo encontró
+    /// el proptest de abajo.
+    #[test]
+    fn otra_carpeta_toma_el_lugar_de_la_borrada() {
+        check(&[
+            vec![Op::Write("tags/rust.md".into(), "")],
+            vec![Op::Write("rs.md/rust.md".into(), "#rust")],
+            vec![
+                Op::Remove("tags".into()),
+                Op::Rename("rs.md".into(), "tags".into()),
+            ],
+        ])
+        .unwrap();
+    }
+
     /// El frontmatter entero sigue a la nota: cambia al editarla y se va con
     /// ella al renombrarla, sin releerla.
     #[test]
