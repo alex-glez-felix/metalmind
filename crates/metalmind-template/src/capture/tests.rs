@@ -29,6 +29,7 @@ const FILES: &[(&str, &str)] = &[
     ),
     ("tags/bitacora.md", "---\ntemplate: diario\n---\n"),
     ("tags/rust.md", "Sin plantilla.\n"),
+    ("tags/vieja.md", "---\ntemplate: borrada\n---\n"),
 ];
 
 fn vault() -> (tempfile::TempDir, VaultRoot) {
@@ -163,6 +164,13 @@ fn una_plantilla_que_no_existe_o_un_frontmatter_no_crean_nada() {
 #[case::al_final("# A\n", 3, "texto\n\n", "# A\ntexto\n")]
 #[case::sin_texto("# A\n\n", 4, "", "# A\n")]
 #[case::plantilla_vacia("", 0, "texto", "texto\n")]
+#[case::crlf_en_una_linea_en_blanco(
+    "# A\r\n\r\n## B\r\n",
+    5,
+    "texto\n",
+    "# A\r\ntexto\r\n\r\n## B\r\n"
+)]
+#[case::crlf_al_final_de_un_heading("# A\r\n## B\r\n", 3, "texto", "# A\r\ntexto\r\n## B\r\n")]
 fn el_texto_va_en_su_linea(
     #[case] text: &str,
     #[case] cursor: usize,
@@ -170,6 +178,40 @@ fn el_texto_va_en_su_linea(
     #[case] expected: &str,
 ) {
     assert_eq!(with_text(text, cursor, captured), expected);
+}
+
+/// La página de un tag pide una plantilla que ya no existe: es la captura
+/// de siempre, con su título, y el aviso dice cuál falta y quién la pide.
+#[test]
+fn un_tag_que_pide_una_plantilla_borrada_es_la_captura_de_siempre() {
+    let (_dir, root) = vault();
+    let (added, written) = add(&root, "texto", Some("Plan"), &["vieja"], Pick::ByTags).unwrap();
+    assert_eq!(added.template, None);
+    assert_eq!(written, "---\ntags: [\"vieja\"]\n---\n# Plan\n\ntexto\n");
+    assert_eq!(added.problems.len(), 1, "{:?}", added.problems);
+    assert!(
+        added.problems[0].contains("borrada"),
+        "{:?}",
+        added.problems
+    );
+}
+
+/// La carpeta de plantillas de la config se lee solo si puede hacer falta:
+/// con un tag que no pide plantilla, tampoco.
+#[test]
+fn una_carpeta_de_plantillas_que_no_vale_con_un_tag_sin_plantilla() {
+    let (_dir, root) = vault();
+    let note = Captures {
+        text: "idea".to_owned(),
+        tags: vec!["rust".to_owned()],
+        ..Captures::default()
+    };
+    let broken = Folders {
+        templates: "/",
+        tags: &tags_folder(),
+    };
+    let added = capture(&root, &note, Pick::ByTags, broken, &now()).unwrap();
+    assert_eq!(added.captured.path.as_str(), "idea.md");
 }
 
 /// La carpeta de plantillas de la config se lee solo si puede hacer falta.

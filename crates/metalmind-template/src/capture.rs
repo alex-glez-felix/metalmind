@@ -4,8 +4,8 @@
 //! plantillas y de tags, no el vault entero.
 
 use jiff::Zoned;
-use metalmind_vault::tags::Tags;
-use metalmind_vault::{Capture, CaptureError, Captured, InvalidPath, VaultPath, VaultRoot, read};
+use metalmind_vault::tags::{TagGraph, Tags};
+use metalmind_vault::{CaptureError, Captured, InvalidPath, VaultPath, VaultRoot, read};
 
 use crate::draft::{DraftProblem, NewNote, Pick, Templates, draft};
 use crate::load::templates_folder;
@@ -44,13 +44,14 @@ pub enum AddError {
 
 /// Crea `note` en la raíz del vault. Con `Pick::Named`, desde esa plantilla
 /// y con el tag cuya página la pide, como en la UI. Con `Pick::ByTags`, desde
-/// la que pidan las páginas de sus tags; si ninguna pide una, o piden
-/// distintas, es la captura de siempre. `{{title}}` es el título o, sin él,
-/// el nombre del archivo.
+/// la que pidan las páginas de sus tags; si ninguna pide una, piden
+/// distintas o la pedida no existe, es la captura de siempre, con el aviso.
+/// `{{title}}` es el título o, sin él, el nombre del archivo.
 ///
 /// # Errors
-/// Los de la captura, una plantilla que no existe o un texto con
-/// frontmatter cuando se usa una plantilla.
+/// Los de la captura, una plantilla elegida que no existe, una carpeta de
+/// plantillas que no vale cuando se usa una, o un texto con frontmatter
+/// cuando se usa una plantilla.
 pub fn capture(
     root: &VaultRoot,
     note: &metalmind_vault::NewNote,
@@ -58,55 +59,122 @@ pub fn capture(
     folders: Folders<'_>,
     now: &Zoned,
 ) -> Result<FromTemplate, AddError> {
-    let plain = |problems| -> Result<FromTemplate, AddError> {
-        Ok(FromTemplate {
-            captured: root.capture(note, now.datetime())?,
-            template: None,
-            problems,
-        })
-    };
     if pick == Pick::Blank || (pick == Pick::ByTags && note.tags.is_empty()) {
-        return plain(Vec::new());
+        return plain(root, note, now, Vec::new());
     }
-    let templates_folder = templates_folder(folders.templates)?;
-    let index = root.files_within(&[templates_folder.clone(), folders.tags.clone()]);
+    // La carpeta de plantillas de la config solo importa si se usa una.
+    let templates_folder = templates_folder(folders.templates);
+    let mut walked = vec![folders.tags.clone()];
+    walked.extend(templates_folder.iter().cloned());
+    let index = root.files_within(&walked);
     let tags = Tags::build(folders.tags.clone(), &index, |page: &VaultPath| {
         read(&root.path().join(page.as_str())).ok().flatten()
     });
-    let graph = tags.graph();
+    let chosen = match choose(pick, tags.graph(), &note.tags) {
+        Ok(chosen) => chosen,
+        Err(problems) => return plain(root, note, now, problems),
+    };
+    let templates_folder = templates_folder?;
     let loaded = Templates::load(root.path(), &index, &templates_folder);
     let mut problems: Vec<String> = loaded.errors.iter().map(ToString::to_string).collect();
-    let templates = loaded.value;
-    let mut note = note.clone();
-    match pick {
-        Pick::Named(name) if templates.get(name).is_none() => {
-            return Err(AddError::MissingTemplate {
-                name: name.to_owned(),
-                folder: templates_folder,
-            });
-        }
-        Pick::Named(name) => note
-            .tags
-            .extend(tag_of_template(graph, name).map(str::to_owned)),
-        _ => match tag_template(graph, &note.tags) {
-            TagChoice::Template { .. } => {}
-            TagChoice::None => return plain(problems),
-            TagChoice::Conflict(asked) => {
-                let asked = asked
-                    .into_iter()
-                    .map(|(tag, template)| (tag.to_owned(), template.to_owned()))
-                    .collect();
-                problems.push(DraftProblem::Conflict { asked }.to_string());
-                return plain(problems);
-            }
-        },
+    if loaded.value.get(&chosen.name).is_some() {
+        return from_template(root, note, &chosen, &loaded.value, &tags, now, problems);
     }
+    let Some(tag) = chosen.asked_by else {
+        return Err(AddError::MissingTemplate {
+            name: chosen.name,
+            folder: templates_folder,
+        });
+    };
+    problems.push(
+        DraftProblem::MissingTemplate {
+            name: chosen.name,
+            tag: Some(tag),
+        }
+        .to_string(),
+    );
+    plain(root, note, now, problems)
+}
+
+/// La plantilla que se usa: la elegida, o la que pide la página de un tag.
+struct Chosen<'p> {
+    pick: Pick<'p>,
+    name: String,
+    /// El tag cuya página la pide, si no se eligió a mano.
+    asked_by: Option<String>,
+    /// El tag que la elegida trae consigo, como en la UI.
+    brings: Option<String>,
+}
+
+/// Sin plantilla, los avisos de por qué.
+fn choose<'p>(
+    pick: Pick<'p>,
+    graph: &TagGraph,
+    tags: &[String],
+) -> Result<Chosen<'p>, Vec<String>> {
+    if let Pick::Named(name) = pick {
+        return Ok(Chosen {
+            pick,
+            name: name.to_owned(),
+            asked_by: None,
+            brings: tag_of_template(graph, name).map(str::to_owned),
+        });
+    }
+    match tag_template(graph, tags) {
+        TagChoice::Template { template, tag } => Ok(Chosen {
+            pick,
+            name: template.to_owned(),
+            asked_by: Some(tag.to_owned()),
+            brings: None,
+        }),
+        TagChoice::None => Err(Vec::new()),
+        TagChoice::Conflict(asked) => {
+            let asked = asked
+                .into_iter()
+                .map(|(tag, template)| (tag.to_owned(), template.to_owned()))
+                .collect();
+            Err(vec![DraftProblem::Conflict { asked }.to_string()])
+        }
+    }
+}
+
+/// La captura de siempre, con los avisos de por qué no hubo plantilla.
+fn plain(
+    root: &VaultRoot,
+    note: &metalmind_vault::NewNote,
+    now: &Zoned,
+    problems: Vec<String>,
+) -> Result<FromTemplate, AddError> {
+    Ok(FromTemplate {
+        captured: root.capture(note, now.datetime())?,
+        template: None,
+        problems,
+    })
+}
+
+fn from_template(
+    root: &VaultRoot,
+    note: &metalmind_vault::NewNote,
+    chosen: &Chosen<'_>,
+    templates: &Templates,
+    tags: &Tags,
+    now: &Zoned,
+    mut problems: Vec<String>,
+) -> Result<FromTemplate, AddError> {
     if metalmind_syntax::scan(&note.text).frontmatter.is_some() {
         return Err(AddError::FrontmatterWithTemplate);
     }
+    let mut note = note.clone();
+    note.tags.extend(chosen.brings.clone());
     let mut template = None;
     let captured = root.capture_with(&note, now.datetime(), |capture| {
-        let filled = fill(capture, pick, &templates, &tags, now);
+        let new = NewNote {
+            title: capture.title.unwrap_or(capture.stem),
+            tags: capture.tags,
+            pick: chosen.pick,
+            now,
+        };
+        let filled = draft(&new, templates, tags.graph());
         problems.extend(filled.problems.iter().map(ToString::to_string));
         template = filled.template;
         with_text(&filled.text, filled.cursor, capture.text)
@@ -118,42 +186,27 @@ pub fn capture(
     })
 }
 
-fn fill(
-    capture: Capture<'_>,
-    pick: Pick<'_>,
-    templates: &Templates,
-    tags: &Tags,
-    now: &Zoned,
-) -> crate::Draft {
-    let note = NewNote {
-        title: capture.title.unwrap_or(capture.stem),
-        tags: capture.tags,
-        pick,
-        now,
-    };
-    draft(&note, templates, tags.graph())
-}
-
-/// `text` con `captured` en `cursor`, en su propia línea; sin dejar líneas
-/// en blanco de más al final.
+/// `text` con `captured` en `cursor`, en su propia línea y con los finales
+/// de línea de la plantilla; sin dejar líneas en blanco de más al final.
 fn with_text(text: &str, cursor: usize, captured: &str) -> String {
+    let ending = if text.contains("\r\n") { "\r\n" } else { "\n" };
     let captured = captured.trim_end_matches(['\n', '\r']);
     let (before, mut after) = text.split_at(cursor.min(text.len()));
-    let mut out = String::with_capacity(text.len() + captured.len() + 2);
+    let mut out = String::with_capacity(text.len() + captured.len() + 2 * ending.len());
     out.push_str(before);
     if !captured.trim().is_empty() {
         // Al final de una línea, el salto que la cierra pasa a cerrar lo capturado.
         if !before.is_empty() && !before.ends_with('\n') {
-            out.push('\n');
-            after = after.strip_prefix('\n').unwrap_or(after);
+            out.push_str(ending);
+            after = after.strip_prefix(ending).unwrap_or(after);
         }
         out.push_str(captured);
-        out.push('\n');
+        out.push_str(ending);
     }
     out.push_str(after);
     let end = out.trim_end_matches(['\n', '\r']).len();
     out.truncate(end);
-    out.push('\n');
+    out.push_str(ending);
     out
 }
 

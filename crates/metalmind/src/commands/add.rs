@@ -35,7 +35,7 @@ pub fn add(args: AddArgs) -> Result<(), CliError> {
         (None, true) => Pick::Blank,
         (None, false) => Pick::ByTags,
     };
-    let text = text(&args.text, args.title.is_some() || args.template.is_some())?;
+    let text = text(&args.text, may_be_empty(&args))?;
     let note = NewNote {
         text,
         title: args.title,
@@ -69,9 +69,15 @@ pub fn add(args: AddArgs) -> Result<(), CliError> {
     })
 }
 
+/// Si la nota puede nacer sin texto: con título, o con una plantilla
+/// elegida o que pueda pedir un tag. Si al final no hay plantilla, la
+/// captura sin texto ni título es error igual.
+fn may_be_empty(args: &AddArgs) -> bool {
+    args.title.is_some() || args.template.is_some() || (!args.tags.is_empty() && !args.no_template)
+}
+
 /// Las palabras del argumento o, si no hay, stdin. Una terminal no cuenta
 /// como stdin: esperar ahí a que alguien escriba parecería un cuelgue.
-/// `optional`: con título o plantilla, la nota puede nacer sin texto.
 fn text(words: &[String], optional: bool) -> Result<String, CliError> {
     if !words.is_empty() {
         return Ok(words.join(" "));
@@ -89,4 +95,31 @@ fn text(words: &[String], optional: bool) -> Result<String, CliError> {
     let mut text = String::new();
     stdin.read_to_string(&mut text).map_err(CliError::Stdin)?;
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser as _;
+
+    use super::*;
+    use crate::cli::{Cli, Command};
+
+    fn may_be_empty_with(args: &[&str]) -> bool {
+        let cli = Cli::try_parse_from(["metalmind", "add"].iter().chain(args)).unwrap();
+        let Some(Command::Add(args)) = cli.command else {
+            panic!("{cli:?}");
+        };
+        may_be_empty(&args)
+    }
+
+    /// Con stdin en una terminal no se espera texto si la nota puede nacer
+    /// sin él: `metalmind add -t reunion` crea la plantilla de la reunión.
+    #[test]
+    fn sin_texto_vale_si_puede_haber_titulo_o_plantilla() {
+        assert!(!may_be_empty_with(&[]));
+        assert!(may_be_empty_with(&["--title", "Plan"]));
+        assert!(may_be_empty_with(&["--template", "semanal"]));
+        assert!(may_be_empty_with(&["-t", "reunion"]));
+        assert!(!may_be_empty_with(&["-t", "reunion", "--no-template"]));
+    }
 }
