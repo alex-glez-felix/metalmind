@@ -129,6 +129,8 @@ pub enum FormatError {
     },
     #[error("la flecha {edge} apunta a un nodo que no existe: {node}")]
     DanglingEdge { edge: String, node: String },
+    #[error("hay dos elementos con el id {0}")]
+    DuplicateId(String),
 }
 
 #[derive(Deserialize)]
@@ -184,8 +186,8 @@ impl Board {
     ///
     /// # Errors
     ///
-    /// JSON inválido, un nodo sin sus campos, puntos que no se leen o una
-    /// flecha hacia un nodo que no está.
+    /// JSON inválido, un nodo sin sus campos, puntos que no se leen, dos
+    /// elementos con el mismo id o una flecha hacia un nodo que no está.
     pub fn parse(json: &str) -> Result<Self, FormatError> {
         let raw: RawBoard = serde_json::from_str(json)?;
         let nodes = raw
@@ -194,9 +196,20 @@ impl Board {
             .map(Node::from_raw)
             .collect::<Result<Vec<_>, _>>()?;
         let edges: Vec<Edge> = raw.edges.into_iter().map(Edge::from).collect();
+        // Nodos y flechas comparten los ids: una flecha nombra sus extremos por id.
+        let mut ids = std::collections::HashSet::new();
+        let all_ids = nodes
+            .iter()
+            .map(|n| &n.id)
+            .chain(edges.iter().map(|e| &e.id));
+        if let Some(repeated) = all_ids.into_iter().find(|id| !ids.insert(id.as_str())) {
+            return Err(FormatError::DuplicateId(repeated.clone()));
+        }
+        let node_ids: std::collections::HashSet<&str> =
+            nodes.iter().map(|n| n.id.as_str()).collect();
         for edge in &edges {
             for end in [&edge.from, &edge.to] {
-                if !nodes.iter().any(|node| node.id == end.node) {
+                if !node_ids.contains(end.node.as_str()) {
                     return Err(FormatError::DanglingEdge {
                         edge: edge.id.clone(),
                         node: end.node.clone(),
@@ -477,6 +490,15 @@ mod tests {
             "{}",
             changed[0]
         );
+    }
+
+    #[test]
+    fn two_elements_with_the_same_id_are_an_error() {
+        let node =
+            FROM_OBSIDIAN.replace(r#""id":"b2","type":"file""#, r#""id":"a1","type":"file""#);
+        assert!(matches!(Board::parse(&node), Err(FormatError::DuplicateId(id)) if id == "a1"));
+        let edge = FROM_OBSIDIAN.replace(r#""id":"e1""#, r#""id":"c3""#);
+        assert!(matches!(Board::parse(&edge), Err(FormatError::DuplicateId(id)) if id == "c3"));
     }
 
     #[test]

@@ -69,8 +69,8 @@ pub fn decode(text: &str) -> Result<Vec<Point>, PointsError> {
             if parts.next().is_some() {
                 return Err(malformed());
             }
-            x += dx;
-            y += dy;
+            x = x.checked_add(dx).ok_or_else(malformed)?;
+            y = y.checked_add(dy).ok_or_else(malformed)?;
             Ok(Point {
                 x: px(x),
                 y: px(y),
@@ -151,6 +151,14 @@ mod tests {
         );
         assert!(decode("0,0,300").is_err(), "la presión es un byte");
         assert!(decode("1,2,3,4").is_err());
+        assert_eq!(
+            decode("2147483647,0 1,0"),
+            Err(PointsError::Malformed {
+                index: 1,
+                text: "1,0".to_owned()
+            }),
+            "la suma de los deltas se desborda"
+        );
         assert_eq!(decode(""), Ok(Vec::new()));
     }
 }

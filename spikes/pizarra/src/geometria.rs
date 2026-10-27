@@ -33,6 +33,8 @@ pub struct Rect {
 }
 
 impl Rect {
+    /// Un nodo mide al menos 1×1: así ninguna cuenta de la silueta divide
+    /// por cero, aunque el archivo diga `"width":0`.
     #[must_use]
     pub fn of(node: &Node) -> Self {
         #[expect(
@@ -42,8 +44,20 @@ impl Rect {
         Self {
             x: node.x as f32,
             y: node.y as f32,
-            w: node.width as f32,
-            h: node.height as f32,
+            w: (node.width as f32).max(1.0),
+            h: (node.height as f32).max(1.0),
+        }
+    }
+
+    /// Si `p` cae dentro de la silueta `shape` inscrita en el rectángulo.
+    #[must_use]
+    pub fn contains(&self, shape: Shape, p: P) -> bool {
+        let c = self.center();
+        let (dx, dy) = ((p.x - c.x) / (self.w / 2.0), (p.y - c.y) / (self.h / 2.0));
+        match shape {
+            Shape::Ellipse => dx * dx + dy * dy <= 1.0,
+            Shape::Diamond => dx.abs() + dy.abs() <= 1.0,
+            Shape::Rectangle | Shape::None => dx.abs() <= 1.0 && dy.abs() <= 1.0,
         }
     }
 
@@ -286,16 +300,13 @@ pub fn arrowhead(tip: P, from: P, size: f32) -> [P; 3] {
     ]
 }
 
-/// El nodo de más arriba bajo `point` (los grupos solo por su borde no cuentan).
+/// El nodo de más arriba bajo `point`, por su silueta: la esquina vacía de
+/// una elipse no la toca. Los grupos no cuentan.
 #[must_use]
 pub fn hit(board: &Board, point: P) -> Option<usize> {
     board.nodes.iter().rposition(|node| {
-        let r = Rect::of(node);
         !matches!(node.kind, NodeKind::Group { .. })
-            && point.x >= r.x
-            && point.x <= r.x + r.w
-            && point.y >= r.y
-            && point.y <= r.y + r.h
+            && Rect::of(node).contains(outline(node), point)
     })
 }
 
@@ -394,6 +405,42 @@ mod tests {
         assert!(close(tip, P::new(100.0, 0.0)));
         assert!((a.x - 88.0).abs() < 1e-3 && (b.x - 88.0).abs() < 1e-3);
         assert!((a.y + b.y).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_zero_sized_box_still_routes_to_finite_points() {
+        let mut board = generar::example();
+        let edge = board.edges.iter().find(|e| e.id == "e3").cloned().unwrap();
+        let vault = board.nodes.iter_mut().find(|n| n.id == "vault").unwrap();
+        (vault.width, vault.height) = (0, 0);
+        let g = route(&board, &edge).unwrap();
+        assert!(
+            g.start().x.is_finite() && g.start().y.is_finite(),
+            "{:?}",
+            g.start()
+        );
+    }
+
+    #[test]
+    fn clicking_the_empty_corner_of_an_ellipse_misses_it() {
+        let board = generar::example();
+        let indice = board.node("indice").map(Rect::of).unwrap();
+        let center = indice.center();
+        let corner = P::new(indice.x + 3.0, indice.y + 3.0);
+        assert_eq!(
+            hit(&board, center).map(|i| board.nodes[i].id.as_str()),
+            Some("indice")
+        );
+        assert_ne!(
+            hit(&board, corner).map(|i| board.nodes[i].id.as_str()),
+            Some("indice")
+        );
+        let decide = board.node("decide").map(Rect::of).unwrap();
+        assert_eq!(
+            hit(&board, P::new(decide.x + 4.0, decide.y + 4.0)),
+            None,
+            "esquina del rombo"
+        );
     }
 
     #[test]

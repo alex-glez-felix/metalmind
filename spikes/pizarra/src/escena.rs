@@ -67,7 +67,42 @@ pub struct Label {
 pub struct ElementScene {
     pub pieces: Vec<Piece>,
     pub labels: Vec<Label>,
+    /// La caja del nodo, o la de la línea de una flecha.
+    pub outline: Rect,
+    /// Todo lo que pinta: las mallas y los textos. Es lo que decide si se ve.
     pub bounds: Rect,
+}
+
+impl ElementScene {
+    fn new(pieces: Vec<Piece>, labels: Vec<Label>, outline: Rect) -> Self {
+        let painted = pieces
+            .iter()
+            .flat_map(|p| &p.mesh.vertices)
+            .map(|v| Rect {
+                x: v.x,
+                y: v.y,
+                w: 0.0,
+                h: 0.0,
+            })
+            .chain(labels.iter().map(|l| l.area));
+        let bounds = painted.fold(outline, union);
+        Self {
+            pieces,
+            labels,
+            outline,
+            bounds,
+        }
+    }
+}
+
+fn union(a: Rect, b: Rect) -> Rect {
+    let (x, y) = (a.x.min(b.x), a.y.min(b.y));
+    Rect {
+        x,
+        y,
+        w: (a.x + a.w).max(b.x + b.w) - x,
+        h: (a.y + a.h).max(b.y + b.h) - y,
+    }
 }
 
 pub const LINE_WIDTH: f32 = 2.0;
@@ -127,11 +162,7 @@ pub fn node_scene(node: &Node, style: Style) -> Result<ElementScene, Tessellatio
             )
         }
     };
-    Ok(ElementScene {
-        pieces,
-        labels,
-        bounds: grow(rect, LINE_WIDTH + 4.0),
-    })
+    Ok(ElementScene::new(pieces, labels, rect))
 }
 
 type Parts = (Vec<Piece>, Vec<Label>);
@@ -295,20 +326,13 @@ pub fn edge_scene(
             color: None,
         });
     }
-    let bounds = path_bounds(&path).map_or(
-        Rect {
-            x: 0.0,
-            y: 0.0,
-            w: 0.0,
-            h: 0.0,
-        },
-        |b| grow(b, ARROW_SIZE),
-    );
-    Ok(ElementScene {
-        pieces,
-        labels,
-        bounds,
-    })
+    let outline = path_bounds(&path).unwrap_or(Rect {
+        x: geometry.label_at.x,
+        y: geometry.label_at.y,
+        w: 0.0,
+        h: 0.0,
+    });
+    Ok(ElementScene::new(pieces, labels, outline))
 }
 
 fn note_title(file: &str, subpath: Option<&str>) -> String {
@@ -317,15 +341,6 @@ fn note_title(file: &str, subpath: Option<&str>) -> String {
     match subpath {
         Some(sub) => format!("{stem}{sub}"),
         None => stem.to_owned(),
-    }
-}
-
-fn grow(r: Rect, by: f32) -> Rect {
-    Rect {
-        x: r.x - by,
-        y: r.y - by,
-        w: r.w + 2.0 * by,
-        h: r.h + 2.0 * by,
     }
 }
 
@@ -649,6 +664,47 @@ mod tests {
         assert!(
             texts.contains(&(LabelKind::CardPath, "docs/research/03-core-architecture.md")),
             "{texts:?}"
+        );
+    }
+
+    #[test]
+    fn what_is_painted_is_inside_the_bounds() {
+        let board = generar::example();
+        let (nodes, edges) = build(&board, Style::Clean).unwrap();
+        for scene in nodes.iter().chain(&edges) {
+            let b = scene.bounds;
+            for v in scene.pieces.iter().flat_map(|p| &p.mesh.vertices) {
+                assert!(
+                    v.x >= b.x && v.x <= b.x + b.w && v.y >= b.y && v.y <= b.y + b.h,
+                    "{v:?} fuera de {b:?}"
+                );
+            }
+            for l in &scene.labels {
+                assert!(
+                    l.area.y >= b.y && l.area.x >= b.x,
+                    "{} fuera de {b:?}",
+                    l.text
+                );
+            }
+        }
+        // La etiqueta de un grupo va arriba de su caja y aun así cuenta.
+        let group = &nodes[0];
+        assert!(group.bounds.y < group.outline.y);
+    }
+
+    #[test]
+    fn a_wide_stroke_counts_its_whole_width() {
+        let mut board = generar::example();
+        let rodeo = board.nodes.iter_mut().find(|n| n.id == "rodeo").unwrap();
+        if let NodeKind::Stroke { stroke_width, .. } = &mut rodeo.kind {
+            *stroke_width = 60.0;
+        }
+        let scene = node_scene(board.node("rodeo").unwrap(), Style::Clean).unwrap();
+        assert!(
+            scene.bounds.x < scene.outline.x - 20.0,
+            "{:?} {:?}",
+            scene.bounds,
+            scene.outline
         );
     }
 

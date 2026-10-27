@@ -99,7 +99,13 @@ fn opciones() -> Result<Opciones, String> {
                 let [x, y, zoom] = partes[..] else {
                     return Err(USO.to_owned());
                 };
-                opciones.camara = Some(Camara { x, y, zoom });
+                opciones.camara = Some(Camara::nueva(x, y, zoom).ok_or_else(|| {
+                    format!(
+                        "--camara: x e y finitos y el zoom entre {} y {}",
+                        Camara::ZOOM_MIN,
+                        Camara::ZOOM_MAX
+                    )
+                })?);
             }
             ruta if !ruta.starts_with("--") => (opciones.board, opciones.titulo) = leer(ruta)?,
             _ => return Err(USO.to_owned()),

@@ -93,14 +93,16 @@ La pizarra solo lee y escribe `.canvas`. Para traer o llevar dibujos de Excalidr
 | Excalidraw | Pizarra | Notas |
 |---|---|---|
 | `rectangle`, `ellipse`, `diamond` con su texto contenido (`containerId`) | nodo `text` con `shape` | El texto pasa; el estilo (relleno, aspereza, trazo punteado) no |
-| `rectangle` con `link: "[[nota]]"` | nodo `file` (`nota.md`) | La convención del plugin de Obsidian |
+| `rectangle` con `link: "[[nota]]"` o `"[[nota#Sección]]"` | nodo `file` (`nota.md`, con `subpath`) | La convención del plugin de Obsidian |
+| `rectangle` con otro `link` | nodo `link` | |
 | `text` suelto | nodo `text` con `shape: "none"` | |
 | `freedraw` | nodo `stroke` | La presión, si la hay |
-| `arrow` pegada por los dos lados, con su texto | flecha con `label` | Más de dos puntos: curva; si no, recta |
+| `arrow` pegada por los dos lados, con su texto | flecha con `label` | `elbowed`: codo; más de dos puntos: curva; si no, recta. Las puntas `arrow` y `triangle` son flecha; las demás (punto, barra, rombo) se pierden: JSON Canvas solo tiene flecha o nada |
 | `frame` con `name` | `group` con `label` | |
 | flecha suelta, `line`, `image`, lo demás | se lista y no se convierte | En la pizarra no hay flechas sueltas |
+| un elemento que no se lee (le falta `x`, un campo tiene otro tipo) | se lista y no se convierte | |
 
-Al revés, cada nodo se vuelve una forma con su texto, y cada flecha, un `arrow` pegado con los puntos que da la geometría del §3. Los anchos de texto los estima el convertidor: Excalidraw guarda el ancho que midió con su fuente. La ida y vuelta del ejemplo conserva nodos, flechas, tarjetas y grupos (`mapeo.rs`, test `the_example_survives_a_round_trip_through_excalidraw`), y la captura de abajo es el visor abriendo el `.excalidraw` convertido. **No está verificado** abriendo el `.excalidraw` del spike en excalidraw.com; el lector sí reescribe byte a byte lo que guarda Excalidraw (test `rewrites_what_excalidraw_saved_byte_for_byte`).
+Al revés, cada nodo se vuelve una forma con su texto, y cada flecha, un `arrow` pegado con los puntos que da la geometría del §3. Los anchos de texto los estima el convertidor: Excalidraw guarda el ancho que midió con su fuente. La ida y vuelta del ejemplo conserva nodos, flechas (con su recorrido), tarjetas (con su sección) y grupos (tests de `mapeo.rs`), y la captura de abajo es el visor abriendo el `.excalidraw` convertido. **No está verificado** abriendo el `.excalidraw` del spike en excalidraw.com; el lector sí reescribe byte a byte lo que guarda Excalidraw (test `rewrites_what_excalidraw_saved_byte_for_byte`).
 
 ![El ejemplo, importado desde .excalidraw](img/pizarra-desde-excalidraw-1280.png)
 

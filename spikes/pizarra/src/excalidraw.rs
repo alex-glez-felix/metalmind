@@ -58,12 +58,22 @@ pub struct Element {
     /// El título de un `frame`.
     #[serde(default)]
     pub name: Option<String>,
+    /// Una flecha en codo (`elbowed` de Excalidraw 0.18).
+    #[serde(default)]
+    pub elbowed: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Binding {
     pub element_id: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Read {
+    pub elements: Vec<Element>,
+    /// El `id` de cada elemento que no se entiende, o `#posición` si no tiene.
+    pub unreadable: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,15 +126,31 @@ impl Scene {
         serde_json::to_string_pretty(self).unwrap_or_default()
     }
 
-    /// Los elementos vivos, en orden de pintado. Uno que no se entiende se
-    /// salta: sigue en el archivo.
+    /// Los elementos vivos, en orden de pintado.
     #[must_use]
     pub fn elements(&self) -> Vec<Element> {
-        self.elements
-            .iter()
-            .filter_map(|value| Element::deserialize(value).ok())
-            .filter(|element| !element.is_deleted)
-            .collect()
+        self.read().elements
+    }
+
+    /// Los elementos vivos y los que no se entienden (sin `id`, `type`, `x`
+    /// o `y`, o con un campo de otro tipo), que siguen en el archivo y quien
+    /// convierte tiene que poder listar.
+    #[must_use]
+    pub fn read(&self) -> Read {
+        let mut read = Read::default();
+        for (index, value) in self.elements.iter().enumerate() {
+            match Element::deserialize(value) {
+                Ok(element) if element.is_deleted => {}
+                Ok(element) => read.elements.push(element),
+                Err(_) => read.unreadable.push(
+                    value
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map_or_else(|| format!("#{index}"), str::to_owned),
+                ),
+            }
+        }
+        read
     }
 
     pub fn push(&mut self, element: Map<String, Value>) {
@@ -208,6 +234,10 @@ fn move_arrow_ends(
     dx: f64,
     dy: f64,
 ) {
+    // Sin puntos no hay extremos que mover ni tamaño que recalcular.
+    if arrow.points.is_empty() {
+        return;
+    }
     let mut points = arrow.points.clone();
     if start {
         shift(object, "x", dx);
@@ -445,6 +475,30 @@ mod tests {
         let scene = Scene::parse(&text).unwrap();
         assert_eq!(scene.elements().len(), 1);
         assert_eq!(scene.write(), text);
+    }
+
+    #[test]
+    fn an_unreadable_element_is_listed_not_dropped() {
+        let text = FROM_EXCALIDRAW.replacen("\"x\": 100,", "\"x\": \"cien\",", 1);
+        let read = Scene::parse(&text).unwrap().read();
+        assert_eq!(read.elements.len(), 1);
+        assert_eq!(read.unreadable, ["caja"]);
+    }
+
+    #[test]
+    fn moving_a_box_leaves_an_arrow_without_points_alone() {
+        let text = FROM_EXCALIDRAW.replace(
+            "\"points\": [\n        [\n          0,\n          0\n        ],\n        [\n          120,\n          0\n        ]\n      ],",
+            "\"points\": [],",
+        );
+        let mut scene = Scene::parse(&text).unwrap();
+        scene.move_with_bindings("caja", 20.0, 0.0, 1).unwrap();
+        let after = scene.write();
+        assert!(
+            after.contains("\"width\": 120,"),
+            "el ancho de la flecha no cambia"
+        );
+        assert!(!after.contains("null,\n      \"height\""), "{after}");
     }
 
     #[test]

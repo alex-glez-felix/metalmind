@@ -197,12 +197,13 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
             };
             boxed(kind, text, None, bind)
         }
-        NodeKind::File { file, .. } => {
+        NodeKind::File { file, subpath } => {
             let name = file.strip_suffix(".md").unwrap_or(file);
+            let target = format!("[[{name}{}]]", subpath.as_deref().unwrap_or(""));
             boxed(
                 "rectangle",
                 name.rsplit('/').next().unwrap_or(name),
-                Some(format!("[[{name}]]")),
+                Some(target),
                 bind,
             )
         }
@@ -343,13 +344,21 @@ pub struct Skipped {
 /// flechas pegadas por los dos lados pasan; lo demás se lista en `Skipped`.
 #[must_use]
 pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
-    let elements = scene.elements();
+    let read = scene.read();
+    let elements = read.elements;
     let contained: std::collections::HashMap<&str, &Element> = elements
         .iter()
         .filter_map(|e| e.container_id.as_deref().map(|c| (c, e)))
         .collect();
     let mut board = Board::default();
-    let mut skipped = Vec::new();
+    let mut skipped: Vec<Skipped> = read
+        .unreadable
+        .into_iter()
+        .map(|id| Skipped {
+            id,
+            reason: "elemento que no se lee",
+        })
+        .collect();
     for element in &elements {
         if element.container_id.is_some() {
             continue;
@@ -381,14 +390,20 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
     (board, skipped)
 }
 
-/// `[[nota]]` es la ruta `nota.md`; `[[mapa.canvas]]`, tal cual.
-fn note_file(link: &str) -> Option<String> {
-    let name = link.strip_prefix("[[")?.strip_suffix("]]")?;
-    Some(if name.contains('.') {
+/// `[[nota#Sección]]` es la ruta `nota.md` y el subpath `#Sección`;
+/// `[[mapa.canvas]]` va tal cual.
+fn note_file(link: &str) -> Option<NodeKind> {
+    let target = link.strip_prefix("[[")?.strip_suffix("]]")?;
+    let (name, subpath) = match target.find('#') {
+        Some(at) => (&target[..at], Some(target[at..].to_owned())),
+        None => (target, None),
+    };
+    let file = if name.contains('.') {
         name.to_owned()
     } else {
         format!("{name}.md")
-    })
+    };
+    Some(NodeKind::File { file, subpath })
 }
 
 #[expect(
@@ -412,17 +427,15 @@ fn import_arrow(e: &Element, label: Option<String>, color: Option<String>) -> Im
     let end = |binding: &crate::excalidraw::Binding, head: &Option<String>| End {
         node: binding.element_id.clone(),
         side: None,
-        tip: if head.is_some() {
-            Tip::Arrow
-        } else {
-            Tip::None
-        },
+        tip: tip(head.as_deref()),
     };
     Imported::Edge(Edge {
         id: e.id.clone(),
         from: end(from, &e.start_arrowhead),
         to: end(to, &e.end_arrowhead),
-        route: if e.points.len() > 2 {
+        route: if e.elbowed {
+            Route::Elbow
+        } else if e.points.len() > 2 {
             Route::Curve
         } else {
             Route::Straight
@@ -431,6 +444,15 @@ fn import_arrow(e: &Element, label: Option<String>, color: Option<String>) -> Im
         label,
         extra: Map::new(),
     })
+}
+
+/// JSON Canvas solo tiene punta de flecha o nada: las puntas que señalan
+/// (`arrow`, `triangle`) son flecha; las demás (punto, barra, rombo) se pierden.
+fn tip(head: Option<&str>) -> Tip {
+    match head {
+        Some("arrow" | "triangle" | "triangle_outline") => Tip::Arrow,
+        _ => Tip::None,
+    }
 }
 
 enum Imported {
@@ -460,13 +482,17 @@ fn import(e: &Element, label: Option<String>) -> Imported {
             extra: Map::new(),
         })
     };
-    let note_file = e.link.as_deref().and_then(note_file);
     let text = label.clone().unwrap_or_default();
+    // Un link de Obsidian es una tarjeta de nota; cualquier otro, una de link.
+    let card = e.link.as_deref().map(|link| {
+        note_file(link).unwrap_or_else(|| NodeKind::Link {
+            url: link.to_owned(),
+        })
+    });
+    if let ("rectangle", Some(card)) = (e.kind.as_str(), card) {
+        return node(card);
+    }
     match e.kind.as_str() {
-        "rectangle" if note_file.is_some() => node(NodeKind::File {
-            file: note_file.unwrap_or_default(),
-            subpath: None,
-        }),
         "rectangle" => node(NodeKind::Text {
             text,
             shape: Shape::Rectangle,
@@ -524,6 +550,57 @@ mod tests {
         );
         let parsed = Board::parse(&back.write());
         assert!(parsed.is_ok(), "{parsed:?}");
+    }
+
+    fn round_trip(board: &Board) -> Board {
+        let scene = Scene::parse(&to_excalidraw(board).write()).unwrap();
+        let (back, skipped) = from_excalidraw(&scene);
+        assert_eq!(skipped, []);
+        back
+    }
+
+    #[test]
+    fn cards_keep_their_kind_and_target_through_excalidraw() {
+        let mut board = generar::example();
+        if let Some(card) = board.nodes.iter_mut().find(|n| n.id == "nota-03") {
+            card.kind = NodeKind::File {
+                file: "docs/research/03-core-architecture.md".to_owned(),
+                subpath: Some("#Riesgos".to_owned()),
+            };
+        }
+        if let Some(card) = board.nodes.iter_mut().find(|n| n.id == "nota-07") {
+            card.kind = NodeKind::Link {
+                url: "https://jsoncanvas.org/".to_owned(),
+            };
+        }
+        let back = round_trip(&board);
+        assert_eq!(
+            back.node("nota-03").map(|n| &n.kind),
+            board.node("nota-03").map(|n| &n.kind)
+        );
+        assert_eq!(
+            back.node("nota-07").map(|n| &n.kind),
+            board.node("nota-07").map(|n| &n.kind)
+        );
+    }
+
+    #[test]
+    fn arrows_keep_their_route_through_excalidraw() {
+        let board = generar::example();
+        let back = round_trip(&board);
+        for id in ["e3", "e5", "e6"] {
+            let route = |b: &Board| b.edges.iter().find(|e| e.id == id).map(|e| e.route);
+            assert_eq!(route(&back), route(&board), "{id}");
+        }
+    }
+
+    #[test]
+    fn only_pointing_heads_become_arrow_tips() {
+        assert_eq!(tip(Some("arrow")), Tip::Arrow);
+        assert_eq!(tip(Some("triangle")), Tip::Arrow);
+        assert_eq!(tip(Some("dot")), Tip::None);
+        assert_eq!(tip(Some("bar")), Tip::None);
+        assert_eq!(tip(None), Tip::None);
     }
 
     #[test]

@@ -24,6 +24,14 @@ impl Camara {
     pub const ZOOM_MIN: f32 = 0.05;
     pub const ZOOM_MAX: f32 = 8.0;
 
+    /// `None` si algo no es finito o el zoom está fuera de rango: con zoom 0
+    /// todas las cuentas de la cámara dividen por cero.
+    pub fn nueva(x: f32, y: f32, zoom: f32) -> Option<Self> {
+        let valida =
+            x.is_finite() && y.is_finite() && (Self::ZOOM_MIN..=Self::ZOOM_MAX).contains(&zoom);
+        valida.then_some(Self { x, y, zoom })
+    }
+
     pub fn a_pantalla(&self, origen: Point<Pixels>, x: f32, y: f32) -> Point<Pixels> {
         point(
             origen.x + px((x - self.x) * self.zoom),
@@ -159,7 +167,7 @@ fn caja(
     tema: &Tema,
     window: &mut Window,
 ) {
-    let b = elemento.bounds;
+    let b = elemento.outline;
     let esquina = camara.a_pantalla(origen, b.x, b.y);
     let limites = Bounds::new(esquina, size(px(b.w * camara.zoom), px(b.h * camara.zoom)));
     let rol = |buscado: fn(&Role) -> bool| {
@@ -343,5 +351,26 @@ pub fn rejilla(camara: &Camara, area: Bounds<Pixels>, tema: &Tema, window: &mut 
             y += paso;
         }
         x += paso;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn una_camara_sin_zoom_o_con_infinitos_no_existe() {
+        assert!(Camara::nueva(0.0, 0.0, 0.0).is_none());
+        assert!(Camara::nueva(f32::NAN, 0.0, 1.0).is_none());
+        assert!(Camara::nueva(0.0, f32::INFINITY, 1.0).is_none());
+        assert!(Camara::nueva(0.0, 0.0, Camara::ZOOM_MAX * 2.0).is_none());
+        assert_eq!(
+            Camara::nueva(10.0, -5.0, 1.0),
+            Some(Camara {
+                x: 10.0,
+                y: -5.0,
+                zoom: 1.0
+            })
+        );
     }
 }
