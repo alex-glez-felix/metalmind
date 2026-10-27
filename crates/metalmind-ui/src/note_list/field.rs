@@ -4,8 +4,9 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, Div, HighlightStyle, InteractiveElement as _, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledText, div,
+    Context, Div, ElementInputHandler, HighlightStyle, InteractiveElement as _, IntoElement,
+    ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
+    canvas, div,
 };
 use metalmind_keymap::ListAction;
 
@@ -30,8 +31,7 @@ impl NoteListView {
         if self.list.prompt() == Some(Prompt::Tag) {
             let title = self
                 .list
-                .selected_row()
-                .and_then(|row| self.list.card(row))
+                .tag_target_card()
                 .map_or_else(String::new, |card| card.title.clone());
             return frame
                 .child(
@@ -40,7 +40,12 @@ impl NoteListView {
                         .truncate()
                         .child(format!("Tags para «{title}»")),
                 )
-                .child(input_box(theme).child(line_with_caret(self.list.tag_line(), &[], theme)));
+                .child(
+                    input_box(theme)
+                        .relative()
+                        .child(line_with_caret(self.list.tag_line(), &[], theme))
+                        .child(self.input_handler(cx)),
+                );
         }
         let editing = self.list.prompt() == Some(Prompt::Filter);
         let line = self.list.filter();
@@ -68,9 +73,24 @@ impl NoteListView {
                 .id("list-filter")
                 .justify_between()
                 .on_click(|_, window, cx| dispatch(ListAction::Filter, window, cx))
+                .relative()
                 .child(content)
-                .children(key_hint(ListAction::Filter, theme, cx)),
+                .children(key_hint(ListAction::Filter, theme, cx))
+                .children(editing.then(|| self.input_handler(cx))),
         )
+    }
+
+    /// El texto, el IME y las teclas muertas llegan al campo por aquí.
+    fn input_handler(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let (focus, entity) = (self.focus_handle.clone(), cx.entity());
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, cx| {
+                window.handle_input(&focus, ElementInputHandler::new(bounds, entity), cx);
+            },
+        )
+        .absolute()
+        .size_full()
     }
 }
 

@@ -6,9 +6,7 @@ use std::ops::Range;
 use gpui_kit::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window};
 
 use super::{PickerDelegate, PickerView};
-use crate::ime::ImeLine;
-use crate::picker::LineEdit;
-use crate::utf16;
+use crate::ime::{ImeLine, commit};
 
 impl<D: PickerDelegate> PickerView<D> {
     /// La línea del input como la ve el IME.
@@ -100,44 +98,5 @@ impl<D: PickerDelegate> EntityInputHandler for PickerView<D> {
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
         None
-    }
-}
-
-/// La edición de un commit del IME. Con preedit, el rango es el del preedit,
-/// que no está en la línea: va en el cursor. Sin él, el rango (en UTF-16)
-/// es de lo ya escrito y se reemplaza, como cuando el IME corrige una
-/// palabra.
-fn commit<'a>(
-    line: &str,
-    had_preedit: bool,
-    range: Option<Range<usize>>,
-    text: &'a str,
-) -> LineEdit<'a> {
-    match range {
-        Some(range) if !had_preedit => LineEdit::Replace {
-            start: utf16::to_byte(line, range.start),
-            end: utf16::to_byte(line, range.end),
-            text,
-        },
-        _ => LineEdit::Insert(text),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn un_commit_reemplaza_lo_escrito_salvo_si_venia_de_un_preedit() {
-        assert_eq!(
-            commit("añob", false, Some(2..4), "x"),
-            LineEdit::Replace {
-                start: 3,
-                end: 5,
-                text: "x"
-            }
-        );
-        assert_eq!(commit("añob", true, Some(2..3), "é"), LineEdit::Insert("é"));
-        assert_eq!(commit("añob", false, None, "x"), LineEdit::Insert("x"));
     }
 }

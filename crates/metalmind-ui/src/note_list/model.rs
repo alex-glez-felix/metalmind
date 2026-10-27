@@ -35,6 +35,9 @@ pub struct NoteList {
     selected: Option<VaultPath>,
     prompt: Option<Prompt>,
     tag_line: InputLine,
+    /// La nota a la que van los tags que se escriben: la elegida al pedirlos,
+    /// aunque después la fila cambie.
+    tag_target: Option<VaultPath>,
 }
 
 impl NoteList {
@@ -56,6 +59,7 @@ impl NoteList {
             selected: None,
             prompt: None,
             tag_line: InputLine::default(),
+            tag_target: None,
         }
     }
 
@@ -156,6 +160,10 @@ impl NoteList {
             .selected
             .take()
             .map(|selected| renamed(selected, &update.changes));
+        self.tag_target = self
+            .tag_target
+            .take()
+            .map(|target| renamed(target, &update.changes));
         let stale = self.cards.apply(&update.changes, &self.index);
         if !self.cards_ready {
             // Sin fechas no hay orden: se muestra al llegar las tarjetas.
@@ -262,12 +270,19 @@ impl NoteList {
 
     /// Pregunta los tags de la nota elegida, si hay una.
     pub fn start_tagging(&mut self) -> bool {
-        if self.selected_note().is_none() {
+        self.tag_target = self.selected_note().cloned();
+        if self.tag_target.is_none() {
             return false;
         }
         self.tag_line = InputLine::default();
         self.prompt = Some(Prompt::Tag);
         true
+    }
+
+    /// La tarjeta de la nota a la que van los tags.
+    #[must_use]
+    pub fn tag_target_card(&self) -> Option<&Card> {
+        self.cards.get(self.tag_target.as_ref()?)
     }
 
     pub fn edit_tag_line(&mut self, edit: LineEdit<'_>) {
@@ -283,7 +298,7 @@ impl NoteList {
     /// pregunta.
     pub fn take_tags(&mut self) -> Option<(VaultPath, Vec<String>)> {
         self.prompt = None;
-        let note = self.selected_note()?.clone();
+        let note = self.tag_target.take()?;
         let tags: Vec<String> = self
             .tag_line
             .text()

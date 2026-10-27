@@ -268,3 +268,14 @@ fn la_fuente_sigue_a_su_tag_renombrado() {
     assert_eq!(list.source(), &ListSource::Tag("rust".into()));
     assert_eq!(rows(&list), ["media.md", "vieja.md"]);
 }
+
+#[test]
+fn los_tags_van_a_la_nota_de_la_pregunta_aunque_la_fila_cambie() {
+    let fixture = Fixture::new();
+    let mut list = fixture.list(ListSource::All, "");
+    assert!(list.start_tagging());
+    list.select_next(1);
+    list.edit_tag_line(LineEdit::Insert("idea"));
+    let (note, _tags) = list.take_tags().unwrap();
+    assert_eq!(note.as_str(), "nueva.md");
+}

@@ -9,6 +9,8 @@ use metalmind_vault::Vault;
 use metalmind_vim::Markdown;
 use pretty_assertions::assert_eq;
 
+use gpui_kit::EntityInputHandler as _;
+
 use super::*;
 use crate::actions::bind_keys;
 use crate::document::Document;
@@ -231,4 +233,36 @@ fn un_vault_sin_notas_dice_que_no_hay_ninguna() {
         .read_with(cx, |view, _| (view.list.is_current(), view.list.total()));
     assert!(current, "sin notas, la lista ya está");
     assert_eq!(total, 0);
+}
+
+#[test]
+fn una_fuente_elegida_gana_a_la_nota_activa_al_cargar() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture(&mut cx);
+    fixture
+        .list
+        .update(cx, |view, cx| view.set_source(ListSource::All, cx));
+    cx.run_until_parked();
+    assert_eq!(selected(&fixture.list, cx).as_deref(), Some("a.md"));
+    assert_eq!(
+        fixture.list.read_with(cx, |view, _| view.source_choices()),
+        1
+    );
+}
+
+#[test]
+fn el_filtro_recibe_el_texto_del_ime() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture(&mut cx);
+    fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
+    cx.simulate_keystrokes("space f");
+    fixture.list.update_in(cx, |view, window, cx| {
+        view.replace_and_mark_text_in_range(None, "´", None, window, cx);
+        view.replace_text_in_range(None, "é", window, cx);
+    });
+    let text = fixture
+        .list
+        .read_with(cx, |view, _| view.list.filter().text().to_owned());
+    assert_eq!(text, "é");
 }
