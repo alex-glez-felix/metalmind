@@ -388,7 +388,7 @@ impl Panel {
     }
 
     /// El focus de la fila elegida: una carpeta o un tag. Un archivo no es
-    /// un alcance.
+    /// un alcance, ni una fila de los backlinks.
     #[must_use]
     pub fn selected_focus(&self) -> Option<Focus> {
         match self.view {
@@ -398,6 +398,7 @@ impl Panel {
                 .filter(|row| row.is_folder())
                 .map(|row| Focus::folder(row.path.clone())),
             PanelView::Tags => self.selected_tag().as_deref().map(Focus::tag),
+            PanelView::Backlinks => None,
         }
     }
 
