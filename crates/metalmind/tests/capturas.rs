@@ -454,7 +454,9 @@ const SCENES: &[(&str, &[Step])] = &[
     // su columna y no se pega al conteo ni al detalle.
     (
         "autocompletado-angosto",
-        &[Step::Keys("<Esc><Esc><C-w>l:e formulas-larga.md<CR>GA #ar")],
+        &[Step::Keys(
+            "<Esc><Esc><C-w>l:e formulas-larga.md<CR>GA #mark",
+        )],
     ),
     (
         "links-autocompletado-angosto",
