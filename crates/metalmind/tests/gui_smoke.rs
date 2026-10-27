@@ -175,6 +175,20 @@ fn el_cierre_del_gestor_de_ventanas_se_niega_con_cambios() {
     assert_eq!(smoke.files(), ["a.md"]);
 }
 
+/// La ventana de una app que ya salió no se lee: `window()` reintenta y ve
+/// que el proceso terminó, en vez de entrar en pánico con el error de X.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_ventana_de_una_app_que_salio_no_se_lee() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.request_close();
+    assert!(metalmind.wait_exit().success());
+    assert_eq!(window.try_pixels(), None);
+}
+
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn w_conserva_los_permisos() {

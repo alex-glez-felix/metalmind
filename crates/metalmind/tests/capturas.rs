@@ -782,8 +782,7 @@ fn settle(window: &Window<'_>, frames: &Path, before: usize, previous: Option<&I
 
 /// Por qué `image` todavía no puede ser la escena que sigue a `previous`.
 fn not_yet_painted(image: &Image, previous: Option<&Image>) -> Option<&'static str> {
-    let (pixels, _) = image.rgb.as_chunks::<3>();
-    if pixels.iter().all(|pixel| Some(pixel) == pixels.first()) {
+    if support::one_color(&image.rgb) {
         Some("de un solo color")
     } else if previous == Some(image) {
         Some("igual a la escena anterior")

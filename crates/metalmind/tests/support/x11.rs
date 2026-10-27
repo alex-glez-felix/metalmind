@@ -170,13 +170,24 @@ impl Display {
 
     /// Los píxeles de `window` en RGB, fila por fila.
     pub fn pixels(&self, window: xproto::Window) -> (u16, u16, Vec<u8>) {
-        let (width, height) = self.size(window);
+        self.try_pixels(window).expect("leer la ventana")
+    }
+
+    /// Como `pixels`, o `None` si la ventana ya no existe (la app salió).
+    pub fn try_pixels(&self, window: xproto::Window) -> Option<(u16, u16, Vec<u8>)> {
+        let geometry = self
+            .conn
+            .get_geometry(window)
+            .expect("pedir el tamaño")
+            .reply()
+            .ok()?;
+        let (width, height) = (geometry.width, geometry.height);
         let image = self
             .conn
             .get_image(ImageFormat::Z_PIXMAP, window, 0, 0, width, height, !0)
             .expect("pedir la imagen")
             .reply()
-            .expect("leer la imagen");
+            .ok()?;
         self.assert_bgrx(image.depth, image.visual);
         let rgb = image
             .data
@@ -185,7 +196,7 @@ impl Display {
             .iter()
             .flat_map(|&[blue, green, red, _]| [red, green, blue])
             .collect();
-        (width, height, rgb)
+        Some((width, height, rgb))
     }
 
     /// Que cada píxel de una imagen de `depth` bits con `visual` sean 4 bytes:
