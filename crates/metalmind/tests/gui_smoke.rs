@@ -850,6 +850,29 @@ fn los_backlinks_abren_la_nota_en_el_link() {
     smoke.wait_contents("b.md", "uno\ndos X[[a]] tres\n");
 }
 
+/// Un clic en un backlink abre su nota y deja el foco en el panel: la
+/// lista sigue siendo la de la nota de antes, así que `j j` y `enter` abren
+/// el link de la otra nota.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn un_clic_en_un_backlink_deja_recorrer_la_lista() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "# A\n");
+    smoke.write("b.md", "ver [[a]]\n");
+    smoke.write("c.md", "y [[a]]\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>b");
+    let (x, y) = tree_row(1);
+    window.click(x, y);
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+    window.type_keys("jj<CR>");
+    window.wait_title("de c.md", |title| title.starts_with("c.md"));
+    window.type_keys("iX<Esc>:w<CR>");
+    smoke.wait_contents("c.md", "y X[[a]]\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {

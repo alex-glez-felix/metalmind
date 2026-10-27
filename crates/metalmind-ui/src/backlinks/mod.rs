@@ -116,8 +116,8 @@ impl BacklinkOutline {
         }
     }
 
-    /// Tras un lote del watcher: la nota activa y la elegida siguen a sus
-    /// renombres.
+    /// Tras un lote del watcher: la nota activa, la elegida y las cerradas
+    /// siguen a sus renombres.
     pub fn follow(&mut self, changes: &[VaultChange]) {
         for change in changes {
             let VaultChange::Renamed { from, to, .. } = change else {
@@ -134,6 +134,13 @@ impl BacklinkOutline {
             if let Some(RowId::Note(source) | RowId::Link(source, _)) = &mut self.selected {
                 moved(source);
             }
+            self.collapsed = std::mem::take(&mut self.collapsed)
+                .into_iter()
+                .map(|mut source| {
+                    moved(&mut source);
+                    source
+                })
+                .collect();
         }
     }
 
@@ -155,6 +162,12 @@ impl BacklinkOutline {
     #[must_use]
     pub fn rows(&self) -> &[Row] {
         &self.rows
+    }
+
+    /// Qué fila está elegida, aunque las filas todavía no se hayan rehecho.
+    #[must_use]
+    pub fn selected_id(&self) -> Option<&RowId> {
+        self.selected.as_ref()
     }
 
     #[must_use]
