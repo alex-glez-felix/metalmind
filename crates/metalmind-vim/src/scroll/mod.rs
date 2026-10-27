@@ -3,10 +3,13 @@
 //! alto hay y cuánto mide cada línea ([`LineHeights`]).
 
 mod page;
+mod sideways;
 mod window;
 
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
 
+pub use self::sideways::Sideways;
+pub(crate) use self::sideways::{f32_of, units};
 pub(crate) use self::window::Window;
 use crate::Mode;
 use crate::columns::Columns;
@@ -52,6 +55,10 @@ pub struct Viewport {
     settled: Option<usize>,
     /// Cómo se miden las columnas en esta ventana (su `tabstop`).
     columns: Columns,
+    /// Ver [`Viewport::left`].
+    left: usize,
+    /// Ver [`Viewport::skip`].
+    skip: usize,
 }
 
 /// `ctrl-e`, `ctrl-y`, `ctrl-d`, `ctrl-u`, `ctrl-f` y `ctrl-b`.
@@ -94,6 +101,8 @@ impl Viewport {
             half_page: None,
             settled: None,
             columns: Columns::default(),
+            left: 0,
+            skip: 0,
         }
     }
 

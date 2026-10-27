@@ -171,10 +171,10 @@ impl Workspace {
         for pane in showing {
             if self.tree.len() > 1 {
                 self.close(pane);
-            } else if let Some(numbers) = self.panes.get(&pane).map(|state| state.numbers) {
+            } else if let Some(options) = self.panes.get(&pane).map(|state| state.options) {
                 let id = self.insert_document(Document::unnamed());
                 let jumps = self.panes.get(&pane).map(|state| state.state.jumps.clone());
-                let mut state = Pane::at_start(id, numbers, self.tabstop);
+                let mut state = Pane::at_start(id, options, self.tabstop);
                 state.state.jumps = jumps.unwrap_or_default();
                 self.panes.insert(pane, state);
             }

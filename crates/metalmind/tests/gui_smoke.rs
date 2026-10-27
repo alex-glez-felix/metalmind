@@ -83,6 +83,37 @@ fn edita_y_guarda(#[case] before: &str, #[case] keys: &str, #[case] after: &str)
     assert_eq!(smoke.files(), ["a.md"]);
 }
 
+/// Con `wrap`, `gj` baja una fila dentro de una línea más ancha que la
+/// ventana: la vista le dio al motor el ancho del panel y las filas que
+/// pinta. Con `:set nowrap`, `gj` es `j` y en la única línea no se mueve.
+#[rstest]
+#[case::con_wrap("", true)]
+#[case::sin_wrap(":set nowrap<CR>", false)]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn gj_baja_por_las_filas_de_la_pantalla(#[case] setup: &str, #[case] wraps: bool) {
+    let line = "0123456789".repeat(300);
+    let smoke = Smoke::new();
+    smoke.write("a.md", &format!("{line}\n"));
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys(&format!("{setup}gjx:wq<CR>"));
+    assert!(metalmind.wait_exit().success());
+    let after = smoke.read("a.md");
+    assert_eq!(after.len(), line.len());
+    let removed = line
+        .bytes()
+        .zip(after.bytes())
+        .position(|(before, now)| before != now)
+        .unwrap();
+    if wraps {
+        assert!(
+            (20..line.len()).contains(&removed),
+            "x borró el byte {removed}, que no es el de la segunda fila"
+        );
+    } else {
+        assert_eq!(removed, 0);
+    }
+}
+
 /// Sin adaptador no hay ventana: dice qué falta y sale, no se queda corriendo (#31).
 #[test]
 #[ignore = "necesita Xvfb: ver docs/testing.md"]

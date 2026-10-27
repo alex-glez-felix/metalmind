@@ -1,9 +1,7 @@
 //! El cursor de cada modo y el texto provisional del IME, sobre la línea
 //! pintada del cursor: miden lo que mide esa línea.
 
-use gpui_kit::{
-    Bounds, PaintQuad, Pixels, Point, ShapedLine, UnderlineStyle, Window, fill, point, size,
-};
+use gpui_kit::{Bounds, PaintQuad, Pixels, Point, ShapedLine, UnderlineStyle, Window, fill, size};
 use metalmind_vim::Mode;
 
 use super::element::shape;
@@ -42,14 +40,8 @@ pub fn cursor_quad(
         }
     };
     let (laid, column) = cursor_position(view, layout)?;
-    let left = laid.x_for_index(column);
-    Some(fill(
-        Bounds::new(
-            point(laid.origin.x + left, laid.origin.y),
-            size(width, laid.text_height),
-        ),
-        color,
-    ))
+    let (origin, height) = laid.place(column)?;
+    Some(fill(Bounds::new(origin, size(width, height)), color))
 }
 
 /// Ancho del carácter bajo el cursor; sobre el fin de línea, el de una `M`.
@@ -63,8 +55,9 @@ fn block_width(
     let cursor = view.cursor();
     let next = view.buffer().next_boundary(cursor);
     if next > cursor && column < laid.len() {
-        let left = laid.x_for_index(column);
-        Some(laid.x_for_index(column + (next.get() - cursor.get())) - left)
+        let row = laid.row_of(column)?;
+        let left = row.x_for_index(column);
+        Some(row.x_for_end(column + (next.get() - cursor.get())) - left)
     } else {
         Some(em_width(&line_face(typeface, laid), window))
     }
@@ -123,14 +116,14 @@ pub fn preedit(
         Some(underline),
         window,
     );
-    let origin = point(laid.origin.x + laid.x_for_index(column), laid.origin.y);
+    let (origin, height) = laid.place(column)?;
     let background = fill(
-        Bounds::new(origin, size(shaped.width(), laid.text_height)),
+        Bounds::new(origin, size(shaped.width(), height)),
         theme.ui.background,
     );
     Some(Preedit {
         origin,
-        height: laid.text_height,
+        height,
         background,
         shaped,
     })

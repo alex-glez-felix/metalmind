@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn a_tall_line_pushes_the_ones_below() {
-        let placed = place(Scroll::at_line(0), 10, 100.0, heights);
+        let placed = place(Scroll::at(0.0), 10, 100.0, heights);
         assert_eq!(
             tops(&placed),
             [
@@ -120,13 +120,13 @@ mod tests {
     #[test]
     fn the_wheel_crosses_a_tall_line_by_its_pixels() {
         let height = |line| f64::from(heights(line));
-        let down = scroll_by_pixels(Scroll::at_line(0), 65.0, 10, height);
+        let down = scroll_by_pixels(Scroll::at(0.0), 65.0, 10, height);
         assert_eq!((down.first_line(), down.fraction()), (2, 0.5));
         let back = scroll_by_pixels(down, -65.0, 10, height);
         assert_eq!((back.first_line(), back.fraction()), (0, 0.0));
-        let past_end = scroll_by_pixels(Scroll::at_line(9), 500.0, 10, height);
-        assert_eq!(past_end, Scroll::at_line(10));
-        let before_start = scroll_by_pixels(Scroll::at_line(1), -500.0, 10, height);
-        assert_eq!(before_start, Scroll::at_line(0));
+        let past_end = scroll_by_pixels(Scroll::at(9.0), 500.0, 10, height);
+        assert_eq!(past_end, Scroll::at(10.0));
+        let before_start = scroll_by_pixels(Scroll::at(1.0), -500.0, 10, height);
+        assert_eq!(before_start, Scroll::at(0.0));
     }
 }

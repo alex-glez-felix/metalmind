@@ -56,6 +56,9 @@ named_actions! {
         /// `:set {opciones}`: las opciones del panel enfocado, como sus
         /// números de línea.
         Set = "editor::set",
+        /// `:set wrap!`: parte las líneas largas del panel enfocado, o deja
+        /// de partirlas y la vista se corre a lo ancho.
+        ToggleWrap = "editor::toggle_wrap",
         /// `space f`: el finder de notas.
         OpenFinder = "workspace::open_finder",
         /// `space /`: la búsqueda de texto en las notas del vault.

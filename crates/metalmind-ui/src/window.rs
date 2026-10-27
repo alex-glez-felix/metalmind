@@ -20,7 +20,7 @@ use crate::new_note::NoteSettings;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
-use crate::workspace::{Autosave, LineNumbers, Options, SystemClock, Workspace};
+use crate::workspace::{Autosave, LineNumbers, Options, PaneOptions, SystemClock, Workspace};
 use crate::workspace_view::WorkspaceView;
 
 #[derive(Debug, thiserror::Error)]
@@ -105,9 +105,12 @@ pub fn open_window(
     let prepared = Prepared::new(vault, updates, paths.as_ref())?;
     let options = window_options(&document);
     let editor = config.settings.editor;
-    let numbers = LineNumbers {
-        absolute: editor.number,
-        relative: editor.relativenumber,
+    let pane = PaneOptions {
+        numbers: LineNumbers {
+            absolute: editor.number,
+            relative: editor.relativenumber,
+        },
+        wrap: editor.wrap,
     };
     let workspace_options = Options {
         scrolloff: usize::try_from(editor.scrolloff).unwrap_or(usize::MAX),
@@ -130,7 +133,7 @@ pub fn open_window(
         let disk = Rc::new(VaultDisk::new(session.read(cx).vault()));
         let workspace = cx.new(|cx| {
             let keymap = AppKeymap::get(cx);
-            let mut workspace = Workspace::new(document, numbers, workspace_options, keymap);
+            let mut workspace = Workspace::new(document, pane, workspace_options, keymap);
             workspace.set_disk(disk);
             workspace
                 .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Action, ActionName, CharSearch, HostCommand, InsertAt, Key, Mode, Motion, Operator, PasteSide,
-    Place, Scroll, TextObject, VisualKind,
+    Place, ScreenMotion, Scroll, Sideways, TextObject, VisualKind,
 };
 
 /// Dónde aplica un binding, al estilo de los contextos de Zed.
@@ -179,6 +179,14 @@ const fn search_word(backward: bool, whole_word: bool) -> Action {
     }
 }
 
+const fn screen(motion: ScreenMotion) -> Action {
+    Action::Motion(Motion::Screen(motion))
+}
+
+const fn sideways(sideways: Sideways) -> Action {
+    Action::ScrollSideways(sideways)
+}
+
 const fn reposition(place: Place, first_non_blank: bool) -> Action {
     Action::Reposition {
         place,
@@ -241,6 +249,20 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[ch('^')], motion(Motion::FirstNonBlank)),
         (Control, &[ch('$')], motion(Motion::LineEnd)),
         (Control, &[ch('g'), ch('g')], motion(Motion::DocumentStart)),
+        (Control, &[ch('g'), ch('j')], screen(ScreenMotion::Down)),
+        (Control, &[ch('g'), ch('k')], screen(ScreenMotion::Up)),
+        (Control, &[ch('g'), ch('0')], screen(ScreenMotion::RowStart)),
+        (
+            Control,
+            &[ch('g'), ch('^')],
+            screen(ScreenMotion::RowFirstNonBlank),
+        ),
+        (
+            Control,
+            &[ch('g'), ch('m')],
+            screen(ScreenMotion::RowMiddle),
+        ),
+        (Control, &[ch('g'), ch('$')], screen(ScreenMotion::RowEnd)),
         (Control, &[ch('G')], motion(Motion::DocumentEnd)),
         (Control, &[ch('%')], motion(Motion::Matching)),
         (Control, &[ch(']'), ch(']')], motion(Motion::NextHeading)),
@@ -379,6 +401,16 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Control, &[Key::Ctrl('f')], Action::Scroll(Scroll::PageDown)),
         (Control, &[Key::Ctrl('b')], Action::Scroll(Scroll::PageUp)),
         (Control, &[ch('z'), ch('t')], reposition(Place::Top, false)),
+        (Control, &[ch('z'), ch('h')], sideways(Sideways::Left)),
+        (Control, &[ch('z'), ch('l')], sideways(Sideways::Right)),
+        (Control, &[ch('z'), ch('H')], sideways(Sideways::HalfLeft)),
+        (Control, &[ch('z'), ch('L')], sideways(Sideways::HalfRight)),
+        (
+            Control,
+            &[ch('z'), ch('s')],
+            sideways(Sideways::CursorStart),
+        ),
+        (Control, &[ch('z'), ch('e')], sideways(Sideways::CursorEnd)),
         (
             Control,
             &[ch('z'), ch('z')],

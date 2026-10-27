@@ -12,6 +12,7 @@ thiserror.workspace = true
 unicode-properties.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true
+unicode-segmentation.workspace = true
 unicode-width.workspace = true
 
 [dev-dependencies]

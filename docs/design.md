@@ -80,7 +80,7 @@ Lo que decide cada componente queda por escribir: cada sección se llena cuando 
 - **Toda PR que cambie algo visible lleva capturas en la descripción** (regla de las PRs de UI desde el 2026-10-19). Todas van en la descripción de la PR, no solo en la rama:
   - en Xvfb, nunca en el display real;
   - en tema **oscuro y claro**, con ventanas de **1920x1080 y 1280x720**: las cuatro combinaciones;
-  - con **contenido que estrese el layout**: notas de más de 1000 líneas, líneas más largas que el ancho (partidas donde la vista parte líneas; el editor hoy no las parte, como `nowrap` de vim), rutas y nombres largos en el árbol y en los pickers, multibyte y emoji, muchos resultados y listas vacías, y menús y tooltips abiertos cerca de los bordes de la ventana. Con contenido cómodo no se ven los bugs (así se pasó el texto encimado del picker);
+  - con **contenido que estrese el layout**: notas de más de 1000 líneas, líneas más largas que el ancho (el editor las parte en filas con `editor.wrap`, el default, y sin él se corre a lo ancho como `nowrap` de vim: las dos se prueban), rutas y nombres largos en el árbol y en los pickers, multibyte y emoji, muchos resultados y listas vacías, y menús y tooltips abiertos cerca de los bordes de la ventana. Con contenido cómodo no se ven los bugs (así se pasó el texto encimado del picker);
   - si la PR arregla o cambia algo visual, capturas de **antes y después** y el diff de imagen, también en los dos tamaños y los dos temas.
 
   Sin capturas, la PR no se mergea.

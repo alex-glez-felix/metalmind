@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use metalmind_buffer::{Buffer, ByteOffset, Edit};
 
 use super::list::{self, Numbering};
-use super::{LazyOutline, ListItem};
+use super::{LazyStyles, ListItem};
 use crate::columns::Columns;
 
 /// Lo que hace un salto de línea en `head`.
@@ -31,7 +31,7 @@ impl Newline {
         buffer: &Buffer,
         head: ByteOffset,
         ends: bool,
-        outline: &LazyOutline,
+        styles: &LazyStyles,
         columns: Columns,
     ) -> Self {
         let line = buffer.line_of(head);
@@ -40,7 +40,7 @@ impl Newline {
         let Some(item) = ListItem::parse(&text).filter(|item| column >= item.content) else {
             return Self::Plain;
         };
-        if outline.get(buffer).is_literal(line) {
+        if styles.outline(buffer).is_literal(line) {
             return Self::Plain;
         }
         if ends && item.is_empty() {
@@ -62,11 +62,11 @@ pub(crate) fn opened_item(
     buffer: &Buffer,
     line: usize,
     below: bool,
-    outline: &LazyOutline,
+    styles: &LazyStyles,
 ) -> Option<String> {
     let text = buffer.line_text(line);
     let item = ListItem::parse(&text)?;
-    if outline.get(buffer).is_literal(line) {
+    if styles.outline(buffer).is_literal(line) {
         return None;
     }
     let marker = if below {

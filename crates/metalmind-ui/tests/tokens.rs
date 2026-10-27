@@ -64,12 +64,12 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "la tecla de una fila no elegida guarda su columna, transparente: si no, la lista se ensancharía al elegir y la tecla se pegaría al detalle",
     ),
     (
-        "src/editor/element.rs",
+        "src/editor/element/measures.rs",
         "x * 2.",
         "geometría, no estilo: el margen del texto se resta de los dos lados",
     ),
     (
-        "src/editor/element.rs",
+        "src/editor/element/measures.rs",
         "y * 2.",
         "geometría, no estilo: el margen del texto se resta arriba y abajo",
     ),

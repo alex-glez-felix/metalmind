@@ -8,7 +8,7 @@ use metalmind_vault::SaveKind;
 use metalmind_vim::{ActionName, Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
 
 use super::panes_oracle::{Panes, Window};
-use super::{Effect, LineNumbers, Message, Options, PaneId, PaneView, Workspace};
+use super::{Effect, LineNumbers, Message, Options, PaneId, PaneOptions, PaneView, Workspace};
 use crate::disk::Files;
 use crate::document::{Document, FileStats, SaveError};
 
@@ -93,7 +93,15 @@ impl Session {
 
     fn with_options(document: Document, options: Options) -> Self {
         Self {
-            workspace: Workspace::new(document, LineNumbers::HYBRID, options, &Keymap::default()),
+            workspace: Workspace::new(
+                document,
+                PaneOptions {
+                    numbers: LineNumbers::HYBRID,
+                    wrap: true,
+                },
+                options,
+                &Keymap::default(),
+            ),
             effect: Effect::Stay,
             clipboard: TestClipboard::default(),
         }

@@ -38,29 +38,87 @@ impl Rows {
         }
     }
 
-    /// Lo que mide una línea con este estilo.
+    /// Lo que mide una línea con este estilo en una sola fila.
     #[must_use]
     pub fn height(&self, style: &LineStyle) -> usize {
-        let base = match style.kind {
+        let (mut line, mut below) = (self.base(style), 0_usize);
+        for (formula, rows) in self.formulas(style) {
+            if formula.below() {
+                below = below.saturating_add(rows);
+            } else {
+                line = line.max(rows);
+            }
+        }
+        line.saturating_add(below)
+    }
+
+    /// Lo que mide cada una de las `rows` filas de una línea partida, con
+    /// cada byte en la fila que dice `row_of` (en la app, la de su
+    /// [`ScreenLine`](crate::ScreenLine)): la fila de una fórmula alta crece
+    /// con ella, y la de un bloque suma debajo de la última. Sin estilo
+    /// calculado, cada fila mide como texto.
+    #[must_use]
+    pub fn line_rows(
+        &self,
+        style: Option<&LineStyle>,
+        rows: usize,
+        row_of: impl Fn(usize) -> usize,
+    ) -> LineRows {
+        let base = style.map_or(self.text, |style| self.base(style));
+        let mut rows = LineRows {
+            rows: vec![base; rows.max(1)],
+            below: 0,
+        };
+        for (formula, height) in style.into_iter().flat_map(|style| self.formulas(style)) {
+            if formula.below() {
+                rows.below = rows.below.saturating_add(height);
+            } else if let Some(row) = rows.rows.get_mut(row_of(formula.range.start)) {
+                *row = (*row).max(height);
+            }
+        }
+        rows
+    }
+
+    fn base(&self, style: &LineStyle) -> usize {
+        match style.kind {
             LineKind::Heading(level) => self
                 .headings
                 .get(usize::from(level).saturating_sub(1))
                 .copied()
                 .unwrap_or(self.text),
             _ => self.text,
-        };
-        let Some(formulas) = &self.formulas else {
-            return base;
-        };
-        let (mut line, mut below) = (base, 0_usize);
-        for formula in &style.math {
-            match formulas.rows(formula) {
-                Some(rows) if formula.below() => below = below.saturating_add(rows),
-                Some(rows) => line = line.max(rows),
-                None => {}
-            }
         }
-        line.saturating_add(below)
+    }
+
+    /// Las fórmulas de `style` que componen, con lo que miden.
+    fn formulas<'s>(&'s self, style: &'s LineStyle) -> impl Iterator<Item = (&'s MathSpot, usize)> {
+        let formulas = self.formulas.as_deref();
+        style.math.iter().filter_map(move |formula| {
+            let rows = formulas?.rows(formula)?;
+            Some((formula, rows))
+        })
+    }
+}
+
+/// Lo que mide cada fila de una línea y lo que suma debajo la fórmula de un
+/// bloque, en las unidades de [`Rows`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LineRows {
+    pub rows: Vec<usize>,
+    pub below: usize,
+}
+
+impl LineRows {
+    /// Lo que mide la línea entera.
+    #[must_use]
+    pub fn height(&self) -> usize {
+        self.rows.iter().sum::<usize>().saturating_add(self.below)
+    }
+
+    /// Dónde empieza la fila `row`, desde arriba de la línea.
+    #[must_use]
+    pub fn top(&self, row: usize) -> usize {
+        self.rows.iter().take(row).sum()
     }
 }
 
@@ -83,7 +141,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::{Styles, TextLines};
+    use crate::{Advances, ScreenLine, Styles, TextLines};
 
     /// Cada fórmula mide lo que dice su LaTeX; `roto` no compone.
     #[derive(Debug)]
@@ -115,6 +173,27 @@ mod tests {
             heights("a $5$ b $1$\n$$\n3\n$$\n$roto$ y $$7$$", &rows),
             [5, 2, 2, 2 + 3, 7]
         );
+    }
+
+    #[test]
+    fn cada_fila_mide_lo_suyo_y_el_bloque_suma_debajo() {
+        let rows = Rows {
+            formulas: Some(Arc::new(ByLatex)),
+            ..Rows::uniform(2)
+        };
+        let text = "uno dos $5$ tres";
+        let lines = TextLines::new(text);
+        let mut styles = Styles::new(1);
+        styles.ensure(0, &lines);
+        let style = styles.line(0);
+        let screen = ScreenLine::new(text, Advances::monospace(text, 1.0), style, Some(7.0));
+        let measured = rows.line_rows(style, screen.rows(), |byte| screen.row_of(byte));
+        assert_eq!(
+            (measured.rows.as_slice(), measured.below),
+            (&[2, 5, 2][..], 0)
+        );
+        assert_eq!((measured.height(), measured.top(2)), (9, 7));
+        assert_eq!(rows.line_rows(None, 3, |_| 0).rows, [2, 2, 2]);
     }
 
     #[test]

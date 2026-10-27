@@ -307,8 +307,10 @@ impl Editor {
         let wanted = usize::from(theme.layout.completion_rows).min(list.len());
         let view = self.view(cx)?;
         let (laid, column) = cursor_position(&view, layout)?;
-        let x = laid.origin.x + laid.x_for_index(column - typed.min(column));
-        let line = Bounds::new(laid.origin, size(laid.width(), laid.height));
+        let row = laid.row_of(column)?;
+        let origin = laid.row_origin(row);
+        let x = origin.x + row.x_for_index(column - typed.min(column));
+        let line = Bounds::new(origin, size(row.width(), row.height));
         let placement = MenuMetrics {
             row_height: theme.menu_row_height,
             frame: theme.layout.menu_padding + theme.stroke.border,

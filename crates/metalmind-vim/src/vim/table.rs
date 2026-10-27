@@ -7,7 +7,7 @@ use crate::Target;
 use crate::VimError;
 use crate::dot::{Change, Dot};
 use crate::lines::clamp_normal;
-use crate::markdown::{LazyOutline, TableFormat};
+use crate::markdown::{LazyStyles, TableFormat};
 
 impl Vim {
     /// [`Vim::align_tables`], y `.` lo repite.
@@ -24,10 +24,10 @@ impl Vim {
     /// Alinea la tabla de cada cursor, en un solo paso de undo; cada
     /// cursor se queda en su celda. `false` si ninguno está en una tabla.
     pub(super) fn align_tables(t: &mut Target<'_>) -> Result<bool, VimError> {
-        let outline = LazyOutline::new(t.doc.styles_mut());
+        let styles = LazyStyles::new(t.doc.styles_mut());
         let mut tables: Vec<TableFormat> = Vec::new();
         let spots = t.selections.map_to(|selection| {
-            let table = TableFormat::at(t.buffer, selection.head, &outline)?;
+            let table = TableFormat::at(t.buffer, selection.head, &styles)?;
             let spot = table.spot(t.buffer, selection.head);
             let seen = tables.iter().position(|seen| seen.lines() == table.lines());
             let index = seen.unwrap_or_else(|| {

@@ -8,7 +8,7 @@ use super::Vim;
 use crate::Target;
 use crate::dot::{Change, Dot};
 use crate::lines::clamp_normal;
-use crate::markdown::{LazyOutline, toggle_checkboxes};
+use crate::markdown::{LazyStyles, toggle_checkboxes};
 use crate::{VimError, VisualKind};
 
 impl Vim {
@@ -57,7 +57,7 @@ impl Vim {
         count: Option<usize>,
         t: &mut Target<'_>,
     ) -> Result<(), VimError> {
-        let edits = toggle_checkboxes(t.buffer, lines, &LazyOutline::new(t.doc.styles_mut()));
+        let edits = toggle_checkboxes(t.buffer, lines, &LazyStyles::new(t.doc.styles_mut()));
         if edits.is_empty() {
             self.fail();
             return Ok(());

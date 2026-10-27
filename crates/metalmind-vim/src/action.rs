@@ -1,4 +1,6 @@
-use crate::{CharSearch, Motion, Operator, Place, Scroll, TextObject, VisualKind};
+use crate::{
+    CharSearch, Motion, Operator, Place, ScreenMotion, Scroll, Sideways, TextObject, VisualKind,
+};
 
 /// Dónde empieza el modo Insert.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +49,9 @@ pub enum Action {
     ClearSearchHighlight,
     /// Mueve la ventana y, si hace falta, el cursor.
     Scroll(Scroll),
+    /// `zh`, `zl`, `zH`, `zL`, `zs`, `ze`: corre la ventana a lo ancho, sin
+    /// `wrap`, y el cursor si queda fuera.
+    ScrollSideways(Sideways),
     /// `zt`, `zz`, `zb`: mueve la ventana para que el cursor quede en ese
     /// lugar; con `first_non_blank` (`z<CR>`, `z.`, `z-`) el cursor va
     /// además al primer no blanco.
@@ -151,6 +156,18 @@ impl Action {
         Self::Motion(Motion::Matching),
         Self::Motion(Motion::NextHeading),
         Self::Motion(Motion::PreviousHeading),
+        Self::Motion(Motion::Screen(ScreenMotion::Down)),
+        Self::Motion(Motion::Screen(ScreenMotion::Up)),
+        Self::Motion(Motion::Screen(ScreenMotion::RowStart)),
+        Self::Motion(Motion::Screen(ScreenMotion::RowFirstNonBlank)),
+        Self::Motion(Motion::Screen(ScreenMotion::RowMiddle)),
+        Self::Motion(Motion::Screen(ScreenMotion::RowEnd)),
+        Self::ScrollSideways(Sideways::Left),
+        Self::ScrollSideways(Sideways::Right),
+        Self::ScrollSideways(Sideways::HalfLeft),
+        Self::ScrollSideways(Sideways::HalfRight),
+        Self::ScrollSideways(Sideways::CursorStart),
+        Self::ScrollSideways(Sideways::CursorEnd),
         Self::Scroll(Scroll::LineDown),
         Self::Scroll(Scroll::LineUp),
         Self::Scroll(Scroll::HalfPageDown),
@@ -322,6 +339,7 @@ impl Action {
             } => search_word_name(backward, whole_word),
             Self::ClearSearchHighlight => "vim::clear_search_highlight",
             Self::Scroll(scroll) => scroll_name(scroll),
+            Self::ScrollSideways(sideways) => sideways_name(sideways),
             Self::Reposition {
                 place,
                 first_non_blank,
@@ -402,6 +420,12 @@ fn motion_name(motion: Motion) -> &'static str {
         Motion::Window(Place::Middle) => "vim::window_middle",
         Motion::Window(Place::Bottom) => "vim::window_bottom",
         Motion::Matching => "vim::matching",
+        Motion::Screen(ScreenMotion::Down) => "vim::screen_down",
+        Motion::Screen(ScreenMotion::Up) => "vim::screen_up",
+        Motion::Screen(ScreenMotion::RowStart) => "vim::start_of_screen_line",
+        Motion::Screen(ScreenMotion::RowFirstNonBlank) => "vim::first_non_blank_of_screen_line",
+        Motion::Screen(ScreenMotion::RowMiddle) => "vim::middle_of_screen_line",
+        Motion::Screen(ScreenMotion::RowEnd) => "vim::end_of_screen_line",
         Motion::NextHeading => "vim::next_heading",
         Motion::PreviousHeading => "vim::previous_heading",
     }
@@ -415,6 +439,17 @@ fn scroll_name(scroll: Scroll) -> &'static str {
         Scroll::HalfPageUp => "vim::scroll_half_page_up",
         Scroll::PageDown => "vim::scroll_page_down",
         Scroll::PageUp => "vim::scroll_page_up",
+    }
+}
+
+fn sideways_name(sideways: Sideways) -> &'static str {
+    match sideways {
+        Sideways::Left => "vim::scroll_left",
+        Sideways::Right => "vim::scroll_right",
+        Sideways::HalfLeft => "vim::scroll_half_screen_left",
+        Sideways::HalfRight => "vim::scroll_half_screen_right",
+        Sideways::CursorStart => "vim::scroll_cursor_start",
+        Sideways::CursorEnd => "vim::scroll_cursor_end",
     }
 }
 

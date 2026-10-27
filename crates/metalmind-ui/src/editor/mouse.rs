@@ -4,7 +4,7 @@
 
 use gpui_kit::{
     App, ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
-    ScrollWheelEvent, Window,
+    ScrollWheelEvent, Window, px,
 };
 use metalmind_buffer::ByteOffset;
 
@@ -12,6 +12,7 @@ use super::Editor;
 use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
+use super::scroll::{f32_of, units};
 use crate::clipboard::SystemClipboard;
 
 impl Editor {
@@ -32,12 +33,28 @@ impl Editor {
         let Some(view) = self.view(cx) else {
             return;
         };
-        let delta = event.delta.pixel_delta(line_height).y;
+        let delta = event.delta.pixel_delta(line_height);
+        // Con shift, la rueda de siempre corre a lo ancho, como en un navegador.
+        let (across, down) = if event.modifiers.shift && delta.x == px(0.) {
+            (delta.y, px(0.))
+        } else {
+            (delta.x, delta.y)
+        };
+        if across != px(0.) && !view.wrap {
+            let left = (f32_of(view.viewport.left()) - f32::from(across)).max(0.);
+            self.scroll_sideways_to(units(left), cx);
+        }
+        if down == px(0.) {
+            return;
+        }
+        let Some(view) = self.view(cx) else {
+            return;
+        };
         self.scroll = scroll_by_pixels(
             self.scroll,
-            -f64::from(delta),
+            -f64::from(down),
             view.buffer().last_line(),
-            |line| f64::from(lines::line_height(&view, line_height, line)),
+            |line| f64::from(lines::line_height(&view, line)),
         );
         let top = self.scroll.first_full_line();
         if self.synced_top != Some(top) {
@@ -47,6 +64,16 @@ impl Editor {
             if let Err(error) = scrolled {
                 self.report(&error, cx);
             }
+        }
+        cx.notify();
+    }
+
+    fn scroll_sideways_to(&mut self, left: usize, cx: &mut Context<Self>) {
+        let scrolled = self.update_workspace(cx, |workspace, pane, _| {
+            workspace.scroll_sideways_to(pane, left)
+        });
+        if let Err(error) = scrolled {
+            self.report(&error, cx);
         }
         cx.notify();
     }

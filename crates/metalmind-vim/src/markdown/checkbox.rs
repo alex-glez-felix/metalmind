@@ -2,7 +2,7 @@
 
 use metalmind_buffer::{Buffer, Edit};
 
-use super::{LazyOutline, ListItem};
+use super::{LazyStyles, ListItem};
 
 /// Las ediciones que marcan o desmarcan el checkbox de cada ítem de `lines`.
 /// Un ítem sin checkbox recibe uno vacío; las líneas que no son ítems o
@@ -10,14 +10,14 @@ use super::{LazyOutline, ListItem};
 pub(crate) fn toggle_checkboxes(
     buffer: &Buffer,
     lines: impl IntoIterator<Item = usize>,
-    outline: &LazyOutline,
+    styles: &LazyStyles,
 ) -> Vec<Edit> {
     lines
         .into_iter()
         .filter_map(|line| {
             let text = buffer.line_text(line);
             let item = ListItem::parse(&text)?;
-            if outline.get(buffer).is_literal(line) {
+            if styles.outline(buffer).is_literal(line) {
                 return None;
             }
             let start = buffer.line_start(line);

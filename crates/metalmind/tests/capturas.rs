@@ -462,6 +462,18 @@ const SCENES: &[(&str, &[Step])] = &[
         "links-autocompletado-angosto",
         &[Step::Keys("<Esc>A [[idea 0")],
     ),
+    // Las líneas largas (#175): con `wrap`, la nota partida en filas, con la
+    // búsqueda y una selección que cruzan filas; sin él, la vista corrida a
+    // lo ancho hasta el cursor, al final de una línea y de una palabra sin
+    // espacios más larga que la ventana.
+    (
+        "wrap-seleccion",
+        &[Step::Keys(
+            "<Esc><Esc><C-w>l<C-w>o<Space>fbastante largo<CR>/sigue y sigue<CR>v3gj",
+        )],
+    ),
+    ("sin-wrap", &[Step::Keys("<Esc>:set nowrap<CR>$")]),
+    ("sin-wrap-palabra", &[Step::Keys("j$")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

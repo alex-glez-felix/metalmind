@@ -6,7 +6,9 @@
 use std::borrow::Cow;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Point, Splice};
-use metalmind_syntax::{Lines, Rows, Styles};
+use std::sync::Arc;
+
+use metalmind_syntax::{LineRows, LineStyle, Lines, Rows, Screen, ScreenLine, Styles};
 
 use crate::mark::Marks;
 use crate::{LineHeights, Viewport};
@@ -107,11 +109,23 @@ impl DocState {
         self.lines.as_mut().map(|lines| &mut lines.styles)
     }
 
-    /// Lo que mide cada línea o, si no se pinta, `None`: todas miden una
-    /// fila de la ventana.
+    /// Cómo se ve cada línea de `buffer` en un panel con `screen` (sin él,
+    /// ninguna se parte) y filas de texto de `row`: lo que mide y, con
+    /// `screen`, dónde cae cada carácter. Si el documento no se pinta, cada
+    /// fila mide `row`.
     #[must_use]
-    pub fn heights(&self) -> Option<&dyn LineHeights> {
-        self.lines.as_ref().map(|lines| lines as &dyn LineHeights)
+    pub fn layout<'a>(
+        &'a self,
+        buffer: &'a Buffer,
+        screen: Option<&'a Screen>,
+        row: usize,
+    ) -> Layout<'a> {
+        Layout {
+            lines: self.lines.as_ref(),
+            buffer,
+            screen,
+            row,
+        }
     }
 
     /// Calcula el estilo de lo que mira la ventana de `viewport` con el
@@ -157,13 +171,67 @@ impl DocState {
     }
 }
 
-impl LineHeights for StyledLines {
-    /// Una línea sin estilo calculado mide como texto: quien mueve la
-    /// ventana pide antes las que va a mirar.
+/// Cómo se ven las líneas de un documento en un panel ([`DocState::layout`]).
+/// Una línea sin estilo calculado mide como texto: quien mueve la ventana
+/// pide antes las que va a mirar.
+#[derive(Clone, Copy, Debug)]
+pub struct Layout<'a> {
+    lines: Option<&'a StyledLines>,
+    buffer: &'a Buffer,
+    screen: Option<&'a Screen>,
+    row: usize,
+}
+
+impl Layout<'_> {
+    #[must_use]
+    pub fn screen(&self) -> Option<&Screen> {
+        self.screen
+    }
+
+    /// La línea `line` en el ancho del panel; `None` sin pantalla.
+    #[must_use]
+    pub fn screen_line(&self, line: usize) -> Option<Arc<ScreenLine>> {
+        let screen = self.screen?;
+        Some(screen.line(&self.buffer.line_text(line), self.style(line)))
+    }
+
+    /// Lo que mide cada fila de `line` y lo que suma debajo.
+    #[must_use]
+    pub fn rows(&self, line: usize) -> LineRows {
+        let style = self.style(line);
+        let wrapped = self
+            .screen
+            .filter(|screen| screen.wrap)
+            .map(|screen| screen.line(&self.buffer.line_text(line), style));
+        let (count, row_of) = match &wrapped {
+            Some(screen) => (screen.rows(), Some(screen)),
+            None => (1, None),
+        };
+        let row_of = |byte| row_of.map_or(0, |screen| screen.row_of(byte));
+        match self.lines {
+            Some(lines) => lines.rows.line_rows(style, count, row_of),
+            None => LineRows {
+                rows: vec![self.row; count],
+                below: 0,
+            },
+        }
+    }
+
+    fn style(&self, line: usize) -> Option<&LineStyle> {
+        self.lines?.styles.line(line)
+    }
+}
+
+impl LineHeights for Layout<'_> {
     fn height(&self, line: usize) -> usize {
-        self.styles
-            .line(line)
-            .map_or(self.rows.text, |style| self.rows.height(style))
+        let wraps = self.screen.is_some_and(|screen| screen.wrap);
+        match self.lines {
+            Some(lines) if !wraps => self
+                .style(line)
+                .map_or(lines.rows.text, |style| lines.rows.height(style)),
+            None if !wraps => self.row,
+            _ => self.rows(line).height(),
+        }
     }
 }
 

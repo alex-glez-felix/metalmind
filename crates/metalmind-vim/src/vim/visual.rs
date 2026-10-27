@@ -12,7 +12,7 @@ use crate::Target;
 use crate::columns::Columns;
 use crate::dot::{Change, Dot, Subject};
 use crate::lines::clamp_normal;
-use crate::markdown::LazyOutline;
+use crate::markdown::LazyStyles;
 use crate::motion::Purpose;
 use crate::object::Object;
 use crate::operator::{Operand, Outcome};
@@ -35,7 +35,10 @@ impl Vim {
     ) -> Result<KeyOutcome, VimError> {
         let moves = matches!(
             action,
-            Action::Motion(_) | Action::Scroll(_) | Action::Reposition { .. }
+            Action::Motion(_)
+                | Action::Scroll(_)
+                | Action::ScrollSideways(_)
+                | Action::Reposition { .. }
         );
         if std::mem::take(&mut self.stale_line_end) && moves {
             *t.selections = t.selections.map(|s| Selection {
@@ -46,6 +49,7 @@ impl Vim {
         match action {
             Action::Motion(motion) => self.move_by(motion, t)?,
             Action::Scroll(scroll) => self.scroll(scroll, t),
+            Action::ScrollSideways(sideways) => self.scroll_sideways(sideways, t),
             Action::Reposition {
                 place,
                 first_non_blank,
@@ -127,17 +131,10 @@ impl Vim {
                     VisualKind::Char | VisualKind::Block => Motion::Right,
                     VisualKind::Line => Motion::Down,
                 };
-                let outline = LazyOutline::new(t.doc.styles_mut());
+                let styles = LazyStyles::new(t.doc.styles_mut());
                 move_cursors(&cursors, true, |s| {
                     let times = Some(times - 1);
-                    motion.resolve(
-                        t.buffer,
-                        s,
-                        times,
-                        Purpose::Select,
-                        &t.pane.viewport,
-                        &outline,
-                    )
+                    motion.resolve(t.buffer, s, times, Purpose::Select, t.pane, &styles)
                 })
                 .unwrap_or(cursors)
             }
@@ -220,10 +217,10 @@ impl Vim {
     ) {
         let count = self.count.take().unwrap_or(1);
         self.reset();
-        let outline = LazyOutline::new(t.doc.styles_mut());
+        let styles = LazyStyles::new(t.doc.styles_mut());
         let selected = t
             .selections
-            .map_to(|s| object.select(t.buffer, s, kind, count, &outline));
+            .map_to(|s| object.select(t.buffer, s, kind, count, &styles));
         let kind = selected.iter().next().map_or(kind, |&(_, kind)| kind);
         *t.selections = selected.to_selections(|&(selection, _)| selection);
         self.mode = Mode::Visual(kind);
@@ -321,9 +318,9 @@ impl Vim {
                 &Object::Visual(Area::Selection(kind)),
                 t.buffer,
                 t.selections,
-                &t.pane.viewport,
+                t.pane,
                 self.indent,
-                &LazyOutline::new(t.doc.styles_mut()),
+                &LazyStyles::new(t.doc.styles_mut()),
             )?,
         };
         let repeated_register = match side {
