@@ -188,7 +188,7 @@ fn renombrar_lleva_la_seleccion_y_lo_abierto() {
         to: path("notas"),
         kind: EntryKind::Folder,
     };
-    tree.apply(&[change], renamed);
+    tree.apply(&[change], renamed, None);
     assert_eq!(tree.selected(), Some(&path("notas/2026/enero.md")));
     assert_eq!(
         render(&tree)[..4],
@@ -205,14 +205,14 @@ fn si_lo_seleccionado_desaparece_queda_la_fila_de_su_lugar() {
         kind: EntryKind::Note,
     };
     let without: Vec<&str> = VAULT.iter().copied().filter(|p| *p != "a.md").collect();
-    tree.apply(&[change], index(&without));
+    tree.apply(&[change], index(&without), None);
     assert_eq!(tree.selected(), Some(&path("b.md")));
     let change = VaultChange::Removed {
         path: path("b.md"),
         kind: EntryKind::Note,
     };
     let without: Vec<&str> = without.into_iter().filter(|p| *p != "b.md").collect();
-    tree.apply(&[change], index(&without));
+    tree.apply(&[change], index(&without), None);
     assert_eq!(tree.selected(), Some(&path("proyectos")));
 }
 
@@ -229,13 +229,13 @@ fn borrar_una_carpeta_abierta_la_olvida() {
         path: path("diario"),
         kind: EntryKind::Folder,
     };
-    tree.apply(&[removed], index(&without));
+    tree.apply(&[removed], index(&without), None);
     assert_eq!(tree.expanded().count(), 0);
     let created = VaultChange::Created {
         path: path("diario"),
         kind: EntryKind::Folder,
     };
-    tree.apply(&[created], index(VAULT));
+    tree.apply(&[created], index(VAULT), None);
     assert_eq!(render(&tree)[0], "▸ diario", "vuelve cerrada");
 }
 
@@ -250,7 +250,7 @@ fn revelar_espera_a_que_el_watcher_lo_traiga() {
         path: path("proyectos/nueva.md"),
         kind: EntryKind::Note,
     };
-    tree.apply(&[change], index(&with));
+    tree.apply(&[change], index(&with), None);
     assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
     assert_eq!(render(&tree)[3], "  nueva.md *");
 }
@@ -278,23 +278,24 @@ fn revelar_con_un_filtro_puesto() {
     let mut tree = FileTree::new(index(VAULT));
     tree.set_filter("nueva");
     tree.reveal(path("proyectos/nueva.md"));
-    tree.apply(&[created()], index(&with));
+    tree.apply(&[created()], index(&with), None);
     assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
 
     let mut tree = FileTree::new(index(VAULT));
     tree.set_filter("enero");
     tree.reveal(path("proyectos/nueva.md"));
-    tree.apply(&[created()], index(&with));
+    tree.apply(&[created()], index(&with), None);
     assert_ne!(tree.selected(), Some(&path("proyectos/nueva.md")));
     tree.set_filter("");
     assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
 }
 
-/// El árbol en `focus`, con `#rust` en `diario/2026/enero.md` y en `b.md`.
-fn focused(focus: &str) -> FileTree {
-    let index = index(VAULT);
+/// Lo que deja ver `focus` en un vault con estas rutas, con `#rust` en
+/// `diario/2026/enero.md`, `b.md` y `z.md`.
+fn in_scope(paths: &[&str], focus: &str) -> (Arc<VaultIndex>, Arc<crate::focus::InScope>) {
+    let index = index(paths);
     let tags = metalmind_vault::tags::Tags::build(path("tags"), &index, |note: &VaultPath| {
-        ["diario/2026/enero.md", "b.md"]
+        ["diario/2026/enero.md", "b.md", "z.md"]
             .contains(&note.as_str())
             .then(|| "#rust".to_owned())
     });
@@ -302,9 +303,36 @@ fn focused(focus: &str) -> FileTree {
         .unwrap()
         .unwrap()
         .resolve(&index, &tags);
+    (index, Arc::new(in_scope))
+}
+
+/// El árbol de [`VAULT`] en `focus`.
+fn focused(focus: &str) -> FileTree {
+    let (index, in_scope) = in_scope(VAULT, focus);
     let mut tree = FileTree::new(index);
-    tree.set_scope(Some(Arc::new(in_scope)));
+    tree.set_scope(Some(in_scope));
     tree
+}
+
+/// La nota elegida se renombra en focus: el lote trae el índice y el
+/// alcance juntos, así su ruta nueva se ve al rehacer las filas.
+#[test]
+fn en_focus_la_seleccion_sigue_a_un_renombre() {
+    let mut tree = focused("#rust");
+    tree.select(&path("b.md"));
+    let renamed: Vec<&str> = VAULT
+        .iter()
+        .map(|entry| if *entry == "b.md" { "z.md" } else { entry })
+        .collect();
+    let (index, in_scope) = in_scope(&renamed, "#rust");
+    let change = VaultChange::Renamed {
+        from: path("b.md"),
+        to: path("z.md"),
+        kind: EntryKind::Note,
+    };
+    tree.apply(&[change], index, Some(in_scope));
+    assert_eq!(tree.selected(), Some(&path("z.md")));
+    assert_eq!(render(&tree), ["▸ diario", "z.md *"]);
 }
 
 /// En focus solo se ven las carpetas con algo del alcance (05 §3).

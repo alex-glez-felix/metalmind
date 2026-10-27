@@ -185,9 +185,10 @@ impl Sidebar {
     }
 
     fn apply(&mut self, update: &VaultUpdate, cx: &mut Context<Self>) {
+        let in_scope = self.session.read(cx).in_scope();
         self.panel
             .tree
-            .apply(&update.changes, Arc::clone(&update.snapshot));
+            .apply(&update.changes, Arc::clone(&update.snapshot), in_scope);
         self.panel.follow(&update.changes);
         self.panel.set_tags(Arc::clone(&update.tags));
         self.sync_focus(cx);
