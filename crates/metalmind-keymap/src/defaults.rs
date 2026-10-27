@@ -5,7 +5,7 @@
 use metalmind_vim::{Context as VimContext, Key};
 
 use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, ListAction};
-use crate::{PanelAction, PickerAction, TagChangeAction, View};
+use crate::{ChangePreviewAction, PanelAction, PickerAction, View};
 
 pub(crate) fn bindings() -> Vec<Binding> {
     // `q` pliega la lista, como `space l`; va antes para que la lista muestre
@@ -23,7 +23,7 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(table(View::FileTreeMenu, TREE_MENU));
     bindings.extend(table(View::Picker, PICKER));
     bindings.extend(table(View::PickerWithSplits, PICKER_SPLITS));
-    bindings.extend(table(View::TagChange, TAG_CHANGE));
+    bindings.extend(table(View::ChangePreview, CHANGE_PREVIEW));
     bindings.extend(table(View::NoteList, LIST));
     bindings.extend(table(View::NoteListInput, LIST_INPUT));
     bindings
@@ -274,15 +274,15 @@ const PICKER_SPLITS: &[(&[Keystroke], PickerAction)] = &[
 
 /// Como el árbol: `j`/`k` se mueven, `x` quita un cambio como `x` borra un
 /// carácter, `enter` aplica y `esc` o `q` cierran sin tocar nada.
-const TAG_CHANGE: &[(&[Keystroke], TagChangeAction)] = &[
-    (&[k('j')], TagChangeAction::SelectNext),
-    (&[named(KeyName::Down)], TagChangeAction::SelectNext),
-    (&[ctrl('n')], TagChangeAction::SelectNext),
-    (&[k('k')], TagChangeAction::SelectPrevious),
-    (&[named(KeyName::Up)], TagChangeAction::SelectPrevious),
-    (&[ctrl('p')], TagChangeAction::SelectPrevious),
-    (&[k('x')], TagChangeAction::ToggleChange),
-    (&[named(KeyName::Enter)], TagChangeAction::Apply),
-    (&[k('q')], TagChangeAction::Cancel),
-    (&[named(KeyName::Escape)], TagChangeAction::Cancel),
+const CHANGE_PREVIEW: &[(&[Keystroke], ChangePreviewAction)] = &[
+    (&[k('j')], ChangePreviewAction::SelectNext),
+    (&[named(KeyName::Down)], ChangePreviewAction::SelectNext),
+    (&[ctrl('n')], ChangePreviewAction::SelectNext),
+    (&[k('k')], ChangePreviewAction::SelectPrevious),
+    (&[named(KeyName::Up)], ChangePreviewAction::SelectPrevious),
+    (&[ctrl('p')], ChangePreviewAction::SelectPrevious),
+    (&[k('x')], ChangePreviewAction::ToggleChange),
+    (&[named(KeyName::Enter)], ChangePreviewAction::Apply),
+    (&[k('q')], ChangePreviewAction::Cancel),
+    (&[named(KeyName::Escape)], ChangePreviewAction::Cancel),
 ];

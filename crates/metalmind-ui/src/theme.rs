@@ -166,8 +166,8 @@ impl Theme {
     /// Alto del cambio elegido bajo la vista previa de un cambio de tags:
     /// sus líneas de texto con el aire del input del picker.
     #[must_use]
-    pub fn tag_change_detail_height(&self) -> Pixels {
-        let lines = f32::from(self.layout.tag_change_detail_lines);
+    pub fn change_preview_detail_height(&self) -> Pixels {
+        let lines = f32::from(self.layout.change_preview_detail_lines);
         self.ui_line() * lines + self.layout.picker_input_padding_y * 2.
     }
 

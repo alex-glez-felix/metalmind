@@ -984,6 +984,69 @@ fn los_links_sin_destino_abren_la_nota_en_el_link() {
     smoke.wait_contents("a.md", "uno\nver X[[falta]] y [[b]]\n");
 }
 
+/// Renombrar `b.md` desde el árbol muestra la vista previa de los links
+/// que cambian; `enter` los aplica junto con el renombre.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn renombrar_una_nota_actualiza_sus_links() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "ver [[b]] y [[b#Meta]]\n");
+    smoke.write("b.md", "# B\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<C-w>hj");
+    window.type_keys("r<BS>d<CR>");
+    window.type_keys("<CR>");
+    smoke.wait_contents("a.md", "ver [[d]] y [[d#Meta]]\n");
+    assert_eq!(smoke.read("d.md"), "# B\n");
+}
+
+/// Si el renombre falla después de reescribir los links (aquí, una carpeta
+/// sin permiso de escritura), los links vuelven a como estaban: no quedan
+/// apuntando a una ruta que no existe.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn un_renombre_que_falla_devuelve_los_links() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let smoke = Smoke::new();
+    smoke.write("a.md", "ver [x](./b.md)\n");
+    smoke.write("b.md", "# B\n");
+    let ro = smoke.notes().join("ro");
+    std::fs::create_dir(&ro).unwrap();
+    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let modified = || {
+        std::fs::metadata(smoke.notes().join("a.md"))
+            .unwrap()
+            .modified()
+            .unwrap()
+    };
+    let before = modified();
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<C-w>hj");
+    window.type_keys("m<C-u>ro/b.md<CR>");
+    window.type_keys("<CR>");
+    wait::until("que se escriba a.md", TIMEOUT, || {
+        if modified() == before {
+            Err("sin escribir".to_owned())
+        } else {
+            Ok(())
+        }
+    });
+    smoke.wait_contents("a.md", "ver [x](./b.md)\n");
+    wait::stays("a.md como estaba", Duration::from_secs(1), || {
+        let text = smoke.read("a.md");
+        if text == "ver [x](./b.md)\n" {
+            Ok(())
+        } else {
+            Err(text)
+        }
+    });
+    assert_eq!(smoke.read("b.md"), "# B\n");
+    std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {

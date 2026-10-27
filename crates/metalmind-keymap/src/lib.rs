@@ -22,5 +22,5 @@ pub use command::Command;
 pub use keymap::{Binding, Keymap, Keys};
 pub use keystroke::{KeyName, Keystroke};
 pub use view::{
-    EditorAction, ListAction, PanelAction, PickerAction, TagChangeAction, View, context,
+    ChangePreviewAction, EditorAction, ListAction, PanelAction, PickerAction, View, context,
 };

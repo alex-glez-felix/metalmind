@@ -93,6 +93,61 @@ impl FileEdits {
             mismatch,
         }
     }
+
+    /// Las mismas ediciones sobre `text`, cada una con sus líneas enteras
+    /// (sin el salto final), y las de una misma línea juntas: aplicarlas da
+    /// lo mismo, y una vista previa puede mostrar la línea antes y después.
+    ///
+    /// # Errors
+    /// Si algún rango de `text` no dice lo que la edición espera.
+    pub fn whole_lines(&self, text: &str) -> Result<Self, StaleEdit> {
+        let mut lines: Vec<TextEdit> = Vec::with_capacity(self.edits.len());
+        let mut copied = 0;
+        for edit in &self.edits {
+            if edit.range.start < copied || text.get(edit.range.clone()) != Some(edit.old.as_str())
+            {
+                return Err(self.stale(Mismatch::Text {
+                    range: edit.range.clone(),
+                    expected: edit.old.clone(),
+                }));
+            }
+            copied = edit.range.end;
+            let start = text[..edit.range.start].rfind('\n').map_or(0, |at| at + 1);
+            match lines.last_mut() {
+                Some(line) if start < line.range.end || start == line.range.start => {
+                    let at = edit.range.start - line.range.start + line.new.len() - line.old.len();
+                    line.new.replace_range(at..at + edit.old.len(), &edit.new);
+                    let end = line_end(text, edit.range.end);
+                    line.new.push_str(&text[line.range.end..end]);
+                    line.old.push_str(&text[line.range.end..end]);
+                    line.range.end = end;
+                }
+                _ => {
+                    let end = line_end(text, edit.range.end);
+                    let old = &text[start..end];
+                    let at = edit.range.start - start;
+                    let mut new = old.to_owned();
+                    new.replace_range(at..at + edit.old.len(), &edit.new);
+                    lines.push(TextEdit {
+                        range: start..end,
+                        old: old.to_owned(),
+                        new,
+                        line: edit.line,
+                    });
+                }
+            }
+        }
+        Ok(Self {
+            path: self.path.clone(),
+            edits: lines,
+            base_len: self.base_len,
+        })
+    }
+}
+
+/// Dónde termina la línea de `at`, sin su salto.
+fn line_end(text: &str, at: usize) -> usize {
+    text[at..].find('\n').map_or(text.len(), |i| at + i)
 }
 
 #[cfg(test)]
@@ -129,6 +184,35 @@ mod tests {
         assert_eq!(redo, plan);
     }
 
+    /// Con líneas enteras, las de una misma línea van juntas y aplicar da lo
+    /// mismo.
+    #[test]
+    fn whole_lines_join_the_edits_of_a_line() {
+        let text = "uno\nver [[a]] y [[a#x]]\n[[a]]\nfin";
+        let plan = edits(vec![
+            edit(10..11, "a", "bb"),
+            edit(18..19, "a", "c"),
+            edit(26..27, "a", "d"),
+        ]);
+        let lines = plan.whole_lines(text).unwrap();
+        let shown: Vec<(&str, &str)> = lines
+            .edits
+            .iter()
+            .map(|edit| (edit.old.as_str(), edit.new.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("ver [[a]] y [[a#x]]", "ver [[bb]] y [[c#x]]"),
+                ("[[a]]", "[[d]]"),
+            ]
+        );
+        assert_eq!(lines.apply(text).unwrap().0, plan.apply(text).unwrap().0);
+        assert!(plan.whole_lines("otro texto que no dice eso").is_err());
+        let overlapping = edits(vec![edit(0..2, "ab", "x"), edit(1..2, "b", "y")]);
+        assert!(overlapping.whole_lines("ab").is_err(), "como apply");
+    }
+
     #[test]
     fn a_changed_text_is_not_touched() {
         let plan = edits(vec![edit(0..1, "a", "b"), edit(2..3, "c", "d")]);
@@ -155,5 +239,35 @@ mod tests {
         let (new, undo) = plan.apply("").unwrap();
         assert_eq!(undo.base_len, Some(new.len()));
         assert_eq!(undo.apply(&new).unwrap(), (String::new(), plan));
+    }
+
+    proptest::proptest! {
+        /// Con ediciones al azar sobre un texto de varias líneas, las de
+        /// líneas enteras dan el mismo texto.
+        #[test]
+        fn whole_lines_apply_the_same(
+            text in "[ab\\n]{0,40}",
+            cuts in proptest::collection::vec((0usize..40, 0usize..3, "[xy\\n]{0,3}"), 0..6),
+        ) {
+            let mut edits_at = Vec::new();
+            let mut from = 0;
+            for (gap, len, new) in cuts {
+                let start = from + gap % 5;
+                let end = start + len;
+                if end > text.len() {
+                    break;
+                }
+                let line = text[..start].matches('\n').count();
+                if text[start..end].contains('\n') {
+                    from = end;
+                    continue;
+                }
+                edits_at.push(TextEdit { range: start..end, old: text[start..end].to_owned(), new, line });
+                from = end + 1;
+            }
+            let plan = edits(edits_at);
+            let lines = plan.whole_lines(&text).unwrap();
+            proptest::prop_assert_eq!(lines.apply(&text).unwrap().0, plan.apply(&text).unwrap().0);
+        }
     }
 }

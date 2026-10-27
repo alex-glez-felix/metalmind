@@ -536,6 +536,21 @@ const SCENES: &[(&str, &[Step])] = &[
     ("toasts-historial", &[Step::Keys(":messages<CR>")]),
     ("toasts-historial-filtrado", &[Step::Keys("E486")]),
     ("toasts-de-nuevo", &[Step::Keys("<CR>")]),
+    // Renombrar desde el árbol una nota con muchos links (las reuniones y
+    // `listas.md` enlazan a `Metalmind/plan`; con el filtro, es la última
+    // fila del árbol): la vista previa con el renombre primero y elegido (su
+    // ruta nueva entera abajo), una línea quitada, `x` sobre el renombre,
+    // que no se quita, y lo aplicado.
+    (
+        "renombrar-nota",
+        &[Step::Keys(concat!(
+            "<Esc><Space>e/Metalmind/plan<CR>Gr<BS><BS><BS><BS>",
+            "plan del proyecto con un nombre largo para ver como se recorta<CR>",
+        ))],
+    ),
+    ("renombrar-nota-quitado", &[Step::Keys("jx")]),
+    ("renombrar-nota-fijo", &[Step::Keys("kx")]),
+    ("renombrar-nota-aplicado", &[Step::Keys("<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

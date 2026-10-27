@@ -1,17 +1,15 @@
 //! Renombrar y fusionar tags y cambiar los campos de su página desde la UI
 //! (05 §3 y §5), sin GPUI: qué se pidió con `:tagrename`, `:tagmerge`,
-//! `:tagaliases` y los demás, su plan y la vista previa que decide qué se
-//! aplica.
+//! `:tagaliases` y los demás, y su plan como vista previa
+//! ([`ChangePreview`]), que decide qué se aplica.
 
 mod field;
-mod preview;
-mod view;
 
-use metalmind_vault::tags::{PageChange, PlanError, TagPlan, Tags, tag_name};
+use metalmind_vault::VaultPath;
+use metalmind_vault::tags::{PageChange, PlanError, PlanNotice, TagPlan, Tags, tag_name};
 
 pub use self::field::{FieldError, TagField};
-pub use self::preview::{Blocked, TagChangePreview};
-pub use self::view::{TagChangeEvent, TagChangeView};
+use crate::change_preview::{ChangePreview, Notice};
 
 /// Un cambio de tags pedido, con los nombres como se escribieron.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,6 +89,28 @@ impl TagRequest {
         }
     }
 
+    /// La vista previa del plan sobre `tags`; `None` si no hay nada que
+    /// cambiar ni que avisar. `unsaved` dice si un archivo del vault tiene
+    /// cambios sin guardar.
+    ///
+    /// # Errors
+    /// Si algún nombre no es válido o no existe.
+    pub fn preview(
+        &self,
+        tags: &Tags,
+        unsaved: impl Fn(&VaultPath) -> bool,
+    ) -> Result<Option<ChangePreview>, PlanError> {
+        let TagPlan { changes, notices } = self.plan(tags)?;
+        let notices = notices
+            .iter()
+            .map(|notice| Notice {
+                text: notice_text(notice),
+                blocks: notice.blocks(),
+            })
+            .collect();
+        Ok(ChangePreview::new(self.title(), changes, notices, unsaved))
+    }
+
     /// Lo que encabeza la vista previa y el aviso al aplicar.
     #[must_use]
     pub fn title(&self) -> String {
@@ -98,6 +118,23 @@ impl TagRequest {
             Self::Rename { from, to } => format!("Renombrar #{from} a #{to}"),
             Self::Merge { from, into } => format!("Fusionar #{from} en #{into}"),
             Self::Page { tag, field, .. } => format!("{} de #{tag}", field.label()),
+        }
+    }
+}
+
+fn notice_text(notice: &PlanNotice) -> String {
+    match notice {
+        PlanNotice::Merges { into } => format!("#{into} ya existe: se fusionan"),
+        PlanNotice::RenamesAlias { of } => format!("es un alias de #{of}: se renombra el alias"),
+        PlanNotice::AliasAbsorbs { tag, of } => {
+            format!("#{tag} ya se escribe en notas: pasa a contar como #{of}")
+        }
+        PlanNotice::BothHavePages { from, into } => {
+            format!("los dos tags tienen página ({from} y {into}): deja una antes de fusionar")
+        }
+        PlanNotice::AliasTaken { alias, by } => format!("#{alias} ya es de #{by}"),
+        PlanNotice::NotPortable { path } => {
+            format!("{path} no se podrá sincronizar con Windows: ese nombre está reservado")
         }
     }
 }

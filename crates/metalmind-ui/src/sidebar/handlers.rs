@@ -264,12 +264,8 @@ impl Sidebar {
                 .create_folder(&path)
                 .map(|()| self.panel.tree.reveal(path)),
             Request::Rename { from, to } => {
-                let workspace = self.workspace.clone();
-                let renamed = workspace.update(cx, |workspace, cx| {
-                    cx.notify();
-                    workspace.rename_file(&self.vault, &from, &to)
-                });
-                renamed.map(|()| self.panel.tree.reveal(to))
+                cx.emit(SidebarEvent::Rename { from, to });
+                Ok(())
             }
             Request::Trash(path) => {
                 let workspace = self.workspace.clone();
