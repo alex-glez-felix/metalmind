@@ -169,7 +169,8 @@ pub fn write_templates(root: &Path) {
 }
 
 /// Dos `plan.md` que empatan por nombre, una en la carpeta de nombre
-/// larguísimo: el link a cualquiera de las dos lleva su carpeta.
+/// larguísimo: `[[plan]]` es esa, la menos honda, y el link a la otra
+/// lleva su carpeta.
 pub fn write_link_notes(root: &Path) {
     for folder in ["Proyectos/Metalmind", LONG_FOLDER] {
         let path = root.join(folder).join("plan.md");
