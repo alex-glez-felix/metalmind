@@ -28,4 +28,4 @@ pub use load::{Loaded, templates_folder};
 pub use note_path::{NameError, NotePath};
 pub use render::{Context, Rendered, VariableProblem, render};
 pub use tags::{TagChoice, tag_of_template, tag_template, tags_asking_for};
-pub use tags_field::TagsNotAdded;
+pub use tags_field::{TagsNotAdded, with_tags};

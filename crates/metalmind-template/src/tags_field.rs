@@ -1,5 +1,6 @@
-//! Agregar tags al `tags:` del frontmatter de una nota nueva, tocando solo
-//! ese campo (05 §3: en focus de tags la nota nace con ellos).
+//! Agregar tags al `tags:` del frontmatter de una nota, tocando solo ese
+//! campo: al crearla en focus de tags (05 §3) o al etiquetarla desde la
+//! lista de notas.
 
 use std::ops::Range;
 
@@ -12,18 +13,22 @@ mod field;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TagsNotAdded {
-    #[error("el frontmatter de la plantilla tiene errores")]
+    #[error("el frontmatter de la nota tiene errores")]
     InvalidFrontmatter,
     #[error("`{0}` no es un tag válido")]
     InvalidTag(String),
-    #[error("el campo `tags` de la plantilla no está escrito en bloque, línea por línea")]
+    #[error("el campo `tags` de la nota no está escrito en bloque, línea por línea")]
     UnsupportedLayout,
 }
 
 /// `text` con `tags` en su frontmatter, después de los que ya tenga. Sin
 /// frontmatter, se le agrega uno. Una lista se alarga en su estilo, de flujo
 /// o en bloque, sin tocar sus comentarios. Si algo falla, `text` no se toca.
-pub(crate) fn with_tags(text: &str, tags: &[String]) -> Result<String, TagsNotAdded> {
+///
+/// # Errors
+/// Si un tag no es válido, el frontmatter tiene errores o su `tags` no se
+/// puede alargar sin reescribirlo.
+pub fn with_tags(text: &str, tags: &[String]) -> Result<String, TagsNotAdded> {
     let wanted = wanted(tags)?;
     if wanted.is_empty() {
         return Ok(text.to_owned());

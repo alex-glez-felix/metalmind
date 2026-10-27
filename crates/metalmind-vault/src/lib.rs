@@ -23,6 +23,7 @@ mod refresh;
 mod saved_jumps;
 mod scan;
 mod searchable;
+mod summary;
 pub mod tags;
 mod vault;
 mod watch;
@@ -52,6 +53,7 @@ pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
 pub use saved_jumps::{SaveJumpsError, SavedJump, SavedJumps};
 pub use scan::walk_notes;
+pub use summary::Summary;
 pub use vault::{
     HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
     VaultRoot, VaultUpdate, VersionError,
