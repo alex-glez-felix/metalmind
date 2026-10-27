@@ -28,7 +28,10 @@ pub(crate) fn touched(root: &Path, events: &[DebouncedEvent]) -> Touched {
             .collect();
         // Un archivo de reglas no es del índice: renombrarlo relee su carpeta,
         // pero no mueve nada a ella.
-        let rules = event.paths.iter().any(|path| ruled_by(root, path).is_some());
+        let rules = event
+            .paths
+            .iter()
+            .any(|path| ruled_by(root, path).is_some());
         if let (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) =
             (event.kind, paths.as_slice())
             && !rules
