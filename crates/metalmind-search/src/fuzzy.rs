@@ -4,7 +4,7 @@
 use std::cmp::Reverse;
 
 use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
-use nucleo_matcher::{Config, Matcher, Utf32Str};
+use nucleo_matcher::{Config, Matcher, Utf32Str, Utf32String};
 use unicode_segmentation::UnicodeSegmentation as _;
 
 /// Lo escrito en el finder, ya interpretado. Sigue la sintaxis de `nucleo`:
@@ -36,6 +36,23 @@ impl Query {
         ))
     }
 
+    /// `text` tal cual, como una sola palabra: sin la sintaxis de `nucleo`
+    /// (`!`, `^`, `'`, `$` y los espacios son caracteres a buscar), con las
+    /// mismas reglas de mayúsculas y acentos que [`Query::new`]. Vacío deja
+    /// pasar todo.
+    #[must_use]
+    pub fn literal(text: &str) -> Self {
+        if text.is_empty() {
+            return Self::new(text);
+        }
+        Self(Pattern::new(
+            text,
+            CaseMatching::Smart,
+            Normalization::Smart,
+            AtomKind::Fuzzy,
+        ))
+    }
+
     /// Un query vacío (o solo espacios) deja pasar todo.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -49,6 +66,35 @@ pub struct Ranked {
     /// Su posición en los candidatos de entrada.
     pub index: usize,
     pub score: u32,
+}
+
+/// Candidatos ya convertidos para `nucleo`: convertir un texto con acentos
+/// (por grafemas) cuesta más que puntuarlo, así que una lista que se filtra
+/// en cada tecla se convierte una sola vez.
+pub struct Haystacks {
+    texts: Vec<Utf32String>,
+    /// En bytes, para desempatar como [`FuzzyMatcher::rank`].
+    lengths: Vec<usize>,
+}
+
+impl Haystacks {
+    pub fn new<'a>(texts: impl IntoIterator<Item = &'a str>) -> Self {
+        let (texts, lengths) = texts
+            .into_iter()
+            .map(|text| (Utf32String::from(text), text.len()))
+            .unzip();
+        Self { texts, lengths }
+    }
+
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.texts.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.texts.is_empty()
+    }
 }
 
 /// Busca como `fzf`: los caracteres del query en orden, con bonus por
@@ -102,6 +148,39 @@ impl FuzzyMatcher {
         ranked.sort_unstable_by_key(|ranked| {
             let length = candidates[ranked.index].as_ref().len();
             (Reverse(ranked.score), length, ranked.index)
+        });
+        ranked
+    }
+
+    /// Como [`FuzzyMatcher::rank`] sobre `haystacks`, mirando solo los de
+    /// `pool`, en orden creciente; `Ranked::index` es la posición en
+    /// `haystacks`.
+    pub fn rank_among(
+        &mut self,
+        query: &Query,
+        haystacks: &Haystacks,
+        pool: &[usize],
+    ) -> Vec<Ranked> {
+        if query.is_empty() {
+            return pool
+                .iter()
+                .map(|&index| Ranked { index, score: 0 })
+                .collect();
+        }
+        let mut ranked: Vec<Ranked> = pool
+            .iter()
+            .filter_map(|&index| {
+                let haystack = haystacks.texts.get(index)?.slice(..);
+                let score = query.0.score(haystack, &mut self.matcher)?;
+                Some(Ranked { index, score })
+            })
+            .collect();
+        ranked.sort_unstable_by_key(|ranked| {
+            (
+                Reverse(ranked.score),
+                haystacks.lengths[ranked.index],
+                ranked.index,
+            )
         });
         ranked
     }

@@ -4,7 +4,7 @@
 mod fuzzy;
 mod text;
 
-pub use fuzzy::{FuzzyMatcher, Query, Ranked};
+pub use fuzzy::{FuzzyMatcher, Haystacks, Query, Ranked};
 pub use text::{
     Case, LineMatch, NoteMatches, SearchError, Syntax, TextMatcher, TextQuery, TextSearcher,
 };
