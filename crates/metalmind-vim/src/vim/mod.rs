@@ -26,9 +26,11 @@ pub use self::outcome::KeyOutcome;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
-use metalmind_buffer::ByteOffset;
+use std::ops::Range;
 
-use self::block::BlockInsert;
+use metalmind_buffer::{Buffer, ByteOffset};
+
+use crate::block::Pending;
 use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
@@ -37,6 +39,7 @@ use crate::jumplist::FileId;
 use crate::keymap::{Bound, Lookup};
 use crate::mark::FileMarks;
 use crate::register::{RegisterName, Registers, SystemRegister};
+use crate::scroll::Viewport;
 use crate::visual::{LastVisual, Reselect};
 use crate::{Action, Indent, Key, Keymap, Markdown, Mode, Prompt, Target, VimError};
 
@@ -98,8 +101,9 @@ pub struct Vim {
     /// Tras `o` en un bloque, el `$` sigue valiendo para operar pero no para
     /// la próxima motion, como el `w_set_curswant` de vim.
     stale_line_end: bool,
-    /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert.
-    block_insert: Option<BlockInsert>,
+    /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert, por
+    /// selección.
+    block_insert: Option<Vec<Pending>>,
     scrolloff: usize,
     indent: Indent,
     markdown: Markdown,
@@ -173,11 +177,17 @@ impl Vim {
         self.mode
     }
 
-    /// En Insert sobre un bloque, dónde empezó a escribirse en su primera
-    /// línea: lo que se borre antes de ahí no se repite en las demás.
+    /// En Insert sobre un bloque, lo escrito hasta ahora en la primera
+    /// línea del primero: lo que `<Esc>` repetirá en las demás, medido como
+    /// al repetirlo. Vacío si se borró de más. `None` fuera de esa pasada.
     #[must_use]
-    pub fn block_insert_start(&self) -> Option<ByteOffset> {
-        self.block_insert.as_ref().map(|block| block.start)
+    pub fn block_insert_written(
+        &self,
+        buffer: &Buffer,
+        viewport: &Viewport,
+    ) -> Option<Range<ByteOffset>> {
+        let pending = self.block_insert.as_ref()?.first()?;
+        Some(pending.written(buffer, viewport.columns()))
     }
 
     /// Pasa una tecla al motor. Si la tecla reproduce una macro, la

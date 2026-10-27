@@ -1,12 +1,14 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
+use std::ops::Range;
+
 use metalmind_buffer::{ByteOffset, Goal, Selection, Selections};
 use metalmind_syntax::Conceal;
 use metalmind_vim::{
     Action, Clipboard, Invocation, Key, KeyOutcome, Mode, Operator, PasteSide, SystemRegister,
 };
 
-use super::{Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
+use super::{Message, PaneId, PaneView, Workspace, WorkspaceError, clamp_cursor};
 
 impl Workspace {
     /// Una tecla en `pane`, que pasa a tener el foco si no lo tenía. Los
@@ -123,13 +125,14 @@ impl Workspace {
         Ok(last)
     }
 
-    /// Si al completar se puede borrar desde `start`: en Insert sobre un
-    /// bloque, solo lo escrito en esta pasada, porque lo de antes no se
-    /// repetiría en las demás líneas.
-    pub(super) fn can_type_over(&self, start: ByteOffset) -> bool {
+    /// Si al completar se puede reescribir `typed` en `view`: en Insert
+    /// sobre un bloque, solo si es parte de lo escrito en esta pasada y
+    /// termina donde termina eso, porque `<Esc>` repite solo eso en las
+    /// demás líneas.
+    pub(super) fn can_type_over(&self, view: &PaneView<'_>, typed: Range<ByteOffset>) -> bool {
         self.vim
-            .block_insert_start()
-            .is_none_or(|inserted| start >= inserted)
+            .block_insert_written(view.buffer(), &view.viewport)
+            .is_none_or(|written| written.start <= typed.start && written.end == typed.end)
     }
 
     /// Cambia `typed`, lo que acaba de escribirse antes del cursor, por

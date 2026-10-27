@@ -2,6 +2,8 @@
 //! salir de Insert con `<Esc>`, lo escrito se repite en las demás, como
 //! `op_insert`, `block_insert` y `op_change` de vim.
 
+use std::ops::Range;
+
 use metalmind_buffer::{Buffer, ByteOffset, Edit};
 
 use super::Block;
@@ -133,19 +135,39 @@ impl Pending {
         self.block.first
     }
 
+    /// Lo escrito hasta ahora en la primera línea, como lo mide
+    /// [`Pending::finish`]; vacío al principio de la línea si se borró de
+    /// más.
+    pub fn written(&self, buffer: &Buffer, columns: Columns) -> Range<ByteOffset> {
+        let text = buffer.line_text(self.block.first);
+        let line_start = buffer.line_start(self.block.first);
+        match self.written_in(&text, columns) {
+            Some((start, len)) => line_start + start..line_start + start + len,
+            None => line_start..line_start,
+        }
+    }
+
+    /// Dónde empieza lo escrito en `text`, la primera línea, y cuántos
+    /// bytes ocupa; `None` si se borró de más.
+    fn written_in(&self, text: &str, columns: Columns) -> Option<(usize, usize)> {
+        match self.insertion {
+            Insertion::Change => {
+                let len = text.len().checked_sub(self.pre_textlen)?;
+                Some((self.piece.textcol, len))
+            }
+            Insertion::Insert | Insertion::Append => self.inserted(text, columns),
+        }
+    }
+
     /// Repite en las demás líneas lo escrito en la primera; `None` si no se
     /// escribió nada o se borró de más.
     pub fn finish(&self, buffer: &Buffer, columns: Columns) -> Option<Finish> {
+        if self.insertion == Insertion::Change && self.block.first == self.block.last {
+            return None;
+        }
         let text = buffer.line_text(self.block.first);
         let line_start = buffer.line_start(self.block.first);
-        let (start, inserted) = match self.insertion {
-            Insertion::Change if self.block.first == self.block.last => return None,
-            Insertion::Change => {
-                let len = text.len().checked_sub(self.pre_textlen)?;
-                (self.piece.textcol, len)
-            }
-            Insertion::Insert | Insertion::Append => self.inserted(&text, columns)?,
-        };
+        let (start, inserted) = self.written_in(&text, columns)?;
         let inserted = text
             .get(start..start + inserted)
             .filter(|s| !s.is_empty())?;

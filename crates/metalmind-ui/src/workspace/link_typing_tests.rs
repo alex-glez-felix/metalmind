@@ -136,3 +136,19 @@ fn en_insert_por_bloque_solo_lo_escrito_en_la_pasada() {
     session.keys("⌃vj$A");
     assert_eq!(typed(&session), None);
 }
+
+/// Un clic dentro de un link que ya estaba termina la pasada por bloque
+/// (como en vim, mover el cursor la corta): completarlo ya no se repite en
+/// las demás líneas.
+#[test]
+fn un_clic_en_insert_por_bloque_corta_la_repeticion() {
+    let mut session = Session::new("x [[pl y\nb\n");
+    session.keys("⌃vjIz");
+    let pane = session.pane();
+    let after_pl = metalmind_buffer::ByteOffset::new("zx [[pl".len());
+    session.workspace.select(pane, after_pl, after_pl).unwrap();
+    assert_eq!(typed(&session), Some(open("pl")));
+    accept(&mut session, "plan");
+    session.keys("⎋");
+    assert_eq!(session.text(), "zx [[plan]] y\nb\n");
+}

@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use super::{LineKind, LineStyle, Role};
+use super::{LineKind, LineStyle, Role, Span};
 use crate::link::wikilink_close;
 
 /// Un `[[` con lo escrito de su destino hasta el cursor.
@@ -55,16 +55,20 @@ impl LineStyle {
         })
     }
 
-    /// Si `range` toca algo donde un `[[` no es un link.
+    /// Si `range` toca algo donde un `[[` no es un link: código, fórmulas
+    /// o comentarios. Uno que empieza justo al final no lo toca, salvo que
+    /// su marcador de apertura sea lo último de `range`.
     fn is_verbatim(&self, range: Range<usize>) -> bool {
-        self.spans.iter().any(|span| {
-            span.range.start <= range.end
-                && range.start < span.range.end
-                && matches!(
-                    span.style.role,
-                    Role::Code | Role::Token(_) | Role::Math | Role::Comment
-                )
-        })
+        let inside = self.spans.iter().any(|span| {
+            is_verbatim(span) && span.range.start < range.end && range.start < span.range.end
+        });
+        let just_opened = self.spans.windows(2).any(|pair| {
+            pair[0].style.role == Role::Markup
+                && pair[0].range.end == range.end
+                && pair[1].range.start == range.end
+                && is_verbatim(&pair[1])
+        });
+        inside || just_opened
     }
 
     /// Si el `[[` en `open` es parte de otro link de la línea y no el
@@ -76,6 +80,13 @@ impl LineStyle {
             .iter()
             .any(|link| link.range.contains(&open) && !own(link.range.start))
     }
+}
+
+fn is_verbatim(span: &Span) -> bool {
+    matches!(
+        span.style.role,
+        Role::Code | Role::Token(_) | Role::Math | Role::Comment
+    )
 }
 
 /// Si el `[[` en `open` va tras un `\` que no está escapado él mismo.

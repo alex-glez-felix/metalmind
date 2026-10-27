@@ -550,21 +550,30 @@ fn the_visual_block_tells_what_to_paint() {
     );
 }
 
-/// En Insert sobre un bloque, el motor dice dónde empezó a escribirse en su
-/// primera línea (lo que se borre antes no se repite); fuera, nada.
+/// En Insert sobre un bloque, el motor dice qué se escribió en su primera
+/// línea, medido como al repetirlo: vacío si se borró de más; fuera, nada.
 #[rstest]
-#[case::append("ab|c\ndef", "<C-v>j$A", Some(3))]
-#[case::insert("ab|c\ndef", "<C-v>jI", Some(2))]
-#[case::change("a|bc\ndef", "<C-v>jlc", Some(1))]
+#[case::append_sin_escribir("ab|c\ndef", "<C-v>j$A", Some(3..3))]
+#[case::append("ab|c\ndef", "<C-v>j$Axy", Some(3..5))]
+#[case::insert("ab|c\ndef", "<C-v>jIxy", Some(2..4))]
+#[case::change("a|bc\ndef", "<C-v>jlcxy", Some(1..3))]
+#[case::borrado_de_mas("ab|c\ndef", "<C-v>j$Ax<BS><BS>", Some(0..0))]
 #[case::al_salir("ab|c\ndef", "<C-v>j$Axy<Esc>", None)]
-#[case::insert_normal("ab|c\ndef", "A", None)]
-fn where_the_block_insert_started(
+#[case::insert_normal("ab|c\ndef", "Axy", None)]
+fn what_the_block_insert_wrote(
     #[case] before: &str,
     #[case] keys: &str,
-    #[case] start: Option<usize>,
+    #[case] written: Option<std::ops::Range<usize>>,
 ) {
+    use metalmind_buffer::ByteOffset;
+
     let mut editor = support::Editor::new(before);
     editor.keys(keys);
-    let start = start.map(metalmind_buffer::ByteOffset::new);
-    assert_eq!(editor.vim.block_insert_start(), start);
+    let written = written.map(|range| ByteOffset::new(range.start)..ByteOffset::new(range.end));
+    assert_eq!(
+        editor
+            .vim
+            .block_insert_written(&editor.buffer, &editor.pane.viewport),
+        written
+    );
 }

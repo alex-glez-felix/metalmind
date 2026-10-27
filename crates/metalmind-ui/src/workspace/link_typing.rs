@@ -40,7 +40,9 @@ impl Workspace {
         let text = view.document.line_text(line)?;
         let Some(found) = style
             .typed_wikilink(&text, cursor.get() - start.get())
-            .filter(|found| self.can_type_over(start + found.target.start))
+            .filter(|found| {
+                self.can_type_over(&view, start + found.target.start..start + found.target.end)
+            })
         else {
             return Ok(None);
         };

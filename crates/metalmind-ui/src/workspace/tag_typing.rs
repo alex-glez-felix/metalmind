@@ -34,7 +34,10 @@ impl Workspace {
         let Some(spot) = spot_at(&view, cursor)?.filter(|spot| {
             spot.replace == spot.name
                 && spot.name.end == cursor
-                && self.can_type_over(ByteOffset::new(spot.name.start))
+                && self.can_type_over(
+                    &view,
+                    ByteOffset::new(spot.name.start)..ByteOffset::new(cursor),
+                )
         }) else {
             return Ok(None);
         };

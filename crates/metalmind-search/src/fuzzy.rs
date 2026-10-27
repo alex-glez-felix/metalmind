@@ -3,7 +3,7 @@
 
 use std::cmp::Reverse;
 
-use nucleo_matcher::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
+use nucleo_matcher::pattern::{Atom, AtomKind, CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str, Utf32String};
 use unicode_segmentation::UnicodeSegmentation as _;
 
@@ -24,33 +24,36 @@ impl Query {
         ))
     }
 
-    /// Lo que empieza con `text`, con las mismas reglas de mayúsculas y
-    /// acentos que [`Query::new`]: `cancion` encuentra `canción`.
+    /// Lo que empieza con `text`, tal cual (ver [`Query::literal`]), con
+    /// las mismas reglas de mayúsculas y acentos que [`Query::new`]:
+    /// `cancion` encuentra `canción`.
     #[must_use]
     pub fn prefix(text: &str) -> Self {
-        Self(Pattern::new(
-            text,
-            CaseMatching::Smart,
-            Normalization::Smart,
-            AtomKind::Prefix,
-        ))
+        Self::one_atom(text, AtomKind::Prefix)
     }
 
     /// `text` tal cual, como una sola palabra: sin la sintaxis de `nucleo`
-    /// (`!`, `^`, `'`, `$` y los espacios son caracteres a buscar), con las
-    /// mismas reglas de mayúsculas y acentos que [`Query::new`]. Vacío deja
-    /// pasar todo.
+    /// (`!`, `^`, `'`, `$`, `\` y los espacios son caracteres a buscar), con
+    /// las mismas reglas de mayúsculas y acentos que [`Query::new`]. Vacío
+    /// deja pasar todo.
     #[must_use]
     pub fn literal(text: &str) -> Self {
+        Self::one_atom(text, AtomKind::Fuzzy)
+    }
+
+    fn one_atom(text: &str, kind: AtomKind) -> Self {
         if text.is_empty() {
             return Self::new(text);
         }
-        Self(Pattern::new(
+        let mut pattern = Pattern::default();
+        pattern.atoms.push(Atom::new(
             text,
             CaseMatching::Smart,
             Normalization::Smart,
-            AtomKind::Fuzzy,
-        ))
+            kind,
+            false,
+        ));
+        Self(pattern)
     }
 
     /// Un query vacío (o solo espacios) deja pasar todo.

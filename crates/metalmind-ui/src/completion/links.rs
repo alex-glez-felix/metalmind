@@ -36,10 +36,11 @@ impl NoteCandidates {
         }
     }
 
-    /// Si son estas mismas notas, en el mismo orden.
+    /// Si son estas mismas notas, en el mismo orden: las mismas casi
+    /// siempre, y si no, las de un lote que no cambió ninguna.
     #[must_use]
-    pub fn has(&self, notes: &[Note]) -> bool {
-        *self.notes == *notes
+    pub fn has(&self, notes: &Arc<[Note]>) -> bool {
+        Arc::ptr_eq(&self.notes, notes) || *self.notes == **notes
     }
 }
 

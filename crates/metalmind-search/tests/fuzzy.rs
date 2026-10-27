@@ -169,7 +169,16 @@ fn prefijo_con_las_reglas_del_fuzzy() {
 /// un espacio es parte de lo que se busca.
 #[test]
 fn literal_sin_operadores() {
-    let candidates = ["!inbox", "inbox", "nota$ cara", "nota barata", "^raíz"];
+    let candidates = [
+        "!inbox",
+        "inbox",
+        "nota$ cara",
+        "nota barata",
+        "^raíz",
+        "plan/diario",
+        "plan de viaje",
+        "a\\ b",
+    ];
     let found = |text: &str| -> Vec<&str> {
         FuzzyMatcher::text()
             .rank(&Query::literal(text), &candidates)
@@ -181,6 +190,8 @@ fn literal_sin_operadores() {
     assert_eq!(found("nota$"), ["nota$ cara"]);
     assert_eq!(found("^ra"), ["^raíz"]);
     assert_eq!(found("ta c"), ["nota$ cara"]);
+    assert_eq!(found("plan d"), ["plan de viaje"], "el espacio se busca");
+    assert_eq!(found("a\\ "), ["a\\ b"], "la barra también");
     assert_eq!(found("").len(), candidates.len());
 }
 
@@ -222,4 +233,16 @@ fn convertidos_dan_lo_mismo() {
             );
         }
     }
+}
+
+/// Un prefijo con espacios es uno solo, no uno por palabra.
+#[test]
+fn prefijo_con_espacios() {
+    let candidates = ["idea 101", "idea suelta 1", "1 idea"];
+    let found: Vec<&str> = FuzzyMatcher::text()
+        .rank(&Query::prefix("idea 1"), &candidates)
+        .into_iter()
+        .map(|found| candidates[found.index])
+        .collect();
+    assert_eq!(found, ["idea 101"]);
 }

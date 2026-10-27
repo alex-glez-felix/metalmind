@@ -4,7 +4,6 @@
 mod insert;
 mod paste;
 
-pub(super) use insert::BlockInsert;
 pub(super) use paste::{put_block, put_block_over_chars};
 
 use metalmind_buffer::{Buffer, ByteOffset, Goal, PerSelection, Selection, Selections};
