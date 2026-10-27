@@ -26,7 +26,9 @@ pub use self::outcome::KeyOutcome;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
-use crate::block::Pending;
+use metalmind_buffer::ByteOffset;
+
+use self::block::BlockInsert;
 use crate::dot::Dot;
 use crate::find::Find;
 use crate::history::History;
@@ -96,9 +98,8 @@ pub struct Vim {
     /// Tras `o` en un bloque, el `$` sigue valiendo para operar pero no para
     /// la próxima motion, como el `w_set_curswant` de vim.
     stale_line_end: bool,
-    /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert, por
-    /// selección.
-    block_insert: Option<Vec<Pending>>,
+    /// Lo que `I`, `A` o `c` sobre un bloque repiten al salir de Insert.
+    block_insert: Option<BlockInsert>,
     scrolloff: usize,
     indent: Indent,
     markdown: Markdown,
@@ -170,6 +171,13 @@ impl Vim {
     #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode
+    }
+
+    /// En Insert sobre un bloque, dónde empezó a escribirse en su primera
+    /// línea: lo que se borre antes de ahí no se repite en las demás.
+    #[must_use]
+    pub fn block_insert_start(&self) -> Option<ByteOffset> {
+        self.block_insert.as_ref().map(|block| block.start)
     }
 
     /// Pasa una tecla al motor. Si la tecla reproduce una macro, la

@@ -32,7 +32,7 @@ impl Vim {
         &mut self,
         t: &mut Target<'_>,
     ) -> Result<Option<Selections>, VimError> {
-        let Some(pending) = self.block_insert.take() else {
+        let Some(BlockInsert { pending, .. }) = self.block_insert.take() else {
             return Ok(None);
         };
         if pending.len() != t.selections.iter().len() {
@@ -134,10 +134,20 @@ impl Vim {
         t: &mut Target<'_>,
     ) {
         let (cursors, pending): (Vec<_>, Vec<_>) = starts.into_iter().unzip();
+        if let Some(start) = cursors.first().copied() {
+            self.block_insert = Some(BlockInsert { pending, start });
+        }
         if let Some(entered) = Selections::new(cursors.into_iter().map(Selection::cursor)) {
             *t.selections = entered;
         }
-        self.block_insert = Some(pending);
         self.start_insert(dot);
     }
+}
+
+/// Un Insert sobre un bloque: lo que se repite por selección y dónde empezó
+/// a escribirse en la primera línea.
+#[derive(Debug)]
+pub(in crate::vim) struct BlockInsert {
+    pending: Vec<Pending>,
+    pub start: ByteOffset,
 }

@@ -549,3 +549,22 @@ fn the_visual_block_tells_what_to_paint() {
         ByteOffset::new(editor.buffer.len().get())
     );
 }
+
+/// En Insert sobre un bloque, el motor dice dónde empezó a escribirse en su
+/// primera línea (lo que se borre antes no se repite); fuera, nada.
+#[rstest]
+#[case::append("ab|c\ndef", "<C-v>j$A", Some(3))]
+#[case::insert("ab|c\ndef", "<C-v>jI", Some(2))]
+#[case::change("a|bc\ndef", "<C-v>jlc", Some(1))]
+#[case::al_salir("ab|c\ndef", "<C-v>j$Axy<Esc>", None)]
+#[case::insert_normal("ab|c\ndef", "A", None)]
+fn where_the_block_insert_started(
+    #[case] before: &str,
+    #[case] keys: &str,
+    #[case] start: Option<usize>,
+) {
+    let mut editor = support::Editor::new(before);
+    editor.keys(keys);
+    let start = start.map(metalmind_buffer::ByteOffset::new);
+    assert_eq!(editor.vim.block_insert_start(), start);
+}
