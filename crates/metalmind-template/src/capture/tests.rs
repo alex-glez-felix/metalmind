@@ -254,3 +254,25 @@ fn una_pagina_de_tag_ilegible_se_avisa() {
         added.problems
     );
 }
+
+/// Una plantilla que no se puede leer se avisa una vez, y solo si se
+/// buscaba una plantilla: con un tag que no pide ninguna, no.
+#[test]
+fn una_plantilla_ilegible_se_avisa_una_vez_y_solo_si_hace_falta() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let (dir, root) = vault();
+    let template = dir.path().join("plantillas/diario.md");
+    fs::set_permissions(&template, fs::Permissions::from_mode(0o000)).unwrap();
+    let plain = add(&root, "idea", None, &["rust"], Pick::ByTags);
+    let semanal = add(&root, "acuerdos", None, &["reunion"], Pick::ByTags);
+    fs::set_permissions(&template, fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(plain.unwrap().0.problems, Vec::<String>::new());
+    let (added, _) = semanal.unwrap();
+    assert_eq!(added.template.as_deref(), Some("semanal"));
+    assert_eq!(added.problems.len(), 1, "{:?}", added.problems);
+    assert!(
+        added.problems[0].contains("diario.md"),
+        "{:?}",
+        added.problems
+    );
+}

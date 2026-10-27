@@ -66,12 +66,11 @@ pub fn capture(
     }
     // La carpeta de plantillas de la config solo importa si se usa una.
     let templates_folder = templates_folder(folders.templates);
-    let mut walked = vec![folders.tags.clone()];
-    walked.extend(templates_folder.iter().cloned());
-    let index = root.files_within(&walked);
+    // Solo las páginas de tag: el grafo sale de ellas.
+    let pages = root.files_within(std::slice::from_ref(folders.tags));
     // Una página que no se puede leer no pide plantilla: se avisa.
     let unread = Mutex::new(Vec::new());
-    let tags = Tags::build(folders.tags.clone(), &index, |page: &VaultPath| {
+    let tags = Tags::build(folders.tags.clone(), &pages, |page: &VaultPath| {
         read(&root.path().join(page.as_str()))
             .map_err(|error| {
                 let mut unread = unread.lock().unwrap_or_else(PoisonError::into_inner);
@@ -89,6 +88,7 @@ pub fn capture(
         }
     };
     let templates_folder = templates_folder?;
+    let index = root.files_within(std::slice::from_ref(&templates_folder));
     let loaded = Templates::load(root.path(), &index, &templates_folder);
     problems.extend(loaded.errors.iter().map(ToString::to_string));
     if loaded.value.get(&chosen.name).is_some() {
