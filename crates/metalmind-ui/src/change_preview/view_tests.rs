@@ -123,6 +123,35 @@ fn el_valor_nuevo_se_ve_aunque_el_de_antes_sea_largo() {
     );
 }
 
+/// Con lo de antes y lo nuevo largos, el detalle muestra renglones enteros:
+/// lo nuevo hasta todos menos uno y lo de antes en uno, con `…`, y nada
+/// pasa de su borde de abajo, que es el de arriba del pie.
+#[test]
+fn el_detalle_muestra_renglones_enteros() {
+    let old: Vec<String> = (0..40).map(|n| format!("alias-viejo-{n}")).collect();
+    let new: Vec<String> = (0..40).map(|n| format!("alias-nuevo-{n}")).collect();
+    let page = format!("---\naliases: [{}]\n---\n", old.join(", "));
+    let request = TagRequest::Page {
+        tag: "rust".to_owned(),
+        field: crate::tag_change::TagField::Aliases,
+        change: metalmind_vault::tags::PageChange::Aliases(new),
+    };
+    let mut cx = TestAppContext::single();
+    let cx = window(&mut cx, preview_of(&request, 0, &page));
+    cx.run_until_parked();
+    let theme = cx.update(|_, cx| Theme::get(cx).clone());
+    let line = theme.ui_line();
+    let lines = f32::from(theme.layout.change_preview_detail_lines);
+    let detail = cx.debug_bounds("change-preview-detail").unwrap();
+    let after = cx.debug_bounds("change-preview-detail-after").unwrap();
+    let before = cx.debug_bounds("change-preview-detail-before").unwrap();
+    assert!(after.size.height <= line * (lines - 1.), "{after:?}");
+    assert_eq!(before.size.height, line, "un renglón");
+    assert!(after.bottom() <= before.top(), "{after:?} {before:?}");
+    let inner_bottom = detail.bottom() - theme.layout.picker_input_padding_y;
+    assert!(before.bottom() <= inner_bottom, "{before:?} en {detail:?}");
+}
+
 /// En una ventana baja la lista se encoge y los botones siguen dentro.
 #[test]
 fn en_una_ventana_baja_los_botones_se_ven() {

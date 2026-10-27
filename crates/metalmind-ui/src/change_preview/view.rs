@@ -255,6 +255,9 @@ impl ChangePreviewView {
             .debug_selector(|| "change-preview-detail".to_owned())
             .flex_none()
             .h(theme.change_preview_detail_height())
+            // La altura cuenta renglones del texto del tema: el detalle tiene
+            // que pintarse con ese mismo interlineado.
+            .map(|element| theme.ui_text(element))
             .overflow_hidden()
             .px(theme.layout.picker_padding_x)
             .py(theme.layout.picker_input_padding_y)
@@ -268,18 +271,32 @@ impl ChangePreviewView {
         } else {
             format!("→ {}", change.after)
         };
+        // Renglones enteros, con `…` al cortar: el valor nuevo, que es lo que
+        // se confirma, se queda con todos menos el de lo de antes.
+        let lines = usize::from(theme.layout.change_preview_detail_lines).max(1);
+        let has_before = !change.before.is_empty();
+        let after_lines = if has_before {
+            (lines - 1).max(1)
+        } else {
+            lines
+        };
         detail
             .text_color(change_color(&change, theme))
             .when(change.dropped, Styled::line_through)
             .child(
                 div()
                     .debug_selector(|| "change-preview-detail-after".to_owned())
+                    .line_clamp(after_lines)
+                    .text_ellipsis()
                     .child(after),
             )
-            .when(!change.before.is_empty(), |detail| {
+            .when(has_before && lines > 1, |detail| {
                 detail.child(
                     div()
+                        .debug_selector(|| "change-preview-detail-before".to_owned())
                         .text_color(theme.ui.picker_muted)
+                        .line_clamp(1)
+                        .text_ellipsis()
                         .child(format!("antes: {}", change.before)),
                 )
             })
