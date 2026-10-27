@@ -11,6 +11,7 @@ use gpui_kit::{
 };
 use metalmind_syntax::note_name;
 use metalmind_vault::{EntryKind, LinkContext, VaultPath};
+use unicode_width::UnicodeWidthChar as _;
 
 use super::render::row_frame;
 use super::{Sidebar, icons};
@@ -18,9 +19,9 @@ use crate::backlinks::Row;
 use crate::panel::{Outline as _, RowMarks};
 use crate::theme::Theme;
 
-/// Cuántos caracteres de la línea se ven antes del link, como mucho: en un
+/// Cuántas columnas de la línea se ven antes del link, como mucho: en un
 /// panel angosto, el link tiene que entrar.
-const LEAD_CHARS: usize = 16;
+const LEAD_COLUMNS: usize = 10;
 
 impl Sidebar {
     pub(super) fn backlink_body(
@@ -160,18 +161,32 @@ fn context_text(context: &LinkContext, theme: &Theme) -> StyledText {
     StyledText::new(SharedString::from(text)).with_highlights([(link, style)])
 }
 
-/// El texto desde [`LEAD_CHARS`] caracteres antes del link (desde la
+/// El texto desde [`LEAD_COLUMNS`] columnas antes del link (desde la
 /// palabra siguiente, si el corte cae en una), con `…` si se cortó algo, y
-/// dónde queda el link en él.
+/// dónde queda el link en él. Un carácter ancho, como los del japonés,
+/// cuenta dos.
 fn lead_in(context: &LinkContext) -> (String, Range<usize>) {
     let before = &context.text[..context.link.start];
-    let Some((cut, _)) = before.char_indices().rev().nth(LEAD_CHARS) else {
+    let mut start = before.len();
+    let mut columns = 0;
+    for (at, c) in before.char_indices().rev() {
+        columns += c.width().unwrap_or(0);
+        if columns > LEAD_COLUMNS {
+            break;
+        }
+        start = at;
+    }
+    if start == 0 {
         return (context.text.clone(), context.link.clone());
-    };
-    let start = cut + before[cut..].chars().next().map_or(0, char::len_utf8);
-    let start = before[start..]
-        .find(' ')
-        .map_or(start, |space| start + space + 1);
+    }
+    let mid_word = !before[..start].ends_with(char::is_whitespace);
+    if mid_word && let Some(space) = before[start..].find(char::is_whitespace) {
+        start += space
+            + before[start + space..]
+                .chars()
+                .next()
+                .map_or(0, char::len_utf8);
+    }
     let text = format!("…{}", &context.text[start..]);
     let link_start = '…'.len_utf8() + context.link.start - start;
     (text, link_start..link_start + context.link.len())
@@ -195,11 +210,13 @@ mod tests {
     #[case::corta("ver el [[plan]] hoy", "ver el [[plan]] hoy")]
     #[case::larga(
         "una línea larguísima que habla de muchas cosas antes de nombrar el [[plan]] al fin",
-        "…de nombrar el [[plan]] al fin"
+        "…el [[plan]] al fin"
     )]
-    #[case::justo("0123456789abcdef[[plan]]", "0123456789abcdef[[plan]]")]
-    #[case::multibyte("ñññññññññññññññññ[[plan]]", "…ññññññññññññññññ[[plan]]")]
-    #[case::una_palabra_larga_pegada("x 0123456789abcdefghij[[plan]]", "…456789abcdefghij[[plan]]")]
+    #[case::justo("0123456789[[plan]]", "0123456789[[plan]]")]
+    #[case::multibyte("ñññññññññññññññññ[[plan]]", "…ññññññññññ[[plan]]")]
+    #[case::una_palabra_larga_pegada("x 0123456789abcdefghij[[plan]]", "…abcdefghij[[plan]]")]
+    #[case::caracteres_anchos("日本語のメモ:計画を見直す [[plan]] とても", "…[[plan]] とても")]
+    #[case::anchos_sin_espacio("日本語のメモ計画を見直す[[plan]]", "…画を見直す[[plan]]")]
     fn el_link_queda_cerca_del_principio(#[case] line: &str, #[case] shown: &str) {
         let (text, link) = lead_in(&context(line, "[[plan]]"));
         assert_eq!(text, shown);

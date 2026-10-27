@@ -406,6 +406,23 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("focus-menu-salir", &[Step::RightClickRow(1)]),
     ("sin-focus", &[Step::Keys("<Esc>F")]),
+    // El panel de backlinks: muchas notas con rutas hondas, líneas largas y
+    // multibyte que enlazan a `Metalmind/plan` (llegan como de otro
+    // programa), el final de la lista, una nota cerrada, el menú de la
+    // última fila junto al borde y la nota abierta en su link, que no tiene
+    // backlinks.
+    (
+        "backlinks",
+        &[
+            Step::Files(vault::write_backlinks),
+            Step::Settle,
+            Step::Keys("<Esc><Esc><C-w>o:e Proyectos/Metalmind/plan.md<CR><Space>b"),
+        ],
+    ),
+    ("backlinks-final", &[Step::Keys("G")]),
+    ("backlinks-plegado", &[Step::Keys("ggjhh")]),
+    ("backlinks-menu-borde", &[Step::RightClickBottomRow]),
+    ("backlinks-abierto", &[Step::Keys("<Esc>gg<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
