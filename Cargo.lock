@@ -3934,6 +3934,7 @@ dependencies = [
 name = "metalmind"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "clap",
  "dirs 7.0.0",
  "env_logger",

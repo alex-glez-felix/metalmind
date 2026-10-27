@@ -1,6 +1,7 @@
 //! `metalmind [carpeta|archivo]`: abre el vault en una ventana, con el archivo
 //! si se pasó uno; si el archivo no existe, empieza vacío y se crea al
-//! guardar con `:w`. Qué vault se abre: [`target`]. Los subcomandos
+//! guardar con `:w`. Qué vault se abre: [`target`]; si no hay ninguno, se
+//! elige con el selector de carpetas del sistema. Los subcomandos
 //! (`metalmind add`, …) son la CLI del vault y, salvo `open`, nunca abren ventana.
 
 mod cli;
@@ -15,6 +16,7 @@ use std::time::Instant;
 use crate::cli::Command;
 use crate::commands::CliError;
 use crate::gui::{Session, StartError};
+use crate::target::TargetError;
 
 fn main() -> ExitCode {
     let launched = Instant::now();
@@ -46,9 +48,10 @@ fn open(
 ) -> Result<(), StartError> {
     let clock = gui::frame_clock(launched, frame_log)?;
     let session = Session::load()?;
-    let target = target::resolve(path, session.sources())?;
-    let prepared = gui::prepare(session, &target)?;
-    gui::run(prepared, clock)
+    match target::resolve(path, session.sources()) {
+        Err(TargetError::NoVault) => gui::run_choosing_vault(session, clock),
+        target => gui::run(gui::prepare(session, &target?)?, clock),
+    }
 }
 
 fn run(command: Command, launched: Instant) -> Result<(), CliError> {

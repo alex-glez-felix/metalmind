@@ -212,7 +212,8 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - `metalmind carpeta/` abre la carpeta como vault; `metalmind archivo.md` abre el
   archivo en el vault de la carpeta que lo contiene, y `metalmind` sin argumentos,
   la carpeta de `METALMIND_VAULT`, el último vault abierto o el `vault:` de la
-  config, en ese orden.
+  config, en ese orden. Si no hay ninguno, pregunta con el selector de carpetas
+  del sistema.
 - Panel lateral con el árbol de carpetas del vault, que se actualiza solo
   cuando algo cambia en disco. Se muestra y se esconde con `space e` o con el
   botón de la barra de la izquierda, y recuerda por vault si estaba visible y
@@ -271,8 +272,8 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 #### Release
 
 - `metalmind --version` y `metalmind --help`.
-- Entrada de escritorio para abrir archivos `text/markdown`, ícono y metainfo
-  de AppStream.
+- Entrada de escritorio en el menú de aplicaciones y en "Abrir con" de los
+  archivos `text/markdown`, ícono y metainfo de AppStream.
 - Binarios para Linux x86_64 y aarch64 en cada GitHub Release, y paquetes
   `metalmind-bin` y `metalmind-git` para el AUR.
 
