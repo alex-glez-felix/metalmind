@@ -394,7 +394,9 @@ const SCENES: &[(&str, &[Step])] = &[
             "<Esc>:focus Ideas/ #rust -#archivado -#un-tag-que-no-existe-con-un-nombre-muy-largo-para-ver-el-corte<CR>",
         )],
     ),
-    ("focus-vacio", &[Step::Keys(":focus #nada<CR>")]),
+    // En el finder, un focus largo se recorta y deja ver lo escrito.
+    ("focus-largo-finder", &[Step::Keys("<Space>fidea")]),
+    ("focus-vacio", &[Step::Keys("<Esc>:focus #nada<CR>")]),
     ("focus-finder-vacio", &[Step::Keys("<Space>f")]),
     (
         "focus-desde-el-panel",
