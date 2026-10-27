@@ -69,6 +69,16 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         let vault = self.session.read(cx).vault();
+        match arrival(&index, &vault.links(), self.overlay.is_some()) {
+            Arrival::Show => {}
+            Arrival::Rebuild => return self.rename_entry(from, to, window, cx),
+            Arrival::Busy => {
+                let text = format!(
+                    "no se renombró {from}: se abrió otra ventana antes de su vista previa"
+                );
+                return self.tell(Message::Info(text), cx);
+            }
+        }
         let built = match built {
             Ok(built) => built,
             Err(error) => return self.rename_failed(error, cx),
@@ -142,7 +152,7 @@ impl WorkspaceView {
     }
 
     /// Pone la vista previa rehecha para `built_for`, si sigue abierta para
-    /// ese índice.
+    /// ese índice; si no se pudo rehacer, deja la que había.
     fn show_rebuilt(
         &mut self,
         built_for: &Arc<LinkIndex>,
@@ -172,11 +182,10 @@ impl WorkspaceView {
                 *view.preview_mut() = fresh;
                 cx.notify();
             }),
-            Err(error) => {
-                self.overlay = None;
-                self.rename_failed(error, cx);
-                cx.notify();
-            }
+            // Un archivo que cambió entre el índice y la lectura: queda la
+            // vista previa de antes y el próximo lote la rehace. Aplicarla
+            // comprueba todo contra el disco antes de escribir nada.
+            Err(error) => log::warn!("no se rehízo la vista previa del renombre: {error}"),
         }
     }
 
@@ -262,6 +271,28 @@ impl WorkspaceView {
         self.sidebar
             .update(cx, |sidebar, cx| sidebar.reveal_entry(to.clone(), cx));
         self.sync_editors(cx);
+    }
+}
+
+/// Qué hacer con un plan que se terminó de armar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Arrival {
+    Show,
+    /// Llegó otro índice mientras se armaba: un link nuevo no estaría en el
+    /// plan, así que se arma otra vez con el de ahora.
+    Rebuild,
+    /// Se abrió otra ventana flotante mientras tanto: no se le pasa por
+    /// encima.
+    Busy,
+}
+
+fn arrival(built_for: &Arc<LinkIndex>, current: &Arc<LinkIndex>, overlay_open: bool) -> Arrival {
+    if overlay_open {
+        Arrival::Busy
+    } else if Arc::ptr_eq(built_for, current) {
+        Arrival::Show
+    } else {
+        Arrival::Rebuild
     }
 }
 
@@ -483,5 +514,26 @@ mod tests {
         std::fs::write(dir.path().join("a.md"), "otra cosa\n").unwrap();
         let error = build(&index(&notes), dir.path(), &path("b.md"), &path("d.md"));
         assert!(error.is_err());
+    }
+
+    /// Un plan armado se muestra solo si sigue siendo del índice de ahora y
+    /// no se abrió otra ventana flotante mientras tanto.
+    #[rstest::rstest]
+    #[case::el_mismo_indice(true, false, Arrival::Show)]
+    #[case::otro_indice(false, false, Arrival::Rebuild)]
+    #[case::otra_ventana(true, true, Arrival::Busy)]
+    #[case::otra_ventana_y_otro_indice(false, true, Arrival::Busy)]
+    fn que_hacer_con_un_plan_armado(
+        #[case] same_index: bool,
+        #[case] overlay_open: bool,
+        #[case] expected: Arrival,
+    ) {
+        let built_for = Arc::new(index(&[("a.md", "")]));
+        let current = if same_index {
+            Arc::clone(&built_for)
+        } else {
+            Arc::new(index(&[("a.md", "")]))
+        };
+        assert_eq!(arrival(&built_for, &current, overlay_open), expected);
     }
 }
