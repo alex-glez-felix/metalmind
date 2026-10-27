@@ -17,13 +17,50 @@ use super::overlay::Overlay;
 use crate::change_preview::{ChangePreview, ChangePreviewEvent, ChangePreviewView, Notice};
 use crate::workspace::Message;
 
-/// Un renombre con su vista previa abierta: qué se renombra, el índice de
-/// links con que se armó y lo que la rehace cuando llega otro.
+/// Un renombre con su vista previa abierta: qué se renombra, el último
+/// índice de links y lo que rehace la vista previa cuando llega otro.
 pub(super) struct RenamePreview {
     from: VaultPath,
     to: VaultPath,
     index: Arc<LinkIndex>,
+    /// La vista previa es de un índice anterior a `index`: aplicarla podría
+    /// dejar fuera un link nuevo.
+    behind: bool,
     rebuild: Option<Task<()>>,
+}
+
+impl RenamePreview {
+    fn new(from: VaultPath, to: VaultPath, index: Arc<LinkIndex>) -> Self {
+        Self {
+            from,
+            to,
+            index,
+            behind: false,
+            rebuild: None,
+        }
+    }
+
+    /// Anota que llegó `latest`; `true` si la vista previa quedó atrás.
+    fn fall_behind(&mut self, latest: &Arc<LinkIndex>) -> bool {
+        if Arc::ptr_eq(&self.index, latest) {
+            return false;
+        }
+        self.index = Arc::clone(latest);
+        self.behind = true;
+        true
+    }
+
+    /// Anota que se puso la vista previa armada con `built_for`; `false`
+    /// si ya llegó otro índice y no hay que ponerla.
+    fn catch_up(&mut self, built_for: &Arc<LinkIndex>) -> bool {
+        let current = Arc::ptr_eq(&self.index, built_for);
+        self.behind &= !current;
+        current
+    }
+
+    fn is_current(&self) -> bool {
+        !self.behind
+    }
 }
 
 /// El plan de un renombre y sus ediciones en líneas enteras.
@@ -96,12 +133,7 @@ impl WorkspaceView {
         let events = cx.subscribe_in(&view, window, move |this, view, event, window, cx| {
             this.on_rename_event(view, *event, &renamed, window, cx);
         });
-        let rename = RenamePreview {
-            from: from.clone(),
-            to: to.clone(),
-            index,
-            rebuild: None,
-        };
+        let rename = RenamePreview::new(from.clone(), to.clone(), index);
         self.show(
             Overlay::ChangePreview {
                 view,
@@ -116,7 +148,8 @@ impl WorkspaceView {
     /// Con la vista previa de un renombre abierta, un lote del vault que
     /// trae otro índice de links (como el autoguardado de un archivo que la
     /// bloqueaba) la rehace con los textos de ahora: si no, aplicar
-    /// encontraría los archivos cambiados. Lo quitado sigue quitado.
+    /// encontraría los archivos cambiados o dejaría fuera un link nuevo.
+    /// Mientras tanto no se aplica. Lo quitado sigue quitado.
     pub(super) fn refresh_rename_preview(
         &mut self,
         latest: &Arc<LinkIndex>,
@@ -130,10 +163,9 @@ impl WorkspaceView {
         else {
             return;
         };
-        if Arc::ptr_eq(&rename.index, latest) {
+        if !rename.fall_behind(latest) {
             return;
         }
-        rename.index = Arc::clone(latest);
         let building = (
             Arc::clone(latest),
             root,
@@ -152,7 +184,8 @@ impl WorkspaceView {
     }
 
     /// Pone la vista previa rehecha para `built_for`, si sigue abierta para
-    /// ese índice; si no se pudo rehacer, deja la que había.
+    /// ese índice; si no se pudo rehacer, deja la que había, sin aplicarse
+    /// hasta que el próximo lote la rehaga.
     fn show_rebuilt(
         &mut self,
         built_for: &Arc<LinkIndex>,
@@ -164,27 +197,28 @@ impl WorkspaceView {
             view,
             rename: Some(rename),
             ..
-        }) = &self.overlay
+        }) = &mut self.overlay
         else {
             return;
         };
-        if !Arc::ptr_eq(&rename.index, built_for) {
-            return;
-        }
         let view = view.clone();
         let rebuilt = built.and_then(|built| {
             preview(&built.plan, built.changes, |path| unsaved.contains(path))
                 .ok_or_else(|| "ya no hay nada que renombrar".to_owned())
         });
         match rebuilt {
-            Ok(mut fresh) => view.update(cx, |view, cx| {
-                fresh.carry_over(view.preview());
-                *view.preview_mut() = fresh;
-                cx.notify();
-            }),
-            // Un archivo que cambió entre el índice y la lectura: queda la
-            // vista previa de antes y el próximo lote la rehace. Aplicarla
-            // comprueba todo contra el disco antes de escribir nada.
+            Ok(mut fresh) => {
+                if !rename.catch_up(built_for) {
+                    return;
+                }
+                view.update(cx, |view, cx| {
+                    fresh.carry_over(view.preview());
+                    *view.preview_mut() = fresh;
+                    cx.notify();
+                });
+            }
+            // Un archivo que cambió entre el índice y la lectura: el próximo
+            // lote trae otro índice y la rehace.
             Err(error) => log::warn!("no se rehízo la vista previa del renombre: {error}"),
         }
     }
@@ -215,6 +249,11 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if event == ChangePreviewEvent::Apply && !self.rename_is_current() {
+            let text = "la vista previa se está rehaciendo con los cambios de ahora; aplica cuando \
+                        termine";
+            return self.tell(Message::Info(text.to_owned()), cx);
+        }
         let apply = (event == ChangePreviewEvent::Apply).then(|| {
             let preview = view.read(cx).preview();
             (
@@ -258,6 +297,16 @@ impl WorkspaceView {
                 self.rename_failed(text, cx);
             }
             Err(error) => self.rename_failed(format!("{title}: no se cambió nada: {error}"), cx),
+        }
+    }
+
+    fn rename_is_current(&self) -> bool {
+        match &self.overlay {
+            Some(Overlay::ChangePreview {
+                rename: Some(rename),
+                ..
+            }) => rename.is_current(),
+            _ => true,
         }
     }
 
@@ -535,5 +584,31 @@ mod tests {
             Arc::new(index(&[("a.md", "")]))
         };
         assert_eq!(arrival(&built_for, &current, overlay_open), expected);
+    }
+
+    /// Mientras llega otro índice, la vista previa queda atrás hasta que se
+    /// pone la que se armó con el último; la de un índice intermedio no
+    /// cuenta, y si no se pudo rehacer sigue atrás.
+    #[test]
+    fn la_vista_previa_queda_atras_hasta_ponerse_la_del_ultimo_indice() {
+        let first = Arc::new(index(&[("a.md", "")]));
+        let mut rename = RenamePreview::new(path("a.md"), path("b.md"), Arc::clone(&first));
+        assert!(rename.is_current());
+        assert!(
+            !rename.fall_behind(&first),
+            "el mismo índice no la deja atrás"
+        );
+        let second = Arc::new(index(&[("a.md", "")]));
+        let third = Arc::new(index(&[("a.md", "")]));
+        assert!(rename.fall_behind(&second));
+        assert!(rename.fall_behind(&third));
+        assert!(!rename.is_current());
+        assert!(
+            !rename.catch_up(&second),
+            "la de un índice intermedio no se pone"
+        );
+        assert!(!rename.is_current());
+        assert!(rename.catch_up(&third));
+        assert!(rename.is_current());
     }
 }
