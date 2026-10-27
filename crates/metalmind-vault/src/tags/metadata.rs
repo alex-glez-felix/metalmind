@@ -187,24 +187,26 @@ impl PageField {
 /// La edición de un campo en una página que ya existe.
 fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<TagPlan, PlanError> {
     let key = field.key();
-    let edits = match (&page.layout, value) {
+    let (edits, base_len) = match (&page.layout, value) {
         (PageLayout::Unreadable, _) => return Err(PlanError::UneditablePage(page.path.clone())),
-        (PageLayout::Bare { .. }, None) => Vec::new(),
+        (PageLayout::Bare { .. }, None) => (Vec::new(), None),
         (
             PageLayout::Bare {
                 at,
                 first_line,
+                len,
                 crlf,
             },
             Some(value),
         ) => {
             let eol = eol(*crlf);
-            vec![TextEdit {
+            let edit = TextEdit {
                 range: *at..at + first_line.len(),
                 old: first_line.clone(),
                 new: format!("---{eol}{key}: {value}{eol}---{eol}{first_line}"),
                 line: 0,
-            }]
+            };
+            (vec![edit], Some(*len))
         }
         (
             PageLayout::Block {
@@ -216,9 +218,10 @@ fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<Ta
             value,
         ) => {
             let line = value.map(|value| format!("{key}: {value}{}", eol(*crlf)));
-            block_edit(entries, key, (*end, *end_line), line)
+            let edits = block_edit(entries, key, (*end, *end_line), line)
                 .into_iter()
-                .collect()
+                .collect();
+            (edits, None)
         }
     };
     let mut plan = TagPlan::default();
@@ -226,6 +229,7 @@ fn edit_page(page: &TagPage, field: PageField, value: Option<&str>) -> Result<Ta
         plan.changes.edits.push(FileEdits {
             path: page.path.clone(),
             edits,
+            base_len,
         });
     }
     Ok(plan)

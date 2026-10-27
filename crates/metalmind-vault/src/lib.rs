@@ -35,7 +35,7 @@ pub use attachment::{
 };
 pub use capture::{Capture, CaptureError, Captured, NewNote};
 pub use changes::{Changes, NewFile, Rename};
-pub use edit::{FileEdits, StaleEdit, TextEdit};
+pub use edit::{FileEdits, Mismatch, StaleEdit, TextEdit};
 pub use file::{FileError, create_atomic, read, write_atomic};
 pub use history::{
     AUTOSAVE_GROUP, ChunkKind, ContentHash, DeletedId, DeletedNote, DiffChunk, History,
