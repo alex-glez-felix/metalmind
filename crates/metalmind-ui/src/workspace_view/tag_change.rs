@@ -18,6 +18,9 @@ use crate::workspace::{Message, shown_path};
 pub(super) struct LastTagChange {
     title: String,
     applied: Applied,
+    /// El tag del que la lista de notas pasó a otro, y a cuál: deshacer el
+    /// cambio la devuelve.
+    list_followed: Option<(String, String)>,
 }
 
 impl WorkspaceView {
@@ -80,9 +83,12 @@ impl WorkspaceView {
         };
         if self.apply_tag_changes(title, &summary, &changes, cx)
             && let Some((from, to)) = renamed
+            && self
+                .list
+                .update(cx, |list, cx| list.rename_tag(from, to, cx))
+            && let Some(last) = &mut self.last_tag_change
         {
-            self.list
-                .update(cx, |list, cx| list.rename_tag(from, to, cx));
+            last.list_followed = Some((from.clone(), to.clone()));
         }
     }
 
@@ -102,7 +108,11 @@ impl WorkspaceView {
                 whole = true;
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
-                self.last_tag_change = Some(LastTagChange { title, applied });
+                self.last_tag_change = Some(LastTagChange {
+                    title,
+                    applied,
+                    list_followed: None,
+                });
                 // Corto: la barra recorta lo que no cabe, y el título ya se vio.
                 Message::Info(format!("{summary}; :tagundo lo deshace"))
             }
@@ -118,6 +128,7 @@ impl WorkspaceView {
                 self.last_tag_change = Some(LastTagChange {
                     title,
                     applied: *applied,
+                    list_followed: None,
                 });
                 message
             }
@@ -182,6 +193,11 @@ impl WorkspaceView {
                 // Donde haya quedado cada archivo, aunque un renombre no se
                 // haya podido deshacer.
                 self.reread(&vault, last.applied.touched(), cx);
+                if let Some((from, to)) = &last.list_followed {
+                    // Si el usuario no eligió otra fuente mientras tanto.
+                    self.list
+                        .update(cx, |list, cx| list.rename_tag(to, from, cx));
+                }
                 undone(&last.title, &report)
             }
             Err(error) => {

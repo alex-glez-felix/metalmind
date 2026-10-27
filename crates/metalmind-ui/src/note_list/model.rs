@@ -165,12 +165,9 @@ impl NoteList {
     }
 
     /// Un tag que se renombró o fusionó desde la app sigue siendo la fuente
-    /// con su nombre nuevo.
-    pub fn rename_tag(&mut self, from: &str, to: &str) -> Step<Note> {
-        if !self.source.rename_tag(from, to) {
-            return Step::default();
-        }
-        self.refill()
+    /// con su nombre nuevo; `None` si la fuente era otra.
+    pub fn rename_tag(&mut self, from: &str, to: &str) -> Option<Step<Note>> {
+        self.source.rename_tag(from, to).then(|| self.refill())
     }
 
     /// Otra fuente: el filtro se queda y la fila vuelve a la primera.
