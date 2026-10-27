@@ -12,7 +12,7 @@ use super::Editor;
 use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
-use super::scroll::{Anchor, sideways};
+use super::scroll::{Anchor, sideways, wheel_anchor};
 use crate::clipboard::SystemClipboard;
 
 impl Editor {
@@ -58,15 +58,12 @@ impl Editor {
             f64::from(f32::from(line_height)),
             |line| f64::from(lines::line_height(&view, line)),
         );
-        let top = self.scroll.first_full_line();
-        // En la misma línea, la rueda recorre sus filas sin mover el motor.
-        let engine = view.viewport;
-        let skip = if engine.top() == top {
-            engine.skip()
-        } else {
-            0
+        let engine = Anchor {
+            top: view.viewport.top(),
+            skip: view.viewport.skip(),
         };
-        let anchor = Anchor { top, skip };
+        let anchor = wheel_anchor(self.scroll, view.buffer().last_line(), engine);
+        let top = anchor.top;
         if self.synced != Some(anchor) {
             self.synced = Some(anchor);
             let scrolled =

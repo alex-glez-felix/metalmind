@@ -82,6 +82,16 @@ pub fn units(pixels: f32) -> usize {
     pixels.max(0.).floor() as usize
 }
 
+/// Dónde deja la rueda al motor con la vista en `scroll` y el motor en
+/// `engine`: en la primera línea entera, sin pasar de la última (con parte
+/// de ella oculta, sigue siendo la primera), y en la misma línea, con las
+/// filas que el motor ya ocultaba: la rueda las recorre sin moverlo.
+pub fn wheel_anchor(scroll: Scroll, last_line: usize, engine: Anchor) -> Anchor {
+    let top = scroll.first_full_line().min(last_line);
+    let skip = if engine.top == top { engine.skip } else { 0 };
+    Anchor { top, skip }
+}
+
 /// Sin `wrap`, a dónde lleva la rueda la ventana que se corrió `left`
 /// píxeles al correrla `delta` más, con `rest`, lo que quedó de menos de un
 /// píxel de las anteriores: el motor solo guarda píxeles enteros, y si no
@@ -98,6 +108,26 @@ mod tests {
 
     fn at(top: f64) -> Scroll {
         Scroll { top }
+    }
+
+    #[test]
+    fn la_rueda_en_la_ultima_linea_no_pasa_de_ella() {
+        let engine = Anchor { top: 10, skip: 60 };
+        let anchor = wheel_anchor(at(10.5), 10, engine);
+        assert_eq!(
+            anchor, engine,
+            "la última, a medias, sigue siendo la primera"
+        );
+        assert_eq!(
+            at(10.5).follow(engine, 0.3, Some(anchor)),
+            at(10.5),
+            "y la vista conserva la fracción de la rueda"
+        );
+        assert_eq!(
+            wheel_anchor(at(4.5), 10, engine),
+            Anchor { top: 5, skip: 0 },
+            "en otra línea, sin filas ocultas"
+        );
     }
 
     #[test]
