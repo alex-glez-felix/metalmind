@@ -81,19 +81,37 @@ impl Sidebar {
         self.navigate(cx, |outline| outline.collapse_or_parent());
     }
 
+    /// En los backlinks, `l` en una nota la abre o baja a sus links, como
+    /// en una carpeta, y en un link lo abre.
     fn expand_or_open(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        match self.panel.outline().selected_file().cloned() {
-            Some(path) => self.open(&path, Placement::Current, true, cx),
-            None => self.navigate(cx, |outline| outline.expand_or_enter()),
+        let is_backlink_note = self.panel.view == PanelView::Backlinks
+            && matches!(
+                self.panel.backlinks.selected_entry(),
+                Some(crate::backlinks::Row::Note { .. })
+            );
+        if !is_backlink_note && self.open_selected_file(Placement::Current, cx) {
+            return;
         }
+        self.navigate(cx, |outline| outline.expand_or_enter());
     }
 
     /// Un archivo se abre; una carpeta o un tag se abre o se cierra.
     fn open_selected(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        match self.panel.outline().selected_file().cloned() {
-            Some(path) => self.open(&path, Placement::Current, true, cx),
-            None => self.navigate(cx, |outline| outline.toggle_selected()),
+        if !self.open_selected_file(Placement::Current, cx) {
+            self.navigate(cx, |outline| outline.toggle_selected());
         }
+    }
+
+    /// Abre el archivo de la fila elegida, donde lo dice ella; si no hay,
+    /// devuelve `false`.
+    fn open_selected_file(&mut self, placement: Placement, cx: &mut Context<Self>) -> bool {
+        let outline = self.panel.outline();
+        let Some(path) = outline.selected_file().cloned() else {
+            return false;
+        };
+        let at = outline.selected_position();
+        self.open(&path, at, placement, true, cx);
+        true
     }
 
     fn open_split_right(&mut self, _: &mut Window, cx: &mut Context<Self>) {
@@ -106,9 +124,7 @@ impl Sidebar {
 
     fn open_selected_in(&mut self, placement: Placement, cx: &mut Context<Self>) {
         self.menu = None;
-        if let Some(path) = self.panel.outline().selected_file().cloned() {
-            self.open(&path, placement, true, cx);
-        }
+        self.open_selected_file(placement, cx);
     }
 
     fn filter(&mut self, _: &mut Window, cx: &mut Context<Self>) {

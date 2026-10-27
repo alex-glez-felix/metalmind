@@ -835,6 +835,21 @@ fn la_lista_de_links_escribe_el_destino_que_no_empata() {
     smoke.wait_contents("a.md", "hola [[proyectos/plan]] y\n");
 }
 
+/// `space b` muestra los backlinks de la nota activa; `j` baja al link de
+/// `b.md` y `enter` abre esa nota con el cursor en el link.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn los_backlinks_abren_la_nota_en_el_link() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "# A\n");
+    smoke.write("b.md", "uno\ndos [[a]] tres\n");
+    smoke.write("c.md", "nada\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    metalmind.window().type_keys("<Space>bj<CR>iX<Esc>:w<CR>");
+    smoke.wait_contents("b.md", "uno\ndos X[[a]] tres\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {

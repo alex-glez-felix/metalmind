@@ -66,6 +66,7 @@ const LEADER: &[(char, Command, bool)] = &[
     ('p', Command::OpenCommandPalette, false),
     ('e', Command::ToggleFolders, true),
     ('t', Command::ToggleTags, true),
+    ('b', Command::ToggleBacklinks, true),
     ('n', Command::NewNoteFromTemplate, true),
     ('d', Command::OpenDailyNote, true),
 ];

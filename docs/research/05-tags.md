@@ -145,7 +145,7 @@ Metalmind es una GUI con navegación estilo vim ([06](06-decisiones-de-fondo.md)
 
 ### Panel lateral
 
-Dos vistas en el mismo panel, tags y árbol de carpetas (el de M2). Una sola está visible a la vez.
+Dos vistas en el mismo panel, tags y árbol de carpetas (el de M2). Una sola está visible a la vez. Desde el 2026-10-26 hay una tercera, los backlinks de la nota activa ([03](03-core-architecture.md) §4), y `T` pasa por las tres.
 
 - **Por defecto: tags.** Es el eje de organización; abrir la app en la vista de carpetas diría lo contrario. La vista elegida se recuerda por vault. Hasta que llegue el índice de tags (M2.5), el panel abre en carpetas.
 - Cambiar de vista: `T` dentro del panel (`panel::toggle_view`); `space t` abre el panel en tags y `space e` en carpetas, con el foco, y si el panel ya muestra esa vista con el foco, lo esconden (`panel::toggle_tags`, `panel::toggle_folders`); si la muestra sin el foco, se lo dan, como `ToggleFocus` de Zed (2026-10-18: antes la escondían, y `j` y `enter` tras `space e` iban al editor). Lo mismo con los dos botones de la barra a la izquierda del panel. El encabezado del panel dice cuál es.

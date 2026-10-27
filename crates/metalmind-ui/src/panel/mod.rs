@@ -16,25 +16,31 @@ use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
+use crate::backlinks::BacklinkOutline;
 use crate::file_tree::FileTree;
 use crate::focus::{Focus, InScope};
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
+use crate::workspace::LinePosition;
 
-/// Las dos vistas del panel (05 §3).
+/// Las vistas del panel: carpetas, tags (05 §3) y los backlinks de la
+/// nota activa.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelView {
     #[default]
     Folders,
     Tags,
+    Backlinks,
 }
 
 impl PanelView {
+    /// La que sigue con `T`, y tras la última la primera.
     #[must_use]
-    pub fn other(self) -> Self {
+    pub fn next(self) -> Self {
         match self {
             Self::Folders => Self::Tags,
-            Self::Tags => Self::Folders,
+            Self::Tags => Self::Backlinks,
+            Self::Backlinks => Self::Folders,
         }
     }
 }
@@ -52,6 +58,8 @@ pub struct Shown {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClickOpen {
     pub path: VaultPath,
+    /// Dónde, si la fila lo dice (un backlink).
+    pub at: Option<LinePosition>,
     /// El doble clic le pasa el foco al editor; el simple lo deja en el
     /// árbol.
     pub focus_editor: bool,
@@ -152,6 +160,7 @@ pub struct Panel {
     pub view: PanelView,
     pub tree: FileTree,
     pub tags: TagOutline,
+    pub backlinks: BacklinkOutline,
     prompt: Option<Prompt>,
     /// El último error de una operación, hasta la próxima.
     error: Option<String>,
@@ -167,6 +176,7 @@ impl Panel {
             view,
             tree,
             tags,
+            backlinks: BacklinkOutline::new(Arc::default()),
             prompt: None,
             error: None,
             focus_folder: None,
@@ -203,10 +213,10 @@ impl Panel {
         }
     }
 
-    /// `T`: la otra vista. Devuelve la fila elegida de tags si al rehacerla
-    /// cambió de lugar.
+    /// `T`: la vista que sigue. Devuelve la fila elegida de tags si al
+    /// rehacerla cambió de lugar.
     pub fn switch_view(&mut self) -> Option<usize> {
-        self.show(self.view.other());
+        self.show(self.view.next());
         self.refresh_shown()
     }
 
@@ -242,6 +252,7 @@ impl Panel {
         match self.view {
             PanelView::Folders => &self.tree,
             PanelView::Tags => &self.tags,
+            PanelView::Backlinks => &self.backlinks,
         }
     }
 
@@ -249,6 +260,7 @@ impl Panel {
         match self.view {
             PanelView::Folders => &mut self.tree,
             PanelView::Tags => &mut self.tags,
+            PanelView::Backlinks => &mut self.backlinks,
         }
     }
 
@@ -264,6 +276,7 @@ impl Panel {
         if let Some(path) = outline.selected_file() {
             return Some(ClickOpen {
                 path: path.clone(),
+                at: outline.selected_position(),
                 focus_editor: count > 1,
             });
         }

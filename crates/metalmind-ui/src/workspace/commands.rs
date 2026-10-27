@@ -154,6 +154,7 @@ impl Workspace {
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
+            Command::ToggleBacklinks => Ok(Effect::TogglePanel(PanelView::Backlinks)),
             Command::FollowLink => self.follow_link(),
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),

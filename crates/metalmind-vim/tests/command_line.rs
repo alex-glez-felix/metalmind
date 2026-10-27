@@ -67,6 +67,7 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(" p", Command::OpenCommandPalette)]
 #[case(" e", Command::ToggleFolders)]
 #[case(" t", Command::ToggleTags)]
+#[case(" b", Command::ToggleBacklinks)]
 #[case(" n", Command::NewNoteFromTemplate)]
 #[case(" d", Command::OpenDailyNote)]
 #[case("gd", Command::FollowLink)]
