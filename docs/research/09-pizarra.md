@@ -75,7 +75,7 @@ Un `.canvas` de Obsidian se abre tal cual. Lo que JSON Canvas no tiene va como c
 
 Lo que el formato decide para que la edición no tenga casos raros:
 
-- **Una flecha siempre une dos nodos.** `fromSide` y `toSide` son opcionales: sin ellos el lado sale de la geometría y cambia al mover las cajas. Soltar una flecha en el vacío crea una caja ahí, como Obsidian. No hay flechas colgando que mantener.
+- **Una flecha siempre une dos nodos.** `fromSide` y `toSide` son opcionales: sin ellos el lado sale de la geometría y cambia al mover las cajas. Soltar una flecha en el vacío crea una caja ahí, como Obsidian. No hay flechas colgando que mantener. Una flecha de un nodo a sí mismo es un lazo en su esquina de arriba a la derecha; su `route` no cuenta y no se guarda.
 - **El trazo es un nodo**, y su caja (`x`, `y`, `width`, `height`) es justo la de sus puntos, que van relativos a la esquina (entre 0 y el ancho o el alto; `Node::stroke` lo garantiza al crearlo o importarlo): se mueve, se selecciona y se agrupa como cualquier otro, y una flecha puede llegar a él. Los puntos van en la misma línea del nodo: medido, ponerlos en una sección aparte al final no hace el diff más chico (1 856 frente a 1 838 bytes al agregar un trazo) y parte un elemento en dos lugares del archivo. Con presión de lápiz caben los de una tableta, por si un día una app de tableta edita el mismo archivo.
 - **Escritura canónica**: un elemento por línea, las claves en un orden fijo y las desconocidas (de Obsidian o de un plugin, como el `background` de un grupo) al final de su línea, sin tocar. Escribir dos veces da los mismos bytes. La semilla del trazo a mano sale del id: no se guarda.
 - **Coordenadas enteras**, como pide JSON Canvas. Con una rejilla de 10 al mover, no se pierde nada.

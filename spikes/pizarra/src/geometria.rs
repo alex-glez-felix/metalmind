@@ -189,7 +189,7 @@ pub fn route(board: &Board, edge: &Edge) -> Option<EdgeGeometry> {
 pub fn route_between(from: &Node, to: &Node, edge: &Edge) -> EdgeGeometry {
     let (a, b) = (Rect::of(from), Rect::of(to));
     if from.id == to.id {
-        return self_loop(&a);
+        return self_loop(&a, outline(from));
     }
     let from_side = edge.from.side.unwrap_or_else(|| facing_side(&a, &b));
     let to_side = edge.to.side.unwrap_or_else(|| facing_side(&b, &a));
@@ -231,14 +231,16 @@ pub fn route_between(from: &Node, to: &Node, edge: &Edge) -> EdgeGeometry {
     }
 }
 
-/// Una flecha de un nodo a sí mismo: sale por la derecha y vuelve por
-/// arriba, por fuera de la caja, como en Obsidian.
-fn self_loop(r: &Rect) -> EdgeGeometry {
-    let reach = (r.w.min(r.h) * 0.6).clamp(40.0, 90.0);
-    let start = P::new(r.x + r.w, r.y + r.h * 0.35);
-    let end = P::new(r.x + r.w * 0.65, r.y);
-    let c1 = start.add(normal(Side::Right), reach);
-    let c2 = end.add(normal(Side::Top), reach);
+/// Una flecha de un nodo a sí mismo: un lazo en la esquina de arriba a la
+/// derecha, por fuera de la silueta. Sus extremos se apoyan cerca de esa
+/// esquina, así que no importa cuán alta o ancha sea la caja.
+fn self_loop(r: &Rect, shape: Shape) -> EdgeGeometry {
+    const REACH: f32 = 48.0;
+    let near = 24.0_f32.min(r.w / 3.0).min(r.h / 3.0);
+    let start = boundary_toward(r, shape, P::new(r.x + r.w, r.y + near));
+    let end = boundary_toward(r, shape, P::new(r.x + r.w - near, r.y));
+    let c1 = start.add(normal(Side::Right), REACH);
+    let c2 = end.add(normal(Side::Top), REACH);
     let curve = [start, c1, c2, end];
     EdgeGeometry {
         path: EdgePath::Cubic(curve),
@@ -461,6 +463,47 @@ mod tests {
             None,
             "esquina del rombo"
         );
+    }
+
+    #[test]
+    fn a_loop_stays_outside_any_shape_and_touches_its_outline() {
+        for shape in [Shape::Rectangle, Shape::Ellipse, Shape::Diamond] {
+            for (w, h) in [
+                (200.0, 100.0),
+                (100.0, 10_000.0),
+                (10_000.0, 100.0),
+                (40.0, 40.0),
+            ] {
+                let r = rect(0.0, 0.0, w, h);
+                let g = self_loop(&r, shape);
+                let EdgePath::Cubic(curve) = g.path else {
+                    panic!("un lazo es una curva");
+                };
+                for i in 1..20 {
+                    #[expect(clippy::cast_precision_loss, reason = "20 muestras")]
+                    let p = cubic_at(curve, i as f32 / 20.0);
+                    assert!(
+                        !r.contains(shape, p),
+                        "{shape:?} {w}×{h}: {p:?} entra en la forma"
+                    );
+                }
+                let c = r.center();
+                for end in [g.start(), g.end()] {
+                    let inward = P::new(
+                        end.x + (c.x - end.x).signum(),
+                        end.y + (c.y - end.y).signum(),
+                    );
+                    let outward = P::new(
+                        end.x - (c.x - end.x).signum(),
+                        end.y - (c.y - end.y).signum(),
+                    );
+                    assert!(
+                        r.contains(shape, inward) && !r.contains(shape, outward),
+                        "{shape:?} {w}×{h}: {end:?} no está en el borde"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

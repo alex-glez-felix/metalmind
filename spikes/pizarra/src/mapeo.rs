@@ -707,6 +707,22 @@ mod tests {
     }
 
     #[test]
+    fn a_loop_survives_excalidraw() {
+        let mut board = generar::example();
+        let mut edge = board.edges[0].clone();
+        edge.id = "lazo".to_owned();
+        edge.to.node.clone_from(&edge.from.node);
+        board.edges.push(edge);
+        let board = Board::parse(&board.write()).unwrap();
+        let back = round_trip(&board);
+        let lazo = |b: &Board| b.edges.iter().find(|e| e.id == "lazo").cloned();
+        assert_eq!(
+            lazo(&back).map(|e| (e.from.node, e.to.node, e.route)),
+            lazo(&board).map(|e| (e.from.node, e.to.node, e.route))
+        );
+    }
+
+    #[test]
     fn only_pointing_heads_become_arrow_tips() {
         assert_eq!(tip(Some("arrow")), Tip::Arrow);
         assert_eq!(tip(Some("triangle")), Tip::Arrow);

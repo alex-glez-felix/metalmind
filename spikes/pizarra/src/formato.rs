@@ -394,7 +394,14 @@ impl Node {
 }
 
 impl From<RawEdge> for Edge {
+    /// Una flecha de un nodo a sí mismo es siempre un lazo (`geometria`):
+    /// su `route` no cambia nada, así que no se guarda.
     fn from(raw: RawEdge) -> Self {
+        let route = if raw.from_node == raw.to_node {
+            Route::Curve
+        } else {
+            raw.route.unwrap_or_default()
+        };
         Self {
             id: raw.id,
             from: End {
@@ -407,7 +414,7 @@ impl From<RawEdge> for Edge {
                 side: raw.to_side,
                 tip: raw.to_end.unwrap_or(Tip::Arrow),
             },
-            route: raw.route.unwrap_or_default(),
+            route,
             color: raw.color,
             label: raw.label,
             extra: raw.extra,
@@ -557,6 +564,17 @@ mod tests {
                 .all(|p| (0.0..=40.0).contains(&p.x) && (0.0..=40.0).contains(&p.y))
         );
         assert_eq!((points[0].x, points[1].y), (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_loop_does_not_keep_a_route() {
+        let text = FROM_OBSIDIAN.replace(
+            r#""toNode":"b2","toSide":"left""#,
+            r#""toNode":"a1","route":"elbow""#,
+        );
+        let board = Board::parse(&text).unwrap();
+        assert_eq!(board.edges[0].route, Route::Curve);
+        assert!(!board.write().contains("\"route\""));
     }
 
     #[test]
