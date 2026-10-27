@@ -1,6 +1,6 @@
 //! De los eventos de `notify` a [`Touched`]: qué rutas del vault releer.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use notify::event::{ModifyKind, RenameMode};
@@ -11,50 +11,26 @@ use crate::refresh::Touched;
 use crate::scan::ruled_by;
 
 pub(crate) fn touched(root: &Path, events: &[Event]) -> Touched {
-    let paired: HashSet<usize> = events
-        .iter()
-        .filter(|event| event.kind == EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
-        .filter_map(|event| event.attrs.tracker())
-        .collect();
     let mut touched = Touched::default();
+    follow_renames(root, events, &mut touched);
     for event in events {
         if event.need_rescan() {
             touched.paths.insert(VaultPath::root());
             continue;
         }
-        let named: Vec<Option<VaultPath>> = event
+        let named = event
             .paths
             .iter()
-            .map(|path| VaultPath::from_fs(root, path))
-            .collect();
-        match (event.kind, named.as_slice()) {
-            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [Some(from), Some(to)]) => {
-                touched.renames.push((from.clone(), to.clone()));
-            }
-            // Movido desde lo que el vault no ve (el temporal oculto de un
-            // guardado atómico, otra carpeta): el destino tiene contenido nuevo.
-            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [None, Some(to)]) => {
-                touched.written.insert(to.clone());
-            }
-            (EventKind::Modify(ModifyKind::Name(RenameMode::To)), [Some(to)])
-                if event
-                    .attrs
-                    .tracker()
-                    .is_none_or(|tracker| !paired.contains(&tracker)) =>
-            {
-                touched.written.insert(to.clone());
-            }
-            _ => {}
-        }
+            .filter_map(|path| VaultPath::from_fs(root, path));
         if matches!(
             event.kind,
             EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any)
         ) {
-            touched.written.extend(named.iter().flatten().cloned());
+            touched.written.extend(named.clone());
         }
         // Un archivo de reglas también relee la parte del vault que decide.
         let ruled = event.paths.iter().filter_map(|path| ruled_by(root, path));
-        let paths = named.into_iter().flatten().chain(ruled);
+        let paths = named.chain(ruled);
         if matches!(event.kind, EventKind::Modify(ModifyKind::Metadata(_))) {
             touched.reread.extend(paths);
         } else {
@@ -62,6 +38,59 @@ pub(crate) fn touched(root: &Path, events: &[Event]) -> Touched {
         }
     }
     touched
+}
+
+/// Los renames del lote, emparejados por el cookie de inotify: notify da un
+/// `Both` si vio el par seguido, y si no, `From` y `To` con el mismo cookie.
+/// Lo que llega desde lo que el vault no ve (el temporal oculto de un
+/// guardado atómico, otra carpeta) es contenido nuevo en el destino.
+fn follow_renames(root: &Path, events: &[Event], touched: &mut Touched) {
+    let named = |event: &Event| -> Vec<Option<VaultPath>> {
+        event
+            .paths
+            .iter()
+            .map(|path| VaultPath::from_fs(root, path))
+            .collect()
+    };
+    let mut both = HashSet::new();
+    let mut sources = HashMap::new();
+    for event in events {
+        match (event.kind, event.attrs.tracker()) {
+            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), Some(tracker)) => {
+                both.insert(tracker);
+            }
+            (EventKind::Modify(ModifyKind::Name(RenameMode::From)), Some(tracker)) => {
+                if let [source] = named(event).as_slice() {
+                    sources.insert(tracker, source.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    for event in events {
+        let source = match (event.kind, named(event).as_slice()) {
+            (EventKind::Modify(ModifyKind::Name(RenameMode::Both)), [from, Some(to)]) => {
+                Some((from.clone(), to.clone()))
+            }
+            (EventKind::Modify(ModifyKind::Name(RenameMode::To)), [Some(to)]) => {
+                match event.attrs.tracker() {
+                    Some(tracker) if both.contains(&tracker) => None,
+                    tracker => Some((
+                        tracker.and_then(|tracker| sources.get(&tracker).cloned().flatten()),
+                        to.clone(),
+                    )),
+                }
+            }
+            _ => None,
+        };
+        match source {
+            Some((Some(from), to)) => touched.renames.push((from, to)),
+            Some((None, to)) => {
+                touched.written.insert(to);
+            }
+            None => {}
+        }
+    }
 }
 
 /// Tras un error del watcher pudo perderse algo: se relee lo que el error
@@ -169,6 +198,27 @@ mod tests {
         let touched = touched(root, &inside);
         assert_eq!(written(&touched), Vec::<&str>::new());
         assert_eq!(touched.renames.len(), 1);
+    }
+
+    #[test]
+    fn un_from_y_un_to_con_el_mismo_cookie_son_un_rename() {
+        // Dos renames cruzados: notify solo recuerda el último `From`, así
+        // que el primero llega sin `Both`.
+        let events = [
+            renamed(RenameMode::From, &["/v/a.md"], 1),
+            renamed(RenameMode::From, &["/v/c.md"], 2),
+            renamed(RenameMode::To, &["/v/b.md"], 1),
+            renamed(RenameMode::To, &["/v/d.md"], 2),
+            renamed(RenameMode::Both, &["/v/c.md", "/v/d.md"], 2),
+        ];
+        let touched = touched(Path::new("/v"), &events);
+        let renames: Vec<_> = touched
+            .renames
+            .iter()
+            .map(|(from, to)| (from.as_str(), to.as_str()))
+            .collect();
+        assert_eq!(renames, [("a.md", "b.md"), ("c.md", "d.md")]);
+        assert_eq!(written(&touched), Vec::<&str>::new());
     }
 
     #[test]
