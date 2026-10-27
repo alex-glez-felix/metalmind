@@ -113,6 +113,12 @@ const SCENES: &[(&str, &[Step])] = &[
     ("finder-buzon", &[Step::Keys("<C-u>-#")]),
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    (
+        "buscar-escrito-largo",
+        &[Step::Keys(
+            "<C-u>zeta y un patron de busqueda mucho mas largo que el ancho del picker, para ver que el cursor sigue a la vista",
+        )],
+    ),
     ("buscar-cjk", &[Step::SearchAfterCjk]),
     ("paleta", &[Step::Keys("<Esc><C-S-p>")]),
     // `ctrl-p` desde la primera fila da la vuelta: el final de la lista.
@@ -297,6 +303,9 @@ const SCENES: &[(&str, &[Step])] = &[
             "<C-u>entrevistas/2026/octubre/una entrevista con un nombre larguisimo para ver como se recorta la ruta en la fila del picker",
         )],
     ),
+    // El input se corre hasta el cursor (#147): al final de lo escrito y,
+    // con `ctrl-a`, de vuelta al principio.
+    ("plantilla-nombre-largo-inicio", &[Step::Keys("<C-a>")]),
     ("plantilla-creada", &[Step::Keys("<CR>")]),
     ("nota-del-dia", &[Step::Keys("<Esc>:today<CR>")]),
     // El resto del menú de un tag (05 §3): el menú entero sobre `#Rust`, la

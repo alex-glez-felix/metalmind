@@ -11,8 +11,8 @@ mod row_line;
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, EventEmitter, FocusHandle, Focusable, KeyContext, ScrollStrategy, SharedString,
-    UniformListScrollHandle, Window,
+    Context, EventEmitter, FocusHandle, Focusable, KeyContext, ScrollHandle, ScrollStrategy,
+    SharedString, UniformListScrollHandle, Window,
 };
 
 use metalmind_keymap::{Action, PickerAction, context};
@@ -110,6 +110,9 @@ pub struct PickerView<D> {
     options: PickerOptions,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
+    /// El texto del input se corre a lo ancho para que el cursor siempre se
+    /// vea, como la línea de comandos de vim.
+    input_scroll: ScrollHandle,
     /// Preedit del IME o de una tecla muerta.
     marked: Option<String>,
 }
@@ -129,6 +132,7 @@ impl<D: PickerDelegate> PickerView<D> {
             options,
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
+            input_scroll: ScrollHandle::new(),
             marked: None,
         }
     }
@@ -216,3 +220,6 @@ impl<D: PickerDelegate> PickerView<D> {
         key_context
     }
 }
+
+#[cfg(test)]
+mod tests;
