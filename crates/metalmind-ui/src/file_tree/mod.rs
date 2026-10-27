@@ -57,6 +57,8 @@ pub struct FileTree {
     in_scope: Option<Arc<InScope>>,
     rows: Vec<Row>,
     selected_row: Option<usize>,
+    /// El usuario quitó la selección: así la deja el árbol.
+    cleared: bool,
 }
 
 impl FileTree {
@@ -82,6 +84,7 @@ impl FileTree {
             in_scope: None,
             rows: Vec::new(),
             selected_row: None,
+            cleared: false,
         };
         tree.prune();
         tree.rebuild();
@@ -142,6 +145,14 @@ impl FileTree {
             }
             None => false,
         }
+    }
+
+    /// Sin fila elegida hasta que se elija otra o se revele algo: los
+    /// cambios de las filas no eligen una por su cuenta.
+    pub fn clear_selection(&mut self) {
+        self.selected = None;
+        self.selected_row = None;
+        self.cleared = true;
     }
 
     /// Selecciona `path` ahora o, si todavía no está en el índice, cuando
@@ -266,7 +277,8 @@ impl FileTree {
     }
 
     /// Rehace las filas; la selección se queda en su ruta si sigue a la
-    /// vista y, si no, en la fila que ocupaba.
+    /// vista y, si no, en la fila que ocupaba. Si el usuario la quitó, no
+    /// vuelve.
     fn refresh_keeping_selection(&mut self) {
         let previous_row = self.selected_row;
         self.rebuild();
@@ -276,7 +288,8 @@ impl FileTree {
             .and_then(|path| self.rows.iter().position(|row| &row.path == path));
         match (found, previous_row) {
             (Some(row), _) | (None, Some(row)) => self.select_row(row),
-            (None, None) => self.select_row(0),
+            (None, None) if !self.cleared => self.select_row(0),
+            (None, None) => {}
         }
     }
 
@@ -349,6 +362,7 @@ impl Outline for FileTree {
         let row = row.min(last);
         self.selected = Some(self.rows[row].path.clone());
         self.selected_row = Some(row);
+        self.cleared = false;
     }
 
     /// `h`: cierra la carpeta seleccionada o, si ya está cerrada o es un

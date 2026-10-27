@@ -216,6 +216,28 @@ fn si_lo_seleccionado_desaparece_queda_la_fila_de_su_lugar() {
     assert_eq!(tree.selected(), Some(&path("proyectos")));
 }
 
+/// Sin selección, ni el watcher ni el filtro eligen una fila; `j` vuelve a
+/// la primera.
+#[test]
+fn quitar_la_seleccion_dura_hasta_moverse() {
+    let mut tree = FileTree::new(index(VAULT));
+    tree.clear_selection();
+    assert_eq!(tree.selected(), None);
+    let mut with: Vec<&str> = VAULT.to_vec();
+    with.push("c.md");
+    let created = VaultChange::Created {
+        path: path("c.md"),
+        kind: EntryKind::Note,
+    };
+    tree.apply(&[created], index(&with), None);
+    tree.set_filter("nota");
+    tree.set_filter("");
+    assert_eq!(tree.selected(), None);
+    assert_eq!(tree.selected_entry(), None);
+    tree.select_next();
+    assert_eq!(render(&tree)[0], "▸ diario *");
+}
+
 #[test]
 fn borrar_una_carpeta_abierta_la_olvida() {
     let mut tree = FileTree::new(index(VAULT));

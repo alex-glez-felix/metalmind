@@ -164,7 +164,7 @@ proptest! {
     fn aplicar_cambios_da_el_arbol_de_cero(
         setup in prop::collection::vec(op(), 0..25),
         open in prop::collection::vec(any::<bool>(), 25),
-        selected in any::<usize>(),
+        selected in any::<Option<usize>>(),
         batches in prop::collection::vec(prop::collection::vec(op(), 1..5), 1..10),
     ) {
         let mut disk = Disk::default();
@@ -182,15 +182,18 @@ proptest! {
         let expanded_ids: BTreeSet<u32> =
             expanded.iter().filter_map(|path| disk.id_of(path)).collect();
         let mut tree = FileTree::with_expanded(disk.index(), expanded);
-        if let Some(row) = tree.rows().len().checked_sub(1).map(|last| selected % (last + 1)) {
-            tree.select_row(row);
+        match (selected, tree.rows().len().checked_sub(1)) {
+            (Some(selected), Some(last)) => tree.select_row(selected % (last + 1)),
+            (None, _) => tree.clear_selection(),
+            (Some(_), None) => {}
         }
+        let cleared = selected.is_none();
         let mut selected_id = tree.selected().and_then(|path| disk.id_of(path));
 
         for batch in &batches {
             let changes: Vec<VaultChange> = batch.iter().flat_map(|op| disk.apply(op)).collect();
             tree.apply(&changes, disk.index(), None);
-            check_selection(&tree, &disk, selected_id)?;
+            check_selection(&tree, &disk, selected_id, cleared)?;
             // Si cayó en otra fila, desde aquí se sigue a la nueva.
             selected_id = tree.selected().and_then(|path| disk.id_of(path));
         }
@@ -206,11 +209,13 @@ proptest! {
 }
 
 /// Lo seleccionado sigue a su archivo mientras se vea; si no se ve, queda
-/// una fila que sí se ve, y nada solo con el árbol vacío.
+/// una fila que sí se ve, y nada con el árbol vacío o si se quitó la
+/// selección (`cleared`).
 fn check_selection(
     tree: &FileTree,
     disk: &Disk,
     selected_id: Option<u32>,
+    cleared: bool,
 ) -> Result<(), TestCaseError> {
     let visible = |path: &VaultPath| tree.rows().iter().any(|row| &row.path == path);
     match selected_id
@@ -218,7 +223,7 @@ fn check_selection(
         .filter(|path| visible(path))
     {
         Some(path) => prop_assert_eq!(tree.selected(), Some(path)),
-        None if tree.rows().is_empty() => prop_assert_eq!(tree.selected(), None),
+        None if cleared || tree.rows().is_empty() => prop_assert_eq!(tree.selected(), None),
         None => prop_assert!(tree.selected().is_some_and(visible)),
     }
     prop_assert_eq!(

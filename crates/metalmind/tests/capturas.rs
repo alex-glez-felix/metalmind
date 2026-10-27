@@ -507,6 +507,12 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Space>vbuz<CR>jt#ideas rust")],
     ),
     ("lista-etiquetada", &[Step::Keys("<CR>")]),
+    // El árbol sin selección (#189): `esc` la quita y lo nuevo va a la raíz.
+    (
+        "arbol-sin-seleccion",
+        &[Step::Keys("<Esc><Esc><C-w>l<Space>egg<Esc>")],
+    ),
+    ("arbol-nueva-carpeta-raiz", &[Step::Keys("A")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

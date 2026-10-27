@@ -171,7 +171,7 @@ impl Sidebar {
         }
         let active = self.active(cx);
         let theme = theme.clone();
-        uniform_list(
+        let list = uniform_list(
             "file-tree",
             rows,
             cx.processor(move |sidebar, range: Range<usize>, _, cx| {
@@ -179,8 +179,19 @@ impl Sidebar {
             }),
         )
         .track_scroll(&self.scroll)
-        .flex_1()
-        .into_any_element()
+        .flex_1();
+        // Las filas no dejan subir su clic: aquí solo llega el del espacio vacío.
+        div()
+            .id("file-tree-area")
+            .flex_1()
+            .flex()
+            .flex_col()
+            .on_click(cx.listener(|sidebar, _, _, cx| {
+                sidebar.panel.tree.clear_selection();
+                cx.notify();
+            }))
+            .child(list)
+            .into_any_element()
     }
 
     fn rows(
@@ -312,6 +323,7 @@ pub(super) fn row_frame(
             gpui_kit::transparent_black()
         })
         .on_click(cx.listener(move |sidebar, event: &ClickEvent, window, cx| {
+            cx.stop_propagation();
             sidebar.click(at, event, window, cx);
         }))
         .on_mouse_down(

@@ -60,7 +60,7 @@ impl Sidebar {
 
 fn folder_name(path: &VaultPath) -> String {
     if path.is_root() {
-        "la raíz".to_owned()
+        "la raíz del vault".to_owned()
     } else {
         format!("{path}/")
     }

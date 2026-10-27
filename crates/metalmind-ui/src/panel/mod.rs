@@ -454,13 +454,17 @@ impl Panel {
         self.prompt = Some(prompt);
     }
 
-    /// `Escape` sin menú: cierra la pregunta o, si no hay, quita el filtro
-    /// de carpetas cuando es la vista que se ve.
+    /// `Escape` sin menú: cierra la pregunta o, si no hay y se ve el árbol
+    /// de carpetas, quita su filtro y luego su selección, una cosa a la vez.
     pub fn escape(&mut self) {
         if self.prompt.is_some() {
             self.cancel();
         } else if self.view == PanelView::Folders {
-            self.tree.set_filter("");
+            if self.tree.is_filtering() {
+                self.tree.set_filter("");
+            } else {
+                self.tree.clear_selection();
+            }
         }
     }
 

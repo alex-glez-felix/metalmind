@@ -105,6 +105,29 @@ fn crear_dentro_de_la_carpeta_o_junto_al_archivo() {
     }
 }
 
+/// `Escape` quita primero el filtro y luego la selección; sin selección se
+/// crea en la raíz, aunque antes hubiera una carpeta elegida (#189).
+#[test]
+fn escape_quita_la_seleccion_y_se_crea_en_la_raiz() {
+    let mut panel = panel();
+    panel.tree.select(&path("diario"));
+    panel.start_filter();
+    type_text(&mut panel, "diario");
+    panel.confirm();
+    panel.escape();
+    assert_eq!(panel.tree.filter(), "");
+    assert_eq!(panel.tree.selected(), Some(&path("diario")));
+    panel.escape();
+    assert_eq!(panel.tree.selected(), None);
+    panel.start_create(NewEntry::Folder);
+    assert!(matches!(
+        panel.prompt(),
+        Some(Prompt::Create { parent, .. }) if parent.is_root()
+    ));
+    type_text(&mut panel, "tags");
+    assert_eq!(panel.confirm(), Some(Request::CreateFolder(path("tags"))));
+}
+
 #[test]
 fn una_extension_sin_nombre_no_es_una_nota() {
     for name in [".md", "x/.MD"] {
