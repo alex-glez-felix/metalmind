@@ -177,7 +177,9 @@ const SCENES: &[(&str, &[Step])] = &[
     (
         "formulas-larga",
         &[
-            Step::Keys(":e formulas-larga.md<CR>:set nornu<CR>"),
+            // La línea de fórmulas rotas tiene que pasar del borde: sin wrap,
+            // que desde #182 viene puesto.
+            Step::Keys(":e formulas-larga.md<CR>:set nornu nowrap<CR>"),
             Step::FormulasZone,
             Step::HoverBrokenFormula,
         ],
