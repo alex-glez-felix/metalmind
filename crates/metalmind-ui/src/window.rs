@@ -132,7 +132,8 @@ pub fn open_window(
                 .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));
             workspace
         });
-        let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
+        let sidebar =
+            cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), window, cx));
         if let Some(file) = &file {
             sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
         }

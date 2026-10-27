@@ -65,8 +65,13 @@ pub struct Sidebar {
     tag_scroll: UniformListScrollHandle,
     backlink_scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
+    /// Se abrió una nota desde los backlinks sin dejar el panel: la lista
+    /// se queda en su nota hasta que el foco sale del panel, para poder
+    /// recorrerla abriendo cada una.
+    holding_backlinks: bool,
     _changes: Subscription,
     _workspace: Subscription,
+    _focus_out: Subscription,
 }
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
@@ -77,6 +82,7 @@ impl Sidebar {
         session: &Entity<VaultSession>,
         state: &PanelState,
         workspace: Entity<Workspace>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let vault = session.read(cx).vault();
@@ -88,6 +94,14 @@ impl Sidebar {
         // La nota activa se marca en el árbol y sus backlinks se muestran:
         // cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |sidebar, _, cx| {
+            if !sidebar.holding_backlinks {
+                sidebar.follow_active(cx);
+            }
+            cx.notify();
+        });
+        let focus_handle = cx.focus_handle();
+        let focus_out = cx.on_focus_out(&focus_handle, window, |sidebar, _, _, cx| {
+            sidebar.holding_backlinks = false;
             sidebar.follow_active(cx);
             cx.notify();
         });
@@ -97,13 +111,15 @@ impl Sidebar {
             panel,
             vault,
             workspace,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             scroll: UniformListScrollHandle::new(),
             tag_scroll: UniformListScrollHandle::new(),
             backlink_scroll: UniformListScrollHandle::new(),
             menu: None,
+            holding_backlinks: false,
             _changes: changes,
             _workspace: workspace_changes,
+            _focus_out: focus_out,
         };
         sidebar.follow_active(cx);
         sidebar
@@ -208,11 +224,17 @@ impl Sidebar {
         self.panel.set_tags(Arc::clone(&update.tags));
         self.panel.backlinks.follow(&update.changes);
         self.panel.backlinks.set_index(Arc::clone(&update.links));
+        let chosen_backlink = self.panel.backlinks.selected_id().cloned();
         self.refresh_backlinks();
+        let still_chosen = self.panel.backlinks.selected_id() == chosen_backlink.as_ref();
         let selected = self.panel.outline().selected_path();
         let selected_tag = self.panel.selected_tag();
+        // El menú de un backlink abre en su link: si el lote cambió de fila
+        // elegida, abriría otro.
+        let backlink_moved = self.panel.view == PanelView::Backlinks && !still_chosen;
         if let Some(menu) = &mut self.menu
-            && !menu.still_on(&update.changes, selected, selected_tag.as_deref())
+            && (backlink_moved
+                || !menu.still_on(&update.changes, selected, selected_tag.as_deref()))
         {
             self.menu = None;
         }
@@ -254,6 +276,9 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         let file = shown_path(&self.vault.root().join(path.as_str()));
+        if self.panel.view == PanelView::Backlinks && !focus_editor {
+            self.holding_backlinks = true;
+        }
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             match at {
