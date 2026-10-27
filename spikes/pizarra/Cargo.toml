@@ -1,0 +1,40 @@
+[package]
+name = "metalmind-spike-pizarra"
+description = "Spike de la pizarra: formato sobre JSON Canvas, flechas que se pegan y se re-enrutan, pintado nativo en GPUI y comparación con .excalidraw."
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[features]
+default = ["rough"]
+# Trazo a mano alzada con roughr (port de rough.js). Sin ella, solo el estilo
+# limpio: así se mide cuánto suma roughr al binario.
+rough = ["dep:roughr"]
+
+[dependencies]
+# lyon en la versión que ya trae GPUI: teselar no suma un crate.
+lyon = "=1.0.19"
+roughr = { version = "=0.14.0", optional = true }
+serde = { version = "=1.0.229", features = ["derive"] }
+# `preserve_order`: reescribir un .excalidraw sin cambiar el orden de sus claves.
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+similar = "=3.2.1"
+thiserror = "=2.0.21"
+
+[dev-dependencies]
+# Solo los ejemplos abren ventana: la biblioteca del spike no depende de GPUI,
+# como el núcleo de Metalmind.
+env_logger = "=0.11.11"
+gpui-kit = { version = "=0.7.3", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+todo = "deny"
+dbg_macro = "deny"
+allow_attributes_without_reason = "deny"

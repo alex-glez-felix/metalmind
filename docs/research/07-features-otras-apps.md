@@ -136,7 +136,7 @@ Lo que hacen bien las apps de tags primero y qué aprovecha Metalmind está en e
 | Transclusión editable | Editar el bloque incrustado cambia el original | Notion [synced blocks](https://www.notion.com/help/synced-blocks); [org-transclusion](https://github.com/nobiot/org-transclusion) | Bajo: M5 ya tiene transclusión de solo lectura. Editar a través de otro archivo complica el undo, el historial y los conflictos. | — | **No encaja** (solo lectura basta) |
 | Filtros por grafo | Huérfanas, links rotos, backlinks que faltan, relacionadas por vecinos | [zk](https://zk-org.github.io/zk/notes/note-filtering.html) | Alto: salen del índice de links. | No | Huérfanas y links rotos, **MVP** (M3, pregunta 11); el resto, **Después** |
 | Grafo 2D/3D | — | [org-roam-ui](https://github.com/org-roam/org-roam-ui), Obsidian | Ya decidido: baja (06 §11). | — | Ya contemplado |
-| Canvas | Lienzo infinito; el formato abierto es [JSON Canvas](https://jsoncanvas.org/) | Obsidian, Heptabase (b) | Bajo: es otra app dentro de la app. | No | **No encaja** por ahora |
+| Canvas | Lienzo infinito; el formato abierto es [JSON Canvas](https://jsoncanvas.org/) | Obsidian, Heptabase (b) | Bajo: es otra app dentro de la app. [09](09-pizarra.md) lo revisa con un spike: formato JSON Canvas con cuatro extensiones y render nativo en GPUI. | No | **No encaja** por ahora; 09 propone **Después**, por fases (pendiente de decisión) |
 | IDs Zettelkasten | Un timestamp como destino del link | [Zettlr](https://docs.zettlr.com/en/pkms/zkn-method.html) | Bajo: choca con "la ruta es la identidad". | — | **No encaja** |
 | Fechas en lenguaje natural | `[[next monday]]` | [Markdown Oxide](https://oxide.md/index) | Bajo: daily notes está apagado por defecto. | — | **No encaja** |
 
