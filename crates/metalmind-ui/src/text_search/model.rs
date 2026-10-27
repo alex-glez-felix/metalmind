@@ -136,6 +136,24 @@ impl TextSearchState {
         if self.pending_choice.is_some() || !self.line.apply(edit) {
             return None;
         }
+        self.restart()
+    }
+
+    /// Otras notas del focus, como tras un lote del watcher: si cambiaron y
+    /// hay algo escrito, devuelve la búsqueda de lo escrito entre ellas.
+    pub fn set_scope(&mut self, scope: Option<Arc<HashSet<VaultPath>>>) -> Option<Search> {
+        if self.scope.as_deref() == scope.as_deref() {
+            return None;
+        }
+        self.scope = scope;
+        if self.pending_choice.is_some() || self.line.text().is_empty() {
+            return None;
+        }
+        self.restart()
+    }
+
+    /// La búsqueda de lo escrito, con una versión nueva.
+    fn restart(&mut self) -> Option<Search> {
         let query = TextQuery {
             pattern: self.line.text().to_owned(),
             syntax: Syntax::Regex,

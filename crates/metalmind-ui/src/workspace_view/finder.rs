@@ -163,15 +163,22 @@ impl WorkspaceView {
         self.run(&edit, window, cx);
     }
 
+    /// El finder o la búsqueda abiertos, con lo que trajo otro lote del
+    /// watcher o cambió el focus.
     fn refresh_finder(&mut self, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
         let (notes, tags) = (session.notes(), session.tags());
-        if let Some(Overlay::Finder { picker, .. }) = &self.overlay {
-            picker.update(cx, |picker, cx| {
+        let scope = session.in_scope().map(|in_scope| in_scope.files());
+        match &self.overlay {
+            Some(Overlay::Finder { picker, .. }) => picker.update(cx, |picker, cx| {
                 picker.update_delegate(cx, |fuzzy, cx| {
                     fuzzy.set_source(notes, Arc::new(TagFilter::new(tags)), cx);
                 });
-            });
+            }),
+            Some(Overlay::TextSearch { picker, .. }) => picker.update(cx, |picker, cx| {
+                picker.update_delegate(cx, |search, _| search.set_scope(scope));
+            }),
+            _ => {}
         }
     }
 

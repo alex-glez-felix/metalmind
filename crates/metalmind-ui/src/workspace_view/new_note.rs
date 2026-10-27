@@ -104,32 +104,28 @@ impl WorkspaceView {
             .unwrap_or_default()
     }
 
-    /// `a` en el panel lateral, que ya eligió la ruta: la nota nace vacía
-    /// o, en focus de tags, con ellos y la plantilla que pidan.
+    /// `a` en el panel lateral: lo que salga mal se dice en el panel, donde
+    /// se pidió.
     pub(super) fn create_panel_note(
         &mut self,
         path: &VaultPath,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let templates = self.templates(cx).unwrap_or_default();
-        let created = NotePath::parse(path.as_str())
-            .map_err(NameProblem::from)
-            .and_then(|note| {
-                let tags = self.session.read(cx).tags();
-                let focused = self.focused_note(cx);
-                let draft = Origin::Blank.draft(
-                    &note.title,
-                    &focused.tags,
-                    &templates,
-                    tags.graph(),
-                    &Zoned::now(),
-                );
-                self.create_note(&note, &draft, Open::Here, window, cx)
-            });
-        if let Err(problem) = created {
-            self.sidebar
-                .update(cx, |sidebar, cx| sidebar.report(&problem, cx));
+        let session = self.session.read(cx);
+        let created = new_note::create_in_panel(
+            &session.vault(),
+            &self.notes,
+            path,
+            &self.focused_note(cx).tags,
+            session.tags().graph(),
+            &Zoned::now(),
+        );
+        match created {
+            Ok(landing) => self.land(&landing, Placement::Current, window, cx),
+            Err(error) => self
+                .sidebar
+                .update(cx, |sidebar, cx| sidebar.report(&error, cx)),
         }
     }
 

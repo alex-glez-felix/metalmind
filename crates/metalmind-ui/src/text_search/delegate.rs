@@ -10,7 +10,7 @@ use gpui_kit::{Context, SharedString, Task};
 use metalmind_vault::VaultPath;
 
 use super::context::row_text;
-use super::model::{MAX_HITS, Status, TextSearchState};
+use super::model::{MAX_HITS, Search, Status, TextSearchState};
 use super::worker::{Event, SearchWorker};
 use super::{Hit, OpenNote};
 use crate::picker::{
@@ -70,6 +70,21 @@ impl TextSearch {
         self.state.hit(item)
     }
 
+    /// Las notas del focus de otro lote del watcher: lo escrito se vuelve a
+    /// buscar si cambiaron.
+    pub fn set_scope(&mut self, scope: Option<Arc<HashSet<VaultPath>>>) {
+        if let Some(search) = self.state.set_scope(scope) {
+            self.launch(search);
+        }
+    }
+
+    fn launch(&mut self, search: Search) {
+        match &self.worker {
+            Ok(worker) => worker.search(search),
+            Err(error) => self.state.failed(search.version, error.clone()),
+        }
+    }
+
     fn handle(&mut self, event: Event, cx: &mut Context<PickerView<Self>>) {
         match event {
             Event::Found { version, notes } => {
@@ -109,12 +124,8 @@ impl PickerDelegate for TextSearch {
     }
 
     fn edit(&mut self, edit: LineEdit<'_>, _cx: &mut Context<PickerView<Self>>) {
-        let Some(search) = self.state.edit(edit) else {
-            return;
-        };
-        match &self.worker {
-            Ok(worker) => worker.search(search),
-            Err(error) => self.state.failed(search.version, error.clone()),
+        if let Some(search) = self.state.edit(edit) {
+            self.launch(search);
         }
     }
 

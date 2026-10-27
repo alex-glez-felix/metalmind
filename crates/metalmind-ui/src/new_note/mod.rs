@@ -9,8 +9,8 @@ use std::fmt::Write as _;
 use jiff::Zoned;
 use metalmind_config::Daily;
 use metalmind_template::{
-    DailyError, Draft, NewNote, NotePath, Pick, Templates, daily_note, draft, tag_of_template,
-    tags_asking_for, templates_folder,
+    DailyError, Draft, NameError, NewNote, NotePath, Pick, Templates, daily_note, draft,
+    tag_of_template, tags_asking_for, templates_folder,
 };
 use metalmind_vault::tags::{TagGraph, TagKey};
 use metalmind_vault::{FileOpError, InvalidPath, Vault, VaultIndex, VaultPath};
@@ -199,6 +199,41 @@ impl Landing {
 pub fn create(vault: &Vault, note: &NotePath, draft: &Draft) -> Result<Landing, FileOpError> {
     vault.create_note(&note.path, &draft.text)?;
     Ok(Landing::created(note.path.clone(), draft))
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PanelNoteError {
+    #[error(transparent)]
+    Folder(#[from] FolderError),
+    #[error(transparent)]
+    Name(#[from] NameError),
+    #[error(transparent)]
+    Create(#[from] FileOpError),
+}
+
+/// `a` en el panel lateral, que ya eligió la ruta: la nota nace vacía o, en
+/// focus de tags (`focus_tags`), con ellos y la plantilla que pida alguno.
+/// Sin tags ninguna plantilla aplica, así que no se leen.
+///
+/// # Errors
+/// Si la ruta no es de una nota, ya existe o no se pudo escribir, o si hay
+/// tags y la carpeta de plantillas de la config no vale.
+pub fn create_in_panel(
+    vault: &Vault,
+    settings: &NoteSettings,
+    path: &VaultPath,
+    focus_tags: &[String],
+    graph: &TagGraph,
+    now: &Zoned,
+) -> Result<Landing, PanelNoteError> {
+    let note = NotePath::parse(path.as_str())?;
+    let templates = if focus_tags.is_empty() {
+        Templates::default()
+    } else {
+        load_templates(vault, &vault.snapshot(), &settings.templates_folder)?
+    };
+    let draft = Origin::Blank.draft(&note.title, focus_tags, &templates, graph, now);
+    Ok(create(vault, &note, &draft)?)
 }
 
 #[derive(Debug, thiserror::Error)]

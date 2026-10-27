@@ -298,3 +298,29 @@ fn en_focus_cada_busqueda_lleva_sus_notas() {
             .is_none()
     );
 }
+
+/// Otro lote del watcher cambia qué notas están en el focus: lo escrito se
+/// vuelve a buscar solo si cambiaron y hay algo escrito.
+#[test]
+fn otras_notas_del_focus_vuelven_a_buscar_lo_escrito() {
+    let scope = |notes: &[&str]| Some(Arc::new(notes.iter().map(|note| path(note)).collect()));
+    let mut state = TextSearchState::new().with_scope(scope(&["a.md"]).unwrap());
+    assert!(
+        state.set_scope(scope(&["b.md"])).is_none(),
+        "sin nada escrito"
+    );
+    let first = typed(&mut state, "idea");
+    assert!(
+        state.set_scope(scope(&["b.md"])).is_none(),
+        "las mismas notas"
+    );
+    let again = state.set_scope(scope(&["a.md", "b.md"])).unwrap();
+    assert!(again.version > first.version);
+    assert_eq!(again.query.pattern, "idea");
+    assert_eq!(again.query.scope, scope(&["a.md", "b.md"]));
+    assert_eq!(state.status(), Status::Searching);
+    assert!(
+        state.set_scope(None).unwrap().query.scope.is_none(),
+        "sin focus"
+    );
+}

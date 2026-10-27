@@ -24,8 +24,7 @@ impl WorkspaceView {
             .unsaved_files()
             .filter_map(|(file, document)| {
                 let path = session.vault_path(file)?;
-                let in_scope = scope.as_ref().is_none_or(|scope| scope.contains(&path));
-                (in_scope && session.vault().is_searchable(&path)).then(|| OpenNote {
+                session.vault().is_searchable(&path).then(|| OpenNote {
                     path,
                     text: document.buffer().snapshot(),
                 })
