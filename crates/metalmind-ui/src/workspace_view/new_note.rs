@@ -117,7 +117,7 @@ impl WorkspaceView {
             &session.vault(),
             &self.notes,
             path,
-            &self.focused_note(cx).tags,
+            &self.focused_note(cx),
             session.tags().graph(),
             &Zoned::now(),
         );

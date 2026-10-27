@@ -10,6 +10,7 @@ use rstest::rstest;
 use metalmind_template::NameError;
 
 use super::*;
+use crate::focus::FocusedNote;
 use crate::picker::LineEdit;
 
 fn now() -> Zoned {
@@ -127,7 +128,13 @@ fn la_plantilla_conserva_sus_tags_y_el_cursor_va_a_la_primera_seccion() {
     let templates = templates(&vault);
     let origin = Origin::Template("entrevista".to_owned());
     let note = NotePath::parse("entrevistas/Backend senior").unwrap();
-    let draft = origin.draft(&note.title, &[], &templates, vault.tags().graph(), &now());
+    let draft = origin.draft(
+        &note.title,
+        &FocusedNote::default(),
+        &templates,
+        vault.tags().graph(),
+        &now(),
+    );
     let landing = create(&vault, &note, &draft).unwrap();
     let text = read(dir.path(), "entrevistas/Backend senior.md");
     assert_eq!(
@@ -150,7 +157,7 @@ fn el_unico_tag_que_pide_la_plantilla_queda_puesto() {
     let origin = Origin::Template("trabajo/semanal".to_owned());
     let draft = origin.draft(
         "Semana",
-        &[],
+        &FocusedNote::default(),
         &templates(&vault),
         vault.tags().graph(),
         &now(),
@@ -165,7 +172,13 @@ fn el_unico_tag_que_pide_la_plantilla_queda_puesto() {
 fn dos_tags_que_piden_la_misma_plantilla_no_ponen_ninguno() {
     let (_dir, vault) = standard();
     let origin = Origin::Template("diario".to_owned());
-    let draft = origin.draft("hoy", &[], &templates(&vault), vault.tags().graph(), &now());
+    let draft = origin.draft(
+        "hoy",
+        &FocusedNote::default(),
+        &templates(&vault),
+        vault.tags().graph(),
+        &now(),
+    );
     assert_eq!(draft.text, "# lunes 26 de octubre\n\n");
 }
 
@@ -174,8 +187,15 @@ fn una_nota_desde_un_tag_usa_la_plantilla_del_tag() {
     let (_dir, vault) = standard();
     let graph = vault.tags().graph().clone();
     let templates = templates(&vault);
-    let from_tag =
-        |tag: &str| Origin::Tag(tag.to_owned()).draft("Plan", &[], &templates, &graph, &now());
+    let from_tag = |tag: &str| {
+        Origin::Tag(tag.to_owned()).draft(
+            "Plan",
+            &FocusedNote::default(),
+            &templates,
+            &graph,
+            &now(),
+        )
+    };
     assert_eq!(
         from_tag("reunion").text,
         "---\ntags: [reunion]\n---\n# Semana del 2026-10-26\n"
@@ -191,7 +211,7 @@ fn crear_nunca_pisa() {
     let note = NotePath::parse("ya").unwrap();
     let draft = Origin::Tag("rust".to_owned()).draft(
         "ya",
-        &[],
+        &FocusedNote::default(),
         &templates(&vault),
         vault.tags().graph(),
         &now(),
@@ -208,7 +228,7 @@ fn los_problemas_de_la_plantilla_llegan_con_la_nota() {
     let (_dir, vault) = vault(&[("plantillas/rota.md", "# {{autor}}\n")]);
     let draft = Origin::Template("rota".to_owned()).draft(
         "x",
-        &[],
+        &FocusedNote::default(),
         &templates(&vault),
         vault.tags().graph(),
         &now(),

@@ -15,6 +15,7 @@ use metalmind_template::{
 use metalmind_vault::tags::{TagGraph, TagKey};
 use metalmind_vault::{FileOpError, InvalidPath, Vault, VaultIndex, VaultPath};
 
+use crate::focus::FocusedNote;
 use crate::picker::PickerItem;
 use crate::workspace::LinePosition;
 
@@ -64,13 +65,14 @@ pub enum Origin {
 }
 
 impl Origin {
-    /// `focus_tags`: los tags con los que nace en el focus (05 §3), además
-    /// de los suyos.
+    /// En `focus` (05 §3), además de los suyos lleva los tags incluidos, y
+    /// una plantilla elegida no le pone un tag que el focus excluye: si no,
+    /// la nota desaparecería del focus en cuanto se crea.
     #[must_use]
     pub fn draft(
         &self,
         title: &str,
-        focus_tags: &[String],
+        focus: &FocusedNote,
         templates: &Templates,
         graph: &TagGraph,
         now: &Zoned,
@@ -78,6 +80,7 @@ impl Origin {
         let (mut tags, pick): (Vec<String>, Pick<'_>) = match self {
             Self::Template(name) => (
                 tag_of_template(graph, name)
+                    .filter(|tag| !focus.excludes(graph, tag))
                     .map(str::to_owned)
                     .into_iter()
                     .collect(),
@@ -86,7 +89,7 @@ impl Origin {
             Self::Tag(tag) => (vec![tag.clone()], Pick::ByTags),
             Self::Blank => (Vec::new(), Pick::ByTags),
         };
-        for tag in focus_tags {
+        for tag in &focus.tags {
             let key = TagKey::new(tag);
             if !tags.iter().any(|own| TagKey::new(own) == key) {
                 tags.push(tag.clone());
@@ -212,8 +215,8 @@ pub enum PanelNoteError {
 }
 
 /// `a` en el panel lateral, que ya eligió la ruta: la nota nace vacía o, en
-/// focus de tags (`focus_tags`), con ellos y la plantilla que pida alguno.
-/// Sin tags ninguna plantilla aplica, así que no se leen.
+/// focus de tags, con ellos y la plantilla que pida alguno. Sin tags
+/// ninguna plantilla aplica, así que no se leen.
 ///
 /// # Errors
 /// Si la ruta no es de una nota, ya existe o no se pudo escribir, o si hay
@@ -222,17 +225,17 @@ pub fn create_in_panel(
     vault: &Vault,
     settings: &NoteSettings,
     path: &VaultPath,
-    focus_tags: &[String],
+    focus: &FocusedNote,
     graph: &TagGraph,
     now: &Zoned,
 ) -> Result<Landing, PanelNoteError> {
     let note = NotePath::parse(path.as_str())?;
-    let templates = if focus_tags.is_empty() {
+    let templates = if focus.tags.is_empty() {
         Templates::default()
     } else {
         load_templates(vault, &vault.snapshot(), &settings.templates_folder)?
     };
-    let draft = Origin::Blank.draft(&note.title, focus_tags, &templates, graph, now);
+    let draft = Origin::Blank.draft(&note.title, focus, &templates, graph, now);
     Ok(create(vault, &note, &draft)?)
 }
 

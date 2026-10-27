@@ -84,3 +84,27 @@ fn los_nodos_del_panel_son_el_mismo_alcance_que_escrito() {
     assert!(folder.same_scope(&Focus::parse("proyectos/app").unwrap().unwrap()));
     assert!(!folder.same_scope(&tag));
 }
+
+/// Si se renombra o se mueve su carpeta, el focus va con ella, y el texto
+/// del indicador también.
+#[test]
+fn sigue_a_su_carpeta_si_se_renombra() {
+    let mut focus = Focus::parse("proyectos/app #rust").unwrap().unwrap();
+    let renamed = |from: &str, to: &str| metalmind_vault::VaultChange::Renamed {
+        from: VaultPath::new(from).unwrap(),
+        to: VaultPath::new(to).unwrap(),
+        kind: metalmind_vault::EntryKind::Folder,
+    };
+    assert!(!focus.follow(&[renamed("otra", "nueva")]));
+    assert!(focus.follow(&[renamed("proyectos", "archivo/proyectos")]));
+    assert_eq!(focus.label(), "focus: archivo/proyectos/app/ #rust");
+    assert!(
+        focus.same_scope(
+            &Focus::parse("#rust archivo/proyectos/app")
+                .unwrap()
+                .unwrap()
+        )
+    );
+    let mut tags = Focus::parse("#rust").unwrap().unwrap();
+    assert!(!tags.follow(&[renamed("proyectos", "otros")]));
+}

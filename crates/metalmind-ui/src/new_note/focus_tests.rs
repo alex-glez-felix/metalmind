@@ -42,17 +42,17 @@ fn focused(vault: &Vault, focus: &str) -> FocusedNote {
         .new_note(&vault.tags())
 }
 
-fn blank(vault: &Vault, focus_tags: &[String]) -> String {
+fn blank(vault: &Vault, focus: &FocusedNote) -> String {
     let templates = load_templates(vault, &vault.snapshot(), "plantillas").unwrap();
     Origin::Blank
-        .draft("Plan", focus_tags, &templates, vault.tags().graph(), &now())
+        .draft("Plan", focus, &templates, vault.tags().graph(), &now())
         .text
 }
 
 #[test]
 fn sin_focus_la_nota_del_panel_nace_vacia() {
     let (_dir, vault) = vault();
-    assert_eq!(blank(&vault, &[]), "");
+    assert_eq!(blank(&vault, &FocusedNote::default()), "");
 }
 
 /// Con la forma establecida de cada tag incluido, no los excluidos, y la
@@ -63,7 +63,7 @@ fn en_focus_de_tags_nace_con_ellos_y_su_plantilla() {
     let note = focused(&vault, "#rust #REUNION -#archivado");
     assert_eq!(note.tags, ["Rust", "reunion"]);
     assert_eq!(
-        blank(&vault, &note.tags),
+        blank(&vault, &note),
         "---\ntags: [Rust, reunion]\n---\n# Semana del 2026-10-26\n"
     );
 }
@@ -72,10 +72,11 @@ fn en_focus_de_tags_nace_con_ellos_y_su_plantilla() {
 fn un_tag_del_focus_que_ya_trae_la_nota_no_se_repite() {
     let (_dir, vault) = vault();
     let templates = load_templates(&vault, &vault.snapshot(), "plantillas").unwrap();
-    let focus_tags = ["Rust".to_owned(), "ui".to_owned()];
+    let focus = focused(&vault, "#rust #ui");
+    assert_eq!(focus.tags, ["Rust", "ui"]);
     let draft = Origin::Tag("rust".to_owned()).draft(
         "Plan",
-        &focus_tags,
+        &focus,
         &templates,
         vault.tags().graph(),
         &now(),
@@ -115,14 +116,14 @@ fn in_panel(
     vault: &Vault,
     folder: &str,
     path: &str,
-    focus_tags: &[String],
+    focus: &FocusedNote,
 ) -> Result<Landing, PanelNoteError> {
     let path = VaultPath::new(path).unwrap();
     create_in_panel(
         vault,
         &settings(folder),
         &path,
-        focus_tags,
+        focus,
         vault.tags().graph(),
         &now(),
     )
@@ -132,13 +133,8 @@ fn in_panel(
 #[test]
 fn en_el_panel_la_nota_nace_con_los_tags_del_focus() {
     let (dir, vault) = vault();
-    let landing = in_panel(
-        &vault,
-        "plantillas",
-        "proyectos/Plan.md",
-        &["reunion".to_owned()],
-    )
-    .unwrap();
+    let focus = focused(&vault, "#reunion");
+    let landing = in_panel(&vault, "plantillas", "proyectos/Plan.md", &focus).unwrap();
     assert_eq!(landing.path.as_str(), "proyectos/Plan.md");
     assert_eq!(
         fs::read_to_string(dir.path().join("proyectos/Plan.md")).unwrap(),
@@ -151,11 +147,30 @@ fn en_el_panel_la_nota_nace_con_los_tags_del_focus() {
 #[test]
 fn las_plantillas_se_leen_solo_si_hay_tags_del_focus() {
     let (dir, vault) = vault();
-    in_panel(&vault, "/", "nueva.md", &[]).unwrap();
+    in_panel(&vault, "/", "nueva.md", &FocusedNote::default()).unwrap();
     assert_eq!(fs::read_to_string(dir.path().join("nueva.md")).unwrap(), "");
     assert!(matches!(
-        in_panel(&vault, "/", "otra.md", &["reunion".to_owned()]),
+        in_panel(&vault, "/", "otra.md", &focused(&vault, "#reunion")),
         Err(PanelNoteError::Folder(_))
     ));
     assert!(!dir.path().join("otra.md").exists());
+}
+
+/// Una plantilla elegida trae el tag que la pide, salvo que el focus lo
+/// excluya: la nota desaparecería del focus en cuanto se crea.
+#[rstest::rstest]
+#[case::lo_excluye("#rust -#reunion", "---\ntags: [Rust]\n---\n# Semana del 2026-10-26\n")]
+#[case::es_el_buzon("-#", "# Semana del 2026-10-26\n")]
+#[case::no_lo_excluye("#rust", "---\ntags: [reunion, Rust]\n---\n# Semana del 2026-10-26\n")]
+fn una_plantilla_no_trae_un_tag_que_el_focus_excluye(#[case] focus: &str, #[case] expected: &str) {
+    let (_dir, vault) = vault();
+    let templates = load_templates(&vault, &vault.snapshot(), "plantillas").unwrap();
+    let draft = Origin::Template("semanal".to_owned()).draft(
+        "Plan",
+        &focused(&vault, focus),
+        &templates,
+        vault.tags().graph(),
+        &now(),
+    );
+    assert_eq!(draft.text, expected);
 }

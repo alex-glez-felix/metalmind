@@ -73,7 +73,7 @@ impl NameQuestion {
         let note = self.answer()?;
         let draft = self
             .origin
-            .draft(&note.title, &self.focused.tags, &self.templates, graph, now);
+            .draft(&note.title, &self.focused, &self.templates, graph, now);
         Ok((note, draft))
     }
 

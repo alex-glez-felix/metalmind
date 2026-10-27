@@ -228,11 +228,16 @@ impl VaultSession {
             self.save();
         }
         self.tags = Arc::clone(&update.tags);
+        let mut moved = false;
         if let Some((focus, in_scope)) = &mut self.focus {
+            moved = focus.follow(&update.changes);
             *in_scope = Arc::new(focus.resolve(&update.snapshot, &self.tags));
         }
         self.notes = self.list(&update.snapshot);
         cx.emit(VaultChanged(update));
+        if moved {
+            cx.emit(FocusChanged);
+        }
         // Se pierde al aparecer carpetas, así que llega con un lote.
         if let (None, Some(reason)) = (self.unwatched, self.vault.unwatched()) {
             self.unwatched = Some(reason);

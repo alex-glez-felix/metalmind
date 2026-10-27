@@ -4,8 +4,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use metalmind_vault::tags::{Scope, ScopeError, TagKey, TagQuery, Tags};
-use metalmind_vault::{VaultIndex, VaultPath};
+use metalmind_vault::tags::{Scope, ScopeError, TagGraph, TagKey, TagQuery, Tags};
+use metalmind_vault::{VaultChange, VaultIndex, VaultPath};
 
 /// Un alcance puesto: `:focus proyectos/ #rust`, o un nodo del panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,7 +81,42 @@ impl Focus {
         FocusedNote {
             folder: self.scope.folder.clone(),
             tags: self.scope.new_note_tags(tags),
+            excluded: self.scope.tags.exclude.clone(),
+            untagged: self.scope.tags.untagged,
         }
+    }
+
+    /// Sigue a su carpeta si un lote del watcher la renombra o la mueve.
+    /// Devuelve si cambió.
+    pub fn follow(&mut self, changes: &[VaultChange]) -> bool {
+        let Some(folder) = &self.scope.folder else {
+            return false;
+        };
+        let mut moved = folder.clone();
+        for change in changes {
+            if let VaultChange::Renamed { from, to, .. } = change
+                && let Some(rebased) = moved.rebase(from, to)
+            {
+                moved = rebased;
+            }
+        }
+        if &moved == folder {
+            return false;
+        }
+        let words: Vec<String> = self
+            .text
+            .split(' ')
+            .map(|word| {
+                if word.starts_with('#') || word.starts_with("-#") {
+                    word.to_owned()
+                } else {
+                    format!("{moved}/")
+                }
+            })
+            .collect();
+        self.text = words.join(" ");
+        self.scope.folder = Some(moved);
+        true
     }
 
     /// Qué hay dentro del alcance en `index` con estos `tags`.
@@ -114,6 +149,27 @@ impl Focus {
 pub struct FocusedNote {
     pub folder: Option<VaultPath>,
     pub tags: Vec<String>,
+    /// Lo que el focus deja fuera: una plantilla elegida no trae esos tags.
+    excluded: Vec<TagKey>,
+    /// `-#`: el focus son las notas sin tags.
+    untagged: bool,
+}
+
+impl FocusedNote {
+    /// Si una nota con `tag` quedaría fuera del focus: el tag, uno de sus
+    /// ancestros o un alias de ellos está excluido.
+    #[must_use]
+    pub fn excludes(&self, graph: &TagGraph, tag: &str) -> bool {
+        if self.untagged {
+            return true;
+        }
+        let key = TagKey::new(tag);
+        let excluded: Vec<&TagKey> = self.excluded.iter().map(|key| graph.resolve(key)).collect();
+        graph
+            .ancestors(graph.resolve(&key))
+            .into_iter()
+            .any(|ancestor| excluded.contains(&ancestor))
+    }
 }
 
 /// Los archivos del vault dentro de un focus y las carpetas que los
