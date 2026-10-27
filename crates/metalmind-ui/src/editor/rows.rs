@@ -46,11 +46,14 @@ pub fn place(
 
 /// `scroll` movido `delta` píxeles (hacia abajo si es positivo): la
 /// fracción es de la línea de arriba, así que un heading alto se recorre
-/// más despacio en líneas que el texto.
+/// más despacio en líneas que el texto. La última línea puede ocultar sus
+/// filas de arriba (una partida más alta que la ventana) hasta dejar ver
+/// una fila de `row` píxeles.
 pub fn scroll_by_pixels(
     scroll: Scroll,
     delta: f64,
     last_line: usize,
+    row: f64,
     line_height: impl Fn(usize) -> f64,
 ) -> Scroll {
     let mut line = scroll.first_line().min(last_line);
@@ -63,11 +66,13 @@ pub fn scroll_by_pixels(
         offset -= line_height(line);
         line += 1;
     }
-    let fraction = if line == last_line {
-        0.0
+    let height = line_height(line);
+    let most = if line == last_line {
+        ((height - row) / height).max(0.0)
     } else {
-        (offset / line_height(line)).clamp(0.0, 1.0 - f64::EPSILON)
+        1.0 - f64::EPSILON
     };
+    let fraction = (offset / height).clamp(0.0, most);
     let top = if offset < 0.0 {
         0.0
     } else {
@@ -120,13 +125,18 @@ mod tests {
     #[test]
     fn the_wheel_crosses_a_tall_line_by_its_pixels() {
         let height = |line| f64::from(heights(line));
-        let down = scroll_by_pixels(Scroll::at(0.0), 65.0, 10, height);
+        let down = scroll_by_pixels(Scroll::at(0.0), 65.0, 10, 20.0, height);
         assert_eq!((down.first_line(), down.fraction()), (2, 0.5));
-        let back = scroll_by_pixels(down, -65.0, 10, height);
+        let back = scroll_by_pixels(down, -65.0, 10, 20.0, height);
         assert_eq!((back.first_line(), back.fraction()), (0, 0.0));
-        let past_end = scroll_by_pixels(Scroll::at(9.0), 500.0, 10, height);
+        let past_end = scroll_by_pixels(Scroll::at(9.0), 500.0, 10, 20.0, height);
         assert_eq!(past_end, Scroll::at(10.0));
-        let before_start = scroll_by_pixels(Scroll::at(1.0), -500.0, 10, height);
+        let before_start = scroll_by_pixels(Scroll::at(1.0), -500.0, 10, 20.0, height);
         assert_eq!(before_start, Scroll::at(0.0));
+        let tall_last = |line| if line == 10 { 100.0 } else { 20.0 };
+        let hidden = scroll_by_pixels(Scroll::at(10.0), 50.0, 10, 20.0, tall_last);
+        assert_eq!(hidden, Scroll::at(10.5), "una última línea alta se recorre");
+        let past = scroll_by_pixels(Scroll::at(10.5), 500.0, 10, 20.0, tall_last);
+        assert_eq!(past, Scroll::at(10.8), "hasta dejar ver su última fila");
     }
 }

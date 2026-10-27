@@ -55,11 +55,18 @@ impl Editor {
             self.scroll,
             -f64::from(down),
             view.buffer().last_line(),
+            f64::from(f32::from(line_height)),
             |line| f64::from(lines::line_height(&view, line)),
         );
         let top = self.scroll.first_full_line();
-        // Mover la ventana deja sin filas ocultas la primera línea.
-        let anchor = Anchor { top, skip: 0 };
+        // En la misma línea, la rueda recorre sus filas sin mover el motor.
+        let engine = view.viewport;
+        let skip = if engine.top() == top {
+            engine.skip()
+        } else {
+            0
+        };
+        let anchor = Anchor { top, skip };
         if self.synced != Some(anchor) {
             self.synced = Some(anchor);
             let scrolled =

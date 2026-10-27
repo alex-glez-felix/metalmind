@@ -289,6 +289,7 @@ impl Editor {
             Err(error) => self.report(&error, cx),
         }
         self.synced = None;
+        self.across = 0.;
         cx.notify();
     }
 

@@ -141,7 +141,8 @@ mod tests {
 
     #[test]
     fn precision_al_final_de_un_millon_de_lineas() {
-        let scroll = super::super::rows::scroll_by_pixels(at(999_998.0), 1.0, 1_000_000, |_| 20.0);
+        let scroll =
+            super::super::rows::scroll_by_pixels(at(999_998.0), 1.0, 1_000_000, 20.0, |_| 20.0);
         assert_eq!(scroll.first_line(), 999_998);
         assert!((scroll.fraction() - 0.05).abs() < 1e-6);
     }
