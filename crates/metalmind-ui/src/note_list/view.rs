@@ -173,10 +173,13 @@ impl NoteListView {
     }
 
     /// Un tag renombrado o fusionado desde la app: si era la fuente, la
-    /// lista lo sigue con su nombre nuevo.
-    pub fn rename_tag(&mut self, from: &str, to: &str, cx: &mut Context<Self>) {
-        let step = self.list.rename_tag(from, to);
+    /// lista lo sigue con su nombre nuevo. Devuelve si la siguió.
+    pub fn rename_tag(&mut self, from: &str, to: &str, cx: &mut Context<Self>) -> bool {
+        let Some(step) = self.list.rename_tag(from, to) else {
+            return false;
+        };
         self.step(step, cx);
+        true
     }
 
     fn reveal_active(&mut self, cx: &Context<Self>) {

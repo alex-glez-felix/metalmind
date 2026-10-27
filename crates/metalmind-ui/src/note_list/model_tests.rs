@@ -258,7 +258,13 @@ fn un_lote_antes_de_las_tarjetas_no_muestra_la_lista_sin_orden() {
 fn la_fuente_sigue_a_su_tag_renombrado() {
     let fixture = Fixture::new();
     let mut list = fixture.list(ListSource::Tag("rust".into()), "");
-    let step = list.rename_tag("#rust", "#lenguaje");
+    let step = list.rename_tag("#rust", "#lenguaje").unwrap();
     run(&mut list, step);
     assert_eq!(list.source(), &ListSource::Tag("lenguaje".into()));
+    assert!(list.rename_tag("#gpui", "#ui").is_none());
+    // `:tagundo` la devuelve por el mismo camino.
+    let step = list.rename_tag("#lenguaje", "#rust").unwrap();
+    run(&mut list, step);
+    assert_eq!(list.source(), &ListSource::Tag("rust".into()));
+    assert_eq!(rows(&list), ["media.md", "vieja.md"]);
 }
