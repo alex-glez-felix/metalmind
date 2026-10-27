@@ -373,6 +373,21 @@ const SCENES: &[(&str, &[Step])] = &[
     ("backlinks-plegado", &[Step::Keys("ggjhh")]),
     ("backlinks-menu-borde", &[Step::RightClickBottomRow]),
     ("backlinks-abierto", &[Step::Keys("<Esc>gg<CR>")]),
+    // Los links sin destino (`space u`): muchos, con nombres más largos que
+    // el picker, multibyte y emoji (llegan como de otro programa); filtrados,
+    // sin resultados y el elegido abierto en el editor, donde se ve con el
+    // color de los links sin destino.
+    (
+        "sin-destino",
+        &[
+            Step::Files(vault::write_unresolved),
+            Step::Settle,
+            Step::Keys("<Space>u"),
+        ],
+    ),
+    ("sin-destino-filtrado", &[Step::Keys("tarea 1")]),
+    ("sin-destino-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    ("sin-destino-abierto", &[Step::Keys("<C-u>informe<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

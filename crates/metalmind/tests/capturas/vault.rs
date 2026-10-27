@@ -211,6 +211,30 @@ pub fn write_backlinks(root: &Path) {
     }
 }
 
+/// Una nota con muchos links que no llevan a nada: un nombre larguísimo,
+/// japonés, emoji, un embed y un link markdown.
+pub fn write_unresolved(root: &Path) {
+    let mut body = String::from(
+        "# Pendientes\n\n\
+         - [[Una nota que todavía no existe y tiene un nombre larguísimo para ver cómo se recorta en el picker]]\n\
+         - ![[diagrama-que-falta.png]]\n\
+         - [el informe final](informes/2026/informe-final.md)\n\
+         - [[日本語のノート/未作成のメモ]]\n\
+         - [[🦀 rust/capítulo 9 — lifetimes]]\n",
+    );
+    for index in 1..=30 {
+        writeln!(
+            body,
+            "- [[tarea pendiente {index:02}]] para la semana que viene"
+        )
+        .expect("escribir en un String");
+    }
+    let path = root
+        .join(LONG_FOLDER)
+        .join("pendientes de una lista que tampoco cabe.md");
+    fs::write(path, body).expect("escribir el archivo");
+}
+
 /// La plantilla de ejemplo, tal como la muestra la documentación.
 fn interview() -> &'static str {
     let docs = include_str!("../../../../docs/plantillas.md");
