@@ -259,3 +259,35 @@ fn la_nota_seleccionada_sigue_a_su_renombre() {
         ]
     );
 }
+
+/// En focus `#ui`, solo los tags de sus notas y el conteo dentro de él; el
+/// buzón queda vacío porque toda nota del focus tiene un tag (05 §3).
+#[test]
+fn en_focus_quedan_sus_tags_con_el_conteo_de_dentro() {
+    let mut outline = outline_of(tags_of(FILES));
+    outline.set_scope(Scope::parse("#ui").unwrap());
+    outline.refresh();
+    outline.expand_or_enter();
+    assert_eq!(
+        shown(&outline),
+        [
+            ">▾ #Rust (1)",
+            "   ▸ #gpui (1)",
+            " ▸ #ui (2)",
+            " ▸ Buzón (0)"
+        ]
+    );
+    outline.set_scope(Scope::default());
+    outline.refresh();
+    assert_eq!(
+        shown(&outline),
+        [
+            ">▾ #Rust (3)",
+            "   ▸ #gpui (1)",
+            "     parser.md",
+            "     viejo.md",
+            " ▸ #ui (2)",
+            " ▸ Buzón (2)",
+        ]
+    );
+}

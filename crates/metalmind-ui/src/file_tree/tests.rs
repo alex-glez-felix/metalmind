@@ -289,3 +289,61 @@ fn revelar_con_un_filtro_puesto() {
     tree.set_filter("");
     assert_eq!(tree.selected(), Some(&path("proyectos/nueva.md")));
 }
+
+/// El árbol en `focus`, con `#rust` en `diario/2026/enero.md` y en `b.md`.
+fn focused(focus: &str) -> FileTree {
+    let index = index(VAULT);
+    let tags = metalmind_vault::tags::Tags::build(path("tags"), &index, |note: &VaultPath| {
+        ["diario/2026/enero.md", "b.md"]
+            .contains(&note.as_str())
+            .then(|| "#rust".to_owned())
+    });
+    let in_scope = crate::focus::Focus::parse(focus)
+        .unwrap()
+        .unwrap()
+        .resolve(&index, &tags);
+    let mut tree = FileTree::new(index);
+    tree.set_scope(Some(Arc::new(in_scope)));
+    tree
+}
+
+/// En focus solo se ven las carpetas con algo del alcance (05 §3).
+#[test]
+fn en_focus_se_esconde_lo_de_fuera() {
+    let mut tree = focused("#rust");
+    tree.expand(&path("diario"));
+    tree.expand(&path("diario/2026"));
+    assert_eq!(
+        render(&tree),
+        ["▾ diario *", "  ▾ 2026", "    enero.md", "b.md"]
+    );
+    tree.set_scope(None);
+    assert_eq!(
+        render(&tree),
+        [
+            "▾ diario *",
+            "  ▾ 2026",
+            "    enero.md",
+            "  hoy.md",
+            "▸ proyectos",
+            "a.md",
+            "b.md"
+        ]
+    );
+}
+
+#[test]
+fn en_focus_de_carpeta_quedan_ella_y_sus_adjuntos() {
+    let mut tree = focused("proyectos/");
+    tree.expand(&path("proyectos"));
+    assert_eq!(render(&tree), ["▾ proyectos *", "  nota.md", "  plano.png"]);
+}
+
+#[test]
+fn el_filtro_solo_busca_dentro_del_focus() {
+    let mut tree = focused("#rust");
+    tree.set_filter("hoy");
+    assert_eq!(render(&tree), Vec::<String>::new());
+    tree.set_filter("en");
+    assert_eq!(render(&tree), ["▾ diario *", "  ▾ 2026", "    enero.md"]);
+}

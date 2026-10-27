@@ -1,5 +1,6 @@
 ---
 source: crates/metalmind-config/tests/themes.rs
+assertion_line: 21
 expression: loaded.value
 ---
 Theme {
@@ -46,6 +47,7 @@ Theme {
         picker_match: #2e5cd6,
         picker_warning: #8f6400,
         picker_muted: #5f6670,
+        focus_indicator: #2e5cd6,
         panel_background: #e6e8ec,
         panel_foreground: #2b2f36,
         panel_muted: #5f6670,

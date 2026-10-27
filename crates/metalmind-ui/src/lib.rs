@@ -10,6 +10,8 @@ mod document;
 mod editor;
 mod file_tree;
 mod finder;
+mod focus;
+mod focus_indicator;
 mod frames;
 mod ime;
 pub mod math;

@@ -7,7 +7,11 @@
 //! nueva, así la lista no parpadea vacía en cada tecla. Un patrón inválido
 //! no cambia nada: la búsqueda anterior sigue y el error se muestra.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use metalmind_search::{NoteMatches, Syntax, TextQuery};
+use metalmind_vault::VaultPath;
 
 use crate::picker::{Chosen, InputLine, LineEdit, Open};
 
@@ -53,6 +57,8 @@ pub struct TextSearchState {
     invalid: Option<String>,
     /// Se pidió elegir antes de que llegaran resultados.
     pending_choice: Option<Open>,
+    /// Con focus, las notas donde se busca.
+    scope: Option<Arc<HashSet<VaultPath>>>,
 }
 
 impl Default for TextSearchState {
@@ -73,7 +79,15 @@ impl TextSearchState {
             progress: Status::Idle,
             invalid: None,
             pending_choice: None,
+            scope: None,
         }
+    }
+
+    /// Busca solo en `scope`: las notas del focus.
+    #[must_use]
+    pub fn with_scope(mut self, scope: Arc<HashSet<VaultPath>>) -> Self {
+        self.scope = Some(scope);
+        self
     }
 
     #[must_use]
@@ -125,6 +139,7 @@ impl TextSearchState {
         let query = TextQuery {
             pattern: self.line.text().to_owned(),
             syntax: Syntax::Regex,
+            scope: self.scope.clone(),
             ..TextQuery::default()
         };
         if let Err(error) = query.compile() {

@@ -12,7 +12,7 @@ use metalmind_template::{
     DailyError, Draft, NewNote, NotePath, Pick, Templates, daily_note, draft, tag_of_template,
     tags_asking_for, templates_folder,
 };
-use metalmind_vault::tags::TagGraph;
+use metalmind_vault::tags::{TagGraph, TagKey};
 use metalmind_vault::{FileOpError, InvalidPath, Vault, VaultIndex, VaultPath};
 
 use crate::picker::PickerItem;
@@ -58,18 +58,24 @@ pub enum Origin {
     Template(String),
     /// Una nota nueva con este tag, con la plantilla que pida su página.
     Tag(String),
+    /// Una nota del panel lateral: vacía, o con la plantilla que pidan los
+    /// tags del focus.
+    Blank,
 }
 
 impl Origin {
+    /// `focus_tags`: los tags con los que nace en el focus (05 §3), además
+    /// de los suyos.
     #[must_use]
     pub fn draft(
         &self,
         title: &str,
+        focus_tags: &[String],
         templates: &Templates,
         graph: &TagGraph,
         now: &Zoned,
     ) -> Draft {
-        let (tags, pick) = match self {
+        let (mut tags, pick): (Vec<String>, Pick<'_>) = match self {
             Self::Template(name) => (
                 tag_of_template(graph, name)
                     .map(str::to_owned)
@@ -78,7 +84,14 @@ impl Origin {
                 Pick::Named(name),
             ),
             Self::Tag(tag) => (vec![tag.clone()], Pick::ByTags),
+            Self::Blank => (Vec::new(), Pick::ByTags),
         };
+        for tag in focus_tags {
+            let key = TagKey::new(tag);
+            if !tags.iter().any(|own| TagKey::new(own) == key) {
+                tags.push(tag.clone());
+            }
+        }
         let note = NewNote {
             title,
             tags: &tags,
@@ -94,6 +107,7 @@ impl Origin {
         match self {
             Self::Template(name) => format!("plantilla {name}"),
             Self::Tag(tag) => format!("#{tag}"),
+            Self::Blank => "nota nueva".to_owned(),
         }
     }
 }
@@ -242,5 +256,7 @@ fn line_position(text: &str, at: usize) -> LinePosition {
     }
 }
 
+#[cfg(test)]
+mod focus_tests;
 #[cfg(test)]
 mod tests;

@@ -4,9 +4,9 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    AnyElement, ClickEvent, Context, Div, HighlightStyle, InteractiveElement as _, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, SharedString, Stateful,
-    StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
+    AnyElement, App, ClickEvent, Context, Div, HighlightStyle, InteractiveElement as _,
+    IntoElement, MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render,
+    SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, StyledText, Window, div,
     prelude::FluentBuilder as _, uniform_list,
 };
 use metalmind_vault::{EntryKind, VaultPath};
@@ -17,6 +17,7 @@ use super::menu::ContextMenu;
 use super::{Sidebar, icons};
 use crate::actions::Dispatch;
 use crate::file_tree::Row;
+use crate::focus_indicator::focus_indicator;
 use crate::panel::{Fill, Outline as _, PanelView, Prompt, RowMarks};
 use crate::theme::Theme;
 
@@ -43,6 +44,7 @@ impl Render for Sidebar {
         root = Self::register_actions(root, cx);
         let focused = self.focus_handle.contains_focused(window, cx);
         root.child(self.header(&theme, cx))
+            .children(self.focus_row(&theme, cx))
             .children(self.prompt_view(&theme, cx))
             .child(self.body(&theme, focused, cx))
             .children(self.panel.error().map(|error| {
@@ -78,6 +80,29 @@ impl Sidebar {
 
     fn register_actions(root: Div, cx: &mut Context<Self>) -> Div {
         root.on_action(cx.listener(Self::on_dispatch))
+    }
+
+    /// Si la carpeta o el tag elegido es el focus de ahora.
+    fn selected_is_focus(&self, cx: &App) -> bool {
+        let current = self.session.read(cx).focus();
+        self.panel
+            .selected_focus()
+            .zip(current)
+            .is_some_and(|(chosen, current)| chosen.same_scope(current))
+    }
+
+    /// Con focus, su alcance bajo el encabezado, como en la barra de estado.
+    fn focus_row(&self, theme: &Theme, cx: &App) -> Option<Div> {
+        let label = self.session.read(cx).focus()?.label();
+        Some(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .h(theme.panel_row_height)
+                .px(theme.layout.panel_padding_x)
+                .child(focus_indicator("panel-focus", label.into(), theme)),
+        )
     }
 
     fn header(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -135,6 +160,8 @@ impl Sidebar {
         if rows == 0 {
             return empty(if self.panel.tree.is_filtering() {
                 "Nada coincide con el filtro."
+            } else if self.session.read(cx).focus().is_some() {
+                "No hay nada en el focus."
             } else {
                 "El vault está vacío."
             });
@@ -196,16 +223,22 @@ impl Sidebar {
     ) {
         self.focus(window, cx);
         self.panel.outline_mut().select_row(at);
+        let focus = self.selected_is_focus(cx);
         self.menu = match self.panel.view {
-            PanelView::Folders => self
-                .panel
-                .tree
-                .selected_entry()
-                .map(|row| ContextMenu::new(position, row.path.clone(), row.kind)),
+            PanelView::Folders => self.panel.tree.selected_entry().map(|row| {
+                let menu = ContextMenu::new(position, row.path.clone(), row.kind);
+                if row.is_folder() {
+                    menu.with_focus(focus)
+                } else {
+                    menu
+                }
+            }),
             PanelView::Tags => self.panel.tags.selected_entry().and_then(|row| {
                 match (row.note(), row.tag_name()) {
                     (Some(note), _) => Some(ContextMenu::on_note(position, note.clone())),
-                    (None, Some(tag)) => Some(ContextMenu::on_tag(position, tag.to_owned())),
+                    (None, Some(tag)) => {
+                        Some(ContextMenu::on_tag(position, tag.to_owned()).with_focus(focus))
+                    }
                     (None, None) => None,
                 }
             }),

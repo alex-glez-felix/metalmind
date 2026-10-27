@@ -2,9 +2,12 @@
 //! que cancela la búsqueda anterior y lanza la nueva. En el hilo de la UI
 //! solo se valida el patrón y se reciben los resultados, de a lotes.
 
+use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use gpui_kit::{Context, SharedString, Task};
+use metalmind_vault::VaultPath;
 
 use super::context::row_text;
 use super::model::{MAX_HITS, Status, TextSearchState};
@@ -22,9 +25,15 @@ pub struct TextSearch {
 }
 
 impl TextSearch {
-    /// Busca en las notas del vault de raíz `root`; las de `open` tienen
-    /// cambios sin guardar y se buscan en memoria.
-    pub fn new(root: &Path, open: Vec<OpenNote>, cx: &mut Context<PickerView<Self>>) -> Self {
+    /// Busca en las notas del vault de raíz `root`, o solo en las de
+    /// `scope` si hay focus; las de `open` tienen cambios sin guardar y se
+    /// buscan en memoria.
+    pub fn new(
+        root: &Path,
+        open: Vec<OpenNote>,
+        scope: Option<Arc<HashSet<VaultPath>>>,
+        cx: &mut Context<PickerView<Self>>,
+    ) -> Self {
         let (sender, events) = async_channel::unbounded();
         let worker = SearchWorker::spawn(root.to_owned(), open, sender)
             .map_err(|error| format!("no se pudo lanzar el hilo de búsqueda: {error}"));
@@ -45,8 +54,12 @@ impl TextSearch {
                 }
             }
         });
+        let state = TextSearchState::new();
         Self {
-            state: TextSearchState::new(),
+            state: match scope {
+                Some(scope) => state.with_scope(scope),
+                None => state,
+            },
             worker,
             _events: events,
         }

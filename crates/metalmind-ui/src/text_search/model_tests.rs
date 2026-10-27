@@ -278,3 +278,23 @@ fn con_el_motor_de_metalmind_search() {
     assert_eq!(b.line.matches, [5..9, 18..22]);
     assert_eq!(b.column(), 5);
 }
+
+/// En focus, cada búsqueda va solo a sus notas (05 §3).
+#[test]
+fn en_focus_cada_busqueda_lleva_sus_notas() {
+    let scope = Arc::new(HashSet::from([path("a.md")]));
+    let mut state = TextSearchState::new().with_scope(Arc::clone(&scope));
+    let search = typed(&mut state, "idea");
+    assert!(
+        search
+            .query
+            .scope
+            .is_some_and(|sent| Arc::ptr_eq(&sent, &scope))
+    );
+    assert!(
+        typed(&mut TextSearchState::new(), "idea")
+            .query
+            .scope
+            .is_none()
+    );
+}

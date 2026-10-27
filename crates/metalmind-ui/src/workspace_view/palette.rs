@@ -24,6 +24,7 @@ impl WorkspaceView {
         let options = PickerOptions {
             placeholder: "Ejecutar una acción…".into(),
             splits: false,
+            focus: None,
         };
         let fuzzy = Fuzzy::new(
             PickerState::new(entries),

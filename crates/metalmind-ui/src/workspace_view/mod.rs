@@ -7,6 +7,7 @@
 
 mod autosave;
 mod finder;
+mod focus;
 mod link_choice;
 mod new_note;
 mod overlay;
@@ -236,6 +237,14 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.open_tag_page(&tag, window, cx);
             }
+            Effect::SetFocus(focus) => {
+                self.sync_editors(cx);
+                self.set_focus(focus, window, cx);
+            }
+            Effect::ShowFocus => {
+                self.sync_editors(cx);
+                self.show_focus(window, cx);
+            }
         }
     }
 
@@ -289,6 +298,7 @@ impl WorkspaceView {
             SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
             SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
+            SidebarEvent::CreateNote(path) => self.create_panel_note(&path, window, cx),
         }
         cx.notify();
     }

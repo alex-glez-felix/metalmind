@@ -13,10 +13,11 @@ use std::{fs, thread};
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use metalmind_config::Paths;
 use metalmind_vault::tags::Tags;
-use metalmind_vault::{Unwatched, Vault, VaultPath, VaultUpdate};
+use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultUpdate};
 
 use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
+use crate::focus::{Focus, InScope};
 
 /// El archivo de los recientes dentro del estado del vault.
 const RECENTS_FILE: &str = "recientes";
@@ -33,14 +34,20 @@ pub struct VaultChanged(pub VaultUpdate);
 /// El vault dejó de ver los cambios de fuera mientras estaba abierto.
 pub struct WatchLost(pub Unwatched);
 
+/// Se puso, cambió o se quitó el focus.
+pub struct FocusChanged;
+
 pub struct VaultSession {
     /// Compartido con el panel lateral, que hace las operaciones de archivo.
     vault: Rc<Vault>,
     recents: Recents,
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
+    /// Las notas del finder, solo las del focus si hay uno.
     notes: Arc<[Note]>,
     tags: Arc<Tags>,
+    /// El focus de la sesión (05 §3): al reabrir, la app empieza sin él.
+    focus: Option<(Focus, Arc<InScope>)>,
     unwatched: Option<Unwatched>,
     _updates: Task<()>,
     _quit: Subscription,
@@ -48,6 +55,7 @@ pub struct VaultSession {
 
 impl EventEmitter<VaultChanged> for VaultSession {}
 impl EventEmitter<WatchLost> for VaultSession {}
+impl EventEmitter<FocusChanged> for VaultSession {}
 
 /// Lo que se prepara antes de abrir la ventana: los hilos que siguen al
 /// vault y guardan los recientes, y los recientes guardados.
@@ -115,6 +123,7 @@ impl VaultSession {
             writer,
             notes,
             tags,
+            focus: None,
             unwatched,
             _updates: updates,
             _quit: quit,
@@ -139,10 +148,56 @@ impl VaultSession {
         self.unwatched
     }
 
-    /// Lo que lista el finder ahora.
+    /// Lo que lista el finder ahora: con focus, solo lo de su alcance.
     #[must_use]
     pub fn notes(&self) -> Arc<[Note]> {
         Arc::clone(&self.notes)
+    }
+
+    #[must_use]
+    pub fn focus(&self) -> Option<&Focus> {
+        self.focus.as_ref().map(|(focus, _)| focus)
+    }
+
+    /// Lo que queda dentro del focus con el índice de ahora.
+    #[must_use]
+    pub fn in_scope(&self) -> Option<Arc<InScope>> {
+        self.focus
+            .as_ref()
+            .map(|(_, in_scope)| Arc::clone(in_scope))
+    }
+
+    /// Pone o quita el focus; el finder, el panel y la búsqueda lo siguen.
+    pub fn set_focus(&mut self, focus: Option<Focus>, cx: &mut Context<Self>) {
+        let index = self.vault.snapshot();
+        self.focus = focus.map(|focus| {
+            let in_scope = Arc::new(focus.resolve(&index, &self.tags));
+            (focus, in_scope)
+        });
+        self.notes = self.list(&index);
+        cx.emit(FocusChanged);
+        cx.notify();
+    }
+
+    /// `F` en el panel: pone `focus`, o lo quita si ya es ese alcance.
+    pub fn toggle_focus(&mut self, focus: Focus, cx: &mut Context<Self>) {
+        let same = self
+            .focus()
+            .is_some_and(|current| current.same_scope(&focus));
+        self.set_focus((!same).then_some(focus), cx);
+    }
+
+    /// Las notas del finder en `index`, dentro del focus si hay uno.
+    fn list(&self, index: &VaultIndex) -> Arc<[Note]> {
+        let notes = notes(index, &self.recents);
+        match &self.focus {
+            Some((_, in_scope)) => notes
+                .iter()
+                .filter(|note| in_scope.contains_file(&note.0))
+                .cloned()
+                .collect(),
+            None => notes,
+        }
     }
 
     /// Los tags del último lote del watcher.
@@ -172,8 +227,11 @@ impl VaultSession {
         if moved {
             self.save();
         }
-        self.notes = notes(&update.snapshot, &self.recents);
         self.tags = Arc::clone(&update.tags);
+        if let Some((focus, in_scope)) = &mut self.focus {
+            *in_scope = Arc::new(focus.resolve(&update.snapshot, &self.tags));
+        }
+        self.notes = self.list(&update.snapshot);
         cx.emit(VaultChanged(update));
         // Se pierde al aparecer carpetas, así que llega con un lote.
         if let (None, Some(reason)) = (self.unwatched, self.vault.unwatched()) {
@@ -184,7 +242,7 @@ impl VaultSession {
     }
 
     fn recents_changed(&mut self, cx: &mut Context<Self>) {
-        self.notes = notes(&self.vault.snapshot(), &self.recents);
+        self.notes = self.list(&self.vault.snapshot());
         self.save();
         cx.notify();
     }

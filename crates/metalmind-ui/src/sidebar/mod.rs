@@ -26,7 +26,7 @@ use metalmind_vault::{Vault, VaultPath, VaultUpdate};
 use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
-use crate::finder::{VaultChanged, VaultSession};
+use crate::finder::{FocusChanged, VaultChanged, VaultSession};
 use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_change::TagRequest;
@@ -52,11 +52,16 @@ pub enum SidebarEvent {
     NewTaggedNote(String),
     /// Abrir la página de este tag.
     OpenTagPage(String),
+    /// Crear esta nota y abrirla: la ventana le pone los tags del focus y
+    /// la plantilla que pidan.
+    CreateNote(VaultPath),
 }
 
 pub struct Sidebar {
     panel: Panel,
     vault: Rc<Vault>,
+    /// De donde sale el focus, que las dos vistas siguen.
+    session: Entity<VaultSession>,
     workspace: Entity<Workspace>,
     focus_handle: FocusHandle,
     /// Cada vista con su scroll: al volver a una, sigue donde se dejó.
@@ -64,6 +69,7 @@ pub struct Sidebar {
     tag_scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
     _changes: Subscription,
+    _focus: Subscription,
     _workspace: Subscription,
 }
 
@@ -83,17 +89,25 @@ impl Sidebar {
         let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
             sidebar.apply(update, cx);
         });
+        let focus = cx.subscribe(session, |sidebar, _, _: &FocusChanged, cx| {
+            sidebar.menu = None;
+            sidebar.sync_focus(cx);
+            sidebar.scroll_to_selection();
+            cx.notify();
+        });
         // La nota activa se marca en el árbol: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         Self {
             panel: Panel::new(tree, tags, state.visible, state.view()),
             vault,
+            session: session.clone(),
             workspace,
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             tag_scroll: UniformListScrollHandle::new(),
             menu: None,
             _changes: changes,
+            _focus: focus,
             _workspace: workspace_changes,
         }
     }
@@ -127,6 +141,12 @@ impl Sidebar {
     #[must_use]
     pub fn root(&self) -> &Path {
         self.vault.root()
+    }
+
+    /// Lo que salió mal con un pedido del panel, en el panel.
+    pub fn report(&mut self, error: &impl std::fmt::Display, cx: &mut Context<Self>) {
+        self.panel.report(error);
+        cx.notify();
     }
 
     /// Selecciona en el árbol el archivo `path`, si está en el vault.
@@ -170,6 +190,7 @@ impl Sidebar {
             .apply(&update.changes, Arc::clone(&update.snapshot));
         self.panel.follow(&update.changes);
         self.panel.set_tags(Arc::clone(&update.tags));
+        self.sync_focus(cx);
         let selected = self.panel.outline().selected_path();
         let selected_tag = self.panel.selected_tag();
         if let Some(menu) = &mut self.menu
@@ -179,6 +200,16 @@ impl Sidebar {
         }
         self.scroll_to_selection();
         cx.notify();
+    }
+
+    /// Las vistas con el focus de la sesión y lo que deja ver ahora.
+    fn sync_focus(&mut self, cx: &App) {
+        let session = self.session.read(cx);
+        let scope = session
+            .focus()
+            .map(|focus| focus.scope().clone())
+            .unwrap_or_default();
+        self.panel.set_focus(scope, session.in_scope());
     }
 
     /// Cada vista lleva su scroll a su selección, se vea o no: lo que

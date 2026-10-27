@@ -1,10 +1,13 @@
 //! El filtro del árbol: la búsqueda difusa de rutas de `metalmind-search` sobre
-//! todo el vault, con las carpetas que contienen cada coincidencia.
+//! el vault, o lo que deje ver el focus, con las carpetas que contienen cada
+//! coincidencia.
 
 use std::collections::{HashMap, HashSet};
 
 use metalmind_search::{FuzzyMatcher, Query};
 use metalmind_vault::{VaultIndex, VaultPath};
+
+use crate::focus::InScope;
 
 pub(super) struct Matches {
     /// Lo que se ve, con las letras de su nombre que coinciden; las
@@ -15,8 +18,12 @@ pub(super) struct Matches {
 }
 
 impl Matches {
-    pub(super) fn find(index: &VaultIndex, query: &str) -> Self {
-        let paths: Vec<&VaultPath> = index.iter().map(|entry| entry.path).collect();
+    pub(super) fn find(index: &VaultIndex, query: &str, in_scope: Option<&InScope>) -> Self {
+        let paths: Vec<&VaultPath> = index
+            .iter()
+            .map(|entry| entry.path)
+            .filter(|path| in_scope.is_none_or(|in_scope| in_scope.shows(path)))
+            .collect();
         let candidates: Vec<&str> = paths.iter().map(|path| path.as_str()).collect();
         let query = Query::new(query);
         let mut fuzzy = FuzzyMatcher::paths();

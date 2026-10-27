@@ -66,6 +66,7 @@ ui:
   picker_match: accent
   picker_warning: warning
   picker_muted: text_muted
+  focus_indicator: accent
   panel_background: surface
   panel_foreground: text
   panel_muted: text_muted

@@ -48,6 +48,8 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":template<CR>", Command::NewNoteFromTemplate)]
 #[case(":today<CR>", Command::OpenDailyNote)]
 #[case(":tagpage<CR>", Command::OpenTagPage)]
+#[case(":focus<CR>", Command::Focus)]
+#[case(":unfocus<CR>", Command::ClearFocus)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]
@@ -97,6 +99,7 @@ fn e_lleva_la_ruta() {
     Command::NewNoteFromTemplate,
     "entrevista Backend senior"
 )]
+#[case(":focus proyectos/ #rust<CR>", Command::Focus, "proyectos/ #rust")]
 fn llevan_lo_escrito_tras_el_nombre(
     #[case] keys: &str,
     #[case] command: Command,

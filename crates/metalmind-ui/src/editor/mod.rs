@@ -44,7 +44,7 @@ use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
 use crate::actions::{self, Dispatch};
 use crate::clipboard::SystemClipboard;
-use crate::finder::{VaultChanged, VaultSession};
+use crate::finder::{FocusChanged, VaultChanged, VaultSession};
 use crate::frames::FrameClock;
 use crate::ime::ImeLine;
 use crate::math::Formulas;
@@ -83,6 +83,7 @@ pub struct Editor {
     completion: self::completion::Completion,
     _repaint: Subscription,
     _vault_changed: Subscription,
+    _focus_changed: Subscription,
     _formulas: Subscription,
 }
 
@@ -103,6 +104,7 @@ impl Editor {
             editor.refresh_completion(cx);
             cx.notify();
         });
+        let focus_changed = cx.subscribe(&session, |_, _, _: &FocusChanged, cx| cx.notify());
         // Llegó la imagen de una fórmula.
         let formulas_ready = cx.observe(&formulas, |_, _, cx| cx.notify());
         Self {
@@ -123,6 +125,7 @@ impl Editor {
             completion: self::completion::Completion::default(),
             _repaint: repaint,
             _vault_changed: vault_changed,
+            _focus_changed: focus_changed,
             _formulas: formulas_ready,
         }
     }
@@ -300,6 +303,11 @@ impl Editor {
             command_line,
             message,
             position: (line + 1, buffer.column_of(view.cursor()) + 1),
+            focus: self
+                .session
+                .read(cx)
+                .focus()
+                .map(|focus| focus.label().into()),
         })
     }
 }

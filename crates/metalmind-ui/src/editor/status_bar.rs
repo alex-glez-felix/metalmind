@@ -1,6 +1,6 @@
 //! Barra de estado de un panel: modo, si se graba una macro, archivo, `[+]`
 //! si hay cambios sin guardar (o, con autoguardado, si está guardado), el
-//! último mensaje o la línea de comandos, y la posición del cursor. Modo,
+//! último mensaje o la línea de comandos, el focus y la posición del cursor. Modo,
 //! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
 
 use gpui_kit::{
@@ -8,6 +8,7 @@ use gpui_kit::{
 };
 use metalmind_vim::{Mode, VisualKind};
 
+use crate::focus_indicator::focus_indicator;
 use crate::theme::Theme;
 use crate::workspace::{Message, SaveState};
 
@@ -27,6 +28,8 @@ pub struct Status {
     pub message: Option<Message>,
     /// Línea y columna en caracteres, desde 1.
     pub position: (usize, usize),
+    /// `focus: #rust`, si hay focus.
+    pub focus: Option<SharedString>,
 }
 
 /// Lo escrito tras `:`, `/` o `?` y el preedit del IME.
@@ -87,6 +90,11 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
             Middle::Typing(line) => command_line(line, theme),
             Middle::Note(message) => note(status.file, mark, message, theme),
         })
+        .children(status.focus.map(|label| {
+            focus_indicator("status-focus", label, theme)
+                .flex_none()
+                .max_w(relative(theme.layout.status_message_max_width))
+        }))
         .child(fixed().child(format!("{line}:{column}")))
 }
 

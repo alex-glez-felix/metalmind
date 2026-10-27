@@ -11,6 +11,7 @@ use metalmind_vault::tags::TagGraph;
 use metalmind_vault::{VaultIndex, VaultPath};
 
 use super::Origin;
+use crate::focus::FocusedNote;
 use crate::picker::{
     Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerRow, PickerView,
 };
@@ -24,6 +25,8 @@ pub struct NameQuestion {
     index: Arc<VaultIndex>,
     /// Por qué no se pudo crear con lo escrito; se olvida al editarlo.
     failed: Option<String>,
+    /// Dónde y con qué tags nace en el focus.
+    focused: FocusedNote,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -45,7 +48,16 @@ impl NameQuestion {
             templates,
             index,
             failed: None,
+            focused: FocusedNote::default(),
         }
+    }
+
+    /// En focus de carpeta, lo escrito va dentro de ella; en focus de tags,
+    /// la nota nace con ellos (05 §3).
+    #[must_use]
+    pub fn in_focus(mut self, focused: FocusedNote) -> Self {
+        self.focused = focused;
+        self
     }
 
     #[must_use]
@@ -59,7 +71,9 @@ impl NameQuestion {
     /// Los de [`NameQuestion::answer`].
     pub fn draft(&self, graph: &TagGraph, now: &Zoned) -> Result<(NotePath, Draft), NameProblem> {
         let note = self.answer()?;
-        let draft = self.origin.draft(&note.title, &self.templates, graph, now);
+        let draft = self
+            .origin
+            .draft(&note.title, &self.focused.tags, &self.templates, graph, now);
         Ok((note, draft))
     }
 
@@ -72,7 +86,11 @@ impl NameQuestion {
         if let Some(failed) = &self.failed {
             return Err(NameProblem::Failed(failed.clone()));
         }
-        let note = NotePath::parse(self.line.text())?;
+        let name = self.line.text().trim();
+        let note = match &self.focused.folder {
+            Some(folder) if !name.is_empty() => NotePath::parse(&format!("{folder}/{name}"))?,
+            _ => NotePath::parse(name)?,
+        };
         if self.index.contains(&note.path) {
             return Err(NameProblem::Exists(note.path));
         }

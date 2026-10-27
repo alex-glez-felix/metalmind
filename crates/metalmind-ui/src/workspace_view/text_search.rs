@@ -17,13 +17,15 @@ impl WorkspaceView {
     pub(super) fn open_text_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
         let root = session.root().to_owned();
+        let scope = session.in_scope().map(|in_scope| in_scope.files());
         let open: Vec<OpenNote> = self
             .workspace
             .read(cx)
             .unsaved_files()
             .filter_map(|(file, document)| {
                 let path = session.vault_path(file)?;
-                session.vault().is_searchable(&path).then(|| OpenNote {
+                let in_scope = scope.as_ref().is_none_or(|scope| scope.contains(&path));
+                (in_scope && session.vault().is_searchable(&path)).then(|| OpenNote {
                     path,
                     text: document.buffer().snapshot(),
                 })
@@ -32,9 +34,10 @@ impl WorkspaceView {
         let options = PickerOptions {
             placeholder: "Buscar en las notas…".into(),
             splits: true,
+            focus: session.focus().map(|focus| focus.label().into()),
         };
         let picker = cx.new(|cx| {
-            let search = TextSearch::new(&root, open, cx);
+            let search = TextSearch::new(&root, open, scope, cx);
             PickerView::new(search, options, cx)
         });
         let events = cx.subscribe_in(&picker, window, Self::on_text_search_event);

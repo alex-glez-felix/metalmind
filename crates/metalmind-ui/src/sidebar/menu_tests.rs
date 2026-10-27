@@ -242,3 +242,26 @@ fn en_una_ventana_angosta_se_recorta_la_etiqueta_y_no_la_tecla() {
         "{label:?} y {keys:?}"
     );
 }
+
+/// Enfocar va al final del menú de un tag y antes de la papelera en el de
+/// una carpeta, con la tecla `F`; si ya es el focus, ofrece salir.
+#[test]
+fn el_menu_ofrece_enfocar_o_salir_del_focus() {
+    let keymap = Keymap::default();
+    let point = Point::default();
+    let tag: Vec<MenuItem> = ContextMenu::on_tag(point, "Rust".to_owned())
+        .with_focus(false)
+        .items()
+        .collect();
+    assert_eq!(tag.last(), Some(&MenuItem::Focus));
+    assert_eq!(MenuItem::Focus.keys(&keymap).as_deref(), Some("F"));
+    let folder: Vec<MenuItem> = ContextMenu::new(point, path("d"), EntryKind::Folder)
+        .with_focus(true)
+        .items()
+        .collect();
+    assert_eq!(
+        &folder[folder.len() - 2..],
+        [MenuItem::Unfocus, MenuItem::Delete]
+    );
+    assert_eq!(MenuItem::Unfocus.label(), "Salir del focus");
+}

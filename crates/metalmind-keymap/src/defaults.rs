@@ -159,6 +159,7 @@ const TREE: &[(&[Keystroke], PanelAction)] = &[
     (&[k('i')], PanelAction::SetTagIcon),
     (&[k('t')], PanelAction::SetTagTemplate),
     (&[k('P')], PanelAction::OpenTagPage),
+    (&[k('F')], PanelAction::ToggleFocus),
     (&[k('d')], PanelAction::Delete),
     (&[k('T')], PanelAction::ToggleView),
     (&[k('q')], PanelAction::Hide),

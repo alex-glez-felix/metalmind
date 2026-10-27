@@ -238,6 +238,9 @@ color_group! {
         /// Lo secundario: carpeta de una nota, atajo de una acción, el
         /// texto de ayuda del input vacío.
         picker_muted,
+        /// El alcance del modo focus en la barra de estado, el panel y los
+        /// pickers.
+        focus_indicator,
         /// El panel lateral y la barra de botones que lo abre.
         panel_background,
         panel_foreground,
