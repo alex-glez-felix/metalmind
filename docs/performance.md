@@ -78,6 +78,9 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Publicar los tags en cada lote (clonarlos), 5 k / 50 k | ≤ 16 / 160 ms | 14 / 14 ns (antes de [#60](https://github.com/alex-glez-felix/metalmind/issues/60), 1.7 / 33 ms) | ✅ | `metalmind-vault` `clonar_los_tags` |
 | Publicar los tags tras cambiar una nota, 5 k / 50 k ([#60](https://github.com/alex-glez-felix/metalmind/issues/60)) | lo que reescanearla | 13 / 13 µs; reescanearla, 3–4 µs | ✅ | `metalmind-vault` `publicar_una_nota_cambiada`, `reescanear_una_nota` |
 | Árbol del panel, todo abierto: armarlo, 5 k / 50 k notas | ≤ 16 ms | 0.11 / 1.3 ms | ✅ | `metalmind-ui` `construir_todo_abierto` |
+| Lista de notas, 5 k notas y 200 páginas de tag: armarla en su orden (todas / el buzón / un tag con descendientes) en el hilo de la UI | ≤ 16 ms | 1.7 / 2.5 / 3.2 ms (máquina cargada con otros builds) | ✅ | `metalmind-ui` `armar_la_lista_de_5k` |
+| Lista de notas, 5 k: una tecla en su filtro (`n` / `#t1 -#t3 nota` / `zzz`) | ≤ 8 ms | 0.16 / 0.27 / 0.07 ms | ✅ | `metalmind-ui` `tecla_en_el_filtro_de_5k` |
+| Lista de notas, 5 k: leer título, extracto y fecha de cada nota (en el fondo, al abrir la ventana) | segundo plano, antes de que la lista se vea | 9.5 ms | ✅ | `metalmind-ui` `leer_las_tarjetas_de_5k` |
 | Árbol: abrir o cerrar una carpeta, 5 k / 50 k | ≤ 1 ms | 0.13 / 1.6 ms | ❌ | `metalmind-ui` `expandir_y_colapsar` ([#59](https://github.com/alex-glez-felix/metalmind/issues/59)) |
 | Árbol: bajar una fila | ≤ 1 ms | 20 ns | ✅ | `metalmind-ui` `bajar_una_fila` |
 | Árbol: filtrar con `/`, peor consulta (`tema nota`), 5 k / 50 k | ≤ 8 ms | 2.6 / 35 ms | ❌ | `metalmind-ui` `filtrar` ([#59](https://github.com/alex-glez-felix/metalmind/issues/59)) |

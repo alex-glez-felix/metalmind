@@ -1,6 +1,6 @@
 //! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
 //! paleta, los links sin destino, las notas de un link que empata, las
-//! plantillas y el nombre de una nota nueva o la vista previa de un cambio
+//! plantillas, el nombre de una nota nueva, la fuente de la lista o la vista previa de un cambio
 //! de tags, uno a la vez, centrado arriba como en Zed.
 
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use metalmind_vault::LinkIndex;
 use super::finder::Finder;
 use super::link_choice::LinkChoicePicker;
 use super::new_note::{NamePicker, TemplatePicker};
+use super::note_list::SourcePicker;
 use super::palette::Palette;
 use super::text_search::TextSearchPicker;
 use super::unresolved::UnresolvedPicker;
@@ -56,6 +57,11 @@ pub enum Overlay {
         picker: Entity<NamePicker>,
         _events: Subscription,
     },
+    /// De dónde salen las notas de la lista.
+    ListSource {
+        picker: Entity<SourcePicker>,
+        _events: Subscription,
+    },
     /// La vista previa de renombrar o fusionar tags.
     TagChange {
         view: Entity<TagChangeView>,
@@ -74,6 +80,7 @@ impl Overlay {
             Self::Palette { picker, .. } => picker.focus_handle(cx),
             Self::Templates { picker, .. } => picker.focus_handle(cx),
             Self::NoteName { picker, .. } => picker.focus_handle(cx),
+            Self::ListSource { picker, .. } => picker.focus_handle(cx),
             Self::TagChange { view, .. } => view.focus_handle(cx),
         }
     }
@@ -89,6 +96,7 @@ impl Overlay {
             Self::Palette { picker, .. } => picker.clone().into_any_element(),
             Self::Templates { picker, .. } => picker.clone().into_any_element(),
             Self::NoteName { picker, .. } => picker.clone().into_any_element(),
+            Self::ListSource { picker, .. } => picker.clone().into_any_element(),
             Self::TagChange { view, .. } => view.clone().into_any_element(),
         };
         div()

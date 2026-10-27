@@ -1,6 +1,6 @@
 //! Lo que Metalmind recuerda entre sesiones, en el directorio de estado (06 §8):
-//! el último vault abierto y, de cada vault, cómo quedó el panel lateral y
-//! dónde van sus saltos ([`metalmind_vault::SavedJumps`]).
+//! el último vault abierto y, de cada vault, cómo quedaron el panel lateral y
+//! la lista de notas, y dónde van sus saltos ([`metalmind_vault::SavedJumps`]).
 //! Nada de esto es del usuario: si falta o está roto, se empieza de cero.
 
 use std::fs;
@@ -11,6 +11,7 @@ use metalmind_config::Paths;
 use metalmind_vault::{FileError, VaultPath};
 use serde::{Deserialize, Serialize};
 
+use crate::note_list::ListSource;
 use crate::panel::PanelView;
 
 const VAULT_STATE: &str = "ui.yaml";
@@ -33,6 +34,19 @@ pub enum StateError {
 #[serde(default)]
 pub struct VaultState {
     pub panel: PanelState,
+    pub list: ListState,
+}
+
+/// La lista de notas: si se ve, de dónde salen sus notas y lo escrito en su
+/// filtro.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ListState {
+    /// `None` mientras no se haya abierto ni plegado en este vault: arranca
+    /// según el ancho de la ventana.
+    pub visible: Option<bool>,
+    pub source: ListSource,
+    pub filter: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,6 +198,8 @@ mod tests {
         assert_eq!(state, VaultState::default());
         assert!(state.panel.visible);
         assert_eq!(state.panel.view(), PanelView::Folders);
+        assert_eq!(state.list.visible, None);
+        assert_eq!(state.list.source, ListSource::Inbox);
         assert_eq!(last_vault(&paths), None);
     }
 
@@ -194,6 +210,11 @@ mod tests {
         let diario = VaultPath::new("diario").unwrap();
         let state = VaultState {
             panel: PanelState::new(false, PanelView::Tags, [&diario].into_iter()),
+            list: ListState {
+                visible: Some(true),
+                source: ListSource::Tag("rust".to_owned()),
+                filter: "-#archivado parser".to_owned(),
+            },
         };
         state.save(&paths, Path::new("/notas")).unwrap();
         assert_eq!(VaultState::load(&paths, Path::new("/notas")), state);

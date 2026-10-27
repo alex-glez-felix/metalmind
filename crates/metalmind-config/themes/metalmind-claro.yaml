@@ -176,6 +176,11 @@ layout:
   icon_size: 0.8       # veces la fuente, redondeado
   rail_width: 36
   rail_button_size: 28
+  list_width: 360
+  list_row_padding_y: sm
+  list_row_gap: 2
+  list_excerpt_lines: 2
+  list_open_min_width: 1600  # sin estado guardado: a 1280 arranca plegada
   menu_width: 240
   menu_padding: xs
   menu_item_padding_x: sm

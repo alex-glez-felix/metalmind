@@ -18,7 +18,6 @@ use crate::finder::{Prepared, SessionError, VaultSession};
 use crate::frames::FrameClock;
 use crate::new_note::NoteSettings;
 use crate::session::{self, VaultState};
-use crate::sidebar::Sidebar;
 use crate::theme::{NoMonoFont, Theme};
 use crate::workspace::{Autosave, LineNumbers, Options, PaneOptions, SystemClock, Workspace};
 use crate::workspace_view::WorkspaceView;
@@ -142,24 +141,13 @@ pub fn open_window(
             }
             workspace
         });
-        let sidebar =
-            cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), window, cx));
-        if let Some(file) = &file {
-            sidebar.update(cx, |sidebar, cx| sidebar.reveal(file, cx));
-        }
-        let view = cx.new(|cx| {
-            WorkspaceView::new(
-                workspace,
-                sidebar.clone(),
-                session,
-                paths,
-                notes,
-                window,
-                cx,
-            )
-        });
+        let view =
+            cx.new(|cx| WorkspaceView::new(workspace, session, &state, paths, notes, window, cx));
         view.update(cx, |view, cx| {
-            if file.is_none() && sidebar.read(cx).is_visible() {
+            if let Some(file) = &file {
+                view.reveal(file, cx);
+            }
+            if file.is_none() && view.sidebar_visible(cx) {
                 view.focus_sidebar(window, cx);
             } else {
                 view.focus(window, cx);

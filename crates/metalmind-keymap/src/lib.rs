@@ -21,4 +21,6 @@ pub use action::{Action, Invocation, Owner, UnknownAction};
 pub use command::Command;
 pub use keymap::{Binding, Keymap, Keys};
 pub use keystroke::{KeyName, Keystroke};
-pub use view::{EditorAction, PanelAction, PickerAction, TagChangeAction, View, context};
+pub use view::{
+    EditorAction, ListAction, PanelAction, PickerAction, TagChangeAction, View, context,
+};

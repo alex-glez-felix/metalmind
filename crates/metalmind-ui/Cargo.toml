@@ -62,6 +62,10 @@ harness = false
 name = "formulas"
 harness = false
 
+[[bench]]
+name = "note_list"
+harness = false
+
 # Necesita valgrind y `gungraun-runner` (ver docs/performance.md).
 [[bench]]
 name = "instrucciones"

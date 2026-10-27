@@ -72,6 +72,12 @@ named_actions! {
         ToggleTags = "panel::toggle_tags",
         /// `space b`: lo mismo con los backlinks de la nota activa.
         ToggleBacklinks = "panel::toggle_backlinks",
+        /// `space l`: muestra la lista de notas, o la pliega y deja la nota
+        /// sola.
+        ToggleNoteList = "list::toggle",
+        /// `space v`: elige de dónde salen las notas de la lista: el buzón,
+        /// todas, un tag o una carpeta.
+        ChooseListSource = "list::choose_source",
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",

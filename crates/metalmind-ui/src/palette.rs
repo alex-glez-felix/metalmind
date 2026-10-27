@@ -72,6 +72,7 @@ fn owns_focus(owner: Owner, active: impl Fn(View) -> bool) -> bool {
         ]
         .into_iter()
         .any(active),
+        Owner::List => active(View::NoteList) || active(View::NoteListInput),
         Owner::Picker => active(View::Picker),
         Owner::TagChange => active(View::TagChange),
     }

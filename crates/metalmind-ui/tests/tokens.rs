@@ -54,6 +54,11 @@ const ALLOWED_SHORTCUTS: &[&str] = &[
 /// Excepciones: el archivo, lo que dice la línea y por qué vale.
 const EXCEPTIONS: &[(&str, &str, &str)] = &[
     (
+        "src/note_list/render.rs",
+        "gpui_kit::transparent_black()",
+        "como en el árbol: la fila sin marcar reserva su borde transparente para no brincar al marcarse",
+    ),
+    (
         "src/sidebar/render.rs",
         "gpui_kit::transparent_black()",
         "una fila sin marcar reserva su borde, transparente: si no, la fila brincaría un píxel al marcarse",

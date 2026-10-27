@@ -244,6 +244,18 @@ metric_group! {
         /// La barra de botones a la izquierda del panel.
         rail_width: Length,
         rail_button_size: Length,
+        /// El ancho de la lista de notas.
+        list_width: Length,
+        /// Arriba y abajo de cada fila de la lista de notas.
+        list_row_padding_y: Length,
+        /// Entre las líneas de una fila de la lista: título, extracto y tags.
+        list_row_gap: Length,
+        /// Las líneas del extracto de cada nota en la lista; lo que no cabe
+        /// se recorta.
+        list_excerpt_lines: Count,
+        /// Sin estado guardado, la lista arranca abierta en una ventana al
+        /// menos así de ancha, y plegada en una más angosta.
+        list_open_min_width: Length,
         /// El ancho del menú contextual; crece si una fila no cabe.
         menu_width: Length,
         /// Alrededor de las entradas del menú y de sus separadores.

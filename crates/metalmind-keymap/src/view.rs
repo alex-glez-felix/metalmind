@@ -67,6 +67,31 @@ named_actions! {
 }
 
 named_actions! {
+    /// De la lista de notas (#164): moverse, abrir, filtrar en su lugar y
+    /// etiquetar la nota elegida.
+    pub enum ListAction {
+        SelectNext = "list::select_next",
+        SelectPrevious = "list::select_previous",
+        SelectFirst = "list::select_first",
+        SelectLast = "list::select_last",
+        /// Abre la nota elegida en el panel de edición y le pasa el foco.
+        Open = "list::open",
+        OpenSplitRight = "list::open_split_right",
+        OpenSplitDown = "list::open_split_down",
+        /// Escribe el filtro: la consulta de `space f` sobre la lista.
+        Filter = "list::filter",
+        /// Pregunta los tags que agregar a la nota elegida.
+        Tag = "list::tag",
+        /// Acepta lo escrito.
+        Confirm = "list::confirm",
+        /// Cierra la pregunta; sin pregunta, quita el filtro.
+        Cancel = "list::cancel",
+        /// Le devuelve el foco al panel de edición.
+        FocusEditor = "list::focus_editor",
+    }
+}
+
+named_actions! {
     /// De cualquier picker: moverse por la lista como en Telescope y Zed, y
     /// editar el input como en readline.
     pub enum PickerAction {
@@ -124,6 +149,10 @@ pub mod context {
     pub const PICKER: &str = "Picker";
     /// La vista previa de un cambio de tags.
     pub const TAG_CHANGE: &str = "TagChange";
+    /// La lista de notas con el foco.
+    pub const NOTE_LIST: &str = "NoteList";
+    /// Escribiendo el filtro o los tags en la lista de notas.
+    pub const NOTE_LIST_INPUT: &str = "NoteListInput";
     /// Lo que se agrega al de un picker si abre en un split.
     pub const SPLITS: &str = "splits";
 }
@@ -142,6 +171,8 @@ pub enum View {
     /// Un picker que abre en un split, como el finder.
     PickerWithSplits,
     TagChange,
+    NoteList,
+    NoteListInput,
 }
 
 impl View {
@@ -158,6 +189,8 @@ impl View {
             Self::Picker => context::PICKER,
             Self::PickerWithSplits => "Picker && splits",
             Self::TagChange => context::TAG_CHANGE,
+            Self::NoteList => context::NOTE_LIST,
+            Self::NoteListInput => context::NOTE_LIST_INPUT,
         }
     }
 }

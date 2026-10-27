@@ -33,6 +33,10 @@ pub enum Effect {
     OpenUnresolvedLinks,
     /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
     TogglePanel(PanelView),
+    /// Mostrar la lista de notas o plegarla.
+    ToggleNoteList,
+    /// Elegir de dónde salen las notas de la lista.
+    ChooseListSource,
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
     /// paneles de ese lado, como el panel lateral, puede tomar el foco.
     FocusPastEdge(Direction),
@@ -159,6 +163,8 @@ impl Workspace {
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
             Command::ToggleBacklinks => Ok(Effect::TogglePanel(PanelView::Backlinks)),
+            Command::ToggleNoteList => Ok(Effect::ToggleNoteList),
+            Command::ChooseListSource => Ok(Effect::ChooseListSource),
             Command::FollowLink => self.follow_link(),
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
