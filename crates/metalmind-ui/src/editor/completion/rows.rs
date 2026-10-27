@@ -1,5 +1,6 @@
 //! Cómo se ve cada fila de las listas: un tag con su ícono, el alias por el
-//! que coincidió y su conteo; una nota con su nombre y su carpeta.
+//! que coincidió y su conteo; una nota con su nombre y su carpeta; una
+//! carpeta con su ruta.
 
 use std::ops::Range;
 
@@ -9,7 +10,7 @@ use metalmind_vault::EntryKind;
 use metalmind_vault::tags::TagIcon;
 
 use super::super::completion_menu::MenuRow;
-use crate::completion::{LinkCompletions, TagCompletions};
+use crate::completion::{ArgumentCompletions, ArgumentList, LinkCompletions, TagCompletions};
 use crate::sidebar::icons;
 use crate::theme::Theme;
 
@@ -41,6 +42,29 @@ pub(super) fn links(list: &LinkCompletions, visible: Range<usize>, theme: &Theme
                     .map(|parent| parent.as_str().to_owned()),
                 count: None,
             }
+        })
+        .collect()
+}
+
+/// Una carpeta se ve como se lee, sin los escapes con que se escribe.
+pub(super) fn argument(
+    list: &ArgumentCompletions,
+    visible: Range<usize>,
+    theme: &Theme,
+) -> Vec<MenuRow> {
+    let folders = match list.list() {
+        ArgumentList::Tags { list, .. } => return tags(list, visible, theme),
+        ArgumentList::Folders(folders) => folders,
+    };
+    folders
+        .rows()
+        .skip(visible.start)
+        .take(visible.len())
+        .map(|folder| MenuRow {
+            icon: icons::entry(EntryKind::Folder, theme),
+            name: format!("{folder}/"),
+            detail: None,
+            count: None,
         })
         .collect()
 }

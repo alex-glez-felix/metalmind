@@ -2,12 +2,14 @@
 //! al escribir un tag y cambia lo escrito por su forma establecida; la de
 //! `[[`, al escribir el destino de un wikilink, y escribe con qué nombre
 //! llega el link a la nota elegida. Las dos se pintan bajo lo escrito (o
-//! encima, si no cabe) y se aceptan con `tab` o un clic.
+//! encima, si no cabe) y se aceptan con `tab` o un clic. La del argumento
+//! de `:` (#156) va sobre la barra de estado (ver `argument`).
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use gpui_kit::{
-    AnyElement, App, Bounds, Context, InteractiveElement as _, IntoElement, KeyContext,
+    AnyElement, App, Bounds, Context, Div, InteractiveElement as _, IntoElement, KeyContext,
     MouseButton, ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Window,
     anchored, size,
 };
@@ -16,24 +18,30 @@ use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
 use metalmind_vault::VaultPath;
 use metalmind_vault::tags::{TagCompletion, TagKey, Tags};
+use metalmind_vim::TypedArgument;
 
 use super::Editor;
-use super::completion_menu::{CompletionMenu, MenuMetrics};
+use super::completion_menu::{CompletionMenu, MenuMetrics, MenuRow};
 use super::cursor::cursor_position;
 use super::layout::FrameLayout;
 use crate::actions::{AppKeymap, EDITOR_CONTEXT};
 use crate::clipboard::SystemClipboard;
-use crate::completion::{LinkCompletions, NoteCandidates, Selection, TagCompletions};
+use crate::completion::{
+    ArgumentCompletions, FolderCandidates, LinkCompletions, NoteCandidates, Selection,
+    TagCompletions,
+};
 use crate::finder::Note;
 use crate::theme::Theme;
 use crate::workspace::{Message, PaneId, TypedLink, TypedTag, Workspace, WorkspaceError};
 
+mod argument;
 mod rows;
 
 /// La lista abierta.
 enum List {
     Tags(TagCompletions),
     Links(LinkCompletions),
+    Argument(ArgumentCompletions),
 }
 
 impl List {
@@ -41,6 +49,7 @@ impl List {
         match self {
             Self::Tags(list) => list.selection(),
             Self::Links(list) => list.selection(),
+            Self::Argument(list) => list.selection(),
         }
     }
 
@@ -48,13 +57,17 @@ impl List {
         match self {
             Self::Tags(list) => list.selection_mut(),
             Self::Links(list) => list.selection_mut(),
+            Self::Argument(list) => list.selection_mut(),
         }
     }
 
-    fn typed(&self) -> &str {
+    /// Lo escrito bajo lo que va la lista; la del argumento de `:` va
+    /// sobre la barra de estado.
+    fn typed_in_text(&self) -> Option<&str> {
         match self {
-            Self::Tags(list) => list.typed(),
-            Self::Links(list) => list.typed(),
+            Self::Tags(list) => Some(list.typed()),
+            Self::Links(list) => Some(list.typed()),
+            Self::Argument(_) => None,
         }
     }
 
@@ -62,6 +75,7 @@ impl List {
         match self {
             Self::Tags(list) => list.rows().len(),
             Self::Links(list) => list.rows().len(),
+            Self::Argument(list) => list.len(),
         }
     }
 }
@@ -73,6 +87,8 @@ pub(super) struct Completion {
     tags: Option<(Arc<Tags>, Arc<[TagCompletion]>)>,
     /// Las notas de `[[`: se arman de nuevo solo si cambian.
     notes: Option<Arc<NoteCandidates>>,
+    /// Las carpetas de un índice del vault, para `:focus`.
+    folders: Option<Arc<FolderCandidates>>,
     /// Para nombres de tags.
     names: FuzzyMatcher,
     /// Para rutas de notas.
@@ -85,6 +101,7 @@ impl Default for Completion {
             list: None,
             tags: None,
             notes: None,
+            folders: None,
             names: FuzzyMatcher::text(),
             paths: FuzzyMatcher::paths(),
         }
@@ -158,6 +175,7 @@ impl Editor {
         self.completion.list = match typed {
             Some(Typed::Link(link)) => self.link_list(&link, cx),
             Some(Typed::Tag(tag)) => self.tag_list(&tag, cx),
+            Some(Typed::Argument(argument)) => self.argument_list(&argument, cx),
             None => None,
         };
     }
@@ -237,6 +255,13 @@ impl Editor {
                     Ok(())
                 }
             }
+            List::Argument(list) => {
+                let text = list.accept();
+                self.update_workspace(cx, |workspace, pane, _| {
+                    workspace.complete_argument(pane, &text);
+                    Ok(())
+                })
+            }
         };
         if let Err(error) = result {
             self.report(&error, cx);
@@ -278,8 +303,8 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let list = self.completion.list.as_ref()?;
+        let typed = list.typed_in_text()?.len();
         let wanted = usize::from(theme.layout.completion_rows).min(list.len());
-        let typed = list.typed().len();
         let view = self.view(cx)?;
         let (laid, column) = cursor_position(&view, layout)?;
         let x = laid.origin.x + laid.x_for_index(column - typed.min(column));
@@ -294,15 +319,36 @@ impl Editor {
         let rows = match &*list {
             List::Tags(list) => rows::tags(list, visible.clone(), theme),
             List::Links(list) => rows::links(list, visible.clone(), theme),
+            List::Argument(_) => return None,
         };
+        let selected = list.selection().selected();
+        let menu = Self::menu(rows, visible, selected, max_width, theme, cx);
+        Some(
+            anchored()
+                .position(Point { x, y: placement.y })
+                .snap_to_window()
+                .child(menu)
+                .into_any_element(),
+        )
+    }
+
+    /// La lista abierta con sus `rows`: un clic en una la acepta.
+    fn menu(
+        rows: Vec<MenuRow>,
+        visible: Range<usize>,
+        selected: usize,
+        max_width: Pixels,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let accept_keys = AppKeymap::get(cx)
             .keys_for(EditorAction::AcceptCompletion.into(), |view| {
                 view == View::Completion
             });
-        let menu = CompletionMenu {
+        CompletionMenu {
             rows,
             visible,
-            selected: list.selection().selected(),
+            selected,
             accept_keys,
             max_width,
         }
@@ -317,14 +363,7 @@ impl Editor {
                     editor.take_focus(window, cx);
                     editor.accept_completion(window, cx);
                 }))
-        });
-        Some(
-            anchored()
-                .position(Point { x, y: placement.y })
-                .snap_to_window()
-                .child(menu)
-                .into_any_element(),
-        )
+        })
     }
 }
 
@@ -332,10 +371,14 @@ impl Editor {
 enum Typed {
     Link(TypedLink),
     Tag(TypedTag),
+    Argument(TypedArgument),
 }
 
 impl Typed {
     fn in_pane(workspace: &Workspace, pane: PaneId) -> Result<Option<Self>, WorkspaceError> {
+        if let Some(argument) = workspace.typed_argument(pane) {
+            return Ok(Some(Self::Argument(argument)));
+        }
         if let Some(link) = workspace.typed_link(pane)? {
             return Ok(Some(Self::Link(link)));
         }

@@ -3,8 +3,19 @@
 
 use super::Vim;
 use crate::Target;
+use crate::argument::{ArgumentWord, argument_words};
+use crate::command::argument_start;
 use crate::history::History;
-use crate::{KeyOutcome, Mode, Prompt, VimError};
+use crate::{ActionName, KeyOutcome, Mode, Prompt, VimError};
+
+/// La palabra que se escribe en el argumento de un comando ajeno, para
+/// autocompletarla.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypedArgument {
+    pub action: ActionName,
+    /// La última, con su rango en bytes de la línea; tras un espacio, vacía.
+    pub word: ArgumentWord,
+}
 
 impl Vim {
     /// Lo escrito tras `:`, `/` o `?`, mientras se está en la línea de comandos.
@@ -17,6 +28,45 @@ impl Vim {
     #[must_use]
     pub fn command_line_prompt(&self) -> Option<Prompt> {
         (self.mode == Mode::CommandLine).then_some(self.prompt)
+    }
+
+    /// Lo que se escribe tras `:` cuando es el argumento de un comando
+    /// ajeno: `:focus proyectos/ #ru` da `workspace::focus` y `#ru`.
+    #[must_use]
+    pub fn typed_argument(&self) -> Option<TypedArgument> {
+        if self.prompt != Prompt::Command {
+            return None;
+        }
+        let line = self.command_line()?;
+        let (command, start) = argument_start(line, self.keymap.commands())?;
+        let word = argument_words(&line[start..])
+            .pop()
+            .filter(|word| start + word.range.end == line.len())
+            .map_or_else(
+                || ArgumentWord {
+                    range: line.len()..line.len(),
+                    text: String::new(),
+                    literal_start: false,
+                },
+                |word| ArgumentWord {
+                    range: start + word.range.start..line.len(),
+                    ..word
+                },
+            );
+        Some(TypedArgument {
+            action: command.action,
+            word,
+        })
+    }
+
+    /// Cambia la palabra de [`Vim::typed_argument`] por `text`, ya escrito
+    /// con sus escapes. Si no se escribe un argumento, no hace nada.
+    pub fn complete_argument(&mut self, text: &str) {
+        let Some(typed) = self.typed_argument() else {
+            return;
+        };
+        self.command_line.truncate(typed.word.range.start);
+        self.type_in_command_line(text);
     }
 
     pub(super) fn open_command_line(&mut self, prompt: Prompt) {

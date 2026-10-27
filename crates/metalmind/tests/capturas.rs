@@ -438,6 +438,16 @@ const SCENES: &[(&str, &[Step])] = &[
     ("sin-destino-filtrado", &[Step::Keys("tarea 1")]),
     ("sin-destino-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("sin-destino-abierto", &[Step::Keys("<C-u>informe<CR>")]),
+    // El autocompletado de `:focus` sobre la barra de estado (#156): muchas
+    // carpetas con rutas hondas, los tags tras aceptar una, y la carpeta
+    // larga con espacios, que el indicador muestra escapada (#157).
+    (
+        "focus-completar-carpetas",
+        &[Step::Keys("<Esc><Esc>:focus pro")],
+    ),
+    ("focus-completar-tags", &[Step::Keys("<Tab> #")]),
+    ("focus-completar-espacios", &[Step::Keys("<Esc>:focus Una")]),
+    ("focus-carpeta-con-espacios", &[Step::Keys("<Tab><CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

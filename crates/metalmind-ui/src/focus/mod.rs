@@ -4,36 +4,55 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use metalmind_vault::tags::{Scope, ScopeError, TagGraph, TagKey, TagQuery, Tags};
+use metalmind_vault::tags::{Scope, ScopeError, ScopeWord, TagGraph, TagKey, TagQuery, Tags};
 use metalmind_vault::{VaultChange, VaultIndex, VaultPath};
+use metalmind_vim::{ArgumentWord, argument_words, escape_argument};
 
 /// Un alcance puesto: `:focus proyectos/ #rust`, o un nodo del panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Focus {
     scope: Scope,
-    /// Lo que muestran la barra de estado, el panel y el finder.
-    text: String,
+    /// Lo que muestran la barra de estado, el panel y el finder, en el
+    /// orden en que se escribió.
+    words: Vec<Written>,
+}
+
+/// Una palabra del alcance como se muestra.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Written {
+    /// La del alcance, que puede haberse movido.
+    Folder,
+    /// Tal cual se escribió: `#Rust` no se muestra como `#rust`.
+    Tag(String),
 }
 
 impl Focus {
-    /// El argumento de `:focus`; `None` si está vacío.
+    /// El argumento de `:focus`; `None` si está vacío. Un espacio de una
+    /// carpeta se escribe `\ ` o entre comillas (ver [`folder_argument`]).
     ///
     /// # Errors
-    /// Los de [`Scope::parse`].
+    /// Los de [`Scope::from_words`].
     pub fn parse(text: &str) -> Result<Option<Self>, ScopeError> {
-        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-        if text.is_empty() {
+        let words = argument_words(text);
+        if words.is_empty() {
             return Ok(None);
         }
-        let scope = Scope::parse(&text)?;
-        Ok(Some(Self { scope, text }))
+        let scope = Scope::from_words(words.iter().map(scope_word))?;
+        let words = words
+            .iter()
+            .map(|word| match scope_word(word) {
+                ScopeWord::Tag(tag) => Written::Tag(tag.to_owned()),
+                ScopeWord::Folder(_) => Written::Folder,
+            })
+            .collect();
+        Ok(Some(Self { scope, words }))
     }
 
     /// `F` sobre una carpeta del panel.
     #[must_use]
     pub fn folder(path: VaultPath) -> Self {
         Self {
-            text: format!("{path}/"),
+            words: vec![Written::Folder],
             scope: Scope {
                 folder: Some(path),
                 tags: TagQuery::default(),
@@ -45,7 +64,7 @@ impl Focus {
     #[must_use]
     pub fn tag(name: &str) -> Self {
         Self {
-            text: format!("#{name}"),
+            words: vec![Written::Tag(format!("#{name}"))],
             scope: Scope {
                 folder: None,
                 tags: TagQuery {
@@ -61,10 +80,19 @@ impl Focus {
         &self.scope
     }
 
-    /// `focus: #rust -#archivado`
+    /// `focus: Mis\ notas/ #rust -#archivado`: se puede volver a escribir en
+    /// `:focus` tal cual.
     #[must_use]
     pub fn label(&self) -> String {
-        format!("focus: {}", self.text)
+        let words: Vec<String> = self
+            .words
+            .iter()
+            .filter_map(|word| match word {
+                Written::Tag(tag) => Some(tag.clone()),
+                Written::Folder => self.scope.folder.as_ref().map(folder_argument),
+            })
+            .collect();
+        format!("focus: {}", words.join(" "))
     }
 
     /// Si es el mismo alcance que `other`, aunque se haya escrito distinto
@@ -103,18 +131,6 @@ impl Focus {
         if &moved == folder {
             return false;
         }
-        let words: Vec<String> = self
-            .text
-            .split(' ')
-            .map(|word| {
-                if word.starts_with('#') || word.starts_with("-#") {
-                    word.to_owned()
-                } else {
-                    format!("{moved}/")
-                }
-            })
-            .collect();
-        self.text = words.join(" ");
         self.scope.folder = Some(moved);
         true
     }
@@ -140,6 +156,26 @@ impl Focus {
             files: Arc::new(files),
             folders,
         }
+    }
+}
+
+/// Una carpeta como se escribe en `:focus` y como la muestra el
+/// indicador: `Mis\ notas/`, y `\#ideas/` si parece un tag.
+#[must_use]
+pub fn folder_argument(folder: &VaultPath) -> String {
+    let escaped = escape_argument(folder.as_str());
+    match ScopeWord::of(folder.as_str()) {
+        ScopeWord::Tag(_) => format!("\\{escaped}/"),
+        ScopeWord::Folder(_) => format!("{escaped}/"),
+    }
+}
+
+/// Lo escapado o entre comillas al principio no es un tag: `\#ideas/`.
+fn scope_word(word: &ArgumentWord) -> ScopeWord<'_> {
+    if word.literal_start {
+        ScopeWord::Folder(&word.text)
+    } else {
+        ScopeWord::of(&word.text)
     }
 }
 

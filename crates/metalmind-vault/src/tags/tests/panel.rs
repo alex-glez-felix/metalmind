@@ -8,8 +8,8 @@ use pretty_assertions::assert_eq;
 use rstest::rstest;
 
 use super::graph::panel;
-use super::{Fixture, key, path, tags};
-use crate::tags::{Scope, ScopeError, TagColor, TagIcon, TagQuery, Tags};
+use super::{Fixture, key, path, scope, tags};
+use crate::tags::{Scope, ScopeError, ScopeWord, TagColor, TagIcon, TagQuery, Tags};
 
 fn fixture() -> Fixture {
     Fixture::new(&[
@@ -30,8 +30,8 @@ fn fixture() -> Fixture {
 }
 
 /// El panel dentro de `scope`, con el buzón al final.
-fn render(tags: &Tags, scope: &str) -> String {
-    let filter = Scope::parse(scope).unwrap().filter(tags);
+fn render(tags: &Tags, text: &str) -> String {
+    let filter = scope(text).unwrap().filter(tags);
     let tree = tags.tree(&filter);
     let mut out = panel(tags, &filter);
     writeln!(out, "Sin tags").unwrap();
@@ -122,9 +122,19 @@ Sin tags
 #[case::tags_only("#rust -#archivado", None, "#rust -#archivado")]
 #[case::inbox("-# p", Some("p"), "-#")]
 fn parsing_a_scope(#[case] text: &str, #[case] folder: Option<&str>, #[case] tags: &str) {
-    let scope = Scope::parse(text).unwrap();
+    let scope = scope(text).unwrap();
     assert_eq!(scope.folder, folder.map(path));
     assert_eq!(scope.tags, TagQuery::parse(tags).query);
+}
+
+/// Quien separa las palabras decide qué es carpeta: una con espacios, o
+/// una que empieza con `#`.
+#[test]
+fn a_folder_word_is_a_folder_as_is() {
+    let scope = Scope::from_words([ScopeWord::Folder("Mis notas/"), ScopeWord::Tag("#rust")]);
+    assert_eq!(scope.unwrap().folder, Some(path("Mis notas")));
+    let scope = Scope::from_words([ScopeWord::Folder("#ideas")]);
+    assert_eq!(scope.unwrap().folder, Some(path("#ideas")));
 }
 
 #[rstest]
@@ -133,14 +143,14 @@ fn parsing_a_scope(#[case] text: &str, #[case] folder: Option<&str>, #[case] tag
 #[case("/", ScopeError::InvalidFolder("/".into()))]
 #[case("../x", ScopeError::InvalidFolder("../x".into()))]
 fn invalid_scopes(#[case] text: &str, #[case] error: ScopeError) {
-    assert_eq!(Scope::parse(text), Err(error));
+    assert_eq!(scope(text), Err(error));
 }
 
 #[test]
 fn what_a_scope_offers() {
     let tags = fixture().tags();
-    let offered = |scope: &str| -> Vec<&str> {
-        let filter = Scope::parse(scope).unwrap().filter(&tags);
+    let offered = |text: &str| -> Vec<&str> {
+        let filter = scope(text).unwrap().filter(&tags);
         let all = [
             "tags/rust.md",
             "p/uno.md",
@@ -175,7 +185,7 @@ fn what_a_scope_offers() {
 #[test]
 fn a_new_note_in_focus_gets_the_included_tags() {
     let tags = fixture().tags();
-    let scope = Scope::parse("p/ #rs #UI -#archivado").unwrap();
+    let scope = scope("p/ #rs #UI -#archivado").unwrap();
     assert_eq!(scope.new_note_tags(&tags), ["Rust", "ui"]);
 }
 

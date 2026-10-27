@@ -13,10 +13,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::changes::Rename;
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
-use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, TagPlan, Tags};
+use crate::tags::{DEFAULT_TAGS_FOLDER, Scope, ScopeError, ScopeWord, TagKey, TagPlan, Tags};
 
 pub(super) fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
+}
+
+/// Un alcance de palabras separadas por espacios.
+pub(super) fn scope(text: &str) -> Result<Scope, ScopeError> {
+    Scope::from_words(text.split_whitespace().map(ScopeWord::of))
 }
 
 pub(super) fn key(name: &str) -> TagKey {

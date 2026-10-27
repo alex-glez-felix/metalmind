@@ -313,9 +313,12 @@ impl Editor {
 }
 
 impl Render for Editor {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let status = self.status(cx).map(|status| status_bar(status, &theme));
+        let menu = self.command_line_menu(window.viewport_size().width, &theme, cx);
+        let status = self
+            .status(cx)
+            .map(|status| status_bar(status, menu, &theme));
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)

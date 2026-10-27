@@ -108,3 +108,33 @@ fn sigue_a_su_carpeta_si_se_renombra() {
     let mut tags = Focus::parse("#rust").unwrap().unwrap();
     assert!(!tags.follow(&[renamed("proyectos", "otros")]));
 }
+
+/// Una carpeta con espacios se escribe como en vim, `\ `, o entre comillas,
+/// y el indicador la muestra con `\ ` (#157).
+#[rstest::rstest]
+#[case::escapada(r"Mis\ notas/ #rust", r"focus: Mis\ notas/ #rust")]
+#[case::entre_comillas(r#""Mis notas" #rust"#, r"focus: Mis\ notas/ #rust")]
+#[case::comillas_en_medio(r#"Mis" "notas/ #rust"#, r"focus: Mis\ notas/ #rust")]
+#[case::parece_un_tag(r"\#ideas", r"focus: \#ideas/")]
+#[case::parece_el_buzon(r#""-#" -#"#, r"focus: \-#/ -#")]
+fn una_carpeta_con_espacios_se_escribe_escapada(#[case] text: &str, #[case] label: &str) {
+    let focus = Focus::parse(text).unwrap().unwrap();
+    assert_eq!(focus.label(), label);
+}
+
+/// Lo que muestra el indicador, escrito en `:focus`, es el mismo alcance.
+#[rstest::rstest]
+#[case("Mis notas")]
+#[case("a/b c/d e")]
+#[case(r"con\barra")]
+#[case("con \"comillas\"")]
+#[case("#ideas")]
+#[case("-#ideas")]
+#[case("-x")]
+fn lo_que_se_ve_se_puede_volver_a_escribir(#[case] folder: &str) {
+    let focus = Focus::folder(VaultPath::new(folder).unwrap());
+    let written = focus.label().strip_prefix("focus: ").unwrap().to_owned();
+    let parsed = Focus::parse(&written).unwrap().unwrap();
+    assert!(parsed.same_scope(&focus), "{written:?}");
+    assert_eq!(parsed.label(), focus.label());
+}

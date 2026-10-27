@@ -27,7 +27,7 @@ use std::path::Path;
 use gungraun::prelude::*;
 use gungraun::{Callgrind, EventKind};
 use metalmind_perf::{NoteNames, linked_vault};
-use metalmind_vault::tags::{Scope, TagCompletion, TagPlan, TagQuery, TagTree, Tags};
+use metalmind_vault::tags::{Scope, ScopeWord, TagCompletion, TagPlan, TagQuery, TagTree, Tags};
 use metalmind_vault::{
     Destination, EntryKind, LinkIndex, RenamePlan, Vault, VaultChange, VaultPath,
 };
@@ -237,7 +237,9 @@ fn tags_panel((dir, tags, scope): (TempDir, Tags, Scope)) -> (TagTree, TempDir, 
 
 fn tags_in(notes: usize, scope: Option<&str>) -> (TempDir, Tags, Scope) {
     let (dir, tags) = tagged(notes);
-    let scope = scope.map_or_else(Scope::default, |scope| Scope::parse(scope).unwrap());
+    let scope = scope.map_or_else(Scope::default, |scope| {
+        Scope::from_words(scope.split_whitespace().map(ScopeWord::of)).unwrap()
+    });
     (dir, tags, scope)
 }
 
