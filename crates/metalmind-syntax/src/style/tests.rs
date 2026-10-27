@@ -342,3 +342,56 @@ fn tag_at_no_mira_el_frontmatter_ni_el_codigo() {
     assert_eq!(styles[1].tag_at(8), None);
     assert_eq!(styles[4].tag_at(5), None);
 }
+
+/// El wikilink que se está escribiendo: de su `[[` al cursor, cerrado o no,
+/// y nunca en código, fórmulas, comentarios ni el frontmatter.
+#[rstest::rstest]
+#[case::recien_abierto("ver [[", 6, Some((6..6, false)))]
+#[case::a_medio_escribir("ver [[pla", 9, Some((6..9, false)))]
+#[case::con_texto_despues("ver [[pla y sigue", 9, Some((6..9, false)))]
+#[case::un_embed("![[foto", 7, Some((3..7, false)))]
+#[case::cerrado_con_el_cursor_al_final("[[plan]] y", 6, Some((2..6, true)))]
+#[case::cerrado_antes_de_la_subruta("[[plan#Meta]]", 6, Some((2..6, true)))]
+#[case::cerrado_antes_del_alias("[[plan|el plan]]", 6, Some((2..6, true)))]
+#[case::en_medio_del_destino("[[plan]]", 4, None)]
+#[case::en_la_subruta("[[plan#Me", 9, None)]
+#[case::en_el_alias("[[plan|el", 9, None)]
+#[case::tras_cerrarlo("[[plan]] y", 10, None)]
+#[case::el_ultimo_de_la_linea("[[a]] y [[b", 11, Some((10..11, false)))]
+#[case::sin_corchetes("plan", 4, None)]
+#[case::un_solo_corchete("[pla", 4, None)]
+#[case::en_codigo_inline("`[[pla` y", 6, None)]
+#[case::en_una_formula("$[[x$ y", 4, None)]
+#[case::en_un_comentario("%%[[pla%% y", 7, None)]
+#[case::con_acentos("[[canción", 10, Some((2..10, false)))]
+#[case::fuera_de_un_caracter("[[ñ", 3, None)]
+#[case::escapado("\\[[pla", 6, None)]
+#[case::la_barra_escapada("\\\\[[pla", 7, Some((4..7, false)))]
+#[case::en_codigo_tras_el_corchete("[[pla `co` y", 8, None)]
+#[case::justo_tras_abrir_el_codigo("[[pla `co` y", 7, None)]
+#[case::justo_antes_de_codigo("[[pla`co` y", 5, Some((2..5, false)))]
+#[case::justo_antes_de_un_comentario("[[pla%%co%% y", 5, Some((2..5, false)))]
+#[case::justo_antes_de_una_formula("[[pla$x$ y", 5, Some((2..5, false)))]
+#[case::en_un_comentario_tras_el_corchete("[[pla %%co%% y", 9, None)]
+#[case::en_el_destino_de_un_link_markdown("[x]([[a]]) y", 7, None)]
+#[case::en_el_texto_de_un_link_markdown("[ver [[a]]](b.md) y", 8, None)]
+fn typed_wikilink_line(
+    #[case] line: &str,
+    #[case] at: usize,
+    #[case] typed: Option<(std::ops::Range<usize>, bool)>,
+) {
+    let style = &styled(line)[0];
+    let found = style
+        .typed_wikilink(line, at)
+        .map(|typed| (typed.target, typed.closed));
+    assert_eq!(found, typed);
+}
+
+#[test]
+fn typed_wikilink_no_mira_el_frontmatter_ni_un_bloque_de_codigo() {
+    let text = "---\nup: [[pla\n---\n```\n[[pla\n```\n";
+    let styles = styled(text);
+    let lines: Vec<&str> = text.split('\n').collect();
+    assert_eq!(styles[1].typed_wikilink(lines[1], 9), None);
+    assert_eq!(styles[4].typed_wikilink(lines[4], 5), None);
+}

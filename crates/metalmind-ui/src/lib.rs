@@ -4,6 +4,7 @@
 
 mod actions;
 mod clipboard;
+mod completion;
 mod disk;
 mod document;
 mod editor;
@@ -19,7 +20,6 @@ pub mod picker;
 mod session;
 mod sidebar;
 mod tag_change;
-mod tag_completion;
 mod tag_outline;
 pub mod text_search;
 mod theme;

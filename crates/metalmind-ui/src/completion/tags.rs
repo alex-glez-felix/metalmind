@@ -6,12 +6,13 @@
 //! `#ru` ofrece `Rust` antes que `arquitectura` aunque esta tenga más.
 
 use std::borrow::Cow;
-use std::ops::Range;
 use std::sync::Arc;
 
 use metalmind_search::{FuzzyMatcher, Query};
 use metalmind_syntax::TagPlace;
 use metalmind_vault::tags::{TagCompletion, TagKey};
+
+use super::Selection;
 
 pub struct TagCompletions {
     /// Todos los tags del vault, de más notas a menos.
@@ -20,11 +21,7 @@ pub struct TagCompletions {
     typed: String,
     place: TagPlace,
     shown: Vec<Shown>,
-    selected: usize,
-    /// Si `selected` la eligió el usuario; si no, es la mejor coincidencia.
-    chosen: bool,
-    /// La primera fila que se ve.
-    first: usize,
+    selection: Selection,
 }
 
 /// Un tag de la lista.
@@ -53,10 +50,8 @@ impl TagCompletions {
             candidates,
             typed: typed.to_owned(),
             place,
+            selection: Selection::new(shown.len()),
             shown,
-            selected: 0,
-            chosen: false,
-            first: 0,
         })
     }
 
@@ -84,17 +79,15 @@ impl TagCompletions {
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
         let mut list = Self::open(candidates, &self.typed, self.place, only_here, matcher)?;
-        if !self.chosen {
+        let Some(chosen) = self.selection.chosen() else {
             return Some(list);
-        }
-        let chosen = &self.candidates[self.shown[self.selected].index].key;
+        };
+        let chosen = &self.candidates[self.shown[chosen].index].key;
         let row = list
             .rows()
             .position(|(completion, _)| completion.key == *chosen);
         if let Some(row) = row {
-            list.selected = row;
-            list.chosen = true;
-            list.first = self.first;
+            list.selection.keep(row, &self.selection);
         }
         Some(list)
     }
@@ -113,38 +106,12 @@ impl TagCompletions {
     }
 
     #[must_use]
-    pub fn selected(&self) -> usize {
-        self.selected
+    pub fn selection(&self) -> &Selection {
+        &self.selection
     }
 
-    /// Las filas que se ven, `rows` como mucho. Como en un picker, solo se
-    /// corren cuando la elegida sale de ellas.
-    pub fn visible(&mut self, rows: usize) -> Range<usize> {
-        let rows = rows.clamp(1, self.shown.len());
-        if self.selected < self.first {
-            self.first = self.selected;
-        } else if self.selected >= self.first + rows {
-            self.first = self.selected + 1 - rows;
-        }
-        self.first = self.first.min(self.shown.len() - rows);
-        self.first..self.first + rows
-    }
-
-    /// La siguiente, y tras la última la primera.
-    pub fn select_next(&mut self) {
-        self.selected = (self.selected + 1) % self.shown.len();
-        self.chosen = true;
-    }
-
-    /// La anterior, y antes de la primera la última.
-    pub fn select_previous(&mut self) {
-        self.selected = self.selected.checked_sub(1).unwrap_or(self.shown.len() - 1);
-        self.chosen = true;
-    }
-
-    pub fn select(&mut self, row: usize) {
-        self.selected = row.min(self.shown.len() - 1);
-        self.chosen = true;
+    pub fn selection_mut(&mut self) -> &mut Selection {
+        &mut self.selection
     }
 
     /// Lo que escribe aceptar en lugar de lo escrito: la forma establecida
@@ -152,7 +119,7 @@ impl TagCompletions {
     /// aceptar deja `#Rust`, 05 §3).
     #[must_use]
     pub fn accept(&self) -> String {
-        self.candidates[self.shown[self.selected].index].text(self.place)
+        self.candidates[self.shown[self.selection.selected()].index].text(self.place)
     }
 }
 
@@ -225,4 +192,5 @@ fn matches(
 }
 
 #[cfg(test)]
+#[path = "tags_tests.rs"]
 mod tests;

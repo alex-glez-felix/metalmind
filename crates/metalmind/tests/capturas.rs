@@ -326,6 +326,36 @@ const SCENES: &[(&str, &[Step])] = &[
     ("tags-alias-aplicado", &[Step::Keys("<CR>")]),
     ("tags-icono-invalido", &[Step::Keys("<C-w>hi<BS>libro<CR>")]),
     ("tags-pagina", &[Step::Keys("<Esc>P")]),
+    // El autocompletado de `[[`: con nada escrito (las recientes primero),
+    // muchas notas que coinciden, dos `plan.md` que empatan (una en una
+    // carpeta larguísima), la más honda aceptada (lleva su carpeta: la otra
+    // gana el `[[plan]]` por menos honda), junto al borde de abajo y
+    // una ruta larga junto al borde derecho. Las dos `plan.md` llegan como
+    // de otro programa, para no cambiar las pantallas de antes.
+    (
+        "links-autocompletado",
+        &[
+            Step::Files(vault::write_link_notes),
+            Step::Settle,
+            Step::Keys("<Esc><Esc><C-w>o:e listas.md<CR>Go[["),
+        ],
+    ),
+    ("links-autocompletado-filtrado", &[Step::Keys("idea 1")]),
+    ("links-autocompletado-empate", &[Step::Keys("<Esc>o[[plan")]),
+    ("links-autocompletado-aceptado", &[Step::Keys("<Tab>")]),
+    (
+        "links-autocompletado-borde",
+        &[Step::Keys("<Esc>:e formulas-larga.md<CR>GA [[idea")],
+    ),
+    (
+        "links-autocompletado-ruta-larga",
+        &[Step::Keys(concat!(
+            "<Esc>:e listas.md<CR>Go",
+            "Un texto muy largo que lleva el link hasta el borde derecho de la ventana, ",
+            "aunque la ventana sea ancha y el panel lateral siga abierto, para que la ",
+            "lista se abra pegada al borde y se vea que no sale de [[tampoco cabe",
+        ))],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

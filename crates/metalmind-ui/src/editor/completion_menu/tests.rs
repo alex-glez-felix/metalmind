@@ -1,26 +1,9 @@
-use std::sync::Arc;
-
-use gpui_kit::{Bounds, IntoElement, Render, TestAppContext, Window, anchored, point, px, size};
+use gpui_kit::{IntoElement, Render, TestAppContext, Window, anchored, point, px, size};
 use metalmind_config::Config;
-use metalmind_search::FuzzyMatcher;
-use metalmind_syntax::TagPlace;
-use metalmind_vault::tags::{TagCompletion, TagKey};
 
 use super::*;
 
-fn tag(name: &str, count: usize, aliases: &[&str]) -> TagCompletion {
-    TagCompletion {
-        key: TagKey::new(name),
-        name: name.to_owned(),
-        aliases: aliases.iter().map(|&alias| alias.to_owned()).collect(),
-        count,
-        color: None,
-        icon: None,
-    }
-}
-
 struct MenuProbe {
-    list: TagCompletions,
     max_width: Pixels,
 }
 
@@ -28,8 +11,14 @@ impl Render for MenuProbe {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::with_font(&Config::defaults().unwrap(), "Mono".into());
         let menu = CompletionMenu {
-            list: &self.list,
+            rows: vec![MenuRow {
+                icon: div(),
+                name: "Rust".to_owned(),
+                detail: Some("alias rustacean-de-toda-la-vida-con-un-alias-muy-largo".to_owned()),
+                count: Some("12".to_owned()),
+            }],
             visible: 0..1,
+            selected: 0,
             accept_keys: Some("tab".to_owned()),
             max_width: self.max_width,
         };
@@ -40,23 +29,13 @@ impl Render for MenuProbe {
 /// Las cajas de las partes de la fila de `Rust`, que coincide por un alias
 /// largo, pintada en no más de `max_width`.
 fn laid_out(max_width: Pixels) -> impl Fn(&str) -> Bounds<Pixels> {
-    let alias = "rustacean-de-toda-la-vida-con-un-alias-muy-largo";
-    let candidates: Arc<[TagCompletion]> = Arc::from([tag("Rust", 12, &[alias])]);
-    let list = TagCompletions::open(
-        candidates,
-        "rustacean",
-        TagPlace::Inline,
-        false,
-        &mut FuzzyMatcher::text(),
-    )
-    .unwrap();
     let mut cx = TestAppContext::single();
-    let (_, cx) = cx.add_window_view(|_, _| MenuProbe { list, max_width });
+    let (_, cx) = cx.add_window_view(|_, _| MenuProbe { max_width });
     cx.run_until_parked();
-    let boxes: Vec<(String, Bounds<Pixels>)> = ["", "-name", "-alias", "-count", "-keys"]
+    let boxes: Vec<(String, Bounds<Pixels>)> = ["", "-name", "-detail", "-count", "-keys"]
         .into_iter()
         .map(|part| {
-            let selector = format!("tag-completion-0{part}");
+            let selector = format!("completion-0{part}");
             let bounds = cx.debug_bounds(selector.clone().leak()).unwrap();
             (part.to_owned(), bounds)
         })
@@ -64,8 +43,8 @@ fn laid_out(max_width: Pixels) -> impl Fn(&str) -> Bounds<Pixels> {
     move |part| boxes.iter().find(|(name, _)| name == part).unwrap().1
 }
 
-/// Un alias largo no saca la lista de la ventana: se recorta el alias, y el
-/// nombre, el conteo y la tecla se leen enteros.
+/// Un detalle largo (un alias) no saca la lista de la ventana: se recorta
+/// el detalle, y el nombre, el conteo y la tecla se leen enteros.
 #[test]
 fn un_alias_largo_se_recorta_y_no_pasa_del_ancho() {
     let wide = laid_out(px(10_000.));
@@ -73,7 +52,7 @@ fn un_alias_largo_se_recorta_y_no_pasa_del_ancho() {
     assert!(wide("").size.width > max_width);
     let narrow = laid_out(max_width);
     assert!(narrow("").right() <= max_width, "{:?}", narrow(""));
-    assert!(narrow("-alias").size.width < wide("-alias").size.width);
+    assert!(narrow("-detail").size.width < wide("-detail").size.width);
     assert_eq!(narrow("-name").size, wide("-name").size);
     assert_eq!(narrow("-count").size, wide("-count").size);
     assert_eq!(narrow("-keys").size, wide("-keys").size);

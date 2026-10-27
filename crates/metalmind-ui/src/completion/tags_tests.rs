@@ -91,14 +91,14 @@ fn en_el_frontmatter_acepta_un_escalar_de_yaml() {
 #[test]
 fn elegir_da_la_vuelta() {
     let mut list = open("ru", TagPlace::Inline).unwrap();
-    list.select_previous();
-    assert_eq!(list.selected(), 2);
-    list.select_next();
-    assert_eq!(list.selected(), 0);
-    list.select_next();
+    list.selection_mut().select_previous();
+    assert_eq!(list.selection().selected(), 2);
+    list.selection_mut().select_next();
+    assert_eq!(list.selection().selected(), 0);
+    list.selection_mut().select_next();
     assert_eq!(list.accept(), "rueda");
-    list.select(10);
-    assert_eq!(list.selected(), 2);
+    list.selection_mut().select(10);
+    assert_eq!(list.selection().selected(), 2);
 }
 
 /// Solo es la misma lista con lo mismo escrito, en el mismo lugar y entre
@@ -125,14 +125,17 @@ fn es_la_misma_lista_solo_con_lo_mismo() {
 #[test]
 fn tags_nuevos_dejan_elegido_el_mismo_tag() {
     let mut list = open("ru", TagPlace::Inline).unwrap();
-    list.select_next();
+    list.selection_mut().select_next();
     assert_eq!(list.accept(), "rueda");
     let mut more = vault().to_vec();
     more.insert(0, tag("ruido", 40, &[]));
     let list = list
         .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
         .unwrap();
-    assert_eq!((list.selected(), list.accept()), (2, "rueda".to_owned()));
+    assert_eq!(
+        (list.selection().selected(), list.accept()),
+        (2, "rueda".to_owned())
+    );
 }
 
 /// Sin una fila elegida por el usuario, queda la primera: la mejor
@@ -145,14 +148,17 @@ fn sin_elegir_queda_la_mejor_coincidencia() {
     let list = list
         .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
         .unwrap();
-    assert_eq!((list.selected(), list.accept()), (0, "ruido".to_owned()));
+    assert_eq!(
+        (list.selection().selected(), list.accept()),
+        (0, "ruido".to_owned())
+    );
 }
 
 /// Si el tag elegido ya no está, queda elegida la primera fila.
 #[test]
 fn sin_el_tag_elegido_vuelve_a_la_primera_fila() {
     let mut list = open("ru", TagPlace::Inline).unwrap();
-    list.select_next();
+    list.selection_mut().select_next();
     let without: Vec<TagCompletion> = vault()
         .iter()
         .filter(|completion| completion.name != "rueda")
@@ -161,7 +167,10 @@ fn sin_el_tag_elegido_vuelve_a_la_primera_fila() {
     let list = list
         .with_candidates(Arc::from(without), false, &mut FuzzyMatcher::text())
         .unwrap();
-    assert_eq!((list.selected(), list.accept()), (0, "Rust".to_owned()));
+    assert_eq!(
+        (list.selection().selected(), list.accept()),
+        (0, "Rust".to_owned())
+    );
 }
 
 /// Lo escrito y los nombres se pliegan igual, también cuando el plegado de
@@ -227,22 +236,25 @@ fn lo_escrito_no_se_ofrece_a_si_mismo() {
 #[test]
 fn la_ventana_se_corre_solo_al_salir_la_elegida() {
     let mut list = open("", TagPlace::Inline).unwrap();
-    assert_eq!(list.visible(3), 0..3);
+    assert_eq!(list.selection_mut().visible(3), 0..3);
     for _ in 0..4 {
-        list.select_next();
+        list.selection_mut().select_next();
     }
-    assert_eq!(list.visible(3), 2..5);
-    list.select_previous();
-    list.select_previous();
-    assert_eq!((list.selected(), list.visible(3)), (2, 2..5));
-    list.select_previous();
-    assert_eq!(list.visible(3), 1..4);
-    list.select_previous();
-    list.select_previous();
+    assert_eq!(list.selection_mut().visible(3), 2..5);
+    list.selection_mut().select_previous();
+    list.selection_mut().select_previous();
     assert_eq!(
-        (list.selected(), list.visible(3)),
+        (list.selection().selected(), list.selection_mut().visible(3)),
+        (2, 2..5)
+    );
+    list.selection_mut().select_previous();
+    assert_eq!(list.selection_mut().visible(3), 1..4);
+    list.selection_mut().select_previous();
+    list.selection_mut().select_previous();
+    assert_eq!(
+        (list.selection().selected(), list.selection_mut().visible(3)),
         (4, 2..5),
         "da la vuelta"
     );
-    assert_eq!(list.visible(10), 0..5);
+    assert_eq!(list.selection_mut().visible(10), 0..5);
 }

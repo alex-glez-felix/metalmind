@@ -70,8 +70,13 @@ impl Smoke {
         self.dir.path().join("notas")
     }
 
+    /// Con las carpetas que falten.
     pub fn write(&self, name: &str, contents: &str) {
-        fs::write(self.notes().join(name), contents).expect("escribir la nota");
+        let path = self.notes().join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("crear la carpeta de la nota");
+        }
+        fs::write(path, contents).expect("escribir la nota");
     }
 
     pub fn read(&self, name: &str) -> String {
@@ -184,7 +189,7 @@ impl Smoke {
         let home = self.home();
         let log_path = self.dir.path().join("metalmind.log");
         let log = File::create(&log_path).expect("crear el log");
-        let child = Command::new(env!("CARGO_BIN_EXE_metalmind"))
+        let child = Command::new(binary())
             .args(args)
             .current_dir(cwd)
             .env("DISPLAY", self.xvfb.name())
@@ -395,3 +400,11 @@ impl Window<'_> {
         self.display.request_close(self.id);
     }
 }
+
+/// El `metalmind` que se lanza: el de `METALMIND_BIN` si se da, porque con
+/// un target compartido entre checkouts el de cargo puede ser de otra rama.
+fn binary() -> std::ffi::OsString {
+    std::env::var_os(BIN_VAR).unwrap_or_else(|| env!("CARGO_BIN_EXE_metalmind").into())
+}
+
+const BIN_VAR: &str = "METALMIND_BIN";

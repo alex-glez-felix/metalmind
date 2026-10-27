@@ -26,6 +26,10 @@ pub use self::outcome::KeyOutcome;
 use self::search::{AwaitingSearch, SearchMemory};
 use self::substitute::LastSubstitute;
 
+use std::ops::Range;
+
+use metalmind_buffer::{Buffer, ByteOffset};
+
 use crate::block::Pending;
 use crate::dot::Dot;
 use crate::find::Find;
@@ -35,6 +39,7 @@ use crate::jumplist::FileId;
 use crate::keymap::{Bound, Lookup};
 use crate::mark::FileMarks;
 use crate::register::{RegisterName, Registers, SystemRegister};
+use crate::scroll::Viewport;
 use crate::visual::{LastVisual, Reselect};
 use crate::{Action, Indent, Key, Keymap, Markdown, Mode, Prompt, Target, VimError};
 
@@ -170,6 +175,19 @@ impl Vim {
     #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode
+    }
+
+    /// En Insert sobre un bloque, lo escrito hasta ahora en la primera
+    /// línea del primero: lo que `<Esc>` repetirá en las demás, medido como
+    /// al repetirlo. Vacío si se borró de más. `None` fuera de esa pasada.
+    #[must_use]
+    pub fn block_insert_written(
+        &self,
+        buffer: &Buffer,
+        viewport: &Viewport,
+    ) -> Option<Range<ByteOffset>> {
+        let pending = self.block_insert.as_ref()?.first()?;
+        Some(pending.written(buffer, viewport.columns()))
     }
 
     /// Pasa una tecla al motor. Si la tecla reproduce una macro, la

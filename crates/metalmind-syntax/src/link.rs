@@ -142,7 +142,7 @@ pub(crate) fn split_subpath(
 
 /// El `]]` del wikilink cuyo contenido empieza en `body`, si llega antes que
 /// un salto de línea o que otro `[[`.
-fn wikilink_close(text: &str, body: usize) -> Option<usize> {
+pub(crate) fn wikilink_close(text: &str, body: usize) -> Option<usize> {
     let bytes = text.as_bytes();
     for i in body..bytes.len().saturating_sub(1) {
         match (bytes[i], bytes[i + 1]) {

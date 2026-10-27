@@ -1,4 +1,4 @@
-use metalmind_search::{FuzzyMatcher, Query};
+use metalmind_search::{FuzzyMatcher, Haystacks, Query, Ranked};
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 use rstest::rstest;
@@ -163,4 +163,86 @@ fn prefijo_con_las_reglas_del_fuzzy() {
     assert_eq!(starts("cancion"), ["Cancionero", "canción"]);
     assert_eq!(starts("canción"), ["canción"]);
     assert_eq!(starts("cañ"), ["cañón"]);
+}
+
+/// Lo literal no tiene operadores: `!inbox` busca el `!`, `nota$` el `$`, y
+/// un espacio es parte de lo que se busca.
+#[test]
+fn literal_sin_operadores() {
+    let candidates = [
+        "!inbox",
+        "inbox",
+        "nota$ cara",
+        "nota barata",
+        "^raíz",
+        "plan/diario",
+        "plan de viaje",
+        "a\\ b",
+    ];
+    let found = |text: &str| -> Vec<&str> {
+        FuzzyMatcher::text()
+            .rank(&Query::literal(text), &candidates)
+            .into_iter()
+            .map(|found| candidates[found.index])
+            .collect()
+    };
+    assert_eq!(found("!inb"), ["!inbox"]);
+    assert_eq!(found("nota$"), ["nota$ cara"]);
+    assert_eq!(found("^ra"), ["^raíz"]);
+    assert_eq!(found("ta c"), ["nota$ cara"]);
+    assert_eq!(found("plan d"), ["plan de viaje"], "el espacio se busca");
+    assert_eq!(found("a\\ "), ["a\\ b"], "la barra también");
+    assert_eq!(found("").len(), candidates.len());
+}
+
+/// Sobre candidatos ya convertidos da lo mismo que sobre los textos, y con
+/// una parte de ellos, lo mismo que con esa parte.
+#[test]
+fn convertidos_dan_lo_mismo() {
+    let candidates = [
+        "notas/canción de cuna",
+        "Canciones/la canción",
+        "cañón",
+        "日本語のノート/canción",
+        "plan",
+        "planes/canción",
+    ];
+    let haystacks = Haystacks::new(candidates);
+    let all: Vec<usize> = (0..candidates.len()).collect();
+    for text in ["", "can", "cancion", "Can", "ñ", "zz", "plan"] {
+        for query in [Query::literal(text), Query::prefix(text)] {
+            let matcher = &mut FuzzyMatcher::paths();
+            assert_eq!(
+                matcher.rank_among(&query, &haystacks, &all),
+                matcher.rank(&query, &candidates),
+                "{text}"
+            );
+            let some = [1, 3, 5];
+            let expected: Vec<Ranked> = matcher
+                .rank(&query, &some.map(|index| candidates[index]))
+                .into_iter()
+                .map(|ranked| Ranked {
+                    index: some[ranked.index],
+                    ..ranked
+                })
+                .collect();
+            assert_eq!(
+                matcher.rank_among(&query, &haystacks, &some),
+                expected,
+                "{text}"
+            );
+        }
+    }
+}
+
+/// Un prefijo con espacios es uno solo, no uno por palabra.
+#[test]
+fn prefijo_con_espacios() {
+    let candidates = ["idea 101", "idea suelta 1", "1 idea"];
+    let found: Vec<&str> = FuzzyMatcher::text()
+        .rank(&Query::prefix("idea 1"), &candidates)
+        .into_iter()
+        .map(|found| candidates[found.index])
+        .collect();
+    assert_eq!(found, ["idea 101"]);
 }

@@ -5,7 +5,7 @@
 //! traduce la entrada y se ejecuta lo que el usuario confirmó.
 
 mod handlers;
-mod icons;
+pub(crate) mod icons;
 mod input;
 mod menu;
 mod prompt;

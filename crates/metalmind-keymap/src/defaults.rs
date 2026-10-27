@@ -13,7 +13,7 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(panes());
     bindings.extend(links());
     bindings.extend(editor());
-    bindings.extend(table(View::TagCompletion, TAG_COMPLETION));
+    bindings.extend(table(View::Completion, COMPLETION));
     bindings.extend(table(View::FileTree, TREE));
     bindings.extend(table(View::FileTreeInput, TREE_INPUT));
     bindings.extend(table(View::FileTreeConfirm, TREE_CONFIRM));
@@ -126,12 +126,12 @@ fn editor() -> impl Iterator<Item = Binding> {
 
 /// Como en los pickers, menos `enter`, que en Insert sigue siendo un salto
 /// de línea (05 §3).
-const TAG_COMPLETION: &[(&[Keystroke], EditorAction)] = &[
-    (&[named(KeyName::Tab)], EditorAction::AcceptTagCompletion),
-    (&[ctrl('n')], EditorAction::NextTagCompletion),
-    (&[named(KeyName::Down)], EditorAction::NextTagCompletion),
-    (&[ctrl('p')], EditorAction::PreviousTagCompletion),
-    (&[named(KeyName::Up)], EditorAction::PreviousTagCompletion),
+const COMPLETION: &[(&[Keystroke], EditorAction)] = &[
+    (&[named(KeyName::Tab)], EditorAction::AcceptCompletion),
+    (&[ctrl('n')], EditorAction::NextCompletion),
+    (&[named(KeyName::Down)], EditorAction::NextCompletion),
+    (&[ctrl('p')], EditorAction::PreviousCompletion),
+    (&[named(KeyName::Up)], EditorAction::PreviousCompletion),
 ];
 
 const TREE: &[(&[Keystroke], PanelAction)] = &[

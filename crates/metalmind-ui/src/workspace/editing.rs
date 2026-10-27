@@ -1,12 +1,14 @@
 //! La entrada de un panel: teclas, texto del IME, ratón y portapapeles.
 
+use std::ops::Range;
+
 use metalmind_buffer::{ByteOffset, Goal, Selection, Selections};
 use metalmind_syntax::Conceal;
 use metalmind_vim::{
     Action, Clipboard, Invocation, Key, KeyOutcome, Mode, Operator, PasteSide, SystemRegister,
 };
 
-use super::{Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
+use super::{Message, PaneId, PaneView, Workspace, WorkspaceError, clamp_cursor};
 
 impl Workspace {
     /// Una tecla en `pane`, que pasa a tener el foco si no lo tenía. Los
@@ -121,6 +123,37 @@ impl Workspace {
             last = Some(self.feed(pane, Key::Char(c), clipboard)?);
         }
         Ok(last)
+    }
+
+    /// Si al completar se puede reescribir `typed` en `view`: en Insert
+    /// sobre un bloque, solo si es parte de lo escrito en esta pasada y
+    /// termina donde termina eso, porque `<Esc>` repite solo eso en las
+    /// demás líneas.
+    pub(super) fn can_type_over(&self, view: &PaneView<'_>, typed: Range<ByteOffset>) -> bool {
+        self.vim
+            .block_insert_written(view.buffer(), &view.viewport)
+            .is_none_or(|written| written.start <= typed.start && written.end == typed.end)
+    }
+
+    /// Cambia `typed`, lo que acaba de escribirse antes del cursor, por
+    /// `text`, como si se tecleara: entra en el mismo paso de undo que el
+    /// resto de la pasada por Insert y `.` lo repite. Como el completado de
+    /// nvim, si `text` sigue a lo escrito solo se teclea el resto.
+    pub(super) fn type_over(
+        &mut self,
+        pane: PaneId,
+        typed: &str,
+        text: &str,
+        clipboard: &mut dyn Clipboard,
+    ) -> Result<(), WorkspaceError> {
+        let rest = text.strip_prefix(typed);
+        if rest.is_none() {
+            for _ in typed.chars() {
+                self.feed(pane, Key::Backspace, clipboard)?;
+            }
+        }
+        self.type_text(pane, rest.unwrap_or(text), clipboard)?;
+        Ok(())
     }
 
     /// Selección hecha con el ratón, con `head` exclusivo. Un clic en Normal
