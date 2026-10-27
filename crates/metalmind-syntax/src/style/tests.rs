@@ -365,6 +365,12 @@ fn tag_at_no_mira_el_frontmatter_ni_el_codigo() {
 #[case::en_un_comentario("%%[[pla%% y", 7, None)]
 #[case::con_acentos("[[canción", 10, Some((2..10, false)))]
 #[case::fuera_de_un_caracter("[[ñ", 3, None)]
+#[case::escapado("\\[[pla", 6, None)]
+#[case::la_barra_escapada("\\\\[[pla", 7, Some((4..7, false)))]
+#[case::en_codigo_tras_el_corchete("[[pla `co` y", 8, None)]
+#[case::en_un_comentario_tras_el_corchete("[[pla %%co%% y", 9, None)]
+#[case::en_el_destino_de_un_link_markdown("[x]([[a]]) y", 7, None)]
+#[case::en_el_texto_de_un_link_markdown("[ver [[a]]](b.md) y", 8, None)]
 fn typed_wikilink_line(
     #[case] line: &str,
     #[case] at: usize,

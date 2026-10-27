@@ -16,10 +16,11 @@ pub struct TypedWikilink {
 
 impl LineStyle {
     /// El destino de wikilink que termina en el byte `at` de `line`, la
-    /// línea de este estilo: tras su `[[` (o `![[`), sin `|`, `#` ni otro
-    /// `[[` de por medio. Si un `]]` lo cierra, el cursor tiene que estar al
-    /// final del destino. Nunca en código, fórmulas, comentarios ni el
-    /// frontmatter.
+    /// línea de este estilo: tras su `[[` (o `![[`) sin escapar, sin `|`,
+    /// `#` ni otro `[[` de por medio. Si un `]]` lo cierra, el cursor tiene
+    /// que estar al final del destino. Como el scanner, nunca dentro de otro
+    /// link (el destino de uno markdown), de código, fórmulas, comentarios
+    /// ni el frontmatter.
     #[must_use]
     pub fn typed_wikilink(&self, line: &str, at: usize) -> Option<TypedWikilink> {
         if matches!(self.kind, LineKind::Frontmatter | LineKind::Fence(_)) {
@@ -31,7 +32,10 @@ impl LineStyle {
         if before[body..].contains(['|', '#']) || before[body..].contains("]]") {
             return None;
         }
-        if self.is_verbatim(open) {
+        if is_escaped(before, open)
+            || self.is_verbatim(open..at)
+            || self.is_in_other_link(line, open)
+        {
             return None;
         }
         let closed = match wikilink_close(line, body) {
@@ -51,14 +55,35 @@ impl LineStyle {
         })
     }
 
-    /// Si el byte `at` cae en algo donde un `[[` no es un link.
-    fn is_verbatim(&self, at: usize) -> bool {
+    /// Si `range` toca algo donde un `[[` no es un link.
+    fn is_verbatim(&self, range: Range<usize>) -> bool {
         self.spans.iter().any(|span| {
-            span.range.contains(&at)
+            span.range.start <= range.end
+                && range.start < span.range.end
                 && matches!(
                     span.style.role,
                     Role::Code | Role::Token(_) | Role::Math | Role::Comment
                 )
         })
     }
+
+    /// Si el `[[` en `open` es parte de otro link de la línea y no el
+    /// principio de uno propio.
+    fn is_in_other_link(&self, line: &str, open: usize) -> bool {
+        let own =
+            |start: usize| start == open || (start + 1 == open && line[start..].starts_with('!'));
+        self.links
+            .iter()
+            .any(|link| link.range.contains(&open) && !own(link.range.start))
+    }
+}
+
+/// Si el `[[` en `open` va tras un `\` que no está escapado él mismo.
+fn is_escaped(before: &str, open: usize) -> bool {
+    let slashes = before[..open]
+        .bytes()
+        .rev()
+        .take_while(|&byte| byte == b'\\')
+        .count();
+    slashes % 2 == 1
 }
