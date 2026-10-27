@@ -104,27 +104,24 @@ fn fnv(id: &str) -> u64 {
 /// contenido, las flechas pegadas con sus puntos y los trazos con los suyos.
 #[must_use]
 pub fn to_excalidraw(board: &Board) -> Scene {
+    let ids = board
+        .nodes
+        .iter()
+        .map(|n| &n.id)
+        .chain(board.edges.iter().map(|e| &e.id));
+    let mut out = Exporter::new(ids.cloned());
     let mut drafts: Vec<Draft> = Vec::new();
-    let mut bound: std::collections::HashMap<String, Vec<Value>> = std::collections::HashMap::new();
-    {
-        let mut bind = |owner: &str, kind: &str, id: &str| {
-            bound
-                .entry(owner.to_owned())
-                .or_default()
-                .push(json!({"type": kind, "id": id}));
-        };
-        for node in &board.nodes {
-            drafts.extend(node_drafts(node, &mut bind));
-        }
-        for edge in &board.edges {
-            if let Some(geometry) = geometria::route(board, edge) {
-                drafts.extend(edge_drafts(
-                    edge,
-                    &geometry.path,
-                    geometry.label_at,
-                    &mut bind,
-                ));
-            }
+    for node in &board.nodes {
+        drafts.extend(node_drafts(node, &mut out));
+    }
+    for edge in &board.edges {
+        if let Some(geometry) = geometria::route(board, edge) {
+            drafts.extend(edge_drafts(
+                edge,
+                &geometry.path,
+                geometry.label_at,
+                &mut out,
+            ));
         }
     }
     let mut scene = Scene::new();
@@ -136,7 +133,7 @@ pub fn to_excalidraw(board: &Board) -> Scene {
             .unwrap_or_default()
             .to_owned();
         let mut draft = draft.set("index", json!(fractional_index(index)));
-        if let Some(list) = bound.get(&id) {
+        if let Some(list) = out.bound.get(&id) {
             draft = draft.set("boundElements", Value::Array(list.clone()));
         }
         scene.push(draft.0);
@@ -144,12 +141,48 @@ pub fn to_excalidraw(board: &Board) -> Scene {
     scene
 }
 
+/// Lo que se va sabiendo al exportar: los ids ya usados (un texto generado
+/// no puede repetir uno) y qué elementos quedan pegados a cada forma.
+struct Exporter {
+    taken: std::collections::HashSet<String>,
+    bound: std::collections::HashMap<String, Vec<Value>>,
+}
+
+impl Exporter {
+    fn new(ids: impl IntoIterator<Item = String>) -> Self {
+        Self {
+            taken: ids.into_iter().collect(),
+            bound: std::collections::HashMap::new(),
+        }
+    }
+
+    fn bind(&mut self, owner: &str, kind: &str, id: &str) {
+        self.bound
+            .entry(owner.to_owned())
+            .or_default()
+            .push(json!({"type": kind, "id": id}));
+    }
+
+    /// `a-texto`, o `a-texto-2` si ya existe.
+    fn label_id(&mut self, owner: &str) -> String {
+        let base = format!("{owner}-texto");
+        let id = std::iter::once(base.clone())
+            // Con `taken.len() + 2` candidatos, alguno está libre.
+            .chain((2..=self.taken.len() + 2).map(|n| format!("{base}-{n}")))
+            .find(|id| !self.taken.contains(id))
+            .unwrap_or(base);
+        self.taken.insert(id.clone());
+        id
+    }
+}
+
 /// Agrega un nodo al final de una escena, como lo haría Excalidraw: con el
 /// índice siguiente y sin tocar los demás elementos.
 pub fn push_node(scene: &mut Scene, node: &Node) {
-    let mut ignore = |_: &str, _: &str, _: &str| {};
-    let next = scene.elements().len();
-    for (offset, draft) in node_drafts(node, &mut ignore).into_iter().enumerate() {
+    let elements = scene.elements();
+    let mut out = Exporter::new(elements.iter().map(|e| e.id.clone()));
+    let next = elements.len();
+    for (offset, draft) in node_drafts(node, &mut out).into_iter().enumerate() {
         scene.push(draft.set("index", json!(fractional_index(next + offset))).0);
     }
 }
@@ -158,7 +191,7 @@ pub fn push_node(scene: &mut Scene, node: &Node) {
     clippy::cast_precision_loss,
     reason = "las coordenadas de una pizarra caben en f32"
 )]
-fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draft> {
+fn node_drafts(node: &Node, out: &mut Exporter) -> Vec<Draft> {
     let (x, y, w, h) = (
         node.x as f32,
         node.y as f32,
@@ -166,24 +199,22 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
         node.height as f32,
     );
     let color = stroke_color(node.color.as_deref());
-    let boxed =
-        |kind: &str, text: &str, link: Option<String>, bind: &mut dyn FnMut(&str, &str, &str)| {
-            let text_id = format!("{}-texto", node.id);
-            bind(&node.id, "text", &text_id);
-            let shape = Draft::new(&node.id, kind, x, y, w, h, &color)
-                .set(
-                    "roundness",
-                    if kind == "rectangle" {
-                        json!({"type": 3})
-                    } else {
-                        Value::Null
-                    },
-                )
-                .set("link", link.map_or(Value::Null, Value::from));
-            let label =
-                Draft::text_in(&text_id, Some((&node.id, [x, y, w, h])), x, y, text, &color);
-            vec![shape, label]
-        };
+    let boxed = |kind: &str, text: &str, link: Option<String>, out: &mut Exporter| {
+        let text_id = out.label_id(&node.id);
+        out.bind(&node.id, "text", &text_id);
+        let shape = Draft::new(&node.id, kind, x, y, w, h, &color)
+            .set(
+                "roundness",
+                if kind == "rectangle" {
+                    json!({"type": 3})
+                } else {
+                    Value::Null
+                },
+            )
+            .set("link", link.map_or(Value::Null, Value::from));
+        let label = Draft::text_in(&text_id, Some((&node.id, [x, y, w, h])), x, y, text, &color);
+        vec![shape, label]
+    };
     match &node.kind {
         NodeKind::Text {
             text,
@@ -195,7 +226,7 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
                 Shape::Diamond => "diamond",
                 Shape::Rectangle | Shape::None => "rectangle",
             };
-            boxed(kind, text, None, bind)
+            boxed(kind, text, None, out)
         }
         NodeKind::File { file, subpath } => {
             // Con la extensión: `[[v1.2]]` sería ambiguo al volver.
@@ -205,10 +236,10 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
                 "rectangle",
                 name.rsplit('/').next().unwrap_or(name),
                 Some(target),
-                bind,
+                out,
             )
         }
-        NodeKind::Link { url } => boxed("rectangle", url, Some(url.clone()), bind),
+        NodeKind::Link { url } => boxed("rectangle", url, Some(url.clone()), out),
         NodeKind::Group { label } => {
             vec![
                 Draft::new(&node.id, "frame", x, y, w, h, INK)
@@ -235,12 +266,7 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
     }
 }
 
-fn edge_drafts(
-    edge: &Edge,
-    path: &EdgePath,
-    label_at: P,
-    bind: &mut impl FnMut(&str, &str, &str),
-) -> Vec<Draft> {
+fn edge_drafts(edge: &Edge, path: &EdgePath, label_at: P, out: &mut Exporter) -> Vec<Draft> {
     let points: Vec<P> = match path {
         EdgePath::Polyline(points) => points.clone(),
         // Excalidraw guarda una flecha curva como puntos por los que pasa.
@@ -266,8 +292,8 @@ fn edge_drafts(
             P::new(hi.x.max(p.x), hi.y.max(p.y)),
         )
     });
-    bind(&edge.from.node, "arrow", &edge.id);
-    bind(&edge.to.node, "arrow", &edge.id);
+    out.bind(&edge.from.node, "arrow", &edge.id);
+    out.bind(&edge.to.node, "arrow", &edge.id);
     let color = stroke_color(edge.color.as_deref());
     let head = |tip: Tip| {
         if tip == Tip::Arrow {
@@ -304,8 +330,8 @@ fn edge_drafts(
         .set("elbowed", json!(edge.route == Route::Elbow)),
     ];
     if let Some(label) = &edge.label {
-        let label_id = format!("{}-texto", edge.id);
-        bind(&edge.id, "text", &label_id);
+        let label_id = out.label_id(&edge.id);
+        out.bind(&edge.id, "text", &label_id);
         let area = [label_at.x - 80.0, label_at.y - 12.5, 160.0, 25.0];
         drafts.push(Draft::text_in(
             &label_id,
@@ -319,32 +345,38 @@ fn edge_drafts(
     drafts
 }
 
-/// Los `index` de Excalidraw son índices fraccionarios en base 62: `a0`…`az`
-/// y luego `b00`…`bzz`. Una escena nueva usa los enteros seguidos.
+/// Los `index` de Excalidraw son índices fraccionarios en base 62: la
+/// letra dice cuántas cifras siguen (`a0`…`az`, `b00`…`bzz`, `c000`…), así
+/// que los enteros seguidos se ordenan igual como cadenas.
 fn fractional_index(index: usize) -> String {
     const DIGITS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    let digit = |i: usize| char::from(DIGITS[i % 62]);
-    if index < 62 {
-        format!("a{}", digit(index))
-    } else {
-        let rest = index - 62;
-        format!("b{}{}", digit(rest / 62 % 62), digit(rest))
+    let (mut rest, mut width, mut span) = (index, 1_u32, 62_usize);
+    while rest >= span {
+        rest -= span;
+        width += 1;
+        span = span.saturating_mul(62);
     }
+    let head = char::from(b'a' + u8::try_from(width - 1).unwrap_or(25));
+    let digits: String = (0..width)
+        .rev()
+        .map(|place| char::from(DIGITS[rest / 62_usize.pow(place) % 62]))
+        .collect();
+    format!("{head}{digits}")
 }
 
-/// Lo que el importador no sabe pasar a la pizarra, para decírselo a quien
-/// convierte.
+/// Lo que el importador no pasa entero a la pizarra (un elemento que se
+/// salta, o uno que pasa sin algo), para decírselo a quien convierte.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Skipped {
+pub struct Loss {
     pub id: String,
     pub reason: &'static str,
 }
 
 /// Un `.excalidraw` como pizarra. Cajas, elipses y rombos con su texto, las
 /// tarjetas (`link: "[[nota]]"`), los textos sueltos, el lápiz y las
-/// flechas pegadas por los dos lados pasan; lo demás se lista en `Skipped`.
+/// flechas pegadas por los dos lados pasan; lo demás se lista en `Loss`.
 #[must_use]
-pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
+pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Loss>) {
     let read = scene.read();
     let elements = read.elements;
     let contained: std::collections::HashMap<&str, &Element> = elements
@@ -352,17 +384,31 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
         .filter_map(|e| e.container_id.as_deref().map(|c| (c, e)))
         .collect();
     let mut board = Board::default();
-    let mut skipped: Vec<Skipped> = read
+    let mut skipped: Vec<Loss> = read
         .unreadable
         .into_iter()
-        .map(|id| Skipped {
+        .map(|id| Loss {
             id,
             reason: "elemento que no se lee",
         })
         .collect();
+    let mut seen = std::collections::HashSet::new();
     for element in &elements {
         if element.container_id.is_some() {
             continue;
+        }
+        if !seen.insert(element.id.as_str()) {
+            skipped.push(Loss {
+                id: element.id.clone(),
+                reason: "id repetido: se quedó el primero",
+            });
+            continue;
+        }
+        if element.angle != 0.0 {
+            skipped.push(Loss {
+                id: element.id.clone(),
+                reason: "girado: pasa sin el giro (la pizarra no gira formas)",
+            });
         }
         let label = contained
             .get(element.id.as_str())
@@ -370,7 +416,7 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
         match import(element, label) {
             Imported::Node(node) => board.nodes.push(node),
             Imported::Edge(edge) => board.edges.push(edge),
-            Imported::Skip(reason) => skipped.push(Skipped {
+            Imported::Skip(reason) => skipped.push(Loss {
                 id: element.id.clone(),
                 reason,
             }),
@@ -381,7 +427,7 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
     board.edges.retain(|edge| {
         let keep = ids.contains(&edge.from.node) && ids.contains(&edge.to.node);
         if !keep {
-            skipped.push(Skipped {
+            skipped.push(Loss {
                 id: edge.id.clone(),
                 reason: "flecha pegada a algo que no se importó",
             });
@@ -392,8 +438,9 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
 }
 
 /// `[[nota#Sección|alias]]` es la ruta `nota.md` y el subpath `#Sección`.
-/// Un nombre sin extensión, o con una que no es de adjunto (`v1.2`), es una
-/// nota; `[[plano.pdf]]` o `[[mapa.canvas]]` van tal cual.
+/// Un nombre con extensión de letras (`datos.csv`, `mapa.canvas`) va tal
+/// cual; sin extensión, o si lo que sigue al punto lleva cifras (`v1.2`), es
+/// una nota. Dentro de Metalmind lo decidiría el índice del vault.
 fn note_file(link: &str) -> Option<NodeKind> {
     let target = link.strip_prefix("[[")?.strip_suffix("]]")?;
     let target = target.split('|').next().unwrap_or(target);
@@ -401,32 +448,17 @@ fn note_file(link: &str) -> Option<NodeKind> {
         Some(at) => (&target[..at], Some(target[at..].to_owned())),
         None => (target, None),
     };
-    let extension = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
-    let file = match extension.as_deref() {
-        Some("md") => name.to_owned(),
-        Some(e) if ATTACHMENTS.contains(&e) => name.to_owned(),
-        _ => format!("{name}.md"),
+    let last = name.rsplit('/').next().unwrap_or(name);
+    let has_extension = last.rsplit_once('.').is_some_and(|(stem, ext)| {
+        !stem.is_empty() && !ext.is_empty() && ext.chars().all(|c| c.is_ascii_alphabetic())
+    });
+    let file = if has_extension {
+        name.to_owned()
+    } else {
+        format!("{name}.md")
     };
     Some(NodeKind::File { file, subpath })
 }
-
-/// Las extensiones que Obsidian abre como adjunto y no como nota.
-const ATTACHMENTS: [&str; 14] = [
-    "canvas",
-    "excalidraw",
-    "pdf",
-    "png",
-    "jpg",
-    "jpeg",
-    "gif",
-    "webp",
-    "svg",
-    "mp3",
-    "mp4",
-    "webm",
-    "wav",
-    "ogg",
-];
 
 #[expect(
     clippy::cast_possible_truncation,
@@ -627,13 +659,25 @@ mod tests {
             ("planos/casa.PDF".to_owned(), None)
         );
         assert_eq!(file("[[mapa.canvas]]"), ("mapa.canvas".to_owned(), None));
+        assert_eq!(
+            file("[[datos/ventas.csv]]"),
+            ("datos/ventas.csv".to_owned(), None)
+        );
+        assert_eq!(file("[[spec.docx]]"), ("spec.docx".to_owned(), None));
+        assert_eq!(
+            file("[[diario/2026.10.26]]"),
+            ("diario/2026.10.26.md".to_owned(), None)
+        );
         assert_eq!(note_file("https://jsoncanvas.org/"), None);
     }
 
     #[test]
     fn a_dotted_note_and_an_attachment_survive_excalidraw() {
         let mut board = generar::example();
-        for (id, file) in [("nota-03", "notas/v1.2.md"), ("nota-07", "planos/casa.pdf")] {
+        for (id, file) in [
+            ("nota-03", "notas/v1.2.md"),
+            ("nota-07", "datos/ventas.csv"),
+        ] {
             if let Some(card) = board.nodes.iter_mut().find(|n| n.id == id) {
                 card.kind = NodeKind::File {
                     file: file.to_owned(),
@@ -671,6 +715,78 @@ mod tests {
     }
 
     #[test]
+    fn generated_label_ids_never_repeat_a_real_one() {
+        let mut board = generar::example();
+        // Un nodo cuyo id es el que tendría el texto de `formato`.
+        let mut clash = board.node("vault").cloned().unwrap();
+        clash.id = "formato-texto".to_owned();
+        clash.y += 400;
+        board.nodes.push(clash);
+        let scene = to_excalidraw(&board);
+        let ids: Vec<String> = scene.elements().into_iter().map(|e| e.id).collect();
+        let unique: std::collections::HashSet<&String> = ids.iter().collect();
+        assert_eq!(unique.len(), ids.len());
+        assert!(ids.contains(&"formato-texto-2".to_owned()), "{ids:?}");
+    }
+
+    #[test]
+    fn repeated_and_rotated_elements_are_reported() {
+        let mut scene = to_excalidraw(&generar::example());
+        scene.push(
+            Draft::new("titulo", "text", 20.0, 0.0, 10.0, 10.0, INK)
+                .set("text", json!("otra"))
+                .0,
+        );
+        scene.push(
+            Draft::new("girada", "rectangle", 0.0, 900.0, 80.0, 40.0, INK)
+                .set("angle", json!(0.3))
+                .0,
+        );
+        let (board, losses) = from_excalidraw(&scene);
+        let reasons: Vec<(&str, &str)> = losses.iter().map(|l| (l.id.as_str(), l.reason)).collect();
+        assert!(
+            reasons
+                .iter()
+                .any(|(id, r)| *id == "titulo" && r.starts_with("id repetido")),
+            "{reasons:?}"
+        );
+        assert!(
+            reasons
+                .iter()
+                .any(|(id, r)| *id == "girada" && r.starts_with("girado")),
+            "{reasons:?}"
+        );
+        assert!(
+            board.node("girada").is_some(),
+            "lo girado pasa, sin el giro"
+        );
+        assert!(Board::parse(&board.write()).is_ok());
+    }
+
+    #[test]
+    fn an_imported_stroke_stays_where_it_was() {
+        let mut scene = Scene::new();
+        // Puntos relativos a (100, 200) que no empiezan en 0: Excalidraw los guarda así.
+        scene.push(
+            Draft::new("lapiz", "freedraw", 100.0, 200.0, 40.0, 30.0, INK)
+                .set("points", json!([[-10, 5], [30, -25], [12, 5]]))
+                .0,
+        );
+        let (board, losses) = from_excalidraw(&scene);
+        assert_eq!(losses, []);
+        let node = board.node("lapiz").unwrap();
+        let NodeKind::Stroke { points, .. } = &node.kind else {
+            panic!("es un trazo");
+        };
+        #[expect(clippy::cast_precision_loss, reason = "coordenadas chicas")]
+        let absolute: Vec<(f32, f32)> = points
+            .iter()
+            .map(|p| (node.x as f32 + p.x, node.y as f32 + p.y))
+            .collect();
+        assert_eq!(absolute, [(90.0, 205.0), (130.0, 175.0), (112.0, 205.0)]);
+    }
+
+    #[test]
     fn a_loose_arrow_is_reported_not_lost_silently() {
         let mut scene = Scene::new();
         scene.push(
@@ -685,8 +801,12 @@ mod tests {
 
     #[test]
     fn fractional_indices_grow_as_strings() {
-        let indices: Vec<_> = (0..1300).map(fractional_index).collect();
+        let indices: Vec<_> = (0..4000).map(fractional_index).collect();
         assert!(indices.windows(2).all(|pair| pair[0] < pair[1]));
         assert_eq!((indices[61].as_str(), indices[62].as_str()), ("az", "b00"));
+        let at = |i: usize| fractional_index(i);
+        assert_eq!((at(3905).as_str(), at(3906).as_str()), ("bzz", "c000"));
+        let wide: Vec<_> = (3800..250_000).step_by(7).map(fractional_index).collect();
+        assert!(wide.windows(2).all(|pair| pair[0] < pair[1]));
     }
 }

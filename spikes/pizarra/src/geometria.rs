@@ -188,6 +188,9 @@ pub fn route(board: &Board, edge: &Edge) -> Option<EdgeGeometry> {
 #[must_use]
 pub fn route_between(from: &Node, to: &Node, edge: &Edge) -> EdgeGeometry {
     let (a, b) = (Rect::of(from), Rect::of(to));
+    if from.id == to.id {
+        return self_loop(&a);
+    }
     let from_side = edge.from.side.unwrap_or_else(|| facing_side(&a, &b));
     let to_side = edge.to.side.unwrap_or_else(|| facing_side(&b, &a));
     match edge.route {
@@ -225,6 +228,23 @@ pub fn route_between(from: &Node, to: &Node, edge: &Edge) -> EdgeGeometry {
             b.side_point(to_side),
             to_side,
         ),
+    }
+}
+
+/// Una flecha de un nodo a sí mismo: sale por la derecha y vuelve por
+/// arriba, por fuera de la caja, como en Obsidian.
+fn self_loop(r: &Rect) -> EdgeGeometry {
+    let reach = (r.w.min(r.h) * 0.6).clamp(40.0, 90.0);
+    let start = P::new(r.x + r.w, r.y + r.h * 0.35);
+    let end = P::new(r.x + r.w * 0.65, r.y);
+    let c1 = start.add(normal(Side::Right), reach);
+    let c2 = end.add(normal(Side::Top), reach);
+    let curve = [start, c1, c2, end];
+    EdgeGeometry {
+        path: EdgePath::Cubic(curve),
+        start_from: c1,
+        end_from: c2,
+        label_at: cubic_at(curve, 0.5),
     }
 }
 
@@ -441,6 +461,29 @@ mod tests {
             None,
             "esquina del rombo"
         );
+    }
+
+    #[test]
+    fn an_arrow_to_its_own_node_loops_outside_it() {
+        let board = generar::example();
+        for route in [Route::Curve, Route::Straight, Route::Elbow] {
+            let mut edge = board.edges[0].clone();
+            edge.to.node.clone_from(&edge.from.node);
+            edge.route = route;
+            let g = route_between(
+                board.node(&edge.from.node).unwrap(),
+                board.node(&edge.to.node).unwrap(),
+                &edge,
+            );
+            let r = board.node(&edge.from.node).map(Rect::of).unwrap();
+            assert!(g.start().distance(g.end()) > 10.0, "{route:?}");
+            assert!(g.start_from.distance(g.end()) > 1.0 && g.end_from.distance(g.end()) > 1.0);
+            let middle = cubic_at([g.start(), g.start_from, g.end_from, g.end()], 0.5);
+            assert!(
+                !r.contains(Shape::Rectangle, middle),
+                "{route:?}: {middle:?} dentro de {r:?}"
+            );
+        }
     }
 
     #[test]

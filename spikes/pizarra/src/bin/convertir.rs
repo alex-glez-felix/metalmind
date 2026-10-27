@@ -23,9 +23,13 @@ fn convertir(entrada: &str, salida: &str) -> Result<String, String> {
             let escena = Scene::parse(&texto).map_err(|e| format!("{entrada}: {e}"))?;
             let (board, saltados) = mapeo::from_excalidraw(&escena);
             for s in &saltados {
-                eprintln!("no se convirtió {}: {}", s.id, s.reason);
+                eprintln!("{}: {}", s.id, s.reason);
             }
-            Ok(board.write())
+            let texto = board.write();
+            // Lo que se escribe tiene que poder leerse: si no, es un error del importador.
+            Board::parse(&texto)
+                .map_err(|e| format!("la conversión no es un .canvas válido: {e}"))?;
+            Ok(texto)
         }
         (Some("canvas"), Some("excalidraw")) => {
             let board = Board::parse(&texto).map_err(|e| format!("{entrada}: {e}"))?;

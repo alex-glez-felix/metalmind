@@ -58,6 +58,8 @@ pub struct Element {
     /// El título de un `frame`.
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    pub angle: f64,
     /// Una flecha en codo (`elbowed` de Excalidraw 0.18).
     #[serde(default)]
     pub elbowed: bool,
