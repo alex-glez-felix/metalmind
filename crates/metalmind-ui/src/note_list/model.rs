@@ -165,10 +165,6 @@ impl NoteList {
             .take()
             .map(|target| renamed(target, &update.changes));
         let stale = self.cards.apply(&update.changes, &self.index);
-        if !self.cards_ready {
-            // Sin fechas no hay orden: se muestra al llegar las tarjetas.
-            return (Step::default(), stale);
-        }
         (self.refill(), stale)
     }
 
@@ -187,6 +183,10 @@ impl NoteList {
     }
 
     fn refill(&mut self) -> Step<Note> {
+        if !self.cards_ready {
+            // Sin fechas no hay orden: se muestra al llegar las tarjetas.
+            return Step::default();
+        }
         let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
         let step = self.filter.set_source(self.ordered(), narrowing);
         self.follow(step)
