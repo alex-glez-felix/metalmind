@@ -70,6 +70,7 @@ fn indexed(text: &str, link: &Link, number: usize, bounds: &Range<usize>) -> Ind
         target_text: link.target_text(text).into_owned(),
         subpath: subpath(text, link),
         line: number,
+        column: link.span.start - bounds.start,
         context: context(text, &link.span, bounds),
         bracketed: link.syntax == LinkSyntax::Markdown
             && text[link.span.start..link.target.start]
@@ -130,15 +131,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn line_and_context_of_each_link() {
+    fn line_column_and_context_of_each_link() {
         let text = "uno\r\ndos [[a]] tres\n\n[x](b.md) y `[[c]]`";
         let links = scan_links(text);
-        let shown: Vec<(usize, &str, &str)> = links
+        let shown: Vec<(usize, usize, &str, &str)> = links
             .iter()
             .map(|link| {
                 let context = &link.context;
                 (
                     link.line,
+                    link.column,
                     context.text.as_str(),
                     &context.text[context.link.clone()],
                 )
@@ -147,8 +149,8 @@ mod tests {
         assert_eq!(
             shown,
             [
-                (1, "dos [[a]] tres", "[[a]]"),
-                (3, "[x](b.md) y `[[c]]`", "[x](b.md)")
+                (1, 4, "dos [[a]] tres", "[[a]]"),
+                (3, 0, "[x](b.md) y `[[c]]`", "[x](b.md)")
             ]
         );
     }
@@ -157,6 +159,7 @@ mod tests {
     fn a_long_line_is_cut_on_char_boundaries() {
         let text = format!("{}[[a]]{}", "é".repeat(100), "ñ".repeat(100));
         let link = &scan_links(&text)[0];
+        assert_eq!(link.column, 200, "en bytes");
         assert!(link.context.text.len() <= 2 * CONTEXT_BYTES + "[[a]]".len() + 2);
         assert_eq!(&link.context.text[link.context.link.clone()], "[[a]]");
     }

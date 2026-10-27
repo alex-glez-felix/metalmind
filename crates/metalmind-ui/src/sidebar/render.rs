@@ -84,6 +84,7 @@ impl Sidebar {
         let title = match self.panel.view {
             PanelView::Folders => "Carpetas",
             PanelView::Tags => "Tags",
+            PanelView::Backlinks => "Backlinks",
         };
         let buttons = div()
             .flex()
@@ -128,8 +129,10 @@ impl Sidebar {
                 .child(text)
                 .into_any_element()
         };
-        if self.panel.view == PanelView::Tags {
-            return self.tag_body(theme, focused, cx);
+        match self.panel.view {
+            PanelView::Tags => return self.tag_body(theme, focused, cx),
+            PanelView::Backlinks => return self.backlink_body(theme, focused, cx),
+            PanelView::Folders => {}
         }
         let rows = self.panel.tree.rows().len();
         if rows == 0 {
@@ -182,7 +185,7 @@ impl Sidebar {
         self.focus(window, cx);
         if let Some(click) = self.panel.click(at, event.click_count()) {
             let placement = crate::workspace::Placement::Current;
-            self.open(&click.path, placement, click.focus_editor, cx);
+            self.open(&click.path, click.at, placement, click.focus_editor, cx);
         }
         cx.notify();
     }
@@ -209,6 +212,11 @@ impl Sidebar {
                     (None, None) => None,
                 }
             }),
+            PanelView::Backlinks => self
+                .panel
+                .backlinks
+                .selected_entry()
+                .map(|row| ContextMenu::on_note(position, row.source().clone())),
         };
         cx.notify();
     }

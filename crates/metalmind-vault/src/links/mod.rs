@@ -64,6 +64,8 @@ pub struct IndexedLink {
     pub subpath: Option<LinkSubpath>,
     /// Desde cero.
     pub line: usize,
+    /// Dónde empieza el link en su línea, en bytes.
+    pub column: usize,
     pub context: LinkContext,
     pub target: LinkTarget,
     /// Un destino markdown entre `<…>`, que admite espacios.

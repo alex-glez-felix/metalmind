@@ -67,6 +67,8 @@ named_actions! {
         ToggleFolders = "panel::toggle_folders",
         /// `space t`: lo mismo con la vista de tags.
         ToggleTags = "panel::toggle_tags",
+        /// `space b`: lo mismo con los backlinks de la nota activa.
+        ToggleBacklinks = "panel::toggle_backlinks",
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",

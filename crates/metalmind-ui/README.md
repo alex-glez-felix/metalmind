@@ -8,6 +8,7 @@ Sin GPUI:
 - `document.rs`: una nota abierta, o un buffer `[No Name]`; el `fixeol` y el guardado.
 - `file_tree/`: el árbol de carpetas del panel lateral sobre el `VaultIndex`: filas visibles, carpetas abiertas, selección, filtro difuso y los cambios del watcher. Benchmark en `benches/file_tree.rs`.
 - `panel/`: el panel lateral entero (si se ve, en qué vista) y lo que le pregunta al usuario: un nombre, el filtro o confirmar un borrado. Confirmar da un `Request` con la operación de archivo.
+- `backlinks/`: la vista de backlinks del panel: los links que llegan a la nota activa, agrupados por nota, con su línea y dónde abre cada fila.
 - `session.rs`: lo que se recuerda entre sesiones en el directorio de estado: el último vault y, por vault, el panel.
 - `picker/model.rs`: el estado del picker difuso (`PickerState`) del finder y la paleta. Benchmark en `benches/picker.rs`.
 - `text_search/`: `space /`. El estado (`TextSearchState`: lo escrito, los resultados y sus versiones), el hilo que cancela y lanza cada búsqueda (`SearchWorker`) y el contexto de cada fila. Benchmark en `benches/text_search.rs`.
@@ -26,7 +27,7 @@ Con GPUI:
 
 | Tecla | Acción | Qué hace |
 |---|---|---|
-| `space e` / `space t` (en un editor) | `panel::toggle_folders` / `panel::toggle_tags` | Muestra el panel en esa vista con el foco, o lo esconde si ya la muestra. También con los botones de la barra de la izquierda. |
+| `space e` / `space t` / `space b` (en un editor) | `panel::toggle_folders` / `panel::toggle_tags` / `panel::toggle_backlinks` | Muestra el panel en esa vista con el foco, o lo esconde si ya la muestra. También con los botones de la barra de la izquierda. |
 | `j` `k` `gg` `G` | `file_tree::select_next` … | Moverse por las filas. |
 | `h` / `l` | `file_tree::collapse_or_parent` / `file_tree::expand_or_open` | Cerrar la carpeta o subir; abrir la carpeta, bajar a su contenido o abrir el archivo. |
 | `o` `Enter`, doble clic | `file_tree::open` | Abrir en el panel de edición enfocado (o abrir y cerrar una carpeta). |
@@ -35,7 +36,7 @@ Con GPUI:
 | `a` / `A` | `file_tree::new_note` / `file_tree::new_folder` | Crear dentro de la carpeta seleccionada (o junto al archivo). Un nombre que termina en `/` es una carpeta; a una nota sin `.md` se le agrega. |
 | `r` / `m` | `file_tree::rename` / `file_tree::move` | Renombrar (el nombre) o mover (la ruta entera). Los buffers abiertos siguen al archivo. |
 | `d` | `file_tree::delete` | Mandar a la papelera del vault (`.trash/`), tras confirmar con `y` o `Enter`. |
-| `T` / `q` | `panel::toggle_view` / `panel::hide` | Cambiar de vista; esconder el panel. |
+| `T` / `q` | `panel::toggle_view` / `panel::hide` | La vista que sigue (carpetas, tags, backlinks); esconder el panel. |
 | `ctrl-w l` | `panel::focus_editor` | Volver al editor; desde el editor, `ctrl-w h` sin panel a la izquierda vuelve al árbol. |
 
 Con el ratón, un clic selecciona (y abre o cierra una carpeta), el doble clic abre y el clic derecho abre un menú con las mismas acciones.

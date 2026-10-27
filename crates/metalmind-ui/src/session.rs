@@ -49,6 +49,7 @@ pub enum SavedView {
     #[default]
     Folders,
     Tags,
+    Backlinks,
 }
 
 impl Default for PanelState {
@@ -67,6 +68,7 @@ impl PanelState {
         match self.view {
             SavedView::Folders => PanelView::Folders,
             SavedView::Tags => PanelView::Tags,
+            SavedView::Backlinks => PanelView::Backlinks,
         }
     }
 
@@ -88,6 +90,7 @@ impl PanelState {
             view: match view {
                 PanelView::Folders => SavedView::Folders,
                 PanelView::Tags => SavedView::Tags,
+                PanelView::Backlinks => SavedView::Backlinks,
             },
             expanded: expanded.map(|path| path.as_str().to_owned()).collect(),
         }
