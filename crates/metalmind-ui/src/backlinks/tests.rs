@@ -162,7 +162,7 @@ fn cerrar_una_nota_no_la_cierra_en_los_backlinks_de_otra() {
     outline.refresh();
     assert_eq!(
         shown(&outline),
-        ["▾ diario.md (1)", "  2:7 y las [[ideas]]"]
+        ["▾ diario.md (1)", "  2:6 y las [[ideas]]"]
     );
     outline.show_note(Some(path("plan.md")));
     outline.refresh();
