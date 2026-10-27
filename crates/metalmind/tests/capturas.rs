@@ -324,6 +324,8 @@ const SCENES: &[(&str, &[Step])] = &[
             ", rustlang, ferris-el-cangrejo, el-lenguaje-de-sistemas-con-un-alias-que-no-cabe-en-el-panel",
         )],
     ),
+    // El campo deja ver el cursor (#149): al final y, con `home`, al principio.
+    ("tags-alias-largos-inicio", &[Step::Keys("<Home>")]),
     ("tags-alias-vista-previa", &[Step::Keys("<CR>")]),
     ("tags-alias-aplicado", &[Step::Keys("<CR>")]),
     ("tags-icono-invalido", &[Step::Keys("<C-w>hi<BS>libro<CR>")]),

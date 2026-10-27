@@ -13,6 +13,7 @@ const ESCAPE: u32 = 0xff1b;
 const RETURN: u32 = 0xff0d;
 const BACKSPACE: u32 = 0xff08;
 const TAB: u32 = 0xff09;
+const HOME: u32 = 0xff50;
 const LEFT: u32 = 0xff51;
 const UP: u32 = 0xff52;
 const RIGHT: u32 = 0xff53;
@@ -64,6 +65,7 @@ fn named(name: &str, notation: &str) -> Stroke {
         "tab" => TAB,
         "space" => char_keysym(' '),
         "lt" => char_keysym('<'),
+        "home" => HOME,
         "left" => LEFT,
         "up" => UP,
         "right" => RIGHT,
