@@ -23,7 +23,7 @@ use super::highlight::{Cells, search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
 pub use super::lines::Typeface;
 use super::lines::{ImageRequest, MathFrame, Shaped, code_block_quads, shape_visible_lines};
-use super::scroll::{Scroll, f32_of};
+use super::scroll::{Anchor, Scroll, f32_of};
 use super::text::Faces;
 use crate::frames::FrameClock;
 use crate::math::{Formulas, Geometry, Image};
@@ -243,9 +243,12 @@ impl gpui_kit::Element for EditorElement {
         let Some(view) = editor.view(cx) else {
             return Prepainted::empty(Viewport::new(content, line_height, editor.scroll), clip);
         };
-        let top = view.viewport.top();
-        let skip = skip_fraction(&view, top);
-        let scroll = editor.scroll.follow(top, skip, editor.synced_top);
+        let anchor = Anchor {
+            top: view.viewport.top(),
+            skip: view.viewport.skip(),
+        };
+        let hidden = skip_fraction(&view, anchor.top);
+        let scroll = editor.scroll.follow(anchor, hidden, editor.synced);
         let viewport = Viewport {
             left: px(f32_of(view.viewport.left())),
             ..Viewport::new(text, line_height, scroll)
@@ -289,7 +292,7 @@ impl gpui_kit::Element for EditorElement {
         self.editor.update(cx, |editor, _| {
             editor.layout = Some(layout.clone());
             editor.scroll = scroll;
-            editor.synced_top = Some(top);
+            editor.synced = Some(anchor);
         });
         // Recortadas como se pinta: una línea a medio scroll no asoma su zona.
         let mark_tooltips = window

@@ -266,7 +266,7 @@ impl Editor {
         if let Err(error) = result {
             self.report(&error, cx);
         }
-        self.synced_top = None;
+        self.synced = None;
         window.refresh();
         cx.notify();
     }
