@@ -219,7 +219,7 @@ fn files_within_lee_solo_esas_carpetas() {
     let folders =
         ["meta/plantillas", "tags", "no/existe"].map(|path| VaultPath::new(path).unwrap());
     assert_eq!(
-        listing(&root.files_within(&folders)),
+        listing(&root.files_within(&folders).index),
         [
             "meta/",
             "meta/plantillas/",

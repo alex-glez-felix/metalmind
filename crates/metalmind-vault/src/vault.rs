@@ -25,7 +25,7 @@ use crate::links::RenamePlan;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
-use crate::scan::{scan, scan_within};
+use crate::scan::{Within, scan, scan_within};
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
 use crate::watcher::{FolderWatch, Unwatched, before_reading};
 use crate::worker::{Message, Save, Worker, read_note};
@@ -160,8 +160,9 @@ impl VaultRoot {
     /// Lo que hay en `folders` y sus subcarpetas, con las reglas de
     /// [`Vault::open`], sin recorrer el resto del vault ni leer ninguna nota:
     /// lo que necesita quien solo mira las plantillas o las páginas de tag.
+    /// Trae también las carpetas que no se pudieron leer.
     #[must_use]
-    pub fn files_within(&self, folders: &[VaultPath]) -> VaultIndex {
+    pub fn files_within(&self, folders: &[VaultPath]) -> Within {
         scan_within(&self.0, folders)
     }
 

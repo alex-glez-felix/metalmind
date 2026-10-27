@@ -276,3 +276,18 @@ fn una_plantilla_ilegible_se_avisa_una_vez_y_solo_si_hace_falta() {
         added.problems
     );
 }
+
+/// Si la carpeta de tags no se puede recorrer, no se sabe qué piden sus
+/// páginas: es la captura de siempre, con el aviso.
+#[test]
+fn una_carpeta_de_tags_ilegible_se_avisa() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let (dir, root) = vault();
+    let folder = dir.path().join("tags");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o000)).unwrap();
+    let added = add(&root, "acuerdos", None, &["reunion"], Pick::ByTags);
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).unwrap();
+    let (added, _) = added.unwrap();
+    assert_eq!(added.template, None);
+    assert_eq!(added.problems, ["no se pudo leer tags/"]);
+}

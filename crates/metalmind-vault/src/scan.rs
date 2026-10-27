@@ -250,9 +250,8 @@ pub(crate) fn scan_partial(
 }
 
 /// Lo que hay hoy en `folders` y sus subcarpetas, como índice, con las
-/// carpetas de más arriba que el índice necesita para colgarlo. Lo que no se
-/// pudo leer queda fuera, con el aviso del walk.
-pub(crate) fn scan_within(root: &Path, folders: &[VaultPath]) -> VaultIndex {
+/// carpetas de más arriba que el índice necesita para colgarlo.
+pub(crate) fn scan_within(root: &Path, folders: &[VaultPath]) -> Within {
     let found = scan_partial(root, folders, None);
     let above: Vec<(VaultPath, EntryKind)> = found
         .entries
@@ -261,7 +260,18 @@ pub(crate) fn scan_within(root: &Path, folders: &[VaultPath]) -> VaultIndex {
         .filter(|folder| !folder.is_root())
         .map(|folder| (folder, EntryKind::Folder))
         .collect();
-    VaultIndex::from_entries(found.entries.into_iter().chain(above))
+    Within {
+        index: VaultIndex::from_entries(found.entries.into_iter().chain(above)),
+        unreadable: found.unreadable,
+    }
+}
+
+/// Lo que se encontró dentro de unas carpetas y lo que no se pudo leer:
+/// de eso no se sabe qué hay.
+#[derive(Debug, Default)]
+pub struct Within {
+    pub index: VaultIndex,
+    pub unreadable: Vec<VaultPath>,
 }
 
 /// Qué parte del vault quedó sin leer por `error`: nada si lo que faltaba ya

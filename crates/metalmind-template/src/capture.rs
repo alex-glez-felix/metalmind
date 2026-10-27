@@ -7,7 +7,7 @@ use std::sync::{Mutex, PoisonError};
 
 use jiff::Zoned;
 use metalmind_vault::tags::{TagGraph, Tags};
-use metalmind_vault::{CaptureError, Captured, InvalidPath, VaultPath, VaultRoot, read};
+use metalmind_vault::{CaptureError, Captured, InvalidPath, VaultPath, VaultRoot, Within, read};
 
 use crate::draft::{DraftProblem, NewNote, Pick, Templates, draft};
 use crate::load::templates_folder;
@@ -66,11 +66,11 @@ pub fn capture(
     }
     // La carpeta de plantillas de la config solo importa si se usa una.
     let templates_folder = templates_folder(folders.templates);
-    // Solo las páginas de tag: el grafo sale de ellas.
+    // Solo las páginas de tag: el grafo sale de ellas. Una carpeta o una
+    // página que no se puede leer no pide plantilla: se avisa.
     let pages = root.files_within(std::slice::from_ref(folders.tags));
-    // Una página que no se puede leer no pide plantilla: se avisa.
-    let unread = Mutex::new(Vec::new());
-    let tags = Tags::build(folders.tags.clone(), &pages, |page: &VaultPath| {
+    let unread = Mutex::new(unreadable(&pages));
+    let tags = Tags::build(folders.tags.clone(), &pages.index, |page: &VaultPath| {
         read(&root.path().join(page.as_str()))
             .map_err(|error| {
                 let mut unread = unread.lock().unwrap_or_else(PoisonError::into_inner);
@@ -88,8 +88,9 @@ pub fn capture(
         }
     };
     let templates_folder = templates_folder?;
-    let index = root.files_within(std::slice::from_ref(&templates_folder));
-    let loaded = Templates::load(root.path(), &index, &templates_folder);
+    let within = root.files_within(std::slice::from_ref(&templates_folder));
+    problems.extend(unreadable(&within));
+    let loaded = Templates::load(root.path(), &within.index, &templates_folder);
     problems.extend(loaded.errors.iter().map(ToString::to_string));
     if loaded.value.get(&chosen.name).is_some() {
         return from_template(root, note, &chosen, &loaded.value, &tags, now, problems);
@@ -108,6 +109,14 @@ pub fn capture(
         .to_string(),
     );
     plain(root, note, now, problems)
+}
+
+fn unreadable(within: &Within) -> Vec<String> {
+    within
+        .unreadable
+        .iter()
+        .map(|folder| format!("no se pudo leer {folder}/"))
+        .collect()
 }
 
 /// La plantilla que se usa: la elegida, o la que pide la página de un tag.

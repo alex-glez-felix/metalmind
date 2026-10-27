@@ -46,7 +46,7 @@ pub use links::{
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;
-pub use scan::walk_notes;
+pub use scan::{Within, walk_notes};
 pub use vault::{
     HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
     VaultRoot, VaultUpdate, VersionError,
