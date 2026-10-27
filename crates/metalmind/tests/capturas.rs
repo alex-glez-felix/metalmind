@@ -416,7 +416,7 @@ const SCENES: &[(&str, &[Step])] = &[
         &[
             Step::Files(vault::write_backlinks),
             Step::Settle,
-            Step::Keys("<Esc><Esc><C-w>o:e Proyectos/Metalmind/plan.md<CR><Space>b"),
+            Step::Keys("<Esc><Esc><C-w>l<C-w>o:e Proyectos/Metalmind/plan.md<CR><Space>b"),
         ],
     ),
     ("backlinks-final", &[Step::Keys("G")]),
