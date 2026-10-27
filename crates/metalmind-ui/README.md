@@ -9,6 +9,7 @@ Sin GPUI:
 - `file_tree/`: el árbol de carpetas del panel lateral sobre el `VaultIndex`: filas visibles, carpetas abiertas, selección, filtro difuso y los cambios del watcher. Benchmark en `benches/file_tree.rs`.
 - `panel/`: el panel lateral entero (si se ve, en qué vista) y lo que le pregunta al usuario: un nombre, el filtro o confirmar un borrado. Confirmar da un `Request` con la operación de archivo.
 - `backlinks/`: la vista de backlinks del panel: los links que llegan a la nota activa, agrupados por nota, con su línea y dónde abre cada fila.
+- `unresolved/`: `space u`, los links sin destino del vault como filas del picker.
 - `session.rs`: lo que se recuerda entre sesiones en el directorio de estado: el último vault y, por vault, el panel.
 - `picker/model.rs`: el estado del picker difuso (`PickerState`) del finder y la paleta. Benchmark en `benches/picker.rs`.
 - `text_search/`: `space /`. El estado (`TextSearchState`: lo escrito, los resultados y sus versiones), el hilo que cancela y lanza cada búsqueda (`SearchWorker`) y el contexto de cada fila. Benchmark en `benches/text_search.rs`.

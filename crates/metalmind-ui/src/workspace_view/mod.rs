@@ -14,6 +14,7 @@ mod palette;
 mod reroute;
 mod tag_change;
 mod text_search;
+mod unresolved;
 
 use std::collections::HashMap;
 
@@ -185,6 +186,10 @@ impl WorkspaceView {
             Effect::OpenCommandPalette => {
                 self.sync_editors(cx);
                 self.open_palette(window, cx);
+            }
+            Effect::OpenUnresolvedLinks => {
+                self.sync_editors(cx);
+                self.open_unresolved_links(window, cx);
             }
             Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
             Effect::FocusPastEdge(Direction::Left) if self.sidebar.read(cx).is_visible() => {

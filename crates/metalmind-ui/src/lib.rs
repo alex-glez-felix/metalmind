@@ -25,6 +25,7 @@ mod tag_outline;
 pub mod text_search;
 mod theme;
 mod tooltip;
+mod unresolved;
 mod utf16;
 mod window;
 mod workspace;

@@ -11,7 +11,9 @@ use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::finder::{Note, TagFilter, VaultChanged, VaultSession, WatchLost};
 use crate::picker::{Fuzzy, Haystack, Open, PickerEvent, PickerOptions, PickerState, PickerView};
-use crate::workspace::{Axis, Message, Workspace, shown_path};
+use metalmind_vault::VaultPath;
+
+use crate::workspace::{Axis, LinePosition, Message, Placement, Workspace, shown_path};
 
 /// El vault de la ventana visto por el finder y por el workspace, que
 /// sigue los links y los archivos de la jumplist con él.
@@ -30,7 +32,10 @@ impl FinderVault {
         workspace: &Entity<Workspace>,
         cx: &mut Context<WorkspaceView>,
     ) -> Self {
-        let changes = cx.observe(&session, |view, _, cx| view.refresh_finder(cx));
+        let changes = cx.observe(&session, |view, _, cx| {
+            view.refresh_finder(cx);
+            view.refresh_unresolved_links(cx);
+        });
         let files = cx.subscribe(&session, |view, session, VaultChanged(update), cx| {
             let root = session.read(cx).root().to_owned();
             view.workspace.update(cx, |workspace, _| {
@@ -131,6 +136,36 @@ impl WorkspaceView {
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             workspace.open_in_split(axis, &path)
+        });
+        if let Err(error) = opened {
+            self.workspace
+                .update(cx, |workspace, _| workspace.report(&error));
+        }
+        self.sync_editors(cx);
+        self.focus(window, cx);
+        self.touch_focused(cx);
+    }
+
+    /// Como `:e ruta`, o `:vsplit ruta` y `:split ruta`, con el cursor en
+    /// `at`.
+    pub(super) fn open_note_at(
+        &mut self,
+        note: &VaultPath,
+        at: LinePosition,
+        open: Open,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let root = self.vault.session.read(cx).root().to_owned();
+        let path = shown_path(&root.join(note.as_str()));
+        let placement = match open {
+            Open::Here => Placement::Current,
+            Open::SplitRight => Placement::Split(Axis::Row),
+            Open::SplitDown => Placement::Split(Axis::Column),
+        };
+        let opened = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            workspace.open_file_at(&path, placement, at)
         });
         if let Err(error) = opened {
             self.workspace

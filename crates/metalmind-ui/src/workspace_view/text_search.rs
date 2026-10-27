@@ -8,7 +8,7 @@ use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::picker::{Open, PickerEvent, PickerOptions, PickerView};
 use crate::text_search::{Hit, OpenNote, TextSearch};
-use crate::workspace::{Axis, LinePosition, Placement, shown_path};
+use crate::workspace::LinePosition;
 
 /// El picker de `space /`.
 pub type TextSearchPicker = PickerView<TextSearch>;
@@ -69,30 +69,12 @@ impl WorkspaceView {
         }
     }
 
-    /// Como `:e ruta`, o `:vsplit ruta` y `:split ruta`, con el cursor en
-    /// la primera coincidencia de la línea.
+    /// Con el cursor en la primera coincidencia de la línea.
     fn open_hit(&mut self, hit: &Hit, open: Open, window: &mut Window, cx: &mut Context<Self>) {
-        let root = self.vault.session.read(cx).root().to_owned();
-        let path = shown_path(&root.join(hit.path.as_str()));
-        let placement = match open {
-            Open::Here => Placement::Current,
-            Open::SplitRight => Placement::Split(Axis::Row),
-            Open::SplitDown => Placement::Split(Axis::Column),
-        };
         let at = LinePosition {
             line: hit.line.line,
             column: hit.column(),
         };
-        let opened = self.workspace.update(cx, |workspace, cx| {
-            cx.notify();
-            workspace.open_file_at(&path, placement, at)
-        });
-        if let Err(error) = opened {
-            self.workspace
-                .update(cx, |workspace, _| workspace.report(&error));
-        }
-        self.sync_editors(cx);
-        self.focus(window, cx);
-        self.touch_focused(cx);
+        self.open_note_at(&hit.path, at, open, window, cx);
     }
 }

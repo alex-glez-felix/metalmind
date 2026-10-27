@@ -1,5 +1,5 @@
 //! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
-//! paleta, las notas de un link que empata, las plantillas y el nombre de
+//! paleta, los links sin destino, las notas de un link que empata, las plantillas y el nombre de
 //! una nota nueva o la vista previa de un cambio de tags, uno a la vez, centrado arriba como en Zed.
 
 use gpui_kit::{
@@ -12,6 +12,7 @@ use super::link_choice::LinkChoicePicker;
 use super::new_note::{NamePicker, TemplatePicker};
 use super::palette::Palette;
 use super::text_search::TextSearchPicker;
+use super::unresolved::UnresolvedPicker;
 use crate::tag_change::TagChangeView;
 use crate::theme::Theme;
 
@@ -26,6 +27,11 @@ pub enum Overlay {
     },
     Palette {
         picker: Entity<Palette>,
+        _events: Subscription,
+    },
+    /// Los links sin destino del vault.
+    Unresolved {
+        picker: Entity<UnresolvedPicker>,
         _events: Subscription,
     },
     /// Las notas entre las que empata un link.
@@ -57,6 +63,7 @@ impl Overlay {
                 picker.focus_handle(cx)
             }
             Self::TextSearch { picker, .. } => picker.focus_handle(cx),
+            Self::Unresolved { picker, .. } => picker.focus_handle(cx),
             Self::Palette { picker, .. } => picker.focus_handle(cx),
             Self::Templates { picker, .. } => picker.focus_handle(cx),
             Self::NoteName { picker, .. } => picker.focus_handle(cx),
@@ -71,6 +78,7 @@ impl Overlay {
                 picker.clone().into_any_element()
             }
             Self::TextSearch { picker, .. } => picker.clone().into_any_element(),
+            Self::Unresolved { picker, .. } => picker.clone().into_any_element(),
             Self::Palette { picker, .. } => picker.clone().into_any_element(),
             Self::Templates { picker, .. } => picker.clone().into_any_element(),
             Self::NoteName { picker, .. } => picker.clone().into_any_element(),

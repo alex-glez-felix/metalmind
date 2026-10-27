@@ -28,6 +28,8 @@ pub enum Effect {
     OpenFinder,
     OpenTextSearch,
     OpenCommandPalette,
+    /// `space u`: los links sin destino del vault.
+    OpenUnresolvedLinks,
     /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
     TogglePanel(PanelView),
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
@@ -145,6 +147,7 @@ impl Workspace {
             Command::Set => self.set_options(argument),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
+            Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
