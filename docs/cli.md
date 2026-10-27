@@ -6,6 +6,7 @@ Capturar y consultar el vault desde la terminal, un script o un agente, sin abri
 metalmind add "Llamar a la imprenta"               # crea llamar-a-la-imprenta.md
 wl-paste | metalmind add -t receta                 # el texto desde stdin
 metalmind add --title "Reunión" -t trabajo < acta.txt
+metalmind add --template entrevista --title "Backend senior" "Sabe Rust"
 metalmind search imprenta                          # rutas, de la mejor a la peor
 metalmind open llamar-a-la-imprenta.md  # abre la app en esa nota
 ```
@@ -25,7 +26,7 @@ La misma regla que `metalmind` sin argumentos ([06](research/06-decisiones-de-fo
 
 `--vault` y `METALMIND_VAULT` se eligieron a propósito: si no son una carpeta, es error (código 3) en vez de seguir con el siguiente, para que un `METALMIND_VAULT` mal escrito no escriba en otro vault. Del último abierto y la config se usa el primero que siga siendo una carpeta. Si no queda ninguno, también es error (código 3).
 
-## `metalmind add [TEXTO]... [-t TAG]... [--title TÍTULO]`
+## `metalmind add [TEXTO]... [-t TAG]... [--title TÍTULO] [--template PLANTILLA | --no-template]`
 
 Crea una nota en la **raíz** del vault. El texto sale de los argumentos (varias palabras se unen con espacios) o, si no hay, de stdin. Si stdin es una terminal no se espera a que alguien escriba: sin texto es error, salvo que haya `--title`.
 
@@ -34,6 +35,13 @@ Crea una nota en la **raíz** del vault. El texto sale de los argumentos (varias
 - Si el texto ya trae frontmatter, se respeta tal cual; combinarlo con `-t` es error de uso (habría que reescribir el YAML del usuario).
 - `--title` va como `# Título` al principio del cuerpo, después del frontmatter si lo hay.
 - El archivo termina siempre en `\n`, y los saltos de línea del final del texto se juntan en uno.
+
+**Con plantilla** ([06](research/06-decisiones-de-fondo.md) §11, [plantillas](plantillas.md)): `--template NOMBRE` crea la nota desde esa plantilla de `templates_folder`, y `-t` sin `--template` usa la que pida la página de uno de sus tags (o de un alias), como una nota nueva con ese tag en la app. `--no-template` lo evita.
+- `{{title}}` es `--title` o, si no hay, el nombre del archivo sin `.md`. `--title` no agrega su propio `# Título`: de eso se encarga la plantilla.
+- El texto (argumentos o stdin) va donde la app deja el cursor en una nota nueva: bajo el primer heading con la sección vacía o, si no hay, en la primera línea en blanco o al final. Sin texto, la nota es la plantilla sola.
+- Los tags de `-t` van en el `tags:` de la plantilla, después de los suyos, y con `--template` también el tag cuya página la pide, si la pide una sola. Un texto con frontmatter y plantilla es error de uso.
+- Una plantilla que no existe es error de uso y no se crea nada. Si los tags piden plantillas distintas no se usa ninguna, como en la app. Lo que la plantilla no pudo llenar (una variable mal escrita) no impide crear: se avisa en stderr (`metalmind: ruta: …`) o en `problems` del JSON.
+- Solo se leen la carpeta de plantillas y la de tags, no el vault entero. Sin `-t` ni `--template` no se lee ninguna de las dos, y una `templates_folder` que no vale solo es error cuando hace falta.
 
 **Nombre del archivo**: `slug.md`, sin fecha: la nota se nombra para enlazarla (`[[idea-nueva]]`), y la fecha ya va en los metadatos del archivo. El slug sale del título o, si no hay, de la primera línea del texto con letras o números: las palabras en minúsculas unidas con `-`, con acentos (también descompuestos) y otros alfabetos tal cual (`Reunión del lunes` → `reunión-del-lunes.md`), hasta 50 caracteres sin cortar palabras. Sin slug (el texto es solo emoji o puntuación), el nombre es la fecha y la hora local: `2026-10-18-090507.md`. Si el nombre está tomado, se prueba `idea-2.md`, `idea-3.md`, …; nunca se pisa una nota.
 
@@ -70,7 +78,7 @@ Todos los subcomandos aceptan `--json` y `--vault`. Con `--json`:
 
 | Comando | stdout con `--json` |
 |---|---|
-| `add` | `{"vault": string, "path": string, "tags": [string]}` |
+| `add` | `{"vault": string, "path": string, "tags": [string], "template": string \| null, "problems": [string]}` |
 | `search` | `{"vault": string, "query": string, "results": [{"path": string, "kind": "note" \| "attachment"}]}` |
 | `open` | `{"vault": string, "path": string}` |
 
@@ -78,7 +86,7 @@ Ejemplos:
 
 ```sh
 $ echo "probar el watcher" | metalmind add -t metalmind --json
-{"vault":"/home/usuario/notas","path":"probar-el-watcher.md","tags":["nota"]}
+{"vault":"/home/usuario/notas","path":"probar-el-watcher.md","tags":["metalmind"],"template":null,"problems":[]}
 
 $ metalmind search watcher --json
 {"vault":"/home/usuario/notas","query":"watcher","results":[{"path":"probar-el-watcher.md","kind":"note"}]}

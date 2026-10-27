@@ -10,7 +10,7 @@ use jiff::Zoned;
 use metalmind_config::Daily;
 use metalmind_template::{
     DailyError, Draft, NewNote, NotePath, Pick, Templates, daily_note, draft, tag_of_template,
-    tags_asking_for,
+    tags_asking_for, templates_folder,
 };
 use metalmind_vault::tags::TagGraph;
 use metalmind_vault::{FileOpError, InvalidPath, Vault, VaultIndex, VaultPath};
@@ -112,12 +112,7 @@ pub fn load_templates(
     index: &VaultIndex,
     folder: &str,
 ) -> Result<Templates, FolderError> {
-    // Solo se quita una `/` final: `/` y `//` tienen que fallar como absolutas.
-    let folder = match folder.strip_suffix('/') {
-        Some(rest) if !rest.is_empty() => rest,
-        _ => folder,
-    };
-    let folder = VaultPath::new(folder).map_err(FolderError)?;
+    let folder = templates_folder(folder).map_err(FolderError)?;
     let loaded = Templates::load(vault.root(), index, &folder);
     for error in loaded.errors {
         log::warn!("no se leyó una plantilla: {error}");

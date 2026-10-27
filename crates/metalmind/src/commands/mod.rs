@@ -22,32 +22,46 @@ pub use search::search;
 use crate::cli::Common;
 use crate::target::{Sources, TargetError, default_vault};
 
-/// El vault de `--vault` o, si falta, el de `metalmind` sin argumentos
-/// ([`default_vault`]). Solo lee `config.yaml`, sin el tema.
-fn choose(common: &Common) -> Result<PathBuf, CliError> {
-    if let Some(vault) = &common.vault {
-        return Ok(vault.clone());
-    }
-    let paths = Paths::detect().ok();
-    let settings = match &paths {
-        Some(paths) => {
-            let loaded = Settings::load(paths);
-            for diagnostic in &loaded.diagnostics {
-                log::warn!("{diagnostic}");
-            }
-            loaded.value
-        }
-        None => Settings::default(),
-    };
-    default_vault(Sources::detect(paths.as_ref(), &settings)).map_err(|error| match error {
-        TargetError::NoVault => CliError::NoVault,
-        other => CliError::Target(other),
-    })
+/// `config.yaml` sin el tema, y dónde está; la de fábrica si no hay `HOME`.
+struct Config {
+    paths: Option<Paths>,
+    settings: Settings,
 }
 
-/// La raíz del vault elegido, ya comprobada.
-fn vault_root(common: &Common) -> Result<VaultRoot, CliError> {
-    Ok(VaultRoot::new(choose(common)?)?)
+impl Config {
+    fn load() -> Self {
+        let paths = Paths::detect().ok();
+        let settings = match &paths {
+            Some(paths) => {
+                let loaded = Settings::load(paths);
+                for diagnostic in &loaded.diagnostics {
+                    log::warn!("{diagnostic}");
+                }
+                loaded.value
+            }
+            None => Settings::default(),
+        };
+        Self { paths, settings }
+    }
+
+    /// El vault de `--vault` o, si falta, el de `metalmind` sin argumentos
+    /// ([`default_vault`]).
+    fn choose(&self, common: &Common) -> Result<PathBuf, CliError> {
+        if let Some(vault) = &common.vault {
+            return Ok(vault.clone());
+        }
+        default_vault(Sources::detect(self.paths.as_ref(), &self.settings)).map_err(|error| {
+            match error {
+                TargetError::NoVault => CliError::NoVault,
+                other => CliError::Target(other),
+            }
+        })
+    }
+
+    /// La raíz del vault elegido, ya comprobada.
+    fn vault_root(&self, common: &Common) -> Result<VaultRoot, CliError> {
+        Ok(VaultRoot::new(self.choose(common)?)?)
+    }
 }
 
 /// La raíz como texto para el JSON; una ruta que no es UTF-8 sale con `�`.

@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use metalmind_vault::{EntryKind, FileError, VaultIndex, VaultPath, read};
+use metalmind_vault::{EntryKind, FileError, InvalidPath, VaultIndex, VaultPath, read};
 
 use crate::draft::Templates;
 
@@ -11,6 +11,20 @@ use crate::draft::Templates;
 pub struct Loaded<T> {
     pub value: T,
     pub errors: Vec<FileError>,
+}
+
+/// La carpeta de plantillas como se escribe en `templates_folder` de la
+/// config, con o sin `/` final.
+///
+/// # Errors
+/// Si no es una carpeta del vault (`/`, `//` y `../x` no lo son).
+pub fn templates_folder(text: &str) -> Result<VaultPath, InvalidPath> {
+    // Solo se quita una `/` final: `/` y `//` tienen que fallar como absolutas.
+    let folder = match text.strip_suffix('/') {
+        Some(rest) if !rest.is_empty() => rest,
+        _ => text,
+    };
+    VaultPath::new(folder)
 }
 
 impl Templates {

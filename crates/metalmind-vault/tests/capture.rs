@@ -138,3 +138,40 @@ fn rechaza_lo_que_no_es_una_nota() {
     ));
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
+
+/// `capture_with` arma el texto con lo que la captura decidió (tags sin `#`
+/// ni repetidos, título y nombre), y nombra y escribe igual que `capture`.
+#[test]
+fn capture_with_deja_el_texto_a_quien_llama() {
+    let dir = TempDir::new().unwrap();
+    let vault = VaultRoot::new(dir.path()).unwrap();
+    let new = NewNote {
+        text: "lo hablado".to_owned(),
+        title: Some(" Reunión ".to_owned()),
+        tags: ["#trabajo", "Trabajo"].map(String::from).to_vec(),
+    };
+    let mut seen = None;
+    let captured = vault
+        .capture_with(&new, now(), |capture| {
+            seen = Some(format!("{capture:?}"));
+            format!("{} / {}\n", capture.stem, capture.tags.join(","))
+        })
+        .unwrap();
+    assert_eq!(captured.path.as_str(), "reunión.md");
+    assert_eq!(
+        seen.unwrap(),
+        r#"Capture { tags: ["trabajo"], title: Some("Reunión"), stem: "reunión", text: "lo hablado" }"#
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("reunión.md")).unwrap(),
+        "reunión / trabajo\n"
+    );
+    let invalid = NewNote {
+        tags: vec!["con espacio".to_owned()],
+        ..new
+    };
+    assert!(matches!(
+        vault.capture_with(&invalid, now(), |_| String::new()),
+        Err(CaptureError::InvalidTag(_))
+    ));
+}

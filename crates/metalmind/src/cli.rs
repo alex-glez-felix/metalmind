@@ -67,9 +67,17 @@ pub struct AddArgs {
     /// Tag de la nota, con o sin `#`; se puede repetir
     #[arg(short = 't', long = "tag", value_name = "TAG")]
     pub tags: Vec<String>,
-    /// Título: va como `# Título` y da el nombre del archivo
+    /// Título: va como `# Título` (o en `{{title}}` de la plantilla) y da el
+    /// nombre del archivo
     #[arg(long, value_name = "TÍTULO")]
     pub title: Option<String>,
+    /// Plantilla de la nota, por su nombre en la carpeta de plantillas; el
+    /// texto va donde empieza a escribirse
+    #[arg(long, value_name = "PLANTILLA", conflicts_with = "no_template")]
+    pub template: Option<String>,
+    /// Sin plantilla, aunque la página de un tag pida una
+    #[arg(long)]
+    pub no_template: bool,
     #[command(flatten)]
     pub common: Common,
 }
@@ -197,6 +205,18 @@ mod tests {
         assert_eq!(args.tags, ["casa", "#super"]);
         assert_eq!(args.title, None);
         assert!(!args.common.json);
+    }
+
+    #[test]
+    fn add_con_plantilla_o_sin_ella_pero_no_las_dos() {
+        let cli = parse(&["add", "--template", "trabajo/semanal", "x"]).unwrap();
+        let Some(Command::Add(args)) = cli.command else {
+            panic!("{cli:?}");
+        };
+        assert_eq!(args.template.as_deref(), Some("trabajo/semanal"));
+        assert!(!args.no_template);
+        let both = parse(&["add", "--template", "a", "--no-template", "x"]).unwrap_err();
+        assert_eq!(both, ErrorKind::ArgumentConflict);
     }
 
     #[test]
