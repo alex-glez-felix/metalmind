@@ -68,7 +68,15 @@ impl WorkspaceView {
             "No hay fuentes".into(),
         );
         let picker = cx.new(|cx| PickerView::new(fuzzy, options, cx));
-        let events = cx.subscribe_in(&picker, window, Self::on_source_event);
+        // Al cancelar, el foco vuelve a la lista si se abrió desde ella.
+        let from_list = self
+            .list
+            .read(cx)
+            .focus_handle()
+            .contains_focused(window, cx);
+        let events = cx.subscribe_in(&picker, window, move |this, picker, event, window, cx| {
+            this.on_source_event(picker, event, from_list, window, cx);
+        });
         self.show(
             Overlay::ListSource {
                 picker,
@@ -83,6 +91,7 @@ impl WorkspaceView {
         &mut self,
         picker: &Entity<SourcePicker>,
         event: &PickerEvent,
+        from_list: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -101,6 +110,7 @@ impl WorkspaceView {
                 self.list.update(cx, |list, cx| list.set_source(source, cx));
                 self.focus_list(window, cx);
             }
+            None if from_list => self.focus_list(window, cx),
             None => self.focus(window, cx),
         }
         cx.notify();

@@ -22,10 +22,20 @@ struct Fixture {
     events: Rc<RefCell<Vec<NoteListEvent>>>,
 }
 
+const FILES: &[(&str, &str)] = &[("a.md", "#rust"), ("b.md", "# Be\nTexto."), ("c.md", "Ce.")];
+
 /// Una lista plegada del buzón con `b.md` abierta en el panel de edición.
 fn fixture(cx: &mut TestAppContext) -> (Fixture, &mut VisualTestContext) {
+    fixture_with(cx, FILES, Some(false))
+}
+
+fn fixture_with<'c>(
+    cx: &'c mut TestAppContext,
+    files: &[(&str, &str)],
+    visible: Option<bool>,
+) -> (Fixture, &'c mut VisualTestContext) {
     let dir = tempfile::tempdir().unwrap();
-    for (name, text) in [("a.md", "#rust"), ("b.md", "# Be\nTexto."), ("c.md", "Ce.")] {
+    for (name, text) in files {
         fs::write(dir.path().join(name), text).unwrap();
     }
     let (vault, updates) = Vault::open(dir.path()).unwrap();
@@ -39,7 +49,7 @@ fn fixture(cx: &mut TestAppContext) -> (Fixture, &mut VisualTestContext) {
     });
     let prepared = Prepared::new(vault, updates, None).unwrap();
     let session = cx.update(|cx| cx.new(|cx| VaultSession::new(prepared, cx)));
-    let document = Document::open(&root.join("b.md")).unwrap();
+    let document = Document::open(&root.join("b.md")).unwrap_or_else(|_| Document::unnamed());
     let options = Options {
         scrolloff: 0,
         tabstop: 8,
@@ -57,7 +67,7 @@ fn fixture(cx: &mut TestAppContext) -> (Fixture, &mut VisualTestContext) {
         })
     });
     let state = ListState {
-        visible: Some(false),
+        visible,
         ..ListState::default()
     };
     let (list, cx) = cx.add_window_view(|_, cx| NoteListView::new(&session, &state, workspace, cx));
@@ -185,4 +195,22 @@ fn sin_estado_guardado_arranca_abierta_solo_en_una_ventana_ancha() {
         "lo elegido gana"
     );
     assert_eq!(settle(Some(false), &[1920.], cx), (false, Some(false)));
+}
+
+#[test]
+fn abierta_al_arrancar_elige_la_nota_activa_cuando_llegan_las_tarjetas() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture_with(&mut cx, FILES, Some(true));
+    assert_eq!(selected(&fixture.list, cx).as_deref(), Some("b.md"));
+}
+
+#[test]
+fn un_vault_sin_notas_dice_que_no_hay_ninguna() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture_with(&mut cx, &[], Some(true));
+    let (current, total) = fixture
+        .list
+        .read_with(cx, |view, _| (view.list.is_current(), view.list.total()));
+    assert!(current, "sin notas, la lista ya está");
+    assert_eq!(total, 0);
 }

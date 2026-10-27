@@ -39,8 +39,14 @@ impl WorkspaceView {
             return self.tell(Message::Info(text), cx);
         };
         let view = cx.new(|cx| TagChangeView::new(preview, cx));
-        let events = cx.subscribe_in(&view, window, |this, view, event, window, cx| {
-            this.on_tag_change_event(view, *event, window, cx);
+        // La lista de notas sigue a un tag renombrado o fusionado.
+        let renamed = match request {
+            TagRequest::Rename { from, to } => Some((from.clone(), to.clone())),
+            TagRequest::Merge { from, into } => Some((from.clone(), into.clone())),
+            TagRequest::Page { .. } => None,
+        };
+        let events = cx.subscribe_in(&view, window, move |this, view, event, window, cx| {
+            this.on_tag_change_event(view, *event, renamed.as_ref(), window, cx);
         });
         self.show(
             Overlay::TagChange {
@@ -56,6 +62,7 @@ impl WorkspaceView {
         &mut self,
         view: &Entity<TagChangeView>,
         event: TagChangeEvent,
+        renamed: Option<&(String, String)>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -68,23 +75,31 @@ impl WorkspaceView {
             )
         });
         self.close_overlay(window, cx);
-        if let Some((title, summary, changes)) = apply {
-            self.apply_tag_changes(title, &summary, &changes, cx);
+        let Some((title, summary, changes)) = apply else {
+            return;
+        };
+        if self.apply_tag_changes(title, &summary, &changes, cx)
+            && let Some((from, to)) = renamed
+        {
+            self.list
+                .update(cx, |list, cx| list.rename_tag(from, to, cx));
         }
     }
 
     /// Aplica `changes` y lo guarda para `:tagundo`; `summary` es el aviso si
-    /// todo sale bien.
+    /// todo sale bien. Devuelve si se aplicó entero.
     pub(super) fn apply_tag_changes(
         &mut self,
         title: String,
         summary: &str,
         changes: &Changes,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let vault = self.session.read(cx).vault();
+        let mut whole = false;
         let message = match vault.apply(changes) {
             Ok(applied) => {
+                whole = true;
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
                 self.last_tag_change = Some(LastTagChange { title, applied });
@@ -109,6 +124,7 @@ impl WorkspaceView {
             Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
         };
         self.tell(message, cx);
+        whole
     }
 
     /// `:tagpage`: la página de `tag`, o la de su tag si es un alias. Si no

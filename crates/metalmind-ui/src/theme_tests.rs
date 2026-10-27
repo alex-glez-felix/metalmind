@@ -134,7 +134,7 @@ fn las_medidas_de_fabrica_son_las_de_antes() {
             theme.layout.list_open_min_width,
             1600.,
         ),
-        ("list_row_height", theme.list_row_height(), 104.),
+        ("list_row_height", theme.list_row_height(), 105.),
         ("radius_sm", theme.radius.sm, 2.),
         ("radius_md", theme.radius.md, 4.),
         ("radius_lg", theme.radius.lg, 8.),

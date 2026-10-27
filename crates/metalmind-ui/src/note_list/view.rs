@@ -58,6 +58,12 @@ pub struct NoteListView {
     /// nueva de la misma nota; lo que llega mientras tanto espera aquí.
     reading: Option<Task<()>>,
     unread: Vec<VaultPath>,
+    /// Al llegar las primeras tarjetas se elige la nota activa.
+    reveal_on_load: bool,
+    /// Lo mostrado cambió porque el usuario lo pidió (escribió en el
+    /// filtro, cambió la fuente): al llegar, la vista va a la fila elegida.
+    /// Un lote del watcher no mueve el scroll.
+    scroll_on_show: bool,
     _changes: Subscription,
     _workspace: Subscription,
 }
@@ -99,6 +105,8 @@ impl NoteListView {
             search: None,
             reading: None,
             unread: Vec::new(),
+            reveal_on_load: true,
+            scroll_on_show: false,
             _changes: changes,
             _workspace: workspace_changes,
         };
@@ -107,6 +115,12 @@ impl NoteListView {
             .filter(|entry| entry.kind == EntryKind::Note)
             .map(|entry| entry.path.clone())
             .collect();
+        if notes.is_empty() {
+            // Un vault sin notas no tiene nada que leer: la lista ya está.
+            view.reveal_on_load = false;
+            let step = view.list.set_cards(Vec::new());
+            view.step(step, cx);
+        }
         view.read_cards(notes, cx);
         view
     }
@@ -153,7 +167,15 @@ impl NoteListView {
 
     pub fn set_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
         self.chosen = Some(true);
+        self.scroll_on_show = true;
         let step = self.list.set_source(source);
+        self.step(step, cx);
+    }
+
+    /// Un tag renombrado o fusionado desde la app: si era la fuente, la
+    /// lista lo sigue con su nombre nuevo.
+    pub fn rename_tag(&mut self, from: &str, to: &str, cx: &mut Context<Self>) {
+        let step = self.list.rename_tag(from, to);
         self.step(step, cx);
     }
 
@@ -161,7 +183,7 @@ impl NoteListView {
         if let Some(active) = self.active(cx)
             && let Some(row) = self.list.reveal(&active)
         {
-            self.scroll.scroll_to_item(row, ScrollStrategy::Center);
+            self.scroll.scroll_to_item(row, ScrollStrategy::Nearest);
         }
     }
 
@@ -188,6 +210,9 @@ impl NoteListView {
                 view.reading = None;
                 let step = view.list.set_cards(cards);
                 view.step(step, cx);
+                if std::mem::take(&mut view.reveal_on_load) {
+                    view.reveal_active(cx);
+                }
                 view.read_cards(Vec::new(), cx);
             });
         }));
@@ -195,7 +220,10 @@ impl NoteListView {
 
     /// Corre la búsqueda que pidió el modelo, como el finder.
     fn step(&mut self, step: Step<Note>, cx: &mut Context<Self>) {
-        self.scroll_to_selection();
+        if self.scroll_on_show && self.list.is_current() {
+            self.scroll_on_show = false;
+            self.scroll_to_selection();
+        }
         cx.notify();
         let Some(job) = step.job else {
             return;
@@ -282,6 +310,7 @@ impl NoteListView {
             self.list.close_prompt();
             return;
         }
+        self.scroll_on_show = true;
         // Al final, borrar hasta el principio es borrarlo todo.
         let _ = self.list.edit_filter(LineEdit::End);
         let step = self.list.edit_filter(LineEdit::DeleteToStart);
@@ -339,6 +368,7 @@ impl NoteListView {
         cx.stop_propagation();
         match prompt {
             Prompt::Filter => {
+                self.scroll_on_show = true;
                 let step = self.list.edit_filter(edit);
                 self.step(step, cx);
             }
