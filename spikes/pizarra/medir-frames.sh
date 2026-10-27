@@ -36,7 +36,8 @@ for n in ${TABLEROS:-500 2000}; do
   for estilo in limpio mano; do
     bandera=(); [[ "$estilo" == mano ]] && bandera=(--mano)
     nombre="limpio"; [[ "$estilo" == mano ]] && nombre="a mano"
-    reporte=$(correr --tam "$tam" --tablero "$n" "${bandera[@]}" ${DETALLE:+--sin-detalle} --banco)
+    # Una corrida que falla no corta las demás: se nota por la falta de reporte.
+    reporte=$(correr --tam "$tam" --tablero "$n" "${bandera[@]}" ${DETALLE:+--sin-detalle} --banco) || true
     if [[ "$reporte" != *"| Fase |"* ]]; then
       echo "$n elementos, $nombre: el visor no dio reporte (ver salida/medir-frames.log)" >&2
       fallos=$((fallos + 1))

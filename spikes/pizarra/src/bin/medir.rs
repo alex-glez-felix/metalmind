@@ -7,7 +7,7 @@
 use std::time::{Duration, Instant};
 
 use metalmind_spike_pizarra::escena::{self, Style};
-use metalmind_spike_pizarra::formato::{Board, Node, NodeKind};
+use metalmind_spike_pizarra::formato::{Board, Node};
 use metalmind_spike_pizarra::{generar, mapeo, trazo};
 
 /// Líneas que cambian (quitadas + agregadas) y bytes de esas líneas.
@@ -49,26 +49,15 @@ fn kb(bytes: usize) -> String {
 
 fn stroke(id: &str, x: i32, y: i32) -> Node {
     #[expect(clippy::cast_precision_loss, reason = "80 puntos")]
-    let points = (0..80)
+    let points: Vec<trazo::Point> = (0..80)
         .map(|i| trazo::Point {
             x: i as f32 * 3.3,
             y: (i as f32 * 0.4).sin() * 20.0 + 20.0,
             pressure: None,
         })
         .collect();
-    Node {
-        id: id.to_owned(),
-        x,
-        y,
-        width: 264,
-        height: 40,
-        color: None,
-        kind: NodeKind::Stroke {
-            stroke_width: 2.0,
-            points,
-        },
-        extra: serde_json::Map::new(),
-    }
+    #[expect(clippy::cast_precision_loss, reason = "coordenadas chicas")]
+    Node::stroke(id, x as f32, y as f32, 2.0, &points)
 }
 
 fn formats(name: &str, board: &Board) {

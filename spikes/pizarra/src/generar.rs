@@ -226,17 +226,7 @@ fn example_boxes() -> Vec<Node> {
             320,
             "proyectos/metalmind/diseño/una-nota-con-un-nombre-muy-largo-para-ver-el-recorte.md",
         ),
-        node(
-            "rodeo",
-            420,
-            160,
-            260,
-            130,
-            NodeKind::Stroke {
-                stroke_width: 2.0,
-                points: circle_stroke(260.0, 130.0, 90),
-            },
-        ),
+        Node::stroke("rodeo", 420.0, 160.0, 2.0, &circle_stroke(260.0, 130.0, 90)),
         text(
             "apunte",
             700,
@@ -355,16 +345,13 @@ pub fn board(n: usize, seed: u64) -> Board {
                 Shape::None,
                 "Un apunte suelto que\nocupa dos líneas",
             ),
-            node(
+            #[expect(clippy::cast_precision_loss, reason = "coordenadas de una pizarra")]
+            Node::stroke(
                 &id("trazo"),
-                ox + 460,
-                oy + 440,
-                300,
-                80,
-                NodeKind::Stroke {
-                    stroke_width: 2.0,
-                    points: scribble(&mut rng),
-                },
+                (ox + 460) as f32,
+                (oy + 440) as f32,
+                2.0,
+                &scribble(&mut rng),
             ),
         ];
         let edges = [

@@ -198,8 +198,9 @@ fn node_drafts(node: &Node, bind: &mut impl FnMut(&str, &str, &str)) -> Vec<Draf
             boxed(kind, text, None, bind)
         }
         NodeKind::File { file, subpath } => {
+            // Con la extensión: `[[v1.2]]` sería ambiguo al volver.
             let name = file.strip_suffix(".md").unwrap_or(file);
-            let target = format!("[[{name}{}]]", subpath.as_deref().unwrap_or(""));
+            let target = format!("[[{file}{}]]", subpath.as_deref().unwrap_or(""));
             boxed(
                 "rectangle",
                 name.rsplit('/').next().unwrap_or(name),
@@ -390,21 +391,42 @@ pub fn from_excalidraw(scene: &Scene) -> (Board, Vec<Skipped>) {
     (board, skipped)
 }
 
-/// `[[nota#Sección]]` es la ruta `nota.md` y el subpath `#Sección`;
-/// `[[mapa.canvas]]` va tal cual.
+/// `[[nota#Sección|alias]]` es la ruta `nota.md` y el subpath `#Sección`.
+/// Un nombre sin extensión, o con una que no es de adjunto (`v1.2`), es una
+/// nota; `[[plano.pdf]]` o `[[mapa.canvas]]` van tal cual.
 fn note_file(link: &str) -> Option<NodeKind> {
     let target = link.strip_prefix("[[")?.strip_suffix("]]")?;
+    let target = target.split('|').next().unwrap_or(target);
     let (name, subpath) = match target.find('#') {
         Some(at) => (&target[..at], Some(target[at..].to_owned())),
         None => (target, None),
     };
-    let file = if name.contains('.') {
-        name.to_owned()
-    } else {
-        format!("{name}.md")
+    let extension = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase());
+    let file = match extension.as_deref() {
+        Some("md") => name.to_owned(),
+        Some(e) if ATTACHMENTS.contains(&e) => name.to_owned(),
+        _ => format!("{name}.md"),
     };
     Some(NodeKind::File { file, subpath })
 }
+
+/// Las extensiones que Obsidian abre como adjunto y no como nota.
+const ATTACHMENTS: [&str; 14] = [
+    "canvas",
+    "excalidraw",
+    "pdf",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "svg",
+    "mp3",
+    "mp4",
+    "webm",
+    "wav",
+    "ogg",
+];
 
 #[expect(
     clippy::cast_possible_truncation,
@@ -512,10 +534,14 @@ fn import(e: &Element, label: Option<String>) -> Imported {
         "frame" => node(NodeKind::Group {
             label: e.name.clone(),
         }),
-        "freedraw" => node(NodeKind::Stroke {
-            stroke_width: e.stroke_width.unwrap_or(2.0) as f32,
-            points: e.points.iter().map(|&[x, y]| point(x, y)).collect(),
-        }),
+        "freedraw" => {
+            let points: Vec<Point> = e.points.iter().map(|&[x, y]| point(x, y)).collect();
+            let (x, y) = (e.x as f32, e.y as f32);
+            let mut stroke =
+                Node::stroke(&e.id, x, y, e.stroke_width.unwrap_or(2.0) as f32, &points);
+            stroke.color = color;
+            Imported::Node(stroke)
+        }
         "arrow" => import_arrow(e, label, color),
         "line" => Imported::Skip("línea: la pizarra no tiene líneas sueltas"),
         "image" => Imported::Skip("imagen: fuera del alcance del esbozo"),
@@ -582,6 +608,47 @@ mod tests {
             back.node("nota-07").map(|n| &n.kind),
             board.node("nota-07").map(|n| &n.kind)
         );
+    }
+
+    #[test]
+    fn obsidian_links_become_the_right_file() {
+        let file = |link: &str| match note_file(link) {
+            Some(NodeKind::File { file, subpath }) => (file, subpath),
+            other => panic!("{link}: {other:?}"),
+        };
+        assert_eq!(file("[[notas/v1.2]]"), ("notas/v1.2.md".to_owned(), None));
+        assert_eq!(file("[[idea|la idea]]"), ("idea.md".to_owned(), None));
+        assert_eq!(
+            file("[[idea#Riesgos|riesgos]]"),
+            ("idea.md".to_owned(), Some("#Riesgos".to_owned()))
+        );
+        assert_eq!(
+            file("[[planos/casa.PDF]]"),
+            ("planos/casa.PDF".to_owned(), None)
+        );
+        assert_eq!(file("[[mapa.canvas]]"), ("mapa.canvas".to_owned(), None));
+        assert_eq!(note_file("https://jsoncanvas.org/"), None);
+    }
+
+    #[test]
+    fn a_dotted_note_and_an_attachment_survive_excalidraw() {
+        let mut board = generar::example();
+        for (id, file) in [("nota-03", "notas/v1.2.md"), ("nota-07", "planos/casa.pdf")] {
+            if let Some(card) = board.nodes.iter_mut().find(|n| n.id == id) {
+                card.kind = NodeKind::File {
+                    file: file.to_owned(),
+                    subpath: None,
+                };
+            }
+        }
+        let back = round_trip(&board);
+        for id in ["nota-03", "nota-07"] {
+            assert_eq!(
+                back.node(id).map(|n| &n.kind),
+                board.node(id).map(|n| &n.kind),
+                "{id}"
+            );
+        }
     }
 
     #[test]

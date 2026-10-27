@@ -240,6 +240,53 @@ impl Board {
 }
 
 impl Node {
+    /// Un trazo cuya caja es justo la de sus puntos: los puntos quedan
+    /// relativos a la esquina, entre 0 y el ancho y el alto. `(x, y)` es
+    /// dónde cae el origen de `points` en la pizarra.
+    #[must_use]
+    pub fn stroke(id: &str, x: f32, y: f32, stroke_width: f32, points: &[Point]) -> Self {
+        let (min_x, min_y, max_x, max_y) = points.iter().fold(
+            (f32::MAX, f32::MAX, f32::MIN, f32::MIN),
+            |(a, b, c, d), p| (a.min(p.x), b.min(p.y), c.max(p.x), d.max(p.y)),
+        );
+        let (min_x, min_y) = if points.is_empty() {
+            (0.0, 0.0)
+        } else {
+            (min_x, min_y)
+        };
+        let points = points
+            .iter()
+            .map(|p| Point {
+                x: p.x - min_x,
+                y: p.y - min_y,
+                ..*p
+            })
+            .collect();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "coordenadas de una pizarra"
+        )]
+        let (x, y, width, height) = (
+            (x + min_x).round() as i32,
+            (y + min_y).round() as i32,
+            (max_x - min_x).ceil().max(1.0) as i32,
+            (max_y - min_y).ceil().max(1.0) as i32,
+        );
+        Self {
+            id: id.to_owned(),
+            x,
+            y,
+            width,
+            height,
+            color: None,
+            kind: NodeKind::Stroke {
+                stroke_width,
+                points,
+            },
+            extra: Map::new(),
+        }
+    }
+
     fn from_raw(raw: RawNode) -> Result<Self, FormatError> {
         let id = raw.id.clone();
         let missing = |field| FormatError::Missing {
@@ -490,6 +537,26 @@ mod tests {
             "{}",
             changed[0]
         );
+    }
+
+    #[test]
+    fn a_stroke_box_is_the_box_of_its_points() {
+        let points = [(-10.0, 5.0), (30.0, -15.0), (12.0, 25.0)].map(|(x, y)| Point {
+            x,
+            y,
+            pressure: None,
+        });
+        let node = Node::stroke("t", 100.0, 200.0, 2.0, &points);
+        assert_eq!((node.x, node.y, node.width, node.height), (90, 185, 40, 40));
+        let NodeKind::Stroke { points, .. } = &node.kind else {
+            panic!("es un trazo");
+        };
+        assert!(
+            points
+                .iter()
+                .all(|p| (0.0..=40.0).contains(&p.x) && (0.0..=40.0).contains(&p.y))
+        );
+        assert_eq!((points[0].x, points[1].y), (0.0, 0.0));
     }
 
     #[test]

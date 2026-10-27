@@ -80,10 +80,19 @@ pub struct Pizarra {
     camara_inicial: Option<Camara>,
     /// Nivel de detalle: de lejos, cada nodo es un quad (`pintar::ZOOM_DETALLE`).
     detalle: bool,
+    /// La barra de estado muestra el frame anterior: hace falta uno más al abrir.
+    estado_al_dia: bool,
 }
 
 impl Pizarra {
-    pub fn new(board: Board, ajustes: Ajustes, cx: &mut Context<Self>) -> Self {
+    /// `nodos` y `flechas` son la escena de `board`, elemento por elemento
+    /// (`escena::build`): mover un nodo reemplaza el suyo por índice.
+    pub fn new(
+        board: Board,
+        (nodos, flechas): (Vec<ElementScene>, Vec<ElementScene>),
+        ajustes: Ajustes,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let Ajustes {
             estilo,
             tema,
@@ -92,7 +101,6 @@ impl Pizarra {
             camara,
             detalle,
         } = ajustes;
-        let (nodos, flechas) = escena::build(&board, estilo).unwrap_or_default();
         Self {
             board,
             estilo,
@@ -110,6 +118,7 @@ impl Pizarra {
             titulo,
             camara_inicial: camara,
             detalle,
+            estado_al_dia: false,
         }
     }
 
@@ -384,7 +393,10 @@ impl Render for Pizarra {
         let fase = self.paso_del_banco(window, cx);
         self.medidas.borrow_mut().empieza(empezo, fase);
         // Un frame más al abrir, para que la barra de estado muestre el primero.
-        if self.camara.is_none() || self.pintado.borrow().elementos == 0 {
+        if self.camara.is_none() {
+            window.request_animation_frame();
+        } else if !self.estado_al_dia {
+            self.estado_al_dia = true;
             window.request_animation_frame();
         }
         let camara = self.camara;

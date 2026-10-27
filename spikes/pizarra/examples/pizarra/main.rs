@@ -16,7 +16,7 @@ mod vista;
 use std::process::ExitCode;
 
 use gpui_kit::{App, AppContext, Bounds, WindowBounds, WindowOptions, point, px, size};
-use metalmind_spike_pizarra::escena::Style;
+use metalmind_spike_pizarra::escena::{self, Style};
 use metalmind_spike_pizarra::excalidraw::Scene;
 use metalmind_spike_pizarra::formato::Board;
 use metalmind_spike_pizarra::{generar, mapeo};
@@ -125,6 +125,13 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let escena = match escena::build(&opciones.board, opciones.estilo) {
+        Ok(escena) => escena,
+        Err(error) => {
+            eprintln!("no se pudo teselar la pizarra: {error:?}");
+            return ExitCode::FAILURE;
+        }
+    };
     gpui_kit::application().run(move |cx: &mut App| {
         let (ancho, alto) = opciones.tamano;
         let bounds = Bounds::new(point(px(0.0), px(0.0)), size(px(ancho), px(alto)));
@@ -153,7 +160,7 @@ fn main() -> ExitCode {
             detalle,
         };
         let abierta = cx.open_window(ventana, move |window, cx| {
-            let vista = cx.new(|cx| Pizarra::new(board, ajustes, cx));
+            let vista = cx.new(|cx| Pizarra::new(board, escena, ajustes, cx));
             let foco = vista.read(cx).foco().clone();
             window.focus(&foco, cx);
             vista
