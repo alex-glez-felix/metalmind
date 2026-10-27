@@ -1,0 +1,27 @@
+{
+	"nodes":[
+		{"id":"capas","type":"group","x":20,"y":140,"width":880,"height":300,"label":"Núcleo, sin GPUI"},
+		{"id":"titulo","type":"text","x":20,"y":20,"width":900,"height":60,"shape":"none","text":"# Cómo entra la pizarra en Metalmind"},
+		{"id":"nota-03","type":"file","x":60,"y":180,"width":300,"height":72,"file":"docs/research/03-core-architecture.md"},
+		{"id":"nota-07","type":"file","x":60,"y":520,"width":300,"height":72,"file":"docs/research/07-features-otras-apps.md"},
+		{"id":"formato","type":"text","x":440,"y":180,"width":220,"height":90,"text":"**metalmind-board**\nformato y geometría","color":"4"},
+		{"id":"vault","type":"text","x":440,"y":330,"width":220,"height":80,"text":"metalmind-vault\nbacklinks y tags","color":"5"},
+		{"id":"indice","type":"text","x":700,"y":300,"width":170,"height":110,"shape":"ellipse","text":"índice de links","color":"6"},
+		{"id":"ui","type":"text","x":1040,"y":180,"width":240,"height":90,"text":"metalmind-ui\nvista y edición","color":"1"},
+		{"id":"decide","type":"text","x":1060,"y":360,"width":200,"height":140,"shape":"diamond","text":"¿cabe en\nun frame?","color":"3"},
+		{"id":"nota-larga","type":"text","x":440,"y":520,"width":560,"height":110,"text":"Un texto largo a propósito dentro de una caja: las flechas se pegan a las formas, se re-enrutan al mover y nunca quedan colgando, y el archivo cambia una sola línea por cada caja que se mueve."},
+		{"id":"nota-ruta-larga","type":"file","x":1040,"y":560,"width":320,"height":72,"file":"proyectos/metalmind/diseño/una-nota-con-un-nombre-muy-largo-para-ver-el-recorte.md"},
+		{"id":"rodeo","type":"stroke","x":420,"y":160,"width":260,"height":130,"strokeWidth":2,"points":"2192,242 67,34 63,37 59,39 56,41 51,43 45,45 39,48 33,50 26,51 17,53 9,54 -1,56 -10,55 -21,55 -32,55 -42,53 -52,51 -63,49 -72,45 -81,42 -89,38 -95,33 -102,28 -106,24 -110,18 -113,13 -113,8 -114,3 -113,-2 -112,-6 -110,-10 -107,-15 -104,-18 -101,-21 -97,-25 -94,-27 -89,-30 -86,-33 -83,-35 -78,-38 -74,-40 -70,-42 -64,-45 -60,-48 -54,-50 -48,-52 -40,-54 -33,-57 -24,-58 -15,-60 -4,-61 5,-62 17,-62 28,-61 40,-60 51,-58 63,-56 73,-53 83,-50 92,-45 101,-40 108,-36 115,-30 119,-25 123,-19 125,-13 126,-8 127,-2 126,2 124,8 122,12 119,17 116,21 111,24 108,28 104,32 100,34 95,37 90,41 86,43 81,45 75,49 70,51 64,54 56,57 49,59 41,62 32,63 22,65"},
+		{"id":"apunte","type":"text","x":700,"y":92,"width":220,"height":60,"shape":"none","text":"lo nuevo: un crate\ncon el formato"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"nota-03","toNode":"formato","label":"§6: núcleo"},
+		{"id":"e2","fromNode":"formato","toNode":"vault"},
+		{"id":"e3","fromNode":"vault","toNode":"indice","route":"straight"},
+		{"id":"e4","fromNode":"formato","toNode":"ui","label":"solo la UI importa GPUI"},
+		{"id":"e5","fromNode":"ui","toNode":"decide","route":"elbow"},
+		{"id":"e6","fromNode":"decide","fromSide":"bottom","toNode":"nota-ruta-larga","route":"elbow"},
+		{"id":"e7","fromNode":"nota-07","toNode":"nota-larga","label":"revisa «No encaja»"},
+		{"id":"e8","fromNode":"nota-03","toNode":"nota-07","route":"straight"}
+	]
+}
