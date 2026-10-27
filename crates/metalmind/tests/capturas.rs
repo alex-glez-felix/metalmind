@@ -376,6 +376,16 @@ const SCENES: &[(&str, &[Step])] = &[
         "tabla-larga-alineada",
         &[Step::Keys("/evento-final<CR>:tableformat<CR>")],
     ),
+    // El autocompletado de `:focus` sobre la barra de estado (#156): muchas
+    // carpetas con rutas hondas, los tags tras aceptar una, y la carpeta
+    // larga con espacios, que el indicador muestra escapada (#157).
+    (
+        "focus-completar-carpetas",
+        &[Step::Keys("<Esc><Esc>:focus pro")],
+    ),
+    ("focus-completar-tags", &[Step::Keys("<Tab> #")]),
+    ("focus-completar-espacios", &[Step::Keys("<Esc>:focus Una")]),
+    ("focus-carpeta-con-espacios", &[Step::Keys("<Tab><CR>")]),
     // El modo focus (05 §3), al salir de las tablas: el panel en sus dos vistas, el menú de una
     // carpeta, el finder y la búsqueda con el alcance, uno largo, uno que
     // no deja nada, y el que pone y quita `F` desde el panel. La fila del
@@ -438,16 +448,6 @@ const SCENES: &[(&str, &[Step])] = &[
     ("sin-destino-filtrado", &[Step::Keys("tarea 1")]),
     ("sin-destino-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     ("sin-destino-abierto", &[Step::Keys("<C-u>informe<CR>")]),
-    // El autocompletado de `:focus` sobre la barra de estado (#156): muchas
-    // carpetas con rutas hondas, los tags tras aceptar una, y la carpeta
-    // larga con espacios, que el indicador muestra escapada (#157).
-    (
-        "focus-completar-carpetas",
-        &[Step::Keys("<Esc><Esc>:focus pro")],
-    ),
-    ("focus-completar-tags", &[Step::Keys("<Tab> #")]),
-    ("focus-completar-espacios", &[Step::Keys("<Esc>:focus Una")]),
-    ("focus-carpeta-con-espacios", &[Step::Keys("<Tab><CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
