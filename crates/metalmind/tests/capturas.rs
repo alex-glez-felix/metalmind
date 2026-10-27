@@ -462,7 +462,9 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 }
                 Step::Files(change) => change(&smoke.notes()),
                 Step::Settle => {
-                    settle(&window, &frames, seen);
+                    // Los archivos que llegan pueden no cambiar lo que se ve:
+                    // aquí no hace falta que difiera de la escena anterior.
+                    settle(&window, &frames, seen, None);
                     seen = frame_count(&frames);
                 }
             }
