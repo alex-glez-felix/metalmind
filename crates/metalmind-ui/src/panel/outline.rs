@@ -1,8 +1,10 @@
-//! Lo que las dos vistas del panel comparten: moverse por las filas, abrir
+//! Lo que las vistas del panel comparten: moverse por las filas, abrir
 //! y cerrar, y qué archivo abre la fila seleccionada. Las acciones del panel
 //! (`j`, `l`, `enter`, el clic) van a la vista que se ve.
 
 use metalmind_vault::VaultPath;
+
+use crate::workspace::LinePosition;
 
 pub trait Outline {
     fn selected_row(&self) -> Option<usize>;
@@ -18,6 +20,10 @@ pub trait Outline {
     fn selected_path(&self) -> Option<&VaultPath>;
     /// El archivo que abre la fila seleccionada: no una carpeta ni un tag.
     fn selected_file(&self) -> Option<&VaultPath>;
+    /// Dónde abre ese archivo; `None` es donde quedó el cursor la última vez.
+    fn selected_position(&self) -> Option<LinePosition> {
+        None
+    }
 
     fn select_next(&mut self) {
         let row = self.selected_row().map_or(0, |row| row + 1);

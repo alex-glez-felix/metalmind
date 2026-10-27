@@ -109,6 +109,7 @@ impl Sidebar {
         let title = match self.panel.view {
             PanelView::Folders => "Carpetas",
             PanelView::Tags => "Tags",
+            PanelView::Backlinks => "Backlinks",
         };
         let buttons = div()
             .flex()
@@ -153,8 +154,10 @@ impl Sidebar {
                 .child(text)
                 .into_any_element()
         };
-        if self.panel.view == PanelView::Tags {
-            return self.tag_body(theme, focused, cx);
+        match self.panel.view {
+            PanelView::Tags => return self.tag_body(theme, focused, cx),
+            PanelView::Backlinks => return self.backlink_body(theme, focused, cx),
+            PanelView::Folders => {}
         }
         let rows = self.panel.tree.rows().len();
         if rows == 0 {
@@ -207,9 +210,13 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         self.focus(window, cx);
-        if let Some(click) = self.panel.click(at, event.click_count()) {
+        // Una fila cortada por el borde se ve entera al elegirla, como con
+        // `j` y `k`.
+        let click = self.panel.click(at, event.click_count());
+        self.scroll_to_selection();
+        if let Some(click) = click {
             let placement = crate::workspace::Placement::Current;
-            self.open(&click.path, placement, click.focus_editor, cx);
+            self.open(&click.path, click.at, placement, click.focus_editor, cx);
         }
         cx.notify();
     }
@@ -223,6 +230,7 @@ impl Sidebar {
     ) {
         self.focus(window, cx);
         self.panel.outline_mut().select_row(at);
+        self.scroll_to_selection();
         let focus = self.selected_is_focus(cx);
         self.menu = match self.panel.view {
             PanelView::Folders => self.panel.tree.selected_entry().map(|row| {
@@ -242,6 +250,11 @@ impl Sidebar {
                     (None, None) => None,
                 }
             }),
+            PanelView::Backlinks => self
+                .panel
+                .backlinks
+                .selected_entry()
+                .map(|row| ContextMenu::on_note(position, row.source().clone())),
         };
         cx.notify();
     }

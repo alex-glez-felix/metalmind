@@ -4,6 +4,7 @@
 //! [`Panel`](crate::panel::Panel) y en el [`Workspace`]; aquí se pinta, se
 //! traduce la entrada y se ejecuta lo que el usuario confirmó.
 
+mod backlink_rows;
 mod handlers;
 pub(crate) mod icons;
 mod input;
@@ -31,7 +32,7 @@ use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_change::TagRequest;
 use crate::tag_outline::TagOutline;
-use crate::workspace::{Placement, Workspace, shown_path};
+use crate::workspace::{LinePosition, Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,10 +68,16 @@ pub struct Sidebar {
     /// Cada vista con su scroll: al volver a una, sigue donde se dejó.
     scroll: UniformListScrollHandle,
     tag_scroll: UniformListScrollHandle,
+    backlink_scroll: UniformListScrollHandle,
     menu: Option<ContextMenu>,
+    /// Se abrió una nota desde los backlinks sin dejar el panel: la lista
+    /// se queda en su nota hasta que el foco sale del panel, para poder
+    /// recorrerla abriendo cada una.
+    holding_backlinks: bool,
     _changes: Subscription,
     _focus: Subscription,
     _workspace: Subscription,
+    _focus_out: Subscription,
 }
 
 impl EventEmitter<SidebarEvent> for Sidebar {}
@@ -81,6 +88,7 @@ impl Sidebar {
         session: &Entity<VaultSession>,
         state: &PanelState,
         workspace: Entity<Workspace>,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         let vault = session.read(cx).vault();
@@ -95,21 +103,73 @@ impl Sidebar {
             sidebar.scroll_to_selection();
             cx.notify();
         });
-        // La nota activa se marca en el árbol: cambia con el panel de edición.
-        let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
-        Self {
-            panel: Panel::new(tree, tags, state.visible, state.view()),
+        // La nota activa se marca en el árbol y sus backlinks se muestran:
+        // cambia con el panel de edición.
+        let workspace_changes = cx.observe(&workspace, |sidebar, _, cx| {
+            if !sidebar.holding_backlinks {
+                sidebar.follow_active(cx);
+            }
+            cx.notify();
+        });
+        let focus_handle = cx.focus_handle();
+        let focus_out = cx.on_focus_out(&focus_handle, window, |sidebar, _, _, cx| {
+            sidebar.holding_backlinks = false;
+            sidebar.follow_active(cx);
+            cx.notify();
+        });
+        let mut panel = Panel::new(tree, tags, state.visible, state.view());
+        panel.backlinks.set_index(vault.links());
+        let mut sidebar = Self {
+            panel,
             vault,
             session: session.clone(),
             workspace,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             scroll: UniformListScrollHandle::new(),
             tag_scroll: UniformListScrollHandle::new(),
+            backlink_scroll: UniformListScrollHandle::new(),
             menu: None,
+            holding_backlinks: false,
             _changes: changes,
             _focus: focus,
             _workspace: workspace_changes,
+            _focus_out: focus_out,
+        };
+        sidebar.follow_active(cx);
+        sidebar
+    }
+
+    /// Los backlinks son los de la nota del panel de edición enfocado.
+    fn follow_active(&mut self, cx: &App) {
+        let active = self.active(cx);
+        self.panel.backlinks.show_note(active);
+        self.refresh_backlinks();
+    }
+
+    fn refresh_backlinks(&mut self) {
+        let before = self.panel.backlinks.selected_row();
+        self.panel.backlinks.refresh();
+        let after = self.panel.backlinks.selected_row();
+        if let Some(row) = after.filter(|_| after != before) {
+            self.backlink_scroll
+                .scroll_to_item(row, ScrollStrategy::Nearest);
         }
+    }
+
+    /// Otra vista: la lista de backlinks deja de quedarse en su nota.
+    fn release_backlinks(&mut self, cx: &App) {
+        if self.holding_backlinks && self.panel.view != PanelView::Backlinks {
+            self.holding_backlinks = false;
+            self.follow_active(cx);
+        }
+    }
+
+    /// Abre o cierra la nota de la fila `at` de los backlinks, sin abrirla.
+    fn toggle_backlink_note(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus_handle, cx);
+        self.panel.backlinks.select_row(at);
+        self.panel.backlinks.toggle_selected();
+        cx.notify();
     }
 
     /// La vista que se ve, si el panel está visible.
@@ -165,6 +225,7 @@ impl Sidebar {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
         let shown = self.panel.toggle(view, focused);
+        self.release_backlinks(cx);
         self.reveal_tag_row(shown.moved);
         cx.notify();
         shown.visible
@@ -192,10 +253,19 @@ impl Sidebar {
         self.panel.follow(&update.changes);
         self.panel.set_tags(Arc::clone(&update.tags));
         self.sync_focus(cx);
+        self.panel.backlinks.follow(&update.changes);
+        self.panel.backlinks.set_index(Arc::clone(&update.links));
+        let chosen_backlink = self.panel.backlinks.selected_id().cloned();
+        self.refresh_backlinks();
+        let still_chosen = self.panel.backlinks.selected_id() == chosen_backlink.as_ref();
         let selected = self.panel.outline().selected_path();
         let selected_tag = self.panel.selected_tag();
+        // El menú de un backlink abre en su link: si el lote cambió de fila
+        // elegida, abriría otro.
+        let backlink_moved = self.panel.view == PanelView::Backlinks && !still_chosen;
         if let Some(menu) = &mut self.menu
-            && !menu.still_on(&update.changes, selected, selected_tag.as_deref())
+            && (backlink_moved
+                || !menu.still_on(&update.changes, selected, selected_tag.as_deref()))
         {
             self.menu = None;
         }
@@ -216,9 +286,10 @@ impl Sidebar {
     /// Cada vista lleva su scroll a su selección, se vea o no: lo que
     /// `reveal` o el watcher seleccionan en la escondida se ve al volver.
     fn scroll_to_selection(&self) {
-        let views: [(&dyn Outline, &UniformListScrollHandle); 2] = [
+        let views: [(&dyn Outline, &UniformListScrollHandle); 3] = [
             (&self.panel.tree, &self.scroll),
             (&self.panel.tags, &self.tag_scroll),
+            (&self.panel.backlinks, &self.backlink_scroll),
         ];
         for (outline, handle) in views {
             if let Some(row) = outline.selected_row() {
@@ -234,11 +305,13 @@ impl Sidebar {
         self.vault_path(document.path()?)
     }
 
-    /// Abre `path` donde dice `placement`; si el panel de edición enfocado
-    /// lo muestra y `focus_editor`, la ventana le pasa el foco.
+    /// Abre `path` donde dice `placement`, en `at` si se da; si el panel de
+    /// edición enfocado lo muestra y `focus_editor`, la ventana le pasa el
+    /// foco.
     fn open(
         &mut self,
         path: &VaultPath,
+        at: Option<LinePosition>,
         placement: Placement,
         focus_editor: bool,
         cx: &mut Context<Self>,
@@ -246,16 +319,26 @@ impl Sidebar {
         let file = shown_path(&self.vault.root().join(path.as_str()));
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
-            workspace
-                .open_file(&file, placement)
-                .unwrap_or_else(|error| {
-                    workspace.report(&error);
-                    false
-                })
+            match at {
+                Some(at) => workspace.open_file_at(&file, placement, at),
+                None => workspace.open_file(&file, placement),
+            }
+            .unwrap_or_else(|error| {
+                workspace.report(&error);
+                false
+            })
         });
-        if opened {
-            cx.emit(SidebarEvent::Opened { focus_editor });
+        if !opened {
+            return;
         }
+        // Abierta desde los backlinks sin pasarle el foco, la lista se queda
+        // en su nota. Basta marcarlo aquí: lo que avisa el panel de edición
+        // llega al observador cuando termina esta actualización. Si no se
+        // abrió nada, la lista sigue a la nota activa.
+        if self.panel.view == PanelView::Backlinks && !focus_editor {
+            self.holding_backlinks = true;
+        }
+        cx.emit(SidebarEvent::Opened { focus_editor });
     }
 
     fn file_of(&self, path: &VaultPath) -> std::path::PathBuf {

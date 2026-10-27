@@ -1,5 +1,6 @@
 //! La barra angosta a la izquierda de la ventana, con un botón por vista
-//! del panel lateral: el ratón llega a lo mismo que `space e` y `space t`.
+//! del panel lateral: el ratón llega a lo mismo que `space e`, `space t` y
+//! `space b`.
 
 use gpui_kit::{
     AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
@@ -39,6 +40,13 @@ pub fn rail(shown: Option<PanelView>, theme: &Theme) -> Div {
             shown == Some(PanelView::Tags),
             div().child("#"),
             Command::ToggleTags,
+            theme,
+        ))
+        .child(rail_button(
+            "rail-backlinks",
+            shown == Some(PanelView::Backlinks),
+            div().child("↩"),
+            Command::ToggleBacklinks,
             theme,
         ))
 }

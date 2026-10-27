@@ -41,7 +41,8 @@ fn mostrar_una_vista_o_esconder_si_ya_se_ve_con_el_foco() {
     assert!(panel.toggle(PanelView::Folders, false).visible);
     assert!(panel.toggle(PanelView::Tags, true).visible);
     assert_eq!(panel.view, PanelView::Tags);
-    assert_eq!(panel.view.other(), PanelView::Folders);
+    assert_eq!(panel.view.next(), PanelView::Backlinks);
+    assert_eq!(PanelView::Backlinks.next(), PanelView::Folders);
 }
 
 /// Desde el editor, `space e` con el árbol ya a la vista no lo esconde: le
@@ -231,6 +232,7 @@ fn un_clic_abre_o_cierra_la_carpeta_y_abre_el_archivo() {
     let open = |focus_editor| {
         Some(ClickOpen {
             path: path("a.md"),
+            at: None,
             focus_editor,
         })
     };
@@ -349,6 +351,7 @@ fn en_la_vista_de_tags_el_clic_abre_el_tag_y_la_nota() {
     let open = |focus_editor| {
         Some(ClickOpen {
             path: path("a.md"),
+            at: None,
             focus_editor,
         })
     };
@@ -471,9 +474,9 @@ fn los_tags_nuevos_se_arman_al_mostrar_su_vista() {
     assert_eq!(
         first_tag(&panel),
         "rust",
-        "con carpetas a la vista no cambia"
+        "con otra vista a la vista no cambia"
     );
-    panel.switch_view();
+    panel.toggle(PanelView::Tags, false);
     assert_eq!(first_tag(&panel), "gpui");
 }
 
@@ -507,7 +510,7 @@ fn el_arbol_de_tags_se_arma_al_mostrarse() {
 }
 
 /// `Escape` sin pregunta quita el filtro de carpetas solo si esa vista se
-/// ve: en la de tags no se toca lo que no está a la vista.
+/// ve: en las de tags y backlinks no se toca lo que no está a la vista.
 #[test]
 fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
     let mut panel = panel();
@@ -517,7 +520,10 @@ fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
     panel.switch_view();
     panel.escape();
     assert_eq!(panel.tree.filter(), "hoy");
-    panel.switch_view();
+    panel.toggle(PanelView::Backlinks, false);
+    panel.escape();
+    assert_eq!(panel.tree.filter(), "hoy");
+    panel.toggle(PanelView::Folders, false);
     panel.escape();
     assert_eq!(panel.tree.filter(), "");
 }
@@ -529,9 +535,13 @@ fn volver_a_tags_lleva_a_la_vista_la_fila_que_se_movio() {
     let mut panel = tags_panel();
     panel.tags.toggle_selected();
     panel.tags.select_row(1);
-    assert_eq!(panel.switch_view(), None);
-    assert_eq!(panel.switch_view(), None, "nada llegó: queda donde estaba");
-    panel.switch_view();
+    assert_eq!(panel.toggle(PanelView::Folders, false).moved, None);
+    assert_eq!(
+        panel.toggle(PanelView::Tags, false).moved,
+        None,
+        "nada llegó: queda donde estaba"
+    );
+    panel.toggle(PanelView::Folders, false);
     let index = VaultIndex::from_entries([
         (path("0.md"), EntryKind::Note),
         (path("a.md"), EntryKind::Note),
@@ -541,4 +551,21 @@ fn volver_a_tags_lleva_a_la_vista_la_fila_que_se_movio() {
     });
     panel.set_tags(Arc::new(tags));
     assert_eq!(panel.toggle(PanelView::Tags, false).moved, Some(2));
+}
+
+/// En la vista de backlinks, las teclas de archivo (`a`, `A`, `r`, `m`, `d`,
+/// `/`) no preguntan nada: actuarían sobre el árbol, que no se ve.
+#[test]
+fn en_backlinks_las_teclas_de_archivo_no_preguntan() {
+    let mut panel = panel();
+    panel.tree.select(&path("a.md"));
+    panel.toggle(PanelView::Backlinks, false);
+    panel.start_create(NewEntry::Note);
+    panel.start_create(NewEntry::Folder);
+    panel.start_rename();
+    panel.start_move();
+    panel.start_delete(path("a.md"), false);
+    panel.start_filter();
+    assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.confirm(), None);
 }

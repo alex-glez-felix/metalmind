@@ -74,6 +74,12 @@ impl<T: PickerItem> Fuzzy<T> {
         self.state.items()
     }
 
+    /// Cambia los ítems y vuelve a filtrar una vez.
+    pub fn set_items(&mut self, items: Arc<[T]>, cx: &mut Context<PickerView<Self>>) {
+        let step = self.state.set_items(items);
+        self.step(step, cx);
+    }
+
     /// Cambia los ítems y lo que los filtra, y vuelve a filtrar una vez.
     pub fn set_source(
         &mut self,
@@ -175,7 +181,9 @@ impl<T: PickerItem> PickerDelegate for Fuzzy<T> {
     }
 
     fn empty(&self) -> SharedString {
-        if self.state.items().is_empty() {
+        if !self.state.is_loaded() {
+            SharedString::new_static("Buscando…")
+        } else if self.state.items().is_empty() {
             self.empty.clone()
         } else {
             SharedString::new_static("Sin resultados")

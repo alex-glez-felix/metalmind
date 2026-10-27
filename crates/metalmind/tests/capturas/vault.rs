@@ -214,6 +214,61 @@ pub fn write_tables(root: &Path) {
     fs::write(root.join(TABLES), note).expect("escribir la nota de tablas");
 }
 
+/// Notas que enlazan a `Proyectos/Metalmind/plan.md`: muchas, en una
+/// carpeta honda, con líneas más largas que el panel, un link a un heading,
+/// multibyte y alguna con varios links.
+pub fn write_backlinks(root: &Path) {
+    let file = |path: &str, contents: &str| {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().expect("la ruta tiene carpeta"))
+            .expect("crear la carpeta");
+        fs::write(path, contents).expect("escribir el archivo");
+    };
+    for index in 1..=24 {
+        let topic = TOPICS[index % TOPICS.len()];
+        let mut body = format!(
+            "# Reunión {index:02}\n\nAcordamos revisar el [[Metalmind/plan]] antes del viernes, \
+             con todo lo que quedó pendiente de la semana pasada y lo de {topic}.\n"
+        );
+        if index % 3 == 0 {
+            body.push_str(
+                "\n日本語のメモ:計画を見直す [[Metalmind/plan#Meta]] とても長い行が続きます。\n",
+            );
+        }
+        if index % 5 == 0 {
+            body.push_str("\nY otra vez: [[Metalmind/plan|el plan]] 🦀 al final.\n");
+        }
+        file(
+            &format!("{DEEP_FOLDER_1}/reuniones/reunión {index:02} — {topic}.md"),
+            &body,
+        );
+    }
+}
+
+/// Una nota con muchos links que no llevan a nada: un nombre larguísimo,
+/// japonés, emoji, un embed y un link markdown.
+pub fn write_unresolved(root: &Path) {
+    let mut body = String::from(
+        "# Pendientes\n\n\
+         - [[Una nota que todavía no existe y tiene un nombre larguísimo para ver cómo se recorta en el picker]]\n\
+         - ![[diagrama-que-falta.png]]\n\
+         - [el informe final](informes/2026/informe-final.md)\n\
+         - [[日本語のノート/未作成のメモ]]\n\
+         - [[🦀 rust/capítulo 9 — lifetimes]]\n",
+    );
+    for index in 1..=30 {
+        writeln!(
+            body,
+            "- [[tarea pendiente {index:02}]] para la semana que viene"
+        )
+        .expect("escribir en un String");
+    }
+    let path = root
+        .join(LONG_FOLDER)
+        .join("pendientes de una lista que tampoco cabe.md");
+    fs::write(path, body).expect("escribir el archivo");
+}
+
 /// La plantilla de ejemplo, tal como la muestra la documentación.
 fn interview() -> &'static str {
     let docs = include_str!("../../../../docs/plantillas.md");

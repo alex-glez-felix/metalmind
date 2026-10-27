@@ -3,6 +3,7 @@
 //! no importa GPUI, y aquí solo se pinta y se traduce la entrada.
 
 mod actions;
+mod backlinks;
 mod clipboard;
 mod completion;
 mod disk;
@@ -26,6 +27,7 @@ mod tag_outline;
 pub mod text_search;
 mod theme;
 mod tooltip;
+mod unresolved;
 mod utf16;
 mod window;
 mod workspace;
