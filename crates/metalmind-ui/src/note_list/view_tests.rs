@@ -99,11 +99,26 @@ fn selected(list: &Entity<NoteListView>, cx: &mut VisualTestContext) -> Option<S
 }
 
 #[test]
+fn plegada_no_lee_ninguna_tarjeta() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture(&mut cx);
+    let (started, current) = fixture
+        .list
+        .read_with(cx, |view, _| (view.started, view.list.is_current()));
+    assert!(!started && !current);
+    fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
+    cx.run_until_parked();
+    assert!(fixture.list.read_with(cx, |view, _| view.list.is_current()));
+}
+
+#[test]
 fn al_abrirla_elige_la_nota_activa() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     assert!(!fixture.list.read_with(cx, |view, _| view.is_visible()));
     assert!(fixture.list.update(cx, NoteListView::toggle));
+    cx.run_until_parked();
     assert_eq!(selected(&fixture.list, cx).as_deref(), Some("b.md"));
     assert_eq!(
         fixture.list.read_with(cx, |view, _| view.state().visible),
@@ -116,6 +131,7 @@ fn t_pregunta_los_tags_de_la_nota_elegida() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
     cx.simulate_keystrokes("t");
     cx.simulate_input("idea gpui");
     cx.simulate_keystrokes("enter");
@@ -134,6 +150,7 @@ fn el_filtro_se_escribe_en_su_lugar_y_esc_lo_quita() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
     cx.simulate_keystrokes("space f");
     cx.simulate_input("c.m");
     cx.run_until_parked();
@@ -155,6 +172,7 @@ fn enter_abre_la_nota_y_pasa_el_foco() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     fixture.list.update(cx, NoteListView::toggle);
+    cx.run_until_parked();
     cx.simulate_keystrokes("j enter");
     assert_eq!(
         *fixture.events.borrow(),
@@ -173,11 +191,11 @@ fn sin_estado_guardado_arranca_abierta_solo_en_una_ventana_ancha() {
     let (fixture, cx) = fixture(&mut cx);
     let min = gpui_kit::px(1600.);
     let settle = |chosen: Option<bool>, widths: &[f32], cx: &mut VisualTestContext| {
-        fixture.list.update(cx, |view, _| {
+        fixture.list.update(cx, |view, cx| {
             view.chosen = chosen;
             view.by_width = None;
             for &width in widths {
-                view.settle_visibility(gpui_kit::px(width), min);
+                view.settle_visibility(gpui_kit::px(width), min, cx);
             }
             (view.is_visible(), view.state().visible)
         })

@@ -439,8 +439,8 @@ impl Render for WorkspaceView {
         self.update_title(window, cx);
         let theme = Theme::get(cx).clone();
         let width = window.viewport_size().width;
-        self.list.update(cx, |list, _| {
-            list.settle_visibility(width, theme.layout.list_open_min_width);
+        self.list.update(cx, |list, cx| {
+            list.settle_visibility(width, theme.layout.list_open_min_width, cx);
         });
         let root = self.workspace.read(cx).tree().root().clone();
         let element = div()
