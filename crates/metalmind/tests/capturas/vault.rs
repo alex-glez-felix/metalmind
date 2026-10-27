@@ -180,6 +180,37 @@ pub fn write_link_notes(root: &Path) {
     }
 }
 
+/// Notas que enlazan a `Proyectos/Metalmind/plan.md`: muchas, en una
+/// carpeta honda, con líneas más largas que el panel, un link a un heading,
+/// multibyte y alguna con varios links.
+pub fn write_backlinks(root: &Path) {
+    let file = |path: &str, contents: &str| {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().expect("la ruta tiene carpeta"))
+            .expect("crear la carpeta");
+        fs::write(path, contents).expect("escribir el archivo");
+    };
+    for index in 1..=24 {
+        let topic = TOPICS[index % TOPICS.len()];
+        let mut body = format!(
+            "# Reunión {index:02}\n\nAcordamos revisar el [[Metalmind/plan]] antes del viernes, \
+             con todo lo que quedó pendiente de la semana pasada y lo de {topic}.\n"
+        );
+        if index % 3 == 0 {
+            body.push_str(
+                "\n日本語のメモ:計画を見直す [[Metalmind/plan#Meta]] とても長い行が続きます。\n",
+            );
+        }
+        if index % 5 == 0 {
+            body.push_str("\nY otra vez: [[Metalmind/plan|el plan]] 🦀 al final.\n");
+        }
+        file(
+            &format!("{DEEP_FOLDER_1}/reuniones/reunión {index:02} — {topic}.md"),
+            &body,
+        );
+    }
+}
+
 /// La plantilla de ejemplo, tal como la muestra la documentación.
 fn interview() -> &'static str {
     let docs = include_str!("../../../../docs/plantillas.md");
