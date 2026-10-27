@@ -16,6 +16,7 @@ editor:
   relativenumber: false
   gutter_marks: false
   scrolloff: 5
+  wrap: false
   tabstop: 2
   expandtab: false
   padding:
@@ -66,6 +67,7 @@ fn every_setting() -> Settings {
             relativenumber: false,
             gutter_marks: false,
             scrolloff: 5,
+            wrap: false,
             tabstop: TabStop(2),
             expandtab: false,
             padding: Padding {
@@ -151,6 +153,7 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "relativenumber": false,
     "gutter_marks": false,
     "scrolloff": 5,
+    "wrap": false,
     "tabstop": 2,
     "expandtab": false,
     "padding": { "horizontal": 20, "vertical": 0 },

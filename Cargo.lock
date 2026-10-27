@@ -4048,6 +4048,7 @@ dependencies = [
  "serde-saphyr",
  "thiserror 2.0.21",
  "unicode-properties",
+ "unicode-segmentation",
  "unicode-width",
 ]
 

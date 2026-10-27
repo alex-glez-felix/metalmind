@@ -8,7 +8,7 @@ use super::dispatch::move_cursors;
 use crate::lines::{self, Want, at_byte_column, clamp_normal, last_char, tab_end};
 use crate::motion::vertical;
 use crate::scroll::Shift;
-use crate::{Place, Scroll, Target, Uniform, VimError};
+use crate::{Place, Scroll, Sideways, Target, VimError};
 
 impl Vim {
     /// Las líneas que se dejan visibles por encima y por debajo del cursor.
@@ -42,6 +42,26 @@ impl Vim {
         }
     }
 
+    /// La rueda corrió la ventana a lo ancho hasta `left`, como
+    /// [`Vim::scroll_to`] a lo alto.
+    pub fn scroll_sideways_to(&mut self, left: usize, t: &mut Target<'_>) {
+        self.reset();
+        let moved = t
+            .pane
+            .scroll_sideways_to(left, t.buffer, t.selections, t.doc, self.mode);
+        if let Some(session) = self.insert.as_mut().filter(|_| moved) {
+            session.cursor_moved();
+        }
+    }
+
+    /// `zh`, `zl`, `zH`, `zL`, `zs` y `ze`.
+    pub(super) fn scroll_sideways(&mut self, sideways: Sideways, t: &mut Target<'_>) {
+        let count = self.take_count().unwrap_or(1);
+        self.reset();
+        t.pane
+            .scroll_sideways(sideways, count, t.buffer, t.selections, t.doc, self.mode);
+    }
+
     /// Tras cada tecla, como vim antes de pintar: el cursor se ve. Si el
     /// texto cambió, se revisa aunque siga en la misma línea.
     pub(super) fn follow_cursor(&mut self, t: &mut Target<'_>, version: u64) {
@@ -68,12 +88,13 @@ impl Vim {
         self.measure(t, reach);
         let half = matches!(scroll, Scroll::HalfPageDown | Scroll::HalfPageUp)
             .then(|| t.pane.viewport.half_page(count));
-        let uniform = Uniform(t.pane.viewport.row());
-        let heights = t.doc.heights().unwrap_or(&uniform);
+        let layout = t
+            .doc
+            .layout(t.buffer, t.pane.screen.as_ref(), t.pane.viewport.row());
         let mut window = t
             .pane
             .viewport
-            .window(t.buffer, head, self.scrolloff, heights);
+            .window(t.buffer, head, self.scrolloff, &layout);
         let moved = match (scroll, half) {
             (Scroll::LineDown | Scroll::LineUp, _) => {
                 window.scroll_lines(scroll == Scroll::LineDown, count.unwrap_or(1));
@@ -142,12 +163,13 @@ impl Vim {
         }
         let head = t.selections.primary().head;
         self.measure(t, 0);
-        let uniform = Uniform(t.pane.viewport.row());
-        let heights = t.doc.heights().unwrap_or(&uniform);
+        let layout = t
+            .doc
+            .layout(t.buffer, t.pane.screen.as_ref(), t.pane.viewport.row());
         let mut window = t
             .pane
             .viewport
-            .window(t.buffer, head, self.scrolloff, heights);
+            .window(t.buffer, head, self.scrolloff, &layout);
         match place {
             Place::Top => window.scroll_cursor_top(0, true),
             Place::Middle => window.scroll_cursor_halfway(true, false),
@@ -169,12 +191,13 @@ impl Vim {
         self.jumped(t)?;
         let head = t.selections.primary().head;
         self.measure(t, 0);
-        let uniform = Uniform(t.pane.viewport.row());
-        let heights = t.doc.heights().unwrap_or(&uniform);
+        let layout = t
+            .doc
+            .layout(t.buffer, t.pane.screen.as_ref(), t.pane.viewport.row());
         let mut window = t
             .pane
             .viewport
-            .window(t.buffer, head, self.scrolloff, heights);
+            .window(t.buffer, head, self.scrolloff, &layout);
         window.cursor = t.pane.viewport.line_at(place, count.unwrap_or(1), t.buffer);
         window.cursor_correct();
         t.pane.viewport.apply(&window);

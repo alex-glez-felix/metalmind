@@ -7,7 +7,7 @@ use super::awaiting::Awaiting;
 use crate::Target;
 use crate::insert::Typed;
 use crate::jumplist::Direction;
-use crate::markdown::LazyOutline;
+use crate::markdown::LazyStyles;
 use crate::matching;
 use crate::motion::Destination;
 use crate::object::Object;
@@ -73,6 +73,7 @@ impl Vim {
                 Mode::Normal | Mode::OperatorPending(_),
             ) => return self.search_word(backward, whole_word, t),
             (Action::Scroll(scroll), Mode::Normal) => self.scroll(scroll, t),
+            (Action::ScrollSideways(sideways), Mode::Normal) => self.scroll_sideways(sideways, t),
             (
                 Action::Reposition {
                     place,
@@ -193,10 +194,9 @@ impl Vim {
         self.reset();
         let purpose = self.motion_purpose();
         let visual = self.in_visual();
-        let outline = LazyOutline::new(t.doc.styles_mut());
+        let styles = LazyStyles::new(t.doc.styles_mut());
         let moved = move_cursors(t.selections, visual, |s| {
-            let destination =
-                motion.resolve(t.buffer, s, count, purpose, &t.pane.viewport, &outline)?;
+            let destination = motion.resolve(t.buffer, s, count, purpose, t.pane, &styles)?;
             let stuck = motion.fails_without_moving() && destination.offset == s.head;
             (!stuck).then_some(destination)
         });

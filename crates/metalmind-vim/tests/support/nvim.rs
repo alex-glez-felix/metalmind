@@ -28,6 +28,18 @@ pub fn run_on(before: &str, keys: &str, screen: Option<Screen>) -> (State, usize
     (dump.state, dump.top)
 }
 
+/// Como [`run_on`] tras correr `setup` (`set nowrap`); devuelve además
+/// lo que la ventana corrió a lo ancho (`leftcol`).
+pub fn run_on_after(
+    setup: &str,
+    before: &str,
+    keys: &str,
+    screen: Screen,
+) -> (State, usize, usize) {
+    let dump = dump(before, keys, setup, Some(screen));
+    (dump.state, dump.top, dump.left)
+}
+
 /// El último mensaje que dejan las teclas en nvim: un error (`E16: Invalid
 /// range`) o un aviso (`Pattern not found: x`); vacío si no hubo.
 pub fn message(before: &str, keys: &str) -> String {
@@ -37,6 +49,7 @@ pub fn message(before: &str, keys: &str) -> String {
 struct Dump {
     state: State,
     top: usize,
+    left: usize,
     message: String,
 }
 
@@ -83,6 +96,7 @@ fn dump(before: &str, keys: &str, setup: &str, screen: Option<Screen>) -> Dump {
     let mode = fields[2].to_owned();
     let (anchor_row, anchor_col) = (number(3), number(4));
     let top = number(5) - 1;
+    let left = number(6);
     let result = Buffer::from(text);
     let at = |row: usize, col| ByteOffset::new(result.line_start(row - 1).get() + col);
     let head = at(row, col);
@@ -96,6 +110,7 @@ fn dump(before: &str, keys: &str, setup: &str, screen: Option<Screen>) -> Dump {
     Dump {
         state,
         top,
+        left,
         message: message.to_owned(),
     }
 }

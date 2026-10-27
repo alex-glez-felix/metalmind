@@ -92,11 +92,11 @@ local state = exec([[
   local messages = vim.split(vim.fn.execute("messages"), "\n", { trimempty = true })
   return {
     pos[1], pos[2], mode, anchor[2], anchor[3] - 1, vim.fn.line("w0"),
-    messages[#messages] or "", vim.api.nvim_buf_get_lines(0, 0, -1, true),
+    messages[#messages] or "", vim.api.nvim_buf_get_lines(0, 0, -1, true), vim.fn.winsaveview().leftcol,
   }
 ]])
 local file = assert(io.open(out, "w"))
-file:write(string.format("%d %d %s %d %d %d\n", state[1], state[2], state[3], state[4], state[5], state[6]))
+file:write(string.format("%d %d %s %d %d %d %d\n", state[1], state[2], state[3], state[4], state[5], state[6], state[9]))
 file:write(state[7] .. "\n")
 file:write(table.concat(state[8], "\n"))
 file:close()

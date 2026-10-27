@@ -3,7 +3,7 @@ use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, Selection, Selections};
 use crate::columns::Columns;
 use crate::dot::{BlockChange, Change, Dot};
 use crate::lines::first_non_blank;
-use crate::markdown::{After, LazyOutline, Newline, opened_item, renumber_items};
+use crate::markdown::{After, LazyStyles, Newline, opened_item, renumber_items};
 use crate::{DocState, InsertAt, VimError};
 
 /// Cómo escriben Insert, `o` y `O` una línea nueva.
@@ -91,12 +91,12 @@ fn open_line(
     doc: &mut DocState,
 ) -> Result<(Selections, bool), VimError> {
     buffer.begin_transaction(original.clone())?;
-    let outline = LazyOutline::new(doc.styles_mut());
+    let styles = LazyStyles::new(doc.styles_mut());
     let opened = points.map_to(|point| {
         let line = buffer.line_of(point.head);
         let item = typing
             .continue_lists
-            .then(|| opened_item(buffer, line, below, &outline))
+            .then(|| opened_item(buffer, line, below, &styles))
             .flatten();
         (point.head, item.unwrap_or_default())
     });
@@ -141,14 +141,14 @@ pub(crate) fn newline(
     }
     // Lo tecleado antes en este Insert ya cambió el texto.
     doc.sync(buffer);
-    let outline = LazyOutline::new(doc.styles_mut());
+    let styles = LazyStyles::new(doc.styles_mut());
     let plans = selections.map_to(|selection| {
         let head = selection.head;
         let line_start = buffer.line_start(buffer.line_of(head));
         (
             head,
             line_start,
-            Newline::at(buffer, head, ends, &outline, typing.columns),
+            Newline::at(buffer, head, ends, &styles, typing.columns),
         )
     });
     let mut edits: Vec<Edit> = plans

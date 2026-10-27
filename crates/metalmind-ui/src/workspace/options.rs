@@ -1,6 +1,16 @@
-//! `:set` sobre las opciones de un panel: hoy, sus números de línea.
+//! `:set` sobre las opciones de un panel: sus números de línea y `wrap`.
 
 use super::LineNumbers;
+
+/// Lo que `:set` cambia en un panel; un split hereda las del panel que se
+/// divide.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PaneOptions {
+    pub numbers: LineNumbers,
+    /// Las líneas más largas que el panel se parten en filas; sin `wrap`,
+    /// la vista se corre a lo ancho para seguir al cursor.
+    pub wrap: bool,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum OptionError {
@@ -18,12 +28,13 @@ enum Change {
 }
 
 /// Lo escrito tras `:set`, de izquierda a derecha como vim: `nu`, `nonu`,
-/// `nu!` e `invnu`, con nombres largos o cortos. En la primera opción que no
+/// `nu!` e `invnu`, con nombres largos o cortos, y lo mismo con `rnu` y
+/// `wrap`. En la primera opción que no
 /// conoce se detiene y deja aplicadas las anteriores.
 ///
 /// # Errors
 /// Sin argumento o con una opción desconocida.
-pub fn set(numbers: &mut LineNumbers, argument: Option<&str>) -> Result<(), OptionError> {
+pub fn set(options: &mut PaneOptions, argument: Option<&str>) -> Result<(), OptionError> {
     let mut words = argument.unwrap_or_default().split_whitespace().peekable();
     if words.peek().is_none() {
         return Err(OptionError::MissingArgument);
@@ -31,8 +42,9 @@ pub fn set(numbers: &mut LineNumbers, argument: Option<&str>) -> Result<(), Opti
     for word in words {
         let (flag, change) = parse(word).ok_or_else(|| OptionError::Unknown(word.to_owned()))?;
         let value = match flag {
-            Flag::Number => &mut numbers.absolute,
-            Flag::RelativeNumber => &mut numbers.relative,
+            Flag::Number => &mut options.numbers.absolute,
+            Flag::RelativeNumber => &mut options.numbers.relative,
+            Flag::Wrap => &mut options.wrap,
         };
         *value = match change {
             Change::On => true,
@@ -47,6 +59,7 @@ pub fn set(numbers: &mut LineNumbers, argument: Option<&str>) -> Result<(), Opti
 enum Flag {
     Number,
     RelativeNumber,
+    Wrap,
 }
 
 fn parse(word: &str) -> Option<(Flag, Change)> {
@@ -66,6 +79,7 @@ fn flag(name: &str) -> Option<Flag> {
     match name {
         "number" | "nu" => Some(Flag::Number),
         "relativenumber" | "rnu" => Some(Flag::RelativeNumber),
+        "wrap" => Some(Flag::Wrap),
         _ => None,
     }
 }
@@ -76,8 +90,18 @@ mod tests {
 
     use super::*;
 
-    fn numbers(absolute: bool, relative: bool) -> LineNumbers {
-        LineNumbers { absolute, relative }
+    fn numbers(absolute: bool, relative: bool) -> PaneOptions {
+        PaneOptions {
+            numbers: LineNumbers { absolute, relative },
+            wrap: false,
+        }
+    }
+
+    fn wrapping(wrap: bool) -> PaneOptions {
+        PaneOptions {
+            wrap,
+            ..numbers(true, true)
+        }
     }
 
     #[test]
@@ -100,7 +124,13 @@ mod tests {
                 numbers(false, false),
             ),
         ];
-        for (argument, before, expected) in cases {
+        let wraps = [
+            ("wrap", wrapping(false), wrapping(true)),
+            ("nowrap", wrapping(true), wrapping(false)),
+            ("wrap!", wrapping(true), wrapping(false)),
+            ("invwrap", wrapping(false), wrapping(true)),
+        ];
+        for (argument, before, expected) in cases.into_iter().chain(wraps) {
             let mut actual = before;
             assert_eq!(set(&mut actual, Some(argument)), Ok(()), "{argument:?}");
             assert_eq!(actual, expected, "{argument:?} desde {before:?}");
@@ -111,8 +141,8 @@ mod tests {
     fn una_opcion_desconocida_deja_las_anteriores() {
         let mut actual = numbers(false, false);
         assert_eq!(
-            set(&mut actual, Some("nu wrap rnu")),
-            Err(OptionError::Unknown("wrap".to_owned()))
+            set(&mut actual, Some("nu list rnu")),
+            Err(OptionError::Unknown("list".to_owned()))
         );
         assert_eq!(actual, numbers(true, false));
         for word in ["no", "nonsense", "nu!!", "!", "invrnu!"] {
@@ -126,7 +156,7 @@ mod tests {
 
     #[test]
     fn sin_argumento_es_un_error() {
-        let mut actual = LineNumbers::HYBRID;
+        let mut actual = wrapping(true);
         assert_eq!(set(&mut actual, None), Err(OptionError::MissingArgument));
         assert_eq!(
             set(&mut actual, Some("  ")),

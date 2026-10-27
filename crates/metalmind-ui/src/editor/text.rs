@@ -2,27 +2,70 @@
 //! color, peso, cursiva, tachado y fondo, todo del tema.
 
 use gpui_kit::{Font, FontStyle, FontWeight, Hsla, Pixels, StrikethroughStyle, TextRun};
-use metalmind_syntax::{Decorations, LineKind, Role, Token};
+use metalmind_syntax::{Decorations, LineKind, Role, Style, Token};
 
 use super::markdown::Run;
 use crate::theme::Theme;
 
-/// El tamaño de la letra y el peso de una línea: un heading es más grande.
-pub fn line_font(kind: Option<LineKind>, size: Pixels, theme: &Theme) -> (Pixels, FontWeight) {
-    match kind {
-        Some(LineKind::Heading(level)) => {
-            let index = usize::from(level).saturating_sub(1).min(5);
-            let (scale, weight) = theme.headings[index];
-            (size * scale, weight)
+/// La letra de las líneas del editor: la del texto, la de cada heading y
+/// el peso de la negrita.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Faces {
+    pub font: Font,
+    pub size: Pixels,
+    pub headings: [(f32, FontWeight); 6],
+    pub normal: FontWeight,
+    pub strong: FontWeight,
+}
+
+impl Faces {
+    pub fn new(font: Font, size: Pixels, theme: &Theme) -> Self {
+        Self {
+            font,
+            size,
+            headings: theme.headings,
+            normal: theme.text.normal,
+            strong: theme.text.strong,
         }
-        _ => (size, theme.text.normal),
+    }
+
+    /// El tamaño de la letra y el peso de una línea: un heading es más
+    /// grande.
+    pub fn line(&self, kind: Option<LineKind>) -> (Pixels, FontWeight) {
+        match kind {
+            Some(LineKind::Heading(level)) => {
+                let index = usize::from(level).saturating_sub(1).min(5);
+                let (scale, weight) = self.headings[index];
+                (self.size * scale, weight)
+            }
+            _ => (self.size, self.normal),
+        }
+    }
+
+    /// La letra de un tramo con `style` en una línea de peso `weight`: la
+    /// negrita y la cursiva cambian de letra, que puede medir distinto.
+    pub fn run(&self, style: Style, weight: FontWeight) -> Font {
+        let has = |decoration| style.decorations.contains(decoration);
+        Font {
+            weight: if has(Decorations::STRONG) && weight.0 < self.strong.0 {
+                self.strong
+            } else {
+                weight
+            },
+            style: if has(Decorations::EMPHASIS) {
+                FontStyle::Italic
+            } else {
+                FontStyle::Normal
+            },
+            ..self.font.clone()
+        }
     }
 }
 
 pub fn text_runs(
     runs: &[Run],
     kind: Option<LineKind>,
-    font: &Font,
+    faces: &Faces,
     weight: FontWeight,
     theme: &Theme,
 ) -> Vec<TextRun> {
@@ -41,19 +84,7 @@ pub fn text_runs(
             };
             TextRun {
                 len: run.len,
-                font: Font {
-                    weight: if has(Decorations::STRONG) && weight.0 < theme.text.strong.0 {
-                        theme.text.strong
-                    } else {
-                        weight
-                    },
-                    style: if has(Decorations::EMPHASIS) {
-                        FontStyle::Italic
-                    } else {
-                        FontStyle::Normal
-                    },
-                    ..font.clone()
-                },
+                font: faces.run(style, weight),
                 color,
                 background_color: background,
                 underline: None,

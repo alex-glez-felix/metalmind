@@ -40,9 +40,10 @@ use std::rc::Rc;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_keymap::{Keymap, UnknownAction};
+use metalmind_syntax::Screen;
 use metalmind_vault::tags::ScopeError;
 use metalmind_vim::{
-    Action, Clipboard, FileId, Indent, Markdown, Mode, PaneState, Pattern, Prompt, Target,
+    Action, Clipboard, FileId, Indent, Layout, Markdown, Mode, PaneState, Pattern, Prompt, Target,
     Viewport, Vim, VimError,
 };
 
@@ -58,6 +59,7 @@ pub use self::link_typing::TypedLink;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
+pub use self::options::PaneOptions;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
 pub use self::tag_typing::TypedTag;
@@ -88,7 +90,7 @@ pub enum WorkspaceError {
 struct Pane {
     document: DocumentId,
     selections: Selections,
-    numbers: LineNumbers,
+    options: PaneOptions,
     /// La ventana y la jumplist; un split copia las suyas.
     state: PaneState,
 }
@@ -102,13 +104,13 @@ struct LastView {
 }
 
 impl Pane {
-    fn at_start(document: DocumentId, numbers: LineNumbers, tabstop: usize) -> Self {
+    fn at_start(document: DocumentId, options: PaneOptions, tabstop: usize) -> Self {
         let mut state = PaneState::default();
         state.viewport.set_tabstop(tabstop);
         Self {
             document,
             selections: Selections::single(Selection::cursor(ByteOffset::ZERO)),
-            numbers,
+            options,
             state,
         }
     }
@@ -169,6 +171,10 @@ pub struct PaneView<'a> {
     pub recording: Option<char>,
     pub command_line: Option<CommandLine<'a>>,
     pub numbers: LineNumbers,
+    /// Si las líneas más largas que el panel se parten en filas.
+    pub wrap: bool,
+    /// El ancho con que el motor mide las líneas, el del último layout.
+    pub screen: Option<&'a Screen>,
     /// El patrón a resaltar, en todos los paneles como `hlsearch`, hasta
     /// un `:noh`.
     pub search: Option<&'a Pattern>,
@@ -203,18 +209,21 @@ impl PaneView<'_> {
     pub fn cursor(&self) -> ByteOffset {
         self.selection.head
     }
+
+    /// Cómo se ve cada línea en el panel, con el ancho del último layout.
+    #[must_use]
+    pub fn layout(&self) -> Layout<'_> {
+        self.document
+            .state()
+            .layout(self.buffer(), self.screen, self.viewport.row())
+    }
 }
 
 impl Workspace {
-    /// Un panel con `document` y los números `numbers`, avisando como vim
-    /// al abrirlo.
+    /// Un panel con `document` y las opciones `pane`, avisando como vim al
+    /// abrirlo.
     #[must_use]
-    pub fn new(
-        document: Document,
-        numbers: LineNumbers,
-        options: Options,
-        keymap: &Keymap,
-    ) -> Self {
+    pub fn new(document: Document, pane: PaneOptions, options: Options, keymap: &Keymap) -> Self {
         let Options {
             scrolloff,
             tabstop,
@@ -238,7 +247,7 @@ impl Workspace {
         Self {
             documents,
             files,
-            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, numbers, tabstop))]),
+            panes: BTreeMap::from([(tree.focus(), Pane::at_start(id, pane, tabstop))]),
             tree,
             hidden: BTreeMap::new(),
             vim,
@@ -302,7 +311,9 @@ impl Workspace {
             },
             recording: self.vim.recording().filter(|_| focused),
             command_line: self.command_line().filter(|_| focused),
-            numbers: state.numbers,
+            numbers: state.options.numbers,
+            wrap: state.options.wrap,
+            screen: state.state.screen(),
             search: self.vim.search_highlight(),
         })
     }

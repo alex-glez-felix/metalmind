@@ -14,7 +14,7 @@ mod table;
 use std::cell::{OnceCell, RefCell};
 
 use metalmind_buffer::Buffer;
-use metalmind_syntax::{LineKind, Styles};
+use metalmind_syntax::{LineKind, LineStyle, Styles};
 
 use crate::doc::BufferLines;
 
@@ -83,16 +83,17 @@ impl Outline {
     }
 }
 
-/// El [`Outline`], calculado la primera vez que se pide. Con el estilo del
-/// documento que se pinta ([`crate::DocState`]) usa ese, que ya está
-/// calculado para lo que se ve y se rehace solo en lo editado; sin él (un
-/// motor sin UI), lo calcula de cero.
-pub(crate) struct LazyOutline<'a> {
+/// El estilo del documento, calculado a pedido: el de una línea o el
+/// [`Outline`], la primera vez que se pide. Con el estilo del documento que
+/// se pinta ([`crate::DocState`]) usa ese, que ya está calculado para lo
+/// que se ve y se rehace solo en lo editado; sin él (un motor sin UI), el
+/// outline se calcula de cero y una línea no tiene estilo.
+pub(crate) struct LazyStyles<'a> {
     styles: RefCell<Option<&'a mut Styles>>,
     outline: OnceCell<Outline>,
 }
 
-impl<'a> LazyOutline<'a> {
+impl<'a> LazyStyles<'a> {
     /// `styles` ya siguió lo editado en el buffer (`DocState::sync`): lo
     /// hace `Vim::run` antes de cada acción, y quien edita a mitad de una
     /// antes de pedir otro.
@@ -103,7 +104,15 @@ impl<'a> LazyOutline<'a> {
         }
     }
 
-    pub(crate) fn get(&self, buffer: &Buffer) -> &Outline {
+    /// El estilo de `line`, si el documento se pinta.
+    pub(crate) fn line(&self, buffer: &Buffer, line: usize) -> Option<LineStyle> {
+        let mut styles = self.styles.borrow_mut();
+        let styles = styles.as_deref_mut()?;
+        styles.ensure(line, &BufferLines(buffer));
+        styles.line(line).cloned()
+    }
+
+    pub(crate) fn outline(&self, buffer: &Buffer) -> &Outline {
         self.outline.get_or_init(|| {
             let last = buffer.last_line();
             if let Some(styles) = self.styles.borrow_mut().as_deref_mut() {

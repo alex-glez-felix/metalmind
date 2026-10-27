@@ -151,6 +151,7 @@ impl Workspace {
                 Ok(Effect::Stay)
             }
             Command::Set => self.set_options(argument),
+            Command::ToggleWrap => self.set_options(Some("wrap!")),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),
@@ -388,11 +389,11 @@ impl Workspace {
     pub fn open_in_split(&mut self, axis: Axis, path: &Path) -> Result<(), WorkspaceError> {
         let focused = self.focused();
         self.interrupt(focused)?;
-        let numbers = self.pane(focused)?.numbers;
+        let options = self.pane(focused)?.options;
         let Some(id) = self.open_document(path) else {
             return Ok(());
         };
-        let mut shown = self.pane_on(id, numbers)?;
+        let mut shown = self.pane_on(id, options)?;
         self.push_jump(focused)?;
         let jumps = self.pane(focused)?.state.jumps.clone();
         self.message = Some(Message::opened(self.document(shown.document)?));
@@ -426,7 +427,7 @@ impl Workspace {
             .panes
             .get_mut(&pane)
             .ok_or(WorkspaceError::NoPane(pane))?;
-        if let Err(error) = options::set(&mut state.numbers, argument) {
+        if let Err(error) = options::set(&mut state.options, argument) {
             self.message = Some(Message::Error(error.to_string()));
         }
         Ok(Effect::Stay)

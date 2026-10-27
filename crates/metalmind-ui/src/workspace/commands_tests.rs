@@ -512,12 +512,36 @@ fn e_no_cambia_los_numeros_del_panel() {
 #[test]
 fn set_con_una_opcion_desconocida_avisa() {
     let mut session = Session::new("uno\n");
-    session.keys(":set wrap⏎");
+    session.keys(":set list⏎");
     assert_eq!(
         session.workspace.message(),
-        Some(&Message::Error("E518: opción desconocida: wrap".to_owned()))
+        Some(&Message::Error("E518: opción desconocida: list".to_owned()))
     );
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
+}
+
+/// `:set nowrap` y la acción de la paleta cambian solo el panel enfocado, y
+/// un split hereda el suyo.
+#[test]
+fn set_wrap_cambia_el_panel_enfocado_y_lo_hereda_un_split() {
+    let mut session = Session::new("uno\n");
+    assert!(session.view(session.pane()).wrap);
+    session.keys(":set nowrap⏎");
+    assert!(!session.view(session.pane()).wrap);
+    session.keys(":vsplit⏎");
+    let right = session.pane();
+    assert!(!session.view(right).wrap, "el split hereda el de su panel");
+    let toggle = Invocation {
+        action: Command::ToggleWrap.into(),
+        argument: None,
+    };
+    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    assert!(session.view(right).wrap);
+    session.keys("⌃wh");
+    assert!(
+        !session.view(session.pane()).wrap,
+        "el otro panel no cambia"
+    );
 }
 
 #[test]

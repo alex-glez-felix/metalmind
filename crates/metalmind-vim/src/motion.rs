@@ -4,11 +4,12 @@ use crate::Operator;
 use crate::columns::Columns;
 use crate::cursor::Cursor;
 use crate::lines::{Want, first_non_blank, is_blank, last_char};
-use crate::markdown::{self, LazyOutline};
+use crate::markdown::{self, LazyStyles};
 use crate::matching;
-use crate::scroll::{Place, Viewport};
+use crate::scroll::Place;
 use crate::span::{Span, SpanKind};
 use crate::word;
+use crate::{PaneState, ScreenMotion};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Motion {
@@ -35,6 +36,8 @@ pub enum Motion {
     /// `%`: la pareja del paréntesis, corchete o llave; con count, ese
     /// porcentaje del archivo.
     Matching,
+    /// `gj`, `gk`, `g0`, `g^`, `gm` y `g$`: por filas de la pantalla.
+    Screen(ScreenMotion),
     /// `]]`: al inicio del heading siguiente.
     NextHeading,
     /// `[[`: al inicio del heading anterior.
@@ -104,9 +107,10 @@ impl Motion {
         selection: &Selection,
         count: Option<usize>,
         purpose: Purpose,
-        viewport: &Viewport,
-        outline: &LazyOutline,
+        pane: &PaneState,
+        styles: &LazyStyles,
     ) -> Option<Destination> {
+        let viewport = &pane.viewport;
         let head = selection.head;
         let times = count.unwrap_or(1);
         let line = buffer.line_of(head);
@@ -183,13 +187,16 @@ impl Motion {
                 ),
                 None => Destination::new(matching::find(buffer, head)?, SpanKind::Inclusive),
             },
+            Self::Screen(motion) => {
+                motion.resolve(buffer, selection, count, purpose, pane, styles)?
+            }
             Self::NextHeading => heading(
                 buffer,
-                markdown::next_heading(outline.get(buffer), line, times)?,
+                markdown::next_heading(styles.outline(buffer), line, times)?,
             ),
             Self::PreviousHeading => heading(
                 buffer,
-                markdown::previous_heading(outline.get(buffer), line, times)?,
+                markdown::previous_heading(styles.outline(buffer), line, times)?,
             ),
         };
         Some(destination)

@@ -1,17 +1,20 @@
 //! Pinta solo las líneas visibles; GPUI cachea el shaping entre frames, así
 //! que el scroll solo da forma a las líneas que entran.
 
-use std::sync::Arc;
-
 use gpui_kit::{
-    AnyElement, App, AvailableSpace, Bounds, ContentMask, Corners, ElementId, ElementInputHandler,
-    Entity, GlobalElementId, Hsla, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels,
-    Point, ShapedLine, SharedString, Style, TextAlign, TextRun, UnderlineStyle, Window, point, px,
-    relative, size,
+    AnyElement, App, AvailableSpace, Bounds, ContentMask, ElementId, ElementInputHandler, Entity,
+    GlobalElementId, InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, Style, Window,
+    point, px, relative, size,
 };
-use metalmind_syntax::{FormulaRows, Rows};
+use metalmind_syntax::Screen;
 use metalmind_vim::Mode;
 
+mod measures;
+mod paint;
+
+use self::measures::{Frame, geometry_of, inset, look_of, rows_of, skip_fraction, to_units};
+pub use self::paint::shape;
+use self::paint::{for_each_text, paint_background, paint_formulas, paint_line};
 use super::Editor;
 use super::cursor::{Preedit, cursor_quad, em_width, preedit};
 use super::formula_tooltip;
@@ -20,9 +23,10 @@ use super::highlight::{Cells, search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
 pub use super::lines::Typeface;
 use super::lines::{ImageRequest, MathFrame, Shaped, code_block_quads, shape_visible_lines};
-use super::scroll::Scroll;
+use super::scroll::{Scroll, f32_of};
+use super::text::Faces;
 use crate::frames::FrameClock;
-use crate::math::{Formulas, Geometry, Image, Look};
+use crate::math::{Formulas, Geometry, Image};
 use crate::theme::Theme;
 use crate::workspace::{PaneId, Workspace};
 
@@ -73,6 +77,9 @@ pub struct Prepainted {
     /// Lo que se puede pintar: todo el ancho y el alto sin el margen
     /// vertical, para que una fila a medio scroll no lo invada.
     clip: Bounds<Pixels>,
+    /// Lo del texto, que sin `wrap` se corre a lo ancho: sin el margen de
+    /// los números.
+    text_clip: Bounds<Pixels>,
     gutter: Option<PaintedGutter>,
     /// Las zonas de las marks del margen, con su tooltip.
     mark_tooltips: Vec<AnyElement>,
@@ -81,6 +88,27 @@ pub struct Prepainted {
     selection: Vec<PaintQuad>,
     cursor: Option<PaintQuad>,
     preedit: Option<Preedit>,
+}
+
+impl Prepainted {
+    /// Nada que pintar: el panel no tiene documento, lo que sería un bug.
+    fn empty(viewport: Viewport, clip: Bounds<Pixels>) -> Self {
+        Self {
+            clip,
+            text_clip: clip,
+            layout: FrameLayout {
+                viewport,
+                lines: Vec::new(),
+            },
+            gutter: None,
+            mark_tooltips: Vec::new(),
+            code_blocks: Vec::new(),
+            search: Vec::new(),
+            selection: Vec::new(),
+            cursor: None,
+            preedit: None,
+        }
+    }
 }
 
 impl IntoElement for EditorElement {
@@ -92,31 +120,60 @@ impl IntoElement for EditorElement {
 }
 
 impl EditorElement {
-    /// Le da al panel su alto y lo que mide cada línea en este frame, con
-    /// el medidor de fórmulas de la letra de hoy.
-    fn resize(
-        &self,
-        content: Bounds<Pixels>,
-        line_height: Pixels,
-        geometry: Geometry,
-        cx: &mut App,
-    ) -> (Entity<Workspace>, PaneId, Entity<Formulas>) {
-        let (workspace, pane, formulas) = {
-            let editor = self.editor.read(cx);
-            (
-                editor.workspace.clone(),
-                editor.pane,
-                editor.formulas.clone(),
-            )
+    /// El panel, su workspace y las fórmulas de la ventana.
+    fn handles(&self, cx: &App) -> (Entity<Workspace>, PaneId, Entity<Formulas>) {
+        let editor = self.editor.read(cx);
+        (
+            editor.workspace.clone(),
+            editor.pane,
+            editor.formulas.clone(),
+        )
+    }
+
+    /// El margen de los números y las marks en un panel de `rows` filas.
+    fn gutter(&self, rows: usize, cell: Pixels, cx: &App) -> Option<Gutter> {
+        let (workspace, pane, _) = self.handles(cx);
+        let marks = workspace
+            .read(cx)
+            .gutter_marks(pane)
+            .inspect_err(|error| log::error!("{error}"))
+            .ok()
+            .flatten();
+        let mark_columns = self.theme.layout.gutter_mark_columns;
+        let editor = self.editor.read(cx);
+        let view = editor.view(cx)?;
+        Some(Gutter::new(&view, marks, mark_columns, rows, cell))
+    }
+
+    /// Le da al panel el ancho de su texto, su alto y lo que mide cada
+    /// línea en este frame, con el medidor de fórmulas de la letra de hoy.
+    fn resize(&self, frame: &Frame, geometry: Geometry, window: &Window, cx: &mut App) {
+        let (workspace, pane, formulas) = self.handles(cx);
+        let faces = Faces::new(
+            frame.typeface.font.clone(),
+            frame.typeface.size,
+            &self.theme,
+        );
+        let lines = self
+            .editor
+            .update(cx, |editor, _| editor.text_screen(faces, window));
+        let wrap = self.editor.read(cx).view(cx).is_some_and(|view| view.wrap);
+        let screen = Screen {
+            width: f32::from(frame.text.size.width),
+            wrap,
+            column: f32::from(frame.cell),
+            lines,
         };
         let measure = formulas.update(cx, |formulas, _| formulas.measure(geometry));
-        let measures = rows_of(line_height, &self.theme, measure);
-        let height = to_units(f32::from(content.size.height).floor());
-        let resized = workspace.update(cx, |workspace, _| workspace.resize(pane, height, measures));
+        let measures = rows_of(frame.line_height, &self.theme, measure);
+        let height = to_units(f32::from(frame.text.size.height).floor());
+        let resized = workspace.update(cx, |workspace, _| {
+            workspace.set_screen(pane, screen)?;
+            workspace.resize(pane, height, measures)
+        });
         if let Err(error) = resized {
             log::error!("{error}");
         }
-        (workspace, pane, formulas)
     }
 }
 
@@ -167,38 +224,32 @@ impl gpui_kit::Element for EditorElement {
         let line_height = window.line_height();
         let rows = Viewport::new(content, line_height, Scroll::default()).full_rows();
         let geometry = geometry_of(&typeface, line_height, &self.theme, window);
-        let (workspace, pane, formulas) = self.resize(content, line_height, geometry, cx);
-        let marks = workspace
-            .read(cx)
-            .gutter_marks(pane)
-            .inspect_err(|error| log::error!("{error}"))
-            .ok()
-            .flatten();
+        let (_, _, formulas) = self.handles(cx);
+        let cell = em_width(&typeface, window);
+        let Some(gutter) = self.gutter(rows, cell, cx) else {
+            let viewport = Viewport::new(content, line_height, self.editor.read(cx).scroll);
+            return Prepainted::empty(viewport, clip);
+        };
+        let frame = Frame {
+            text: gutter.text_bounds(content),
+            typeface,
+            line_height,
+            cell,
+        };
+        self.resize(&frame, geometry, window, cx);
+        let Frame { typeface, text, .. } = frame;
         let vault_links = self.editor.update(cx, |editor, cx| editor.links(cx));
         let editor = self.editor.read(cx);
         let Some(view) = editor.view(cx) else {
-            let viewport = Viewport::new(content, line_height, editor.scroll);
-            return Prepainted {
-                clip,
-                layout: FrameLayout {
-                    viewport,
-                    lines: Vec::new(),
-                },
-                gutter: None,
-                mark_tooltips: Vec::new(),
-                code_blocks: Vec::new(),
-                search: Vec::new(),
-                selection: Vec::new(),
-                cursor: None,
-                preedit: None,
-            };
+            return Prepainted::empty(Viewport::new(content, line_height, editor.scroll), clip);
         };
         let top = view.viewport.top();
-        let scroll = editor.scroll.follow(top, editor.synced_top);
-        let cell = em_width(&typeface, window);
-        let mark_columns = self.theme.layout.gutter_mark_columns;
-        let gutter = Gutter::new(&view, marks, mark_columns, rows, cell);
-        let viewport = Viewport::new(gutter.text_bounds(content), line_height, scroll);
+        let skip = skip_fraction(&view, top);
+        let scroll = editor.scroll.follow(top, skip, editor.synced_top);
+        let viewport = Viewport {
+            left: px(f32_of(view.viewport.left())),
+            ..Viewport::new(text, line_height, scroll)
+        };
         let math = MathFrame {
             formulas: formulas.read(cx),
             geometry,
@@ -214,8 +265,12 @@ impl gpui_kit::Element for EditorElement {
             &math,
             window,
         );
-        let code_blocks = code_block_quads(&lines, bounds.right(), &self.theme);
+        let code_blocks = code_block_quads(&lines, text.left(), bounds.right(), &self.theme);
         let mut layout = FrameLayout { viewport, lines };
+        let text_clip = Bounds::from_corners(
+            point(text.left(), clip.top()),
+            point(bounds.right(), clip.bottom()),
+        );
         let painted_gutter = (gutter.columns > 0)
             .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
         let cells = Cells {
@@ -245,6 +300,7 @@ impl gpui_kit::Element for EditorElement {
         Prepainted {
             layout,
             clip,
+            text_clip,
             gutter: painted_gutter,
             mark_tooltips,
             code_blocks,
@@ -286,13 +342,16 @@ impl gpui_kit::Element for EditorElement {
             for zone in &mut prepainted.mark_tooltips {
                 zone.paint(window, cx);
             }
+        });
+        let text_clip = prepainted.text_clip;
+        window.with_content_mask(Some(ContentMask { bounds: text_clip }), |window| {
             for quad in prepainted.code_blocks.drain(..) {
                 window.paint_quad(quad);
             }
             // El fondo del código inline y del resaltado, bajo la selección.
             for laid in &prepainted.layout.lines {
-                for_each_text(laid, |shaped, origin| {
-                    paint_background(shaped, origin, laid.text_height, window, cx);
+                for_each_text(laid, |shaped, origin, height| {
+                    paint_background(shaped, origin, height, window, cx);
                 });
             }
             for quad in prepainted
@@ -303,8 +362,8 @@ impl gpui_kit::Element for EditorElement {
                 window.paint_quad(quad);
             }
             for laid in &prepainted.layout.lines {
-                for_each_text(laid, |shaped, origin| {
-                    paint_line(shaped, origin, laid.text_height, window, cx);
+                for_each_text(laid, |shaped, origin, height| {
+                    paint_line(shaped, origin, height, window, cx);
                 });
                 paint_formulas(laid, window);
             }
@@ -317,88 +376,6 @@ impl gpui_kit::Element for EditorElement {
             }
         });
         FrameClock::painted(cx);
-    }
-}
-
-/// El área del texto y los números, sin el margen del tema.
-fn inset(bounds: Bounds<Pixels>, theme: &Theme) -> Bounds<Pixels> {
-    let (x, y) = (theme.text_padding_x, theme.text_padding_y);
-    Bounds::new(
-        point(bounds.left() + x, bounds.top() + y),
-        size(
-            (bounds.size.width - x * 2.).max(px(0.)),
-            (bounds.size.height - y * 2.).max(px(0.)),
-        ),
-    )
-}
-
-fn paint_line(
-    shaped: &ShapedLine,
-    origin: Point<Pixels>,
-    line_height: Pixels,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    if let Err(error) = shaped.paint(origin, line_height, TextAlign::Left, None, window, cx) {
-        log::error!("no se pudo pintar una línea: {error:#}");
-    }
-}
-
-fn paint_background(
-    shaped: &ShapedLine,
-    origin: Point<Pixels>,
-    line_height: Pixels,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    if let Err(error) =
-        shaped.paint_background(origin, line_height, TextAlign::Left, None, window, cx)
-    {
-        log::error!("no se pudo pintar el fondo de una línea: {error:#}");
-    }
-}
-
-/// Lo que mide una línea de texto, cada heading y cada fórmula, en píxeles
-/// enteros: las mismas medidas para el motor, que mueve la ventana, y para
-/// la vista.
-fn rows_of(line_height: Pixels, theme: &Theme, formulas: Arc<dyn FormulaRows>) -> Rows {
-    let text = f32::from(line_height);
-    Rows {
-        text: to_units(text.round()),
-        headings: theme
-            .headings
-            .map(|(scale, _)| to_units((text * scale).round())),
-        formulas: Some(formulas),
-    }
-}
-
-/// Las medidas de la letra del editor con que se componen las fórmulas.
-fn geometry_of(
-    typeface: &Typeface,
-    line_height: Pixels,
-    theme: &Theme,
-    window: &Window,
-) -> Geometry {
-    let text_system = window.text_system();
-    let font_id = text_system.resolve_font(&typeface.font);
-    Geometry {
-        size: f32::from(typeface.size) * theme.text.math.0,
-        line_height: f32::from(line_height),
-        ascent: f32::from(text_system.ascent(font_id, typeface.size)).abs(),
-        descent: f32::from(text_system.descent(font_id, typeface.size)).abs(),
-        block_margin: f32::from(theme.layout.math_block_margin),
-    }
-}
-
-/// Una fórmula se pinta con la letra de las fórmulas, la escala de la
-/// pantalla, el color del texto y el margen del tema.
-fn look_of(geometry: Geometry, theme: &Theme, window: &Window) -> Look {
-    let color = theme.ui.foreground.to_rgb();
-    Look {
-        size: geometry.size,
-        scale: window.scale_factor(),
-        color: [color.r, color.g, color.b, color.a],
-        padding: f32::from(theme.layout.math_padding),
     }
 }
 
@@ -423,55 +400,4 @@ fn attach_images(
             }
         }
     });
-}
-
-/// Cada trozo de texto de la línea con su origen.
-fn for_each_text(laid: &LaidLine, mut paint: impl FnMut(&ShapedLine, Point<Pixels>)) {
-    for piece in &laid.pieces {
-        if let Some(text) = &piece.text {
-            paint(text, point(laid.origin.x + piece.x, laid.origin.y));
-        }
-    }
-}
-
-fn paint_formulas(laid: &LaidLine, window: &mut Window) {
-    for formula in &laid.formulas {
-        let Some(image) = formula.image.clone() else {
-            continue;
-        };
-        let bounds = formula.bounds;
-        if let Err(error) = window.paint_image(bounds, bounds, Corners::default(), image, 0, false)
-        {
-            log::error!("no se pudo pintar una fórmula: {error:#}");
-        }
-    }
-}
-
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "píxeles de un panel, ya redondeados y nunca negativos"
-)]
-fn to_units(pixels: f32) -> usize {
-    pixels.max(1.) as usize
-}
-
-pub fn shape(
-    text: SharedString,
-    typeface: &Typeface,
-    color: Hsla,
-    underline: Option<UnderlineStyle>,
-    window: &Window,
-) -> ShapedLine {
-    let run = TextRun {
-        len: text.len(),
-        font: typeface.font.clone(),
-        color,
-        background_color: None,
-        underline,
-        strikethrough: None,
-    };
-    window
-        .text_system()
-        .shape_line(text, typeface.size, &[run], None)
 }

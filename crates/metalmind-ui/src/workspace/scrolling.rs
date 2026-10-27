@@ -1,6 +1,6 @@
 //! La ventana de cada panel: cuántas filas le caben y la rueda del ratón.
 
-use metalmind_syntax::Rows;
+use metalmind_syntax::{Rows, Screen};
 use metalmind_vim::Mode;
 
 use super::{Pane, PaneId, Workspace, WorkspaceError};
@@ -63,6 +63,43 @@ impl Workspace {
             &mut state.selections,
             editable.state,
             scrolloff,
+            Mode::Normal,
+        );
+        Ok(())
+    }
+
+    /// El ancho del área de texto de `pane` en este layout y si parte las
+    /// líneas: con él mide el motor cuántas filas ocupa cada una.
+    ///
+    /// # Errors
+    /// Si `pane` no existe, lo que sería un bug.
+    pub fn set_screen(&mut self, pane: PaneId, screen: Screen) -> Result<(), WorkspaceError> {
+        let state = self
+            .panes
+            .get_mut(&pane)
+            .ok_or(WorkspaceError::NoPane(pane))?;
+        state.state.set_screen(Some(screen));
+        Ok(())
+    }
+
+    /// La rueda corrió `pane` a lo ancho hasta `left`, sin `wrap`; como
+    /// [`Workspace::scroll_to`], el cursor la sigue.
+    ///
+    /// # Errors
+    /// Si `pane` no existe o su documento tampoco, lo que sería un bug.
+    pub fn scroll_sideways_to(&mut self, pane: PaneId, left: usize) -> Result<(), WorkspaceError> {
+        if pane == self.focused() {
+            return self.edit_pane(pane, None, |vim, target| {
+                vim.scroll_sideways_to(left, target);
+                Ok(())
+            });
+        }
+        let (state, editable) = self.shown(pane)?;
+        state.state.scroll_sideways_to(
+            left,
+            editable.buffer,
+            &mut state.selections,
+            editable.state,
             Mode::Normal,
         );
         Ok(())

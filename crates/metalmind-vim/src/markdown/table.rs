@@ -5,7 +5,7 @@ use std::ops::Range;
 use metalmind_buffer::{Buffer, ByteOffset, Edit};
 use metalmind_syntax::{CellSpot, Formatted, Table};
 
-use super::LazyOutline;
+use super::LazyStyles;
 use crate::doc::BufferLines;
 
 /// Una tabla de la nota y cómo queda alineada.
@@ -17,10 +17,10 @@ pub(crate) struct TableFormat {
 impl TableFormat {
     /// La tabla de la línea de `at`, si no está en un bloque de código ni
     /// en el frontmatter.
-    pub(crate) fn at(buffer: &Buffer, at: ByteOffset, outline: &LazyOutline) -> Option<Self> {
+    pub(crate) fn at(buffer: &Buffer, at: ByteOffset, styles: &LazyStyles) -> Option<Self> {
         let line = buffer.line_of(at);
         let table = Table::around(&BufferLines(buffer), line)?;
-        if outline.get(buffer).is_literal(line) {
+        if styles.outline(buffer).is_literal(line) {
             return None;
         }
         let formatted = table.formatted();

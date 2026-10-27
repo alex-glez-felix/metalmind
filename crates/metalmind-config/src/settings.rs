@@ -101,6 +101,9 @@ pub struct Editor {
     pub gutter_marks: bool,
     /// Líneas que se dejan visibles por encima y por debajo del cursor.
     pub scrolloff: u32,
+    /// Las líneas más largas que el panel se parten en filas; sin `wrap`,
+    /// la vista se corre a lo ancho para seguir al cursor.
+    pub wrap: bool,
     pub tabstop: TabStop,
     /// `Tab` inserta espacios.
     pub expandtab: bool,
@@ -227,6 +230,7 @@ impl Default for Editor {
             relativenumber: true,
             gutter_marks: true,
             scrolloff: 0,
+            wrap: true,
             tabstop: TabStop(4),
             expandtab: true,
             padding: Padding::default(),

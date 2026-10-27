@@ -18,6 +18,7 @@ mod markdown;
 mod mouse;
 mod replaced;
 mod rows;
+mod screen;
 mod scroll;
 mod spans;
 mod status_bar;
@@ -25,6 +26,7 @@ mod text;
 
 use std::ops::Range;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use gpui_kit::{
     App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
@@ -40,8 +42,10 @@ use self::element::EditorElement;
 use self::keys::Route;
 use self::layout::FrameLayout;
 use self::links::Links;
+use self::screen::TextScreen;
 use self::scroll::Scroll;
 use self::status_bar::{Status, status_bar};
+use self::text::Faces;
 use crate::actions::{self, Dispatch};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession};
@@ -81,6 +85,9 @@ pub struct Editor {
     /// La línea con marks bajo el ratón, para su tooltip.
     mark_hover: Option<self::mark_hover::MarkHover>,
     completion: self::completion::Completion,
+    /// Con qué mide el motor las líneas de este panel, mientras la letra
+    /// sea la misma.
+    text_screen: Option<Arc<TextScreen>>,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _focus_changed: Subscription,
@@ -123,6 +130,7 @@ impl Editor {
             synced_top: None,
             mark_hover: None,
             completion: self::completion::Completion::default(),
+            text_screen: None,
             _repaint: repaint,
             _vault_changed: vault_changed,
             _focus_changed: focus_changed,
@@ -152,6 +160,19 @@ impl Editor {
                 let source = self.session.read(cx).vault_path(&path);
                 self.source = Some((path, source.clone()));
                 source
+            }
+        }
+    }
+
+    /// El medidor de las líneas con la letra `faces`: el de antes si es la
+    /// misma, así no se pierde lo ya medido.
+    fn text_screen(&mut self, faces: Faces, window: &Window) -> Arc<TextScreen> {
+        match &self.text_screen {
+            Some(screen) if *screen.faces() == faces => screen.clone(),
+            _ => {
+                let screen = Arc::new(TextScreen::new(window.text_system().clone(), faces));
+                self.text_screen = Some(screen.clone());
+                screen
             }
         }
     }

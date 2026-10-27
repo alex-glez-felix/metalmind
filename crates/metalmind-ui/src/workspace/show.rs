@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{DocumentId, LineNumbers, Pane, PaneId, Workspace, WorkspaceError};
+use super::{DocumentId, Pane, PaneId, PaneOptions, Workspace, WorkspaceError};
 use crate::document::Document;
 use crate::workspace::Message;
 
@@ -68,10 +68,10 @@ impl Workspace {
         if current.document == id {
             return Ok(());
         }
-        let (numbers, jumps) = (current.numbers, current.state.jumps.clone());
+        let (options, jumps) = (current.options, current.state.jumps.clone());
         let window = &current.state.viewport;
         let (height, row) = (window.height(), window.row());
-        let mut shown = self.pane_on(id, numbers)?;
+        let mut shown = self.pane_on(id, options)?;
         shown.state.jumps = jumps;
         // El tamaño es del panel, como en vim: quien mueva el cursor antes
         // del próximo layout ya ve la ventana con su alto.
@@ -86,21 +86,21 @@ impl Workspace {
         Ok(())
     }
 
-    /// Un panel con `numbers` sobre `id`, con el cursor de uno que ya lo
+    /// Un panel con `options` sobre `id`, con el cursor de uno que ya lo
     /// muestra o, si está oculto, del último que lo mostró, tras releerlo.
     /// La jumplist es la de un panel nuevo: quien llama pone la suya.
     pub(super) fn pane_on(
         &mut self,
         id: DocumentId,
-        numbers: LineNumbers,
+        options: PaneOptions,
     ) -> Result<Pane, WorkspaceError> {
         if let Some(shown) = self.panes.values().find(|pane| pane.document == id) {
             return Ok(Pane {
-                numbers,
+                options,
                 ..shown.clone()
             });
         }
-        let mut pane = Pane::at_start(id, numbers, self.tabstop);
+        let mut pane = Pane::at_start(id, options, self.tabstop);
         if self.hidden.contains_key(&id) {
             self.refresh(id)?;
         }

@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use gpui_kit::{Bounds, Pixels, Point, RenderImage, ShapedLine, SharedString, px};
+use gpui_kit::{Bounds, Pixels, Point, RenderImage, ShapedLine, SharedString, point, px};
 
 use super::scroll::{Scroll, to_line};
 
@@ -12,6 +12,8 @@ pub struct Viewport {
     /// Lo que mide una línea de texto; un heading mide más.
     pub line_height: Pixels,
     pub scroll: Scroll,
+    /// Sin `wrap`, lo que la ventana se corrió a lo ancho.
+    pub left: Pixels,
 }
 
 impl Viewport {
@@ -20,6 +22,7 @@ impl Viewport {
             bounds,
             line_height,
             scroll,
+            left: px(0.),
         }
     }
 
@@ -32,18 +35,15 @@ impl Viewport {
 #[derive(Clone, Debug)]
 pub struct LaidLine {
     pub line: usize,
+    /// Arriba a la izquierda de su primera fila; sin `wrap`, corrido a la
+    /// izquierda lo que la ventana se corrió a lo ancho.
     pub origin: Point<Pixels>,
-    /// Lo que mide la línea: más que el texto si es un heading o tiene una
-    /// fórmula alta, y con la fórmula de un bloque debajo.
+    /// Lo que mide la línea: sus filas y la fórmula de un bloque debajo.
     pub height: Pixels,
-    /// Lo que mide la fila del texto: `height` sin lo que suma debajo la
-    /// fórmula de un bloque.
-    pub text_height: Pixels,
     /// El tamaño de su letra: más grande en un heading.
     pub font_size: Pixels,
-    /// La línea de izquierda a derecha: texto y fórmulas que reemplazan su
-    /// fuente. Con el cursor encima, un solo trozo de texto.
-    pub pieces: Vec<Piece>,
+    /// Las filas de pantalla, de arriba abajo; sin `wrap`, una.
+    pub rows: Vec<LaidRow>,
     /// Las fórmulas que se pintan, las de los trozos y la de debajo.
     pub formulas: Vec<PlacedFormula>,
     /// Las fórmulas que no compusieron, con el mensaje para el ratón.
@@ -52,11 +52,24 @@ pub struct LaidLine {
     pub code_block: bool,
 }
 
-/// Un trozo de la línea: los bytes de la fuente que pinta y dónde va.
+/// Una fila de una línea: los bytes que muestra y dónde va cada trozo.
+#[derive(Clone, Debug)]
+pub struct LaidRow {
+    pub source: Range<usize>,
+    /// Desde arriba de la línea.
+    pub top: Pixels,
+    /// Lo que mide la fila del texto: más si tiene una fórmula alta.
+    pub height: Pixels,
+    /// De izquierda a derecha: texto y fórmulas que reemplazan su fuente.
+    /// Con el cursor en la línea, solo texto.
+    pub pieces: Vec<Piece>,
+}
+
+/// Un trozo de una fila: los bytes de la fuente que pinta y dónde va.
 #[derive(Clone, Debug)]
 pub struct Piece {
     pub source: Range<usize>,
-    /// Desde el inicio de la línea.
+    /// Desde el inicio de la fila.
     pub x: Pixels,
     pub width: Pixels,
     /// El texto; `None` si es una fórmula, que pinta [`PlacedFormula`].
@@ -79,7 +92,7 @@ pub struct FormulaError {
     pub message: SharedString,
 }
 
-impl LaidLine {
+impl LaidRow {
     /// Hasta dónde llega lo pintado.
     pub fn width(&self) -> Pixels {
         self.pieces
@@ -87,13 +100,8 @@ impl LaidLine {
             .map_or(px(0.), |piece| piece.x + piece.width)
     }
 
-    /// Los bytes de la línea.
-    pub fn len(&self) -> usize {
-        self.pieces.last().map_or(0, |piece| piece.source.end)
-    }
-
-    /// Dónde cae el byte `index`, desde el inicio de la línea. Dentro de
-    /// una fórmula, en su borde izquierdo.
+    /// Dónde cae el byte `index` de la línea, desde el inicio de la fila.
+    /// Dentro de una fórmula, en su borde izquierdo.
     pub fn x_for_index(&self, index: usize) -> Pixels {
         let Some(piece) = self
             .pieces
@@ -124,16 +132,82 @@ impl LaidLine {
         }
     }
 
-    /// El byte más cercano a `x`; sobre una fórmula, su principio, y a la
-    /// derecha de todo, el final de la línea.
-    pub fn closest_index_for_x(&self, x: Pixels) -> usize {
+    /// El byte más cercano a `x`; sobre una fórmula, su principio. A la
+    /// derecha de todo, el final de la línea si es la última fila y, si no,
+    /// su último carácter: el final de una fila es el principio de la otra.
+    pub fn closest_index_for_x(&self, x: Pixels, last: bool) -> usize {
         let Some(piece) = self.pieces.iter().find(|piece| x < piece.x + piece.width) else {
-            return self.len();
+            return if last {
+                self.source.end
+            } else {
+                self.last_char()
+            };
         };
         match &piece.text {
             Some(text) => piece.source.start + text.closest_index_for_x(x - piece.x),
             None => piece.source.start,
         }
+    }
+
+    fn last_char(&self) -> usize {
+        let Some(piece) = self.pieces.last() else {
+            return self.source.start;
+        };
+        let inside = piece.text.as_ref().and_then(|text| {
+            let glyphs = text.runs.iter().flat_map(|run| &run.glyphs);
+            glyphs.map(|glyph| glyph.index).next_back()
+        });
+        piece.source.start + inside.unwrap_or(0)
+    }
+}
+
+impl LaidLine {
+    /// Los bytes de la línea.
+    pub fn len(&self) -> usize {
+        self.rows.last().map_or(0, |row| row.source.end)
+    }
+
+    /// La fila del byte `index`: el que empieza una fila es de ella, y el
+    /// fin de línea, de la última.
+    pub fn row_index(&self, index: usize) -> usize {
+        self.rows
+            .partition_point(|row| row.source.start <= index)
+            .saturating_sub(1)
+    }
+
+    pub fn row_of(&self, index: usize) -> Option<&LaidRow> {
+        self.rows.get(self.row_index(index))
+    }
+
+    /// Arriba a la izquierda de `row`, en la ventana.
+    pub fn row_origin(&self, row: &LaidRow) -> Point<Pixels> {
+        point(self.origin.x, self.origin.y + row.top)
+    }
+
+    /// Dónde cae el byte `index` en la ventana, arriba de su fila, y lo
+    /// que mide esa fila.
+    pub fn place(&self, index: usize) -> Option<(Point<Pixels>, Pixels)> {
+        let row = self.row_of(index)?;
+        let origin = self.row_origin(row);
+        Some((
+            point(origin.x + row.x_for_index(index), origin.y),
+            row.height,
+        ))
+    }
+
+    /// El byte más cercano a `position`: arriba o abajo de las filas, la
+    /// primera o la última.
+    pub fn closest_index(&self, position: Point<Pixels>) -> usize {
+        let y = position.y - self.origin.y;
+        let last = self.rows.len().saturating_sub(1);
+        let index = self
+            .rows
+            .iter()
+            .position(|row| y < row.top + row.height)
+            .unwrap_or(last);
+        self.rows.get(index).map_or(0, |row| {
+            row.closest_index_for_x(position.x - self.origin.x, index == last)
+        })
     }
 
     /// El mensaje de la fórmula rota bajo `position`, si la hay.
@@ -178,8 +252,7 @@ impl FrameLayout {
             .iter()
             .find(|laid| position.y < laid.origin.y + laid.height)
             .or_else(|| self.lines.last())?;
-        let index = laid.closest_index_for_x(position.x - laid.origin.x);
-        Some((laid.line, index))
+        Some((laid.line, laid.closest_index(position)))
     }
 
     /// La fórmula rota bajo `position`, para mostrar su mensaje.
@@ -194,6 +267,28 @@ mod tests {
 
     use super::*;
 
+    fn row(source: Range<usize>, top: f32, height: f32) -> LaidRow {
+        LaidRow {
+            source,
+            top: px(top),
+            height: px(height),
+            pieces: Vec::new(),
+        }
+    }
+
+    fn line(line: usize, top: f32, rows: Vec<LaidRow>) -> LaidLine {
+        LaidLine {
+            line,
+            origin: point(px(0.), px(top)),
+            height: rows.iter().map(|row| row.height).sum(),
+            font_size: px(10.),
+            rows,
+            formulas: Vec::new(),
+            errors: Vec::new(),
+            code_block: false,
+        }
+    }
+
     fn layout(lines: &[(usize, f32)]) -> FrameLayout {
         let bounds = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(100.)));
         let mut top = 0.;
@@ -201,18 +296,8 @@ mod tests {
             viewport: Viewport::new(bounds, px(10.), Scroll::default()),
             lines: lines
                 .iter()
-                .map(|&(line, height)| {
-                    let laid = LaidLine {
-                        line,
-                        origin: point(px(0.), px(top)),
-                        height: px(height),
-                        text_height: px(height),
-                        font_size: px(10.),
-                        pieces: Vec::new(),
-                        formulas: Vec::new(),
-                        errors: Vec::new(),
-                        code_block: false,
-                    };
+                .map(|&(number, height)| {
+                    let laid = line(number, top, vec![row(0..0, 0., height)]);
                     top += height;
                     laid
                 })
@@ -233,15 +318,18 @@ mod tests {
         assert_eq!(layout(&[]).visible_lines(), 0..0);
     }
 
-    /// `ab` de 10 cada letra, una fórmula de 30 en los bytes 2..7 y `c`.
-    fn with_formula() -> LaidLine {
-        let mut laid = layout(&[(0, 10.)]).lines.remove(0);
-        let text = |source: Range<usize>, x: f32, width: f32| Piece {
+    fn text(source: Range<usize>, x: f32, width: f32) -> Piece {
+        Piece {
             width: px(width),
             source,
             x: px(x),
             text: Some(ShapedLine::default()),
-        };
+        }
+    }
+
+    /// `ab` de 10 cada letra, una fórmula de 30 en los bytes 2..7 y `c`.
+    fn with_formula() -> LaidRow {
+        let mut laid = row(0..8, 0., 10.);
         laid.pieces = vec![
             text(0..2, 0., 20.),
             Piece {
@@ -258,7 +346,7 @@ mod tests {
     #[test]
     fn una_formula_ocupa_su_ancho_y_un_clic_va_a_su_principio() {
         let mut laid = with_formula();
-        assert_eq!((laid.len(), laid.width()), (8, px(60.)));
+        assert_eq!(laid.width(), px(60.));
         assert_eq!(laid.x_for_index(2), px(20.));
         assert_eq!(laid.x_for_index(4), px(20.), "dentro: el borde izquierdo");
         assert_eq!(laid.x_for_index(7), px(50.));
@@ -268,13 +356,14 @@ mod tests {
             "un tramo que acaba dentro la cubre"
         );
         assert_eq!(laid.x_for_end(2), px(20.));
-        assert_eq!(laid.closest_index_for_x(px(35.)), 2);
-        assert_eq!(laid.closest_index_for_x(px(500.)), 8);
+        assert_eq!(laid.closest_index_for_x(px(35.), true), 2);
+        assert_eq!(laid.closest_index_for_x(px(500.), true), 8);
         laid.pieces.pop();
+        laid.source = 0..7;
         assert_eq!(
-            laid.closest_index_for_x(px(500.)),
+            laid.closest_index_for_x(px(500.), true),
             7,
-            "a la derecha de una fórmula que cierra la línea, su final"
+            "a la derecha de una fórmula que cierra la fila, su final"
         );
     }
 
@@ -287,5 +376,35 @@ mod tests {
         assert_eq!(line_at(34.), Some(1));
         assert_eq!(line_at(35.), Some(2));
         assert_eq!(line_at(90.), Some(2));
+    }
+
+    #[test]
+    fn cada_byte_en_su_fila_y_el_raton_en_la_de_su_altura() {
+        let laid = line(
+            3,
+            100.,
+            vec![
+                row(0..10, 0., 10.),
+                row(10..18, 10., 25.),
+                row(18..20, 35., 10.),
+            ],
+        );
+        let rows: Vec<usize> = [0, 9, 10, 17, 18, 20]
+            .map(|index| laid.row_index(index))
+            .to_vec();
+        assert_eq!(rows, [0, 0, 1, 1, 2, 2], "el fin de línea, en la última");
+        assert_eq!(laid.len(), 20);
+        assert_eq!(laid.height, px(45.));
+        assert_eq!(
+            laid.place(12).map(|(origin, height)| (origin.y, height)),
+            Some((px(110.), px(25.)))
+        );
+        let row_at = |y: f32| laid.row_index(laid.closest_index(point(px(999.), px(y))));
+        assert_eq!([95., 105., 130., 136., 300.].map(row_at), [0, 0, 1, 2, 2]);
+        assert_eq!(
+            laid.closest_index(point(px(999.), px(105.))),
+            0,
+            "sin trozos, el principio de la fila"
+        );
     }
 }

@@ -4,9 +4,7 @@
 
 use std::ops::Range;
 
-use gpui_kit::{
-    Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window, point, size,
-};
+use gpui_kit::{Bounds, Context, EntityInputHandler, Pixels, Point, UTF16Selection, Window, size};
 
 use super::Editor;
 use super::cursor::cursor_position;
@@ -86,10 +84,8 @@ impl EntityInputHandler for Editor {
         }
         let layout = self.layout.as_ref()?;
         let (laid, column) = cursor_position(&view, layout)?;
-        Some(Bounds::new(
-            point(laid.origin.x + laid.x_for_index(column), laid.origin.y),
-            size(laid.text_height, laid.text_height),
-        ))
+        let (origin, height) = laid.place(column)?;
+        Some(Bounds::new(origin, size(height, height)))
     }
 
     fn character_index_for_point(

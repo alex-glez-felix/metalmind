@@ -4,12 +4,12 @@ use crate::columns::Columns;
 use crate::find::Find;
 use crate::lines::{first_non_blank, is_blank, last_char};
 use crate::mark;
-use crate::markdown::{LazyOutline, ListItem, indent_of};
+use crate::markdown::{LazyStyles, ListItem, indent_of};
 use crate::motion::Purpose;
 use crate::search::{Query, WordSearch};
 use crate::span::{Extent, Missed, Region, Span, SpanKind};
 use crate::visual::Area;
-use crate::{Motion, Operator, TextObject, Viewport};
+use crate::{Motion, Operator, PaneState, TextObject};
 
 /// Sobre qué actúa un operador.
 #[derive(Clone, Debug)]
@@ -42,8 +42,8 @@ impl Object {
         selection: &Selection,
         operator: Operator,
         count: Option<usize>,
-        viewport: &Viewport,
-        outline: &LazyOutline,
+        pane: &PaneState,
+        styles: &LazyStyles,
     ) -> Result<Extent, Missed> {
         let span = match *self {
             Self::Motion(motion) => motion
@@ -52,8 +52,8 @@ impl Object {
                     selection,
                     count,
                     Purpose::Operate(operator),
-                    viewport,
-                    outline,
+                    pane,
+                    styles,
                 )
                 .ok_or(Missed::Stay)?
                 .span_from(selection.head),
@@ -72,7 +72,7 @@ impl Object {
                 .destination()
                 .span_from(selection.head),
             Self::TextObject(object) => {
-                object.resolve(buffer, selection.head, count.unwrap_or(1), outline)?
+                object.resolve(buffer, selection.head, count.unwrap_or(1), styles)?
             }
             Self::Mark { offset, exact } => {
                 let kind = if exact {
@@ -90,9 +90,16 @@ impl Object {
             Self::ListItems => {
                 let target = current_lines(buffer, selection, operator, count.unwrap_or(1))
                     .ok_or(Missed::Stay)?;
-                return Ok(with_children(buffer, target, viewport.columns(), outline));
+                return Ok(with_children(
+                    buffer,
+                    target,
+                    pane.viewport.columns(),
+                    styles,
+                ));
             }
-            Self::Visual(area) => return Ok(area.target(buffer, selection, viewport.columns())),
+            Self::Visual(area) => {
+                return Ok(area.target(buffer, selection, pane.viewport.columns()));
+            }
         };
         Ok(span.into_extent(buffer))
     }
@@ -123,17 +130,12 @@ fn current_lines(
 /// Si la primera línea es un ítem de lista fuera de código y frontmatter,
 /// extiende las líneas hasta el último hijo de cada ítem: lo que sigue más
 /// indentado, con las líneas en blanco de en medio.
-fn with_children(
-    buffer: &Buffer,
-    target: Extent,
-    columns: Columns,
-    outline: &LazyOutline,
-) -> Extent {
+fn with_children(buffer: &Buffer, target: Extent, columns: Columns, styles: &LazyStyles) -> Extent {
     let Region::Lines { first, last } = target.region else {
         return target;
     };
     let item = ListItem::parse(&buffer.line_text(first)).is_some();
-    if !item || outline.get(buffer).is_literal(first) {
+    if !item || styles.outline(buffer).is_literal(first) {
         return target;
     }
     let last = (first..=last).fold(last, |end, line| end.max(last_child(buffer, line, columns)));

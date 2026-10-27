@@ -97,9 +97,10 @@ impl Gutter {
         let number_columns = self.columns - self.mark_columns;
         let mut labels = Vec::new();
         for laid in &layout.lines {
+            let height = laid.rows.first().map_or(laid.height, |row| row.height);
             let at = |x: Pixels, shaped| Label {
                 origin: point(x, laid.origin.y),
-                height: laid.text_height,
+                height,
                 shaped,
             };
             if let Some(mark) = self.mark_at(laid.line) {

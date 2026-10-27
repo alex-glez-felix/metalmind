@@ -10,7 +10,7 @@ mod word;
 use metalmind_buffer::{Buffer, ByteOffset, Goal, Selection};
 
 use crate::VisualKind;
-use crate::markdown::{self, LazyOutline};
+use crate::markdown::{self, LazyStyles};
 use crate::span::{Missed, Span, SpanKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +56,7 @@ impl TextObject {
         buffer: &Buffer,
         head: ByteOffset,
         count: usize,
-        outline: &LazyOutline,
+        styles: &LazyStyles,
     ) -> Result<Span, Missed> {
         let missed = || Missed::at(buffer, head);
         match self {
@@ -72,7 +72,7 @@ impl TextObject {
             }
             Self::Section { around } => {
                 let (first, last) = markdown::section(
-                    outline.get(buffer),
+                    styles.outline(buffer),
                     buffer,
                     buffer.line_of(head),
                     count,
@@ -98,7 +98,7 @@ impl TextObject {
         selection: &Selection,
         kind: VisualKind,
         count: usize,
-        outline: &LazyOutline,
+        styles: &LazyStyles,
     ) -> (Selection, VisualKind) {
         let mut ends = Ends {
             anchor: selection.anchor,
@@ -121,7 +121,7 @@ impl TextObject {
             }
             Self::Paragraph { around } => paragraph::select(buffer, &mut ends, kind, count, around),
             Self::Section { around } => {
-                select_section(outline, buffer, &mut ends, kind, count, around)
+                select_section(styles, buffer, &mut ends, kind, count, around)
             }
         };
         let moved = ends.anchor != selection.anchor || ends.head != selection.head;
@@ -138,7 +138,7 @@ impl TextObject {
 /// abarca, la que la contiene. Si no hay, nada cambia. Una selección hacia
 /// arriba sigue hacia arriba, como con `ip`.
 fn select_section(
-    outline: &LazyOutline,
+    styles: &LazyStyles,
     buffer: &Buffer,
     ends: &mut Ends,
     kind: VisualKind,
@@ -147,7 +147,14 @@ fn select_section(
 ) -> VisualKind {
     let (anchor, head) = (buffer.line_of(ends.anchor), buffer.line_of(ends.head));
     let selected = (kind == VisualKind::Line).then(|| (anchor.min(head), anchor.max(head)));
-    match markdown::select_section(outline.get(buffer), buffer, selected, head, count, around) {
+    match markdown::select_section(
+        styles.outline(buffer),
+        buffer,
+        selected,
+        head,
+        count,
+        around,
+    ) {
         Some((first, last)) => {
             let (from, to) = if head < anchor {
                 (last, first)
