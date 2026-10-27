@@ -552,3 +552,20 @@ fn volver_a_tags_lleva_a_la_vista_la_fila_que_se_movio() {
     panel.set_tags(Arc::new(tags));
     assert_eq!(panel.toggle(PanelView::Tags, false).moved, Some(2));
 }
+
+/// En la vista de backlinks, las teclas de archivo (`a`, `A`, `r`, `m`, `d`,
+/// `/`) no preguntan nada: actuarían sobre el árbol, que no se ve.
+#[test]
+fn en_backlinks_las_teclas_de_archivo_no_preguntan() {
+    let mut panel = panel();
+    panel.tree.select(&path("a.md"));
+    panel.toggle(PanelView::Backlinks, false);
+    panel.start_create(NewEntry::Note);
+    panel.start_create(NewEntry::Folder);
+    panel.start_rename();
+    panel.start_move();
+    panel.start_delete(path("a.md"), false);
+    panel.start_filter();
+    assert_eq!(panel.prompt(), None);
+    assert_eq!(panel.confirm(), None);
+}
