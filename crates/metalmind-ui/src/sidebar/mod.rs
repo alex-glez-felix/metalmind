@@ -317,9 +317,6 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) {
         let file = shown_path(&self.vault.root().join(path.as_str()));
-        if self.panel.view == PanelView::Backlinks && !focus_editor {
-            self.holding_backlinks = true;
-        }
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             match at {
@@ -331,9 +328,17 @@ impl Sidebar {
                 false
             })
         });
-        if opened {
-            cx.emit(SidebarEvent::Opened { focus_editor });
+        if !opened {
+            return;
         }
+        // Abierta desde los backlinks sin pasarle el foco, la lista se queda
+        // en su nota. Basta marcarlo aquí: lo que avisa el panel de edición
+        // llega al observador cuando termina esta actualización. Si no se
+        // abrió nada, la lista sigue a la nota activa.
+        if self.panel.view == PanelView::Backlinks && !focus_editor {
+            self.holding_backlinks = true;
+        }
+        cx.emit(SidebarEvent::Opened { focus_editor });
     }
 
     fn file_of(&self, path: &VaultPath) -> std::path::PathBuf {

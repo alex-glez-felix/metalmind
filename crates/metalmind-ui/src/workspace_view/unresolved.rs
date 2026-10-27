@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui_kit::{AppContext as _, Context, Entity, Window};
+use gpui_kit::{AppContext as _, Context, Entity, Task, Window};
 use metalmind_vault::LinkIndex;
 
 use super::WorkspaceView;
@@ -24,25 +24,30 @@ fn options() -> PickerOptions {
     PickerOptions {
         placeholder: "Links sin destino…".into(),
         splits: true,
+        focus: None,
     }
 }
 
 impl WorkspaceView {
+    /// La lista se arma fuera del hilo de la interfaz, como al rehacerse:
+    /// con un vault grande, recorrer y ordenar todos los links trabaría la
+    /// ventana. Mientras, el picker espera: lo que se escriba y se elija
+    /// sale al llegar la lista.
     pub(super) fn open_unresolved_links(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let index = self.vault.session.read(cx).vault().links();
-        let links = unresolved_links(&index);
         let fuzzy = Fuzzy::new(
-            PickerState::new(links),
+            PickerState::loading(),
             Haystack::Text,
             "Todos los links llevan a algo".into(),
         );
         let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_unresolved_event);
+        let refresh = Some(Self::build_unresolved_links(&index, None, cx));
         self.show(
             Overlay::Unresolved {
                 picker,
                 index,
-                refresh: None,
+                refresh,
                 _events: events,
             },
             window,
@@ -66,6 +71,15 @@ impl WorkspaceView {
                 .get(chosen.item)
                 .map(|link| (link.clone(), chosen.open)),
         };
+        // Si llegó otro índice y la lista aún no se rehace, el link elegido
+        // puede ya tener destino o no estar: entonces no se abre nada y el
+        // picker sigue abierto hasta que llegue la lista nueva.
+        if let Some((link, _)) = &chosen
+            && let Some(Overlay::Unresolved { index, .. }) = &self.overlay
+            && !link.is_unresolved_in(index)
+        {
+            return;
+        }
         self.close_overlay(window, cx);
         if let Some((link, open)) = chosen {
             self.open_note_at(&link.source, link.at, open, window, cx);
@@ -89,10 +103,26 @@ impl WorkspaceView {
             return;
         }
         *index = Arc::clone(latest);
-        let latest = Arc::clone(latest);
         // Reemplazar la tarea cancela la del lote anterior, si no terminó.
-        *refresh = Some(cx.spawn(async move |view, cx| {
-            cx.background_executor().timer(REFRESH_DELAY).await;
+        *refresh = Some(Self::build_unresolved_links(
+            latest,
+            Some(REFRESH_DELAY),
+            cx,
+        ));
+    }
+
+    /// Arma la lista de `latest` en otro hilo, tras `delay` si se da, y la
+    /// pone en el picker si sigue abierto para ese índice.
+    fn build_unresolved_links(
+        latest: &Arc<LinkIndex>,
+        delay: Option<Duration>,
+        cx: &mut Context<Self>,
+    ) -> Task<()> {
+        let latest = Arc::clone(latest);
+        cx.spawn(async move |view, cx| {
+            if let Some(delay) = delay {
+                cx.background_executor().timer(delay).await;
+            }
             let building = Arc::clone(&latest);
             let links = cx
                 .background_executor()
@@ -102,7 +132,7 @@ impl WorkspaceView {
             let _ = view.update(cx, |view, cx| {
                 view.show_unresolved_links(&latest, links, cx);
             });
-        }));
+        })
     }
 
     /// Pone en el picker la lista sacada de `built`, si sigue abierto y

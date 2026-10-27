@@ -181,7 +181,9 @@ impl<T: PickerItem> PickerDelegate for Fuzzy<T> {
     }
 
     fn empty(&self) -> SharedString {
-        if self.state.items().is_empty() {
+        if !self.state.is_loaded() {
+            SharedString::new_static("Buscando…")
+        } else if self.state.items().is_empty() {
             self.empty.clone()
         } else {
             SharedString::new_static("Sin resultados")

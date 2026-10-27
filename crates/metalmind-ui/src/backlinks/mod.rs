@@ -69,7 +69,8 @@ impl Row {
 pub struct BacklinkOutline {
     index: Arc<LinkIndex>,
     note: Option<VaultPath>,
-    /// Las notas cerradas; las demás se ven abiertas.
+    /// Las notas cerradas en los backlinks de `note`; las demás se ven
+    /// abiertas.
     collapsed: BTreeSet<VaultPath>,
     selected: Option<RowId>,
     rows: Vec<Row>,
@@ -93,10 +94,12 @@ impl BacklinkOutline {
     }
 
     /// La nota cuyos backlinks se muestran: la del panel de edición
-    /// enfocado, si es del vault. Otra nota empieza en su primera fila.
+    /// enfocado, si es del vault. Otra nota empieza en su primera fila y con
+    /// todas sus notas abiertas: lo cerrado era de los backlinks de la otra.
     pub fn show_note(&mut self, note: Option<VaultPath>) {
         if self.note != note {
             self.note = note;
+            self.collapsed.clear();
             self.selected = None;
             self.selected_row = None;
             self.stale = true;

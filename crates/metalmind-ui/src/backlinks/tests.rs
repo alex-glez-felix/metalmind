@@ -145,6 +145,33 @@ fn otro_indice_deja_la_eleccion_y_otra_nota_la_reinicia() {
     assert_eq!(outline.selected_row(), None);
 }
 
+/// Lo cerrado es de los backlinks de una nota: en los de otra, la misma nota
+/// fuente se ve abierta, y al volver a la primera también.
+#[test]
+fn cerrar_una_nota_no_la_cierra_en_los_backlinks_de_otra() {
+    let mut outline = BacklinkOutline::new(index(&[
+        ("plan.md", "# Plan\n"),
+        ("ideas.md", "# Ideas\n"),
+        ("diario.md", "ver el [[plan]]\ny las [[ideas]]\n"),
+    ]));
+    outline.show_note(Some(path("plan.md")));
+    outline.refresh();
+    outline.collapse_or_parent();
+    assert_eq!(shown(&outline), ["▸ diario.md (1)"]);
+    outline.show_note(Some(path("ideas.md")));
+    outline.refresh();
+    assert_eq!(
+        shown(&outline),
+        ["▾ diario.md (1)", "  2:7 y las [[ideas]]"]
+    );
+    outline.show_note(Some(path("plan.md")));
+    outline.refresh();
+    assert_eq!(
+        shown(&outline),
+        ["▾ diario.md (1)", "  1:7 ver el [[plan]]"]
+    );
+}
+
 /// La nota activa renombrada sigue mostrándose con su ruta nueva.
 #[test]
 fn sigue_a_la_nota_renombrada() {

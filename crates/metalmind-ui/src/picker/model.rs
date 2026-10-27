@@ -116,6 +116,12 @@ impl<T: AsRef<str>> PickerState<T> {
         }
     }
 
+    /// Si ya llegaron los ítems.
+    #[must_use]
+    pub fn is_loaded(&self) -> bool {
+        self.loaded
+    }
+
     /// Lo que filtra lo escrito antes del fuzzy, como los tags del finder.
     #[must_use]
     pub fn with_narrowing(mut self, narrowing: Arc<dyn Narrowing<T>>) -> Self {
