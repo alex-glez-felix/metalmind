@@ -3,6 +3,8 @@
 //! texto capturado donde la UI dejaría el cursor. Lee solo las carpetas de
 //! plantillas y de tags, no el vault entero.
 
+use std::sync::{Mutex, PoisonError};
+
 use jiff::Zoned;
 use metalmind_vault::tags::{TagGraph, Tags};
 use metalmind_vault::{CaptureError, Captured, InvalidPath, VaultPath, VaultRoot, read};
@@ -67,16 +69,28 @@ pub fn capture(
     let mut walked = vec![folders.tags.clone()];
     walked.extend(templates_folder.iter().cloned());
     let index = root.files_within(&walked);
+    // Una página que no se puede leer no pide plantilla: se avisa.
+    let unread = Mutex::new(Vec::new());
     let tags = Tags::build(folders.tags.clone(), &index, |page: &VaultPath| {
-        read(&root.path().join(page.as_str())).ok().flatten()
+        read(&root.path().join(page.as_str()))
+            .map_err(|error| {
+                let mut unread = unread.lock().unwrap_or_else(PoisonError::into_inner);
+                unread.push(error.to_string());
+            })
+            .ok()
+            .flatten()
     });
+    let mut problems = unread.into_inner().unwrap_or_else(PoisonError::into_inner);
     let chosen = match choose(pick, tags.graph(), &note.tags) {
         Ok(chosen) => chosen,
-        Err(problems) => return plain(root, note, now, problems),
+        Err(why) => {
+            problems.extend(why);
+            return plain(root, note, now, problems);
+        }
     };
     let templates_folder = templates_folder?;
     let loaded = Templates::load(root.path(), &index, &templates_folder);
-    let mut problems: Vec<String> = loaded.errors.iter().map(ToString::to_string).collect();
+    problems.extend(loaded.errors.iter().map(ToString::to_string));
     if loaded.value.get(&chosen.name).is_some() {
         return from_template(root, note, &chosen, &loaded.value, &tags, now, problems);
     }

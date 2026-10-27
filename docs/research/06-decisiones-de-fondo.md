@@ -264,4 +264,4 @@ Sin hitos nuevos (03 §8) **(propuesta)**:
 
 - La CLI (`metalmind add`, `search`, `tags`, con `--json`) y el buzón, junto con M2.5 o justo después: necesitan el walk de M2 y el `TagIndex` de M2.5, y nada más.
 - El historial de versiones (§3), en M6, junto con el autosave, que es lo que decide su retención.
-- Daily notes, plantillas y grafo siguen en post-MVP. Celular y cifrado no tienen lugar en el roadmap ([`IDEAS.md`](../IDEAS.md)).
+- Daily notes y plantillas ya están (§11: núcleo, UI y `metalmind add`). El grafo sigue en post-MVP. Celular y cifrado no tienen lugar en el roadmap ([`IDEAS.md`](../IDEAS.md)).

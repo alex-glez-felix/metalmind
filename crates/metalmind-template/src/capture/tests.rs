@@ -234,3 +234,23 @@ fn una_carpeta_de_plantillas_que_no_vale_solo_importa_con_plantilla() {
     let added = capture(&root, &note, Pick::Blank, broken, &now()).unwrap();
     assert_eq!(added.captured.path.as_str(), "idea.md");
 }
+
+/// Una página de tag que no se puede leer no pide plantilla, y se avisa.
+#[test]
+fn una_pagina_de_tag_ilegible_se_avisa() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let (dir, root) = vault();
+    let page = dir.path().join("tags/reunion.md");
+    fs::set_permissions(&page, fs::Permissions::from_mode(0o000)).unwrap();
+    let added = add(&root, "acuerdos", None, &["reunion"], Pick::ByTags);
+    fs::set_permissions(&page, fs::Permissions::from_mode(0o644)).unwrap();
+    let (added, written) = added.unwrap();
+    assert_eq!(added.template, None);
+    assert_eq!(written, "---\ntags: [\"reunion\"]\n---\nacuerdos\n");
+    assert_eq!(added.problems.len(), 1, "{:?}", added.problems);
+    assert!(
+        added.problems[0].contains("reunion.md"),
+        "{:?}",
+        added.problems
+    );
+}
