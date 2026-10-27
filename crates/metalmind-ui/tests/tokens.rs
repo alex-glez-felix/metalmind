@@ -59,6 +59,11 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "una fila sin marcar reserva su borde, transparente: si no, la fila brincaría un píxel al marcarse",
     ),
     (
+        "src/editor/completion_menu.rs",
+        "gpui_kit::transparent_black()",
+        "la tecla de una fila no elegida guarda su columna, transparente: si no, la lista se ensancharía al elegir y la tecla se pegaría al detalle",
+    ),
+    (
         "src/editor/element.rs",
         "x * 2.",
         "geometría, no estilo: el margen del texto se resta de los dos lados",
