@@ -79,7 +79,7 @@ impl CompletionMenu {
                         .debug_selector(move || format!("completion-{row}-name"))
                         .min_w_0()
                         .truncate()
-                        .when(name_grows, |name| name.flex_1())
+                        .when(name_grows, Styled::flex_1)
                         .child(shown.name),
                 )
                 .children(shown.detail.map(|detail| {
