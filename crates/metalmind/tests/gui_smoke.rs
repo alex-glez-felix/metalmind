@@ -896,6 +896,20 @@ fn cambiar_de_vista_suelta_la_lista_de_backlinks() {
     smoke.wait_contents("c.md", "y X[[b]]\n");
 }
 
+/// `space u` lista los links sin destino del vault; `enter` abre la nota
+/// del elegido con el cursor en el link.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn los_links_sin_destino_abren_la_nota_en_el_link() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "uno\nver [[falta]] y [[b]]\n");
+    smoke.write("b.md", "nada\n");
+    let mut metalmind = smoke.launch(&["b.md"]);
+    metalmind.window().type_keys("<Space>u<CR>iX<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "uno\nver X[[falta]] y [[b]]\n");
+}
+
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide
 /// 1280x800.
 const EDITOR_TEXT: Area = Area {
@@ -904,6 +918,26 @@ const EDITOR_TEXT: Area = Area {
     width: 900,
     height: 760,
 };
+
+/// Con `space u` abierto, una nota que llega al vault y resuelve un link lo
+/// saca de la lista: `enter` abre el que sigue sin destino.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_lista_sin_destino_sigue_al_vault() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "[[falta]] y [[otra]]\n");
+    smoke.write("b.md", "nada\n");
+    let mut metalmind = smoke.launch(&["b.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>u");
+    let open = window.wait_still(EDITOR_TEXT);
+    smoke.write("falta.md", "ya está\n");
+    window.wait_change("la lista sin falta", EDITOR_TEXT, &open);
+    window.wait_still(EDITOR_TEXT);
+    window.type_keys("<CR>iX<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "[[falta]] y X[[otra]]\n");
+}
 
 /// Tras un scroll, la lista de `#` se pinta con el texto de ese mismo frame:
 /// otro repintado (aquí, el de una nota que llega al vault) no la mueve.

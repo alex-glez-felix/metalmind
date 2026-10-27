@@ -72,6 +72,9 @@ named_actions! {
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",
+        /// `space u`: el picker de los links del vault que no llevan a
+        /// ningún archivo; abre la nota en el elegido.
+        OpenUnresolvedLinks = "links::open_unresolved",
         /// `:tagrename #viejo #nuevo`: la vista previa de renombrar un tag o
         /// un alias en todo el vault; si el nuevo ya existe, se fusionan.
         RenameTag = "tags::rename",

@@ -200,6 +200,8 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   backlinks de la nota activa: cada nota que la enlaza y, debajo, la línea de
   cada link. Se recorre con `j`/`k`, `h`/`l` pliegan, y `enter` o un clic
   abren la nota con el cursor en el link.
+- `space u` lista los links del vault que no llevan a ninguna nota, con su
+  nota y su línea; `enter` abre la nota en el link.
 
 #### Vault y panel lateral (M2)
 
