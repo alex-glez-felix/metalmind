@@ -43,7 +43,7 @@ use self::keys::Route;
 use self::layout::FrameLayout;
 use self::links::Links;
 use self::screen::TextScreen;
-use self::scroll::Scroll;
+use self::scroll::{Anchor, Scroll};
 use self::status_bar::{Status, status_bar};
 use self::text::Faces;
 use crate::actions::{self, Dispatch};
@@ -78,10 +78,13 @@ pub struct Editor {
     /// El botón bajó sobre una casilla en Normal: se marca si se suelta sin
     /// arrastrar.
     checkbox_pressed: bool,
-    /// La primera línea del panel en el workspace la última vez que se
-    /// leyó o se escribió (ver [`Scroll::follow`]); `None` tras una tecla,
-    /// para que la vista quede alineada a las filas del motor.
-    synced_top: Option<usize>,
+    /// Dónde estaba la ventana del panel en el workspace la última vez que
+    /// se leyó o se escribió (ver [`Scroll::follow`]); `None` tras una
+    /// tecla, para que la vista quede alineada a las filas del motor.
+    synced: Option<Anchor>,
+    /// Lo que la rueda corrió a lo ancho de menos de un píxel (ver
+    /// [`self::scroll::sideways`]).
+    across: f32,
     /// La línea con marks bajo el ratón, para su tooltip.
     mark_hover: Option<self::mark_hover::MarkHover>,
     completion: self::completion::Completion,
@@ -127,7 +130,8 @@ impl Editor {
             marked: None,
             drag_anchor: None,
             checkbox_pressed: false,
-            synced_top: None,
+            synced: None,
+            across: 0.,
             mark_hover: None,
             completion: self::completion::Completion::default(),
             text_screen: None,
@@ -284,7 +288,8 @@ impl Editor {
             Ok(_) => {}
             Err(error) => self.report(&error, cx),
         }
-        self.synced_top = None;
+        self.synced = None;
+        self.across = 0.;
         cx.notify();
     }
 

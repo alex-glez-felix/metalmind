@@ -196,7 +196,7 @@ impl Line<'_> {
             parts(self.text.len(), spots, |index| {
                 measured
                     .get(index)
-                    .is_some_and(|(_, formula)| formula.is_ok())
+                    .is_some_and(|(spot, formula)| formula.is_ok() && !self.splits(spot))
             })
         };
         let mut builder = Builder {
@@ -240,6 +240,14 @@ impl Line<'_> {
             .filter(|(_, formula)| formula.is_err())
             .map(|(spot, _)| spot.range.clone())
             .collect()
+    }
+
+    /// Si la fuente de `spot` quedó partida en varias filas: no cabía en
+    /// una, así que se ve como texto en vez de una fórmula en la primera
+    /// fila y huecos en las demás.
+    fn splits(&self, spot: &MathSpot) -> bool {
+        let row_of = |byte: usize| self.rows.iter().position(|row| row.source.contains(&byte));
+        row_of(spot.range.start) != row_of(spot.range.end.saturating_sub(1))
     }
 
     /// Lo que miden las filas, sin lo que suma debajo un bloque.

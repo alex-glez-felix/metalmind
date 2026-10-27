@@ -12,7 +12,7 @@ use super::Editor;
 use super::formula_tooltip::hover_at;
 use super::lines;
 use super::rows::scroll_by_pixels;
-use super::scroll::{f32_of, units};
+use super::scroll::{Anchor, sideways, wheel_anchor};
 use crate::clipboard::SystemClipboard;
 
 impl Editor {
@@ -41,8 +41,9 @@ impl Editor {
             (delta.x, delta.y)
         };
         if across != px(0.) && !view.wrap {
-            let left = (f32_of(view.viewport.left()) - f32::from(across)).max(0.);
-            self.scroll_sideways_to(units(left), cx);
+            let (left, rest) = sideways(view.viewport.left(), self.across, -f32::from(across));
+            self.across = rest;
+            self.scroll_sideways_to(left, cx);
         }
         if down == px(0.) {
             return;
@@ -54,11 +55,17 @@ impl Editor {
             self.scroll,
             -f64::from(down),
             view.buffer().last_line(),
+            f64::from(f32::from(line_height)),
             |line| f64::from(lines::line_height(&view, line)),
         );
-        let top = self.scroll.first_full_line();
-        if self.synced_top != Some(top) {
-            self.synced_top = Some(top);
+        let engine = Anchor {
+            top: view.viewport.top(),
+            skip: view.viewport.skip(),
+        };
+        let anchor = wheel_anchor(self.scroll, view.buffer().last_line(), engine);
+        let top = anchor.top;
+        if self.synced != Some(anchor) {
+            self.synced = Some(anchor);
             let scrolled =
                 self.update_workspace(cx, |workspace, pane, _| workspace.scroll_to(pane, top));
             if let Err(error) = scrolled {

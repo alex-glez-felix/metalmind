@@ -683,10 +683,12 @@ fn hover_broken_formula(window: &Window<'_>, image: &Image, theme: &str, rest: (
     let Some(&(_, lowest)) = pixels.iter().max_by_key(|(_, y)| *y) else {
         return false;
     };
-    // La línea de las fórmulas rotas, de izquierda a derecha.
+    // La última fila de la línea de las fórmulas rotas, de izquierda a
+    // derecha: partida, las de arriba tienen fórmulas en otras columnas.
+    let row = usize::try_from(TEXT_LINE / 2).unwrap();
     let mut columns: Vec<usize> = pixels
         .iter()
-        .filter(|(_, y)| lowest - y < FORMULA_GAP)
+        .filter(|(_, y)| lowest - y < row)
         .map(|(x, _)| *x)
         .collect();
     columns.sort_unstable();

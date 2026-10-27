@@ -241,6 +241,9 @@ impl Viewport {
     }
 
     pub(crate) fn apply(&mut self, window: &Window<'_>) {
+        if window.top != self.top {
+            self.skip = 0;
+        }
         self.top = window.top;
         self.settled = window.settled;
         self.bottom = window.bottom();
