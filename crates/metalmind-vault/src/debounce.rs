@@ -3,11 +3,13 @@
 //! nombra un lote, así que no necesita fusionar eventos; fusionarlos, como
 //! `notify-debouncer-full`, perdía el origen de un rename (#43, #54).
 
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use notify::event::{ModifyKind, RenameMode};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 
 use crate::watcher::Watches;
@@ -25,6 +27,26 @@ impl Batch {
             Ok(event) => self.events.push(event),
             Err(error) => self.errors.push(error),
         }
+    }
+
+    /// Si un rename quedó a medias: llegó su origen y todavía no su destino.
+    fn has_open_rename(&self) -> bool {
+        let mut open = HashSet::new();
+        for event in &self.events {
+            let Some(tracker) = event.attrs.tracker() else {
+                continue;
+            };
+            match event.kind {
+                EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
+                    open.insert(tracker);
+                }
+                EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+                    open.remove(&tracker);
+                }
+                _ => {}
+            }
+        }
+        !open.is_empty()
     }
 }
 
@@ -73,6 +95,8 @@ impl Watches for Debouncer {
 
 /// Junta lo que llega en `window` desde el primer evento que cuenta y se lo
 /// da a `on_batch`, hasta que se cierre el canal; lo que quedaba sale igual.
+/// Con un rename a medias espera una ventana más a su destino: partido en
+/// dos lotes saldría como borrar y crear. Si no llega, salió del vault.
 fn deliver(
     received: &Receiver<notify::Result<Event>>,
     window: Duration,
@@ -84,12 +108,17 @@ fn deliver(
         }
         let mut batch = Batch::default();
         batch.push(first);
-        let deadline = Instant::now() + window;
+        let mut deadline = Instant::now() + window;
+        let mut extended = false;
         let open = loop {
             let left = deadline.saturating_duration_since(Instant::now());
             match received.recv_timeout(left) {
                 Ok(raw) if is_read(&raw) => {}
                 Ok(raw) => batch.push(raw),
+                Err(RecvTimeoutError::Timeout) if !extended && batch.has_open_rename() => {
+                    extended = true;
+                    deadline = Instant::now() + window;
+                }
                 Err(RecvTimeoutError::Timeout) => break true,
                 Err(RecvTimeoutError::Disconnected) => break false,
             }
@@ -154,6 +183,27 @@ mod tests {
             .unwrap();
         assert_eq!(paths(&batch), [Path::new("/v/b"), Path::new("/v/a")]);
         assert_eq!(batch.errors.len(), 1);
+    }
+
+    fn renamed(mode: RenameMode, path: &str, cookie: usize) -> Event {
+        Event::new(EventKind::Modify(ModifyKind::Name(mode)))
+            .add_path(PathBuf::from(path))
+            .set_tracker(cookie)
+    }
+
+    #[test]
+    fn un_rename_queda_a_medias_hasta_que_llega_su_destino() {
+        let mut batch = Batch::default();
+        batch.push(Ok(renamed(RenameMode::From, "/v/a.md", 7)));
+        assert!(batch.has_open_rename());
+        batch.push(Ok(renamed(RenameMode::To, "/v/b.md", 7)));
+        assert!(!batch.has_open_rename());
+        // Sin cookie no hay par que esperar.
+        let mut untracked = Batch::default();
+        untracked.push(Ok(Event::new(EventKind::Modify(ModifyKind::Name(
+            RenameMode::From,
+        )))));
+        assert!(!untracked.has_open_rename());
     }
 
     #[test]
