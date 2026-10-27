@@ -32,16 +32,14 @@ impl FinderVault {
         workspace: &Entity<Workspace>,
         cx: &mut Context<WorkspaceView>,
     ) -> Self {
-        let changes = cx.observe(&session, |view, _, cx| {
-            view.refresh_finder(cx);
-            view.refresh_unresolved_links(cx);
-        });
+        let changes = cx.observe(&session, |view, _, cx| view.refresh_finder(cx));
         let files = cx.subscribe(&session, |view, session, VaultChanged(update), cx| {
             let root = session.read(cx).root().to_owned();
             view.workspace.update(cx, |workspace, _| {
                 workspace.files_changed(&root, &update.changes);
                 workspace.set_links(&root, Arc::clone(&update.links));
             });
+            view.refresh_unresolved_links(&update.links, cx);
         });
         let lost = cx.subscribe(&session, |view, _, WatchLost(reason), cx| {
             view.workspace.update(cx, |workspace, _| {

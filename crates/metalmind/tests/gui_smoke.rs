@@ -879,6 +879,26 @@ const EDITOR_TEXT: Area = Area {
     height: 760,
 };
 
+/// Con `space u` abierto, una nota que llega al vault y resuelve un link lo
+/// saca de la lista: `enter` abre el que sigue sin destino.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn la_lista_sin_destino_sigue_al_vault() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "[[falta]] y [[otra]]\n");
+    smoke.write("b.md", "nada\n");
+    let mut metalmind = smoke.launch(&["b.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>u");
+    let open = window.wait_still(EDITOR_TEXT);
+    smoke.write("falta.md", "ya está\n");
+    window.wait_change("la lista sin falta", EDITOR_TEXT, &open);
+    window.wait_still(EDITOR_TEXT);
+    window.type_keys("<CR>iX<Esc>:w<CR>");
+    smoke.wait_contents("a.md", "[[falta]] y X[[otra]]\n");
+}
+
 /// Tras un scroll, la lista de `#` se pinta con el texto de ese mismo frame:
 /// otro repintado (aquí, el de una nota que llega al vault) no la mueve.
 #[test]

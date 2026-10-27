@@ -2,7 +2,10 @@
 //! el elegido abre su nota con el cursor en el link, en el panel o en un
 //! split, como `space /`.
 
+use std::sync::Arc;
+
 use gpui_kit::{AppContext as _, Context, Entity, Window};
+use metalmind_vault::LinkIndex;
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
@@ -21,7 +24,8 @@ fn options() -> PickerOptions {
 
 impl WorkspaceView {
     pub(super) fn open_unresolved_links(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let links = unresolved_links(&self.vault.session.read(cx).vault().links());
+        let index = self.vault.session.read(cx).vault().links();
+        let links = unresolved_links(&index);
         let fuzzy = Fuzzy::new(
             PickerState::new(links),
             Haystack::Text,
@@ -32,6 +36,7 @@ impl WorkspaceView {
         self.show(
             Overlay::Unresolved {
                 picker,
+                index,
                 _events: events,
             },
             window,
@@ -61,13 +66,22 @@ impl WorkspaceView {
         }
     }
 
-    /// Con el picker abierto, un lote del vault (una nota nueva que resuelve
-    /// un link, otra con links nuevos) cambia la lista.
-    pub(super) fn refresh_unresolved_links(&mut self, cx: &mut Context<Self>) {
-        let Some(Overlay::Unresolved { picker, .. }) = &self.overlay else {
+    /// Con el picker abierto, un lote del vault que trae otro índice de
+    /// links (una nota nueva que resuelve un link, otra con links nuevos)
+    /// cambia la lista.
+    pub(super) fn refresh_unresolved_links(
+        &mut self,
+        latest: &Arc<LinkIndex>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Overlay::Unresolved { picker, index, .. }) = &mut self.overlay else {
             return;
         };
-        let links = unresolved_links(&self.vault.session.read(cx).vault().links());
+        if Arc::ptr_eq(index, latest) {
+            return;
+        }
+        *index = Arc::clone(latest);
+        let links = unresolved_links(latest);
         picker.update(cx, |picker, cx| {
             picker.update_delegate(cx, |fuzzy, cx| fuzzy.set_items(links, cx));
         });

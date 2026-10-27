@@ -1,11 +1,15 @@
 //! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
-//! paleta, los links sin destino, las notas de un link que empata, las plantillas y el nombre de
-//! una nota nueva o la vista previa de un cambio de tags, uno a la vez, centrado arriba como en Zed.
+//! paleta, los links sin destino, las notas de un link que empata, las
+//! plantillas y el nombre de una nota nueva o la vista previa de un cambio
+//! de tags, uno a la vez, centrado arriba como en Zed.
+
+use std::sync::Arc;
 
 use gpui_kit::{
     AnyElement, App, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
     IntoElement as _, ParentElement as _, Styled as _, Subscription, div,
 };
+use metalmind_vault::LinkIndex;
 
 use super::finder::Finder;
 use super::link_choice::LinkChoicePicker;
@@ -29,9 +33,10 @@ pub enum Overlay {
         picker: Entity<Palette>,
         _events: Subscription,
     },
-    /// Los links sin destino del vault.
+    /// Los links sin destino del vault, sacados de `index`.
     Unresolved {
         picker: Entity<UnresolvedPicker>,
+        index: Arc<LinkIndex>,
         _events: Subscription,
     },
     /// Las notas entre las que empata un link.
