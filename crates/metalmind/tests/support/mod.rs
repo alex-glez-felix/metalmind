@@ -261,10 +261,13 @@ impl<'a> Metalmind<'a> {
                 .into_iter()
                 .next()
                 .ok_or_else(|| "ninguna ventana".to_owned())?;
-            if one_color(&window.pixels().2) {
-                Err("la ventana es de un solo color".to_owned())
-            } else {
-                Ok(window)
+            match window.try_pixels() {
+                // La próxima vuelta ve que el proceso terminó.
+                None => Err("la ventana ya no existe".to_owned()),
+                Some((_, _, rgb)) if one_color(&rgb) => {
+                    Err("la ventana es de un solo color".to_owned())
+                }
+                Some(_) => Ok(window),
             }
         })
     }
@@ -371,6 +374,11 @@ impl Window<'_> {
     /// Lo que se ve en la ventana ahora: ancho, alto y píxeles en RGB.
     pub fn pixels(&self) -> (u16, u16, Vec<u8>) {
         self.display.pixels(self.id)
+    }
+
+    /// Como `pixels`, o `None` si la ventana ya no existe.
+    pub fn try_pixels(&self) -> Option<(u16, u16, Vec<u8>)> {
+        self.display.try_pixels(self.id)
     }
 
     /// Una muesca de la rueda hacia abajo (el botón 5 de X) en `(x, y)`.
