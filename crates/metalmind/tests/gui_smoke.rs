@@ -570,6 +570,26 @@ fn space_e_le_da_el_foco_al_arbol() {
     assert_eq!(smoke.read("b.md"), "xdos\n");
 }
 
+/// Con `plantillas/` elegida, `esc` quita la selección y `A` crea en la
+/// raíz del vault (#189); lo creado queda elegido y un clic bajo las filas
+/// vuelve a quitar la selección.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn sin_seleccion_el_arbol_crea_en_la_raiz() {
+    let smoke = Smoke::new();
+    smoke.write("plantillas/diario.md", "# {{date}}\n");
+    let mut metalmind = smoke.launch(&["."]);
+    let window = metalmind.window();
+    window.wait_title("sin archivo", |title| title.starts_with("[No Name]"));
+    window.type_keys("<Esc>Atags<CR>");
+    smoke.wait_files(&["plantillas", "tags"]);
+    let (x, y) = tree_row(6);
+    window.click(x, y);
+    window.type_keys("Aclic<CR>");
+    smoke.wait_files(&["clic", "plantillas", "tags"]);
+    assert!(metalmind.is_running());
+}
+
 /// `ctrl-w h` pasa al árbol, con la nota abierta seleccionada; `r` la
 /// renombra y el buffer sigue al archivo: lo que se guarda va al nombre nuevo.
 #[test]
