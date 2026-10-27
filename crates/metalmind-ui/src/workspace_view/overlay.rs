@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use gpui_kit::{
     AnyElement, App, Entity, FocusHandle, Focusable as _, InteractiveElement as _,
-    IntoElement as _, ParentElement as _, Styled as _, Subscription, div,
+    IntoElement as _, ParentElement as _, Styled as _, Subscription, Task, div,
 };
 use metalmind_vault::LinkIndex;
 
@@ -33,10 +33,12 @@ pub enum Overlay {
         picker: Entity<Palette>,
         _events: Subscription,
     },
-    /// Los links sin destino del vault, sacados de `index`.
+    /// Los links sin destino del vault, sacados de `index`. `refresh` rehace
+    /// la lista para un índice más nuevo; soltarlo la cancela.
     Unresolved {
         picker: Entity<UnresolvedPicker>,
         index: Arc<LinkIndex>,
+        refresh: Option<Task<()>>,
         _events: Subscription,
     },
     /// Las notas entre las que empata un link.
