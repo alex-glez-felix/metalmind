@@ -88,6 +88,8 @@ named_actions! {
         Cancel = "list::cancel",
         /// Le devuelve el foco al panel de edición.
         FocusEditor = "list::focus_editor",
+        /// Le pasa el foco al panel lateral, a su izquierda.
+        FocusSidebar = "list::focus_sidebar",
     }
 }
 

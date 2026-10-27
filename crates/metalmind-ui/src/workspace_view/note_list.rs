@@ -121,6 +121,10 @@ impl WorkspaceView {
                 self.touch_focused(cx);
             }
             NoteListEvent::FocusEditor => self.focus(window, cx),
+            NoteListEvent::FocusSidebar if self.sidebar_visible(cx) => {
+                self.focus_sidebar(window, cx);
+            }
+            NoteListEvent::FocusSidebar => {}
             NoteListEvent::TagNote { note, tags } => self.tag_note(&note, &tags, cx),
         }
         cx.notify();

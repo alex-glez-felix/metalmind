@@ -162,15 +162,27 @@ fn sin_estado_guardado_arranca_abierta_solo_en_una_ventana_ancha() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     let min = gpui_kit::px(1600.);
-    let settle = |visible: Option<bool>, width: f32, cx: &mut VisualTestContext| {
+    let settle = |chosen: Option<bool>, widths: &[f32], cx: &mut VisualTestContext| {
         fixture.list.update(cx, |view, _| {
-            view.visible = visible;
-            view.settle_visibility(gpui_kit::px(width), min);
-            view.is_visible()
+            view.chosen = chosen;
+            view.by_width = None;
+            for &width in widths {
+                view.settle_visibility(gpui_kit::px(width), min);
+            }
+            (view.is_visible(), view.state().visible)
         })
     };
-    assert!(settle(None, 1920., cx));
-    assert!(!settle(None, 1280., cx));
-    assert!(settle(Some(true), 1280., cx), "lo guardado gana");
-    assert!(!settle(Some(false), 1920., cx));
+    assert_eq!(settle(None, &[1920.], cx), (true, None), "no se guarda");
+    assert_eq!(settle(None, &[1280.], cx), (false, None));
+    assert_eq!(
+        settle(None, &[1280., 1920.], cx),
+        (false, None),
+        "no brinca"
+    );
+    assert_eq!(
+        settle(Some(true), &[1280.], cx),
+        (true, Some(true)),
+        "lo elegido gana"
+    );
+    assert_eq!(settle(Some(false), &[1920.], cx), (false, Some(false)));
 }

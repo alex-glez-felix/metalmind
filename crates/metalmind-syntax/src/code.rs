@@ -75,7 +75,8 @@ pub(crate) fn closes(open: &Fence, line: &str) -> bool {
 
 /// Si la línea que empieza en `start` abre un bloque cercado, devuelve el fin
 /// del bloque (tras la cerca de cierre, o el fin del texto si no cierra).
-pub(crate) fn fenced_block_end(text: &str, start: usize) -> Option<usize> {
+#[must_use]
+pub fn fenced_block_end(text: &str, start: usize) -> Option<usize> {
     let open = opening_fence(&text[start..line_end(text, start)])?;
     let mut line = next_line(text, start);
     while line < text.len() {

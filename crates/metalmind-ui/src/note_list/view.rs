@@ -31,6 +31,8 @@ pub enum NoteListEvent {
         focus_editor: bool,
     },
     FocusEditor,
+    /// `ctrl-w h`: el foco pasa al panel lateral, si se ve.
+    FocusSidebar,
     /// Agregar `tags` al frontmatter de `note`.
     TagNote {
         note: VaultPath,
@@ -40,8 +42,10 @@ pub enum NoteListEvent {
 
 pub struct NoteListView {
     pub(super) list: NoteList,
-    /// `None` hasta decidirlo con el ancho de la ventana.
-    visible: Option<bool>,
+    /// Si el usuario la abrió o la plegó en este vault: es lo que se guarda.
+    chosen: Option<bool>,
+    /// Sin elección, lo que dijo el ancho de la ventana en el primer frame.
+    by_width: Option<bool>,
     root: PathBuf,
     session: Entity<VaultSession>,
     workspace: Entity<Workspace>,
@@ -84,7 +88,8 @@ impl NoteListView {
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         let mut view = Self {
             list,
-            visible: state.visible,
+            chosen: state.visible,
+            by_width: None,
             root: vault.root().to_owned(),
             session: session.clone(),
             workspace,
@@ -108,13 +113,14 @@ impl NoteListView {
 
     #[must_use]
     pub fn is_visible(&self) -> bool {
-        self.visible.unwrap_or(false)
+        self.chosen.or(self.by_width).unwrap_or(false)
     }
 
     /// Sin estado guardado, la lista arranca abierta solo en una ventana al
-    /// menos de `min_width`.
+    /// menos de `min_width`. Se decide una vez y no se guarda: el próximo
+    /// arranque vuelve a mirar el ancho.
     pub fn settle_visibility(&mut self, window_width: Pixels, min_width: Pixels) {
-        self.visible.get_or_insert(window_width >= min_width);
+        self.by_width.get_or_insert(window_width >= min_width);
     }
 
     #[must_use]
@@ -125,7 +131,7 @@ impl NoteListView {
     #[must_use]
     pub fn state(&self) -> ListState {
         ListState {
-            visible: self.visible,
+            visible: self.chosen,
             source: self.list.source().clone(),
             filter: self.list.filter().text().to_owned(),
         }
@@ -135,7 +141,7 @@ impl NoteListView {
     /// quedó visible.
     pub fn toggle(&mut self, cx: &mut Context<Self>) -> bool {
         let visible = !self.is_visible();
-        self.visible = Some(visible);
+        self.chosen = Some(visible);
         if visible {
             self.reveal_active(cx);
         } else {
@@ -146,7 +152,7 @@ impl NoteListView {
     }
 
     pub fn set_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
-        self.visible = Some(true);
+        self.chosen = Some(true);
         let step = self.list.set_source(source);
         self.step(step, cx);
     }
@@ -253,6 +259,7 @@ impl NoteListView {
             ListAction::Confirm => self.confirm(cx),
             ListAction::Cancel => self.cancel(cx),
             ListAction::FocusEditor => cx.emit(NoteListEvent::FocusEditor),
+            ListAction::FocusSidebar => cx.emit(NoteListEvent::FocusSidebar),
         }
         self.scroll_to_selection();
         cx.notify();

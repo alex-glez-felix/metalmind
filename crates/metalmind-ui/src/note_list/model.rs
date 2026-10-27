@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use metalmind_vault::tags::Tags;
-use metalmind_vault::{VaultIndex, VaultPath, VaultUpdate};
+use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath, VaultUpdate};
 
 use super::cards::{Card, Cards};
 use super::source::ListSource;
@@ -130,9 +130,15 @@ impl NoteList {
         self.cards.get(self.note(row)?)
     }
 
-    /// Llegaron tarjetas leídas del disco.
+    /// Llegaron tarjetas leídas del disco. Las de una nota que ya no está
+    /// (se leyó antes de un renombre) no se guardan.
     pub fn set_cards(&mut self, cards: Vec<(VaultPath, Card)>) -> Step<Note> {
-        self.cards.insert_all(cards);
+        let index = Arc::clone(&self.index);
+        self.cards.insert_all(
+            cards
+                .into_iter()
+                .filter(|(path, _)| index.kind(path) == Some(EntryKind::Note)),
+        );
         self.refill()
     }
 
@@ -141,7 +147,12 @@ impl NoteList {
     pub fn apply(&mut self, update: &VaultUpdate) -> (Step<Note>, Vec<VaultPath>) {
         self.index = Arc::clone(&update.snapshot);
         self.tags = Arc::clone(&update.tags);
-        let stale = self.cards.apply(&update.changes);
+        self.source.follow(&update.changes);
+        self.selected = self
+            .selected
+            .take()
+            .map(|selected| renamed(selected, &update.changes));
+        let stale = self.cards.apply(&update.changes, &self.index);
         let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
         let step = self.filter.set_source(self.ordered(), narrowing);
         (self.follow(step), stale)
@@ -269,6 +280,14 @@ impl NoteList {
             .collect();
         (!tags.is_empty()).then_some((note, tags))
     }
+}
+
+/// Dónde quedó `path` tras los renombres del lote.
+fn renamed(path: VaultPath, changes: &[VaultChange]) -> VaultPath {
+    changes.iter().fold(path, |path, change| match change {
+        VaultChange::Renamed { from, to, .. } => path.rebase(from, to).unwrap_or(path),
+        _ => path,
+    })
 }
 
 #[cfg(test)]

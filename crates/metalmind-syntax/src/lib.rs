@@ -23,6 +23,7 @@ mod tag;
 use std::ops::Range;
 
 pub use anchor::{BlockId, Heading};
+pub use code::fenced_block_end;
 pub use frontmatter::{Entry, Frontmatter, Property, PropertyValue, Value};
 pub use link::{Link, LinkSyntax, Subpath};
 pub use resolve::{
