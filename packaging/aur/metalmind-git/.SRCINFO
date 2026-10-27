@@ -18,6 +18,7 @@ pkgbase = metalmind-git
 	depends = vulkan-icd-loader
 	depends = wayland
 	optdepends = ttf-jetbrains-mono: la fuente monoespaciada preferida
+	optdepends = xdg-desktop-portal-impl: el selector de carpetas para elegir el vault la primera vez
 	provides = metalmind
 	conflicts = metalmind
 	source = metalmind::git+https://github.com/alex-glez-felix/metalmind.git

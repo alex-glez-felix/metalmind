@@ -40,4 +40,4 @@ pub use frames::FrameClock;
 pub use panel::Outline;
 pub use session::last_vault;
 pub use theme::{NoMonoFont, Theme};
-pub use window::{OpenError, Startup, open, open_window};
+pub use window::{OpenError, Startup, open, open_window, require_display};

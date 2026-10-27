@@ -4,11 +4,11 @@
 
 use std::cell::RefCell;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 
-use gpui_kit::App;
+use gpui_kit::{App, PathPromptOptions};
 use metalmind_config::{Config, Diagnostic, HistoryRetention, Paths, Severity};
 use metalmind_ui::{Document, FrameClock, OpenError, Startup};
 use metalmind_vault::{
@@ -34,6 +34,11 @@ pub enum StartError {
     FrameLog(io::Error),
     #[error(transparent)]
     Window(OpenError),
+    #[error(
+        "no se pudo abrir el selector de carpetas: {0:#}\nPasa el vault como argumento \
+         (`metalmind ~/Notas`) o ponlo en `vault:` de config.yaml"
+    )]
+    Chooser(#[source] anyhow::Error),
 }
 
 /// Las rutas de Metalmind y la config, lo primero que se lee.
@@ -128,18 +133,74 @@ pub fn frame_clock(launched: Instant, frame_log: Option<&Path>) -> Result<FrameC
 /// Si no hay sesión gráfica, fuente monoespaciada o la plataforma no puede
 /// abrir la ventana.
 pub fn run(prepared: Prepared, clock: FrameClock) -> Result<(), StartError> {
+    run_app(move |cx, failure| failure.check(open(prepared, clock, cx), cx))
+}
+
+/// Pregunta con el selector de carpetas del sistema qué vault abrir y lo abre
+/// como [`run`]; si se cancela, sale sin abrir nada.
+///
+/// # Errors
+/// Los de [`run`] y [`prepare`], o si el escritorio no tiene selector.
+pub fn run_choosing_vault(session: Session, clock: FrameClock) -> Result<(), StartError> {
+    run_app(move |cx, failure| {
+        if let Err(error) = metalmind_ui::require_display(cx) {
+            return failure.check(Err(StartError::Window(error)), cx);
+        }
+        let chosen = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Abrir como vault".into()),
+        });
+        cx.spawn(async move |cx| {
+            let answer = chosen.await.unwrap_or_else(|closed| Err(closed.into()));
+            cx.update(|cx| match chosen_vault(answer) {
+                Ok(Some(vault)) => {
+                    let target = Target { vault, file: None };
+                    let opened =
+                        prepare(session, &target).and_then(|prepared| open(prepared, clock, cx));
+                    failure.check(opened, cx);
+                }
+                Ok(None) => cx.quit(),
+                Err(error) => failure.check(Err(error), cx),
+            });
+        })
+        .detach();
+    })
+}
+
+/// La carpeta que devolvió el selector; `None` si se canceló.
+fn chosen_vault(
+    answer: anyhow::Result<Option<Vec<PathBuf>>>,
+) -> Result<Option<PathBuf>, StartError> {
+    let paths = answer.map_err(StartError::Chooser)?;
+    Ok(paths.and_then(|paths| paths.into_iter().next()))
+}
+
+fn open(prepared: Prepared, clock: FrameClock, cx: &mut App) -> Result<(), StartError> {
     let Prepared { startup, config } = prepared;
-    let failed = Rc::new(RefCell::new(None));
-    let failed_in_app = Rc::clone(&failed);
-    gpui_kit::application().run(move |cx| {
-        if let Err(error) = metalmind_ui::open(startup, &config, clock, cx) {
-            *failed_in_app.borrow_mut() = Some(error);
+    metalmind_ui::open(startup, &config, clock, cx).map_err(StartError::Window)
+}
+
+/// Corre la app con `start` y devuelve el error que la cerró, si hubo.
+fn run_app(start: impl FnOnce(&mut App, Failure) + 'static) -> Result<(), StartError> {
+    let failure = Failure::default();
+    let in_app = failure.clone();
+    gpui_kit::application().run(move |cx| start(cx, in_app));
+    failure.0.take().map_or(Ok(()), Err)
+}
+
+/// Dónde deja la app el error con que se cierra, para que [`run_app`] lo
+/// devuelva.
+#[derive(Clone, Default)]
+struct Failure(Rc<RefCell<Option<StartError>>>);
+
+impl Failure {
+    fn check(&self, result: Result<(), StartError>, cx: &mut App) {
+        if let Err(error) = result {
+            *self.0.borrow_mut() = Some(error);
             quit_from_event_loop(cx);
         }
-    });
-    match failed.take() {
-        Some(error) => Err(StartError::Window(error)),
-        None => Ok(()),
     }
 }
 
@@ -218,5 +279,20 @@ mod tests {
                 deleted: 30 * DAY,
             }
         );
+    }
+
+    #[test]
+    fn el_selector_da_la_carpeta_elegida_o_nada_si_se_cancela() {
+        let notas = PathBuf::from("/notas");
+        assert_eq!(
+            chosen_vault(Ok(Some(vec![notas.clone()]))).unwrap(),
+            Some(notas)
+        );
+        assert_eq!(chosen_vault(Ok(None)).unwrap(), None);
+        assert_eq!(chosen_vault(Ok(Some(Vec::new()))).unwrap(), None);
+        assert!(matches!(
+            chosen_vault(Err(anyhow::anyhow!("sin portal"))),
+            Err(StartError::Chooser(_))
+        ));
     }
 }

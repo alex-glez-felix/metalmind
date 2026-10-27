@@ -63,10 +63,7 @@ pub fn open(
     clock: FrameClock,
     cx: &mut App,
 ) -> Result<(), OpenError> {
-    // Sin display, GPUI arranca headless y la ventana se abriría sin que nadie la vea.
-    if cx.graphical_environment().is_none() {
-        return Err(OpenError::NoDisplay);
-    }
+    require_display(cx)?;
     cx.set_global(clock);
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
@@ -75,6 +72,16 @@ pub fn open(
     })
     .detach();
     open_window(startup, config, cx).map(drop)
+}
+
+/// # Errors
+/// Si no hay sesión gráfica: GPUI arrancaría headless y lo que se abra no
+/// lo vería nadie.
+pub fn require_display(cx: &App) -> Result<(), OpenError> {
+    match cx.graphical_environment() {
+        Some(_) => Ok(()),
+        None => Err(OpenError::NoDisplay),
+    }
 }
 
 /// La ventana de [`open`], en la plataforma que tenga `cx`: también la de
