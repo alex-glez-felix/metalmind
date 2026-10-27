@@ -60,6 +60,9 @@ pub struct NoteListView {
     unread: Vec<VaultPath>,
     /// Al llegar las primeras tarjetas se elige la nota activa.
     reveal_on_load: bool,
+    /// Las tarjetas se leen la primera vez que la lista se ve: plegada no
+    /// le cuesta nada a la ventana.
+    started: bool,
     /// Lo mostrado cambió porque el usuario lo pidió (escribió en el
     /// filtro, cambió la fuente): al llegar, la vista va a la fila elegida.
     /// Un lote del watcher no mueve el scroll.
@@ -88,7 +91,10 @@ impl NoteListView {
         let changes = cx.subscribe(session, |view, _, VaultChanged(update), cx| {
             let (step, unread) = view.list.apply(update);
             view.step(step, cx);
-            view.read_cards(unread, cx);
+            // Antes de la primera lectura no hay nada que releer: esa lee todo.
+            if view.started {
+                view.read_cards(unread, cx);
+            }
         });
         // La nota activa se marca en la lista: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
@@ -106,23 +112,38 @@ impl NoteListView {
             reading: None,
             unread: Vec::new(),
             reveal_on_load: true,
+            started: false,
             scroll_on_show: false,
             _changes: changes,
             _workspace: workspace_changes,
         };
-        let notes: Vec<VaultPath> = index
+        if view.is_visible() {
+            view.start(cx);
+        }
+        view
+    }
+
+    /// La primera lectura de las tarjetas, de todas las notas del vault.
+    fn start(&mut self, cx: &mut Context<Self>) {
+        if std::mem::replace(&mut self.started, true) {
+            return;
+        }
+        let notes: Vec<VaultPath> = self
+            .session
+            .read(cx)
+            .vault()
+            .snapshot()
             .files()
             .filter(|entry| entry.kind == EntryKind::Note)
             .map(|entry| entry.path.clone())
             .collect();
         if notes.is_empty() {
             // Un vault sin notas no tiene nada que leer: la lista ya está.
-            view.reveal_on_load = false;
-            let step = view.list.set_cards(Vec::new());
-            view.step(step, cx);
+            self.reveal_on_load = false;
+            let step = self.list.set_cards(Vec::new());
+            self.step(step, cx);
         }
-        view.read_cards(notes, cx);
-        view
+        self.read_cards(notes, cx);
     }
 
     #[must_use]
@@ -133,8 +154,16 @@ impl NoteListView {
     /// Sin estado guardado, la lista arranca abierta solo en una ventana al
     /// menos de `min_width`. Se decide una vez y no se guarda: el próximo
     /// arranque vuelve a mirar el ancho.
-    pub fn settle_visibility(&mut self, window_width: Pixels, min_width: Pixels) {
+    pub fn settle_visibility(
+        &mut self,
+        window_width: Pixels,
+        min_width: Pixels,
+        cx: &mut Context<Self>,
+    ) {
         self.by_width.get_or_insert(window_width >= min_width);
+        if self.is_visible() {
+            self.start(cx);
+        }
     }
 
     #[must_use]
@@ -157,6 +186,7 @@ impl NoteListView {
         let visible = !self.is_visible();
         self.chosen = Some(visible);
         if visible {
+            self.start(cx);
             self.reveal_active(cx);
         } else {
             self.list.close_prompt();
@@ -167,6 +197,7 @@ impl NoteListView {
 
     pub fn set_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
         self.chosen = Some(true);
+        self.start(cx);
         self.scroll_on_show = true;
         let step = self.list.set_source(source);
         self.step(step, cx);
