@@ -100,7 +100,7 @@ impl WorkspaceView {
                 .await;
             // Si la vista ya no existe, no hay lista que cambiar.
             let _ = view.update(cx, |view, cx| {
-                view.show_unresolved_links(&latest, links, cx)
+                view.show_unresolved_links(&latest, links, cx);
             });
         }));
     }
