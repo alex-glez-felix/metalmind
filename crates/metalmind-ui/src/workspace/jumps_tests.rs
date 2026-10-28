@@ -14,7 +14,7 @@ fn at(session: &Session) -> (String, usize) {
 }
 
 fn error(session: &Session) -> Option<String> {
-    match session.workspace.message() {
+    match session.workspace.messages().last() {
         Some(Message::Error(text)) => Some(text.clone()),
         _ => None,
     }

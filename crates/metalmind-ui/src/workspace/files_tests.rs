@@ -52,14 +52,14 @@ fn abrir_en_el_panel_reemplaza_lo_que_muestra() {
 fn abrir_el_archivo_que_ya_muestra_no_lo_relee() {
     let (_dir, vault, mut session) = vault();
     session.keys("x");
-    let before = session.workspace.message().cloned();
+    let before = session.workspace.messages().last().cloned();
     let opened = session
         .workspace
         .open_file(&file(&vault, "a.md"), Placement::Current)
         .unwrap();
     assert!(opened);
     assert_eq!(session.text(), "");
-    assert_eq!(session.workspace.message(), before.as_ref());
+    assert_eq!(session.workspace.messages().last(), before.as_ref());
 }
 
 /// Como `:e` con `hidden`: la nota con cambios queda oculta y vuelve
@@ -75,7 +75,7 @@ fn con_cambios_cambia_y_la_nota_queda_oculta() {
     assert!(opened);
     assert_eq!(shown(&session), file(&vault, "b.md"));
     assert!(!matches!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(Message::Error(_))
     ));
     session
@@ -156,7 +156,7 @@ fn un_archivo_que_no_se_lee_no_abre_split() {
     assert!(!opened);
     assert_eq!(session.workspace.tree().len(), 1);
     assert!(matches!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(Message::Error(_))
     ));
 }

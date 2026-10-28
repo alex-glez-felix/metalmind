@@ -165,7 +165,7 @@ impl Workspace {
                 Autosaved::Saved
             }
             Err(SaveError::ChangedOnDisk) => {
-                self.message = Some(Message::changed_on_disk(document));
+                self.messages.push(Message::changed_on_disk(document));
                 Autosaved::ChangedOnDisk
             }
             Err(error) => {
@@ -177,7 +177,8 @@ impl Workspace {
                     let name = document.display_name();
                     log::error!("autoguardado de {name}: {error}");
                     let hidden = !self.in_focus(id);
-                    self.message = Some(Message::save_failed(hidden.then_some(&*name), &error));
+                    self.messages
+                        .push(Message::save_failed(hidden.then_some(&*name), &error));
                 }
                 Autosaved::Failed
             }

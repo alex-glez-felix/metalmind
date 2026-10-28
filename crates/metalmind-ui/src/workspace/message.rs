@@ -1,4 +1,7 @@
-//! El último aviso, el que vim muestra en la línea de comandos.
+//! Un aviso de la ventana: lo que vim muestra en la línea de comandos y
+//! Metalmind en un toast.
+
+use std::time::Duration;
 
 use metalmind_vault::Unwatched;
 use metalmind_vim::{Substitution, Wrap};
@@ -9,10 +12,34 @@ use crate::document::{Document, FileStats, SaveError};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Message {
     Info(String),
+    Warning(String),
     Error(String),
 }
 
 impl Message {
+    #[must_use]
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Info(text) | Self::Warning(text) | Self::Error(text) => text,
+        }
+    }
+
+    #[must_use]
+    pub fn is_error(&self) -> bool {
+        matches!(self, Self::Error(_))
+    }
+
+    /// Cuánto se ve su toast si nadie lo cierra; los errores, hasta que se
+    /// cierran.
+    #[must_use]
+    pub fn lifetime(&self) -> Option<Duration> {
+        match self {
+            Self::Info(_) => Some(Duration::from_secs(4)),
+            Self::Warning(_) => Some(Duration::from_secs(8)),
+            Self::Error(_) => None,
+        }
+    }
+
     #[must_use]
     pub fn wrapped(wrap: Wrap) -> Self {
         Self::Info(
@@ -48,10 +75,9 @@ impl Message {
         Self::Info(format!("\"{name}\" {stats} escritos"))
     }
 
-    /// Un guardado que falló: la causa primero, para que un nombre largo no
-    /// la tape al recortar la barra. `name` es el archivo, si no es el que
-    /// ya muestra la barra, y va al final; los errores de vim van con su
-    /// texto original.
+    /// Un guardado que falló, con la causa primero. `name` es el archivo, si
+    /// no es el que ya muestra la barra, y va al final; los errores de vim
+    /// van con su texto original.
     #[must_use]
     pub fn save_failed(name: Option<&str>, error: &SaveError) -> Self {
         let text = if error.is_vim() {
@@ -86,8 +112,7 @@ impl Message {
     }
 
     /// Cerrar la ventana con cambios en `document`. nvim muestra antes
-    /// `E37: No write since last change`; la barra tiene una sola línea y
-    /// se queda con la que dice cuál es.
+    /// `E37: No write since last change`; basta con la que dice cuál es.
     #[must_use]
     pub fn unsaved_in(document: &Document) -> Self {
         let path = document.display_name();
@@ -100,21 +125,22 @@ impl Message {
     #[must_use]
     pub fn changed_on_disk(document: &Document) -> Self {
         let path = document.display_name();
-        Self::Error(format!(
+        Self::Warning(format!(
             "W12: Warning: File \"{path}\" has changed and the buffer was changed in Vim as well"
         ))
     }
 
-    /// El vault dejó de ver los cambios de fuera, y cómo arreglarlo. Corto,
-    /// para que el comando quepa en la barra; el log lo explica entero.
+    /// El vault dejó de ver los cambios de fuera, y cómo arreglarlo.
     #[must_use]
     pub fn unwatched(reason: Unwatched) -> Self {
         let text = match reason {
-            Unwatched::WatchLimit => {
-                "no se ven cambios externos: sudo sysctl fs.inotify.max_user_watches=524288"
-            }
+            Unwatched::WatchLimit => concat!(
+                "no se ven los cambios hechos fuera de Metalmind: el sistema no deja ",
+                "vigilar más carpetas. Para subir el límite: ",
+                "sudo sysctl fs.inotify.max_user_watches=524288",
+            ),
         };
-        Self::Error(text.to_owned())
+        Self::Warning(text.to_owned())
     }
 
     /// `:wa` con un buffer sin archivo.
@@ -135,8 +161,8 @@ mod tests {
 
     #[test]
     fn sin_watches_dice_como_subir_el_limite() {
-        let Message::Error(text) = Message::unwatched(Unwatched::WatchLimit) else {
-            panic!("es un error");
+        let Message::Warning(text) = Message::unwatched(Unwatched::WatchLimit) else {
+            panic!("es una advertencia");
         };
         assert!(
             text.contains("sudo sysctl fs.inotify.max_user_watches="),

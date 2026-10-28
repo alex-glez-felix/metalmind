@@ -266,6 +266,15 @@ color_group! {
         menu_background,
         menu_border,
         menu_hover,
+        /// Los avisos en la esquina de arriba a la derecha.
+        toast_background,
+        toast_border,
+        /// El ícono de cada nivel de aviso.
+        toast_info,
+        toast_warning,
+        toast_error,
+        /// La tecla que cierra los toasts.
+        toast_hint,
     }
 }
 

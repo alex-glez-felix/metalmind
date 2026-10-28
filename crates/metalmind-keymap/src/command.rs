@@ -118,6 +118,12 @@ named_actions! {
         Focus = "workspace::focus",
         /// `:unfocus`, o un clic en el indicador de la barra de estado.
         ClearFocus = "workspace::clear_focus",
+        /// `:messages`: el historial de avisos, también los que ya se
+        /// cerraron; el elegido vuelve a verse en un toast.
+        ShowMessages = "messages::show",
+        /// Cierra los toasts, como `esc` en Normal; un clic cierra uno.
+        /// Siguen en `:messages`.
+        DismissMessages = "messages::dismiss",
     }
 }
 
@@ -154,6 +160,7 @@ const EX: &[(&str, usize, Command)] = &[
     ("today", 5, Command::OpenDailyNote),
     ("focus", 5, Command::Focus),
     ("unfocus", 7, Command::ClearFocus),
+    ("messages", 3, Command::ShowMessages),
 ];
 
 impl Command {
@@ -202,7 +209,9 @@ impl Command {
             | Self::SetTagTemplate
             | Self::OpenTagPage
             | Self::Focus
-            | Self::ClearFocus => RangeRule::NotAllowed,
+            | Self::ClearFocus
+            | Self::ShowMessages
+            | Self::DismissMessages => RangeRule::NotAllowed,
             _ => RangeRule::Unsupported,
         }
     }

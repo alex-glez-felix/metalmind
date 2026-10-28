@@ -521,6 +521,21 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Esc><Esc><C-w>l<Space>egg<Esc>")],
     ),
     ("arbol-nueva-carpeta-raiz", &[Step::Keys("A")]),
+    // Los avisos en toasts (#194): `esc` cierra los que quedan; tres
+    // errores, que no se cierran solos, uno tan largo que se parte en
+    // líneas; el historial de toda la corrida, que los tapa, filtrado, y el
+    // elegido otra vez como el último.
+    (
+        "toasts",
+        &[Step::Keys(concat!(
+            "<Esc><Esc><C-w>l<C-w>l<Esc>:nada<CR>/zzqqxx<CR>",
+            ":estecomandonoexiste y lleva un argumento muy, muy largo para que el aviso ",
+            "no quepa en el toast y se parta en varias filas<CR>",
+        ))],
+    ),
+    ("toasts-historial", &[Step::Keys(":messages<CR>")]),
+    ("toasts-historial-filtrado", &[Step::Keys("E486")]),
+    ("toasts-de-nuevo", &[Step::Keys("<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

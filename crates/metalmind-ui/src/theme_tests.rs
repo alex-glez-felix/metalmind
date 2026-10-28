@@ -249,8 +249,8 @@ fn el_indicador_del_autoguardado_sale_del_tema() {
     assert_eq!(ui.status_saved, ui.status_unfocused_foreground);
     assert_eq!(ui.status_unsaved, ui.modified);
     assert_eq!(ui.status_changed_on_disk, ui.error);
-    assert!((theme.layout.status_message_max_width - 0.5).abs() < f32::EPSILON);
-    config.theme.metrics.layout.status_message_max_width = config::Fraction(0.25);
+    assert!((theme.layout.status_focus_max_width - 0.5).abs() < f32::EPSILON);
+    config.theme.metrics.layout.status_focus_max_width = config::Fraction(0.25);
     let theme = Theme::with_font(&config, "Mono".into());
-    assert!((theme.layout.status_message_max_width - 0.25).abs() < f32::EPSILON);
+    assert!((theme.layout.status_focus_max_width - 0.25).abs() < f32::EPSILON);
 }

@@ -26,6 +26,7 @@ mod line_numbers;
 mod link_typing;
 mod links;
 mod message;
+mod messages;
 mod options;
 mod pane_tree;
 mod saved_jumps;
@@ -59,6 +60,7 @@ pub use self::link_typing::TypedLink;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
+pub use self::messages::{MessageId, Messages, ToastId};
 pub use self::options::PaneOptions;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
@@ -132,7 +134,7 @@ pub struct Workspace {
     tabstop: usize,
     /// El margen muestra las marks de cada línea.
     gutter_marks: bool,
-    message: Option<Message>,
+    messages: Messages,
     links: Option<VaultLinks>,
     link_choice: Option<LinkChoice>,
     /// Donde se escriben los documentos.
@@ -231,7 +233,8 @@ impl Workspace {
             gutter_marks,
             markdown,
         } = options;
-        let message = Message::opened(&document);
+        let mut messages = Messages::default();
+        messages.record(Message::opened(&document));
         let mut documents = Documents::default();
         let mut files = FileIds::default();
         let file = files.of_document(&document);
@@ -254,7 +257,7 @@ impl Workspace {
             scrolloff,
             tabstop,
             gutter_marks,
-            message: Some(message),
+            messages,
             links: None,
             link_choice: None,
             disk: Rc::new(Files),
@@ -279,17 +282,28 @@ impl Workspace {
     }
 
     #[must_use]
-    pub fn message(&self) -> Option<&Message> {
-        self.message.as_ref()
+    pub fn messages(&self) -> &Messages {
+        &self.messages
     }
 
-    pub fn set_message(&mut self, message: Message) {
-        self.message = Some(message);
+    /// Lo anota y lo muestra en un toast.
+    pub fn show_message(&mut self, message: Message) {
+        self.messages.push(message);
+    }
+
+    /// Cierra ese toast, como un clic en él.
+    pub fn dismiss_toast(&mut self, toast: ToastId) {
+        self.messages.dismiss(toast);
+    }
+
+    /// Vuelve a mostrar en un toast uno del historial.
+    pub fn reshow_message(&mut self, id: MessageId) {
+        self.messages.show(id);
     }
 
     pub fn report(&mut self, error: &WorkspaceError) {
         log::error!("{error}");
-        self.message = Some(Message::Error(error.to_string()));
+        self.messages.push(Message::Error(error.to_string()));
     }
 
     /// # Errors

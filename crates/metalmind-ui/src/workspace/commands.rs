@@ -63,6 +63,8 @@ pub enum Effect {
     SetFocus(Option<Focus>),
     /// `:focus` sin alcance: la ventana dice el de ahora.
     ShowFocus,
+    /// `:messages`: el historial de avisos.
+    OpenMessages,
 }
 
 fn page_change(field: TagField, argument: Option<&str>) -> Result<Effect, WorkspaceError> {
@@ -71,7 +73,7 @@ fn page_change(field: TagField, argument: Option<&str>) -> Result<Effect, Worksp
 
 impl Workspace {
     /// Ejecuta `invocation` en el panel enfocado y deja el aviso, si lo hay,
-    /// en [`Workspace::message`]. Si el comando salió de una macro, la
+    /// en [`Workspace::messages`]. Si el comando salió de una macro, la
     /// macro sigue en el panel que quedó con el foco, hasta su próximo
     /// comando o hasta terminar; como en vim, un error la corta.
     pub fn run(&mut self, invocation: &Invocation, clipboard: &mut dyn Clipboard) -> Effect {
@@ -102,15 +104,13 @@ impl Workspace {
     }
 
     fn run_one(&mut self, command: Command, argument: Option<&str>) -> Effect {
-        let before = self.message.take();
+        let mark = self.messages.mark();
         let effect = self.try_run(command, argument).unwrap_or_else(|error| {
             self.report(&error);
             Effect::Stay
         });
-        match &self.message {
-            Some(Message::Error(_)) => self.vim.abort_macro(),
-            Some(Message::Info(_)) => {}
-            None => self.message = before,
+        if self.messages.since(mark).any(Message::is_error) {
+            self.vim.abort_macro();
         }
         effect
     }
@@ -127,6 +127,11 @@ impl Workspace {
             Command::Quit => Ok(self.quit(false)),
             Command::ForceQuit => Ok(self.quit(true)),
             Command::SaveAndQuit => self.save_and_quit(path),
+            Command::ShowMessages => Ok(Effect::OpenMessages),
+            Command::DismissMessages => {
+                self.messages.dismiss_all();
+                Ok(Effect::Stay)
+            }
             Command::SaveAll => {
                 self.save_all();
                 Ok(Effect::Stay)
@@ -195,7 +200,7 @@ impl Workspace {
         if let Some(path) = path
             && self.loaded_elsewhere(id, path, force)
         {
-            self.message = Some(Message::loaded_elsewhere());
+            self.messages.push(Message::loaded_elsewhere());
             return Ok(false);
         }
         let disk = Rc::clone(&self.disk);
@@ -224,7 +229,7 @@ impl Workspace {
             }
         };
         let saved = matches!(message, Message::Info(_));
-        self.message = Some(message);
+        self.messages.push(message);
         // `:w otra-ruta` escribe una copia y la nota sigue con sus cambios: su
         // autoguardado sigue como estaba.
         if saved && !self.document(id)?.is_modified() {
@@ -328,22 +333,23 @@ impl Workspace {
         let id = self.pane(self.focused())?.document;
         let document = self.document(id)?;
         if !force && document.is_modified() {
-            self.message = Some(Message::unsaved());
+            self.messages.push(Message::unsaved());
             return Ok(());
         }
         let Some(path) = document.path() else {
-            self.message = Some(Message::Error(SaveError::NoFileName.to_string()));
+            self.messages
+                .push(Message::Error(SaveError::NoFileName.to_string()));
             return Ok(());
         };
         let reloaded = match Document::open(path) {
             Ok(reloaded) => reloaded,
             Err(error) => {
-                self.message = Some(Message::Error(error.to_string()));
+                self.messages.push(Message::Error(error.to_string()));
                 return Ok(());
             }
         };
         self.replace_document(id, reloaded)?;
-        self.message = Some(Message::opened(self.document(id)?));
+        self.messages.record(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
         Ok(())
     }
@@ -402,7 +408,8 @@ impl Workspace {
         let mut shown = self.pane_on(id, options)?;
         self.push_jump(focused)?;
         let jumps = self.pane(focused)?.state.jumps.clone();
-        self.message = Some(Message::opened(self.document(shown.document)?));
+        self.messages
+            .record(Message::opened(self.document(shown.document)?));
         self.vim.cursor_moved();
         let new = self.tree.split(axis);
         shown.state.jumps = jumps;
@@ -434,7 +441,7 @@ impl Workspace {
             .get_mut(&pane)
             .ok_or(WorkspaceError::NoPane(pane))?;
         if let Err(error) = options::set(&mut state.options, argument) {
-            self.message = Some(Message::Error(error.to_string()));
+            self.messages.push(Message::Error(error.to_string()));
         }
         Ok(Effect::Stay)
     }

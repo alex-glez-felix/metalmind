@@ -331,10 +331,6 @@ impl Editor {
             .command_line(cx)
             .filter(|(prompt, _)| *prompt != Prompt::Command)
             .map(|(_, line)| line);
-        let message = view
-            .focused
-            .then(|| self.workspace.read(cx).message().cloned())
-            .flatten();
         Some(Status {
             mode: view.focused.then_some(view.mode),
             recording: view.recording,
@@ -342,7 +338,6 @@ impl Editor {
             modified: view.document.is_modified(),
             save: view.save,
             command_line,
-            message,
             position: (line + 1, buffer.column_of(view.cursor()) + 1),
             focus: self
                 .session

@@ -1076,3 +1076,63 @@ fn un_clic_en_una_sugerencia_devuelve_el_foco_al_editor() {
     window.type_keys("x<Esc>:w<CR>");
     smoke.wait_contents("a.md", "hola #ruedax\n");
 }
+
+/// Arriba a la derecha, donde salen los toasts con el tema de fábrica.
+fn toasts(window: &Window) -> Area {
+    let (width, _, _) = window.pixels();
+    let width = i16::try_from(width).unwrap();
+    Area {
+        x: width - 440,
+        y: 0,
+        width: 440,
+        height: 160,
+    }
+}
+
+/// Un error sale en un toast arriba a la derecha y no se va solo; un clic lo
+/// cierra, `:messages` lo lista y `enter` lo vuelve a mostrar, igual, y `esc`
+/// en Normal lo cierra otra vez. Un aviso de información se cierra solo.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn los_avisos_salen_en_toasts_que_se_cierran() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write("a.md", "uno\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    let area = toasts(&window);
+    let empty = window.wait_still(area);
+    let shows = |what: &str, expected: &[u8]| {
+        wait::until(what, TIMEOUT, || {
+            if window.area_pixels(area) == expected {
+                Ok(())
+            } else {
+                Err("todavía no".to_owned())
+            }
+        });
+    };
+
+    window.type_keys(":nada<CR>");
+    window.wait_change("el toast del error", area, &empty);
+    let error = window.wait_still(area);
+    wait::stays("el error no se va solo", Duration::from_secs(5), || {
+        if window.area_pixels(area) == error {
+            Ok(())
+        } else {
+            Err("se fue".to_owned())
+        }
+    });
+    window.click(area.x + 200, 24);
+    shows("que el clic lo cierre", &empty);
+
+    window.type_keys(":mes<CR>");
+    window.wait_change("el historial", area, &empty);
+    window.type_keys("<CR>");
+    shows("el error otra vez, igual", &error);
+    window.type_keys("<Esc>");
+    shows("que esc lo cierre", &empty);
+
+    window.type_keys(":w<CR>");
+    window.wait_change("el toast de lo escrito", area, &empty);
+    shows("que se cierre solo", &empty);
+}

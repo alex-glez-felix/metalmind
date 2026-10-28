@@ -44,7 +44,7 @@ impl FinderVault {
         });
         let lost = cx.subscribe(&session, |view, _, WatchLost(reason), cx| {
             view.workspace.update(cx, |workspace, _| {
-                workspace.set_message(Message::unwatched(*reason));
+                workspace.show_message(Message::unwatched(*reason));
             });
             cx.notify();
         });
@@ -60,7 +60,7 @@ impl FinderVault {
         workspace.update(cx, |workspace, _| {
             workspace.set_links(&root, links);
             if let Some(reason) = unwatched {
-                workspace.set_message(Message::unwatched(reason));
+                workspace.show_message(Message::unwatched(reason));
             }
         });
         Self {
@@ -185,7 +185,7 @@ impl WorkspaceView {
         let Some(argument) = path.to_str().map(str::to_owned) else {
             let error = format!("{} no es una ruta UTF-8", path.display());
             self.workspace.update(cx, |workspace, _| {
-                workspace.set_message(Message::Error(error));
+                workspace.show_message(Message::Error(error));
             });
             return;
         };

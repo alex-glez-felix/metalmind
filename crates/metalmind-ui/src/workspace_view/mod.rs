@@ -3,12 +3,14 @@
 //! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
 //! workspace y en el panel; aquí solo se crean y sueltan editores y se
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
-//! abierto, el finder, la búsqueda de texto o la paleta.
+//! abierto, el finder, la búsqueda de texto o la paleta, que tapa los toasts
+//! de los avisos, arriba a la derecha.
 
 mod autosave;
 mod finder;
 mod focus;
 mod link_choice;
+mod messages;
 mod new_note;
 mod note_list;
 mod overlay;
@@ -16,6 +18,7 @@ mod palette;
 mod reroute;
 mod tag_change;
 mod text_search;
+mod toasts;
 mod unresolved;
 
 use std::collections::HashMap;
@@ -48,6 +51,7 @@ use self::finder::FinderVault;
 use self::overlay::Overlay;
 use self::reroute::{Reroute, reroute};
 use self::tag_change::LastTagChange;
+use self::toasts::ToastTimers;
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -63,6 +67,7 @@ pub struct WorkspaceView {
     formulas: Entity<Formulas>,
     overlay: Option<Overlay>,
     autosave: Option<AutosaveTimer>,
+    toast_timers: ToastTimers,
     last_tag_change: Option<LastTagChange>,
     notes: NoteSettings,
     _subscriptions: [Subscription; 4],
@@ -118,6 +123,7 @@ impl WorkspaceView {
             formulas,
             overlay: None,
             autosave: None,
+            toast_timers: ToastTimers::default(),
             last_tag_change: None,
             notes,
             _subscriptions: [repaint, events, list_events, activation],
@@ -281,6 +287,10 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.show_focus(window, cx);
             }
+            Effect::OpenMessages => {
+                self.sync_editors(cx);
+                self.open_messages(window, cx);
+            }
         }
     }
 
@@ -301,7 +311,7 @@ impl WorkspaceView {
                 let name = invocation.action.name();
                 let error = format!("{name} no tiene a quién llegar: su vista no está abierta");
                 self.workspace.update(cx, |workspace, _| {
-                    workspace.set_message(Message::Error(error));
+                    workspace.show_message(Message::Error(error));
                 });
                 cx.notify();
                 return;
@@ -437,6 +447,9 @@ impl Render for WorkspaceView {
         self.formulas
             .update(cx, |formulas, _| formulas.next_frame());
         self.update_title(window, cx);
+        // Aquí y no al cambiar el workspace: un aviso que llega sin avisar
+        // también tiene su temporizador, que cuenta desde que se ve.
+        self.schedule_toasts(cx);
         let theme = Theme::get(cx).clone();
         let width = window.viewport_size().width;
         self.list.update(cx, |list, cx| {
@@ -479,6 +492,7 @@ impl Render for WorkspaceView {
                     .h_full()
                     .child(self.render_node(&root, &theme)),
             )
+            .children(self.render_toasts(&theme, cx))
             .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }
 }

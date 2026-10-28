@@ -23,7 +23,7 @@ impl Workspace {
             return false;
         }
         if let Some(document) = self.documents.get(id) {
-            self.message = Some(Message::unsaved_in(document));
+            self.messages.push(Message::unsaved_in(document));
         }
         false
     }
@@ -71,8 +71,8 @@ impl Workspace {
 
     /// `:wa`: guarda cada documento con cambios, también los ocultos, y
     /// devuelve si se guardaron todos. Como vim, uno que no se puede guardar
-    /// no detiene a los demás; el aviso es el primer error o, si no hubo,
-    /// lo último que se escribió.
+    /// no detiene a los demás; el toast es el primer error o, si no hubo,
+    /// lo último que se escribió, y lo demás va al historial.
     pub(super) fn save_all(&mut self) -> bool {
         let modified: Vec<DocumentId> = self
             .documents
@@ -81,6 +81,7 @@ impl Workspace {
             .map(|(id, _)| id)
             .collect();
         let mut first_error = None;
+        let mut last_written = None;
         for id in modified {
             let Some(document) = self.documents.get_mut(id) else {
                 continue;
@@ -99,19 +100,25 @@ impl Workspace {
                     Message::save_failed(hidden.then_some(&*name), &error)
                 }
             };
-            if matches!(message, Message::Error(_)) {
-                first_error.get_or_insert(message);
-            } else {
-                self.message = Some(message);
+            if message.is_error() && first_error.is_none() {
+                first_error = Some(message);
+            } else if message.is_error() {
+                self.messages.record(message);
+            } else if let Some(previous) = last_written.replace(message) {
+                self.messages.record(previous);
             }
         }
-        match first_error {
-            Some(error) => {
-                self.message = Some(error);
-                false
+        if let Some(error) = first_error {
+            if let Some(written) = last_written {
+                self.messages.record(written);
             }
-            None => true,
+            self.messages.push(error);
+            return false;
         }
+        if let Some(written) = last_written {
+            self.messages.push(written);
+        }
+        true
     }
 }
 

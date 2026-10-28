@@ -36,7 +36,7 @@ fn shown(session: &Session) -> PathBuf {
 }
 
 fn error(session: &Session) -> Option<&str> {
-    match session.workspace.message() {
+    match session.workspace.messages().last() {
         Some(Message::Error(text)) => Some(text),
         _ => None,
     }
@@ -52,7 +52,10 @@ fn e_abre_otro_archivo_en_el_panel() {
     // Como vim con `hidden`, a.md queda oculto.
     assert_eq!(session.workspace.documents.iter().count(), 2);
     let opened = format!("\"{}\" 2L, 6B", path(&dir, "b.md").display());
-    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+    assert_eq!(
+        session.workspace.messages().last(),
+        Some(&Message::Info(opened))
+    );
 }
 
 #[test]
@@ -61,7 +64,10 @@ fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
     fs::write(path(&dir, "c.md"), "c1\nc2").unwrap();
     edit(&mut session, "e", &path(&dir, "c.md"));
     let opened = format!("\"{}\" [noeol] 2L, 5B", path(&dir, "c.md").display());
-    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+    assert_eq!(
+        session.workspace.messages().last(),
+        Some(&Message::Info(opened))
+    );
 }
 
 /// Vaciado en otro panel, ya no es lo que hay en disco: el aviso cuenta el buffer.
@@ -75,7 +81,10 @@ fn e_de_un_archivo_sin_salto_final_vaciado_en_otro_panel() {
     assert_eq!(shown(&session), path(&dir, "a.md"));
     edit(&mut session, "e", &path(&dir, "c.md"));
     let opened = format!("\"{}\" 0L, 0B", path(&dir, "c.md").display());
-    assert_eq!(session.workspace.message(), Some(&Message::Info(opened)));
+    assert_eq!(
+        session.workspace.messages().last(),
+        Some(&Message::Info(opened))
+    );
 }
 
 #[test]
@@ -514,7 +523,7 @@ fn set_con_una_opcion_desconocida_avisa() {
     let mut session = Session::new("uno\n");
     session.keys(":set list⏎");
     assert_eq!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(&Message::Error("E518: opción desconocida: list".to_owned()))
     );
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
@@ -908,4 +917,73 @@ fn focus_y_unfocus_los_pone_la_ventana() {
     session.keys(":focus #2024/10⏎");
     assert_eq!(error(&session), Some("`#2024/10` no es un tag válido"));
     assert_eq!(session.text(), "uno\n");
+}
+
+#[test]
+fn messages_abre_el_historial_y_dismiss_cierra_los_toasts() {
+    let mut session = Session::new("uno\n");
+    session.keys(":nada⏎");
+    assert_eq!(session.workspace.messages().toasts().len(), 1);
+    session.keys(":mes⏎");
+    assert_eq!(session.effect, Effect::OpenMessages);
+    let dismiss = Invocation {
+        action: Command::DismissMessages.into(),
+        argument: None,
+    };
+    session.effect = session.workspace.run(&dismiss, &mut session.clipboard);
+    assert_eq!(session.workspace.messages().toasts().len(), 0);
+    assert_eq!(
+        session.workspace.messages().history().count(),
+        2,
+        "con el de abrir"
+    );
+}
+
+/// `:wa` deja en un toast lo último escrito y lo demás en el historial.
+#[test]
+fn wa_muestra_un_solo_toast() {
+    let (dir, mut session) = two_files();
+    session.keys("ix⎋");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("iy⎋:wa⏎");
+    let toasts = session.workspace.messages().toasts();
+    assert_eq!(toasts.len(), 1, "{toasts:?}");
+    assert!(toasts[0].1.text().ends_with("escritos"));
+    let written = session
+        .workspace
+        .messages()
+        .history()
+        .filter(|(_, message)| message.text().ends_with("escritos"))
+        .count();
+    assert_eq!(written, 2);
+}
+
+/// Con dos que no se pueden guardar, el toast es el primero y los dos
+/// quedan en `:messages`.
+#[test]
+fn wa_anota_cada_error() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (dir, mut session) = two_files();
+    session.keys("ix⎋");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("iy⎋");
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+    session.keys(":wa⏎");
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+    let toasts = session.workspace.messages().toasts();
+    assert_eq!(toasts.len(), 1, "{toasts:?}");
+    let errors: Vec<&str> = session
+        .workspace
+        .messages()
+        .history()
+        .filter(|(_, message)| message.is_error())
+        .map(|(_, message)| message.text())
+        .collect();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert_eq!(
+        errors[0],
+        toasts[0].1.text(),
+        "el toast es el primero, que se anota al final"
+    );
 }

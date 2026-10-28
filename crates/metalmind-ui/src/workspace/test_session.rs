@@ -228,7 +228,7 @@ impl Session {
             })
             .collect();
         windows.sort();
-        let error = match self.workspace.message() {
+        let error = match self.workspace.messages().last() {
             Some(Message::Error(text)) => text.replace(&format!("{}/", dir.display()), ""),
             _ => String::new(),
         };
