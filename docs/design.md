@@ -65,7 +65,7 @@ Lo que decide cada componente queda por escribir: cada sección se llena cuando 
 
 ### Toasts de avisos
 
-Arriba a la derecha, sobre todo lo demás, con el fondo y el radio del picker y el borde del menú: un ícono por nivel (`●` información, `▲` advertencia, `◆` error, cada uno con su color), el texto entero partido en líneas y `esc`, apagado, a la derecha. La información dura 4 s, las advertencias 8 s y los errores hasta que se cierran (un clic, `esc` en Normal); `:messages` los lista en el picker. Detalles en [03 §"Estado (avisos en toasts…)"](research/03-core-architecture.md).
+Arriba a la derecha, sobre los paneles y bajo un picker abierto, con el fondo y el radio del picker y el borde del menú: un ícono por nivel (`●` información, `▲` advertencia, `◆` error, cada uno con su color), el texto entero partido en líneas y `esc`, apagado, a la derecha. La información dura 4 s, las advertencias 8 s y los errores hasta que se cierran (un clic, `esc` en Normal); `:messages` los lista en el picker. Detalles en [03 §"Estado (avisos en toasts…)"](research/03-core-architecture.md).
 
 ### Margen de números (gutter)
 

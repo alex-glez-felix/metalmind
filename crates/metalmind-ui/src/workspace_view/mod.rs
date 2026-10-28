@@ -3,8 +3,8 @@
 //! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
 //! workspace y en el panel; aquí solo se crean y sueltan editores y se
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
-//! abierto, el finder, la búsqueda de texto o la paleta, y arriba a la
-//! derecha, los toasts de los avisos.
+//! abierto, el finder, la búsqueda de texto o la paleta, que tapa los toasts
+//! de los avisos, arriba a la derecha.
 
 mod autosave;
 mod finder;
@@ -490,7 +490,7 @@ impl Render for WorkspaceView {
                     .h_full()
                     .child(self.render_node(&root, &theme)),
             )
-            .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
             .children(self.render_toasts(&theme, cx))
+            .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }
 }

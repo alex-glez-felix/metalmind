@@ -676,7 +676,7 @@ Las metas de rendimiento de cada hito se juntan, con su justificación y los nú
 - **Niveles**: `Message` es `Info`, `Warning` o `Error`, con un ícono por nivel (`●`, `▲`, `◆`: no solo el color) y cuánto dura su toast: 4 s la información, 8 s las advertencias (`W12`, el watcher sin inotify) y los errores hasta que se cierran.
 - **Cerrar**: un clic cierra ese toast; `esc` en Normal, donde vim solo suelta lo pendiente, los cierra todos (lo decide el `Workspace` al ver `vim::normal_mode` desde Normal: un atajo propio pisaría el del motor), y también `messages::dismiss` desde la paleta. Cada toast muestra `esc` a la derecha.
 - **Historial**: `:messages` (`:mes`, `messages::show`) lo abre en el picker de siempre, del más nuevo al más viejo, con su nivel a la derecha; el elegido vuelve a verse en un toast, entero.
-- **La ventana** (`workspace_view/toasts.rs`) pinta los toasts sobre todo lo demás, también sobre un picker abierto, y pone un temporizador por toast que se cierra solo. Los colores y medidas son del tema: `ui.toast_*` y `layout.toast_*` ([config.md](../config.md)).
+- **La ventana** (`workspace_view/toasts.rs`) pinta los toasts sobre los paneles y debajo de un picker abierto, que es modal, y pone un temporizador por toast que se cierra solo. Los colores y medidas son del tema: `ui.toast_*` y `layout.toast_*` ([config.md](../config.md)).
 - Smoke en Xvfb: `los_avisos_salen_en_toasts_que_se_cierran`.
 
 ### Estado (M2, panel lateral y árbol de carpetas, 2026-10-18)
