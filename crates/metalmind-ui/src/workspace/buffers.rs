@@ -100,8 +100,10 @@ impl Workspace {
                     Message::save_failed(hidden.then_some(&*name), &error)
                 }
             };
-            if message.is_error() {
-                first_error.get_or_insert(message);
+            if message.is_error() && first_error.is_none() {
+                first_error = Some(message);
+            } else if message.is_error() {
+                self.messages.record(message);
             } else if let Some(previous) = last_written.replace(message) {
                 self.messages.record(previous);
             }

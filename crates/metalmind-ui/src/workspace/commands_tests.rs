@@ -942,8 +942,10 @@ fn messages_abre_el_historial_y_dismiss_cierra_los_toasts() {
 /// `:wa` deja en un toast lo último escrito y lo demás en el historial.
 #[test]
 fn wa_muestra_un_solo_toast() {
-    let (_dir, mut session) = two_files();
-    session.keys("ix⎋:e b.md⏎iy⎋:wa⏎");
+    let (dir, mut session) = two_files();
+    session.keys("ix⎋");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("iy⎋:wa⏎");
     let toasts = session.workspace.messages().toasts();
     assert_eq!(toasts.len(), 1, "{toasts:?}");
     assert!(toasts[0].1.text().ends_with("escritos"));
@@ -954,4 +956,34 @@ fn wa_muestra_un_solo_toast() {
         .filter(|(_, message)| message.text().ends_with("escritos"))
         .count();
     assert_eq!(written, 2);
+}
+
+/// Con dos que no se pueden guardar, el toast es el primero y los dos
+/// quedan en `:messages`.
+#[test]
+fn wa_anota_cada_error() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let (dir, mut session) = two_files();
+    session.keys("ix⎋");
+    edit(&mut session, "e", &path(&dir, "b.md"));
+    session.keys("iy⎋");
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+    session.keys(":wa⏎");
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+    let toasts = session.workspace.messages().toasts();
+    assert_eq!(toasts.len(), 1, "{toasts:?}");
+    let errors: Vec<&str> = session
+        .workspace
+        .messages()
+        .history()
+        .filter(|(_, message)| message.is_error())
+        .map(|(_, message)| message.text())
+        .collect();
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert_eq!(
+        errors[0],
+        toasts[0].1.text(),
+        "el toast es el primero, que se anota al final"
+    );
 }

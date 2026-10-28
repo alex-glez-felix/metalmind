@@ -60,7 +60,7 @@ pub use self::link_typing::TypedLink;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
-pub use self::messages::{MessageId, Messages};
+pub use self::messages::{MessageId, Messages, ToastId};
 pub use self::options::PaneOptions;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
@@ -291,9 +291,9 @@ impl Workspace {
         self.messages.push(message);
     }
 
-    /// Cierra el toast de `id`, como un clic en él.
-    pub fn dismiss_message(&mut self, id: MessageId) {
-        self.messages.dismiss(id);
+    /// Cierra ese toast, como un clic en él.
+    pub fn dismiss_toast(&mut self, toast: ToastId) {
+        self.messages.dismiss(toast);
     }
 
     /// Vuelve a mostrar en un toast uno del historial.

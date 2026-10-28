@@ -13,10 +13,10 @@ use super::WorkspaceView;
 use crate::theme::Theme;
 #[cfg(doc)]
 use crate::workspace::Workspace;
-use crate::workspace::{Message, MessageId};
+use crate::workspace::{Message, ToastId};
 
 /// El temporizador de cada toast que se cierra solo; soltarlo lo cancela.
-pub(super) type ToastTimers = HashMap<MessageId, Task<()>>;
+pub(super) type ToastTimers = HashMap<ToastId, Task<()>>;
 
 impl WorkspaceView {
     /// Un temporizador por toast que se ve y se cierra solo, ni uno más.
@@ -27,27 +27,27 @@ impl WorkspaceView {
             .messages()
             .toasts()
             .into_iter()
-            .map(|(id, message)| (id, message.lifetime()))
+            .map(|(toast, message)| (toast, message.lifetime()))
             .collect();
         self.toast_timers
-            .retain(|id, _| toasts.iter().any(|(shown, _)| shown == id));
-        for (id, lifetime) in toasts {
+            .retain(|toast, _| toasts.iter().any(|(shown, _)| shown == toast));
+        for (toast, lifetime) in toasts {
             let Some(lifetime) = lifetime else {
                 continue;
             };
-            self.toast_timers.entry(id).or_insert_with(|| {
+            self.toast_timers.entry(toast).or_insert_with(|| {
                 cx.spawn(async move |view, cx| {
                     cx.background_executor().timer(lifetime).await;
                     // Sin la vista, no queda toast que cerrar.
-                    let _ = view.update(cx, |view, cx| view.dismiss_toast(id, cx));
+                    let _ = view.update(cx, |view, cx| view.dismiss_toast(toast, cx));
                 })
             });
         }
     }
 
-    fn dismiss_toast(&mut self, id: MessageId, cx: &mut Context<Self>) {
+    fn dismiss_toast(&mut self, toast: ToastId, cx: &mut Context<Self>) {
         self.workspace.update(cx, |workspace, cx| {
-            workspace.dismiss_message(id);
+            workspace.dismiss_toast(toast);
             cx.notify();
         });
     }
@@ -65,10 +65,10 @@ impl WorkspaceView {
         let rows = toasts
             .into_iter()
             .enumerate()
-            .map(|(index, (id, message))| {
+            .map(|(index, (shown, message))| {
                 toast(message, theme)
                     .id(("toast", index))
-                    .on_click(cx.listener(move |view, _, _, cx| view.dismiss_toast(id, cx)))
+                    .on_click(cx.listener(move |view, _, _, cx| view.dismiss_toast(shown, cx)))
             });
         Some(
             div()

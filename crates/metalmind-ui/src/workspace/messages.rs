@@ -15,6 +15,11 @@ const TOASTS: usize = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MessageId(u64);
 
+/// Una vez que se muestra un aviso: volver a mostrarlo da otro, así su
+/// temporizador empieza de nuevo y el viejo ya no lo cierra.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ToastId(u64);
+
 #[derive(Debug, Default)]
 pub struct Messages {
     /// Del más viejo al más nuevo.
@@ -28,8 +33,8 @@ pub struct Messages {
 struct Logged {
     id: MessageId,
     message: Message,
-    /// Cuándo se abrió su toast, si se ve.
-    shown: Option<u64>,
+    /// Su toast, si se ve.
+    shown: Option<ToastId>,
 }
 
 impl Messages {
@@ -65,11 +70,11 @@ impl Messages {
     /// Vuelve a mostrar uno del historial, como el último toast.
     pub fn show(&mut self, id: MessageId) {
         self.shows += 1;
-        let order = self.shows;
+        let toast = ToastId(self.shows);
         let Some(logged) = self.log.iter_mut().find(|logged| logged.id == id) else {
             return;
         };
-        logged.shown = Some(order);
+        logged.shown = Some(toast);
         let mut shown: Vec<&mut Logged> = self
             .log
             .iter_mut()
@@ -84,9 +89,13 @@ impl Messages {
         }
     }
 
-    /// Cierra su toast; sigue en el historial.
-    pub fn dismiss(&mut self, id: MessageId) {
-        if let Some(logged) = self.log.iter_mut().find(|logged| logged.id == id) {
+    /// Cierra ese toast, si sigue abierto; el aviso sigue en el historial.
+    pub fn dismiss(&mut self, toast: ToastId) {
+        if let Some(logged) = self
+            .log
+            .iter_mut()
+            .find(|logged| logged.shown == Some(toast))
+        {
             logged.shown = None;
         }
     }
@@ -99,17 +108,14 @@ impl Messages {
 
     /// Los que se ven, del que se abrió antes al último.
     #[must_use]
-    pub fn toasts(&self) -> Vec<(MessageId, &Message)> {
-        let mut shown: Vec<&Logged> = self
+    pub fn toasts(&self) -> Vec<(ToastId, &Message)> {
+        let mut shown: Vec<(ToastId, &Message)> = self
             .log
             .iter()
-            .filter(|logged| logged.shown.is_some())
+            .filter_map(|logged| Some((logged.shown?, &logged.message)))
             .collect();
-        shown.sort_by_key(|logged| logged.shown);
+        shown.sort_by_key(|&(toast, _)| toast);
         shown
-            .into_iter()
-            .map(|logged| (logged.id, &logged.message))
-            .collect()
     }
 
     /// Todo lo anotado, del más nuevo al más viejo.
@@ -161,8 +167,9 @@ mod tests {
     #[test]
     fn cerrar_un_toast_lo_deja_en_el_historial() {
         let mut messages = Messages::default();
-        let uno = messages.push(info("uno"));
+        messages.push(info("uno"));
         messages.push(info("dos"));
+        let (uno, _) = messages.toasts()[0];
         messages.dismiss(uno);
         assert_eq!(shown(&messages), ["dos"]);
         let history: Vec<&str> = messages.history().map(|(_, m)| m.text()).collect();
@@ -201,6 +208,20 @@ mod tests {
         messages.show(viejo);
         messages.push(info("otro"));
         assert_eq!(shown(&messages), ["viejo", "otro"]);
+    }
+
+    #[test]
+    fn volver_a_mostrar_uno_que_se_ve_lo_vuelve_otro_toast() {
+        let mut messages = Messages::default();
+        let id = messages.push(info("uno"));
+        let (antes, _) = messages.toasts()[0];
+        messages.show(id);
+        let (ahora, _) = messages.toasts()[0];
+        assert_ne!(antes, ahora);
+        messages.dismiss(antes);
+        assert_eq!(shown(&messages), ["uno"], "el toast viejo ya no lo cierra");
+        messages.dismiss(ahora);
+        assert_eq!(messages.toasts().len(), 0);
     }
 
     #[test]
