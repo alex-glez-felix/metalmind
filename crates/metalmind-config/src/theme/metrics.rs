@@ -212,9 +212,8 @@ metric_group! {
         /// Entre los campos de la barra de estado.
         status_gap: Length,
         /// La fracción del espacio entre el modo y la posición que puede ocupar
-        /// el mensaje de la barra de estado: hasta ahí se lee entero y el nombre
-        /// de la nota se recorta antes.
-        status_message_max_width: Fraction,
+        /// el indicador del focus en la barra de estado.
+        status_focus_max_width: Fraction,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,
@@ -268,6 +267,14 @@ metric_group! {
         completion_rows: Count,
         tooltip_padding_x: Length,
         tooltip_padding_y: Length,
+        /// El ancho de un toast; el texto se parte en líneas.
+        toast_width: Length,
+        /// Entre los toasts y los bordes de arriba y derecho de la ventana.
+        toast_margin: Length,
+        /// Entre un toast y otro, y entre su ícono, su texto y su tecla.
+        toast_gap: Length,
+        toast_padding_x: Length,
+        toast_padding_y: Length,
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
         gutter_mark_columns: MarkColumns,

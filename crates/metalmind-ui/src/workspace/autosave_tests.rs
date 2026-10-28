@@ -72,7 +72,7 @@ impl Autosaving {
     }
 
     fn message(&self) -> Option<&Message> {
-        self.session.workspace.message()
+        self.session.workspace.messages().last()
     }
 
     /// El watcher avisa que `name` cambió en disco.
@@ -240,7 +240,7 @@ fn no_pisa_lo_que_cambio_en_disco() {
         "W12: Warning: File \"{}\" has changed and the buffer was changed in Vim as well",
         autosaving.path("a.md").display()
     );
-    assert_eq!(autosaving.message(), Some(&Message::Error(w12)));
+    assert_eq!(autosaving.message(), Some(&Message::Warning(w12)));
     assert_eq!(autosaving.state(), Some(SaveState::ChangedOnDisk));
 
     // Ni el autoguardado ni `:w` lo pisan; `:w!` sí.
@@ -270,7 +270,9 @@ fn el_watcher_avisa_antes_del_autoguardado_y_e_bang_trae_lo_de_disco() {
     autosaving.session.keys("Ax⎋");
     fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
     autosaving.modified_on_disk("a.md");
-    assert!(matches!(autosaving.message(), Some(Message::Error(text)) if text.starts_with("W12")));
+    assert!(
+        matches!(autosaving.message(), Some(Message::Warning(text)) if text.starts_with("W12"))
+    );
     autosaving.wait(SECOND);
     assert!(
         !autosaving.tick(),
@@ -370,7 +372,7 @@ fn si_escribir_falla_se_reintenta_sin_otra_edicion() {
     autosaving
         .session
         .workspace
-        .set_message(Message::Info("otro aviso".to_owned()));
+        .show_message(Message::Info("otro aviso".to_owned()));
     autosaving.wait(SECOND * 5);
     assert!(autosaving.tick());
     assert_eq!(
@@ -423,7 +425,9 @@ fn un_cambio_de_fuera_a_mitad_de_un_insert_no_rompe_lo_que_se_escribe() {
     assert!(autosaving.tick());
     fs::write(autosaving.path("a.md"), "de fuera\n").unwrap();
     autosaving.modified_on_disk("a.md");
-    assert!(matches!(autosaving.message(), Some(Message::Error(text)) if text.starts_with("W12")));
+    assert!(
+        matches!(autosaving.message(), Some(Message::Warning(text)) if text.starts_with("W12"))
+    );
     autosaving.session.keys("y⎋");
     assert_eq!(autosaving.session.text(), "xyuno");
     assert_eq!(autosaving.state(), Some(SaveState::ChangedOnDisk));
@@ -482,7 +486,7 @@ fn guardar_una_copia_no_olvida_que_el_autoguardado_falla() {
     autosaving
         .session
         .workspace
-        .set_message(Message::Info("otro aviso".to_owned()));
+        .show_message(Message::Info("otro aviso".to_owned()));
     autosaving.wait(SECOND * 5);
     assert!(autosaving.tick());
     assert_eq!(

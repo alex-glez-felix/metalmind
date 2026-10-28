@@ -135,7 +135,8 @@ impl Workspace {
                 LinkSubpath::Heading(heading) => format!("#{heading}"),
                 LinkSubpath::Block(id) => format!("#^{id}"),
             };
-            self.message = Some(Message::Error(format!("la nota no tiene {name}")));
+            self.messages
+                .push(Message::Error(format!("la nota no tiene {name}")));
             return Ok(());
         };
         self.edit_pane(self.focused(), None, |vim, target| {
@@ -147,7 +148,7 @@ impl Workspace {
     }
 
     fn not_followed(&mut self, why: &str) -> Effect {
-        self.message = Some(Message::Error(why.to_owned()));
+        self.messages.push(Message::Error(why.to_owned()));
         Effect::Stay
     }
 }

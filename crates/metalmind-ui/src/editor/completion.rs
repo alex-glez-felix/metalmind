@@ -251,7 +251,7 @@ impl Editor {
                     })
                 } else {
                     let message = Message::unnameable(list.accept().as_str());
-                    self.update_workspace(cx, |workspace, _, _| workspace.set_message(message));
+                    self.update_workspace(cx, |workspace, _, _| workspace.show_message(message));
                     Ok(())
                 }
             }

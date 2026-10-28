@@ -62,6 +62,12 @@ Theme {
         menu_background: #f5f6f8,
         menu_border: #d2d6dc,
         menu_hover: #2e5cd6 α0.15,
+        toast_background: #e6e8ec,
+        toast_border: #d2d6dc,
+        toast_info: #2e5cd6,
+        toast_warning: #8f6400,
+        toast_error: #c4304f,
+        toast_hint: #5f6670,
     },
     cursor: CursorColors {
         normal: #2e5cd6 α0.4,
@@ -207,7 +213,7 @@ Theme {
             status_gap: Length(
                 16.0,
             ),
-            status_message_max_width: Fraction(
+            status_focus_max_width: Fraction(
                 0.5,
             ),
             picker_width: Length(
@@ -290,6 +296,21 @@ Theme {
             ),
             tooltip_padding_y: Length(
                 4.0,
+            ),
+            toast_width: Length(
+                400.0,
+            ),
+            toast_margin: Length(
+                12.0,
+            ),
+            toast_gap: Length(
+                8.0,
+            ),
+            toast_padding_x: Length(
+                12.0,
+            ),
+            toast_padding_y: Length(
+                8.0,
             ),
             gutter_mark_columns: MarkColumns(
                 3,

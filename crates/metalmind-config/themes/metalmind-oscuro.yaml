@@ -81,6 +81,12 @@ ui:
   menu_background: raised
   menu_border: border_strong
   menu_hover: { color: accent, alpha: 0.25 }
+  toast_background: surface
+  toast_border: border_strong
+  toast_info: accent
+  toast_warning: warning
+  toast_error: danger
+  toast_hint: text_muted
 
 cursor:
   # El bloque deja ver el carácter que tapa.
@@ -168,7 +174,7 @@ layout:
   status_padding_x: 10
   status_padding_y: 3
   status_gap: lg
-  status_message_max_width: 0.5  # entre el modo y la posición; el nombre se recorta antes
+  status_focus_max_width: 0.5  # el focus, del espacio entre el modo y la posición
   picker_width: 640
   picker_top: 64
   picker_rows: 12
@@ -196,6 +202,11 @@ layout:
   completion_rows: 8
   tooltip_padding_x: sm
   tooltip_padding_y: xs
+  toast_width: 400
+  toast_margin: md     # del borde de arriba y del derecho de la ventana
+  toast_gap: sm        # entre toasts, y entre el ícono, el texto y la tecla
+  toast_padding_x: md
+  toast_padding_y: sm
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio
   math_padding: 1
   math_block_margin: xs

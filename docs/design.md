@@ -61,7 +61,11 @@ Lo que decide cada componente queda por escribir: cada sección se llena cuando 
 
 ### Barra de estado
 
-*Por decidir.*
+*Por decidir.* Lleva el modo, la nota, su indicador, el focus y la posición; los avisos van en toasts.
+
+### Toasts de avisos
+
+Arriba a la derecha, sobre todo lo demás, con el fondo y el radio del picker y el borde del menú: un ícono por nivel (`●` información, `▲` advertencia, `◆` error, cada uno con su color), el texto entero partido en líneas y `esc`, apagado, a la derecha. La información dura 4 s, las advertencias 8 s y los errores hasta que se cierran (un clic, `esc` en Normal); `:messages` los lista en el picker. Detalles en [03 §"Estado (avisos en toasts…)"](research/03-core-architecture.md).
 
 ### Margen de números (gutter)
 
@@ -84,6 +88,6 @@ Lo que decide cada componente queda por escribir: cada sección se llena cuando 
   - si la PR arregla o cambia algo visual, capturas de **antes y después** y el diff de imagen, también en los dos tamaños y los dos temas.
 
   Sin capturas, la PR no se mergea.
-- **`scripts/capturas.sh`** las toma todas: abre cada pantalla (editor con markdown y al final de la nota larga, árbol con rutas hondas, menú contextual en medio y junto al borde de abajo, split, línea de comandos, finder con resultados, filtrado, con una ruta larga y vacío, búsqueda de texto con resultados, vacía y con texto en japonés detrás de la elipsis, paleta, y la jumplist y las marks de una sesión anterior al abrir, tras `ctrl-o` y tras `'B`, en `capturas/saltos.rs`) en un Xvfb propio, sobre un vault de fixtures que estresa el layout (`crates/metalmind/tests/capturas/vault.rs`), en los dos temas y los dos tamaños, y deja los PNG en `target/capturas/`. Es el test `capturas` de `metalmind`; necesita lo mismo que el smoke ([testing](testing.md#correrlo-en-local)). Una pantalla nueva es una línea más en `SCENES` (`crates/metalmind/tests/capturas.rs`); una UI nueva que abra algo cerca de un borde (un tooltip, un menú) suma su escena ahí.
+- **`scripts/capturas.sh`** las toma todas: abre cada pantalla (editor con markdown y al final de la nota larga, árbol con rutas hondas, menú contextual en medio y junto al borde de abajo, split, línea de comandos, toasts de avisos y su historial, finder con resultados, filtrado, con una ruta larga y vacío, búsqueda de texto con resultados, vacía y con texto en japonés detrás de la elipsis, paleta, y la jumplist y las marks de una sesión anterior al abrir, tras `ctrl-o` y tras `'B`, en `capturas/saltos.rs`) en un Xvfb propio, sobre un vault de fixtures que estresa el layout (`crates/metalmind/tests/capturas/vault.rs`), en los dos temas y los dos tamaños, y deja los PNG en `target/capturas/`. Es el test `capturas` de `metalmind`; necesita lo mismo que el smoke ([testing](testing.md#correrlo-en-local)). Una pantalla nueva es una línea más en `SCENES` (`crates/metalmind/tests/capturas.rs`); una UI nueva que abra algo cerca de un borde (un tooltip, un menú) suma su escena ahí.
 - **Antes y después**: el script corrido en la base deja el "antes"; en la rama, `scripts/capturas.sh target/despues --antes target/capturas` compara cada par, deja `diff-*.png` con lo que cambió en rojo, un `resumen.md` y `titulos.txt` con el título de la ventana en cada pantalla (sin gestor de ventanas, la captura no lo muestra), y sale con error si cambió algún píxel. Un refactor que no debería cambiar nada tiene que dar 0.
 - Las capturas que van en la PR se suben a `docs/capturas/<tema-de-la-pr>/` en la rama y se enlazan por commit (`https://raw.githubusercontent.com/alex-glez-felix/metalmind/<commit>/docs/capturas/…`).

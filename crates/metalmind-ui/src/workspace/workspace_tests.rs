@@ -359,24 +359,25 @@ fn solo_el_panel_con_el_foco_dice_que_se_graba_una_macro() {
 }
 
 #[test]
-fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa_en_la_barra() {
+fn la_busqueda_se_escribe_tras_su_simbolo_y_avisa() {
     let mut session = Session::new("uno\ndos\nuno\n");
     session.keys("?un");
     let line = session.view(session.pane()).command_line.unwrap();
     assert_eq!((line.prompt.symbol(), line.typed), ('?', "un"));
     session.keys("⎋/nada⏎");
     assert_eq!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(&Message::Error("E486: Pattern not found: nada".to_owned()))
     );
     session.keys("G/uno⏎");
     assert!(matches!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(Message::Info(_))
     ));
     assert_eq!(session.cursor(), ByteOffset::ZERO);
+    let mark = session.workspace.messages().mark();
     session.keys("n");
-    assert_eq!(session.workspace.message(), None);
+    assert_eq!(session.workspace.messages().since(mark).count(), 0);
     assert_eq!(session.cursor(), ByteOffset::new(8));
 }
 
@@ -385,7 +386,7 @@ fn un_global_sin_lineas_avisa_sin_error() {
     let mut session = Session::new("uno\ndos\n");
     session.keys(":g/tres/d⏎");
     assert_eq!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(&Message::Info("Pattern not found: tres".to_owned()))
     );
     session.keys(":g/o/d⏎");
@@ -415,8 +416,31 @@ fn un_comando_que_falla_corta_la_macro() {
     assert_eq!(session.text(), "c\n");
     session.keys("@a");
     assert!(matches!(
-        session.workspace.message(),
+        session.workspace.messages().last(),
         Some(Message::Error(_))
     ));
     assert_eq!(session.text(), "c\n");
+}
+
+#[test]
+fn esc_en_normal_cierra_los_toasts_y_en_insert_no() {
+    let mut session = Session::new("uno\n");
+    session.keys(":nada⏎");
+    session.keys("i⎋");
+    assert_eq!(
+        session.workspace.messages().toasts().len(),
+        1,
+        "esc sale de Insert"
+    );
+    session.keys("3⎋");
+    assert_eq!(session.workspace.messages().toasts().len(), 0);
+    assert!(
+        session
+            .workspace
+            .messages()
+            .last()
+            .is_some_and(Message::is_error)
+    );
+    session.keys("j");
+    assert_eq!(session.mode(), Mode::Normal, "y el 3 se soltó");
 }

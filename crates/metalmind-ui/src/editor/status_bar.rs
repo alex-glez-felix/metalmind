@@ -1,7 +1,8 @@
 //! Barra de estado de un panel: modo, si se graba una macro, archivo, `[+]`
-//! si hay cambios sin guardar (o, con autoguardado, si está guardado), el
-//! último mensaje o la línea de comandos, el focus y la posición del cursor. Modo,
-//! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
+//! si hay cambios sin guardar (o, con autoguardado, si está guardado), la
+//! línea de comandos, el focus y la posición del cursor. Modo, macro y
+//! línea de comandos solo los muestra el panel con el foco; los avisos van
+//! en toasts.
 //! Sobre la línea de comandos va la lista del autocompletado de su argumento.
 
 use gpui_kit::{
@@ -12,7 +13,7 @@ use metalmind_vim::{Mode, VisualKind};
 
 use crate::focus_indicator::focus_indicator;
 use crate::theme::Theme;
-use crate::workspace::{Message, SaveState};
+use crate::workspace::SaveState;
 
 /// Lo que muestra la barra, ya calculado por el editor.
 #[derive(Clone, Debug)]
@@ -27,7 +28,6 @@ pub struct Status {
     /// apagado.
     pub save: Option<SaveState>,
     pub command_line: Option<CommandLine>,
-    pub message: Option<Message>,
     /// Línea y columna en caracteres, desde 1.
     pub position: (usize, usize),
     /// `focus: #rust`, si hay focus.
@@ -45,19 +45,16 @@ pub struct CommandLine {
 /// Lo que va entre el modo y la posición.
 #[derive(Debug, PartialEq)]
 enum Middle {
-    /// La nota, su indicador y el último aviso, si hay.
-    Note(Option<Message>),
+    /// La nota y su indicador.
+    Note,
     /// Lo que se teclea tras `:`, `/` o `?`: ocupa todo el medio, como la
-    /// línea de comandos de vim, sin el límite de un aviso.
+    /// línea de comandos de vim.
     Typing(CommandLine),
 }
 
 impl Middle {
-    fn of(command_line: Option<CommandLine>, message: Option<Message>) -> Self {
-        match command_line {
-            Some(line) => Self::Typing(line),
-            None => Self::Note(message),
-        }
+    fn of(command_line: Option<CommandLine>) -> Self {
+        command_line.map_or(Self::Note, Self::Typing)
     }
 }
 
@@ -89,14 +86,14 @@ pub fn status_bar(status: Status, menu: Option<AnyElement>, theme: &Theme) -> Di
         .when_some(status.recording, |bar, register| {
             bar.child(fixed().child(format!("grabando @{register}")))
         })
-        .child(match Middle::of(status.command_line, status.message) {
+        .child(match Middle::of(status.command_line) {
             Middle::Typing(line) => command_line(line, menu, theme),
-            Middle::Note(message) => note(status.file, mark, message, theme),
+            Middle::Note => note(status.file, mark),
         })
         .children(status.focus.map(|label| {
             focus_indicator("status-focus", label, theme)
                 .flex_none()
-                .max_w(relative(theme.layout.status_message_max_width))
+                .max_w(relative(theme.layout.status_focus_max_width))
         }))
         .child(fixed().child(format!("{line}:{column}")))
 }
@@ -106,13 +103,11 @@ fn fixed() -> Div {
     div().flex_shrink_0().whitespace_nowrap()
 }
 
-/// Entre el modo y la posición: el nombre de la nota, el indicador (o el
-/// `[+]`) y el mensaje. El mensaje no cede: mide lo que dice, hasta su parte
-/// de este espacio, y se lee entero; el nombre toma lo que queda y se
-/// recorta por el medio, para que se vean el principio y la extensión. La
-/// barra es de una sola línea; en un panel más angosto que lo mínimo, se
-/// recorta el final sin salirse.
-fn note(file: SharedString, mark: Option<Div>, message: Option<Message>, theme: &Theme) -> Div {
+/// Entre el modo y la posición: el nombre de la nota y el indicador (o el
+/// `[+]`). El nombre se recorta por el medio, para que se vean el principio
+/// y la extensión. La barra es de una sola línea; en un panel más angosto
+/// que lo mínimo, se recorta el final sin salirse.
+fn note(file: SharedString, mark: Option<Div>) -> Div {
     div()
         .flex()
         .flex_row()
@@ -128,13 +123,6 @@ fn note(file: SharedString, mark: Option<Div>, message: Option<Message>, theme: 
                 .child(file),
         )
         .children(mark)
-        .children(message.map(|message| {
-            message_line(message, theme)
-                .flex_shrink_0()
-                .max_w(relative(theme.layout.status_message_max_width))
-                .ml(theme.layout.status_gap)
-                .truncate()
-        }))
 }
 
 /// Sin animación ni un "guardando…" entre medio: solo cambia de texto.
@@ -201,13 +189,6 @@ fn command_line(line: CommandLine, menu: Option<AnyElement>, theme: &Theme) -> D
         )
 }
 
-fn message_line(message: Message, theme: &Theme) -> Div {
-    match message {
-        Message::Info(text) => div().child(text),
-        Message::Error(text) => div().text_color(theme.ui.error).child(text),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use metalmind_vim::Prompt;
@@ -215,22 +196,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lo_que_se_teclea_ocupa_todo_el_medio_sin_el_limite_de_un_aviso() {
+    fn lo_que_se_teclea_ocupa_todo_el_medio() {
         let line = CommandLine {
             symbol: ':',
             typed: "una línea de comandos larga".to_owned(),
             preedit: String::new(),
         };
-        let message = Message::Info("un aviso".to_owned());
-        assert_eq!(
-            Middle::of(Some(line.clone()), Some(message.clone())),
-            Middle::Typing(line)
-        );
-        assert_eq!(
-            Middle::of(None, Some(message.clone())),
-            Middle::Note(Some(message))
-        );
-        assert_eq!(Middle::of(None, None), Middle::Note(None));
+        assert_eq!(Middle::of(Some(line.clone())), Middle::Typing(line));
+        assert_eq!(Middle::of(None), Middle::Note);
     }
 
     #[test]

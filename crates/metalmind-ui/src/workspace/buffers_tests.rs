@@ -34,7 +34,7 @@ fn shown(session: &Session) -> PathBuf {
 }
 
 fn error(session: &Session) -> Option<&str> {
-    match session.workspace.message() {
+    match session.workspace.messages().last() {
         Some(Message::Error(text)) => Some(text),
         _ => None,
     }
@@ -97,10 +97,10 @@ fn muestra_en_el_panel_que_le_digan_y_devuelve_el_documento() {
 fn mostrar_la_nota_del_panel_no_hace_nada() {
     let (dir, mut session) = three_files();
     session.keys("x");
-    let before = session.workspace.message().cloned();
+    let before = session.workspace.messages().last().cloned();
     show(&mut session, &path(&dir, "a.md"));
     assert_eq!(session.text(), "1\na2");
-    assert_eq!(session.workspace.message(), before.as_ref());
+    assert_eq!(session.workspace.messages().last(), before.as_ref());
 }
 
 /// Lo que estuviera a medias termina como con `ctrl-c`, también al

@@ -27,7 +27,7 @@ pub(in crate::workspace) fn vault_session(
 }
 
 fn error(session: &Session) -> Option<String> {
-    match session.workspace.message() {
+    match session.workspace.messages().last() {
         Some(Message::Error(text)) => Some(text.clone()),
         _ => None,
     }

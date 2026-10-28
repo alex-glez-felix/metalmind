@@ -46,7 +46,7 @@ impl Workspace {
                 Some(id)
             }
             Err(error) => {
-                self.message = Some(Message::Error(error.to_string()));
+                self.messages.push(Message::Error(error.to_string()));
                 None
             }
         }
@@ -76,7 +76,7 @@ impl Workspace {
         // El tamaño es del panel, como en vim: quien mueva el cursor antes
         // del próximo layout ya ve la ventana con su alto.
         shown.state.viewport.resize(height, row);
-        self.message = Some(Message::opened(self.document(id)?));
+        self.messages.record(Message::opened(self.document(id)?));
         self.vim.cursor_moved();
         if let Some(old) = self.panes.insert(pane, shown) {
             let left = old.document;

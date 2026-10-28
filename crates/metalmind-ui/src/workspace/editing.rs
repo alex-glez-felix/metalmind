@@ -25,9 +25,11 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, WorkspaceError> {
         self.focus(pane)?;
+        let before = self.vim.mode();
         let outcome = self.edit_pane(pane, Some(&mut *clipboard), |vim, target| {
             Ok(vim.feed(key, target)?)
         })?;
+        self.dismiss_on_escape(before, &outcome);
         self.note(&outcome);
         self.settle(outcome, clipboard)
     }
@@ -44,9 +46,11 @@ impl Workspace {
         clipboard: &mut dyn Clipboard,
     ) -> Result<KeyOutcome, WorkspaceError> {
         self.focus(pane)?;
+        let before = self.vim.mode();
         let outcome = self.edit_pane(pane, Some(&mut *clipboard), |vim, target| {
             Ok(vim.execute(action, target)?)
         })?;
+        self.dismiss_on_escape(before, &outcome);
         self.note(&outcome);
         self.settle(outcome, clipboard)
     }
@@ -87,24 +91,28 @@ impl Workspace {
         }
     }
 
-    /// El aviso que deja una tecla. Abrir la línea de comandos o encontrar
-    /// lo buscado borra el anterior; lo demás no lo toca.
+    /// `esc` en Normal, donde vim solo suelta lo pendiente, cierra también
+    /// los toasts.
+    fn dismiss_on_escape(&mut self, before: Mode, outcome: &KeyOutcome) {
+        if before == Mode::Normal && *outcome == KeyOutcome::Executed(Action::NormalMode) {
+            self.messages.dismiss_all();
+        }
+    }
+
+    /// El aviso que deja una tecla.
     fn note(&mut self, outcome: &KeyOutcome) {
-        self.message = match outcome {
-            KeyOutcome::Executed(
-                Action::CommandLine
-                | Action::Search { .. }
-                | Action::SubmitCommand
-                | Action::SearchNext { .. }
-                | Action::SearchWord { .. },
-            ) => None,
-            KeyOutcome::InvalidCommand(error) => Some(Message::Error(error.to_string())),
-            KeyOutcome::SearchFailed(error) => Some(Message::Error(error.to_string())),
-            KeyOutcome::SearchWrapped(wrap) => Some(Message::wrapped(*wrap)),
-            KeyOutcome::Substituted(substitution) => Message::substituted(*substitution),
-            KeyOutcome::GlobalMissed(miss) => Some(Message::Info(miss.to_string())),
+        let message = match outcome {
+            KeyOutcome::InvalidCommand(error) => Message::Error(error.to_string()),
+            KeyOutcome::SearchFailed(error) => Message::Error(error.to_string()),
+            KeyOutcome::SearchWrapped(wrap) => Message::wrapped(*wrap),
+            KeyOutcome::Substituted(substitution) => match Message::substituted(*substitution) {
+                Some(message) => message,
+                None => return,
+            },
+            KeyOutcome::GlobalMissed(miss) => Message::Info(miss.to_string()),
             _ => return,
         };
+        self.messages.push(message);
     }
 
     /// Texto ya compuesto por el teclado o el IME: cada carácter entra al

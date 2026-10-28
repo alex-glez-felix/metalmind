@@ -52,7 +52,8 @@ impl Workspace {
                     let name = gone.map_or_else(String::new, |path| {
                         format!(": {}", shown_path(&path).display())
                     });
-                    self.message = Some(Message::Error(format!("el archivo ya no existe{name}")));
+                    self.messages
+                        .push(Message::Error(format!("el archivo ya no existe{name}")));
                     false
                 }
             },
@@ -129,7 +130,7 @@ impl Workspace {
         let noticed = document.changed_on_disk();
         match document.check_disk() {
             Ok(true) if !noticed => {
-                self.message = Some(Message::changed_on_disk(document));
+                self.messages.push(Message::changed_on_disk(document));
             }
             Ok(_) => {}
             Err(error) => log::warn!("no se releyó {}: {error}", document.display_name()),
