@@ -236,13 +236,13 @@ fn split_name(typed: &str) -> (&str, &str) {
 }
 
 /// `typed` es `full` recortado a `min` letras o más, conservando el `!`.
-fn abbreviates(typed: &str, full: &str, min: usize) -> bool {
+pub(crate) fn abbreviates(typed: &str, full: &str, min: usize) -> bool {
     let (typed, typed_bang) = split_bang(typed);
     let (full, full_bang) = split_bang(full);
     typed_bang == full_bang && typed.len() >= min && full.starts_with(typed)
 }
 
-fn split_bang(name: &str) -> (&str, bool) {
+pub(crate) fn split_bang(name: &str) -> (&str, bool) {
     name.strip_suffix('!')
         .map_or((name, false), |name| (name, true))
 }

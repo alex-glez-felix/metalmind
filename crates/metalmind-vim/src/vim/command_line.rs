@@ -1,12 +1,16 @@
 //! La línea donde se escribe tras `:`, `/` o `?`: editarla, recorrer su
 //! historial y enviarla.
 
+use std::ops::Range;
+
 use super::Vim;
-use crate::Target;
 use crate::argument::{ArgumentWord, argument_words};
 use crate::command::argument_start;
+use crate::command_names::names_starting_with;
+use crate::ex::{LineRange, skip_blanks};
 use crate::history::History;
 use crate::{ActionName, KeyOutcome, Mode, Prompt, VimError};
+use crate::{CommandName, Target};
 
 /// La palabra que se escribe en el argumento de un comando ajeno, para
 /// autocompletarla.
@@ -15,6 +19,20 @@ pub struct TypedArgument {
     pub action: ActionName,
     /// La última, con su rango en bytes de la línea; tras un espacio, vacía.
     pub word: ArgumentWord,
+}
+
+/// Lo que se escribe tras `:` fuera del argumento de un comando, para
+/// autocompletarlo.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TypedCommand {
+    /// Nada todavía: lo enviado antes, de lo más nuevo a lo más viejo.
+    Empty { history: Vec<String> },
+    /// El nombre del comando, tras su rango si lo hay: `range` son sus
+    /// bytes en la línea y `names`, los que empiezan con él.
+    Name {
+        range: Range<usize>,
+        names: Vec<CommandName>,
+    },
 }
 
 impl Vim {
@@ -66,6 +84,49 @@ impl Vim {
             return;
         };
         self.command_line.truncate(typed.word.range.start);
+        self.type_in_command_line(text);
+    }
+
+    /// Lo que se escribe tras `:` si es nada o el nombre de un comando:
+    /// `'<,'>s` da `s`. `None` si no hay nada que ofrecer.
+    #[must_use]
+    pub fn typed_command(&self) -> Option<TypedCommand> {
+        if self.prompt != Prompt::Command {
+            return None;
+        }
+        let line = self.command_line()?;
+        if line.is_empty() {
+            let history: Vec<String> = self
+                .command_history
+                .newest_first()
+                .map(str::to_owned)
+                .collect();
+            return (!history.is_empty()).then_some(TypedCommand::Empty { history });
+        }
+        let typed = line.trim_start_matches([' ', ':']);
+        let (_, rest) = LineRange::parse(typed).ok()?;
+        let name = skip_blanks(rest);
+        let letters = name.strip_suffix('!').unwrap_or(name);
+        if letters.is_empty() || !letters.chars().all(|c| c.is_ascii_alphabetic()) {
+            return None;
+        }
+        let names = names_starting_with(name, self.keymap.commands());
+        (!names.is_empty()).then(|| TypedCommand::Name {
+            range: line.len() - name.len()..line.len(),
+            names,
+        })
+    }
+
+    /// Cambia lo de [`Vim::typed_command`] por `text`: el nombre de un
+    /// comando o una línea entera del historial. Si no hay nada que
+    /// ofrecer, no hace nada.
+    pub fn complete_command(&mut self, text: &str) {
+        let start = match self.typed_command() {
+            Some(TypedCommand::Empty { .. }) => 0,
+            Some(TypedCommand::Name { range, .. }) => range.start,
+            None => return,
+        };
+        self.command_line.truncate(start);
         self.type_in_command_line(text);
     }
 
