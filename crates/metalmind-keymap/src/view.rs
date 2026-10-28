@@ -147,6 +147,10 @@ pub mod context {
     /// Lo que se agrega al del editor con una lista del autocompletado
     /// (`#` o `[[`) abierta.
     pub const COMPLETION: &str = "Completion";
+    /// Lo que se agrega al del editor con la lista del historial o del
+    /// nombre de un comando de `:` abierta: las flechas siguen recorriendo
+    /// el historial, como en vim.
+    pub const COMMAND_COMPLETION: &str = "CommandCompletion";
     /// Cualquier picker.
     pub const PICKER: &str = "Picker";
     /// La vista previa de un cambio de tags.
@@ -165,6 +169,9 @@ pub enum View {
     Editor,
     /// El editor con una lista del autocompletado abierta.
     Completion,
+    /// El editor con la lista del historial o del nombre de un comando de
+    /// `:` abierta.
+    CommandCompletion,
     FileTree,
     FileTreeInput,
     FileTreeConfirm,
@@ -184,6 +191,7 @@ impl View {
         match self {
             Self::Editor => context::EDITOR,
             Self::Completion => "Editor && Completion",
+            Self::CommandCompletion => "Editor && CommandCompletion",
             Self::FileTree => context::FILE_TREE,
             Self::FileTreeInput => context::FILE_TREE_INPUT,
             Self::FileTreeConfirm => context::FILE_TREE_CONFIRM,
@@ -206,6 +214,14 @@ mod tests {
         assert_eq!(
             View::Completion.predicate(),
             format!("{} && {}", context::EDITOR, context::COMPLETION)
+        );
+    }
+
+    #[test]
+    fn el_predicado_de_la_lista_de_comandos_nombra_sus_dos_contextos() {
+        assert_eq!(
+            View::CommandCompletion.predicate(),
+            format!("{} && {}", context::EDITOR, context::COMMAND_COMPLETION)
         );
     }
 

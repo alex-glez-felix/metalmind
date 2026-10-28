@@ -16,6 +16,7 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(links());
     bindings.extend(editor());
     bindings.extend(table(View::Completion, COMPLETION));
+    bindings.extend(table(View::CommandCompletion, COMMAND_COMPLETION));
     bindings.extend(table(View::FileTree, TREE));
     bindings.extend(table(View::FileTreeInput, TREE_INPUT));
     bindings.extend(table(View::FileTreeConfirm, TREE_CONFIRM));
@@ -144,6 +145,10 @@ fn editor() -> impl Iterator<Item = Binding> {
 
 /// Como en los pickers, menos `enter`, que en Insert sigue siendo un salto
 /// de línea (05 §3).
+/// Solo `tab`: las flechas, `ctrl-n` y `ctrl-p` son del historial.
+const COMMAND_COMPLETION: &[(&[Keystroke], EditorAction)] =
+    &[(&[named(KeyName::Tab)], EditorAction::AcceptCompletion)];
+
 const COMPLETION: &[(&[Keystroke], EditorAction)] = &[
     (&[named(KeyName::Tab)], EditorAction::AcceptCompletion),
     (&[ctrl('n')], EditorAction::NextCompletion),

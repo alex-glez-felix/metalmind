@@ -1,6 +1,7 @@
 //! Vista de un panel: pinta solo lo visible de su documento y le pasa la
 //! entrada al [`Workspace`], que es quien edita.
 
+mod command_popup;
 mod completion;
 mod completion_menu;
 mod cursor;
@@ -36,7 +37,7 @@ use gpui_kit::{
 use metalmind_buffer::ByteOffset;
 use metalmind_keymap::{Action, EditorAction};
 use metalmind_vault::VaultPath;
-use metalmind_vim::{KeyOutcome, Mode};
+use metalmind_vim::{KeyOutcome, Mode, Prompt};
 
 use self::element::EditorElement;
 use self::keys::Route;
@@ -307,15 +308,29 @@ impl Editor {
         Some(ImeLine::new(text, column, marked))
     }
 
+    /// Lo que se escribe tras `:`, `/` o `?`, con el preedit del IME.
+    fn command_line(&self, cx: &App) -> Option<(Prompt, status_bar::CommandLine)> {
+        let line = self.view(cx)?.command_line?;
+        Some((
+            line.prompt,
+            status_bar::CommandLine {
+                symbol: line.prompt.symbol(),
+                typed: line.typed.to_owned(),
+                preedit: self.marked.clone().unwrap_or_default(),
+            },
+        ))
+    }
+
+    /// La búsqueda se escribe en la barra, como en vim, para no tapar lo que
+    /// resalta; `:` va en su pop-up.
     fn status(&self, cx: &App) -> Option<Status> {
         let view = self.view(cx)?;
         let buffer = view.buffer();
         let line = buffer.line_of(view.cursor());
-        let command_line = view.command_line.map(|line| status_bar::CommandLine {
-            symbol: line.prompt.symbol(),
-            typed: line.typed.to_owned(),
-            preedit: self.marked.clone().unwrap_or_default(),
-        });
+        let command_line = self
+            .command_line(cx)
+            .filter(|(prompt, _)| *prompt != Prompt::Command)
+            .map(|(_, line)| line);
         let message = view
             .focused
             .then(|| self.workspace.read(cx).message().cloned())
@@ -341,10 +356,11 @@ impl Editor {
 impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
-        let menu = self.command_line_menu(window.viewport_size().width, &theme, cx);
-        let status = self
-            .status(cx)
-            .map(|status| status_bar(status, menu, &theme));
+        let popup = self
+            .command_line(cx)
+            .filter(|(prompt, _)| *prompt == Prompt::Command)
+            .map(|(_, line)| self.command_popup(line, window.viewport_size().width, &theme, cx));
+        let status = self.status(cx).map(|status| status_bar(status, &theme));
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
@@ -386,5 +402,6 @@ impl Render for Editor {
                     .child(EditorElement::new(cx.entity(), theme.clone())),
             )
             .children(status)
+            .children(popup)
     }
 }

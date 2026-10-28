@@ -2,45 +2,40 @@
 //! al escribir un tag y cambia lo escrito por su forma establecida; la de
 //! `[[`, al escribir el destino de un wikilink, y escribe con qué nombre
 //! llega el link a la nota elegida. Las dos se pintan bajo lo escrito (o
-//! encima, si no cabe) y se aceptan con `tab` o un clic. La del argumento
-//! de `:` (#156) va sobre la barra de estado (ver `argument`).
+//! encima, si no cabe) y se aceptan con `tab` o un clic. Las de `:` (el
+//! historial, el nombre del comando y su argumento, #156) van en el pop-up
+//! de la línea de comandos (ver `command_popup`).
 
-use std::ops::Range;
 use std::sync::Arc;
 
-use gpui_kit::{
-    AnyElement, App, Bounds, Context, Div, InteractiveElement as _, IntoElement, KeyContext,
-    MouseButton, ParentElement as _, Pixels, Point, StatefulInteractiveElement as _, Window,
-    anchored, size,
-};
-use metalmind_keymap::{EditorAction, View, context};
+use gpui_kit::{App, Context, KeyContext, Window};
+use metalmind_keymap::{View, context};
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
 use metalmind_vault::VaultPath;
 use metalmind_vault::tags::{TagCompletion, TagKey, Tags};
-use metalmind_vim::TypedArgument;
+use metalmind_vim::{Mode, TypedArgument, TypedCommand};
 
 use super::Editor;
-use super::completion_menu::{CompletionMenu, MenuMetrics, MenuRow};
-use super::cursor::cursor_position;
-use super::layout::FrameLayout;
-use crate::actions::{AppKeymap, EDITOR_CONTEXT};
+use crate::actions::EDITOR_CONTEXT;
 use crate::clipboard::SystemClipboard;
 use crate::completion::{
-    ArgumentCompletions, FolderCandidates, LinkCompletions, NoteCandidates, Selection,
-    TagCompletions,
+    ArgumentCompletions, CommandCompletions, FolderCandidates, LinkCompletions, NoteCandidates,
+    Selection, TagCompletions,
 };
 use crate::finder::Note;
-use crate::theme::Theme;
 use crate::workspace::{Message, PaneId, TypedLink, TypedTag, Workspace, WorkspaceError};
 
-mod argument;
+mod command_line;
+mod overlay;
 mod rows;
 
 /// La lista abierta.
 enum List {
     Tags(TagCompletions),
     Links(LinkCompletions),
+    /// El historial o el nombre de un comando de `:`.
+    Command(CommandCompletions),
     Argument(ArgumentCompletions),
 }
 
@@ -49,6 +44,7 @@ impl List {
         match self {
             Self::Tags(list) => list.selection(),
             Self::Links(list) => list.selection(),
+            Self::Command(list) => list.selection(),
             Self::Argument(list) => list.selection(),
         }
     }
@@ -57,17 +53,17 @@ impl List {
         match self {
             Self::Tags(list) => list.selection_mut(),
             Self::Links(list) => list.selection_mut(),
+            Self::Command(list) => list.selection_mut(),
             Self::Argument(list) => list.selection_mut(),
         }
     }
 
-    /// Lo escrito bajo lo que va la lista; la del argumento de `:` va
-    /// sobre la barra de estado.
+    /// Lo escrito bajo lo que va la lista; las de `:` van en su pop-up.
     fn typed_in_text(&self) -> Option<&str> {
         match self {
             Self::Tags(list) => Some(list.typed()),
             Self::Links(list) => Some(list.typed()),
-            Self::Argument(_) => None,
+            Self::Command(_) | Self::Argument(_) => None,
         }
     }
 
@@ -75,7 +71,28 @@ impl List {
         match self {
             Self::Tags(list) => list.rows().len(),
             Self::Links(list) => list.rows().len(),
+            Self::Command(list) => list.len(),
             Self::Argument(list) => list.len(),
+        }
+    }
+
+    /// Si es la lista de lo que se escribe ahora, aunque con otro texto.
+    fn is_for(&self, typed: &Typed) -> bool {
+        matches!(
+            (self, typed),
+            (Self::Tags(_), Typed::Tag(_))
+                | (Self::Links(_), Typed::Link(_))
+                | (Self::Command(_), Typed::Command(_))
+                | (Self::Argument(_), Typed::Argument(_))
+        )
+    }
+
+    /// Dónde valen sus atajos: en las de `:` fuera de un argumento, las
+    /// flechas son del historial.
+    fn view(&self) -> View {
+        match self {
+            Self::Command(_) => View::CommandCompletion,
+            Self::Tags(_) | Self::Links(_) | Self::Argument(_) => View::Completion,
         }
     }
 }
@@ -149,35 +166,63 @@ impl Editor {
     pub(super) fn key_context(&self) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add(EDITOR_CONTEXT);
-        if self.completion.is_open() {
-            key_context.add(context::COMPLETION);
+        match self.completion.list.as_ref().map(List::view) {
+            Some(View::CommandCompletion) => key_context.add(context::COMMAND_COMPLETION),
+            Some(_) => key_context.add(context::COMPLETION),
+            None => {}
         }
         key_context
     }
 
     /// Tras cualquier cambio del workspace o del vault, la lista abierta
     /// sigue a lo que se está escribiendo con los tags y las notas de
-    /// ahora, o se cierra.
+    /// ahora, o se cierra. La de `:` fuera de un argumento también se abre:
+    /// al abrir la línea, tras recorrer el historial o tras borrar.
     pub(super) fn refresh_completion(&mut self, cx: &App) {
-        if self.completion.is_open() {
-            self.update_completion(cx);
+        if !self.completion.is_open() && self.mode(cx) != Mode::CommandLine {
+            return;
         }
+        let typed = self.typed(cx);
+        let follows = match (&self.completion.list, &typed) {
+            (_, Some(Typed::Command(_))) => true,
+            (Some(list), Some(typed)) => list.is_for(typed),
+            _ => false,
+        };
+        self.completion.list = if follows {
+            self.list_for(typed, cx)
+        } else {
+            None
+        };
     }
 
-    /// Tras escribir texto: abre, filtra o cierra la lista según el link o
-    /// el tag que se está escribiendo. Si lo escrito no cambió, la fila que
-    /// eligió el usuario sigue elegida.
+    /// Tras escribir texto: abre, filtra o cierra la lista según lo que se
+    /// está escribiendo. Si lo escrito no cambió, la fila que eligió el
+    /// usuario sigue elegida.
     pub(super) fn update_completion(&mut self, cx: &App) {
-        let typed = Typed::in_pane(self.workspace.read(cx), self.pane)
+        let typed = self.typed(cx);
+        self.completion.list = self.list_for(typed, cx);
+    }
+
+    fn typed(&self, cx: &App) -> Option<Typed> {
+        Typed::in_pane(self.workspace.read(cx), self.pane)
             .inspect_err(|error| log::error!("{error}"))
             .ok()
-            .flatten();
-        self.completion.list = match typed {
-            Some(Typed::Link(link)) => self.link_list(&link, cx),
-            Some(Typed::Tag(tag)) => self.tag_list(&tag, cx),
-            Some(Typed::Argument(argument)) => self.argument_list(&argument, cx),
-            None => None,
-        };
+            .flatten()
+    }
+
+    fn list_for(&mut self, typed: Option<Typed>, cx: &App) -> Option<List> {
+        match typed? {
+            Typed::Link(link) => self.link_list(&link, cx),
+            Typed::Tag(tag) => self.tag_list(&tag, cx),
+            Typed::Command(command) => {
+                let previous = match self.completion.list.take() {
+                    Some(List::Command(list)) => Some(list),
+                    _ => None,
+                };
+                Some(List::Command(CommandCompletions::open(command, previous)))
+            }
+            Typed::Argument(argument) => self.argument_list(&argument, cx),
+        }
     }
 
     /// La lista de `[[`: solo en una nota del vault, que es desde donde se
@@ -255,6 +300,13 @@ impl Editor {
                     Ok(())
                 }
             }
+            List::Command(list) => {
+                let text = list.accept();
+                self.update_workspace(cx, |workspace, pane, _| {
+                    workspace.complete_command(pane, &text);
+                    Ok(())
+                })
+            }
             List::Argument(list) => {
                 let text = list.accept();
                 self.update_workspace(cx, |workspace, pane, _| {
@@ -291,88 +343,13 @@ impl Editor {
             cx.notify();
         }
     }
-
-    /// La lista bajo lo escrito, o encima si abajo no cabe en el texto del
-    /// panel (ver [`MenuMetrics::place`]), sobre `layout`: el del frame que
-    /// se está pintando. No pasa de `max_width`, el ancho de la ventana.
-    pub(super) fn completion_overlay(
-        &mut self,
-        layout: &FrameLayout,
-        max_width: Pixels,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let list = self.completion.list.as_ref()?;
-        let typed = list.typed_in_text()?.len();
-        let wanted = usize::from(theme.layout.completion_rows).min(list.len());
-        let view = self.view(cx)?;
-        let (laid, column) = cursor_position(&view, layout)?;
-        let row = laid.row_of(column)?;
-        let origin = laid.row_origin(row);
-        let x = origin.x + row.x_for_index(column - typed.min(column));
-        let line = Bounds::new(origin, size(row.width(), row.height));
-        let placement = MenuMetrics {
-            row_height: theme.menu_row_height,
-            frame: theme.layout.menu_padding + theme.stroke.border,
-        }
-        .place(wanted, line, layout.viewport.bounds);
-        let list = self.completion.list.as_mut()?;
-        let visible = list.selection_mut().visible(placement.rows);
-        let rows = match &*list {
-            List::Tags(list) => rows::tags(list, visible.clone(), theme),
-            List::Links(list) => rows::links(list, visible.clone(), theme),
-            List::Argument(_) => return None,
-        };
-        let selected = list.selection().selected();
-        let menu = Self::menu(rows, visible, selected, max_width, theme, cx);
-        Some(
-            anchored()
-                .position(Point { x, y: placement.y })
-                .snap_to_window()
-                .child(menu)
-                .into_any_element(),
-        )
-    }
-
-    /// La lista abierta con sus `rows`: un clic en una la acepta.
-    fn menu(
-        rows: Vec<MenuRow>,
-        visible: Range<usize>,
-        selected: usize,
-        max_width: Pixels,
-        theme: &Theme,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let accept_keys = AppKeymap::get(cx)
-            .keys_for(EditorAction::AcceptCompletion.into(), |view| {
-                view == View::Completion
-            });
-        CompletionMenu {
-            rows,
-            visible,
-            selected,
-            accept_keys,
-            max_width,
-        }
-        .render(theme, cx, |row, element, cx| {
-            element
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(cx.listener(move |editor, _, window, cx| {
-                    if let Some(list) = &mut editor.completion.list {
-                        list.selection_mut().select(row);
-                    }
-                    // El foco pudo irse (al panel lateral) con la lista abierta.
-                    editor.take_focus(window, cx);
-                    editor.accept_completion(window, cx);
-                }))
-        })
-    }
 }
 
 /// Lo que se está escribiendo.
 enum Typed {
     Link(TypedLink),
     Tag(TypedTag),
+    Command(TypedCommand),
     Argument(TypedArgument),
 }
 
@@ -380,6 +357,9 @@ impl Typed {
     fn in_pane(workspace: &Workspace, pane: PaneId) -> Result<Option<Self>, WorkspaceError> {
         if let Some(argument) = workspace.typed_argument(pane) {
             return Ok(Some(Self::Argument(argument)));
+        }
+        if let Some(command) = workspace.typed_command(pane) {
+            return Ok(Some(Self::Command(command)));
         }
         if let Some(link) = workspace.typed_link(pane)? {
             return Ok(Some(Self::Link(link)));
