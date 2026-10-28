@@ -5,7 +5,8 @@ use std::collections::VecDeque;
 
 use super::Message;
 
-/// Cuántos avisos guarda el historial, como `messagesopt=history:500` de nvim.
+/// Cuántos avisos guarda el historial, como `messagesopt=history:500` de nvim;
+/// el más viejo se va, salvo si se ve.
 const HISTORY: usize = 500;
 /// Cuántos toasts se ven a la vez; uno nuevo cierra el más viejo.
 const TOASTS: usize = 4;
@@ -56,8 +57,10 @@ impl Messages {
     pub fn record(&mut self, message: Message) -> MessageId {
         let id = MessageId(self.next);
         self.next += 1;
-        if self.log.len() == HISTORY {
-            self.log.pop_front();
+        if self.log.len() == HISTORY
+            && let Some(oldest) = self.log.iter().position(|logged| logged.shown.is_none())
+        {
+            self.log.remove(oldest);
         }
         self.log.push_back(Logged {
             id,
@@ -251,6 +254,17 @@ mod tests {
         }
         assert_eq!(messages.history().count(), HISTORY);
         assert_eq!(messages.history().last().map(|(_, m)| m.text()), Some("1"));
+    }
+
+    #[test]
+    fn un_toast_abierto_no_se_va_con_el_historial() {
+        let mut messages = Messages::default();
+        messages.push(Message::Error("E492".to_owned()));
+        for n in 0..HISTORY {
+            messages.record(info(&n.to_string()));
+        }
+        assert_eq!(shown(&messages), ["E492"]);
+        assert_eq!(messages.history().count(), HISTORY);
     }
 
     #[test]

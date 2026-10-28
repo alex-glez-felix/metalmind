@@ -89,7 +89,6 @@ impl WorkspaceView {
         let list = cx.new(|cx| NoteListView::new(&session, &state.list, workspace.clone(), cx));
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
-            view.schedule_toasts(cx);
             view.refresh_tag_change(cx);
             cx.notify();
         });
@@ -448,6 +447,9 @@ impl Render for WorkspaceView {
         self.formulas
             .update(cx, |formulas, _| formulas.next_frame());
         self.update_title(window, cx);
+        // Aquí y no al cambiar el workspace: un aviso que llega sin avisar
+        // también tiene su temporizador, que cuenta desde que se ve.
+        self.schedule_toasts(cx);
         let theme = Theme::get(cx).clone();
         let width = window.viewport_size().width;
         self.list.update(cx, |list, cx| {

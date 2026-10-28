@@ -19,7 +19,8 @@ use crate::workspace::{Message, ToastId};
 pub(super) type ToastTimers = HashMap<ToastId, Task<()>>;
 
 impl WorkspaceView {
-    /// Un temporizador por toast que se ve y se cierra solo, ni uno más.
+    /// Un temporizador por toast que se ve y se cierra solo, ni uno más. Lo
+    /// llama cada frame.
     pub(super) fn schedule_toasts(&mut self, cx: &mut Context<Self>) {
         let toasts: Vec<_> = self
             .workspace
