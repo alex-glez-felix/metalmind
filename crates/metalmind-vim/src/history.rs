@@ -25,6 +25,11 @@ impl History {
         self.entries.push(entry.to_owned());
     }
 
+    /// Las entradas, de la más nueva a la más vieja.
+    pub fn newest_first(&self) -> impl Iterator<Item = &str> {
+        self.entries.iter().rev().map(String::as_str)
+    }
+
     /// Lo escrito cambió: la próxima flecha filtra por el texto nuevo.
     pub fn stop_browsing(&mut self) {
         self.browsing = None;

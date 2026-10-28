@@ -1,7 +1,8 @@
 //! El modo focus (05 §3) en la app real: con focus, el finder ofrece solo
 //! las notas del alcance.
 
-use super::support::{Area, Smoke, Window};
+use super::command_line::popup_list;
+use super::support::Smoke;
 
 /// `a.md` abierta y sin tags, `b.md` sin tags y `c.md` con `#rust`: sin
 /// focus, el primero del finder es otra nota que `c.md`.
@@ -36,17 +37,6 @@ fn f_en_el_panel_enfoca_el_tag_elegido() {
     window.wait_title("de c.md", |title| title.starts_with("c.md"));
 }
 
-/// Sobre la barra de estado, donde se abre la lista del argumento de `:`.
-fn argument_list(window: &Window<'_>) -> Area {
-    let (_, height, _) = window.pixels();
-    Area {
-        x: 0,
-        y: i16::try_from(height).unwrap() - 260,
-        width: 400,
-        height: 220,
-    }
-}
-
 /// `:focus` completa carpetas, con sus espacios escapados, y tags (#156):
 /// `tab` escribe `Mis\ notas/` y `#rust`, y el finder ofrece solo la nota
 /// de esa carpeta con ese tag.
@@ -59,7 +49,7 @@ fn focus_completa_carpetas_con_espacios_y_tags() {
     smoke.write("Mis notas/e.md", "cinco\n");
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    let list = argument_list(&window);
+    let list = popup_list(&window);
     let closed = window.wait_still(list);
     window.type_keys(":focus Mis");
     window.wait_change("la lista de carpetas", list, &closed);

@@ -12,9 +12,9 @@
 //! Como vim con `hidden`, el default de nvim, un documento que ningún panel
 //! muestra queda oculto, con sus cambios, su historial y su cursor.
 
-mod argument_typing;
 mod autosave;
 mod buffers;
+mod command_typing;
 mod commands;
 mod documents;
 mod editing;
@@ -561,8 +561,8 @@ fn clamp_cursor(buffer: &Buffer, offset: ByteOffset, mode: Mode) -> ByteOffset {
 }
 
 #[cfg(test)]
-#[path = "argument_typing_tests.rs"]
-mod argument_typing_tests;
+#[path = "command_typing_tests.rs"]
+mod command_typing_tests;
 #[cfg(test)]
 mod link_typing_tests;
 #[cfg(test)]

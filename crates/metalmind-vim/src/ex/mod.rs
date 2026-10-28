@@ -17,7 +17,7 @@ pub use global::GlobalMiss;
 pub(crate) use join::join;
 pub(crate) use sort::{SortOptions, sort};
 
-use self::address::skip_blanks;
+pub(crate) use self::address::skip_blanks;
 use crate::command::{self, HostCommand};
 use crate::indent::Shift;
 use crate::substitute::SubstituteCommand;
@@ -106,6 +106,12 @@ const NAMES: &[(&str, usize, Name)] = &[
     ("delmarks", 4, Name::DeleteMarks),
     ("tableformat", 6, Name::FormatTable),
 ];
+
+/// Los nombres completos de los comandos del motor, con cuántas letras
+/// bastan para abreviarlos.
+pub(crate) fn engine_names() -> impl Iterator<Item = (&'static str, usize)> {
+    NAMES.iter().map(|&(name, min, _)| (name, min))
+}
 
 impl ParsedLine {
     /// Como vim, ignora espacios y `:` de más; una línea vacía no es nada.
