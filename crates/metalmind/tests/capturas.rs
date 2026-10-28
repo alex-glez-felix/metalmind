@@ -95,11 +95,19 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Esc>"), Step::RightClickBottomRow],
     ),
     ("split", &[Step::Keys("<Esc><C-w>l<C-w>v")]),
+    // La línea de `:` es un pop-up como la paleta (#193): lo largo se parte
+    // en filas; debajo van los nombres que empiezan con lo escrito, con el
+    // que corre primero, y con la línea vacía, el historial.
     (
         "linea-de-comandos",
         &[Step::Keys(
-            "<C-w>o:una linea de comandos larga, que sigue mas alla de la mitad de la barra de estado y no termina",
+            "<C-w>o:una linea de comandos larga, que sigue mas alla del ancho del pop-up y no se corta: se parte en filas, sin_espacios_en/una/ruta/muy/larga/que/tampoco/cabe.md",
         )],
+    ),
+    ("linea-de-comandos-nombres", &[Step::Keys("<Esc>:s")]),
+    (
+        "linea-de-comandos-historial",
+        &[Step::Keys("<Esc>:noh<CR>:focus #rust<CR>:unfocus<CR>:")],
     ),
     ("finder", &[Step::Keys("<Esc><Space>f")]),
     ("finder-filtrado", &[Step::Keys("idea")]),
@@ -380,7 +388,7 @@ const SCENES: &[(&str, &[Step])] = &[
         "tabla-larga-alineada",
         &[Step::Keys("/evento-final<CR>:tableformat<CR>")],
     ),
-    // El autocompletado de `:focus` sobre la barra de estado (#156): muchas
+    // El autocompletado de `:focus` en el pop-up de `:` (#156, #193): muchas
     // carpetas con rutas hondas, los tags tras aceptar una, y la carpeta
     // larga con espacios, que el indicador muestra escapada (#157).
     (

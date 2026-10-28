@@ -104,6 +104,16 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "el mismo tope que el picker, sobre el que flota igual",
     ),
     (
+        "src/editor/command_popup.rs",
+        "relative(0.9)",
+        "el mismo tope que el picker, con el que se ve igual",
+    ),
+    (
+        "src/editor/command_popup.rs",
+        "keys.text_color(gpui_kit::transparent_black())",
+        "como en la lista del autocompletado: la tecla de una fila no elegida guarda su columna, transparente",
+    ),
+    (
         "src/picker/view/render.rs",
         "relative(0.9)",
         "tope del picker en una ventana angosta, como fracción de la ventana; es una pregunta abierta de la auditoría",

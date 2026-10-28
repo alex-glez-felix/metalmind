@@ -1,12 +1,11 @@
 //! Barra de estado de un panel: modo, si se graba una macro, archivo, `[+]`
 //! si hay cambios sin guardar (o, con autoguardado, si está guardado), el
-//! último mensaje o la línea de comandos, el focus y la posición del cursor. Modo,
-//! macro, mensaje y línea de comandos solo los muestra el panel con el foco.
-//! Sobre la línea de comandos va la lista del autocompletado de su argumento.
+//! último mensaje o lo que se busca tras `/` o `?`, el focus y la posición
+//! del cursor. Modo, macro, mensaje y búsqueda solo los muestra el panel con
+//! el foco. La línea de `:` va en su pop-up.
 
 use gpui_kit::{
-    AnyElement, Div, ParentElement as _, SharedString, Styled as _, div,
-    prelude::FluentBuilder as _, relative,
+    Div, ParentElement as _, SharedString, Styled as _, div, prelude::FluentBuilder as _, relative,
 };
 use metalmind_vim::{Mode, VisualKind};
 
@@ -26,6 +25,7 @@ pub struct Status {
     /// El indicador del autoguardado, en lugar del `[+]`; `None` si está
     /// apagado.
     pub save: Option<SaveState>,
+    /// Lo que se busca tras `/` o `?`.
     pub command_line: Option<CommandLine>,
     pub message: Option<Message>,
     /// Línea y columna en caracteres, desde 1.
@@ -61,8 +61,7 @@ impl Middle {
     }
 }
 
-/// `menu` es la lista del autocompletado de lo que se teclea tras `:`.
-pub fn status_bar(status: Status, menu: Option<AnyElement>, theme: &Theme) -> Div {
+pub fn status_bar(status: Status, theme: &Theme) -> Div {
     let (line, column) = status.position;
     let foreground = if status.mode.is_some() {
         theme.ui.status_foreground
@@ -90,7 +89,7 @@ pub fn status_bar(status: Status, menu: Option<AnyElement>, theme: &Theme) -> Di
             bar.child(fixed().child(format!("grabando @{register}")))
         })
         .child(match Middle::of(status.command_line, status.message) {
-            Middle::Typing(line) => command_line(line, menu, theme),
+            Middle::Typing(line) => command_line(line, theme),
             Middle::Note(message) => note(status.file, mark, message, theme),
         })
         .children(status.focus.map(|label| {
@@ -170,9 +169,8 @@ impl CommandLine {
 }
 
 /// Si no cabe, se recorta el principio de lo escrito: el preedit y el cursor,
-/// que es donde se escribe, siempre se ven. `menu` se pinta desde su
-/// principio.
-fn command_line(line: CommandLine, menu: Option<AnyElement>, theme: &Theme) -> Div {
+/// que es donde se escribe, siempre se ven.
+fn command_line(line: CommandLine, theme: &Theme) -> Div {
     let text = line.text();
     let preedit = line.preedit;
     div()
@@ -181,7 +179,6 @@ fn command_line(line: CommandLine, menu: Option<AnyElement>, theme: &Theme) -> D
         .flex_grow_1()
         .min_w_0()
         .text_color(theme.ui.foreground)
-        .children(menu)
         .child(
             div()
                 .min_w_0()
