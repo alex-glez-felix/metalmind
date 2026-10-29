@@ -273,7 +273,6 @@ impl WorkspaceView {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
                 self.reveal_renamed(to, cx);
-                // El resumen primero: la barra recorta lo que no cabe.
                 self.tell(Message::Info(format!("{summary}; ahora es {to}")), cx);
             }
             Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
@@ -310,7 +309,7 @@ impl WorkspaceView {
         }
     }
 
-    /// Al log y a la barra.
+    /// Al log y a un toast.
     fn rename_failed(&mut self, text: String, cx: &mut Context<Self>) {
         log::error!("{text}");
         self.tell(Message::Error(text), cx);
