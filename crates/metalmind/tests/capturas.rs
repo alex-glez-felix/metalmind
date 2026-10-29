@@ -558,13 +558,14 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<C-w>l:vaultundo<CR>")],
     ),
     ("nada-que-deshacer", &[Step::Keys(":vaultundo<CR>")]),
-    // El ancho de lectura (#172) sin `wrap`: la línea 12 pasa de la columna,
+    // El ancho de lectura (#172) sin `wrap`, desde la nota (los `<C-w>l` la
+    // alcanzan aunque el foco siga en el árbol): la línea 12 pasa de la columna,
     // el bloque de código y la selección `V` llegan a su borde, y con `$`
     // la vista se corre a lo ancho dentro de ella.
     (
         "ancho-de-lectura-sin-wrap",
         &[Step::Keys(
-            "<Esc><Esc><C-w>o<Space>flayout bastante<CR>:set nowrap<CR>16GVj",
+            "<Esc><Esc><C-w>l<C-w>l<Esc><C-w>o<Space>flayout bastante<CR>:set nowrap<CR>16GVj",
         )],
     ),
     ("ancho-de-lectura-a-lo-ancho", &[Step::Keys("<Esc>12G$")]),
