@@ -2,11 +2,16 @@
 //! establecida, sus alias, su conteo, su color y su ícono. El filtrado
 //! difuso es de `metalmind-search`; aquí está lo que hay que ofrecer.
 
+use std::collections::BTreeSet;
+use std::ops::Range;
+
 use metalmind_syntax::TagPlace;
 
+use crate::path::VaultPath;
 use crate::tags::Tags;
 use crate::tags::key::TagKey;
 use crate::tags::metadata::yaml_scalar;
+use crate::tags::note::scan_note;
 use crate::tags::page::{TagColor, TagIcon};
 
 /// Un tag que se puede ofrecer al escribir `#`.
@@ -72,5 +77,50 @@ impl Tags {
             )
         });
         completions
+    }
+}
+
+impl Tags {
+    /// Los tags que el vault solo conoce por la última versión guardada de
+    /// `note` y que la nota, escrita ahora como `text`, ya no escribe fuera
+    /// de `typing` (el nombre del tag a medio escribir): lo que el
+    /// autoguardado indexó de ese mismo tag, con lo escrito entonces.
+    /// `text` solo se pide si la nota escribe algún tag que nadie más nombra.
+    #[must_use]
+    pub fn unwritten_in(
+        &self,
+        note: &VaultPath,
+        text: impl FnOnce() -> String,
+        typing: &Range<usize>,
+    ) -> BTreeSet<TagKey> {
+        let mut unwritten: BTreeSet<TagKey> = self
+            .index
+            .note(note)
+            .into_iter()
+            .flat_map(|saved| &saved.occurrences)
+            .filter(|occurrence| self.is_only_in(&occurrence.key, note))
+            .map(|occurrence| occurrence.key.clone())
+            .collect();
+        if unwritten.is_empty() {
+            return unwritten;
+        }
+        let (written, _) = scan_note(&text());
+        for occurrence in written.occurrences {
+            if occurrence.range != *typing {
+                unwritten.remove(&occurrence.key);
+            }
+        }
+        unwritten
+    }
+
+    /// Si `note` es lo único que nombra `key`: ni otra nota, ni una página,
+    /// ni un alias, ni un `parents`.
+    fn is_only_in(&self, key: &TagKey, note: &VaultPath) -> bool {
+        self.index
+            .tag(key)
+            .is_some_and(|entry| entry.notes.len() == 1 && entry.notes.contains(note))
+            && self.graph.page(key).is_none()
+            && self.graph.alias_of(key).is_none()
+            && self.graph.children(key).is_empty()
     }
 }

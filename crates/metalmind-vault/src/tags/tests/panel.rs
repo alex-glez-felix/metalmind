@@ -1,6 +1,7 @@
 //! La vista de tags del panel con su buzón, el modo focus y el
 //! autocompletado de `#` (05 §3, §5; 06 §9).
 
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use metalmind_syntax::TagPlace;
@@ -9,7 +10,7 @@ use rstest::rstest;
 
 use super::graph::panel;
 use super::{Fixture, key, path, scope, tags};
-use crate::tags::{Scope, ScopeError, ScopeWord, TagColor, TagIcon, TagQuery, Tags};
+use crate::tags::{Scope, ScopeError, ScopeWord, TagColor, TagIcon, TagKey, TagQuery, Tags};
 
 fn fixture() -> Fixture {
     Fixture::new(&[
@@ -224,24 +225,43 @@ fn completions_by_count_with_aliases() {
     assert_eq!(year.text(TagPlace::Tags), "\"2024\"");
 }
 
-/// El tag que una nota escribe una sola vez, y nada más nombra, es el que se
-/// está escribiendo ahí; otra nota, una página o un `parents` ya lo hacen
+/// Lo que el vault solo sabe por la versión guardada de `a.md` y la nota de
+/// ahora ya no escribe fuera del tag a medio escribir (`[` `]` en `now`):
+/// el autoguardado de `#rus` antes de borrar la `s` no deja `rus` en la
+/// lista de `#ru`. Lo que nombra otra nota, una página o un `parents` sí es
 /// del vault.
-#[test]
-fn only_once_in_a_note() {
+#[rstest]
+#[case::lo_escrito_antes("hola #rus", "hola #[ru]", &["rus"])]
+#[case::lo_escrito_igual("hola #ru", "hola #[ru]", &["ru"])]
+#[case::sigue_escrito_en_otro_lado("#rus y #ru", "#rus y #[r]", &["ru"])]
+#[case::tambien_en_otra_nota("hola #otra", "hola #[ot]", &[])]
+#[case::tiene_pagina("hola #pagina", "hola #[pa]", &[])]
+#[case::lo_nombra_un_parents("hola #padre", "hola #[pa]", &[])]
+#[case::en_el_frontmatter("---\ntags: [rus]\n---\n", "---\ntags: [[ru]]\n---\n", &["rus"])]
+fn unwritten_in_a_note(#[case] saved: &str, #[case] now: &str, #[case] expected: &[&str]) {
     let tags = tags(&[
-        ("a.md", "#ru #dos #dos #otra"),
+        ("a.md", saved),
         ("b.md", "#otra"),
         ("tags/hijo.md", "---\nparents: [padre]\n---\n"),
-        ("d.md", "#padre"),
         ("tags/pagina.md", ""),
-        ("e.md", "#pagina"),
     ]);
-    let a = path("a.md");
-    assert!(tags.is_only_once_in(&key("RU"), &a));
-    assert!(!tags.is_only_once_in(&key("ru"), &path("b.md")));
-    assert!(!tags.is_only_once_in(&key("dos"), &a));
-    assert!(!tags.is_only_once_in(&key("otra"), &a));
-    assert!(!tags.is_only_once_in(&key("padre"), &path("d.md")));
-    assert!(!tags.is_only_once_in(&key("pagina"), &path("e.md")));
+    let start = now.rfind('[').unwrap();
+    let end = now.rfind(']').unwrap() - 1;
+    let text = format!(
+        "{}{}{}",
+        &now[..start],
+        &now[start + 1..=end],
+        &now[end + 2..]
+    );
+    let unwritten = tags.unwritten_in(&path("a.md"), || text, &(start..end));
+    let expected: BTreeSet<TagKey> = expected.iter().map(|name| key(name)).collect();
+    assert_eq!(unwritten, expected);
+}
+
+/// Si la nota no escribe nada que solo ella nombre, no hace falta leerla.
+#[test]
+fn unwritten_in_does_not_read_without_tags_of_its_own() {
+    let tags = tags(&[("a.md", "#otra"), ("b.md", "#otra")]);
+    let unwritten = tags.unwritten_in(&path("a.md"), || unreachable!(), &(1..3));
+    assert!(unwritten.is_empty());
 }

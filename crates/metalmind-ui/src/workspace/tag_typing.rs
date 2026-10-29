@@ -5,6 +5,8 @@
 //! en el frontmatter, `Scan::tag_at` sobre el frontmatter solo, que sabe en
 //! qué campo está. Así no se escanea la nota entera en cada tecla.
 
+use std::ops::Range;
+
 use metalmind_buffer::ByteOffset;
 use metalmind_syntax::{LineKind, Styles, TagPlace, TagSpot};
 use metalmind_vim::{Clipboard, Mode};
@@ -15,6 +17,8 @@ use super::{PaneId, PaneView, Workspace, WorkspaceError};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypedTag {
     pub typed: String,
+    /// Dónde está lo escrito en el buffer.
+    pub range: Range<usize>,
     pub place: TagPlace,
 }
 
@@ -46,6 +50,7 @@ impl Workspace {
             .text_in(ByteOffset::new(spot.name.start)..ByteOffset::new(cursor))?;
         Ok(Some(TypedTag {
             typed,
+            range: spot.name,
             place: spot.place,
         }))
     }

@@ -25,7 +25,13 @@ fn vault() -> Arc<[TagCompletion]> {
 }
 
 fn open(typed: &str, place: TagPlace) -> Option<TagCompletions> {
-    TagCompletions::open(vault(), typed, place, false, &mut FuzzyMatcher::text())
+    TagCompletions::open(
+        vault(),
+        typed,
+        place,
+        &BTreeSet::new(),
+        &mut FuzzyMatcher::text(),
+    )
 }
 
 /// Cada fila como se ve: el nombre y, si coincidió por él, el alias.
@@ -67,7 +73,7 @@ fn por_el_nombre_antes_que_por_un_alias() {
         candidates,
         "rust",
         TagPlace::Inline,
-        false,
+        &BTreeSet::new(),
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
@@ -110,7 +116,7 @@ fn es_la_misma_lista_solo_con_lo_mismo() {
         Arc::clone(&candidates),
         "ru",
         TagPlace::Inline,
-        false,
+        &BTreeSet::new(),
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
@@ -130,7 +136,7 @@ fn tags_nuevos_dejan_elegido_el_mismo_tag() {
     let mut more = vault().to_vec();
     more.insert(0, tag("ruido", 40, &[]));
     let list = list
-        .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
+        .with_candidates(Arc::from(more), &BTreeSet::new(), &mut FuzzyMatcher::text())
         .unwrap();
     assert_eq!(
         (list.selection().selected(), list.accept()),
@@ -146,7 +152,7 @@ fn sin_elegir_queda_la_mejor_coincidencia() {
     let mut more = vault().to_vec();
     more.insert(0, tag("ruido", 40, &[]));
     let list = list
-        .with_candidates(Arc::from(more), false, &mut FuzzyMatcher::text())
+        .with_candidates(Arc::from(more), &BTreeSet::new(), &mut FuzzyMatcher::text())
         .unwrap();
     assert_eq!(
         (list.selection().selected(), list.accept()),
@@ -165,7 +171,11 @@ fn sin_el_tag_elegido_vuelve_a_la_primera_fila() {
         .cloned()
         .collect();
     let list = list
-        .with_candidates(Arc::from(without), false, &mut FuzzyMatcher::text())
+        .with_candidates(
+            Arc::from(without),
+            &BTreeSet::new(),
+            &mut FuzzyMatcher::text(),
+        )
         .unwrap();
     assert_eq!(
         (list.selection().selected(), list.accept()),
@@ -183,7 +193,7 @@ fn el_plegado_de_varias_letras_coincide() {
             Arc::clone(&candidates),
             typed,
             TagPlace::Inline,
-            false,
+            &BTreeSet::new(),
             &mut FuzzyMatcher::text(),
         )
         .map(|list| list.rows().map(|(tag, _)| tag.name.clone()).collect())
@@ -203,7 +213,7 @@ fn empezar_sin_acento_cuenta_como_empezar() {
         candidates,
         "cancion",
         TagPlace::Inline,
-        false,
+        &BTreeSet::new(),
         &mut FuzzyMatcher::text(),
     )
     .unwrap();
@@ -211,24 +221,26 @@ fn empezar_sin_acento_cuenta_como_empezar() {
     assert_eq!(names, ["canción", "cancionera"]);
 }
 
-/// Lo que se escribe, si solo lo nombra esta ocurrencia ya autoguardada, no
-/// se ofrece a sí mismo; los demás que coinciden sí.
+/// Los tags de `hidden` no se ofrecen (los que solo existen por lo que el
+/// autoguardado indexó del tag a medio escribir); los demás que coinciden sí.
 #[test]
-fn lo_escrito_no_se_ofrece_a_si_mismo() {
-    let candidates: Arc<[TagCompletion]> = Arc::from([tag("ru", 1, &[]), tag("bruma", 1, &[])]);
-    let names = |only_here: bool| -> Vec<String> {
+fn los_ocultos_no_se_ofrecen() {
+    let candidates: Arc<[TagCompletion]> =
+        Arc::from([tag("ru", 1, &[]), tag("rus", 1, &[]), tag("bruma", 1, &[])]);
+    let names = |hidden: &[&str]| -> Vec<String> {
+        let hidden: BTreeSet<TagKey> = hidden.iter().map(|name| TagKey::new(name)).collect();
         TagCompletions::open(
             Arc::clone(&candidates),
             "RU",
             TagPlace::Inline,
-            only_here,
+            &hidden,
             &mut FuzzyMatcher::text(),
         )
         .map(|list| list.rows().map(|(tag, _)| tag.name.clone()).collect())
         .unwrap_or_default()
     };
-    assert_eq!(names(false), ["ru", "bruma"]);
-    assert_eq!(names(true), ["bruma"]);
+    assert_eq!(names(&[]), ["ru", "rus", "bruma"]);
+    assert_eq!(names(&["RU", "rus"]), ["bruma"]);
 }
 
 /// La ventana de filas solo se corre cuando la elegida sale de ella: subir
