@@ -26,7 +26,7 @@ pub enum Icon {
     Collapsed,
     Expanded,
     Tags,
-    TagWithoutIcon,
+    Hash,
     Inbox,
     Backlinks,
     NoteList,
@@ -42,7 +42,7 @@ impl Icon {
         Self::Collapsed,
         Self::Expanded,
         Self::Tags,
-        Self::TagWithoutIcon,
+        Self::Hash,
         Self::Inbox,
         Self::Backlinks,
         Self::NoteList,
@@ -58,7 +58,7 @@ impl Icon {
             Self::Collapsed => "icons/tabler/chevron-right.svg",
             Self::Expanded => "icons/tabler/chevron-down.svg",
             Self::Tags => "icons/tabler/tags.svg",
-            Self::TagWithoutIcon => "icons/tabler/hash.svg",
+            Self::Hash => "icons/tabler/hash.svg",
             Self::Inbox => "icons/tabler/inbox.svg",
             Self::Backlinks => "icons/tabler/arrow-back-up.svg",
             Self::NoteList => "icons/tabler/list.svg",
@@ -126,9 +126,7 @@ pub fn tag(icon: Option<&TagIcon>, theme: &Theme) -> Div {
             theme.ui.panel_foreground,
             theme,
         ),
-        Some(TagIcon::Set { .. }) | None => {
-            self::icon(Icon::TagWithoutIcon, theme.ui.panel_muted, theme)
-        }
+        Some(TagIcon::Set { .. }) | None => self::icon(Icon::Hash, theme.ui.panel_muted, theme),
     }
 }
 
@@ -199,6 +197,6 @@ mod tests {
             all.iter()
                 .any(|path| path == "icons/tabler/folder-filled.svg")
         );
-        assert!(Assets.list("fonts/").unwrap().is_empty());
+        assert_eq!(Assets.list("fonts/").unwrap(), Vec::<SharedString>::new());
     }
 }
