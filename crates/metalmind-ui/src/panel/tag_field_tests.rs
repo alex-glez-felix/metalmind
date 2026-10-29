@@ -7,6 +7,7 @@ use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::picker::LineEdit;
 use crate::tag_change::{TagField, TagRequest};
 
 fn path(path: &str) -> VaultPath {
@@ -81,7 +82,10 @@ fn la_pregunta_empieza_con_lo_que_tiene_la_pagina() {
 fn confirmar_pide_la_vista_previa_del_cambio() {
     let mut panel = panel();
     panel.start_tag_field(TagField::Aliases);
-    panel.input_mut().unwrap().insert(", #rustlang  ferris");
+    panel
+        .input_mut()
+        .unwrap()
+        .apply(LineEdit::Insert(", #rustlang  ferris"));
     assert_eq!(
         panel.confirm(),
         Some(Request::ChangeTags(TagRequest::Page {
@@ -95,8 +99,11 @@ fn confirmar_pide_la_vista_previa_del_cambio() {
         }))
     );
     panel.start_tag_field(TagField::Icon);
-    panel.input_mut().unwrap().clear_before();
-    panel.input_mut().unwrap().insert("lucide:book");
+    panel.input_mut().unwrap().apply(LineEdit::DeleteToStart);
+    panel
+        .input_mut()
+        .unwrap()
+        .apply(LineEdit::Insert("lucide:book"));
     let Some(Request::ChangeTags(TagRequest::Page { change, .. })) = panel.confirm() else {
         panic!("tenía que pedir el cambio");
     };
@@ -114,7 +121,7 @@ fn confirmar_pide_la_vista_previa_del_cambio() {
 fn vacio_quita_el_campo() {
     let mut panel = panel();
     panel.start_tag_field(TagField::Parents);
-    panel.input_mut().unwrap().clear_before();
+    panel.input_mut().unwrap().apply(LineEdit::DeleteToStart);
     let Some(Request::ChangeTags(TagRequest::Page { change, .. })) = panel.confirm() else {
         panic!("tenía que pedir el cambio");
     };
@@ -140,8 +147,8 @@ fn un_valor_invalido_deja_la_pregunta_abierta() {
     for (field, text, error) in cases {
         let mut panel = panel();
         panel.start_tag_field(field);
-        panel.input_mut().unwrap().clear_before();
-        panel.input_mut().unwrap().insert(text);
+        panel.input_mut().unwrap().apply(LineEdit::DeleteToStart);
+        panel.input_mut().unwrap().apply(LineEdit::Insert(text));
         assert_eq!(panel.confirm(), None);
         assert_eq!(asked(&panel).0, field);
         assert_eq!(panel.error(), Some(error));
@@ -162,8 +169,8 @@ fn en_la_vista_de_carpetas_no_se_pregunta() {
 fn cerrar_la_pregunta_quita_su_error() {
     let mut panel = panel();
     panel.start_tag_field(TagField::Icon);
-    panel.input_mut().unwrap().clear_before();
-    panel.input_mut().unwrap().insert("libro");
+    panel.input_mut().unwrap().apply(LineEdit::DeleteToStart);
+    panel.input_mut().unwrap().apply(LineEdit::Insert("libro"));
     assert_eq!(panel.confirm(), None);
     assert!(panel.error().is_some());
     panel.escape();

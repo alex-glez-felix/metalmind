@@ -5,6 +5,7 @@ use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::picker::LineEdit;
 use crate::tag_change::TagRequest;
 use crate::tag_outline::RowKind;
 
@@ -30,7 +31,7 @@ fn panel() -> Panel {
 }
 
 fn type_text(panel: &mut Panel, text: &str) {
-    panel.input_mut().unwrap().insert(text);
+    panel.input_mut().unwrap().apply(LineEdit::Insert(text));
     panel.input_changed();
 }
 
@@ -166,13 +167,39 @@ fn renombrar_empieza_con_el_cursor_antes_de_la_extension() {
     panel.start_rename();
     let input = panel.input_mut().unwrap();
     assert_eq!((input.text(), input.cursor()), ("hoy.md", 3));
-    input.clear_before();
-    input.insert("ayer");
+    input.apply(LineEdit::DeleteToStart);
+    input.apply(LineEdit::Insert("ayer"));
     assert_eq!(
         panel.confirm(),
         Some(Request::Rename {
             from: path("diario/hoy.md"),
             to: path("diario/ayer.md"),
+        })
+    );
+}
+
+/// La `é` con acento combinante es un grafema: `backspace` la borra entera.
+#[test]
+fn renombrar_borra_por_grafema() {
+    let index = VaultIndex::from_entries([(path("cafe\u{301}.md"), EntryKind::Note)]);
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| None);
+    let tree = FileTree::with_expanded(Arc::new(index), []);
+    let mut panel = Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags)),
+        true,
+        PanelView::Folders,
+    );
+    panel.tree.select(&path("cafe\u{301}.md"));
+    panel.start_rename();
+    let input = panel.input_mut().unwrap();
+    input.apply(LineEdit::DeleteBackward);
+    input.apply(LineEdit::Insert("é"));
+    assert_eq!(
+        panel.confirm(),
+        Some(Request::Rename {
+            from: path("cafe\u{301}.md"),
+            to: path("café.md"),
         })
     );
 }
@@ -197,8 +224,8 @@ fn mover_escribe_la_ruta_entera() {
     panel.start_move();
     let input = panel.input_mut().unwrap();
     assert_eq!(input.text(), "a.md");
-    input.home();
-    input.insert("diario/");
+    input.apply(LineEdit::Home);
+    input.apply(LineEdit::Insert("diario/"));
     assert_eq!(
         panel.confirm(),
         Some(Request::Rename {
@@ -288,8 +315,8 @@ fn una_pregunta_abierta_sigue_a_su_entrada() {
     panel.tree.select(&path("diario/hoy.md"));
     panel.start_rename();
     panel.follow(&[renamed("diario", "viejo"), removed("otra.md")]);
-    panel.input_mut().unwrap().clear_before();
-    panel.input_mut().unwrap().insert("ayer");
+    panel.input_mut().unwrap().apply(LineEdit::DeleteToStart);
+    panel.input_mut().unwrap().apply(LineEdit::Insert("ayer"));
     assert_eq!(
         panel.confirm(),
         Some(Request::Rename {
@@ -412,14 +439,14 @@ fn en_la_vista_de_tags_se_renombra_y_se_fusiona_el_tag() {
         panic!("{:?}", panel.prompt());
     };
     assert_eq!((tag.as_str(), input.text()), ("rust", "rust"));
-    panel.input_mut().unwrap().insert("lang");
+    panel.input_mut().unwrap().apply(LineEdit::Insert("lang"));
     let rename = TagRequest::Rename {
         from: "rust".to_owned(),
         to: "rustlang".to_owned(),
     };
     assert_eq!(panel.confirm(), Some(Request::ChangeTags(rename)));
     panel.start_move();
-    panel.input_mut().unwrap().insert("#go");
+    panel.input_mut().unwrap().apply(LineEdit::Insert("#go"));
     let merge = TagRequest::Merge {
         from: "rust".to_owned(),
         into: "go".to_owned(),
@@ -434,7 +461,7 @@ fn un_nombre_de_tag_invalido_deja_la_pregunta_abierta() {
     let mut panel = tags_panel();
     panel.click(0, 1);
     panel.start_rename();
-    panel.input_mut().unwrap().insert("/otro");
+    panel.input_mut().unwrap().apply(LineEdit::Insert("/otro"));
     assert_eq!(panel.confirm(), None);
     assert!(matches!(panel.prompt(), Some(Prompt::RenameTag { .. })));
     assert_eq!(

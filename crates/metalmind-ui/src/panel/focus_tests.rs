@@ -9,6 +9,7 @@ use pretty_assertions::assert_eq;
 
 use super::*;
 use crate::focus::Focus;
+use crate::picker::LineEdit;
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -55,7 +56,7 @@ fn en_focus_de_carpeta_se_crea_dentro_de_ella() {
     focus_on(&mut panel, "a/b/");
     assert_eq!(panel.tree.selected(), Some(&path("a")));
     panel.start_create(NewEntry::Note);
-    panel.input_mut().unwrap().insert("x");
+    panel.input_mut().unwrap().apply(LineEdit::Insert("x"));
     assert_eq!(panel.confirm(), Some(Request::CreateNote(path("a/b/x.md"))));
 }
 
@@ -75,6 +76,6 @@ fn quitar_el_focus_devuelve_todo_el_vault() {
     panel.set_focus(Scope::default(), None);
     assert_eq!(rows(&panel), ["a", "c.md"]);
     panel.start_create(NewEntry::Note);
-    panel.input_mut().unwrap().insert("x");
+    panel.input_mut().unwrap().apply(LineEdit::Insert("x"));
     assert_eq!(panel.confirm(), Some(Request::CreateNote(path("a/x.md"))));
 }

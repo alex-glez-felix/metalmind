@@ -9,7 +9,8 @@ use metalmind_vault::VaultPath;
 
 use super::Sidebar;
 use super::render::button;
-use crate::panel::{LineInput, NewEntry, Prompt};
+use crate::panel::{NewEntry, Prompt};
+use crate::picker::InputLine;
 use crate::theme::Theme;
 use metalmind_keymap::PanelAction;
 
@@ -69,7 +70,7 @@ fn folder_name(path: &VaultPath) -> String {
 /// El texto con el cursor de barra. Si no cabe, se recorta como en la
 /// línea de comandos: primero lo que sigue al cursor y luego el principio de
 /// lo que lo antecede, así el cursor siempre se ve.
-fn input_field(input: &LineInput, theme: &Theme) -> Div {
+fn input_field(input: &InputLine, theme: &Theme) -> Div {
     let (before, after) = input.text().split_at(input.cursor());
     let up_to_caret = div()
         .flex()
