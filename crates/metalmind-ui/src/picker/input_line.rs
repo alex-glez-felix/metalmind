@@ -1,6 +1,8 @@
-//! La línea donde se escribe el query: texto y cursor, con las teclas de
-//! edición de una línea de readline. Offsets en bytes.
+//! Un campo de una línea: el query de los pickers y las preguntas del
+//! panel. Texto y cursor, con las teclas de edición de readline. Offsets en
+//! bytes.
 
+use gpui_kit::Keystroke;
 use unicode_segmentation::UnicodeSegmentation as _;
 
 /// Una edición de la línea, como la piden las acciones `picker::`.
@@ -28,6 +30,36 @@ pub enum LineEdit<'a> {
     End,
 }
 
+impl LineEdit<'static> {
+    /// La tecla de edición que pide `keystroke`, si es una; el texto no,
+    /// que llega por el IME o como `key_char`.
+    #[must_use]
+    pub fn for_key(keystroke: &Keystroke) -> Option<Self> {
+        let modifiers = keystroke.modifiers;
+        if modifiers.alt || modifiers.platform || modifiers.function {
+            return None;
+        }
+        if modifiers.control {
+            return match keystroke.key.as_str() {
+                "u" => Some(Self::DeleteToStart),
+                "w" | "backspace" => Some(Self::DeleteWordBackward),
+                "a" => Some(Self::Home),
+                "e" => Some(Self::End),
+                _ => None,
+            };
+        }
+        match keystroke.key.as_str() {
+            "backspace" => Some(Self::DeleteBackward),
+            "delete" => Some(Self::DeleteForward),
+            "left" => Some(Self::Left),
+            "right" => Some(Self::Right),
+            "home" => Some(Self::Home),
+            "end" => Some(Self::End),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InputLine {
     text: String,
@@ -35,6 +67,25 @@ pub struct InputLine {
 }
 
 impl InputLine {
+    /// Con el cursor al final.
+    #[must_use]
+    pub fn new(text: &str) -> Self {
+        Self::with_cursor(text, text.len())
+    }
+
+    /// Con el cursor en `cursor`, o al final si no cae entre dos grafemas.
+    #[must_use]
+    pub fn with_cursor(text: &str, cursor: usize) -> Self {
+        let on_boundary = cursor == text.len()
+            || text
+                .grapheme_indices(true)
+                .any(|(offset, _)| offset == cursor);
+        Self {
+            text: text.to_owned(),
+            cursor: if on_boundary { cursor } else { text.len() },
+        }
+    }
+
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
@@ -188,6 +239,50 @@ mod tests {
             let mut input = line(before);
             assert_eq!(input.apply(edit), changed, "{before:?} {edit:?}");
             assert_eq!(show(&input), after, "{before:?} {edit:?}");
+        }
+    }
+
+    #[test]
+    fn el_cursor_inicial_cae_entre_grafemas() {
+        assert_eq!(show(&InputLine::new("año")), "año|");
+        assert_eq!(show(&InputLine::with_cursor("nota.md", 4)), "nota|.md");
+        assert_eq!(show(&InputLine::with_cursor("ñ", 1)), "ñ|");
+        assert_eq!(
+            show(&InputLine::with_cursor("cafe\u{301}s", 4)),
+            "cafe\u{301}s|"
+        );
+        assert_eq!(show(&InputLine::with_cursor("ab", 9)), "ab|");
+    }
+
+    #[test]
+    fn teclas_de_edicion() {
+        use gpui_kit::Modifiers;
+
+        let key = |key: &str, modifiers| Keystroke {
+            modifiers,
+            key: key.to_owned(),
+            key_char: None,
+        };
+        let none = Modifiers::none();
+        let ctrl = Modifiers::control();
+        let cases = [
+            (key("backspace", none), Some(LineEdit::DeleteBackward)),
+            (key("delete", none), Some(LineEdit::DeleteForward)),
+            (key("left", none), Some(LineEdit::Left)),
+            (key("right", none), Some(LineEdit::Right)),
+            (key("home", none), Some(LineEdit::Home)),
+            (key("end", none), Some(LineEdit::End)),
+            (key("u", ctrl), Some(LineEdit::DeleteToStart)),
+            (key("w", ctrl), Some(LineEdit::DeleteWordBackward)),
+            (key("backspace", ctrl), Some(LineEdit::DeleteWordBackward)),
+            (key("a", ctrl), Some(LineEdit::Home)),
+            (key("e", ctrl), Some(LineEdit::End)),
+            (key("c", ctrl), None),
+            (key("a", none), None),
+            (key("backspace", Modifiers::alt()), None),
+        ];
+        for (keystroke, edit) in cases {
+            assert_eq!(LineEdit::for_key(&keystroke), edit, "{keystroke:?}");
         }
     }
 }

@@ -3,7 +3,6 @@
 //! confirmar un borrado). Confirmar devuelve un [`Request`] que ejecuta
 //! quien tiene el vault; así las reglas de los nombres se prueban sin disco.
 
-mod input;
 mod marks;
 mod outline;
 
@@ -13,12 +12,12 @@ use metalmind_syntax::note_name;
 use metalmind_vault::tags::{Scope, Tags, tag_name};
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
-pub use self::input::LineInput;
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
 use crate::backlinks::BacklinkOutline;
 use crate::file_tree::FileTree;
 use crate::focus::{Focus, InScope};
+use crate::picker::InputLine;
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
 use crate::workspace::LinePosition;
@@ -75,20 +74,20 @@ pub enum NewEntry {
 /// Lo que el panel está preguntando.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Prompt {
-    Filter(LineInput),
+    Filter(InputLine),
     Create {
         parent: VaultPath,
         kind: NewEntry,
-        input: LineInput,
+        input: InputLine,
     },
     Rename {
         path: VaultPath,
-        input: LineInput,
+        input: InputLine,
     },
     /// Como renombrar, pero se escribe la ruta entera.
     Move {
         path: VaultPath,
-        input: LineInput,
+        input: InputLine,
     },
     ConfirmDelete {
         path: VaultPath,
@@ -98,18 +97,18 @@ pub enum Prompt {
     /// El nombre nuevo del tag elegido en la vista de tags.
     RenameTag {
         tag: String,
-        input: LineInput,
+        input: InputLine,
     },
     /// El tag con que se fusiona el elegido.
     MergeTag {
         tag: String,
-        input: LineInput,
+        input: InputLine,
     },
     /// Un campo de la página del tag elegido, con lo que tiene ahora.
     TagField {
         tag: String,
         field: TagField,
-        input: LineInput,
+        input: InputLine,
     },
 }
 
@@ -287,7 +286,7 @@ impl Panel {
     }
 
     /// El campo que se está editando, si hay uno.
-    pub fn input_mut(&mut self) -> Option<&mut LineInput> {
+    pub fn input_mut(&mut self) -> Option<&mut InputLine> {
         match self.prompt.as_mut()? {
             Prompt::Filter(input)
             | Prompt::Create { input, .. }
@@ -309,7 +308,7 @@ impl Panel {
     }
 
     pub fn start_filter(&mut self) {
-        self.open(Prompt::Filter(LineInput::new(self.tree.filter())));
+        self.open(Prompt::Filter(InputLine::new(self.tree.filter())));
     }
 
     /// Dentro de la carpeta seleccionada, o junto al archivo seleccionado;
@@ -327,7 +326,7 @@ impl Panel {
         self.open(Prompt::Create {
             parent,
             kind,
-            input: LineInput::default(),
+            input: InputLine::default(),
         });
     }
 
@@ -338,7 +337,7 @@ impl Panel {
     pub fn start_rename(&mut self) {
         if self.view == PanelView::Tags {
             if let Some(tag) = self.selected_tag() {
-                let input = LineInput::new(&tag);
+                let input = InputLine::new(&tag);
                 self.open(Prompt::RenameTag { tag, input });
             }
             return;
@@ -348,7 +347,7 @@ impl Panel {
         };
         let name = path.name();
         let stem = name.rfind('.').filter(|&dot| dot > 0).unwrap_or(name.len());
-        let input = LineInput::with_cursor(name, stem);
+        let input = InputLine::with_cursor(name, stem);
         self.open(Prompt::Rename { path, input });
     }
 
@@ -359,7 +358,7 @@ impl Panel {
             if let Some(tag) = self.selected_tag() {
                 self.open(Prompt::MergeTag {
                     tag,
-                    input: LineInput::new(""),
+                    input: InputLine::new(""),
                 });
             }
             return;
@@ -367,14 +366,14 @@ impl Panel {
         let Some(path) = self.tree.selected().cloned() else {
             return;
         };
-        let input = LineInput::new(path.as_str());
+        let input = InputLine::new(path.as_str());
         self.open(Prompt::Move { path, input });
     }
 
     /// En la vista de tags, pregunta `field` del tag elegido.
     pub fn start_tag_field(&mut self, field: TagField) {
         if let Some(tag) = self.selected_tag() {
-            let input = LineInput::new(&field.current(self.tags.tags(), &tag));
+            let input = InputLine::new(&field.current(self.tags.tags(), &tag));
             self.open(Prompt::TagField { tag, field, input });
         }
     }
@@ -554,7 +553,7 @@ fn request(prompt: &Prompt) -> Result<Option<Request>, PromptError> {
 }
 
 /// Lo escrito como otro tag, sin `#`; vacío o igual a `tag`, ninguno.
-fn other_tag(tag: &str, input: &LineInput) -> Result<Option<String>, PromptError> {
+fn other_tag(tag: &str, input: &InputLine) -> Result<Option<String>, PromptError> {
     let text = input.text().trim();
     if text.is_empty() {
         return Ok(None);
