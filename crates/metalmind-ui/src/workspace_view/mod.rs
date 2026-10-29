@@ -21,6 +21,7 @@ mod tag_change;
 mod text_search;
 mod toasts;
 mod unresolved;
+mod vault_undo;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -51,8 +52,8 @@ use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
 use self::reroute::{Reroute, reroute};
-use self::tag_change::LastTagChange;
 use self::toasts::ToastTimers;
+use self::vault_undo::VaultUndo;
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -69,7 +70,7 @@ pub struct WorkspaceView {
     overlay: Option<Overlay>,
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
-    last_tag_change: Option<LastTagChange>,
+    vault_undo: VaultUndo,
     /// El plan de un renombre que se está armando, antes de su vista previa.
     renaming: Option<Task<()>>,
     notes: NoteSettings,
@@ -127,7 +128,7 @@ impl WorkspaceView {
             overlay: None,
             autosave: None,
             toast_timers: ToastTimers::default(),
-            last_tag_change: None,
+            vault_undo: VaultUndo::default(),
             renaming: None,
             notes,
             _subscriptions: [repaint, events, list_events, activation],
@@ -266,9 +267,9 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.change_tags(&request, window, cx);
             }
-            Effect::UndoTagChange => {
+            Effect::UndoVaultChange => {
                 self.sync_editors(cx);
-                self.undo_tag_change(cx);
+                self.undo_vault_change(cx);
                 self.focus(window, cx);
             }
             Effect::NewNote(request) => {

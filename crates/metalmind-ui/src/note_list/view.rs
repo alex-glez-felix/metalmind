@@ -61,7 +61,7 @@ pub struct NoteListView {
     pub(super) marked: Option<String>,
     /// Al llegar las primeras tarjetas se elige la nota activa.
     reveal_on_load: bool,
-    /// Cuántas veces eligió el usuario una fuente: `:tagundo` no deshace una
+    /// Cuántas veces eligió el usuario una fuente: `:vaultundo` no deshace una
     /// fuente que se eligió después del cambio.
     source_choices: u64,
     /// Las tarjetas se leen la primera vez que la lista se ve: plegada no

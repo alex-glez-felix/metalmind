@@ -90,8 +90,9 @@ named_actions! {
         /// `:tagmerge #a #b`: la vista previa de pasar las notas de `#a` a
         /// `#b`.
         MergeTag = "tags::merge",
-        /// `:tagundo`: deshace el último cambio de tags aplicado.
-        UndoTagChange = "tags::undo",
+        /// `:vaultundo` (o `:tagundo`): deshace el último cambio aplicado al
+        /// vault, sea de tags o el renombre de una nota con sus links.
+        UndoVaultChange = "vault::undo",
         /// `:tagaliases #tag [alias…]`: la vista previa de dejar esos alias
         /// en la página del tag; sin ninguno, de quitarlos.
         EditTagAliases = "tags::edit_aliases",
@@ -150,7 +151,8 @@ const EX: &[(&str, usize, Command)] = &[
     ("set", 2, Command::Set),
     ("tagrename", 9, Command::RenameTag),
     ("tagmerge", 8, Command::MergeTag),
-    ("tagundo", 7, Command::UndoTagChange),
+    ("tagundo", 7, Command::UndoVaultChange),
+    ("vaultundo", 9, Command::UndoVaultChange),
     ("tagaliases", 10, Command::EditTagAliases),
     ("tagparents", 10, Command::EditTagParents),
     ("tagicon", 7, Command::SetTagIcon),
@@ -200,7 +202,7 @@ impl Command {
             | Self::Set
             | Self::RenameTag
             | Self::MergeTag
-            | Self::UndoTagChange
+            | Self::UndoVaultChange
             | Self::NewNoteFromTemplate
             | Self::OpenDailyNote
             | Self::EditTagAliases
