@@ -5,8 +5,7 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Bounds, Context, EntityInputHandler, KeyDownEvent, Keystroke, Pixels, Point, UTF16Selection,
-    Window,
+    Bounds, Context, EntityInputHandler, KeyDownEvent, Pixels, Point, UTF16Selection, Window,
 };
 
 use super::model::Prompt;
@@ -26,7 +25,7 @@ impl NoteListView {
         if self.list.prompt().is_none() {
             return;
         }
-        let Some(edit) = line_edit(&event.keystroke) else {
+        let Some(edit) = LineEdit::for_key(&event.keystroke) else {
             return;
         };
         cx.stop_propagation();
@@ -46,32 +45,6 @@ impl NoteListView {
             Some(line) => ImeLine::new(line.text().to_owned(), line.cursor(), marked),
             None => ImeLine::new(String::new(), 0, ""),
         }
-    }
-}
-
-/// La tecla de edición que pide `keystroke`, si es una.
-fn line_edit(keystroke: &Keystroke) -> Option<LineEdit<'static>> {
-    let modifiers = keystroke.modifiers;
-    if modifiers.alt || modifiers.platform || modifiers.function {
-        return None;
-    }
-    if modifiers.control {
-        return match keystroke.key.as_str() {
-            "u" => Some(LineEdit::DeleteToStart),
-            "w" | "backspace" => Some(LineEdit::DeleteWordBackward),
-            "a" => Some(LineEdit::Home),
-            "e" => Some(LineEdit::End),
-            _ => None,
-        };
-    }
-    match keystroke.key.as_str() {
-        "backspace" => Some(LineEdit::DeleteBackward),
-        "delete" => Some(LineEdit::DeleteForward),
-        "left" => Some(LineEdit::Left),
-        "right" => Some(LineEdit::Right),
-        "home" => Some(LineEdit::Home),
-        "end" => Some(LineEdit::End),
-        _ => None,
     }
 }
 
