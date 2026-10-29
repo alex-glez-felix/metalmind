@@ -9,7 +9,7 @@
 use std::fs;
 use std::path::Path;
 
-use metalmind_config::{Color, Length, Location, MarkColumns, Px, Theme, Themes};
+use metalmind_config::{Color, Length, Location, MarkColumns, Px, TextColumns, Theme, Themes};
 use pretty_assertions::assert_eq;
 
 fn load(text: &str) -> Result<Theme, metalmind_config::Diagnostic> {
@@ -135,6 +135,14 @@ fn medidas_fuera_de_rango_son_error() {
             "layout:\n  gutter_mark_columns: 9\n",
             "las columnas de las marks van de 3 a 8",
         ),
+        (
+            "layout:\n  note_max_width: 19\n",
+            "un ancho en columnas de texto va de 20 a 1000",
+        ),
+        (
+            "layout:\n  note_max_width: 1001\n",
+            "un ancho en columnas de texto va de 20 a 1000",
+        ),
     ];
     for (yaml, expected) in cases {
         let error = load(&format!("extends: metalmind-oscuro\n{yaml}")).unwrap_err();
@@ -196,5 +204,19 @@ fn las_columnas_de_las_marks_aceptan_de_3_a_8() {
             theme.metrics.layout.gutter_mark_columns,
             MarkColumns(columns)
         );
+    }
+}
+
+/// El ancho de lectura de fábrica y los extremos que acepta un tema.
+#[test]
+fn el_ancho_de_lectura_va_en_columnas_de_20_a_1000() {
+    let factory = load("extends: metalmind-oscuro\n").unwrap();
+    assert_eq!(factory.metrics.layout.note_max_width, TextColumns(80));
+    for columns in [20, 1000] {
+        let theme = load(&format!(
+            "extends: metalmind-oscuro\nlayout:\n  note_max_width: {columns}\n"
+        ))
+        .unwrap();
+        assert_eq!(theme.metrics.layout.note_max_width, TextColumns(columns));
     }
 }

@@ -12,7 +12,9 @@ use serde::{Deserialize, Deserializer};
 
 use super::represent::{Plain, Represent, Units};
 use super::units::LengthRef;
-pub use super::units::{Count, Factor, Fraction, Length, MarkColumns, Px, TextStyle, Weight};
+pub use super::units::{
+    Count, Factor, Fraction, Length, MarkColumns, Px, TextColumns, TextStyle, Weight,
+};
 use crate::diagnostic::Location;
 use crate::parse::Spanned;
 
@@ -40,7 +42,16 @@ macro_rules! plain_metric {
     )*};
 }
 
-plain_metric!(Px, Factor, Fraction, Weight, Count, MarkColumns, TextStyle);
+plain_metric!(
+    Px,
+    Factor,
+    Fraction,
+    Weight,
+    Count,
+    MarkColumns,
+    TextColumns,
+    TextStyle
+);
 
 impl Metric for Length {
     type Raw = LengthRef;
@@ -278,6 +289,9 @@ metric_group! {
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
         gutter_mark_columns: MarkColumns,
+        /// Lo más que mide el texto de una nota, en columnas; en un panel
+        /// más ancho, la nota se centra.
+        note_max_width: TextColumns,
         /// Alrededor de la imagen de una fórmula, donde cae el suavizado de
         /// sus bordes.
         math_padding: Length,

@@ -24,5 +24,6 @@ pub use settings::{
 pub use theme::{
     BUILTIN_THEMES, Color, Count, CursorColors, DEFAULT_THEME, Factor, Fraction, Heading, Headings,
     Layout, Length, LoadError, MarkColumns, Metrics, Plain, Px, Radius, Represent, RoleColors,
-    Rows, Spacing, Stroke, SyntaxColors, Text, TextStyle, Theme, Themes, UiColors, Units, Weight,
+    Rows, Spacing, Stroke, SyntaxColors, Text, TextColumns, TextStyle, Theme, Themes, UiColors,
+    Units, Weight,
 };

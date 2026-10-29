@@ -6,7 +6,9 @@
 use std::fmt::Debug;
 
 use super::color::Color;
-use super::units::{Count, Factor, Fraction, Length, MarkColumns, Px, TextStyle, Weight};
+use super::units::{
+    Count, Factor, Fraction, Length, MarkColumns, Px, TextColumns, TextStyle, Weight,
+};
 
 /// Cómo lleva `Self` un valor de la unidad `T`.
 pub trait Represent<T> {
@@ -24,6 +26,7 @@ pub trait Units:
     + Represent<Count>
     + Represent<Weight>
     + Represent<MarkColumns>
+    + Represent<TextColumns>
     + Represent<TextStyle>
 {
 }

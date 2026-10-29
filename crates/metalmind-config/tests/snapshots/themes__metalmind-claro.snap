@@ -1,6 +1,5 @@
 ---
 source: crates/metalmind-config/tests/themes.rs
-assertion_line: 21
 expression: loaded.value
 ---
 Theme {
@@ -314,6 +313,9 @@ Theme {
             ),
             gutter_mark_columns: MarkColumns(
                 3,
+            ),
+            note_max_width: TextColumns(
+                80,
             ),
             math_padding: Length(
                 1.0,

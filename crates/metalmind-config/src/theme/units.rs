@@ -102,6 +102,26 @@ impl TryFrom<u8> for MarkColumns {
     }
 }
 
+/// El ancho de lectura de una nota en columnas de texto, de 20 a 1000:
+/// con menos no cabe una frase; 1000 ya es más que cualquier pantalla.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u16")]
+pub struct TextColumns(pub u16);
+
+impl TryFrom<u16> for TextColumns {
+    type Error = String;
+
+    fn try_from(value: u16) -> Result<Self, String> {
+        if (20..=1000).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(format!(
+                "un ancho en columnas de texto va de 20 a 1000, no {value}"
+            ))
+        }
+    }
+}
+
 /// Un tamaño de letra: veces `font.size` y el interlineado, veces el tamaño.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(try_from = "RawTextStyle")]

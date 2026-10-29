@@ -20,7 +20,7 @@ pub use headings::{Heading, Headings};
 pub use loader::{LoadError, Themes};
 pub use metrics::{
     Count, Factor, Fraction, Layout, Length, MarkColumns, Metrics, Px, Radius, Rows, Spacing,
-    Stroke, Text, TextStyle, Weight,
+    Stroke, Text, TextColumns, TextStyle, Weight,
 };
 pub use represent::{Plain, Represent, Units};
 
