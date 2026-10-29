@@ -21,6 +21,7 @@ include = [
     "packaging/linux/metalmind.desktop",
     "packaging/linux/metalmind.svg",
     "packaging/linux/io.github.alex_glez_felix.metalmind.metainfo.xml",
+    "crates/metalmind-ui/assets/tabler.LICENSE",
 ]
 
 # Las mismas librerías que pide GPUI en ci.yml.

@@ -239,6 +239,11 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   directorio desde el que se lanzó Metalmind.
 - El ancho del panel se ajusta con `panel.width` en `config.yaml` y sus colores
   con las claves `ui.panel_*` y `ui.menu_*` del tema.
+- Íconos de [Tabler](https://tabler.io/icons) (MIT) en toda la UI: la barra de
+  vistas, el árbol (la carpeta abierta se ve abierta), la vista de tags, los
+  backlinks y las listas de autocompletado. Un tag con `icon: tabler:<nombre>`
+  en su página muestra ese ícono; el set entero viene en el binario.
+- Ícono de la app nuevo, con el mismo trazo que los de la UI.
 
 #### Búsqueda de texto (M6)
 

@@ -256,7 +256,7 @@ Theme {
                 4.0,
             ),
             icon_size: Factor(
-                0.8,
+                1.0,
             ),
             rail_width: Length(
                 36.0,

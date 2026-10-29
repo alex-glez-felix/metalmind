@@ -22,6 +22,7 @@ metalmind-syntax.workspace = true
 metalmind-template.workspace = true
 metalmind-vault.workspace = true
 metalmind-vim.workspace = true
+miniz_oxide.workspace = true
 png.workspace = true
 ratex-layout.workspace = true
 ratex-parser.workspace = true

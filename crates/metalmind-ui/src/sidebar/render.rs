@@ -13,11 +13,12 @@ use metalmind_vault::{EntryKind, VaultPath};
 
 use metalmind_keymap::{Action, PanelAction, context};
 
+use super::Sidebar;
 use super::menu::ContextMenu;
-use super::{Sidebar, icons};
 use crate::actions::Dispatch;
 use crate::file_tree::Row;
 use crate::focus_indicator::focus_indicator;
+use crate::icons;
 use crate::panel::{Fill, Outline as _, PanelView, Prompt, RowMarks};
 use crate::theme::Theme;
 
@@ -286,7 +287,7 @@ fn row_view(
     row_frame(at, row.depth, marks, theme, cx)
         .text_color(text_color)
         .child(icons::disclosure(row.kind, row.expanded, theme))
-        .child(icons::entry(row.kind, theme))
+        .child(icons::entry(row.kind, row.expanded, theme))
         .child(div().min_w_0().truncate().child(name(row, theme)))
         .into_any_element()
 }

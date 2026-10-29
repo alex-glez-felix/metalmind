@@ -127,14 +127,15 @@ pub fn write(root: &Path) {
         "Proyectos/foto de las vacaciones con un nombre larguísimo.jpg",
         b"\xff\xd8\xff",
     );
-    // Las páginas dan la jerarquía y los íconos de la vista de tags.
+    // Las páginas dan la jerarquía y los íconos de la vista de tags: un
+    // emoji y uno de Tabler.
     file(
         "tags/rust.md",
         "---\nicon: 🦀\naliases: [rs]\n---\nEl lenguaje.\n".as_bytes(),
     );
     file(
         "tags/diseño.md",
-        "---\nicon: 🎨\nparents: [rust]\naliases: [arquitectura-de-la-interfaz-y-sus-principios-a-largo-plazo-con-un-alias-que-no-cabe-ni-en-la-ventana-mas-ancha-que-hay-porque-sigue-y-sigue-sin-parar-por-mucho-que-uno-quiera-leerlo-entero-de-una-sola-vez-en-la-lista-de-tags-del-autocompletado]\n---\n".as_bytes(),
+        "---\nicon: tabler:palette\nparents: [rust]\naliases: [arquitectura-de-la-interfaz-y-sus-principios-a-largo-plazo-con-un-alias-que-no-cabe-ni-en-la-ventana-mas-ancha-que-hay-porque-sigue-y-sigue-sin-parar-por-mucho-que-uno-quiera-leerlo-entero-de-una-sola-vez-en-la-lista-de-tags-del-autocompletado]\n---\n".as_bytes(),
     );
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
     file(FORMULAS, SPIKE_FORMULAS.as_bytes());
