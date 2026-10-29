@@ -5,7 +5,7 @@ use std::rc::Rc;
 use gpui_kit::{
     AnyElement, AnyTooltip, App, AvailableSpace, Bounds, Entity, InteractiveElement as _,
     IntoElement, PaintQuad, Pixels, Point, ShapedLine, Size, StatefulInteractiveElement as _,
-    Styled as _, TextRun, Window, div, fill, point, px, size,
+    Styled as _, TextRun, Window, div, fill, point, size,
 };
 
 use super::Editor;
@@ -63,21 +63,12 @@ impl Gutter {
         }
     }
 
-    /// Lo que queda a la derecha del margen, para el texto.
-    pub fn text_bounds(&self, bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-        let width = (bounds.size.width - self.width).max(px(0.));
-        Bounds::new(
-            point(bounds.left() + self.width, bounds.top()),
-            size(width, bounds.size.height),
-        )
-    }
-
-    /// El fondo del margen en toda la altura de `bounds`, desde su borde
+    /// El fondo del margen en toda la altura de `column`, desde su borde
     /// izquierdo, y en cada línea pintada su mark y su número, a su altura.
     pub fn paint(
         &self,
         view: &PaneView<'_>,
-        bounds: Bounds<Pixels>,
+        column: Bounds<Pixels>,
         layout: &FrameLayout,
         typeface: &Typeface,
         theme: &Theme,
@@ -88,8 +79,8 @@ impl Gutter {
         let numbers_left = left + cells(self.column_width, self.mark_columns);
         let background = fill(
             Bounds::new(
-                bounds.origin,
-                size(text_left - bounds.left(), bounds.size.height),
+                column.origin,
+                size(text_left - column.left(), column.size.height),
             ),
             theme.ui.gutter,
         );
@@ -248,7 +239,7 @@ pub fn tooltip_origin(
     point(x, y.max(Pixels::ZERO))
 }
 
-fn cells(width: Pixels, columns: usize) -> Pixels {
+pub(super) fn cells(width: Pixels, columns: usize) -> Pixels {
     width * f32::from(u16::try_from(columns).unwrap_or(u16::MAX))
 }
 

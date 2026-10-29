@@ -29,6 +29,17 @@ pub struct Typeface {
     pub size: Pixels,
 }
 
+impl Typeface {
+    /// La letra del texto de `window`, la que hereda el editor.
+    pub fn of(window: &Window) -> Self {
+        let style = window.text_style();
+        Self {
+            font: style.font(),
+            size: style.font_size.to_pixels(window.rem_size()),
+        }
+    }
+}
+
 /// Lo que mide la línea `line` en píxeles, con lo que mide el motor.
 pub fn line_height(view: &PaneView<'_>, line: usize) -> f32 {
     units(view.layout().height(line))
