@@ -1,6 +1,7 @@
 use std::cell::RefCell;
-use std::fs;
+use std::fs::{self, File};
 use std::rc::Rc;
+use std::time::{Duration, SystemTime};
 
 use gpui_kit::{Entity, TestAppContext, VisualTestContext};
 use metalmind_config::Config;
@@ -24,6 +25,7 @@ struct Fixture {
     events: Rc<RefCell<Vec<NoteListEvent>>>,
 }
 
+/// De la más reciente a la más vieja: es el orden de la lista.
 const FILES: &[(&str, &str)] = &[("a.md", "#rust"), ("b.md", "# Be\nTexto."), ("c.md", "Ce.")];
 
 /// Una lista plegada del buzón con `b.md` abierta en el panel de edición.
@@ -37,8 +39,18 @@ fn fixture_with<'c>(
     visible: Option<bool>,
 ) -> (Fixture, &'c mut VisualTestContext) {
     let dir = tempfile::tempdir().unwrap();
-    for (name, text) in files {
-        fs::write(dir.path().join(name), text).unwrap();
+    let now = SystemTime::now();
+    // Sin fechas explícitas, escrituras seguidas pueden caer en el mismo tick
+    // del reloj del sistema de archivos o no, y el orden cambiaría.
+    for ((name, text), minutes_ago) in files.iter().zip(0..) {
+        let path = dir.path().join(name);
+        fs::write(&path, text).unwrap();
+        File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(now - Duration::from_secs(minutes_ago * 60))
+            .unwrap();
     }
     let (vault, updates) = Vault::open(dir.path()).unwrap();
     let root = vault.root().to_owned();
