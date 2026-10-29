@@ -281,7 +281,7 @@ const SCENES: &[(&str, &[Step])] = &[
         "renombrar-tag-aplicado",
         &[Step::Keys("<Esc>:tagrename #archivado #guardado<CR><CR>")],
     ),
-    ("renombrar-tag-deshecho", &[Step::Keys(":tagundo<CR>")]),
+    ("renombrar-tag-deshecho", &[Step::Keys(":vaultundo<CR>")]),
     // Notas nuevas desde plantillas (06 §11). Las plantillas llegan aquí,
     // como de otro programa, para no cambiar las pantallas de antes: el menú
     // de un tag con su nota nueva, la pregunta del nombre desde el tag, el
@@ -540,7 +540,8 @@ const SCENES: &[(&str, &[Step])] = &[
     // `listas.md` enlazan a `Metalmind/plan`; con el filtro, es la última
     // fila del árbol): la vista previa con el renombre primero y elegido (su
     // ruta nueva entera abajo), una línea quitada, `x` sobre el renombre,
-    // que no se quita, y lo aplicado.
+    // que no se quita, lo aplicado, deshecho con `:vaultundo` y otro
+    // `:vaultundo` sin nada que deshacer.
     (
         "renombrar-nota",
         &[Step::Keys(concat!(
@@ -551,6 +552,11 @@ const SCENES: &[(&str, &[Step])] = &[
     ("renombrar-nota-quitado", &[Step::Keys("jx")]),
     ("renombrar-nota-fijo", &[Step::Keys("kx")]),
     ("renombrar-nota-aplicado", &[Step::Keys("<CR>")]),
+    (
+        "renombrar-nota-deshecho",
+        &[Step::Keys("<C-w>l:vaultundo<CR>")],
+    ),
+    ("nada-que-deshacer", &[Step::Keys(":vaultundo<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

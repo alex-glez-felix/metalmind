@@ -9,11 +9,12 @@ use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, Entity, Task, Window};
 use metalmind_vault::{
-    ApplyError, Changes, LinkIndex, RenameConflict, RenamePlan, UndoReport, Vault, VaultPath,
+    ApplyError, Changes, LinkIndex, RenameConflict, RenamePlan, Vault, VaultPath,
 };
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
+use super::vault_undo::{is_clean, leftovers};
 use crate::change_preview::{ChangePreview, ChangePreviewEvent, ChangePreviewView, Notice};
 use crate::workspace::Message;
 
@@ -223,7 +224,8 @@ impl WorkspaceView {
         }
     }
 
-    /// Sin links que cambien: los documentos abiertos siguen al archivo.
+    /// Sin links que cambien: los documentos abiertos siguen al archivo, y
+    /// `:vaultundo` lo deshace como a cualquier renombre.
     fn rename_now(
         &mut self,
         vault: &Vault,
@@ -236,7 +238,14 @@ impl WorkspaceView {
             workspace.rename_file(vault, from, to)
         });
         match renamed {
-            Ok(()) => self.reveal_renamed(to, cx),
+            Ok(applied) => {
+                self.vault_undo.remember(title(from, to), applied);
+                self.reveal_renamed(to, cx);
+            }
+            // Solo hay un renombre: si se paró, no se hizo nada y basta su causa.
+            Err(ApplyError::Interrupted { cause, .. }) => {
+                self.rename_failed(cause.to_string(), cx);
+            }
             Err(error) => self.rename_failed(error.to_string(), cx),
         }
     }
@@ -272,8 +281,13 @@ impl WorkspaceView {
             Ok(applied) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
+                self.vault_undo.remember(title, applied);
                 self.reveal_renamed(to, cx);
-                self.tell(Message::Info(format!("{summary}; ahora es {to}")), cx);
+                // Corto: la barra recorta lo que no cabe, y el título ya se vio.
+                self.tell(
+                    Message::Info(format!("{summary}; :vaultundo lo deshace")),
+                    cx,
+                );
             }
             Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
                 self.rename_failed(format!("{title}: no se cambió nada: {cause}"), cx);
@@ -378,26 +392,16 @@ fn preview(
     changes: Changes,
     unsaved: impl Fn(&VaultPath) -> bool,
 ) -> Option<ChangePreview> {
-    let title = format!("Renombrar {} a {}", plan.from, plan.to);
     let notices = conflicts_notice(&plan.conflicts, &plan.to)
         .into_iter()
         .collect();
-    ChangePreview::new(title, changes, notices, unsaved).map(ChangePreview::with_fixed_renames)
+    ChangePreview::new(title(&plan.from, &plan.to), changes, notices, unsaved)
+        .map(ChangePreview::with_fixed_renames)
 }
 
-fn is_clean(report: &UndoReport) -> bool {
-    report.changed.is_empty() && report.failed.is_empty() && report.renames.is_empty()
-}
-
-/// Lo que no se pudo devolver.
-fn leftovers(report: &UndoReport) -> String {
-    let files = report
-        .changed
-        .iter()
-        .chain(report.failed.iter().map(|(path, _)| path));
-    let mut left: Vec<String> = files.map(ToString::to_string).collect();
-    left.extend(report.renames.iter().map(ToString::to_string));
-    left.join(", ")
+/// Cómo se llama el renombre en la vista previa y en los avisos.
+fn title(from: &VaultPath, to: &VaultPath) -> String {
+    format!("Renombrar {from} a {to}")
 }
 
 /// Cuántos links quedan rotos porque no se pueden reescribir, y dónde

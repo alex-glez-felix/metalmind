@@ -1005,6 +1005,48 @@ fn renombrar_una_nota_actualiza_sus_links() {
     assert_eq!(smoke.read("d.md"), "# B\n");
 }
 
+/// `:vaultundo` deshace el renombre de `b.md` con sus links: la nota vuelve
+/// a su nombre y los links a como estaban.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn vaultundo_deshace_el_renombre_y_sus_links() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "ver [[b]] y [x](./b.md)\n");
+    smoke.write("b.md", "# B\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<C-w>hj");
+    let tree = window.wait_still(EDITOR_TEXT);
+    window.type_keys("r<BS>d<CR>");
+    window.wait_change("la vista previa", EDITOR_TEXT, &tree);
+    window.wait_still(EDITOR_TEXT);
+    window.type_keys("<CR>");
+    smoke.wait_contents("a.md", "ver [[d]] y [x](./d.md)\n");
+    window.type_keys("<C-w>l:vaultundo<CR>");
+    smoke.wait_contents("a.md", "ver [[b]] y [x](./b.md)\n");
+    smoke.wait_files(&["a.md", "b.md"]);
+    assert_eq!(smoke.read("b.md"), "# B\n");
+}
+
+/// Un renombre sin links que cambien también se deshace, y no el cambio de
+/// antes: aquí, el de tags.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn vaultundo_deshace_un_renombre_sin_links_y_no_el_cambio_anterior() {
+    let smoke = Smoke::new();
+    smoke.write("a.md", "uno #rust\n");
+    smoke.write("b.md", "nada\n");
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagrename #rust #lang<CR><CR>");
+    smoke.wait_contents("a.md", "uno #lang\n");
+    window.type_keys("<C-w>hjr<BS>c<CR>");
+    smoke.wait_files(&["a.md", "c.md"]);
+    window.type_keys("<C-w>l:vaultundo<CR>");
+    smoke.wait_files(&["a.md", "b.md"]);
+    assert_eq!(smoke.read("a.md"), "uno #lang\n");
+}
+
 /// Si el renombre falla después de reescribir los links (aquí, una carpeta
 /// sin permiso de escritura), los links vuelven a como estaban: no quedan
 /// apuntando a una ruta que no existe.

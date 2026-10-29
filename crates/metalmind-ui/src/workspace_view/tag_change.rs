@@ -1,29 +1,18 @@
-//! `:tagrename`, `:tagmerge` y `:tagundo` en la ventana: arma el plan con
-//! los tags del vault, muestra su vista previa, aplica lo que quedó con
-//! [`Vault::apply`] y guarda lo aplicado para deshacerlo (05 §5).
+//! `:tagrename` y `:tagmerge` en la ventana: arma el plan con los tags del
+//! vault, muestra su vista previa, aplica lo que quedó con [`Vault::apply`]
+//! y lo guarda para `:vaultundo` (05 §5).
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::{
-    Applied, ApplyError, Changes, FileOpError, Rename, UndoReport, Vault, VaultPath,
-};
+use metalmind_vault::{ApplyError, Changes, FileOpError, Rename, Vault, VaultPath};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
+use super::vault_undo::ListFollowed;
 use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
 use crate::tag_change::TagRequest;
 use crate::workspace::{Message, shown_path};
-
-/// El último cambio de tags aplicado, para `:tagundo`.
-pub(super) struct LastTagChange {
-    title: String,
-    applied: Applied,
-    /// El tag del que la lista de notas pasó a otro, a cuál y cuántas
-    /// fuentes había elegido el usuario: deshacer el cambio la devuelve si
-    /// no eligió otra después.
-    list_followed: Option<(String, String, u64)>,
-}
 
 impl WorkspaceView {
     pub(super) fn change_tags(
@@ -88,14 +77,17 @@ impl WorkspaceView {
             && self
                 .list
                 .update(cx, |list, cx| list.rename_tag(from, to, cx))
-            && let Some(last) = &mut self.last_tag_change
         {
             let choices = self.list.read(cx).source_choices();
-            last.list_followed = Some((from.clone(), to.clone(), choices));
+            self.vault_undo.list_followed(ListFollowed {
+                from: from.clone(),
+                to: to.clone(),
+                choices,
+            });
         }
     }
 
-    /// Aplica `changes` y lo guarda para `:tagundo`; `summary` es el aviso si
+    /// Aplica `changes` y lo guarda para `:vaultundo`; `summary` es el aviso si
     /// todo sale bien. Devuelve si se aplicó entero.
     pub(super) fn apply_tag_changes(
         &mut self,
@@ -111,13 +103,9 @@ impl WorkspaceView {
                 whole = true;
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
-                self.last_tag_change = Some(LastTagChange {
-                    title,
-                    applied,
-                    list_followed: None,
-                });
+                self.vault_undo.remember(title, applied);
                 // Corto: la barra recorta lo que no cabe, y el título ya se vio.
-                Message::Info(format!("{summary}; :tagundo lo deshace"))
+                Message::Info(format!("{summary}; :vaultundo lo deshace"))
             }
             Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
                 Message::Error(format!("{title}: no se cambió nada: {cause}"))
@@ -126,13 +114,9 @@ impl WorkspaceView {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
                 let message = Message::Error(format!(
-                    "{title} se paró a medias ({cause}). :tagundo deshace lo hecho"
+                    "{title} se paró a medias ({cause}). :vaultundo deshace lo hecho"
                 ));
-                self.last_tag_change = Some(LastTagChange {
-                    title,
-                    applied: *applied,
-                    list_followed: None,
-                });
+                self.vault_undo.remember(title, *applied);
                 message
             }
             Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
@@ -159,64 +143,6 @@ impl WorkspaceView {
             Ok(page) => self.edit_note(&shown_path(&root.join(page.as_str())), window, cx),
             Err(error) => self.tell(Message::Error(error), cx),
         }
-    }
-
-    pub(super) fn undo_tag_change(&mut self, cx: &mut Context<Self>) {
-        let Some(last) = self.last_tag_change.take() else {
-            let text = "no hay ningún cambio de tags que deshacer".to_owned();
-            return self.tell(Message::Error(text), cx);
-        };
-        let unsaved = self.unsaved_paths(cx);
-        let busy: BTreeSet<VaultPath> = last
-            .applied
-            .touched()
-            .filter(|path| unsaved.contains(path))
-            .collect();
-        if !busy.is_empty() {
-            let paths: Vec<&str> = busy.iter().map(VaultPath::as_str).collect();
-            let text = format!(
-                "no se deshizo: {} tiene cambios sin guardar; guárdalos antes de :tagundo",
-                paths.join(", ")
-            );
-            self.last_tag_change = Some(last);
-            return self.tell(Message::Error(text), cx);
-        }
-        let vault = self.session.read(cx).vault();
-        let message = match vault.undo(&last.applied) {
-            Ok(report) => {
-                let back: Vec<Rename> = report
-                    .moved_back
-                    .iter()
-                    .map(|rename| Rename {
-                        from: rename.to.clone(),
-                        to: rename.from.clone(),
-                    })
-                    .collect();
-                self.follow_renames(&vault, back.iter(), cx);
-                // Donde haya quedado cada archivo, aunque un renombre no se
-                // haya podido deshacer.
-                self.reread(&vault, last.applied.touched(), cx);
-                // Solo si se deshizo todo: lo que cambió después sigue con el
-                // tag nuevo, y la lista se quedaría sin esas notas.
-                let whole = report.changed.is_empty()
-                    && report.failed.is_empty()
-                    && report.renames.is_empty();
-                if let Some((from, to, choices)) = &last.list_followed
-                    && whole
-                    && self.list.read(cx).source_choices() == *choices
-                {
-                    self.list
-                        .update(cx, |list, cx| list.rename_tag(to, from, cx));
-                }
-                undone(&last.title, &report)
-            }
-            Err(error) => {
-                let text = format!("no se deshizo {}: {error}", last.title);
-                self.last_tag_change = Some(last);
-                Message::Error(text)
-            }
-        };
-        self.tell(message, cx);
     }
 
     /// Con la vista previa abierta, lo que se guardó desde que se abrió deja
@@ -285,23 +211,5 @@ impl WorkspaceView {
             workspace.show_message(message);
             cx.notify();
         });
-    }
-}
-
-fn undone(title: &str, report: &UndoReport) -> Message {
-    let mut skipped: Vec<String> = report
-        .changed
-        .iter()
-        .chain(report.failed.iter().map(|(path, _)| path))
-        .map(|path| path.as_str().to_owned())
-        .collect();
-    skipped.extend(report.renames.iter().map(ToString::to_string));
-    if skipped.is_empty() {
-        Message::Info(format!("se deshizo {title}"))
-    } else {
-        let skipped = skipped.join(", ");
-        Message::Error(format!(
-            "se deshizo {title} salvo lo que cambió después o falló: {skipped}"
-        ))
     }
 }

@@ -1,5 +1,5 @@
 //! La lista de notas en la ventana: plegarla, elegir su fuente en un picker
-//! y etiquetar la nota elegida, que se aplica y se deshace (`:tagundo`) como
+//! y etiquetar la nota elegida, que se aplica y se deshace (`:vaultundo`) como
 //! un cambio de tags (05 §5).
 
 use std::sync::Arc;
@@ -141,7 +141,7 @@ impl WorkspaceView {
     }
 
     /// Agrega `tags` al frontmatter de `note`. Como un cambio de tags, no
-    /// escribe por debajo de un buffer con cambios y `:tagundo` lo deshace.
+    /// escribe por debajo de un buffer con cambios y `:vaultundo` lo deshace.
     fn tag_note(&mut self, note: &VaultPath, tags: &[String], cx: &mut Context<Self>) {
         if self.unsaved_paths(cx).contains(note) {
             let text = format!("no se etiquetó {note}: tiene cambios sin guardar; guárdala antes");

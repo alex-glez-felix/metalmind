@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use metalmind_vault::{FileOpError, Vault, VaultPath};
+use metalmind_vault::{Applied, ApplyError, Changes, FileOpError, Rename, Vault, VaultPath};
 
 use metalmind_buffer::{Buffer, ByteOffset, Selection, Selections};
 
@@ -103,20 +103,28 @@ impl Workspace {
 
     /// Renombra o mueve `from` a `to` en `vault`; los documentos abiertos de
     /// `from` (o de lo que contiene, si es carpeta) pasan a su ruta nueva y
-    /// conservan sus cambios sin guardar.
+    /// conservan sus cambios sin guardar. Lo devuelto sirve para
+    /// [`Vault::undo`].
     ///
     /// # Errors
-    /// Los de [`Vault::rename`]; los documentos quedan como estaban.
+    /// Los de [`Vault::apply`]; los documentos quedan como estaban.
     pub fn rename_file(
         &mut self,
         vault: &Vault,
         from: &VaultPath,
         to: &VaultPath,
-    ) -> Result<(), FileOpError> {
-        vault.rename(from, to)?;
+    ) -> Result<Applied, ApplyError> {
+        let rename = Rename {
+            from: from.clone(),
+            to: to.clone(),
+        };
+        let applied = vault.apply(&Changes {
+            renames: vec![rename],
+            ..Changes::default()
+        })?;
         let root = vault.root();
         self.moved(&root.join(from.as_str()), &root.join(to.as_str()));
-        Ok(())
+        Ok(applied)
     }
 
     /// `old` (un archivo o una carpeta) pasó a llamarse `new`, aquí o por
