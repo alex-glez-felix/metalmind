@@ -25,6 +25,7 @@ mod vault;
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
+use std::ops::Range;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -592,10 +593,9 @@ fn set_writable(folder: &Path, writable: bool) {
 const TREE_ROW: i16 = 26;
 const TREE_LEFT: i16 = 36;
 const TREE_WIDTH: i16 = 260;
-/// Con `editor.padding` por defecto (12 a los lados, 8 arriba) y líneas de
-/// texto de 21: la columna de las marks y el centro de cada línea sin heading.
+/// Con `editor.padding` por defecto (8 arriba) y líneas de texto de 21: el
+/// centro de cada línea sin heading.
 const EDITOR_LEFT: i16 = TREE_LEFT + TREE_WIDTH;
-const MARK_X: i16 = EDITOR_LEFT + 12 + 4;
 const TEXT_TOP: i16 = 8;
 const TEXT_LINE: i16 = 21;
 
@@ -619,7 +619,7 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
         i16::try_from(height).unwrap() - 2,
     );
     let mut seen = frame_count(&frames);
-    let mark_color = gutter_mark_color(theme);
+    let mark_color = MarkInk::of(theme);
     window.resize(width.into(), height.into());
     let mut report = Vec::new();
     let mut previous = None;
@@ -707,43 +707,98 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
 }
 
 /// Dónde dejar el ratón para ver el tooltip de una mark en `image`.
-fn mark_position(at: MarkAt, image: &Image, mark_color: [u8; 3]) -> (i16, i16) {
+fn mark_position(at: MarkAt, image: &Image, mark_color: MarkInk) -> (i16, i16) {
+    let editors = i16::try_from(image.width).unwrap() - EDITOR_LEFT;
+    let line = |line: i16| TEXT_TOP + TEXT_LINE * line + TEXT_LINE / 2;
     match at {
-        MarkAt::Line(line) => (MARK_X, TEXT_TOP + TEXT_LINE * line + TEXT_LINE / 2),
-        MarkAt::Lowest => (MARK_X, lowest_mark(image, MARK_X, mark_color)),
+        MarkAt::Line(at) => (mark_x(image, EDITOR_LEFT, line(at), mark_color), line(at)),
+        MarkAt::Lowest => lowest_mark(image, EDITOR_LEFT..EDITOR_LEFT + editors / 2, mark_color),
         MarkAt::RightmostPane => {
-            let editors = i16::try_from(image.width).unwrap() - EDITOR_LEFT;
             let pane_left = EDITOR_LEFT + editors * 3 / 4;
-            (pane_left + MARK_X - EDITOR_LEFT, TEXT_TOP + TEXT_LINE / 2)
+            (mark_x(image, pane_left, line(0), mark_color), line(0))
         }
     }
 }
 
-/// La fila más baja con la letra de una mark en la columna de `x`: se busca
-/// su color en la imagen, porque dónde termina el texto depende de la ventana.
-fn lowest_mark(image: &Image, x: i16, mark_color: [u8; 3]) -> i16 {
+/// Las columnas de la imagen en `columns` con el color de una mark en la
+/// fila `row`.
+fn mark_columns(
+    image: &Image,
+    columns: Range<i16>,
+    row: usize,
+    mark_color: MarkInk,
+) -> impl Iterator<Item = i16> {
     let width = usize::from(image.width);
-    let columns = usize::try_from(x - 4).unwrap()..usize::try_from(x + 6).unwrap();
+    columns.filter(move |&column| {
+        let at = (row * width + usize::try_from(column).unwrap()) * 3;
+        mark_color.covers(&image.rgb[at..at + 3])
+    })
+}
+
+/// La primera letra de una mark desde `left` a la altura `y`: la nota se
+/// centra en el panel (#172), así que la columna de las marks depende del
+/// ancho y se busca por su color.
+fn mark_x(image: &Image, left: i16, y: i16, mark_color: MarkInk) -> i16 {
+    let width = i16::try_from(image.width).unwrap();
+    let rows =
+        usize::try_from(y - TEXT_LINE / 4).unwrap()..usize::try_from(y + TEXT_LINE / 4).unwrap();
+    rows.filter_map(|row| mark_columns(image, left..width, row, mark_color).next())
+        .min()
+        .map(|x| x + 2)
+        .expect("ninguna mark en la línea")
+}
+
+/// La fila más baja con la letra de una mark en `columns`: dónde termina
+/// el texto depende de la ventana.
+fn lowest_mark(image: &Image, columns: Range<i16>, mark_color: MarkInk) -> (i16, i16) {
     (0..usize::from(image.height))
         .rev()
-        .find(|&row| {
-            columns.clone().any(|column| {
-                let at = (row * width + column) * 3;
-                image.rgb[at..at + 3] == mark_color
-            })
+        .find_map(|row| {
+            let x = mark_columns(image, columns.clone(), row, mark_color).next()?;
+            Some((x + 2, i16::try_from(row).unwrap() - 4))
         })
-        .map(|row| i16::try_from(row).unwrap() - 4)
         .expect("ninguna mark en la columna")
 }
 
-/// El color de `ui.gutter_mark` en el tema de fábrica `theme`.
-fn gutter_mark_color(theme: &str) -> [u8; 3] {
-    let dir = tempfile::tempdir().unwrap();
-    let loaded = Themes::new(dir.path().to_owned())
-        .load(&format!("metalmind-{theme}"))
-        .unwrap();
-    let [_, red, green, blue] = loaded.value.ui.gutter_mark.rgb.to_be_bytes();
-    [red, green, blue]
+/// La tinta de las marks en el tema de fábrica: `ui.gutter_mark` sobre el
+/// fondo del margen.
+#[derive(Clone, Copy)]
+struct MarkInk {
+    mark: [f32; 3],
+    ground: [f32; 3],
+}
+
+impl MarkInk {
+    fn of(theme: &str) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let ui = Themes::new(dir.path().to_owned())
+            .load(&format!("metalmind-{theme}"))
+            .unwrap()
+            .value
+            .ui;
+        let rgb = |color: metalmind_config::Color| {
+            let [_, red, green, blue] = color.rgb.to_be_bytes();
+            [red, green, blue].map(f32::from)
+        };
+        Self {
+            mark: rgb(ui.gutter_mark),
+            ground: rgb(ui.gutter),
+        }
+    }
+
+    /// Si `pixel` es la letra de una mark: el suavizado mezcla su color con
+    /// el fondo, así que se mide cuánto de la mezcla tiene (al menos la
+    /// mitad) y lo lejos que queda de ella (otro color, como el del texto).
+    fn covers(self, pixel: &[u8]) -> bool {
+        let ink: Vec<f32> = (0..3).map(|i| self.mark[i] - self.ground[i]).collect();
+        let seen: Vec<f32> = (0..3)
+            .map(|i| f32::from(pixel[i]) - self.ground[i])
+            .collect();
+        let dot = |a: &[f32], b: &[f32]| a.iter().zip(b).map(|(a, b)| a * b).sum::<f32>();
+        let share = dot(&seen, &ink) / dot(&ink, &ink);
+        let off: Vec<f32> = seen.iter().zip(&ink).map(|(s, i)| s - share * i).collect();
+        share >= 0.5 && dot(&off, &off).sqrt() <= 16.
+    }
 }
 
 /// Distancia en píxeles entre dos tramos del color de error que ya no son
