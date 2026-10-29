@@ -188,7 +188,7 @@ layout:
   panel_gap: 6
   panel_indent: 14
   panel_button_padding_x: xs
-  icon_size: 0.8       # veces la fuente, redondeado
+  icon_size: 1.0       # veces la fuente, redondeado
   rail_width: 36
   rail_button_size: 28
   list_width: 360
