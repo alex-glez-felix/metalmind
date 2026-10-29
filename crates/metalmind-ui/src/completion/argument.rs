@@ -3,6 +3,7 @@
 //! `-#` van los tags, los mismos que en `#` dentro de una nota, y si no las
 //! carpetas del vault. Aceptar escribe la palabra entera, con sus escapes.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use metalmind_search::FuzzyMatcher;
@@ -88,14 +89,18 @@ impl ArgumentCompletions {
                 if list.is_for(&sources.tags, typed, TagPlace::Inline) {
                     Some(list)
                 } else {
-                    list.with_candidates(sources.tags, false, sources.names)
+                    list.with_candidates(sources.tags, &BTreeSet::new(), sources.names)
                 }
                 .map(|list| ArgumentList::Tags { list, negated })
             }
-            (FocusWord::Tag { typed, negated }, _) => {
-                TagCompletions::open(sources.tags, typed, TagPlace::Inline, false, sources.names)
-                    .map(|list| ArgumentList::Tags { list, negated })
-            }
+            (FocusWord::Tag { typed, negated }, _) => TagCompletions::open(
+                sources.tags,
+                typed,
+                TagPlace::Inline,
+                &BTreeSet::new(),
+                sources.names,
+            )
+            .map(|list| ArgumentList::Tags { list, negated }),
             (FocusWord::Folder(typed), Some(ArgumentList::Folders(list))) => {
                 if list.is_for(&sources.folders, typed) {
                     Some(list)

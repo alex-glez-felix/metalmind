@@ -6,6 +6,7 @@
 //! `#ru` ofrece `Rust` antes que `arquitectura` aunque esta tenga más.
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use metalmind_search::{FuzzyMatcher, Query};
@@ -34,18 +35,17 @@ struct Shown {
 }
 
 impl TagCompletions {
-    /// La lista para `typed` en `place`; `None` si ningún tag coincide.
-    /// Con `only_here`, lo escrito solo existe en el vault por esta misma
-    /// ocurrencia (ya autoguardada) y no se ofrece a sí mismo.
+    /// La lista para `typed` en `place`, sin los tags de `hidden`; `None` si
+    /// ningún tag coincide.
     #[must_use]
     pub fn open(
         candidates: Arc<[TagCompletion]>,
         typed: &str,
         place: TagPlace,
-        only_here: bool,
+        hidden: &BTreeSet<TagKey>,
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
-        let shown = matches(&candidates, typed, only_here, matcher);
+        let shown = matches(&candidates, typed, hidden, matcher);
         (!shown.is_empty()).then(|| Self {
             candidates,
             typed: typed.to_owned(),
@@ -75,10 +75,10 @@ impl TagCompletions {
     pub fn with_candidates(
         &self,
         candidates: Arc<[TagCompletion]>,
-        only_here: bool,
+        hidden: &BTreeSet<TagKey>,
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
-        let mut list = Self::open(candidates, &self.typed, self.place, only_here, matcher)?;
+        let mut list = Self::open(candidates, &self.typed, self.place, hidden, matcher)?;
         let Some(chosen) = self.selection.chosen() else {
             return Some(list);
         };
@@ -134,14 +134,14 @@ struct Side<'a> {
 fn matches(
     candidates: &[TagCompletion],
     typed: &str,
-    only_here: bool,
+    hidden: &BTreeSet<TagKey>,
     matcher: &mut FuzzyMatcher,
 ) -> Vec<Shown> {
     let typed = TagKey::new(typed);
     let haystacks: Vec<(usize, Option<&str>)> = candidates
         .iter()
         .enumerate()
-        .filter(|(_, completion)| !(only_here && completion.key == typed))
+        .filter(|(_, completion)| !hidden.contains(&completion.key))
         .flat_map(|(index, completion)| {
             std::iter::once((index, None)).chain(
                 completion

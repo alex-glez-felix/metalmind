@@ -13,9 +13,11 @@ fn typed(session: &Session) -> Option<TypedTag> {
     session.workspace.typed_tag(session.pane()).unwrap()
 }
 
+/// Lo escrito tras `hola #`, en la primera línea.
 fn inline(typed: &str) -> TypedTag {
     TypedTag {
         typed: typed.to_owned(),
+        range: 6..6 + typed.len(),
         place: TagPlace::Inline,
     }
 }
@@ -64,6 +66,7 @@ fn en_tags_del_frontmatter() {
         typed(&session),
         Some(TypedTag {
             typed: "ra".to_owned(),
+            range: 11..13,
             place: TagPlace::Tags,
         })
     );
@@ -157,6 +160,7 @@ fn en_un_frontmatter_largo() {
         typed(&session),
         Some(TypedTag {
             typed: "ra".to_owned(),
+            range: 11..13,
             place: TagPlace::Tags,
         })
     );

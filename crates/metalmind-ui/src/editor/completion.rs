@@ -6,6 +6,7 @@
 //! historial, el nombre del comando y su argumento, #156) van en el pop-up
 //! de la línea de comandos (ver `command_popup`).
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use gpui_kit::{App, Context, KeyContext, Window};
@@ -13,7 +14,7 @@ use metalmind_keymap::{View, context};
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
 use metalmind_vault::VaultPath;
-use metalmind_vault::tags::{TagCompletion, TagKey, Tags};
+use metalmind_vault::tags::{TagCompletion, Tags};
 use metalmind_vim::{Mode, TypedArgument, TypedCommand};
 
 use super::Editor;
@@ -257,9 +258,10 @@ impl Editor {
         {
             return None;
         }
-        let only_here = note
-            .as_ref()
-            .is_some_and(|note| tags.is_only_once_in(&TagKey::new(&typed.typed), note));
+        let hidden = match &note {
+            Some(note) => tags.unwritten_in(note, || self.written(cx), &typed.range),
+            None => BTreeSet::new(),
+        };
         let candidates = self.completion.tag_candidates(tags);
         let matcher = &mut self.completion.names;
         match self.completion.list.take() {
@@ -267,11 +269,18 @@ impl Editor {
                 Some(list)
             }
             Some(List::Tags(list)) if list.is_typing(&typed.typed, typed.place) => {
-                list.with_candidates(candidates, only_here, matcher)
+                list.with_candidates(candidates, &hidden, matcher)
             }
-            _ => TagCompletions::open(candidates, &typed.typed, typed.place, only_here, matcher),
+            _ => TagCompletions::open(candidates, &typed.typed, typed.place, &hidden, matcher),
         }
         .map(List::Tags)
+    }
+
+    /// El texto del panel como está ahora, guardado o no.
+    fn written(&self, cx: &App) -> String {
+        self.view(cx)
+            .map(|view| view.buffer().to_string())
+            .unwrap_or_default()
     }
 
     /// Escribe lo elegido y cierra la lista: lo que queda escrito ya es el
