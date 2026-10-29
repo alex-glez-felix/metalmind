@@ -13,9 +13,10 @@ use metalmind_syntax::note_name;
 use metalmind_vault::{EntryKind, LinkContext, VaultPath};
 use unicode_width::UnicodeWidthChar as _;
 
+use super::Sidebar;
 use super::render::row_frame;
-use super::{Sidebar, icons};
 use crate::backlinks::Row;
+use crate::icons;
 use crate::panel::{Outline as _, RowMarks};
 use crate::theme::Theme;
 
@@ -92,7 +93,7 @@ fn backlink_row(
         } => row_frame(at, 0, marks, theme, cx)
             .text_color(theme.ui.panel_foreground)
             .child(disclosure(at, *expanded, theme, cx))
-            .child(icons::entry(EntryKind::Note, theme))
+            .child(icons::entry(EntryKind::Note, false, theme))
             .child(note_label(source, theme))
             .child(muted(theme).flex_none().child(count.to_string())),
         Row::Link { context, .. } => row_frame(at, 1, marks, theme, cx)

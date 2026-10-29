@@ -6,7 +6,6 @@
 
 mod backlink_rows;
 mod handlers;
-pub(crate) mod icons;
 mod input;
 mod menu;
 mod prompt;

@@ -186,17 +186,7 @@ impl Theme {
             + self.layout.list_row_padding_y * 2.
             + self.stroke.border
     }
-
-    /// El lado corto de los íconos provisionales del panel, que no son
-    /// cuadrados; se van con los de Tabler (#41).
-    #[must_use]
-    pub fn icon_short_side(&self) -> Pixels {
-        self.icon_size * ICON_SHAPE_RATIO
-    }
 }
-
-/// Proporción de las formas de carpeta y nota mientras no hay íconos (#41).
-const ICON_SHAPE_RATIO: f32 = 0.75;
 
 fn pick_font(configured: Option<&str>, installed: &[String]) -> Result<SharedString, NoMonoFont> {
     if let Some(family) = configured {

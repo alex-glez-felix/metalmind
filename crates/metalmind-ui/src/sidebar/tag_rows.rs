@@ -6,11 +6,11 @@ use std::ops::Range;
 use gpui_kit::{
     AnyElement, Context, Div, IntoElement, ParentElement as _, Styled as _, div, uniform_list,
 };
-use metalmind_vault::tags::TagIcon;
 use metalmind_vault::{EntryKind, VaultPath};
 
+use super::Sidebar;
 use super::render::row_frame;
-use super::{Sidebar, icons};
+use crate::icons::{self, Icon};
 use crate::panel::{Outline as _, RowMarks};
 use crate::tag_outline::{Row, RowKind};
 use crate::theme::Theme;
@@ -75,43 +75,23 @@ fn tag_row(
             ..
         } => frame
             .child(icons::arrow(expandable.then_some(*expanded), theme))
-            .child(tag_icon(icon.as_ref(), theme))
+            .child(icons::tag(icon.as_ref(), theme))
             .child(label(name))
             .child(count_label(*count, theme)),
         RowKind::Note => {
             let name = row.note().map_or("", VaultPath::name);
             frame
                 .child(icons::arrow(None, theme))
-                .child(icons::entry(EntryKind::Note, theme))
+                .child(icons::entry(EntryKind::Note, false, theme))
                 .child(label(name))
         }
         RowKind::Inbox { count, expanded } => frame
             .child(icons::arrow((*count > 0).then_some(*expanded), theme))
-            .child(glyph("∅", theme))
+            .child(icons::icon(Icon::Inbox, theme.ui.panel_muted, theme))
             .child(label("Sin tags"))
             .child(count_label(*count, theme)),
     }
     .into_any_element()
-}
-
-/// El emoji de la página del tag o, si no tiene, un `#` tenue. Los íconos
-/// de un set llegan con los de Tabler (#41).
-fn tag_icon(icon: Option<&TagIcon>, theme: &Theme) -> Div {
-    match icon {
-        Some(TagIcon::Emoji(emoji)) => icon_slot(theme).child(emoji.clone()),
-        Some(TagIcon::Set { .. }) | None => glyph("#", theme),
-    }
-}
-
-/// Un carácter tenue en el lugar del ícono.
-fn glyph(text: &'static str, theme: &Theme) -> Div {
-    icon_slot(theme)
-        .text_color(theme.ui.panel_muted)
-        .child(text)
-}
-
-fn icon_slot(theme: &Theme) -> Div {
-    div().w(theme.icon_size).flex_none().flex().justify_center()
 }
 
 fn label(text: &str) -> Div {

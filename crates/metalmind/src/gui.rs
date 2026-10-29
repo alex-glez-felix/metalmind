@@ -186,7 +186,9 @@ fn open(prepared: Prepared, clock: FrameClock, cx: &mut App) -> Result<(), Start
 fn run_app(start: impl FnOnce(&mut App, Failure) + 'static) -> Result<(), StartError> {
     let failure = Failure::default();
     let in_app = failure.clone();
-    gpui_kit::application().run(move |cx| start(cx, in_app));
+    gpui_kit::application()
+        .with_assets(metalmind_ui::Assets)
+        .run(move |cx| start(cx, in_app));
     failure.0.take().map_or(Ok(()), Err)
 }
 

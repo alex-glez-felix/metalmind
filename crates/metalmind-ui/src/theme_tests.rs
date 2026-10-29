@@ -125,7 +125,6 @@ fn las_medidas_de_fabrica_son_las_de_antes() {
             4.,
         ),
         ("icon_size", theme.icon_size, 12.),
-        ("icon_short_side", theme.icon_short_side(), 9.),
         ("rail_width", theme.layout.rail_width, 36.),
         ("rail_button_size", theme.layout.rail_button_size, 28.),
         ("list_width", theme.layout.list_width, 360.),

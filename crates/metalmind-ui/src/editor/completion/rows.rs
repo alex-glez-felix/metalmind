@@ -4,16 +4,15 @@
 
 use std::ops::Range;
 
-use gpui_kit::{Div, ParentElement as _, Styled as _, div};
+use gpui_kit::{Div, ParentElement as _, Styled as _};
 use metalmind_syntax::note_name;
 use metalmind_vault::EntryKind;
-use metalmind_vault::tags::TagIcon;
 
 use super::super::completion_menu::MenuRow;
 use crate::completion::{
     ArgumentCompletions, ArgumentList, CommandCompletions, LinkCompletions, TagCompletions,
 };
-use crate::sidebar::icons;
+use crate::icons;
 use crate::theme::Theme;
 
 pub(super) fn tags(list: &TagCompletions, visible: Range<usize>, theme: &Theme) -> Vec<MenuRow> {
@@ -21,7 +20,7 @@ pub(super) fn tags(list: &TagCompletions, visible: Range<usize>, theme: &Theme) 
         .skip(visible.start)
         .take(visible.len())
         .map(|(completion, alias)| MenuRow {
-            icon: tag_icon(completion.icon.as_ref(), theme),
+            icon: icons::tag(completion.icon.as_ref(), theme),
             name: completion.name.clone(),
             detail: alias.map(|alias| format!("alias {alias}")),
             count: Some(completion.count.to_string()),
@@ -36,7 +35,7 @@ pub(super) fn links(list: &LinkCompletions, visible: Range<usize>, theme: &Theme
         .map(|path| {
             let name = path.name();
             MenuRow {
-                icon: icons::entry(EntryKind::of_file(path), theme),
+                icon: icons::entry(EntryKind::of_file(path), false, theme),
                 name: note_name::strip_extension(name).unwrap_or(name).to_owned(),
                 detail: path
                     .parent()
@@ -81,7 +80,7 @@ pub(super) fn argument(
         .skip(visible.start)
         .take(visible.len())
         .map(|folder| MenuRow {
-            icon: icons::entry(EntryKind::Folder, theme),
+            icon: icons::entry(EntryKind::Folder, false, theme),
             name: format!("{folder}/"),
             detail: None,
             count: None,
@@ -89,20 +88,8 @@ pub(super) fn argument(
         .collect()
 }
 
-/// El emoji de la página del tag o un `#` tenue, como en el panel.
-fn tag_icon(icon: Option<&TagIcon>, theme: &Theme) -> Div {
-    match icon {
-        Some(TagIcon::Emoji(emoji)) => icon_slot(theme).child(emoji.clone()),
-        Some(TagIcon::Set { .. }) | None => muted_glyph("#", theme),
-    }
-}
-
 fn muted_glyph(glyph: &'static str, theme: &Theme) -> Div {
-    icon_slot(theme)
+    icons::slot(theme)
         .text_color(theme.ui.panel_muted)
         .child(glyph)
-}
-
-fn icon_slot(theme: &Theme) -> Div {
-    div().w(theme.icon_size).flex_none().flex().justify_center()
 }
