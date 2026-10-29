@@ -11,7 +11,8 @@ use metalmind_vault::{
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::tag_change::{TagChangeEvent, TagChangePreview, TagChangeView, TagRequest};
+use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
+use crate::tag_change::TagRequest;
 use crate::workspace::{Message, shown_path};
 
 /// El último cambio de tags aplicado, para `:tagundo`.
@@ -31,18 +32,17 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let plan = match request.plan(&self.session.read(cx).tags()) {
-            Ok(plan) => plan,
+        let unsaved = self.unsaved_paths(cx);
+        let tags = self.session.read(cx).tags();
+        let preview = match request.preview(&tags, |path| unsaved.contains(path)) {
+            Ok(Some(preview)) => preview,
+            Ok(None) => {
+                let text = format!("{}: no hay nada que cambiar", request.title());
+                return self.tell(Message::Info(text), cx);
+            }
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),
         };
-        let unsaved = self.unsaved_paths(cx);
-        let Some(preview) =
-            TagChangePreview::new(request.title(), plan, |path| unsaved.contains(path))
-        else {
-            let text = format!("{}: no hay nada que cambiar", request.title());
-            return self.tell(Message::Info(text), cx);
-        };
-        let view = cx.new(|cx| TagChangeView::new(preview, cx));
+        let view = cx.new(|cx| ChangePreviewView::new(preview, cx));
         // La lista de notas sigue a un tag renombrado o fusionado.
         let renamed = match request {
             TagRequest::Rename { from, to } => Some((from.clone(), to.clone())),
@@ -53,8 +53,9 @@ impl WorkspaceView {
             this.on_tag_change_event(view, *event, renamed.as_ref(), window, cx);
         });
         self.show(
-            Overlay::TagChange {
+            Overlay::ChangePreview {
                 view,
+                rename: None,
                 _events: events,
             },
             window,
@@ -64,13 +65,13 @@ impl WorkspaceView {
 
     fn on_tag_change_event(
         &mut self,
-        view: &Entity<TagChangeView>,
-        event: TagChangeEvent,
+        view: &Entity<ChangePreviewView>,
+        event: ChangePreviewEvent,
         renamed: Option<&(String, String)>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let apply = (event == TagChangeEvent::Apply).then(|| {
+        let apply = (event == ChangePreviewEvent::Apply).then(|| {
             let preview = view.read(cx).preview();
             (
                 preview.title().to_owned(),
@@ -220,8 +221,8 @@ impl WorkspaceView {
 
     /// Con la vista previa abierta, lo que se guardó desde que se abrió deja
     /// de bloquear, como con el autoguardado.
-    pub(super) fn refresh_tag_change(&mut self, cx: &mut Context<Self>) {
-        let Some(Overlay::TagChange { view, .. }) = &self.overlay else {
+    pub(super) fn refresh_change_preview(&mut self, cx: &mut Context<Self>) {
+        let Some(Overlay::ChangePreview { view, .. }) = &self.overlay else {
             return;
         };
         let view = view.clone();
@@ -245,7 +246,7 @@ impl WorkspaceView {
 
     /// Los documentos abiertos de lo que renombró el vault pasan a su ruta
     /// nueva.
-    fn follow_renames<'r>(
+    pub(super) fn follow_renames<'r>(
         &self,
         vault: &Vault,
         renames: impl Iterator<Item = &'r Rename>,

@@ -1,24 +1,34 @@
-//! La vista previa de un cambio de tags: una fila por edición, archivo
-//! nuevo o renombre del plan, cada una se puede quitar, y lo que queda es
-//! lo que se aplica.
+//! El modelo de la vista previa: una fila por edición, archivo nuevo o
+//! renombre del plan, cada una se puede quitar, y lo que queda es lo que se
+//! aplica.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
-use metalmind_vault::tags::{PlanNotice, TagPlan};
 use metalmind_vault::{Changes, FileEdits, TextEdit, VaultPath};
 
-pub struct TagChangePreview {
+pub struct ChangePreview {
     title: String,
-    plan: TagPlan,
+    changes: Changes,
+    notices: Vec<Notice>,
     rows: Vec<Change>,
     dropped: BTreeSet<usize>,
     selected: usize,
     /// Los archivos del plan con cambios sin guardar en un buffer.
     unsaved: BTreeSet<VaultPath>,
+    /// Los renombres son lo que se pidió: no se pueden quitar.
+    fixed_renames: bool,
+}
+
+/// Algo que dice el plan sobre sí mismo, como que dos tags se fusionan.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Notice {
+    pub text: String,
+    /// Si impide aplicar.
+    pub blocks: bool,
 }
 
 /// Dónde está, en el plan, lo que muestra una fila.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Change {
     Edit { file: usize, edit: usize },
     Create(usize),
@@ -36,6 +46,8 @@ pub struct PreviewRow<'a> {
     pub before: &'a str,
     pub after: &'a str,
     pub dropped: bool,
+    /// No se puede quitar: un renombre fijo.
+    pub fixed: bool,
     /// El archivo con cambios sin guardar que pisaría: el que edita, o el
     /// origen o el destino de un renombre.
     pub unsaved: Option<&'a VaultPath>,
@@ -46,21 +58,25 @@ pub struct PreviewRow<'a> {
 pub enum Blocked<'a> {
     /// No quedó ningún cambio.
     Nothing,
-    Notice(&'a PlanNotice),
+    Notice(&'a Notice),
     /// Archivos con cambios sin guardar: escribirlos pisaría el buffer.
     Unsaved(Vec<&'a VaultPath>),
 }
 
-impl TagChangePreview {
+impl ChangePreview {
     /// `unsaved` dice si un archivo del vault tiene cambios sin guardar.
-    /// `None` si el plan no tiene nada que mostrar: ni cambios ni avisos.
-    /// Un aviso que bloquea se muestra aunque no haya cambios.
+    /// `None` si no hay nada que mostrar: ni cambios ni avisos. Un aviso que
+    /// bloquea se muestra aunque no haya cambios.
     #[must_use]
-    pub fn new(title: String, plan: TagPlan, unsaved: impl Fn(&VaultPath) -> bool) -> Option<Self> {
-        if plan.changes.is_empty() && plan.notices.is_empty() {
+    pub fn new(
+        title: String,
+        changes: Changes,
+        notices: Vec<Notice>,
+        unsaved: impl Fn(&VaultPath) -> bool,
+    ) -> Option<Self> {
+        if changes.is_empty() && notices.is_empty() {
             return None;
         }
-        let changes = &plan.changes;
         let edits = changes.edits.iter().enumerate().flat_map(|(file, edits)| {
             (0..edits.edits.len()).map(move |edit| Change::Edit { file, edit })
         });
@@ -70,20 +86,61 @@ impl TagChangePreview {
             .collect();
         let mut preview = Self {
             title,
-            plan,
+            changes,
+            notices,
             rows,
             dropped: BTreeSet::new(),
             selected: 0,
             unsaved: BTreeSet::new(),
+            fixed_renames: false,
         };
         preview.set_unsaved(unsaved);
         Some(preview)
     }
 
+    /// Con los renombres primero, elegidos y fijos: son lo que se pidió, su
+    /// destino es lo que se confirma y tiene que leerse entero en el
+    /// detalle, y quitar uno dejaría las ediciones que lo acompañan
+    /// apuntando a la ruta vieja.
+    #[must_use]
+    pub fn with_fixed_renames(mut self) -> Self {
+        self.fixed_renames = true;
+        self.rows
+            .sort_by_key(|change| !matches!(change, Change::Rename(_)));
+        self.selected = 0;
+        self
+    }
+
+    /// Esta vista previa, armada de nuevo, deja quitadas las filas que se
+    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo) y la
+    /// elegida donde estaba.
+    pub fn carry_over(&mut self, old: &Self) {
+        let key = |preview: &Self, row: usize| {
+            preview.row(row).map(|row| {
+                (
+                    row.path.clone(),
+                    row.before.to_owned(),
+                    row.after.to_owned(),
+                )
+            })
+        };
+        let dropped: HashSet<_> = old
+            .dropped
+            .iter()
+            .filter_map(|&row| key(old, row))
+            .collect();
+        self.dropped = (0..self.rows.len())
+            .filter(|&row| {
+                !self.is_fixed(row) && key(self, row).is_some_and(|key| dropped.contains(&key))
+            })
+            .collect();
+        self.selected = old.selected.min(self.rows.len().saturating_sub(1));
+    }
+
     /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como
     /// tras un autoguardado con la vista previa abierta.
     pub fn set_unsaved(&mut self, unsaved: impl Fn(&VaultPath) -> bool) {
-        let changes = &self.plan.changes;
+        let changes = &self.changes;
         let renames = changes.renames.iter();
         self.unsaved = changes
             .edits
@@ -101,8 +158,8 @@ impl TagChangePreview {
     }
 
     #[must_use]
-    pub fn notices(&self) -> &[PlanNotice] {
-        &self.plan.notices
+    pub fn notices(&self) -> &[Notice] {
+        &self.notices
     }
 
     #[must_use]
@@ -118,7 +175,7 @@ impl TagChangePreview {
     /// La fila `row`, si existe.
     #[must_use]
     pub fn row(&self, row: usize) -> Option<PreviewRow<'_>> {
-        let changes = &self.plan.changes;
+        let changes = &self.changes;
         let unsaved = |path: &VaultPath| self.unsaved.get(path);
         let (path, line, before, after, unsaved) = match *self.rows.get(row)? {
             Change::Edit { file, edit } => {
@@ -146,6 +203,7 @@ impl TagChangePreview {
             before,
             after,
             dropped: self.dropped.contains(&row),
+            fixed: self.is_fixed(row),
             unsaved,
         })
     }
@@ -171,11 +229,16 @@ impl TagChangePreview {
     }
 
     /// Quita la fila elegida de lo que se aplica, o la devuelve si ya estaba
-    /// quitada.
+    /// quitada. Un renombre fijo no se quita.
     pub fn toggle_selected(&mut self) {
-        if self.selected < self.rows.len() && !self.dropped.remove(&self.selected) {
-            self.dropped.insert(self.selected);
+        let row = self.selected;
+        if row < self.rows.len() && !self.is_fixed(row) && !self.dropped.remove(&row) {
+            self.dropped.insert(row);
         }
+    }
+
+    fn is_fixed(&self, row: usize) -> bool {
+        self.fixed_renames && matches!(self.rows.get(row), Some(Change::Rename(_)))
     }
 
     /// Cuántos cambios quedan y en cuántos archivos.
@@ -194,7 +257,7 @@ impl TagChangePreview {
     /// Lo primero que impide aplicar, si algo lo impide.
     #[must_use]
     pub fn blocked(&self) -> Option<Blocked<'_>> {
-        if let Some(notice) = self.plan.notices.iter().find(|notice| notice.blocks()) {
+        if let Some(notice) = self.notices.iter().find(|notice| notice.blocks) {
             return Some(Blocked::Notice(notice));
         }
         let kept = || {
@@ -209,18 +272,29 @@ impl TagChangePreview {
         kept().next().is_none().then_some(Blocked::Nothing)
     }
 
-    /// Lo que se aplica: el plan sin las filas quitadas. Las filas van en
-    /// el orden del plan: ediciones, archivos nuevos y renombres.
+    /// Lo que se aplica: el plan sin las filas quitadas, en su orden.
     #[must_use]
     pub fn changes(&self) -> Changes {
-        let plan = &self.plan.changes;
-        let mut kept = (0..self.rows.len()).map(|row| !self.dropped.contains(&row));
-        let mut keep = || kept.next().unwrap_or(false);
+        let plan = &self.changes;
+        let dropped: HashSet<Change> = self.dropped.iter().map(|&row| self.rows[row]).collect();
+        let keep = |change: Change| !dropped.contains(&change);
         let edits = plan
             .edits
             .iter()
-            .filter_map(|file| {
-                let edits: Vec<TextEdit> = file.edits.iter().filter(|_| keep()).cloned().collect();
+            .enumerate()
+            .filter_map(|(file_at, file)| {
+                let edits: Vec<TextEdit> = file
+                    .edits
+                    .iter()
+                    .enumerate()
+                    .filter(|&(edit, _)| {
+                        keep(Change::Edit {
+                            file: file_at,
+                            edit,
+                        })
+                    })
+                    .map(|(_, edit)| edit.clone())
+                    .collect();
                 (!edits.is_empty()).then(|| FileEdits {
                     path: file.path.clone(),
                     edits,
@@ -228,14 +302,26 @@ impl TagChangePreview {
                 })
             })
             .collect();
-        let creates = plan.creates.iter().filter(|_| keep()).cloned().collect();
-        let renames = plan.renames.iter().filter(|_| keep()).cloned().collect();
         Changes {
             edits,
-            creates,
-            renames,
+            creates: kept(&plan.creates, Change::Create, keep),
+            renames: kept(&plan.renames, Change::Rename, keep),
         }
     }
+}
+
+/// Los de `items` que no se quitaron; `change` dice qué fila es cada uno.
+fn kept<T: Clone>(
+    items: &[T],
+    change: fn(usize) -> Change,
+    keep: impl Fn(Change) -> bool,
+) -> Vec<T> {
+    items
+        .iter()
+        .enumerate()
+        .filter(|&(at, _)| keep(change(at)))
+        .map(|(_, item)| item.clone())
+        .collect()
 }
 
 fn plural(count: usize, one: &str, many: &str) -> String {

@@ -48,6 +48,9 @@ pub enum SidebarEvent {
     /// Renombrar o fusionar un tag: la ventana arma el plan y muestra su
     /// vista previa.
     ChangeTags(TagRequest),
+    /// Renombrar o mover una entrada: la ventana mira qué links cambian y,
+    /// si alguno, muestra la vista previa antes de aplicar.
+    Rename { from: VaultPath, to: VaultPath },
     /// Una nota nueva con este tag: la ventana pregunta su nombre y usa la
     /// plantilla que pida su página.
     NewTaggedNote(String),
@@ -215,6 +218,14 @@ impl Sidebar {
             return;
         };
         self.panel.tree.reveal(relative);
+        self.scroll_to_selection();
+        cx.notify();
+    }
+
+    /// Selecciona en el árbol `path` del vault, ya o cuando llegue en un
+    /// lote del watcher, como lo recién renombrado.
+    pub fn reveal_entry(&mut self, path: VaultPath, cx: &mut Context<Self>) {
+        self.panel.tree.reveal(path);
         self.scroll_to_selection();
         cx.notify();
     }

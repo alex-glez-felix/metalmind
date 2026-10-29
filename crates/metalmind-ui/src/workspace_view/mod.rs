@@ -15,6 +15,7 @@ mod new_note;
 mod note_list;
 mod overlay;
 mod palette;
+mod rename;
 mod reroute;
 mod tag_change;
 mod text_search;
@@ -26,7 +27,7 @@ use std::path::Path;
 
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Subscription, Window, div,
+    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
     prelude::FluentBuilder as _,
 };
 use metalmind_config::Paths;
@@ -69,6 +70,8 @@ pub struct WorkspaceView {
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
     last_tag_change: Option<LastTagChange>,
+    /// El plan de un renombre que se está armando, antes de su vista previa.
+    renaming: Option<Task<()>>,
     notes: NoteSettings,
     _subscriptions: [Subscription; 4],
 }
@@ -89,7 +92,7 @@ impl WorkspaceView {
         let list = cx.new(|cx| NoteListView::new(&session, &state.list, workspace.clone(), cx));
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
-            view.refresh_tag_change(cx);
+            view.refresh_change_preview(cx);
             cx.notify();
         });
         let activation = cx.observe_window_activation(window, Self::on_activation);
@@ -125,6 +128,7 @@ impl WorkspaceView {
             autosave: None,
             toast_timers: ToastTimers::default(),
             last_tag_change: None,
+            renaming: None,
             notes,
             _subscriptions: [repaint, events, list_events, activation],
         }
@@ -353,6 +357,7 @@ impl WorkspaceView {
             }
             SidebarEvent::FocusEditor => self.focus(window, cx),
             SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
+            SidebarEvent::Rename { from, to } => self.rename_entry(&from, &to, window, cx),
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
             SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
             SidebarEvent::CreateNote(path) => self.create_panel_note(&path, window, cx),

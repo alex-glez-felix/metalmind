@@ -1,7 +1,7 @@
 //! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
 //! paleta, el historial de avisos, los links sin destino, las notas de un link que empata, las
 //! plantillas, el nombre de una nota nueva, la fuente de la lista o la vista previa de un cambio
-//! de tags, uno a la vez, centrado arriba como en Zed.
+//! en el vault, uno a la vez, centrado arriba como en Zed.
 
 use std::sync::Arc;
 
@@ -17,9 +17,10 @@ use super::messages::MessagesPicker;
 use super::new_note::{NamePicker, TemplatePicker};
 use super::note_list::SourcePicker;
 use super::palette::Palette;
+use super::rename::RenamePreview;
 use super::text_search::TextSearchPicker;
 use super::unresolved::UnresolvedPicker;
-use crate::tag_change::TagChangeView;
+use crate::change_preview::ChangePreviewView;
 use crate::theme::Theme;
 
 pub enum Overlay {
@@ -68,9 +69,12 @@ pub enum Overlay {
         picker: Entity<SourcePicker>,
         _events: Subscription,
     },
-    /// La vista previa de renombrar o fusionar tags.
-    TagChange {
-        view: Entity<TagChangeView>,
+    /// La vista previa de un cambio en el vault: renombrar o fusionar
+    /// tags, o renombrar una nota con sus links.
+    ChangePreview {
+        view: Entity<ChangePreviewView>,
+        /// Si es la de un renombre, lo que hace falta para rehacerla.
+        rename: Option<RenamePreview>,
         _events: Subscription,
     },
 }
@@ -88,7 +92,7 @@ impl Overlay {
             Self::Templates { picker, .. } => picker.focus_handle(cx),
             Self::NoteName { picker, .. } => picker.focus_handle(cx),
             Self::ListSource { picker, .. } => picker.focus_handle(cx),
-            Self::TagChange { view, .. } => view.focus_handle(cx),
+            Self::ChangePreview { view, .. } => view.focus_handle(cx),
         }
     }
 
@@ -105,7 +109,7 @@ impl Overlay {
             Self::Templates { picker, .. } => picker.clone().into_any_element(),
             Self::NoteName { picker, .. } => picker.clone().into_any_element(),
             Self::ListSource { picker, .. } => picker.clone().into_any_element(),
-            Self::TagChange { view, .. } => view.clone().into_any_element(),
+            Self::ChangePreview { view, .. } => view.clone().into_any_element(),
         };
         div()
             .absolute()

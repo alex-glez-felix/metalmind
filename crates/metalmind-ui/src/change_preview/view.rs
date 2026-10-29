@@ -10,37 +10,36 @@ use gpui_kit::{
     StatefulInteractiveElement as _, Styled, UniformListScrollHandle, Window, div,
     prelude::FluentBuilder as _, px, relative, uniform_list,
 };
-use metalmind_keymap::{Action, TagChangeAction, View, context};
-use metalmind_vault::tags::PlanNotice;
+use metalmind_keymap::{Action, ChangePreviewAction, View, context};
 
 use super::preview::PreviewRow;
-use super::{Blocked, TagChangePreview};
+use super::{Blocked, ChangePreview};
 use crate::actions::{AppKeymap, Dispatch};
 use crate::picker::fit;
 use crate::theme::Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TagChangeEvent {
+pub enum ChangePreviewEvent {
     Apply,
     Cancel,
 }
 
-pub struct TagChangeView {
-    preview: TagChangePreview,
+pub struct ChangePreviewView {
+    preview: ChangePreview,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
 }
 
-impl EventEmitter<TagChangeEvent> for TagChangeView {}
+impl EventEmitter<ChangePreviewEvent> for ChangePreviewView {}
 
-impl Focusable for TagChangeView {
+impl Focusable for ChangePreviewView {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl TagChangeView {
-    pub fn new(preview: TagChangePreview, cx: &mut Context<Self>) -> Self {
+impl ChangePreviewView {
+    pub fn new(preview: ChangePreview, cx: &mut Context<Self>) -> Self {
         Self {
             preview,
             focus_handle: cx.focus_handle(),
@@ -49,11 +48,11 @@ impl TagChangeView {
     }
 
     #[must_use]
-    pub fn preview(&self) -> &TagChangePreview {
+    pub fn preview(&self) -> &ChangePreview {
         &self.preview
     }
 
-    pub fn preview_mut(&mut self) -> &mut TagChangePreview {
+    pub fn preview_mut(&mut self) -> &mut ChangePreview {
         &mut self.preview
     }
 
@@ -63,20 +62,20 @@ impl TagChangeView {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Action::TagChange(action) = invocation.action else {
+        let Action::ChangePreview(action) = invocation.action else {
             cx.propagate();
             return;
         };
         match action {
-            TagChangeAction::SelectNext => self.preview.select_next(),
-            TagChangeAction::SelectPrevious => self.preview.select_previous(),
-            TagChangeAction::ToggleChange => self.preview.toggle_selected(),
-            TagChangeAction::Apply => {
+            ChangePreviewAction::SelectNext => self.preview.select_next(),
+            ChangePreviewAction::SelectPrevious => self.preview.select_previous(),
+            ChangePreviewAction::ToggleChange => self.preview.toggle_selected(),
+            ChangePreviewAction::Apply => {
                 if self.preview.blocked().is_none() {
-                    cx.emit(TagChangeEvent::Apply);
+                    cx.emit(ChangePreviewEvent::Apply);
                 }
             }
-            TagChangeAction::Cancel => cx.emit(TagChangeEvent::Cancel),
+            ChangePreviewAction::Cancel => cx.emit(ChangePreviewEvent::Cancel),
         }
         self.changed(cx);
     }
@@ -125,15 +124,15 @@ impl TagChangeView {
             .preview
             .notices()
             .iter()
-            .filter(|notice| !notice.blocks())
+            .filter(|notice| !notice.blocks)
             .map(|notice| {
                 div()
                     .text_color(theme.ui.picker_warning)
-                    .child(notice_text(notice))
+                    .child(notice.text.clone())
             });
         let blocked = self.preview.blocked().map(|blocked| {
             div()
-                .debug_selector(|| "tag-change-blocked".to_owned())
+                .debug_selector(|| "change-preview-blocked".to_owned())
                 .text_color(theme.ui.error)
                 .child(blocked_text(&blocked))
         });
@@ -159,7 +158,7 @@ impl TagChangeView {
             f32::from(theme.stroke.border),
         );
         let theme = theme.clone();
-        let toggle_keys = keys(TagChangeAction::ToggleChange, cx);
+        let toggle_keys = keys(ChangePreviewAction::ToggleChange, cx);
         // En una ventana baja se encoge la lista (los demás son `flex_none`),
         // no el detalle ni los botones.
         div()
@@ -169,7 +168,7 @@ impl TagChangeView {
             .border_color(theme.ui.picker_border)
             .child(
                 uniform_list(
-                    "tag-change-rows",
+                    "change-preview-rows",
                     self.preview.len(),
                     cx.processor(move |this, rows: Range<usize>, _window, cx| {
                         rows.map(|row| {
@@ -202,7 +201,7 @@ impl TagChangeView {
         let color = change_color(&change, theme);
         div()
             .id(row)
-            .debug_selector(move || format!("tag-change-row-{row}"))
+            .debug_selector(move || format!("change-preview-row-{row}"))
             .w_full()
             .h(row_height)
             .flex()
@@ -232,15 +231,18 @@ impl TagChangeView {
                     .text_color(theme.ui.picker_muted)
                     .children(place),
             )
-            .when_some(toggle_keys.filter(|_| selected), |row, keys| {
-                row.child(
-                    div()
-                        .flex_none()
-                        .map(|element| theme.ui_small_text(element))
-                        .text_color(theme.ui.picker_muted)
-                        .child(keys),
-                )
-            })
+            .when_some(
+                toggle_keys.filter(|_| selected && !change.fixed),
+                |row, keys| {
+                    row.child(
+                        div()
+                            .flex_none()
+                            .map(|element| theme.ui_small_text(element))
+                            .text_color(theme.ui.picker_muted)
+                            .child(keys),
+                    )
+                },
+            )
             .into_any_element()
     }
 
@@ -250,9 +252,12 @@ impl TagChangeView {
     /// moverse entre filas no corra los botones.
     fn render_detail(&self, theme: &Theme) -> impl IntoElement {
         let detail = div()
-            .debug_selector(|| "tag-change-detail".to_owned())
+            .debug_selector(|| "change-preview-detail".to_owned())
             .flex_none()
-            .h(theme.tag_change_detail_height())
+            .h(theme.change_preview_detail_height())
+            // La altura cuenta renglones del texto del tema: el detalle tiene
+            // que pintarse con ese mismo interlineado.
+            .map(|element| theme.ui_text(element))
             .overflow_hidden()
             .px(theme.layout.picker_padding_x)
             .py(theme.layout.picker_input_padding_y)
@@ -266,18 +271,32 @@ impl TagChangeView {
         } else {
             format!("→ {}", change.after)
         };
+        // Renglones enteros, con `…` al cortar: el valor nuevo, que es lo que
+        // se confirma, se queda con todos menos el de lo de antes.
+        let lines = usize::from(theme.layout.change_preview_detail_lines).max(1);
+        let has_before = !change.before.is_empty();
+        let after_lines = if has_before {
+            (lines - 1).max(1)
+        } else {
+            lines
+        };
         detail
             .text_color(change_color(&change, theme))
             .when(change.dropped, Styled::line_through)
             .child(
                 div()
-                    .debug_selector(|| "tag-change-detail-after".to_owned())
+                    .debug_selector(|| "change-preview-detail-after".to_owned())
+                    .line_clamp(after_lines)
+                    .text_ellipsis()
                     .child(after),
             )
-            .when(!change.before.is_empty(), |detail| {
+            .when(has_before && lines > 1, |detail| {
                 detail.child(
                     div()
+                        .debug_selector(|| "change-preview-detail-before".to_owned())
                         .text_color(theme.ui.picker_muted)
+                        .line_clamp(1)
+                        .text_ellipsis()
                         .child(format!("antes: {}", change.before)),
                 )
             })
@@ -296,14 +315,14 @@ impl TagChangeView {
             .border_color(theme.ui.picker_border)
             .child(button(
                 "Cancelar",
-                TagChangeAction::Cancel,
+                ChangePreviewAction::Cancel,
                 false,
                 theme,
                 cx,
             ))
             .child(button(
                 "Aplicar",
-                TagChangeAction::Apply,
+                ChangePreviewAction::Apply,
                 blocked,
                 theme,
                 cx,
@@ -311,14 +330,14 @@ impl TagChangeView {
     }
 }
 
-impl Render for TagChangeView {
+impl Render for ChangePreviewView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         div()
             .key_context(key_context())
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_dispatch))
-            .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(TagChangeEvent::Cancel)))
+            .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(ChangePreviewEvent::Cancel)))
             .w(theme.layout.picker_width)
             .max_w(relative(0.9))
             .max_h(relative(1.))
@@ -360,7 +379,7 @@ fn change_color(change: &PreviewRow<'_>, theme: &Theme) -> Hsla {
 
 fn key_context() -> KeyContext {
     let mut key_context = KeyContext::new_with_defaults();
-    key_context.add(context::TAG_CHANGE);
+    key_context.add(context::CHANGE_PREVIEW);
     key_context
 }
 
@@ -368,10 +387,10 @@ fn key_context() -> KeyContext {
 /// nada.
 fn button(
     label: &'static str,
-    action: TagChangeAction,
+    action: ChangePreviewAction,
     disabled: bool,
     theme: &Theme,
-    cx: &mut Context<TagChangeView>,
+    cx: &mut Context<ChangePreviewView>,
 ) -> AnyElement {
     let hover = theme.ui.picker_hover;
     let color = if disabled {
@@ -381,7 +400,7 @@ fn button(
     };
     div()
         .id(label)
-        .debug_selector(move || format!("tag-change-{label}"))
+        .debug_selector(move || format!("change-preview-{label}"))
         .flex()
         .items_center()
         .gap(theme.layout.picker_gap)
@@ -405,33 +424,16 @@ fn button(
 }
 
 /// Las teclas de `action` en la vista previa.
-fn keys(action: TagChangeAction, cx: &App) -> Option<SharedString> {
+fn keys(action: ChangePreviewAction, cx: &App) -> Option<SharedString> {
     AppKeymap::get(cx)
-        .keys_for(action.into(), |view| view == View::TagChange)
+        .keys_for(action.into(), |view| view == View::ChangePreview)
         .map(SharedString::from)
-}
-
-fn notice_text(notice: &PlanNotice) -> String {
-    match notice {
-        PlanNotice::Merges { into } => format!("#{into} ya existe: se fusionan"),
-        PlanNotice::RenamesAlias { of } => format!("es un alias de #{of}: se renombra el alias"),
-        PlanNotice::AliasAbsorbs { tag, of } => {
-            format!("#{tag} ya se escribe en notas: pasa a contar como #{of}")
-        }
-        PlanNotice::BothHavePages { from, into } => {
-            format!("los dos tags tienen página ({from} y {into}): deja una antes de fusionar")
-        }
-        PlanNotice::AliasTaken { alias, by } => format!("#{alias} ya es de #{by}"),
-        PlanNotice::NotPortable { path } => {
-            format!("{path} no se podrá sincronizar con Windows: ese nombre está reservado")
-        }
-    }
 }
 
 fn blocked_text(blocked: &Blocked<'_>) -> String {
     match blocked {
         Blocked::Nothing => "no queda ningún cambio".to_owned(),
-        Blocked::Notice(notice) => notice_text(notice),
+        Blocked::Notice(notice) => notice.text.clone(),
         Blocked::Unsaved(paths) => {
             let paths: Vec<&str> = paths.iter().map(|path| path.as_str()).collect();
             format!(

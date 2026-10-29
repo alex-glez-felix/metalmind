@@ -4,6 +4,7 @@
 
 mod actions;
 mod backlinks;
+mod change_preview;
 mod clipboard;
 mod completion;
 mod disk;

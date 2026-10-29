@@ -41,6 +41,7 @@ impl FinderVault {
                 workspace.set_links(&root, Arc::clone(&update.links));
             });
             view.refresh_unresolved_links(&update.links, cx);
+            view.refresh_rename_preview(&update.links, cx);
         });
         let lost = cx.subscribe(&session, |view, _, WatchLost(reason), cx| {
             view.workspace.update(cx, |workspace, _| {

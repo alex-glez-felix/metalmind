@@ -3,7 +3,7 @@
 
 use metalmind_vim::Action as VimAction;
 
-use crate::{Command, EditorAction, ListAction, PanelAction, PickerAction, TagChangeAction};
+use crate::{ChangePreviewAction, Command, EditorAction, ListAction, PanelAction, PickerAction};
 
 /// Una acción con nombre, de cualquier parte de la app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,7 +15,7 @@ pub enum Action {
     Panel(PanelAction),
     List(ListAction),
     Picker(PickerAction),
-    TagChange(TagChangeAction),
+    ChangePreview(ChangePreviewAction),
 }
 
 /// Quién atiende una acción: solo se puede invocar con su vista en el foco.
@@ -27,7 +27,7 @@ pub enum Owner {
     Panel,
     List,
     Picker,
-    TagChange,
+    ChangePreview,
 }
 
 impl Action {
@@ -40,7 +40,7 @@ impl Action {
             Self::Panel(action) => action.name(),
             Self::List(action) => action.name(),
             Self::Picker(action) => action.name(),
-            Self::TagChange(action) => action.name(),
+            Self::ChangePreview(action) => action.name(),
         }
     }
 
@@ -57,13 +57,16 @@ impl Action {
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
         let list = ListAction::ALL.iter().copied().map(Self::List);
         let picker = PickerAction::ALL.iter().copied().map(Self::Picker);
-        let tag_change = TagChangeAction::ALL.iter().copied().map(Self::TagChange);
+        let change_preview = ChangePreviewAction::ALL
+            .iter()
+            .copied()
+            .map(Self::ChangePreview);
         vim.chain(commands)
             .chain(editor)
             .chain(panel)
             .chain(list)
             .chain(picker)
-            .chain(tag_change)
+            .chain(change_preview)
     }
 
     #[must_use]
@@ -74,7 +77,7 @@ impl Action {
             Self::Panel(_) => Owner::Panel,
             Self::List(_) => Owner::List,
             Self::Picker(_) => Owner::Picker,
-            Self::TagChange(_) => Owner::TagChange,
+            Self::ChangePreview(_) => Owner::ChangePreview,
         }
     }
 }
@@ -109,9 +112,9 @@ impl From<PickerAction> for Action {
     }
 }
 
-impl From<TagChangeAction> for Action {
-    fn from(action: TagChangeAction) -> Self {
-        Self::TagChange(action)
+impl From<ChangePreviewAction> for Action {
+    fn from(action: ChangePreviewAction) -> Self {
+        Self::ChangePreview(action)
     }
 }
 

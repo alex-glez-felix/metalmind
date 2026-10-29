@@ -202,6 +202,10 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   abren la nota con el cursor en el link.
 - `space u` lista los links del vault que no llevan a ninguna nota, con su
   nota y su línea; `enter` abre la nota en el link.
+- Renombrar o mover una nota (o una carpeta) desde el panel actualiza los
+  links que dejarían de llevar a ella: antes, una vista previa con cada
+  línea que cambia, antes y después; se puede quitar cualquiera y `enter`
+  aplica el resto junto con el renombre.
 
 #### Vault y panel lateral (M2)
 

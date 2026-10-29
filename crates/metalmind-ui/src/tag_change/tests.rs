@@ -1,8 +1,9 @@
-use metalmind_vault::tags::{PageChange, PlanNotice, TagPlan, Tags};
+use metalmind_vault::tags::{PageChange, Tags};
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::change_preview::Blocked;
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -30,9 +31,8 @@ fn rust_notes() -> Tags {
     tags(&[("a.md", "uno #rust\n"), ("b.md", "#rust\ndos #Rust\n")])
 }
 
-fn preview(request: &TagRequest, tags: &Tags) -> TagChangePreview {
-    let plan = request.plan(tags).unwrap();
-    TagChangePreview::new(request.title(), plan, |_| false).unwrap()
+fn preview(request: &TagRequest, tags: &Tags) -> ChangePreview {
+    request.preview(tags, |_| false).unwrap().unwrap()
 }
 
 fn rename(from: &str, to: &str) -> TagRequest {
@@ -92,6 +92,33 @@ fn cada_ocurrencia_es_una_fila() {
 }
 
 /// `x` quita una fila de lo que se aplica y la vuelve a poner.
+/// Armada de nuevo con otros textos (una nota que se guardó con la vista
+/// previa abierta), sigue quitado lo que se había quitado y elegida la
+/// misma fila, aunque cambie de línea.
+#[test]
+fn armarla_de_nuevo_deja_lo_quitado() {
+    let request = rename("rust", "lang");
+    let mut old = preview(&request, &rust_notes());
+    old.select(2);
+    old.toggle_selected();
+    let quitada = old.row(2).unwrap();
+    let (path, before) = (quitada.path.clone(), quitada.before.to_owned());
+    let saved = tags(&[
+        ("a.md", "nueva línea\nuno #rust\n"),
+        ("b.md", "#rust\ndos #Rust\n"),
+    ]);
+    let mut new = preview(&request, &saved);
+    new.carry_over(&old);
+    let dropped: Vec<(String, String)> = (0..new.len())
+        .filter_map(|row| new.row(row))
+        .filter(|row| row.dropped)
+        .map(|row| (row.path.as_str().to_owned(), row.before.to_owned()))
+        .collect();
+    assert_eq!(dropped, [(path.as_str().to_owned(), before)]);
+    assert_eq!(new.selected(), 2);
+    assert_eq!(new.row(0).unwrap().line, Some(2), "a.md cambió de línea");
+}
+
 #[test]
 fn quitar_una_fila_la_saca_de_lo_que_se_aplica() {
     let mut preview = preview(&rename("rust", "lang"), &rust_notes());
@@ -124,9 +151,10 @@ fn sin_cambios_no_se_aplica() {
 #[test]
 fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
     let request = rename("rust", "lang");
-    let plan = request.plan(&rust_notes()).unwrap();
-    let mut preview =
-        TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md").unwrap();
+    let mut preview = request
+        .preview(&rust_notes(), |file| file.as_str() == "a.md")
+        .unwrap()
+        .unwrap();
     assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
     assert_eq!(
         preview.blocked(),
@@ -141,9 +169,10 @@ fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
 #[test]
 fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
     let request = rename("rust", "lang");
-    let plan = request.plan(&rust_notes()).unwrap();
-    let mut preview =
-        TagChangePreview::new(request.title(), plan, |file| file.as_str() == "a.md").unwrap();
+    let mut preview = request
+        .preview(&rust_notes(), |file| file.as_str() == "a.md")
+        .unwrap()
+        .unwrap();
     assert!(preview.blocked().is_some());
     preview.set_unsaved(|_| false);
     assert_eq!(preview.blocked(), None);
@@ -155,11 +184,10 @@ fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
 fn un_buffer_sin_guardar_en_el_destino_bloquea() {
     let tags = tags(&[("a.md", "#rust\n"), ("tags/rust.md", "Del lenguaje.\n")]);
     let request = rename("rust", "lang");
-    let plan = request.plan(&tags).unwrap();
-    let preview = TagChangePreview::new(request.title(), plan, |file| {
-        file.as_str() == "tags/lang.md"
-    })
-    .unwrap();
+    let preview = request
+        .preview(&tags, |file| file.as_str() == "tags/lang.md")
+        .unwrap()
+        .unwrap();
     let last = preview.row(preview.len() - 1).unwrap();
     assert_eq!(last.unsaved, Some(&path("tags/lang.md")));
     assert_eq!(
@@ -191,13 +219,16 @@ fn un_bloqueo_sin_cambios_se_muestra_y_nada_no() {
         from: "a".to_owned(),
         into: "b".to_owned(),
     };
-    let plan = request.plan(&pages).unwrap();
-    let preview = TagChangePreview::new(request.title(), plan, |_| false).unwrap();
+    let preview = request.preview(&pages, |_| false).unwrap().unwrap();
     assert!(matches!(
         preview.blocked(),
-        Some(Blocked::Notice(PlanNotice::BothHavePages { .. }))
+        Some(Blocked::Notice(Notice { blocks: true, text })) if text.contains("tienen página")
     ));
-    assert!(TagChangePreview::new(String::new(), TagPlan::default(), |_| false).is_none());
+    let nothing = TagRequest::Rename {
+        from: "a".to_owned(),
+        to: "a".to_owned(),
+    };
+    assert!(nothing.preview(&pages, |_| false).unwrap().is_none());
 }
 
 /// Si los dos tags tienen página, el plan lo marca y no se aplica.
@@ -216,7 +247,7 @@ fn dos_paginas_bloquean_la_fusion() {
     assert_eq!(preview.title(), "Fusionar #rust en #go");
     assert!(matches!(
         preview.blocked(),
-        Some(Blocked::Notice(PlanNotice::BothHavePages { .. }))
+        Some(Blocked::Notice(Notice { blocks: true, text })) if text.contains("tienen página")
     ));
 }
 

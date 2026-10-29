@@ -237,7 +237,7 @@ Theme {
             picker_detail_share: Fraction(
                 0.4,
             ),
-            tag_change_detail_lines: Count(
+            change_preview_detail_lines: Count(
                 4,
             ),
             panel_padding_x: Length(
