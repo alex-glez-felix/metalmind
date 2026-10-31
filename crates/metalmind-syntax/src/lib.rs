@@ -34,7 +34,7 @@ pub use style::{
     LinkSpot, MathPlace, MathSpot, Role, Rows, Screen, ScreenLine, ScreenLines, Span, Style,
     Styles, TextLines, Token, TypedWikilink, is_thematic_break, quote_prefix_len,
 };
-pub use table::{Align, CellPos, CellSpot, Formatted, Table};
+pub use table::{Align, CellPos, CellSpot, Formatted, Step, Table};
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
 
 /// Lo que el scanner encontró en una nota, en orden de aparición.

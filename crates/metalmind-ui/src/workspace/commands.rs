@@ -161,6 +161,10 @@ impl Workspace {
             }
             Command::Set => self.set_options(argument),
             Command::ToggleWrap => self.set_options(Some("wrap!")),
+            Command::ToggleAlignTablesOnLeave => {
+                self.toggle_align_tables_on_leave();
+                Ok(Effect::Stay)
+            }
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),
@@ -444,6 +448,20 @@ impl Workspace {
             self.messages.push(Message::Error(error.to_string()));
         }
         Ok(Effect::Stay)
+    }
+
+    fn toggle_align_tables_on_leave(&mut self) {
+        let mut markdown = self.vim.markdown();
+        markdown.align_tables_on_leave = !markdown.align_tables_on_leave;
+        self.vim.set_markdown(markdown);
+        let state = if markdown.align_tables_on_leave {
+            "encendido"
+        } else {
+            "apagado"
+        };
+        self.messages.push(Message::Info(format!(
+            "Alinear la tabla al salir de Insert: {state}"
+        )));
     }
 
     /// `ctrl-w o`: cierra los demás paneles; sus documentos quedan ocultos.

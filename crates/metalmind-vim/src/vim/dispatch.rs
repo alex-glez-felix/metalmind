@@ -1,6 +1,7 @@
 //! De una acción con nombre a lo que hace en cada modo.
 
 use metalmind_buffer::{Buffer, Selection, Selections};
+use metalmind_syntax::Step;
 
 use super::Vim;
 use super::awaiting::Awaiting;
@@ -150,9 +151,23 @@ impl Vim {
             Action::Newline => {
                 self.type_in_insert(&Typed::Newline { list: true }, t)?;
             }
+            Action::NextTableCell => self.type_in_insert(&self.cell_or_tab(Step::Next), t)?,
+            Action::PreviousTableCell => {
+                self.type_in_insert(&self.cell_or_tab(Step::Previous), t)?;
+            }
             _ => self.reset(),
         }
         Ok(())
+    }
+
+    /// Un Insert en bloque copia a las demás líneas lo escrito en la
+    /// primera: ahí `tab` es un tab, como en vim, y no reescribe la tabla.
+    fn cell_or_tab(&self, step: Step) -> Typed {
+        if self.block_insert.is_some() {
+            Typed::Text("\t".to_owned())
+        } else {
+            Typed::Cell(step)
+        }
     }
 
     fn run_in_command_line(

@@ -569,6 +569,32 @@ const SCENES: &[(&str, &[Step])] = &[
         )],
     ),
     ("ancho-de-lectura-a-lo-ancho", &[Step::Keys("<Esc>12G$")]),
+    // `tab` y `shift-tab` entre celdas (#152) en la tabla de la cita, que
+    // sigue sin alinear: alinea y salta a la celda de al lado, tras la
+    // última agrega una fila, y lo escrito en ella se alinea al volver.
+    // Luego la paleta enciende alinear al salir de Insert (#153) y `<Esc>`
+    // alinea lo escrito. Van al final para no cambiar las pantallas de antes.
+    (
+        "tabla-tab-celda",
+        &[Step::Keys(
+            "<Esc><Esc><C-w>o:e tablas.md<CR>:set nornu wrap<CR>gg/dentro<CR>i<Tab>",
+        )],
+    ),
+    ("tabla-tab-fila-nueva", &[Step::Keys("<Tab>")]),
+    (
+        "tabla-shift-tab",
+        &[Step::Keys(
+            "otra fila<Tab>con un comentario largo que ensancha la columna<S-Tab>",
+        )],
+    ),
+    (
+        "tabla-paleta-alinear-al-salir",
+        &[Step::Keys("<Esc><C-S-p>align tables")],
+    ),
+    (
+        "tabla-alineada-al-salir",
+        &[Step::Keys("<CR>gg/clara<CR>ea, concisa y sin rodeos<Esc>")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

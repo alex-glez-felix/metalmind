@@ -111,8 +111,8 @@ impl Session {
         self.workspace.focused()
     }
 
-    /// Teclea en el panel enfocado; `⎋`, `⏎`, `⌫`, `⇥` y `⌃w` son Escape,
-    /// Enter, Backspace, Tab y `ctrl-w`. Devuelve lo que pasó con la última tecla y
+    /// Teclea en el panel enfocado; `⎋`, `⏎`, `⌫`, `⇥`, `⇤` y `⌃w` son
+    /// Escape, Enter, Backspace, Tab, shift-tab y `ctrl-w`. Devuelve lo que pasó con la última tecla y
     /// ejecuta cada comando que llega.
     pub fn keys(&mut self, text: &str) -> Option<KeyOutcome> {
         let mut last = None;
@@ -123,6 +123,7 @@ impl Session {
                 '⏎' => Key::Enter,
                 '⌫' => Key::Backspace,
                 '⇥' => Key::Tab,
+                '⇤' => Key::ShiftTab,
                 '⌃' => Key::Ctrl(chars.next().unwrap()),
                 _ => Key::Char(c),
             };

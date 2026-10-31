@@ -343,6 +343,7 @@ use rstest_reuse::{self, apply, template};
     "aXbc\ndef\n|Yghi"
 )]
 #[case("a|bc\ndef\nghi", "<C-v>jI<Tab><Esc>", "a|\tbc\nd\tef\nghi")]
+#[case("a|bc\ndef\nghi", "<C-v>jI<S-Tab><Esc>", "a|\tbc\nd\tef\nghi")]
 #[case("a|bc\ndef\nghi", "<C-v>jlr<Tab>", "a|\t\t\nd\t\t\nghi")]
 #[case("a|bc\ndef\nghi", "<C-v>jlA<Tab>X<Esc>", "a|bc\tX\ndef\tX\nghi")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}

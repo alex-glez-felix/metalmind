@@ -40,6 +40,13 @@ pub struct CellPos {
     pub column: usize,
 }
 
+/// Hacia dónde salta `tab` (`Next`) o `shift-tab` (`Previous`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    Next,
+    Previous,
+}
+
 /// Un punto dentro de una celda: cuántos bytes de su contenido, sin los
 /// blancos de los lados, quedan antes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,43 +131,94 @@ impl Table {
     #[must_use]
     pub fn formatted(&self) -> Formatted {
         let widths = self.widths();
-        let prefix = &self.lines[0][self.rows[0].prefix.clone()];
-        let mut lines = Vec::with_capacity(self.rows.len());
-        let mut starts = Vec::with_capacity(self.rows.len());
+        let mut formatted = Formatted {
+            lines: Vec::with_capacity(self.rows.len() + 1),
+            cells: Vec::with_capacity(self.rows.len() + 1),
+        };
         for (index, row) in self.rows.iter().enumerate() {
-            let columns = if index == 1 {
-                self.aligns.len()
-            } else {
-                row.cells.len().max(self.aligns.len())
-            };
-            let mut line = prefix.to_owned();
-            let mut cell_starts = Vec::with_capacity(columns);
-            line.push('|');
-            for (column, &width) in widths.iter().enumerate().take(columns) {
-                let align = self.aligns.get(column).copied().unwrap_or(Align::None);
-                let content = if index == 1 {
-                    separator(align, width)
+            let contents = (0..self.columns(index)).map(|column| {
+                if index == 1 {
+                    let align = self.aligns.get(column).copied().unwrap_or(Align::None);
+                    separator(align, widths[column])
                 } else {
                     row.cells
                         .get(column)
                         .map_or("", |cell| &self.lines[index][cell.content.clone()])
                         .to_owned()
-                };
-                let (before, after) = padding(align, width.saturating_sub(content.width()));
-                line.push(' ');
-                line.push_str(&" ".repeat(before));
-                cell_starts.push(line.len()..line.len() + content.len());
-                line.push_str(&content);
-                line.push_str(&" ".repeat(after));
-                line.push_str(" |");
+                }
+            });
+            self.push_row(&mut formatted, &widths, contents);
+        }
+        formatted
+    }
+
+    /// Como [`Table::formatted`], con una fila vacía más al final, de
+    /// tantas celdas como el encabezado.
+    #[must_use]
+    pub fn formatted_with_new_row(&self) -> Formatted {
+        let mut formatted = self.formatted();
+        let empty = std::iter::repeat_n(String::new(), self.aligns.len());
+        self.push_row(&mut formatted, &self.widths(), empty);
+        formatted
+    }
+
+    /// La celda a la que lleva `step` desde `cell`, en orden de lectura y
+    /// sin pasar por la separadora. Antes de la primera se queda en ella;
+    /// tras la última, `None`: ahí va una fila nueva.
+    #[must_use]
+    pub fn step(&self, cell: CellPos, step: Step) -> Option<CellPos> {
+        let CellPos { row, column } = cell;
+        let in_row = row != 1;
+        let at = |row, column| Some(CellPos { row, column });
+        match step {
+            Step::Next if in_row && column + 1 < self.columns(row) => at(row, column + 1),
+            Step::Next => {
+                let next = if row == 0 { 2 } else { row + 1 };
+                (next < self.rows.len()).then_some(CellPos {
+                    row: next,
+                    column: 0,
+                })
             }
-            lines.push(line);
-            starts.push(cell_starts);
+            Step::Previous if in_row && column > 0 => at(row, column - 1),
+            Step::Previous if row == 0 => at(0, 0),
+            Step::Previous => {
+                let previous = if row == 2 { 0 } else { row - 1 };
+                at(previous, self.columns(previous).saturating_sub(1))
+            }
         }
-        Formatted {
-            lines,
-            cells: starts,
+    }
+
+    /// Cuántas celdas tiene la fila `row` una vez alineada.
+    fn columns(&self, row: usize) -> usize {
+        if row == 1 {
+            self.aligns.len()
+        } else {
+            self.rows[row].cells.len().max(self.aligns.len())
         }
+    }
+
+    /// Agrega a `formatted` una fila con `contents` rellenas a `widths`.
+    fn push_row(
+        &self,
+        formatted: &mut Formatted,
+        widths: &[usize],
+        contents: impl Iterator<Item = String>,
+    ) {
+        let mut line = self.lines[0][self.rows[0].prefix.clone()].to_owned();
+        let mut cells = Vec::new();
+        line.push('|');
+        for (column, (content, &width)) in contents.zip(widths).enumerate() {
+            let align = self.aligns.get(column).copied().unwrap_or(Align::None);
+            let (before, after) = padding(align, width.saturating_sub(content.width()));
+            line.push(' ');
+            line.push_str(&" ".repeat(before));
+            cells.push(line.len()..line.len() + content.len());
+            line.push_str(&content);
+            line.push_str(&" ".repeat(after));
+            line.push_str(" |");
+        }
+        formatted.lines.push(line);
+        formatted.cells.push(cells);
     }
 
     /// El ancho de cada columna: el de su celda más ancha, sin contar la
@@ -194,7 +252,8 @@ pub struct Formatted {
 }
 
 impl Formatted {
-    /// Cada fila, en el orden de la tabla y sin salto de línea.
+    /// Cada fila, en el orden de la tabla y sin salto de línea; con
+    /// [`Table::formatted_with_new_row`], una más que la tabla.
     #[must_use]
     pub fn lines(&self) -> &[String] {
         &self.lines

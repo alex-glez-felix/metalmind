@@ -23,7 +23,7 @@ pub(crate) use heading::{next_heading, previous_heading};
 pub(crate) use list::{ListItem, indent_of};
 pub(crate) use newline::{After, Newline, opened_item, renumber_items};
 pub(crate) use section::{section, select_section};
-pub(crate) use table::TableFormat;
+pub(crate) use table::{Move, align_tables};
 
 /// Qué partes de la edición de markdown están encendidas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,6 +33,8 @@ pub struct Markdown {
     pub continue_lists: bool,
     /// `>>` y `<<` sobre un ítem de lista mueven también sus hijos.
     pub indent_list_children: bool,
+    /// Al salir de Insert con `<Esc>` tras escribir en una tabla, la alinea.
+    pub align_tables_on_leave: bool,
 }
 
 impl Default for Markdown {
@@ -40,6 +42,7 @@ impl Default for Markdown {
         Self {
             continue_lists: true,
             indent_list_children: true,
+            align_tables_on_leave: false,
         }
     }
 }

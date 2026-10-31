@@ -63,6 +63,7 @@ history:                  # cuántas versiones viejas de cada nota se guardan
 markdown:                 # la edición de markdown en el editor
   continue_lists: true        # Enter, o y O en un ítem de lista abren el siguiente (y renumeran)
   indent_list_children: true  # >> y << en un ítem de lista mueven también sus hijos
+  align_tables_on_leave: false # salir de Insert tras escribir en una tabla la alinea
 ```
 
 Los números de línea siguen a vim: con solo `number`, el número de cada línea; con solo `relativenumber`, la distancia al cursor; con los dos (el default), el modo híbrido: el número de la línea del cursor y la distancia en las demás. El margen crece con el número de líneas y resalta la del cursor (`ui.gutter_current`). Cada panel tiene los suyos: `:set nu`, `:set rnu`, `:set nonu`, `:set nornu`, `:set nu!` (o `invnu`) cambian solo el panel enfocado, y un split hereda los del panel que se divide. Por ejemplo, solo números absolutos:
@@ -90,7 +91,7 @@ Con `wrap` (el default), una línea más ancha que el panel se parte en filas, d
 
 `tabstop` y `expandtab` son también el ancho y los caracteres con que indentan `>`, `<`, `:>` y `:<`: Metalmind no tiene un `shiftwidth` aparte. Con `expandtab: false`, la sangría se escribe con tabs y luego espacios, como vim.
 
-Con `markdown`, `Enter` en Insert sobre `- algo`, `1. algo` o `- [ ] algo` abre otro ítem igual (el número siguiente, el checkbox sin marcar), renumera los de abajo y en un ítem vacío termina la lista; `o` y `O` hacen lo mismo. `>>` y `<<` sobre un ítem llevan consigo a sus hijos. Cada parte se apaga por separado: con `continue_lists: false`, `Enter` es solo un salto de línea; con `indent_list_children: false`, `>>` mueve solo la línea, como en vim.
+Con `markdown`, `Enter` en Insert sobre `- algo`, `1. algo` o `- [ ] algo` abre otro ítem igual (el número siguiente, el checkbox sin marcar), renumera los de abajo y en un ítem vacío termina la lista; `o` y `O` hacen lo mismo. `>>` y `<<` sobre un ítem llevan consigo a sus hijos. Cada parte se apaga por separado: con `continue_lists: false`, `Enter` es solo un salto de línea; con `indent_list_children: false`, `>>` mueve solo la línea, como en vim. En una tabla, `tab` y `shift-tab` en Insert la alinean y saltan a la celda siguiente o anterior (tras la última, `tab` agrega una fila); con `align_tables_on_leave: true`, salir de Insert con `Esc` tras escribir en una tabla también la alinea. Esa opción se enciende y se apaga desde la paleta (**editor: toggle align tables on leave**) para la sesión; lo que diga `config.yaml` vuelve al abrir otra ventana.
 
 Hoy la app usa el tema, la fuente, los números de línea, `gutter_marks`, `wrap`, `editor.padding`, `editor.autosave`, `editor.autosave_delay_ms`, `panes`, `panel`, `scrolloff`, `tabstop`, `expandtab`, `markdown`, `history`, `vault`, `templates_folder` y `daily` (ver [plantillas](plantillas.md)). El resto de los ajustes se irán aplicando a medida que lleguen las funciones que los usan.
 

@@ -1,9 +1,12 @@
 use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, Selection, Selections};
+use metalmind_syntax::Step;
 
 use crate::columns::Columns;
 use crate::dot::{BlockChange, Change, Dot};
 use crate::lines::first_non_blank;
-use crate::markdown::{After, LazyStyles, Newline, opened_item, renumber_items};
+use crate::markdown::{
+    After, LazyStyles, Move, Newline, align_tables, opened_item, renumber_items,
+};
 use crate::{DocState, InsertAt, VimError};
 
 /// Cómo escriben Insert, `o` y `O` una línea nueva.
@@ -244,6 +247,9 @@ pub(crate) enum Typed {
     Newline {
         list: bool,
     },
+    /// `tab` o `shift-tab`: en una tabla la alinea y salta de celda; fuera,
+    /// escribe un tab.
+    Cell(Step),
 }
 
 impl Typed {
@@ -262,6 +268,13 @@ impl Typed {
                 let typing = typing.lists_if(list);
                 let (selections, list) = newline(buffer, selections, typing, true, doc)?;
                 (selections, Self::Newline { list })
+            }
+            &Self::Cell(step) => {
+                // Lo tecleado antes en este Insert ya cambió el texto.
+                doc.sync(buffer);
+                let styles = LazyStyles::new(doc.styles_mut());
+                let (moved, _) = align_tables(buffer, selections, &styles, Move::Cell(step))?;
+                (moved, self.clone())
             }
         })
     }

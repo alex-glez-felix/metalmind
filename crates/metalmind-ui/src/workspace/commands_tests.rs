@@ -553,6 +553,40 @@ fn set_wrap_cambia_el_panel_enfocado_y_lo_hereda_un_split() {
     );
 }
 
+/// En una tabla, `tab` y `shift-tab` saltan de celda; desde la paleta se
+/// enciende alinearla al salir de Insert, y se vuelve a apagar.
+#[test]
+fn tab_salta_de_celda_y_la_paleta_alinea_al_salir_de_insert() {
+    let mut session = Session::new("| a | b |\n|-|-|\n| uno | dos |\n");
+    session.keys("jji⇥x⇤y⎋");
+    assert_eq!(
+        session.text(),
+        "| a   | b    |\n| --- | ---- |\n| yuno | xdos |\n"
+    );
+    let toggle = Invocation {
+        action: Command::ToggleAlignTablesOnLeave.into(),
+        argument: None,
+    };
+    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    assert_eq!(
+        session.workspace.messages().last(),
+        Some(&Message::Info(
+            "Alinear la tabla al salir de Insert: encendido".to_owned()
+        ))
+    );
+    session.keys("azz⎋");
+    assert_eq!(
+        session.text(),
+        "| a      | b    |\n| ------ | ---- |\n| yzzuno | xdos |\n"
+    );
+    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    session.keys("ix⎋");
+    assert_eq!(
+        session.text(),
+        "| a      | b    |\n| ------ | ---- |\n| yzxzuno | xdos |\n"
+    );
+}
+
 #[test]
 fn space_f_space_barra_y_space_p_piden_el_finder_la_busqueda_y_la_paleta() {
     let mut session = Session::new("uno\n");

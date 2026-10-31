@@ -366,6 +366,8 @@ const VIM: &[(Context, &[Key], Action)] = {
         (Insert, &[Key::Backspace], Action::Backspace),
         (Insert, &[Key::Enter], Action::Newline),
         (Insert, &[Key::Ctrl('j')], Action::Newline),
+        (Insert, &[Key::Tab], Action::NextTableCell),
+        (Insert, &[Key::ShiftTab], Action::PreviousTableCell),
         (CommandLine, &[Key::Escape], Action::NormalMode),
         (CommandLine, &[Key::Ctrl('c')], Action::Interrupt),
         (CommandLine, &[Key::Backspace], Action::Backspace),

@@ -52,6 +52,7 @@ history:
 markdown:
   continue_lists: false
   indent_list_children: false
+  align_tables_on_leave: true
 ";
 
 fn every_setting() -> Settings {
@@ -101,6 +102,7 @@ fn every_setting() -> Settings {
         markdown: Markdown {
             continue_lists: false,
             indent_list_children: false,
+            align_tables_on_leave: true,
         },
     }
 }
@@ -171,7 +173,7 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "template": "diario"
   },
   "history": { "keep_all_hours": 12, "hourly_days": 7, "daily_days": 365, "deleted_days": 30 },
-  "markdown": { "continue_lists": false, "indent_list_children": false }
+  "markdown": { "continue_lists": false, "indent_list_children": false, "align_tables_on_leave": true }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);

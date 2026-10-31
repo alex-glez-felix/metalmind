@@ -66,6 +66,10 @@ impl From<Key> for Keystroke {
             Key::Enter => Self::plain(KeyName::Enter),
             Key::Backspace => Self::plain(KeyName::Backspace),
             Key::Tab => Self::plain(KeyName::Tab),
+            Key::ShiftTab => Self {
+                shift: true,
+                ..Self::plain(KeyName::Tab)
+            },
             Key::Up => Self::plain(KeyName::Up),
             Key::Down => Self::plain(KeyName::Down),
         }
@@ -124,6 +128,7 @@ mod tests {
             Key::Enter,
             Key::Backspace,
             Key::Tab,
+            Key::ShiftTab,
             Key::Up,
             Key::Down,
         ];
