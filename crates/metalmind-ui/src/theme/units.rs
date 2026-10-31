@@ -67,6 +67,14 @@ impl Represent<config::MarkColumns> for Gpui {
     }
 }
 
+impl Represent<config::TextColumns> for Gpui {
+    type Value = usize;
+
+    fn represent(value: config::TextColumns) -> usize {
+        usize::from(value.0)
+    }
+}
+
 impl Represent<config::Factor> for Gpui {
     type Value = config::Factor;
 

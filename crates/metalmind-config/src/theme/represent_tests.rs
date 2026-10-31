@@ -36,7 +36,16 @@ macro_rules! unchanged {
     )*};
 }
 
-unchanged!(Px, Factor, Fraction, Count, Weight, MarkColumns, TextStyle);
+unchanged!(
+    Px,
+    Factor,
+    Fraction,
+    Count,
+    Weight,
+    MarkColumns,
+    TextColumns,
+    TextStyle
+);
 
 #[test]
 fn convert_pasa_cada_campo_por_su_unidad() {

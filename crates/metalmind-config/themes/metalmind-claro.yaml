@@ -199,5 +199,6 @@ layout:
   toast_padding_x: md
   toast_padding_y: sm
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio
+  note_max_width: 80      # columnas de texto; en un panel más ancho la nota se centra
   math_padding: 1
   math_block_margin: xs

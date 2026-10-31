@@ -19,7 +19,7 @@ use super::Editor;
 use super::cursor::{Preedit, cursor_quad, em_width, preedit};
 use super::formula_tooltip;
 use super::gutter::{Gutter, PaintedGutter};
-use super::highlight::{Cells, search_quads, selection_quads};
+use super::highlight::{search_quads, selection_quads};
 use super::layout::{FrameLayout, LaidLine, Viewport};
 pub use super::lines::Typeface;
 use super::lines::{ImageRequest, MathFrame, Shaped, code_block_quads, shape_visible_lines};
@@ -211,11 +211,7 @@ impl gpui_kit::Element for EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let text_style = window.text_style();
-        let typeface = Typeface {
-            font: text_style.font(),
-            size: text_style.font_size.to_pixels(window.rem_size()),
-        };
+        let typeface = Typeface::of(window);
         let content = inset(bounds, &self.theme);
         let clip = Bounds::new(
             point(bounds.left(), content.top()),
@@ -230,14 +226,16 @@ impl gpui_kit::Element for EditorElement {
             let viewport = Viewport::new(content, line_height, self.editor.read(cx).scroll);
             return Prepainted::empty(viewport, clip);
         };
-        let frame = Frame {
-            text: gutter.text_bounds(content),
+        let frame = Frame::new(
+            bounds,
+            gutter.width,
             typeface,
             line_height,
             cell,
-        };
+            &self.theme,
+        );
         self.resize(&frame, geometry, window, cx);
-        let Frame { typeface, text, .. } = frame;
+        let typeface = &frame.typeface;
         let vault_links = self.editor.update(cx, |editor, cx| editor.links(cx));
         let editor = self.editor.read(cx);
         let Some(view) = editor.view(cx) else {
@@ -251,7 +249,7 @@ impl gpui_kit::Element for EditorElement {
         let scroll = editor.scroll.follow(anchor, hidden, editor.synced);
         let viewport = Viewport {
             left: px(f32_of(view.viewport.left())),
-            ..Viewport::new(text, line_height, scroll)
+            ..Viewport::new(frame.text, line_height, scroll)
         };
         let math = MathFrame {
             formulas: formulas.read(cx),
@@ -262,32 +260,26 @@ impl gpui_kit::Element for EditorElement {
         let Shaped { lines, images } = shape_visible_lines(
             &view,
             &viewport,
-            &typeface,
+            typeface,
             &self.theme,
             &vault_links,
             &math,
             window,
         );
-        let code_blocks = code_block_quads(&lines, text.left(), bounds.right(), &self.theme);
+        let code_blocks =
+            code_block_quads(&lines, frame.text.left(), frame.column.right(), &self.theme);
         let mut layout = FrameLayout { viewport, lines };
-        let text_clip = Bounds::from_corners(
-            point(text.left(), clip.top()),
-            point(bounds.right(), clip.bottom()),
-        );
         let painted_gutter = (gutter.columns > 0)
-            .then(|| gutter.paint(&view, bounds, &layout, &typeface, &self.theme, window));
-        let cells = Cells {
-            width: cell,
-            edge: bounds.right(),
-        };
+            .then(|| gutter.paint(&view, frame.column, &layout, typeface, &self.theme, window));
+        let cells = frame.cells();
         let search = search_quads(&view, &layout, cells, &self.theme);
         let selection = selection_quads(&view, &layout, cells, &self.theme);
-        let cursor = cursor_quad(&view, &layout, &typeface, &self.theme, window);
+        let cursor = cursor_quad(&view, &layout, typeface, &self.theme, window);
         let preedit = editor
             .marked
             .clone()
             .filter(|_| view.mode == Mode::Insert)
-            .and_then(|text| preedit(&view, &layout, text, &typeface, &self.theme, window));
+            .and_then(|text| preedit(&view, &layout, text, typeface, &self.theme, window));
         attach_images(&formulas, images, &mut layout.lines, cx);
         self.editor.update(cx, |editor, _| {
             editor.layout = Some(layout.clone());
@@ -303,7 +295,7 @@ impl gpui_kit::Element for EditorElement {
         Prepainted {
             layout,
             clip,
-            text_clip,
+            text_clip: frame.text_clip(clip),
             gutter: painted_gutter,
             mark_tooltips,
             code_blocks,

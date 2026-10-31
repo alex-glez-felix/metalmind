@@ -79,6 +79,11 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "geometría, no estilo: el margen del texto se resta arriba y abajo",
     ),
     (
+        "src/editor/element/measures.rs",
+        "width) / 2.",
+        "geometría, no estilo: lo que sobra del ancho de lectura se reparte a los dos lados",
+    ),
+    (
         "src/editor/markdown.rs",
         "spans.len() * 2",
         "la capacidad de un Vec (dos tramos por span y uno más), no una medida",
