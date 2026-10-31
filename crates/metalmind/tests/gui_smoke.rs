@@ -681,8 +681,6 @@ fn keys_shown(lines: &[String]) -> u32 {
 /// (260), y `editor.padding` (12 a los lados, 8 arriba).
 const EDITOR_LEFT: i16 = 296;
 const TEXT_TOP: i16 = 8;
-/// La columna de las marks, la primera del margen.
-const MARK_X: i16 = EDITOR_LEFT + 12 + 4;
 /// Donde puede salir el tooltip de una mark de la primera línea visible.
 const TOP_OF_EDITOR: Area = Area {
     x: EDITOR_LEFT,
@@ -705,12 +703,16 @@ fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
     );
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
+    let opened = window.wait_still(TOP_OF_EDITOR);
+    window.type_keys("jj");
+    window.wait_change("el cursor en el heading", TOP_OF_EDITOR, &opened);
     let unmarked = window.wait_still(TOP_OF_EDITOR);
-    window.type_keys("jjma");
+    window.type_keys("ma");
     window.wait_change("la mark en el margen", TOP_OF_EDITOR, &unmarked);
     // Una muesca son tres líneas de texto: pasan `uno`, `dos` y lo que mide
     // una línea de texto del heading, que mide más, así que asoma recortado.
     let marked = window.wait_still(TOP_OF_EDITOR);
+    let mark_x = first_changed_column(TOP_OF_EDITOR, &unmarked, &marked) + 2;
     let away = (EDITOR_LEFT + 300, 300);
     window.scroll_down(away.0, away.1);
     window.wait_change("el scroll", TOP_OF_EDITOR, &marked);
@@ -724,7 +726,7 @@ fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
     };
 
     let hovered = Instant::now();
-    window.move_pointer(MARK_X, TEXT_TOP + 6);
+    window.move_pointer(mark_x, TEXT_TOP + 6);
     wait::until(
         "el tooltip sobre lo que se ve del heading",
         TIMEOUT,
@@ -737,12 +739,31 @@ fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
     window.move_pointer(away.0, away.1);
     wait::until("que el tooltip se vaya", TIMEOUT, unchanged);
 
-    window.move_pointer(MARK_X, TEXT_TOP / 2);
+    window.move_pointer(mark_x, TEXT_TOP / 2);
     wait::stays(
         "sin tooltip sobre el margen de arriba",
         shows_in * 2,
         unchanged,
     );
+}
+
+/// La primera columna de la ventana, de izquierda a derecha, en la que
+/// `after` no se ve como `before` dentro de `area`: lo que pintó una tecla,
+/// como la letra de una mark, que el ancho de lectura centra con su margen.
+fn first_changed_column(area: Area, before: &[u8], after: &[u8]) -> i16 {
+    let row = usize::from(area.width) * 3;
+    let column = before
+        .chunks(row)
+        .zip(after.chunks(row))
+        .filter_map(|(before, after)| {
+            before
+                .chunks(3)
+                .zip(after.chunks(3))
+                .position(|(before, after)| before != after)
+        })
+        .min()
+        .unwrap();
+    area.x + i16::try_from(column).unwrap()
 }
 
 /// Alto de una línea de texto con la fuente por defecto.
