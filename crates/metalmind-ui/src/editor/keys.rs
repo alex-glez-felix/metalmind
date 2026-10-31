@@ -29,6 +29,9 @@ pub fn translate(keystroke: &Keystroke) -> Option<Key> {
     if modifiers.control {
         return control_key(keystroke);
     }
+    if modifiers.shift && keystroke.key == "tab" {
+        return Some(Key::ShiftTab);
+    }
     if !modifiers.shift
         && let Some(key) = named_key(&keystroke.key)
     {
@@ -124,7 +127,7 @@ mod tests {
             ("enter", None, Mods::None, Some(Key::Enter)),
             ("backspace", None, Mods::None, Some(Key::Backspace)),
             ("tab", None, Mods::None, Some(Key::Tab)),
-            ("tab", None, Mods::Shift, None),
+            ("tab", None, Mods::Shift, Some(Key::ShiftTab)),
             ("r", None, Mods::Ctrl, Some(Key::Ctrl('r'))),
             // A diferencia de una terminal, GPUI distingue `ctrl-i` de Tab.
             ("i", None, Mods::Ctrl, Some(Key::Ctrl('i'))),

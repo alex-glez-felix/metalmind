@@ -37,6 +37,8 @@ pub struct Markdown {
     pub continue_lists: bool,
     /// `>>` y `<<` en un ítem de lista mueven también sus hijos.
     pub indent_list_children: bool,
+    /// Salir de Insert tras escribir en una tabla la alinea.
+    pub align_tables_on_leave: bool,
 }
 
 /// La nota del día. Apagada por defecto: el flujo de captura es el buzón.
@@ -199,6 +201,7 @@ impl Default for Markdown {
         Self {
             continue_lists: true,
             indent_list_children: true,
+            align_tables_on_leave: false,
         }
     }
 }

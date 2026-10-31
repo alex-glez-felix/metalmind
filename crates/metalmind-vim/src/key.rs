@@ -7,6 +7,7 @@ pub enum Key {
     Enter,
     Backspace,
     Tab,
+    ShiftTab,
     Up,
     Down,
 }
@@ -23,6 +24,7 @@ impl std::fmt::Display for Key {
             Self::Enter => f.write_str("enter"),
             Self::Backspace => f.write_str("backspace"),
             Self::Tab => f.write_str("tab"),
+            Self::ShiftTab => f.write_str("shift-tab"),
             Self::Up => f.write_str("up"),
             Self::Down => f.write_str("down"),
         }
@@ -42,6 +44,7 @@ mod tests {
             (Key::Ctrl('w'), "ctrl-w"),
             (Key::Escape, "escape"),
             (Key::Enter, "enter"),
+            (Key::ShiftTab, "shift-tab"),
         ];
         for (key, text) in cases {
             assert_eq!(key.to_string(), text);

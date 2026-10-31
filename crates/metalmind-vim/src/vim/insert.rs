@@ -1,11 +1,13 @@
 //! Entrar a Insert, teclear y salir.
 
-use metalmind_buffer::Selections;
+use metalmind_buffer::{Selection, Selections};
 
 use super::Vim;
 use crate::Target;
 use crate::dot::{Change, Dot};
 use crate::insert::{self, Session, Typed, Typing};
+use crate::lines::clamp_normal;
+use crate::markdown::{LazyStyles, Move, align_tables};
 use crate::{InsertAt, Key, KeyOutcome, Mode, VimError};
 
 impl Vim {
@@ -104,11 +106,36 @@ impl Vim {
     }
 
     /// `<Esc>`: lo que pide el count, lo que un bloque repite en sus demás
-    /// líneas y salir.
+    /// líneas, alinear la tabla si así se pidió y salir.
     pub(super) fn finish_insert(&mut self, t: &mut Target<'_>) -> Result<(), VimError> {
         self.repeat_insert(t)?;
         let corners = self.replicate_in_block(t)?;
+        let corners = self.align_on_leave(corners, t)?;
         self.leave_insert_to(corners, t)
+    }
+
+    /// Con `align_tables_on_leave`, si este Insert cambió el texto, alinea
+    /// la tabla de cada cursor (o de cada esquina del bloque) dentro de su
+    /// misma transacción. `ctrl-c` no pasa por aquí: como en vim, no dispara
+    /// lo que hace salir de Insert.
+    fn align_on_leave(
+        &self,
+        corners: Option<Selections>,
+        t: &mut Target<'_>,
+    ) -> Result<Option<Selections>, VimError> {
+        if !self.markdown.align_tables_on_leave || !t.buffer.has_uncommitted_edits() {
+            return Ok(corners);
+        }
+        t.doc.sync(t.buffer);
+        let styles = LazyStyles::new(t.doc.styles_mut());
+        let Some(corners) = corners else {
+            (*t.selections, _) = align_tables(t.buffer, t.selections, &styles, Move::Stay)?;
+            return Ok(None);
+        };
+        let (aligned, _) = align_tables(t.buffer, &corners, &styles, Move::Stay)?;
+        Ok(Some(aligned.map(|corner| {
+            Selection::cursor(clamp_normal(t.buffer, corner.head))
+        })))
     }
 
     /// Sale a Normal; lo hecho en Insert pasa a ser lo que repite `.`.

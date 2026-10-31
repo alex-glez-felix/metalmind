@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
 
-use super::{Align, CellPos, CellSpot, Table};
+use super::{Align, CellPos, CellSpot, Step, Table};
 use crate::TextLines;
 
 /// Marca el cursor en los casos: `|` es de la tabla.
@@ -172,6 +172,58 @@ fn spots_name_the_cell_and_the_offset_in_it() {
     assert_eq!(table.spot(0, 5), spot(0, 0, 2));
     assert_eq!(table.spot(0, 8), spot(0, 1, 1));
     assert_eq!(table.spot(1, 3), spot(1, 1, 0));
+}
+
+#[test]
+fn steps_walk_the_cells_in_reading_order_past_the_separator() {
+    let text = "| a | b |\n|-|-|\n| 1 |\n| 1 | 2 | 3 |";
+    let table = Table::around(&TextLines::new(text), 0).unwrap();
+    let cell = |row, column| Some(CellPos { row, column });
+    let cases = [
+        ((0, 0), Step::Next, cell(0, 1)),
+        ((0, 1), Step::Next, cell(2, 0)),
+        // la fila corta se alinea con tantas celdas como el encabezado
+        ((2, 0), Step::Next, cell(2, 1)),
+        ((2, 1), Step::Next, cell(3, 0)),
+        // y la larga conserva las de más
+        ((3, 1), Step::Next, cell(3, 2)),
+        ((3, 2), Step::Next, None),
+        ((1, 0), Step::Next, cell(2, 0)),
+        ((1, 1), Step::Next, cell(2, 0)),
+        ((3, 0), Step::Previous, cell(2, 1)),
+        ((2, 0), Step::Previous, cell(0, 1)),
+        ((1, 1), Step::Previous, cell(0, 1)),
+        ((0, 1), Step::Previous, cell(0, 0)),
+        ((0, 0), Step::Previous, cell(0, 0)),
+    ];
+    for ((row, column), step, expected) in cases {
+        assert_eq!(
+            table.step(CellPos { row, column }, step),
+            expected,
+            "{step:?} desde ({row}, {column})"
+        );
+    }
+}
+
+#[test]
+fn a_new_row_has_as_many_empty_cells_as_the_header() {
+    let text = "> | nombre | x |\n> |:-:|-:|\n> | José | 1 | sobra |";
+    let table = Table::around(&TextLines::new(text), 0).unwrap();
+    let formatted = table.formatted_with_new_row();
+    assert_eq!(
+        formatted.lines(),
+        [
+            "> | nombre |   x |",
+            "> | :----: | --: |",
+            "> |  José  |   1 | sobra |",
+            "> |        |     |",
+        ]
+    );
+    let first = CellSpot {
+        cell: CellPos { row: 3, column: 0 },
+        offset: 0,
+    };
+    assert_eq!(formatted.place(first), (3, 7));
 }
 
 /// Lo que dice cada celda de cada fila de la tabla, en orden.

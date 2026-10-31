@@ -126,6 +126,7 @@ pub fn open_window(
         markdown: Markdown {
             continue_lists: config.settings.markdown.continue_lists,
             indent_list_children: config.settings.markdown.indent_list_children,
+            align_tables_on_leave: config.settings.markdown.align_tables_on_leave,
         },
     };
     let autosave = editor.autosave.then_some(editor.autosave_delay_ms.get());

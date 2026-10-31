@@ -245,6 +245,7 @@ fn markdown_editing_turned_off(#[case] before: &str, #[case] keys: &str, #[case]
     let off = Markdown {
         continue_lists: false,
         indent_list_children: false,
+        align_tables_on_leave: false,
     };
     assert_eq!(run(before, keys, off, false).0, after);
 }

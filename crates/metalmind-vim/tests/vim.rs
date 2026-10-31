@@ -921,6 +921,12 @@ use rstest_reuse::{self, apply, template};
 #[case("ab|c", ":q<Esc>x", "a|b")]
 #[case("ab|c", ":<BS>x", "a|b")]
 #[case("|abc", "i:<Esc>", "|:abc")]
+// fuera de una tabla, `tab` y `shift-tab` escriben un tab en Insert; el
+// count, `.` y una macro los repiten
+#[case("a|b", "i<S-Tab><Esc>", "a|\tb")]
+#[case("a|b", "3i<S-Tab><Esc>", "a\t\t|\tb")]
+#[case("a|b", "i<Tab>x<S-Tab><Esc>.", "a\tx\tx|\t\tb")]
+#[case("a|b\ncd", "qai<S-Tab><Esc>jq@a", "a\tb\nc|\td")]
 fn cases(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {}
 
 #[apply(cases)]

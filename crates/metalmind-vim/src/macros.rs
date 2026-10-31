@@ -11,7 +11,12 @@ const CTRL_H: char = '\u{8}';
 /// El `K_SPECIAL` de vim, seguido del nombre de la tecla.
 const SPECIAL: char = '\u{80}';
 
-const SPECIAL_KEYS: [(Key, &str); 3] = [(Key::Backspace, "kb"), (Key::Up, "ku"), (Key::Down, "kd")];
+const SPECIAL_KEYS: [(Key, &str); 4] = [
+    (Key::Backspace, "kb"),
+    (Key::ShiftTab, "kB"),
+    (Key::Up, "ku"),
+    (Key::Down, "kd"),
+];
 
 pub(crate) fn encode(keys: &[Key]) -> String {
     let mut text = String::new();
@@ -55,7 +60,7 @@ fn encode_key(key: Key, text: &mut String) {
         Key::Escape => Some(ESCAPE),
         Key::Enter => Some('\r'),
         Key::Tab => Some('\t'),
-        Key::Backspace | Key::Up | Key::Down => None,
+        Key::Backspace | Key::ShiftTab | Key::Up | Key::Down => None,
     };
     if let Some(c) = c {
         text.push(c);
@@ -100,13 +105,17 @@ mod tests {
             Key::Enter,
             Key::Backspace,
             Key::Tab,
+            Key::ShiftTab,
             Key::Up,
             Key::Down,
             Key::Ctrl('r'),
             Key::Ctrl('j'),
         ];
         let encoded = encode(&keys);
-        assert_eq!(encoded, "iñ\u{1b}\r\u{80}kb\t\u{80}ku\u{80}kd\u{12}\n");
+        assert_eq!(
+            encoded,
+            "iñ\u{1b}\r\u{80}kb\t\u{80}kB\u{80}ku\u{80}kd\u{12}\n"
+        );
         assert_eq!(decode(&chars(&encoded)), keys);
     }
 

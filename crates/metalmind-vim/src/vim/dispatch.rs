@@ -1,6 +1,7 @@
 //! De una acción con nombre a lo que hace en cada modo.
 
 use metalmind_buffer::{Buffer, Selection, Selections};
+use metalmind_syntax::Step;
 
 use super::Vim;
 use super::awaiting::Awaiting;
@@ -150,6 +151,8 @@ impl Vim {
             Action::Newline => {
                 self.type_in_insert(&Typed::Newline { list: true }, t)?;
             }
+            Action::NextTableCell => self.type_in_insert(&Typed::Cell(Step::Next), t)?,
+            Action::PreviousTableCell => self.type_in_insert(&Typed::Cell(Step::Previous), t)?,
             _ => self.reset(),
         }
         Ok(())

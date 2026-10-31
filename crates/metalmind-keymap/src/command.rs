@@ -59,6 +59,9 @@ named_actions! {
         /// `:set wrap!`: parte las líneas largas del panel enfocado, o deja
         /// de partirlas y la vista se corre a lo ancho.
         ToggleWrap = "editor::toggle_wrap",
+        /// Enciende o apaga `markdown.align_tables_on_leave` mientras dure
+        /// la sesión: salir de Insert tras escribir en una tabla la alinea.
+        ToggleAlignTablesOnLeave = "editor::toggle_align_tables_on_leave",
         /// `space f`: el finder de notas.
         OpenFinder = "workspace::open_finder",
         /// `space /`: la búsqueda de texto en las notas del vault.

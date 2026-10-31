@@ -131,6 +131,11 @@ pub enum Action {
     ToggleCheckbox,
     /// Alinea las columnas de la tabla del cursor (`:tableformat`).
     FormatTable,
+    /// En Insert, alinea la tabla y va a la celda siguiente; tras la
+    /// última agrega una fila. Fuera de una tabla escribe un tab.
+    NextTableCell,
+    /// Como [`Action::NextTableCell`], a la celda anterior.
+    PreviousTableCell,
 }
 
 impl Action {
@@ -311,6 +316,8 @@ impl Action {
         Self::HistoryNext,
         Self::ToggleCheckbox,
         Self::FormatTable,
+        Self::NextTableCell,
+        Self::PreviousTableCell,
     ];
 
     #[must_use]
@@ -382,6 +389,8 @@ impl Action {
             Self::HistoryNext => "vim::history_next",
             Self::ToggleCheckbox => "editor::toggle_checkbox",
             Self::FormatTable => "editor::format_table",
+            Self::NextTableCell => "editor::next_table_cell",
+            Self::PreviousTableCell => "editor::previous_table_cell",
         }
     }
 }

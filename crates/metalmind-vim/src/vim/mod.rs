@@ -175,6 +175,11 @@ impl Vim {
     }
 
     #[must_use]
+    pub fn markdown(&self) -> Markdown {
+        self.markdown
+    }
+
+    #[must_use]
     pub fn mode(&self) -> Mode {
         self.mode
     }

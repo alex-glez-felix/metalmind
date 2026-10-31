@@ -87,7 +87,7 @@ pub enum Input {
 const PASTE_START: &str = "<PasteStart>";
 const PASTE_END: &str = "<PasteEnd>";
 
-/// Notación de vim (`<Esc>`, `<CR>`, `<BS>`, `<C-r>`), la misma que recibe
+/// Notación de vim (`<Esc>`, `<CR>`, `<BS>`, `<S-Tab>`, `<C-r>`), la misma que recibe
 /// nvim. `<PasteStart>texto<PasteEnd>` es un pegado de la terminal y
 /// `<LeftMouse><col,fila>` un clic, contando desde 0; en texto ASCII la
 /// columna de pantalla de nvim es la de caracteres.
@@ -240,6 +240,7 @@ fn special_key(text: &str) -> Option<(Key, usize)> {
         "CR" => Key::Enter,
         "BS" => Key::Backspace,
         "Tab" => Key::Tab,
+        "S-Tab" => Key::ShiftTab,
         "Up" => Key::Up,
         "Down" => Key::Down,
         "lt" => Key::Char('<'),
