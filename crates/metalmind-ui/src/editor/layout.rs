@@ -245,14 +245,18 @@ impl FrameLayout {
     }
 
     /// Línea y byte dentro de ella más cercanos a `position`; arriba o abajo
-    /// del texto pintado se toma la primera o la última fila.
+    /// del texto pintado se toma la primera o la última fila. A los lados del
+    /// área del texto, lo que se ve en su borde: sin `wrap`, una línea larga
+    /// sigue fuera de ella, recortada.
     pub fn hit(&self, position: Point<Pixels>) -> Option<(usize, usize)> {
         let laid = self
             .lines
             .iter()
             .find(|laid| position.y < laid.origin.y + laid.height)
             .or_else(|| self.lines.last())?;
-        Some((laid.line, laid.closest_index(position)))
+        let bounds = self.viewport.bounds;
+        let inside = point(position.x.clamp(bounds.left(), bounds.right()), position.y);
+        Some((laid.line, laid.closest_index(inside)))
     }
 
     /// La fórmula rota bajo `position`, para mostrar su mensaje.
@@ -365,6 +369,34 @@ mod tests {
             7,
             "a la derecha de una fórmula que cierra la fila, su final"
         );
+    }
+
+    /// Sin `wrap`, corrida 50 a lo ancho: una línea de 30 letras de 10 que
+    /// pasa por los dos lados del área del texto, de 50 a 150.
+    fn sideways() -> FrameLayout {
+        let bounds = Bounds::new(point(px(50.), px(0.)), size(px(100.), px(100.)));
+        let mut laid = line(0, 0., vec![row(0..30, 0., 10.)]);
+        laid.rows[0].pieces = (0..30_u16)
+            .map(|at| Piece {
+                source: usize::from(at)..usize::from(at) + 1,
+                x: px(10. * f32::from(at)),
+                width: px(10.),
+                text: None,
+            })
+            .collect();
+        FrameLayout {
+            viewport: Viewport::new(bounds, px(10.), Scroll::default()),
+            lines: vec![laid],
+        }
+    }
+
+    #[test]
+    fn un_clic_a_los_lados_del_texto_cae_en_lo_que_se_ve() {
+        let painted = sideways();
+        let byte_at = |x: f32| painted.hit(point(px(x), px(5.))).map(|(_, byte)| byte);
+        assert_eq!(byte_at(75.), Some(7), "dentro, donde cae");
+        assert_eq!(byte_at(10.), Some(5), "a la izquierda, el borde");
+        assert_eq!(byte_at(400.), Some(15), "a la derecha, el borde");
     }
 
     #[test]
