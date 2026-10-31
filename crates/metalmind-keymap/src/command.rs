@@ -81,6 +81,10 @@ named_actions! {
         /// `space v`: elige de dónde salen las notas de la lista: el buzón,
         /// todas, un tag o una carpeta.
         ChooseListSource = "list::choose_source",
+        /// `space c`, o un clic en la ruta sobre un panel: la lista muestra
+        /// esa carpeta (la de la nota enfocada, sin argumento) con la nota
+        /// elegida.
+        ShowFolder = "list::show_folder",
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",

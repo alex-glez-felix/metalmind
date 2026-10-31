@@ -601,6 +601,24 @@ fn space_f_space_barra_y_space_p_piden_el_finder_la_busqueda_y_la_paleta() {
 }
 
 #[test]
+fn la_carpeta_en_la_lista_la_muestra_la_ventana() {
+    let mut session = Session::new("uno\n");
+    session.keys(" c");
+    assert_eq!(session.effect, Effect::ShowFolder(None));
+    let crumb = Invocation {
+        action: Command::ShowFolder.into(),
+        argument: Some("proyectos/metalmind".to_owned()),
+    };
+    session.effect = session.workspace.run(&crumb, &mut session.clipboard);
+    assert_eq!(
+        session.effect,
+        Effect::ShowFolder(Some("proyectos/metalmind".to_owned()))
+    );
+    session.keys("ix⎋");
+    assert_eq!(session.text(), "xuno\n", "space c no deja nada pendiente");
+}
+
+#[test]
 fn las_notas_nuevas_las_pide_la_ventana() {
     let mut session = Session::new("uno\n");
     let asked = |template: Option<&str>, name: Option<&str>| {

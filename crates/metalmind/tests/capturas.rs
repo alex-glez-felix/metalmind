@@ -595,6 +595,29 @@ const SCENES: &[(&str, &[Step])] = &[
         "tabla-alineada-al-salir",
         &[Step::Keys("<CR>gg/clara<CR>ea, concisa y sin rodeos<Esc>")],
     ),
+    // La ruta sobre cada panel en lugar de pestañas (#164, paso 2), con la
+    // lista abierta: dos notas lado a lado, una de rutas hondas; luego
+    // tres, una abajo; luego paneles angostos, donde lo que no cabe se
+    // pierde por la izquierda, y `space c`, que lleva la lista a la carpeta
+    // de la nota enfocada con ella elegida.
+    (
+        "splits-ruta",
+        &[Step::Keys(concat!(
+            "<Esc><Esc><C-w>o<Space>fla nota al fondo<CR>",
+            "<C-w>v<Space>fidea 001<CR>",
+        ))],
+    ),
+    (
+        "splits-ruta-abajo",
+        &[Step::Keys("<C-w>s<Space>ftokens del tema<CR>")],
+    ),
+    (
+        "splits-ruta-angostos",
+        &[Step::Keys(
+            "<C-w>o<Space>fla nota al fondo<CR><C-w>v<C-w>v<C-w>v",
+        )],
+    ),
+    ("splits-carpeta", &[Step::Keys("<Space>c")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -620,10 +643,11 @@ fn set_writable(folder: &Path, writable: bool) {
 const TREE_ROW: i16 = 26;
 const TREE_LEFT: i16 = 36;
 const TREE_WIDTH: i16 = 260;
-/// Con `editor.padding` por defecto (8 arriba) y líneas de texto de 21: el
-/// centro de cada línea sin heading.
+/// Bajo la ruta sobre el panel (una línea de `ui_sm` de 21, 3 arriba y
+/// abajo y su borde), con `editor.padding` por defecto (8 arriba) y líneas
+/// de texto de 21: el centro de cada línea sin heading.
 const EDITOR_LEFT: i16 = TREE_LEFT + TREE_WIDTH;
-const TEXT_TOP: i16 = 8;
+const TEXT_TOP: i16 = 28 + 8;
 const TEXT_LINE: i16 = 21;
 
 #[rstest]

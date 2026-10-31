@@ -44,6 +44,7 @@ fn fixture_with<'c>(
     // del reloj del sistema de archivos o no, y el orden cambiaría.
     for ((name, text), minutes_ago) in files.iter().zip(0..) {
         let path = dir.path().join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, text).unwrap();
         File::options()
             .write(true)
@@ -301,5 +302,53 @@ fn cerrar_la_pregunta_suelta_el_preedit() {
             .list
             .read_with(cx, |view, _| view.marked().to_owned()),
         ""
+    );
+}
+
+#[test]
+fn la_carpeta_de_la_nota_activa_llega_con_ella_elegida() {
+    let mut cx = TestAppContext::single();
+    let files = &[
+        ("a.md", "#rust"),
+        ("b.md", "# Be"),
+        ("ui/c.md", "Ce."),
+        ("ui/hondo/d.md", "De."),
+    ];
+    let (fixture, cx) = fixture_with(&mut cx, files, Some(false));
+    let show = |named: Option<&str>, cx: &mut VisualTestContext| {
+        let shown = fixture.list.update(cx, |view, cx| {
+            view.show_folder(named, cx)
+                .map_err(|error| error.to_string())
+        });
+        cx.run_until_parked();
+        shown
+    };
+    // `b.md` está en la raíz: su carpeta son todas las notas, y se elige
+    // aunque no sea la primera fila.
+    show(None, cx).unwrap();
+    let source = fixture
+        .list
+        .read_with(cx, |view, _| view.list.source().clone());
+    assert_eq!(source, ListSource::All);
+    assert!(fixture.list.read_with(cx, |view, _| view.is_visible()));
+    assert_eq!(selected(&fixture.list, cx).as_deref(), Some("b.md"));
+    // Una miga: la nota activa no es de ahí, así que la primera fila.
+    show(Some("ui"), cx).unwrap();
+    let source = fixture
+        .list
+        .read_with(cx, |view, _| view.list.source().clone());
+    assert_eq!(source, ListSource::Folder("ui".into()));
+    assert_eq!(selected(&fixture.list, cx).as_deref(), Some("ui/c.md"));
+    assert_eq!(
+        show(Some("nada"), cx),
+        Err("nada no es una carpeta del vault".to_owned())
+    );
+    let source = fixture
+        .list
+        .read_with(cx, |view, _| view.list.source().clone());
+    assert_eq!(
+        source,
+        ListSource::Folder("ui".into()),
+        "un error no cambia la fuente"
     );
 }

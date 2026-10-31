@@ -678,9 +678,12 @@ fn keys_shown(lines: &[String]) -> u32 {
 }
 
 /// Con la config por defecto: la barra de botones (36) y el panel lateral
-/// (260), y `editor.padding` (12 a los lados, 8 arriba).
+/// (260), y `editor.padding` (12 a los lados, 8 arriba) bajo la ruta sobre
+/// el panel (una línea de `ui_sm` de 21, 3 arriba y abajo y su borde).
 const EDITOR_LEFT: i16 = 296;
-const TEXT_TOP: i16 = 8;
+const PATH_HEADER: i16 = 28;
+const PADDING_TOP: i16 = 8;
+const TEXT_TOP: i16 = PATH_HEADER + PADDING_TOP;
 /// Donde puede salir el tooltip de una mark de la primera línea visible.
 const TOP_OF_EDITOR: Area = Area {
     x: EDITOR_LEFT,
@@ -739,7 +742,7 @@ fn el_tooltip_de_una_mark_a_medio_scroll_solo_sale_sobre_lo_que_se_ve() {
     window.move_pointer(away.0, away.1);
     wait::until("que el tooltip se vaya", TIMEOUT, unchanged);
 
-    window.move_pointer(mark_x, TEXT_TOP / 2);
+    window.move_pointer(mark_x, PATH_HEADER + PADDING_TOP / 2);
     wait::stays(
         "sin tooltip sobre el margen de arriba",
         shows_in * 2,

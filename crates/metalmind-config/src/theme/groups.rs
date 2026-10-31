@@ -214,6 +214,15 @@ color_group! {
         status_border,
         /// La línea entre dos paneles.
         pane_border,
+        /// La ruta de la nota sobre cada panel: el nombre, las carpetas, todo
+        /// en un panel sin foco, la línea bajo el panel enfocado, una carpeta
+        /// bajo el ratón y la línea que la separa de la nota.
+        pane_header_foreground,
+        pane_header_folder,
+        pane_header_unfocused,
+        pane_header_focus,
+        pane_header_hover,
+        pane_header_border,
         /// El `[+]` de un archivo con cambios sin guardar.
         modified,
         /// El indicador del autoguardado: "guardado".

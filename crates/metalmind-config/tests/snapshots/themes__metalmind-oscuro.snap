@@ -34,6 +34,12 @@ Theme {
         status_unfocused_foreground: #5c6370,
         status_border: #2a2e36,
         pane_border: #5c6370,
+        pane_header_foreground: #d7dae0,
+        pane_header_folder: #9aa0a6,
+        pane_header_unfocused: #5c6370,
+        pane_header_focus: #7aa2f7,
+        pane_header_hover: #d7dae0 α0.06,
+        pane_header_border: #2a2e36,
         modified: #e0af68,
         status_saved: #5c6370,
         status_unsaved: #e0af68,
@@ -214,6 +220,12 @@ Theme {
             ),
             status_focus_max_width: Fraction(
                 0.5,
+            ),
+            pane_header_padding_x: Length(
+                10.0,
+            ),
+            pane_header_padding_y: Length(
+                3.0,
             ),
             picker_width: Length(
                 640.0,

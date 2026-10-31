@@ -225,6 +225,9 @@ metric_group! {
         /// La fracción del espacio entre el modo y la posición que puede ocupar
         /// el indicador del focus en la barra de estado.
         status_focus_max_width: Fraction,
+        /// Alrededor de la ruta de la nota sobre cada panel.
+        pane_header_padding_x: Length,
+        pane_header_padding_y: Length,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,

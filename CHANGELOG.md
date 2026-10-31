@@ -162,6 +162,11 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   `ctrl-w h j k l` y `ctrl-w w` mueven el foco, `ctrl-w q` y `:q` cierran el
   panel y `ctrl-w o` y `:on` dejan solo el actual. Dos paneles pueden mostrar
   el mismo archivo con cursores independientes.
+- Sin pestañas: sobre cada panel va la ruta de su nota en el vault, y cada
+  carpeta de la ruta es una miga que, con un clic, muestra esa carpeta en la
+  lista de notas con la nota elegida. `space c` hace lo mismo con la carpeta
+  de la nota enfocada. Con varios paneles, la línea bajo la ruta del
+  enfocado lleva el acento del tema.
 - Como nvim, con `hidden`: cambiar de nota (con `:e`, el finder o el panel
   lateral) o cerrar un panel deja la nota de antes abierta en segundo plano,
   con sus cambios, su historial y su cursor. Al volver a una sin cambios, se
