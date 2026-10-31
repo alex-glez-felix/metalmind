@@ -6,12 +6,14 @@
 
 mod config;
 mod diagnostic;
+pub mod edit;
 mod file;
 mod history;
 mod parse;
 mod paths;
 mod settings;
 mod theme;
+mod vault;
 
 pub use config::Config;
 pub use diagnostic::{Diagnostic, Loaded, Location, Severity};
@@ -27,3 +29,4 @@ pub use theme::{
     Rows, Spacing, Stroke, SyntaxColors, Text, TextColumns, TextStyle, Theme, Themes, UiColors,
     Units, Weight,
 };
+pub use vault::{SavedView, VaultConfig};

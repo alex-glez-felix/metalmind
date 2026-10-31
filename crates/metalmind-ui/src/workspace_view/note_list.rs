@@ -1,4 +1,5 @@
-//! La lista de notas en la ventana: plegarla, elegir su fuente en un picker
+//! La lista de notas en la ventana: plegarla, elegir su fuente (también una
+//! vista guardada) en un picker
 //! y etiquetar la nota elegida, que se aplica y se deshace (`:vaultundo`) como
 //! un cambio de tags (05 §5).
 
@@ -19,6 +20,8 @@ use crate::workspace::Message;
 pub struct SourceChoice {
     source: ListSource,
     label: String,
+    /// La consulta de una vista guardada.
+    detail: Option<String>,
 }
 
 impl AsRef<str> for SourceChoice {
@@ -27,7 +30,11 @@ impl AsRef<str> for SourceChoice {
     }
 }
 
-impl PickerItem for SourceChoice {}
+impl PickerItem for SourceChoice {
+    fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
+    }
+}
 
 pub type SourcePicker = PickerView<Fuzzy<SourceChoice>>;
 
@@ -48,12 +55,14 @@ impl WorkspaceView {
     }
 
     pub(super) fn choose_list_source(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let views = self.vault_views(cx).unwrap_or_default();
         let vault = self.session.read(cx).vault();
         let tags = self.session.read(cx).tags();
-        let choices: Arc<[SourceChoice]> = ListSource::choices(&vault.snapshot(), &tags)
+        let choices: Arc<[SourceChoice]> = ListSource::choices(&vault.snapshot(), &tags, &views)
             .into_iter()
             .map(|source| SourceChoice {
                 label: source.label(),
+                detail: source.view_name().and(source.query()),
                 source,
             })
             .collect();

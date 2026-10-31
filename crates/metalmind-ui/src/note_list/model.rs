@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use metalmind_config::SavedView;
 use metalmind_vault::tags::Tags;
 use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath, VaultUpdate};
 
@@ -181,6 +182,45 @@ impl NoteList {
         self.selected = selected;
         self.filter.select(0);
         self.refill()
+    }
+
+    /// Una vista recién guardada desde la lista: la muestra con el filtro
+    /// vacío, porque lo que decía ya está en la vista.
+    pub fn show_saved_view(&mut self, view: &SavedView) -> Step<Note> {
+        let len = self.filter().text().len();
+        let _ = self.filter.edit(LineEdit::Replace {
+            start: 0,
+            end: len,
+            text: "",
+        });
+        self.set_source(ListSource::of_view(view))
+    }
+
+    /// Las vistas del archivo cambiaron; la fuente sigue a la suya, con su
+    /// nombre nuevo si es `renamed`, o vuelve al buzón si ya no está.
+    /// `None` si la fuente no cambió.
+    pub fn follow_views(
+        &mut self,
+        views: &[SavedView],
+        renamed: Option<(&str, &str)>,
+    ) -> Option<Step<Note>> {
+        let mut source = self.source.clone();
+        if let (ListSource::View { name, .. }, Some((from, to))) = (&mut source, renamed)
+            && name == from
+        {
+            to.clone_into(name);
+        }
+        let source = source.resolve(views);
+        if source == self.source {
+            return None;
+        }
+        let same_notes = source.query() == self.source.query();
+        self.source = source;
+        Some(if same_notes {
+            Step::default()
+        } else {
+            self.refill()
+        })
     }
 
     fn refill(&mut self) -> Step<Note> {

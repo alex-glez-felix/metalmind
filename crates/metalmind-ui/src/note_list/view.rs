@@ -9,6 +9,7 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Pixels, ScrollStrategy,
     Subscription, Task, UniformListScrollHandle, Window,
 };
+use metalmind_config::SavedView;
 use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
 use metalmind_vault::{EntryKind, VaultPath};
@@ -16,6 +17,7 @@ use metalmind_vault::{EntryKind, VaultPath};
 use super::cards::read_all;
 use super::model::{NoteList, Prompt};
 use super::source::{FolderError, ListSource, folder_to_show};
+use super::views::load as load_views;
 use crate::finder::{Note, VaultChanged, VaultSession};
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
@@ -86,8 +88,10 @@ impl NoteListView {
     ) -> Self {
         let vault = session.read(cx).vault();
         let index = vault.snapshot();
+        // Una vista guardada se muestra con la consulta que tiene hoy.
+        let source = state.source.clone().resolve(&load_views(vault.root()).0);
         let list = NoteList::new(
-            state.source.clone(),
+            source,
             &state.filter,
             Arc::clone(&index),
             session.read(cx).tags(),
@@ -232,6 +236,27 @@ impl NoteListView {
         self.scroll_on_show = true;
         let step = self.list.set_source(source, selected);
         self.step(step, cx);
+    }
+
+    /// Muestra la vista que se acaba de guardar desde la lista, con el
+    /// filtro vacío.
+    pub fn show_saved_view(&mut self, view: &SavedView, cx: &mut Context<Self>) {
+        self.source_choices += 1;
+        self.scroll_on_show = true;
+        let step = self.list.show_saved_view(view);
+        self.step(step, cx);
+    }
+
+    /// Las vistas del vault cambiaron: la fuente sigue a la suya.
+    pub fn follow_views(
+        &mut self,
+        views: &[SavedView],
+        renamed: Option<(&str, &str)>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(step) = self.list.follow_views(views, renamed) {
+            self.step(step, cx);
+        }
     }
 
     /// El preedit del IME en el campo que se escribe.

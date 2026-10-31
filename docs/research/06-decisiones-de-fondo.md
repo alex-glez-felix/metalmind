@@ -177,7 +177,7 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 ## 10. Vistas guardadas
 
-**Decisión.** Una vista guardada es una consulta de tags (05 §4) con nombre. Aparecen en el panel junto a los tags y se puede enfocar en ellas (05 §3). Ejemplos: `buzón` = sin tags (§9); `gs` = `#gs -#archivado`.
+**Decisión.** Una vista guardada es una consulta de tags (05 §4) con nombre. Aparecen en el panel junto a los tags y se puede enfocar en ellas (05 §3). Ejemplo: `gs` = `#gs -#archivado`.
 
 **Por qué.** Las consultas que se repiten a diario no deberían escribirse cada vez; es lo que 05 §8 y [`IDEAS.md`](../IDEAS.md#tags) ya anotaban como idea.
 
@@ -185,8 +185,14 @@ Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; 
 
 - Se guardan con el vault, no en la config global: una consulta de tags solo tiene sentido en el vault donde existen esos tags, y así viaja con él.
 - Una vista apunta a una consulta en texto, que se parsea con el mismo `TagQuery` de 05. Agregarle "o" o comodines después no cambia el formato de la vista.
-- Dónde exactamente **(propuesta)**: en `<vault>/.metalmind/config.yaml`, bajo una clave `views` con nombre → consulta. Es la config del vault de 03 §5 y ya está dentro del vault, así que se sincroniza con él.
-- `buzón` viene predefinida **(propuesta)**: no hace falta escribirla, pero se le puede cambiar el nombre.
+- Dónde exactamente (decidido el 2026-10-31, [#169](https://github.com/alex-glez-felix/metalmind/issues/169)): en `<vault>/.metalmind/config.yaml`, bajo la clave `views`, un mapa de nombre a consulta en el orden en que se escribieron (`gs: "#gs -#archivado"`). Es la config del vault de 03 §5: ya está dentro del vault, así que se sincroniza con él, y no se inventa un archivo más para una sola clave. Lo lee y lo edita `metalmind_config::VaultConfig`; el resto del archivo no se toca (abajo).
+- `buzón` **no** es una vista predefinida (decidido el 2026-10-31, #169): el buzón sigue siendo su propia fuente, fija, la primera del picker. No es solo una consulta: es el concepto de §9, con comportamiento en toda la app (el nodo del panel, el focus donde una nota nace sin tags, la captura, `t` en la lista). Como vista se podría editar o borrar, y entonces "sin tags" dejaría de significar buzón o desaparecería; tampoco haría falta una regla para que reaparezca si se borra. Una vista con `-#` se puede guardar igual, si alguien quiere otro nombre para lo mismo.
+- **En la lista de notas** (2026-10-31, #169): una vista es una fuente de la lista (`ListSource::View`), que sale en el picker de `space v` después del buzón y de todas, con su consulta a la derecha, y se resuelve con el mismo `TagQuery` que el buzón y los tags. Una consulta con palabras que no son tags no trae ninguna nota, como un tag inválido. La cabecera muestra el nombre y debajo la consulta, con `renombrar` y `borrar`.
+  - **Guardar** (`list::save_view`, `s` en la lista, `vista` en su pie, y la paleta): la consulta de la fuente más los tags del filtro (`#rust` con el filtro `-#archivado` da `#rust -#archivado`); el texto que no es de tags no se guarda y se avisa. Una carpeta no es una consulta de tags y no se guarda como vista. Pide el nombre en un pop-up; dos vistas no pueden llamarse igual sin distinguir mayúsculas. La lista pasa a mostrar la vista con el filtro vacío.
+  - **Renombrar** (`list::rename_view`) y **borrar** (`list::delete_view`) actúan sobre la vista que muestra la lista; borrarla no toca ninguna nota y la lista vuelve al buzón.
+  - El archivo se lee al abrir el picker, al guardar y al arrancar; una vista guardada en el estado de la lista vuelve con la consulta que tenga en el archivo, o la lista vuelve al buzón si ya no existe.
+- **Escribir sin reescribir** (2026-10-31, #169): `metalmind_config::edit` cambia, agrega, quita o renombra una clave de un YAML del usuario tocando solo sus líneas, con los comentarios y el orden del resto como estaban, como el frontmatter. Solo edita mapas en bloque; un mapa de flujo, una lista o un ancla en el camino es un error que pide cambiarlo a mano. Cada edición se comprueba releyendo el resultado: si no dice lo mismo que el original con ese único cambio, no se aplica. Es texto a texto; quien llama guarda con `write_atomic`. Es la base para guardar desde la UI las opciones de `config.yaml` ([#204](https://github.com/alex-glez-felix/metalmind/issues/204)).
+- Pendiente: las vistas en el panel lateral y el focus en una vista ([#209](https://github.com/alex-glez-felix/metalmind/issues/209)), y que renombrar un tag reescriba las vistas que lo nombran ([#210](https://github.com/alex-glez-felix/metalmind/issues/210)).
 
 ## 11. Baratas, sin restricción de arquitectura
 

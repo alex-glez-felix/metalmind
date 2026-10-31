@@ -516,6 +516,27 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Space>vbuz<CR>jt#ideas rust")],
     ),
     ("lista-etiquetada", &[Step::Keys("<CR>")]),
+    // Las vistas guardadas (#169): `s` guarda el tag y el filtro (sin el
+    // texto, que avisa), con su nombre; la vista con su consulta debajo de la
+    // cabecera, renombrada con un nombre largo y borrada.
+    (
+        "vista-guardar",
+        &[Step::Keys("<Space>v#rust<CR><Space>f-#archivado idea<CR>s")],
+    ),
+    ("vista-nombre", &[Step::Keys("Rust sin archivar")]),
+    ("vista-guardada", &[Step::Keys("<CR>")]),
+    (
+        "vista-renombrar",
+        &[Step::Keys(
+            "<C-w>l<Space>prename view<CR><C-u>Rust sin archivar, con un nombre que tampoco cabe en la cabecera",
+        )],
+    ),
+    ("vista-renombrada", &[Step::Keys("<CR>")]),
+    ("vista-fuentes", &[Step::Keys("<Space>v")]),
+    (
+        "vista-borrada",
+        &[Step::Keys("<Esc><C-w>l<Space>pdelete view<CR>")],
+    ),
     // El árbol sin selección (#189): `esc` la quita y lo nuevo va a la raíz.
     (
         "arbol-sin-seleccion",

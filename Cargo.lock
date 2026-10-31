@@ -3978,6 +3978,7 @@ dependencies = [
  "dirs 7.0.0",
  "insta",
  "pretty_assertions",
+ "rstest",
  "serde",
  "serde-saphyr",
  "serde_ignored",

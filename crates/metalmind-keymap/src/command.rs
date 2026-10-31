@@ -79,12 +79,19 @@ named_actions! {
         /// sola.
         ToggleNoteList = "list::toggle",
         /// `space v`: elige de dónde salen las notas de la lista: el buzón,
-        /// todas, un tag o una carpeta.
+        /// todas, una vista guardada, un tag o una carpeta.
         ChooseListSource = "list::choose_source",
         /// `space c`, o un clic en la ruta sobre un panel: la lista muestra
         /// esa carpeta (la de la nota enfocada, sin argumento) con la nota
         /// elegida.
         ShowFolder = "list::show_folder",
+        /// `s` en la lista: guarda su fuente y los tags del filtro como una
+        /// vista con nombre (06 §10), que sale en `space v`.
+        SaveListView = "list::save_view",
+        /// Cambia el nombre de la vista guardada que muestra la lista.
+        RenameListView = "list::rename_view",
+        /// Borra la vista guardada que muestra la lista; sus notas no cambian.
+        DeleteListView = "list::delete_view",
         /// `gd` o `enter`: abre lo que nombra el link bajo el cursor, en el
         /// heading o el bloque que nombre.
         FollowLink = "editor::follow_link",

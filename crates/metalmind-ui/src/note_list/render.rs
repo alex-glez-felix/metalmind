@@ -1,4 +1,5 @@
-//! Cómo se ve la lista: la cabecera con la fuente y cuántas notas trae, el
+//! Cómo se ve la lista: la cabecera con la fuente y cuántas notas trae, la
+//! consulta de una vista guardada, el
 //! campo del filtro (`field.rs`), las filas en una `uniform_list` (solo se pintan las visibles,
 //! tenga la fuente las notas que tenga) y las teclas de lo que se hace con
 //! el ratón.
@@ -17,6 +18,7 @@ use metalmind_vault::tags::TagKey;
 
 use super::cards::{Card, stem};
 use super::date::when;
+use super::source::ListSource;
 use super::view::NoteListView;
 use crate::actions::{AppKeymap, Dispatch};
 use crate::panel::{Fill, RowMarks};
@@ -46,6 +48,7 @@ impl Render for NoteListView {
                 cx.listener(|view, _, window, cx| window.focus(&view.focus_handle, cx)),
             )
             .child(self.header(&theme, cx))
+            .children(self.view_bar(&theme, cx))
             .child(self.field(&theme, cx))
             .child(self.body(&theme, focused, cx))
             .child(footer(&theme, cx))
@@ -95,6 +98,40 @@ impl NoteListView {
                     .map(|count| theme.ui_small_text(count))
                     .child(count),
             )
+    }
+
+    /// Con una vista guardada de fuente, su consulta y lo que se le hace.
+    fn view_bar(&self, theme: &Theme, cx: &mut Context<Self>) -> Option<Div> {
+        let ListSource::View { query, .. } = self.list.source() else {
+            return None;
+        };
+        let buttons: [(&'static str, &'static str, Action); 2] = [
+            (
+                "list-rename-view",
+                "renombrar",
+                Command::RenameListView.into(),
+            ),
+            ("list-delete-view", "borrar", Command::DeleteListView.into()),
+        ];
+        Some(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(theme.layout.panel_gap)
+                .h(theme.panel_row_height)
+                .px(theme.layout.panel_padding_x)
+                .map(|bar| theme.ui_small_text(bar))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(theme.ui.panel_muted)
+                        .child(query.clone()),
+                )
+                .children(buttons.map(|(id, label, action)| button(id, label, action, theme, cx))),
+        )
     }
 
     fn body(&self, theme: &Theme, focused: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -298,7 +335,8 @@ fn small(theme: &Theme) -> Div {
 /// Qué hace el ratón en la lista, con su tecla: lo enseña (design.md, 3).
 /// Abrir es un clic en la fila.
 fn footer(theme: &Theme, cx: &mut Context<NoteListView>) -> Div {
-    let buttons: [(&'static str, &'static str, Action); 2] = [
+    let buttons: [(&'static str, &'static str, Action); 3] = [
+        ("list-save-view", "vista", Command::SaveListView.into()),
         ("list-tag", "etiquetar", ListAction::Tag.into()),
         ("list-fold", "plegar", Command::ToggleNoteList.into()),
     ];
@@ -312,24 +350,34 @@ fn footer(theme: &Theme, cx: &mut Context<NoteListView>) -> Div {
         .border_t(theme.stroke.border)
         .border_color(theme.ui.panel_border)
         .map(|footer| theme.ui_small_text(footer))
-        .children(buttons.map(|(id, label, action)| {
-            div()
-                .id(id)
-                .flex()
-                .items_center()
-                .gap(theme.layout.panel_button_padding_x)
-                .px(theme.layout.panel_button_padding_x)
-                .rounded(theme.radius.md)
-                .text_color(theme.ui.panel_muted)
-                .hover(|button| {
-                    button
-                        .bg(theme.ui.panel_hover)
-                        .text_color(theme.ui.panel_foreground)
-                })
-                .on_click(move |_, window, cx| dispatch(action, window, cx))
-                .children(key_hint(action, theme, cx))
-                .child(label)
-        }))
+        .children(buttons.map(|(id, label, action)| button(id, label, action, theme, cx)))
+}
+
+/// Un botón de texto apagado, con su tecla si tiene.
+fn button(
+    id: &'static str,
+    label: &'static str,
+    action: Action,
+    theme: &Theme,
+    cx: &gpui_kit::App,
+) -> impl IntoElement {
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(theme.layout.panel_button_padding_x)
+        .px(theme.layout.panel_button_padding_x)
+        .rounded(theme.radius.md)
+        .text_color(theme.ui.panel_muted)
+        .hover(|button| {
+            button
+                .bg(theme.ui.panel_hover)
+                .text_color(theme.ui.panel_foreground)
+        })
+        .on_click(move |_, window, cx| dispatch(action, window, cx))
+        .children(key_hint(action, theme, cx))
+        .child(label)
 }
 
 pub(super) fn dispatch(action: impl Into<Action>, window: &mut Window, cx: &mut gpui_kit::App) {

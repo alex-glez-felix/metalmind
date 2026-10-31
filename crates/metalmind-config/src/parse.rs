@@ -81,11 +81,11 @@ pub(crate) fn parse<T: DeserializeOwned>(text: &str) -> Result<(T, Vec<Diagnosti
     Ok((value, warnings))
 }
 
-fn options() -> serde_saphyr::Options {
+pub(crate) fn options() -> serde_saphyr::Options {
     serde_saphyr::options! { strict_booleans: true }
 }
 
-fn to_diagnostic(error: &serde_saphyr::Error) -> Diagnostic {
+pub(crate) fn to_diagnostic(error: &serde_saphyr::Error) -> Diagnostic {
     Diagnostic::error(message::render(error)).at(error.location().and_then(location))
 }
 

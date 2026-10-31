@@ -10,6 +10,7 @@ mod autosave;
 mod finder;
 mod focus;
 mod link_choice;
+mod list_views;
 mod messages;
 mod new_note;
 mod note_list;
@@ -252,6 +253,7 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.show_folder(folder.as_deref(), window, cx);
             }
+            Effect::ListView(change) => self.change_list_view(change, window, cx),
             Effect::FocusPastEdge(Direction::Left) if self.list.read(cx).is_visible() => {
                 self.focus_list(window, cx);
             }
