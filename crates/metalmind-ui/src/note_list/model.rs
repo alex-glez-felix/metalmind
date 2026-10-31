@@ -184,16 +184,15 @@ impl NoteList {
         self.refill()
     }
 
-    /// Una vista recién guardada desde la lista: la muestra con el filtro
-    /// vacío, porque lo que decía ya está en la vista.
-    pub fn show_saved_view(&mut self, view: &SavedView) -> Step<Note> {
+    /// Vacía el filtro sin buscar: es para antes de cambiar la fuente, que
+    /// vuelve a llenar la lista.
+    pub fn clear_filter(&mut self) {
         let len = self.filter().text().len();
         let _ = self.filter.edit(LineEdit::Replace {
             start: 0,
             end: len,
             text: "",
         });
-        self.set_source(ListSource::of_view(view), self.selected.clone())
     }
 
     /// Las vistas del archivo cambiaron; la fuente sigue a la suya, con su

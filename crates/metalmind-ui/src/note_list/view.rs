@@ -247,13 +247,12 @@ impl NoteListView {
         self.step(step, cx);
     }
 
-    /// Muestra la vista que se acaba de guardar desde la lista, con el
-    /// filtro vacío.
+    /// Muestra la vista que se acaba de guardar, con el filtro vacío porque
+    /// ya está en ella; plegada, se abre.
     pub fn show_saved_view(&mut self, view: &SavedView, cx: &mut Context<Self>) {
-        self.source_choices += 1;
-        self.scroll_on_show = true;
-        let step = self.list.show_saved_view(view);
-        self.step(step, cx);
+        let selected = self.list.selected_note().cloned();
+        self.list.clear_filter();
+        self.show(ListSource::of_view(view), selected, cx);
     }
 
     /// Las vistas del vault cambiaron: la fuente sigue a la suya.

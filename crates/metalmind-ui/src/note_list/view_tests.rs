@@ -497,3 +497,25 @@ fn con_la_config_rota_la_vista_guardada_no_se_pierde() {
     let (fixture, cx) = fixture_state(&mut cx, &files, &state);
     assert_eq!(shown(&fixture.list, cx), (gs, vec!["a.md".to_owned()]));
 }
+
+#[test]
+fn guardar_una_vista_con_la_lista_plegada_la_abre() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture_with(&mut cx, WITH_VIEWS, Some(false));
+    let view = SavedView {
+        name: "Rust".into(),
+        query: "#rust".into(),
+    };
+    fixture
+        .list
+        .update(cx, |list, cx| list.show_saved_view(&view, cx));
+    cx.run_until_parked();
+    assert!(fixture.list.read_with(cx, |list, _| list.is_visible()));
+    assert_eq!(
+        shown(&fixture.list, cx),
+        (
+            ListSource::of_view(&view),
+            vec!["a.md".to_owned(), "b.md".to_owned()]
+        )
+    );
+}

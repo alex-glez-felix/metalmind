@@ -8,7 +8,7 @@ use std::path::Path;
 use metalmind_config::edit::EditError;
 use metalmind_config::{Diagnostic, Loaded, SavedView, Severity, VaultConfig};
 use metalmind_vault::FileError;
-use metalmind_vault::tags::TagQuery;
+use metalmind_vault::tags::{QueryWord, TagQuery};
 
 use super::source::ListSource;
 
@@ -111,27 +111,28 @@ impl ViewDraft {
         if matches!(source, ListSource::Folder(_)) {
             return Err(DraftError::Folder);
         }
-        let mut words: Vec<String> = source
-            .query()
-            .map(|query| query.split_whitespace().map(str::to_owned).collect())
-            .unwrap_or_default();
-        let parsed = TagQuery::parse(filter);
-        if let Some(invalid) = parsed.invalid.first() {
-            return Err(DraftError::Invalid(invalid.clone()));
-        }
-        for (range, _) in TagQuery::words(filter) {
-            let word = &filter[range];
-            if !parsed.words.iter().any(|text| text == word) && !words.iter().any(|w| w == word) {
-                words.push(word.to_owned());
+        let source_query = source.query().unwrap_or_default();
+        let mut draft = Self {
+            query: String::new(),
+            dropped: Vec::new(),
+        };
+        let mut words: Vec<&str> = Vec::new();
+        for text in [source_query.as_str(), filter] {
+            for (range, word) in TagQuery::words(text) {
+                let written = &text[range];
+                match word {
+                    QueryWord::Invalid => return Err(DraftError::Invalid(written.to_owned())),
+                    QueryWord::Text => draft.dropped.push(written.to_owned()),
+                    _ if words.contains(&written) => {}
+                    _ => words.push(written),
+                }
             }
         }
         if words.is_empty() {
             return Err(DraftError::Empty);
         }
-        Ok(Self {
-            query: words.join(" "),
-            dropped: parsed.words,
-        })
+        draft.query = words.join(" ");
+        Ok(draft)
     }
 }
 
@@ -159,6 +160,25 @@ mod tests {
         #[case] query: &str,
     ) {
         assert_eq!(ViewDraft::new(&source, filter).unwrap().query, query);
+    }
+
+    #[test]
+    fn de_una_vista_con_texto_o_un_tag_invalido_no_sale_otra_igual() {
+        let with_text = ListSource::View {
+            name: "x".into(),
+            query: "#rust idea".into(),
+        };
+        let draft = ViewDraft::new(&with_text, "-#archivado").unwrap();
+        assert_eq!(draft.query, "#rust -#archivado");
+        assert_eq!(draft.dropped, ["idea"]);
+        let invalid = ListSource::View {
+            name: "x".into(),
+            query: "#2024/10".into(),
+        };
+        assert_eq!(
+            ViewDraft::new(&invalid, "#rust"),
+            Err(DraftError::Invalid("#2024/10".into()))
+        );
     }
 
     #[test]
