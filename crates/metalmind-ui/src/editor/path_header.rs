@@ -4,8 +4,8 @@
 //! en el enfocado, si hay varios, la línea de abajo lleva el acento.
 
 use gpui_kit::{
-    Context, Div, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
+    Context, Div, InteractiveElement as _, MouseButton, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, relative,
 };
 use metalmind_keymap::{Command, Invocation, View};
 use metalmind_vault::VaultPath;
@@ -103,9 +103,10 @@ struct PathLine {
 }
 
 impl PathLine {
-    /// Si no cabe, se recortan las dos partes en proporción a lo que miden:
-    /// el nombre por la derecha y las carpetas por la izquierda, para que
-    /// quede a la vista la más cercana a la nota.
+    /// Si no cabe, la carpeta de la nota no se encoge, para el clic, hasta
+    /// `pane_header_folder_max_share` de la línea; lo demás se recorta en
+    /// proporción a lo que mide: las otras carpetas por la izquierda y el
+    /// nombre por la derecha.
     fn render(self, theme: &Theme) -> Div {
         let (name_color, folder_color) = if self.focused {
             (theme.ui.pane_header_foreground, theme.ui.pane_header_folder)
@@ -116,10 +117,19 @@ impl PathLine {
             )
         };
         let nearest = self.path.folders.len().checked_sub(1);
-        let crumbs = self.path.folders.iter().enumerate().map(|(at, folder)| {
-            let hint = self.key.as_deref().filter(|_| Some(at) == nearest);
-            crumb(self.pane, at, folder, hint, folder_color, theme)
-        });
+        let mut crumbs: Vec<_> = self
+            .path
+            .folders
+            .iter()
+            .enumerate()
+            .map(|(at, folder)| {
+                let hint = self.key.as_deref().filter(|_| Some(at) == nearest);
+                crumb(self.pane, at, folder, hint, folder_color, theme)
+            })
+            .collect();
+        let nearest = crumbs
+            .pop()
+            .map(|nearest| nearest.max_w(relative(theme.layout.pane_header_folder_max_share)));
         let full = self.full;
         div()
             .flex()
@@ -127,13 +137,13 @@ impl PathLine {
             .items_center()
             .child(
                 div()
-                    .debug_selector(|| "pane-path-crumbs".to_owned())
                     .flex()
                     .min_w_0()
                     .overflow_hidden()
                     .justify_end()
                     .children(crumbs),
             )
+            .children(nearest)
             .child(
                 div()
                     .id(SharedString::from(format!("pane-path-name-{}", self.pane)))
@@ -160,7 +170,7 @@ fn crumb(
     key: Option<&str>,
     color: gpui_kit::Hsla,
     theme: &Theme,
-) -> impl IntoElement {
+) -> Div {
     let tip: SharedString = match key {
         Some(key) => format!("{folder}/ en la lista · {key}"),
         None => format!("{folder}/ en la lista"),
@@ -173,10 +183,14 @@ fn crumb(
     div()
         .flex()
         .flex_shrink_0()
+        .min_w_0()
         .text_color(color)
         .child(
             div()
                 .id(SharedString::from(format!("pane-path-{pane}-{at}")))
+                .debug_selector(move || format!("pane-path-crumb-{at}"))
+                .min_w_0()
+                .truncate()
                 .rounded(theme.radius.sm)
                 .cursor_pointer()
                 .hover(|crumb| crumb.bg(theme.ui.pane_header_hover))
@@ -186,7 +200,7 @@ fn crumb(
                 .tooltip(move |_, cx| Tooltip::view(tip.clone(), cx))
                 .child(folder.name().to_owned()),
         )
-        .child("/")
+        .child(div().flex_none().child("/"))
 }
 
 #[cfg(test)]

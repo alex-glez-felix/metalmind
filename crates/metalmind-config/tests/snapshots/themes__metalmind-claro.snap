@@ -227,6 +227,9 @@ Theme {
             pane_header_padding_y: Length(
                 3.0,
             ),
+            pane_header_folder_max_share: Fraction(
+                0.5,
+            ),
             picker_width: Length(
                 640.0,
             ),
