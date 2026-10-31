@@ -228,6 +228,9 @@ metric_group! {
         /// Alrededor de la ruta de la nota sobre cada panel.
         pane_header_padding_x: Length,
         pane_header_padding_y: Length,
+        /// Lo más de la ruta de un panel que ocupa la carpeta de la nota, que
+        /// no se encoge como las demás; si no cabe, se recorta.
+        pane_header_folder_max_share: Fraction,
         picker_width: Length,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,

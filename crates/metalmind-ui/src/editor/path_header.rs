@@ -4,9 +4,8 @@
 //! en el enfocado, si hay varios, la línea de abajo lleva el acento.
 
 use gpui_kit::{
-    Context, Div, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
-    relative,
+    Context, Div, InteractiveElement as _, MouseButton, ParentElement as _, SharedString,
+    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, relative,
 };
 use metalmind_keymap::{Command, Invocation, View};
 use metalmind_vault::VaultPath;
@@ -62,27 +61,19 @@ impl Editor {
         let split = self.workspace.read(cx).tree().len() > 1;
         let key =
             AppKeymap::get(cx).keys_for(Command::ShowFolder.into(), |view| view == View::Editor);
-        let (name_color, folder_color) = if focused {
-            (theme.ui.pane_header_foreground, theme.ui.pane_header_folder)
-        } else {
-            (
-                theme.ui.pane_header_unfocused,
-                theme.ui.pane_header_unfocused,
-            )
-        };
-        let nearest = path.folders.len().checked_sub(1);
-        let crumbs = path.folders.iter().enumerate().map(|(at, folder)| {
-            let hint = key.as_deref().filter(|_| Some(at) == nearest);
-            crumb(self.pane, at, folder, hint, folder_color, theme)
-        });
         let full: SharedString = note
             .map_or_else(|| path.name.clone(), |note| note.to_string())
             .into();
+        let line = PathLine {
+            pane: self.pane,
+            path,
+            full,
+            focused,
+            key,
+        };
         div()
-            .flex()
             .flex_none()
             .min_w_0()
-            .items_center()
             .px(theme.layout.pane_header_padding_x)
             .py(theme.layout.pane_header_padding_y)
             .border_b(theme.stroke.border)
@@ -96,9 +87,56 @@ impl Editor {
                 MouseButton::Left,
                 cx.listener(|editor, _, window, cx| editor.take_focus(window, cx)),
             )
+            .child(line.render(theme))
+    }
+}
+
+/// Las migas y el nombre, en una línea.
+struct PathLine {
+    pane: PaneId,
+    path: PanePath,
+    /// La ruta entera, para el tooltip del nombre.
+    full: SharedString,
+    focused: bool,
+    /// La tecla de `list::show_folder`, en el tooltip de la carpeta de la nota.
+    key: Option<String>,
+}
+
+impl PathLine {
+    /// Si no cabe, la carpeta de la nota no se encoge, para el clic, hasta
+    /// `pane_header_folder_max_share` de la línea; lo demás se recorta en
+    /// proporción a lo que mide: las otras carpetas por la izquierda y el
+    /// nombre por la derecha.
+    fn render(self, theme: &Theme) -> Div {
+        let (name_color, folder_color) = if self.focused {
+            (theme.ui.pane_header_foreground, theme.ui.pane_header_folder)
+        } else {
+            (
+                theme.ui.pane_header_unfocused,
+                theme.ui.pane_header_unfocused,
+            )
+        };
+        let nearest = self.path.folders.len().checked_sub(1);
+        let mut crumbs: Vec<_> = self
+            .path
+            .folders
+            .iter()
+            .enumerate()
+            .map(|(at, folder)| {
+                let hint = self.key.as_deref().filter(|_| Some(at) == nearest);
+                crumb(self.pane, at, folder, hint, folder_color, theme)
+            })
+            .collect();
+        let nearest = crumbs
+            .pop()
+            .map(|nearest| nearest.max_w(relative(theme.layout.pane_header_folder_max_share)));
+        let full = self.full;
+        div()
+            .flex()
+            .min_w_0()
+            .overflow_hidden()
+            .items_center()
             .child(
-                // Lo que no cabe se pierde por la izquierda: quedan a la vista
-                // las carpetas más cercanas a la nota.
                 div()
                     .flex()
                     .min_w_0()
@@ -106,20 +144,21 @@ impl Editor {
                     .justify_end()
                     .children(crumbs),
             )
+            .children(nearest)
             .child(
                 div()
                     .id(SharedString::from(format!("pane-path-name-{}", self.pane)))
-                    .flex_shrink_0()
-                    .max_w(relative(1.))
+                    .debug_selector(|| "pane-path-name".to_owned())
+                    .min_w_0()
                     .truncate()
                     .text_color(name_color)
-                    .font_weight(if focused {
+                    .font_weight(if self.focused {
                         theme.text.strong
                     } else {
                         theme.text.normal
                     })
                     .tooltip(move |_, cx| Tooltip::view(full.clone(), cx))
-                    .child(path.name),
+                    .child(self.path.name),
             )
     }
 }
@@ -132,7 +171,7 @@ fn crumb(
     key: Option<&str>,
     color: gpui_kit::Hsla,
     theme: &Theme,
-) -> impl IntoElement {
+) -> Div {
     let tip: SharedString = match key {
         Some(key) => format!("{folder}/ en la lista · {key}"),
         None => format!("{folder}/ en la lista"),
@@ -145,10 +184,14 @@ fn crumb(
     div()
         .flex()
         .flex_shrink_0()
+        .min_w_0()
         .text_color(color)
         .child(
             div()
                 .id(SharedString::from(format!("pane-path-{pane}-{at}")))
+                .debug_selector(move || format!("pane-path-crumb-{at}"))
+                .min_w_0()
+                .truncate()
                 .rounded(theme.radius.sm)
                 .cursor_pointer()
                 .hover(|crumb| crumb.bg(theme.ui.pane_header_hover))
@@ -158,8 +201,12 @@ fn crumb(
                 .tooltip(move |_, cx| Tooltip::view(tip.clone(), cx))
                 .child(folder.name().to_owned()),
         )
-        .child("/")
+        .child(div().flex_none().child("/"))
 }
+
+#[cfg(test)]
+#[path = "path_header_tests.rs"]
+mod layout_tests;
 
 #[cfg(test)]
 mod tests {
