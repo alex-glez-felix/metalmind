@@ -219,7 +219,7 @@ impl Vim {
                 self.type_in_insert(piece, t)?;
             }
         }
-        self.leave_insert(t)
+        self.finish_insert(t)
     }
 
     pub(super) fn travel(&mut self, travel: Travel, t: &mut Target<'_>) -> Result<(), VimError> {
