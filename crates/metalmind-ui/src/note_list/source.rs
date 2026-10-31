@@ -30,7 +30,7 @@ pub fn folder_to_show(
     index: &VaultIndex,
 ) -> Result<VaultPath, FolderError> {
     let folder = match named {
-        Some(named) => VaultPath::new(named.trim().trim_end_matches('/'))?,
+        Some(named) => VaultPath::new(named.trim_end_matches('/'))?,
         None => note
             .and_then(VaultPath::parent)
             .ok_or(FolderError::NotInVault)?,
@@ -287,6 +287,25 @@ mod tests {
             .map(|folder| folder.as_str().to_owned())
             .map_err(|error| error.to_string());
         assert_eq!(shown, expected.map(str::to_owned).map_err(str::to_owned));
+    }
+
+    /// Un espacio al borde es parte del nombre: la miga de `notas ` no
+    /// lleva a `notas`.
+    #[test]
+    fn la_carpeta_nombrada_conserva_sus_espacios() {
+        let dir = tempfile::tempdir().unwrap();
+        for folder in ["notas", "notas ", " ideas"] {
+            fs::create_dir_all(dir.path().join(folder)).unwrap();
+            fs::write(dir.path().join(folder).join("a.md"), "").unwrap();
+        }
+        let (vault, _updates) = Vault::open(dir.path()).unwrap();
+        let index = vault.snapshot();
+        for named in ["notas ", " ideas", "notas"] {
+            let shown = folder_to_show(Some(named), None, &index).unwrap();
+            assert_eq!(shown.as_str(), named);
+        }
+        let shown = folder_to_show(Some("notas /"), None, &index).unwrap();
+        assert_eq!(shown.as_str(), "notas ");
     }
 
     #[rstest]
