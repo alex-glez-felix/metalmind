@@ -289,6 +289,12 @@ const TYPED: &str = "| a   | b   |\n| --- | --- |\n| ‸x   | y   |";
     "3iab<Esc>",
     "| a       | b   |\n| ------- | --- |\n| ababa‸bx | y   |"
 )]
+// `".p` teclea de nuevo lo último insertado y sale con `<Esc>`, como vim
+#[case(
+    TYPED,
+    "iab<Esc>\".p",
+    "| a     | b   |\n| ----- | --- |\n| aba‸bx | y   |"
+)]
 // si no cambió nada, o se sale con `ctrl-c`, no alinea
 #[case(ROUGH, "i<Esc>", "| a | b |\n|-|-|\n| u‸no | dos |")]
 #[case(ROUGH, "iz<C-c>", "| a | b |\n|-|-|\n| un‸zo | dos |")]
