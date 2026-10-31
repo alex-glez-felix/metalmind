@@ -71,13 +71,18 @@ const MAX: &str = concat!(
     "una-nota-con-el-nombre-mas-largo-que-deja-el-sistema-de-a.md",
 );
 
-/// Una carpeta más ancha que media línea se recorta y deja lugar al nombre.
+/// Una carpeta más ancha que el panel se recorta a media línea, sin
+/// salirse, y deja lugar al nombre.
 #[test]
 fn una_carpeta_larguisima_no_se_come_el_nombre() {
     let note = "una carpeta con un nombre larguísimo que no cabe ni en media línea/nota.md";
     let width = px(300.);
     let (nearest, name) = laid_out(note, 0, width);
     assert!(nearest.size.width <= width / 2., "{nearest:?}");
+    assert!(
+        nearest.left() >= px(0.) && nearest.right() <= width,
+        "{nearest:?}"
+    );
     assert!(name.size.width > px(0.), "{name:?}");
     assert!(name.right() <= width, "{name:?}");
 }

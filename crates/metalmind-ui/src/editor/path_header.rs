@@ -134,6 +134,7 @@ impl PathLine {
         div()
             .flex()
             .min_w_0()
+            .overflow_hidden()
             .items_center()
             .child(
                 div()
