@@ -20,6 +20,16 @@ use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
 use crate::tag_change::{RequestError, TagField, TagRequest};
 
+/// Qué se le hace a una vista guardada desde la lista (06 §10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListViewChange {
+    /// La fuente y los tags del filtro, como una vista nueva.
+    Save,
+    /// La vista que muestra la lista.
+    Rename,
+    Delete,
+}
+
 /// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
@@ -40,6 +50,8 @@ pub enum Effect {
     /// Mostrar en la lista la carpeta del vault que se nombra o, sin
     /// nombre, la de la nota enfocada.
     ShowFolder(Option<String>),
+    /// Guardar, renombrar o borrar una vista guardada desde la lista.
+    ListView(ListViewChange),
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
     /// paneles de ese lado, como el panel lateral, puede tomar el foco.
     FocusPastEdge(Direction),
@@ -178,6 +190,9 @@ impl Workspace {
             Command::ToggleNoteList => Ok(Effect::ToggleNoteList),
             Command::ChooseListSource => Ok(Effect::ChooseListSource),
             Command::ShowFolder => Ok(Effect::ShowFolder(argument.map(str::to_owned))),
+            Command::SaveListView => Ok(Effect::ListView(ListViewChange::Save)),
+            Command::RenameListView => Ok(Effect::ListView(ListViewChange::Rename)),
+            Command::DeleteListView => Ok(Effect::ListView(ListViewChange::Delete)),
             Command::FollowLink => self.follow_link(),
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),

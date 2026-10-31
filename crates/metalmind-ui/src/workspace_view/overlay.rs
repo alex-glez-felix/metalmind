@@ -1,6 +1,6 @@
 //! Lo que flota sobre los paneles: el finder, la búsqueda de texto, la
 //! paleta, el historial de avisos, los links sin destino, las notas de un link que empata, las
-//! plantillas, el nombre de una nota nueva, la fuente de la lista o la vista previa de un cambio
+//! plantillas, el nombre de una nota nueva, la fuente de la lista, el nombre de una vista guardada o la vista previa de un cambio
 //! en el vault, uno a la vez, centrado arriba como en Zed.
 
 use std::sync::Arc;
@@ -13,6 +13,7 @@ use metalmind_vault::LinkIndex;
 
 use super::finder::Finder;
 use super::link_choice::LinkChoicePicker;
+use super::list_views::ViewNamePicker;
 use super::messages::MessagesPicker;
 use super::new_note::{NamePicker, TemplatePicker};
 use super::note_list::SourcePicker;
@@ -69,6 +70,11 @@ pub enum Overlay {
         picker: Entity<SourcePicker>,
         _events: Subscription,
     },
+    /// El nombre de una vista guardada, al guardarla o renombrarla.
+    ViewName {
+        picker: Entity<ViewNamePicker>,
+        _events: Subscription,
+    },
     /// La vista previa de un cambio en el vault: renombrar o fusionar
     /// tags, o renombrar una nota con sus links.
     ChangePreview {
@@ -92,6 +98,7 @@ impl Overlay {
             Self::Templates { picker, .. } => picker.focus_handle(cx),
             Self::NoteName { picker, .. } => picker.focus_handle(cx),
             Self::ListSource { picker, .. } => picker.focus_handle(cx),
+            Self::ViewName { picker, .. } => picker.focus_handle(cx),
             Self::ChangePreview { view, .. } => view.focus_handle(cx),
         }
     }
@@ -109,6 +116,7 @@ impl Overlay {
             Self::Templates { picker, .. } => picker.clone().into_any_element(),
             Self::NoteName { picker, .. } => picker.clone().into_any_element(),
             Self::ListSource { picker, .. } => picker.clone().into_any_element(),
+            Self::ViewName { picker, .. } => picker.clone().into_any_element(),
             Self::ChangePreview { view, .. } => view.clone().into_any_element(),
         };
         div()

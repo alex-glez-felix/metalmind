@@ -1,8 +1,9 @@
-//! De dónde salen las notas de la lista: el buzón, todas, un tag con sus
-//! descendientes o una carpeta con sus subcarpetas.
+//! De dónde salen las notas de la lista: el buzón, todas, una vista
+//! guardada, un tag con sus descendientes o una carpeta con sus subcarpetas.
 
 use std::collections::BTreeSet;
 
+use metalmind_config::SavedView;
 use metalmind_vault::tags::{TagKey, TagQuery, Tags};
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultIndex, VaultPath};
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,11 @@ pub enum ListSource {
     #[default]
     Inbox,
     All,
+    /// Una vista guardada (06 §10), con la consulta que tenía al elegirla.
+    View {
+        name: String,
+        query: String,
+    },
     /// El nombre del tag, sin `#`, como se eligió.
     Tag(String),
     /// La ruta de la carpeta en el vault.
@@ -72,6 +78,7 @@ impl ListSource {
         match self {
             Self::Inbox => "Buzón".to_owned(),
             Self::All => "Todas las notas".to_owned(),
+            Self::View { name, .. } => name.clone(),
             Self::Tag(tag) => format!("#{tag}"),
             Self::Folder(folder) => format!("{folder}/"),
         }
@@ -83,19 +90,21 @@ impl ListSource {
         match self {
             Self::Inbox => Some("-#".to_owned()),
             Self::Tag(tag) => Some(format!("#{tag}")),
+            Self::View { query, .. } => Some(query.clone()),
             Self::All | Self::Folder(_) => None,
         }
     }
 
-    /// Sus notas, en cualquier orden. Un tag que ya no existe o una carpeta
-    /// que ya no está no tienen ninguna.
+    /// Sus notas, en cualquier orden. Un tag que ya no existe, una carpeta
+    /// que ya no está o una vista con algo que no es de tags no tienen
+    /// ninguna.
     #[must_use]
     pub fn notes(&self, index: &VaultIndex, tags: &Tags) -> Vec<VaultPath> {
         match self {
-            Self::Inbox | Self::Tag(_) => {
+            Self::Inbox | Self::Tag(_) | Self::View { .. } => {
                 let text = self.query().unwrap_or_default();
                 let parsed = TagQuery::parse(&text);
-                if !parsed.invalid.is_empty() {
+                if !parsed.invalid.is_empty() || !parsed.words.is_empty() {
                     return Vec::new();
                 }
                 parsed.query.notes(tags).into_iter().cloned().collect()
@@ -139,10 +148,40 @@ impl ListSource {
         path.as_str().clone_into(folder);
     }
 
-    /// Lo que se puede elegir como fuente en este vault: el buzón, todas,
-    /// cada tag y cada carpeta, en ese orden.
+    /// El nombre de la vista guardada, si lo es.
     #[must_use]
-    pub fn choices(index: &VaultIndex, tags: &Tags) -> Vec<Self> {
+    pub fn view_name(&self) -> Option<&str> {
+        match self {
+            Self::View { name, .. } => Some(name),
+            _ => None,
+        }
+    }
+
+    /// Una vista sigue a las del archivo: con su consulta de ahora, o el
+    /// buzón si ya no existe.
+    #[must_use]
+    pub fn resolve(self, views: &[SavedView]) -> Self {
+        let Self::View { name, .. } = &self else {
+            return self;
+        };
+        views
+            .iter()
+            .find(|view| &view.name == name)
+            .map_or(Self::Inbox, Self::of_view)
+    }
+
+    #[must_use]
+    pub fn of_view(view: &SavedView) -> Self {
+        Self::View {
+            name: view.name.clone(),
+            query: view.query.clone(),
+        }
+    }
+
+    /// Lo que se puede elegir como fuente en este vault: el buzón, todas,
+    /// cada vista, cada tag y cada carpeta, en ese orden.
+    #[must_use]
+    pub fn choices(index: &VaultIndex, tags: &Tags, views: &[SavedView]) -> Vec<Self> {
         // También los que solo tienen página o son padres de otros: traen
         // las notas de sus descendientes.
         let keys: BTreeSet<&TagKey> = tags
@@ -164,6 +203,7 @@ impl ListSource {
         folders.sort();
         [Self::Inbox, Self::All]
             .into_iter()
+            .chain(views.iter().map(Self::of_view))
             .chain(tag_names.into_iter().map(Self::Tag))
             .chain(folders.into_iter().map(Self::Folder))
             .collect()
@@ -228,6 +268,14 @@ mod tests {
         &["ui/gpui.md", "ui/hondo/viejo.md", "ui/suelta.md"]
     )]
     #[case::una_carpeta_que_no_esta(ListSource::Folder("nada".into()), &[])]
+    #[case::una_vista(
+        ListSource::View { name: "gs".into(), query: "#rust -#archivado".into() },
+        &["parser.md", "ui/gpui.md"]
+    )]
+    #[case::una_vista_con_texto(
+        ListSource::View { name: "x".into(), query: "#rust parser".into() },
+        &[]
+    )]
     #[case::todas(
         ListSource::All,
         &["parser.md", "sin-tags.md", "tags/gpui.md", "ui/gpui.md", "ui/hondo/viejo.md", "ui/suelta.md"]
@@ -241,7 +289,11 @@ mod tests {
     #[test]
     fn las_fuentes_para_elegir_son_buzon_todas_tags_y_carpetas() {
         let (_dir, vault) = vault();
-        let labels: Vec<String> = ListSource::choices(&vault.snapshot(), &vault.tags())
+        let views = [SavedView {
+            name: "Para hoy".into(),
+            query: "#gpui".into(),
+        }];
+        let labels: Vec<String> = ListSource::choices(&vault.snapshot(), &vault.tags(), &views)
             .iter()
             .map(ListSource::label)
             .collect();
@@ -250,6 +302,7 @@ mod tests {
             [
                 "Buzón",
                 "Todas las notas",
+                "Para hoy",
                 "#archivado",
                 "#gpui",
                 "#Rust",
@@ -325,7 +378,7 @@ mod tests {
         )
         .unwrap();
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let choices = ListSource::choices(&vault.snapshot(), &vault.tags());
+        let choices = ListSource::choices(&vault.snapshot(), &vault.tags(), &[]);
         let padre = ListSource::Tag("padre".into());
         assert!(choices.contains(&padre), "{choices:?}");
         assert_eq!(
@@ -351,9 +404,33 @@ mod tests {
             ListSource::All,
             ListSource::Tag("rust".into()),
             ListSource::Folder("ui/hondo".into()),
+            ListSource::View {
+                name: "Para hoy".into(),
+                query: "#hoy -#hecho".into(),
+            },
         ] {
             let text = serde_saphyr::to_string(&source).unwrap();
             assert_eq!(serde_saphyr::from_str::<ListSource>(&text).unwrap(), source);
         }
+    }
+
+    #[test]
+    fn una_vista_toma_la_consulta_del_archivo_o_vuelve_al_buzon() {
+        let views = [SavedView {
+            name: "gs".into(),
+            query: "#gs".into(),
+        }];
+        let old = ListSource::View {
+            name: "gs".into(),
+            query: "#viejo".into(),
+        };
+        assert_eq!(old.resolve(&views), ListSource::of_view(&views[0]));
+        let gone = ListSource::View {
+            name: "otra".into(),
+            query: "#x".into(),
+        };
+        assert_eq!(gone.resolve(&views), ListSource::Inbox);
+        let tag = ListSource::Tag("gs".into());
+        assert_eq!(tag.clone().resolve(&views), tag);
     }
 }

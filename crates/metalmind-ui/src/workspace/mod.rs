@@ -49,7 +49,7 @@ use metalmind_vim::{
 };
 
 pub use self::autosave::{Autosave, SaveState, SystemClock};
-pub use self::commands::Effect;
+pub use self::commands::{Effect, ListViewChange};
 pub use self::documents::DocumentId;
 use self::documents::Documents;
 use self::file_ids::FileIds;

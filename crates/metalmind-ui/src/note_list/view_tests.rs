@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::{Entity, TestAppContext, VisualTestContext};
-use metalmind_config::Config;
+use metalmind_config::{Config, SavedView};
 use metalmind_keymap::Keymap;
 use metalmind_vault::Vault;
 use metalmind_vim::Markdown;
@@ -37,6 +37,18 @@ fn fixture_with<'c>(
     cx: &'c mut TestAppContext,
     files: &[(&str, &str)],
     visible: Option<bool>,
+) -> (Fixture, &'c mut VisualTestContext) {
+    let state = ListState {
+        visible,
+        ..ListState::default()
+    };
+    fixture_state(cx, files, &state)
+}
+
+fn fixture_state<'c>(
+    cx: &'c mut TestAppContext,
+    files: &[(&str, &str)],
+    state: &ListState,
 ) -> (Fixture, &'c mut VisualTestContext) {
     let dir = tempfile::tempdir().unwrap();
     let now = SystemTime::now();
@@ -81,11 +93,7 @@ fn fixture_with<'c>(
             Workspace::new(document, pane, options, &Keymap::default())
         })
     });
-    let state = ListState {
-        visible,
-        ..ListState::default()
-    };
-    let (list, cx) = cx.add_window_view(|_, cx| NoteListView::new(&session, &state, workspace, cx));
+    let (list, cx) = cx.add_window_view(|_, cx| NoteListView::new(&session, state, workspace, cx));
     let events = Rc::new(RefCell::new(Vec::new()));
     let seen = Rc::clone(&events);
     cx.update(|_, cx| {
@@ -350,5 +358,164 @@ fn la_carpeta_de_la_nota_activa_llega_con_ella_elegida() {
         source,
         ListSource::Folder("ui".into()),
         "un error no cambia la fuente"
+    );
+}
+
+fn shown(list: &Entity<NoteListView>, cx: &mut VisualTestContext) -> (ListSource, Vec<String>) {
+    list.read_with(cx, |view, _| {
+        let notes = (0..view.list.len())
+            .filter_map(|row| view.list.note(row).map(ToString::to_string))
+            .collect();
+        (view.list.source().clone(), notes)
+    })
+}
+
+const WITH_VIEWS: &[(&str, &str)] = &[
+    ("a.md", "#rust"),
+    ("b.md", "#rust #archivado"),
+    ("c.md", "Ce."),
+    (
+        ".metalmind/config.yaml",
+        "views:\n  gs: \"#rust -#archivado\"\n",
+    ),
+];
+
+#[test]
+fn una_vista_guardada_vuelve_con_la_consulta_del_archivo() {
+    let mut cx = TestAppContext::single();
+    let state = ListState {
+        visible: Some(true),
+        source: ListSource::View {
+            name: "gs".into(),
+            query: "#viejo".into(),
+        },
+        filter: String::new(),
+    };
+    let (fixture, cx) = fixture_state(&mut cx, WITH_VIEWS, &state);
+    let gs = ListSource::View {
+        name: "gs".into(),
+        query: "#rust -#archivado".into(),
+    };
+    assert_eq!(shown(&fixture.list, cx), (gs, vec!["a.md".to_owned()]));
+}
+
+#[test]
+fn una_vista_que_ya_no_esta_vuelve_al_buzon() {
+    let mut cx = TestAppContext::single();
+    let state = ListState {
+        visible: Some(true),
+        source: ListSource::View {
+            name: "otra".into(),
+            query: "#rust".into(),
+        },
+        filter: String::new(),
+    };
+    let (fixture, cx) = fixture_state(&mut cx, WITH_VIEWS, &state);
+    assert_eq!(
+        shown(&fixture.list, cx),
+        (ListSource::Inbox, vec!["c.md".to_owned()])
+    );
+}
+
+#[test]
+fn la_vista_recien_guardada_se_muestra_sin_el_filtro() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture_with(&mut cx, WITH_VIEWS, Some(true));
+    cx.simulate_keystrokes("space f");
+    cx.simulate_input("#rust");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    let view = SavedView {
+        name: "Rust".into(),
+        query: "#rust".into(),
+    };
+    fixture
+        .list
+        .update(cx, |list, cx| list.show_saved_view(&view, cx));
+    cx.run_until_parked();
+    let (source, notes) = shown(&fixture.list, cx);
+    assert_eq!(source, ListSource::of_view(&view));
+    assert_eq!(notes, ["a.md", "b.md"]);
+    let filter = fixture
+        .list
+        .read_with(cx, |view, _| view.list.filter().text().to_owned());
+    assert_eq!(filter, "");
+}
+
+#[test]
+fn la_lista_sigue_a_su_vista_renombrada_o_borrada() {
+    let mut cx = TestAppContext::single();
+    let gs = SavedView {
+        name: "gs".into(),
+        query: "#rust -#archivado".into(),
+    };
+    let state = ListState {
+        visible: Some(true),
+        source: ListSource::of_view(&gs),
+        filter: String::new(),
+    };
+    let (fixture, cx) = fixture_state(&mut cx, WITH_VIEWS, &state);
+    let estudio = SavedView {
+        name: "estudio".into(),
+        ..gs
+    };
+    fixture.list.update(cx, |list, cx| {
+        list.follow_views(std::slice::from_ref(&estudio), Some(("gs", "estudio")), cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        shown(&fixture.list, cx),
+        (ListSource::of_view(&estudio), vec!["a.md".to_owned()])
+    );
+    fixture
+        .list
+        .update(cx, |list, cx| list.follow_views(&[], None, cx));
+    cx.run_until_parked();
+    assert_eq!(
+        shown(&fixture.list, cx),
+        (ListSource::Inbox, vec!["c.md".to_owned()])
+    );
+}
+
+#[test]
+fn con_la_config_rota_la_vista_guardada_no_se_pierde() {
+    let mut cx = TestAppContext::single();
+    let gs = ListSource::View {
+        name: "gs".into(),
+        query: "#rust -#archivado".into(),
+    };
+    let state = ListState {
+        visible: Some(true),
+        source: gs.clone(),
+        filter: String::new(),
+    };
+    let files = [
+        ("a.md", "#rust"),
+        ("b.md", "#rust #archivado"),
+        (".metalmind/config.yaml", "views: [\n"),
+    ];
+    let (fixture, cx) = fixture_state(&mut cx, &files, &state);
+    assert_eq!(shown(&fixture.list, cx), (gs, vec!["a.md".to_owned()]));
+}
+
+#[test]
+fn guardar_una_vista_con_la_lista_plegada_la_abre() {
+    let mut cx = TestAppContext::single();
+    let (fixture, cx) = fixture_with(&mut cx, WITH_VIEWS, Some(false));
+    let view = SavedView {
+        name: "Rust".into(),
+        query: "#rust".into(),
+    };
+    fixture
+        .list
+        .update(cx, |list, cx| list.show_saved_view(&view, cx));
+    cx.run_until_parked();
+    assert!(fixture.list.read_with(cx, |list, _| list.is_visible()));
+    assert_eq!(
+        shown(&fixture.list, cx),
+        (
+            ListSource::of_view(&view),
+            vec!["a.md".to_owned(), "b.md".to_owned()]
+        )
     );
 }

@@ -137,6 +137,18 @@ pub fn write(root: &Path) {
         "tags/diseño.md",
         "---\nicon: tabler:palette\nparents: [rust]\naliases: [arquitectura-de-la-interfaz-y-sus-principios-a-largo-plazo-con-un-alias-que-no-cabe-ni-en-la-ventana-mas-ancha-que-hay-porque-sigue-y-sigue-sin-parar-por-mucho-que-uno-quiera-leerlo-entero-de-una-sola-vez-en-la-lista-de-tags-del-autocompletado]\n---\n".as_bytes(),
     );
+    // Las vistas guardadas del vault (06 §10): una con un nombre que no
+    // cabe en la cabecera de la lista ni en el picker.
+    file(
+        ".metalmind/config.yaml",
+        concat!(
+            "# Las vistas del vault\n",
+            "views:\n",
+            "  \"Ideas de rust sin archivar, con un nombre larguísimo que no cabe en la cabecera de la lista\": \"#rust -#archivado #ideas\"\n",
+            "  diseño: \"#diseño\"\n",
+        )
+        .as_bytes(),
+    );
     fs::create_dir_all(root.join("Vacía")).expect("crear la carpeta vacía");
     file(FORMULAS, SPIKE_FORMULAS.as_bytes());
     file(LONG_FORMULAS, long_formulas().as_bytes());

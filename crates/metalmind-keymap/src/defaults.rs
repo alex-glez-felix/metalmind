@@ -10,7 +10,10 @@ use crate::{ChangePreviewAction, PanelAction, PickerAction, View};
 pub(crate) fn bindings() -> Vec<Binding> {
     // `q` pliega la lista, como `space l`; va antes para que la lista muestre
     // `space l`, el último que se declara.
-    let mut bindings = vec![in_view(View::NoteList, &[k('q')], Command::ToggleNoteList)];
+    let mut bindings = vec![
+        in_view(View::NoteList, &[k('q')], Command::ToggleNoteList),
+        in_view(View::NoteList, &[k('s')], Command::SaveListView),
+    ];
     bindings.extend(leader());
     bindings.extend(panes());
     bindings.extend(links());

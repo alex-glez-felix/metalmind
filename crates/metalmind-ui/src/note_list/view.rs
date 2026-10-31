@@ -9,6 +9,7 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Pixels, ScrollStrategy,
     Subscription, Task, UniformListScrollHandle, Window,
 };
+use metalmind_config::{SavedView, Severity};
 use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
 use metalmind_vault::{EntryKind, VaultPath};
@@ -16,6 +17,7 @@ use metalmind_vault::{EntryKind, VaultPath};
 use super::cards::read_all;
 use super::model::{NoteList, Prompt};
 use super::source::{FolderError, ListSource, folder_to_show};
+use super::views::load as load_views;
 use crate::finder::{Note, VaultChanged, VaultSession};
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
@@ -86,8 +88,19 @@ impl NoteListView {
     ) -> Self {
         let vault = session.read(cx).vault();
         let index = vault.snapshot();
+        // Una vista guardada vuelve con la consulta que tiene hoy; con la
+        // config rota se queda como estaba, para no perderla.
+        let (views, diagnostics) = load_views(vault.root());
+        let broken = diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error);
+        let source = if broken {
+            state.source.clone()
+        } else {
+            state.source.clone().resolve(&views)
+        };
         let list = NoteList::new(
-            state.source.clone(),
+            source,
             &state.filter,
             Arc::clone(&index),
             session.read(cx).tags(),
@@ -232,6 +245,26 @@ impl NoteListView {
         self.scroll_on_show = true;
         let step = self.list.set_source(source, selected);
         self.step(step, cx);
+    }
+
+    /// Muestra la vista que se acaba de guardar, con el filtro vacío porque
+    /// ya está en ella; plegada, se abre.
+    pub fn show_saved_view(&mut self, view: &SavedView, cx: &mut Context<Self>) {
+        let selected = self.list.selected_note().cloned();
+        self.list.clear_filter();
+        self.show(ListSource::of_view(view), selected, cx);
+    }
+
+    /// Las vistas del vault cambiaron: la fuente sigue a la suya.
+    pub fn follow_views(
+        &mut self,
+        views: &[SavedView],
+        renamed: Option<(&str, &str)>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(step) = self.list.follow_views(views, renamed) {
+            self.step(step, cx);
+        }
     }
 
     /// El preedit del IME en el campo que se escribe.

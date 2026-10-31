@@ -123,6 +123,18 @@ Lo que sí sigue siendo YAML:
 - `~` solo es nulo: `vault: ~` es "sin vault", pero `vault: ~/Notas` es la ruta.
 - Un texto con `: ` o que empieza con `{`, `[`, `*`, `&`, `!`, `%`, `@` o `` ` `` va entre comillas.
 
+## Config del vault
+
+Cada vault puede tener la suya en `<vault>/.metalmind/config.yaml`, que viaja con él (git, Syncthing). Por ahora guarda sus **vistas guardadas**: una consulta de tags con nombre, como se escribe en `space f`, que sale como fuente de la lista de notas en `space v`.
+
+```yaml
+views:
+  gs: "#gs -#archivado"
+  Para hoy: "#hoy -#hecho"
+```
+
+No hace falta escribirlo a mano: en la lista, `s` (o `vista` en su pie, o `list::save_view` en la paleta) guarda la fuente y los tags del filtro como una vista, y con una vista en la lista, `renombrar` y `borrar` (`list::rename_view`, `list::delete_view`) la cambian. Metalmind escribe solo la clave de esa vista: los comentarios y el resto del archivo quedan como estaban. Si el archivo tiene un error, las vistas no se cargan, se dice dónde, y no se escribe nada hasta arreglarlo.
+
 ## Temas
 
 Un tema es una **paleta** con nombres, los **roles** (cada color por su papel), los **colores semánticos** de cada parte de la interfaz y las **medidas**: espaciado, radios, anchos de línea, letra, filas y el tamaño de cada parte. Todo color y tamaño de la interfaz sale de aquí ([diseño](design.md#tokens)). Los temas propios van en `themes/<nombre>.yaml` dentro de la carpeta de configuración y se eligen con `theme: <nombre>`.
