@@ -1,5 +1,5 @@
 //! Teclas en la notación de vim: `ihola<Esc>:wq<CR>`, `<C-r>`, `<C-S-p>`,
-//! `<lt>`.
+//! `<S-Tab>`, `<lt>`.
 
 /// Una tecla con su keysym de X11; las mayúsculas y los símbolos que piden
 /// shift los resuelve el mapa de teclado del servidor.
@@ -13,6 +13,8 @@ const ESCAPE: u32 = 0xff1b;
 const RETURN: u32 = 0xff0d;
 const BACKSPACE: u32 = 0xff08;
 const TAB: u32 = 0xff09;
+/// `shift-tab`: el mapa de teclado lo pone en la tecla del tab, con shift.
+const ISO_LEFT_TAB: u32 = 0xfe20;
 const HOME: u32 = 0xff50;
 const LEFT: u32 = 0xff51;
 const UP: u32 = 0xff52;
@@ -63,6 +65,7 @@ fn named(name: &str, notation: &str) -> Stroke {
         "cr" | "enter" | "return" => RETURN,
         "bs" => BACKSPACE,
         "tab" => TAB,
+        "s-tab" => ISO_LEFT_TAB,
         "space" => char_keysym(' '),
         "lt" => char_keysym('<'),
         "home" => HOME,
@@ -93,7 +96,7 @@ fn char_keysym(c: char) -> u32 {
 #[test]
 fn notacion_de_teclas() {
     let ctrl = |keysym| Stroke { keysym, ctrl: true };
-    let cases: [(&str, Vec<Stroke>); 8] = [
+    let cases: [(&str, Vec<Stroke>); 9] = [
         ("iA", vec![plain(0x69), plain(0x41)]),
         (
             "<Esc>:w<CR>",
@@ -108,6 +111,7 @@ fn notacion_de_teclas() {
             "<BS><Tab><Space><Up>",
             vec![plain(BACKSPACE), plain(TAB), plain(0x20), plain(UP)],
         ),
+        ("<S-Tab>", vec![plain(ISO_LEFT_TAB)]),
     ];
     for (notation, expected) in cases {
         assert_eq!(parse(notation), expected, "{notation:?}");
