@@ -87,6 +87,20 @@ impl WorkspaceView {
         );
     }
 
+    /// `list::show_folder`: la lista muestra la carpeta y toma el foco.
+    pub(super) fn show_folder(
+        &mut self,
+        named: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match self.list.update(cx, |list, cx| list.show_folder(named, cx)) {
+            Ok(()) => self.focus_list(window, cx),
+            Err(error) => self.tell(Message::Error(error.to_string()), cx),
+        }
+        cx.notify();
+    }
+
     fn on_source_event(
         &mut self,
         picker: &Entity<SourcePicker>,

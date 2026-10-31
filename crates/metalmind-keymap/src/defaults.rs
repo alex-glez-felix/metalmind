@@ -75,6 +75,7 @@ const LEADER: &[(char, Command, bool)] = &[
     ('u', Command::OpenUnresolvedLinks, true),
     ('l', Command::ToggleNoteList, true),
     ('v', Command::ChooseListSource, true),
+    ('c', Command::ShowFolder, false),
     ('n', Command::NewNoteFromTemplate, true),
     ('d', Command::OpenDailyNote, true),
 ];

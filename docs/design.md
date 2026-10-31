@@ -35,7 +35,7 @@ Lo que hay hoy, con los valores de los temas de fábrica:
 | `text` | Tamaño (veces `font.size`) e interlineado de `editor`, `ui_md` y `ui_sm`; `math`, las fórmulas en veces `editor`; pesos `normal` y `strong` | todo 1.0 / 1.4; `math` 1.21; 400 y 700 |
 | `headings` | Tamaño y peso de `h1`…`h6` | de 1.6 a 1.0 |
 | `rows` | Alto de las filas del árbol y del menú (veces la fuente) y el aire de las del picker | 1.7, 1.7, 6 px |
-| `layout` | Las medidas de cada parte: barra de estado, picker, panel, barra de botones, menú y fórmulas, y el ancho de lectura de una nota (`note_max_width`) | un nombre de `spacing` o píxeles; `note_max_width`, un entero de columnas de texto, de 20 a 1000 (80) |
+| `layout` | Las medidas de cada parte: barra de estado, ruta sobre cada panel, picker, panel, barra de botones, menú y fórmulas, y el ancho de lectura de una nota (`note_max_width`) | un nombre de `spacing` o píxeles; `note_max_width`, un entero de columnas de texto, de 20 a 1000 (80) |
 
 De `config.yaml` y no del tema, porque son preferencias de quien usa la app y no del estilo: `font` (familia y tamaño base), `editor.padding`, `panes.border_width` y `panel.width`.
 

@@ -15,7 +15,7 @@ use metalmind_vault::{EntryKind, VaultPath};
 
 use super::cards::read_all;
 use super::model::{NoteList, Prompt};
-use super::source::ListSource;
+use super::source::{FolderError, ListSource, folder_to_show};
 use crate::finder::{Note, VaultChanged, VaultSession};
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
@@ -203,13 +203,34 @@ impl NoteListView {
     }
 
     pub fn set_source(&mut self, source: ListSource, cx: &mut Context<Self>) {
+        self.show(source, None, cx);
+    }
+
+    /// Las notas de la carpeta `named` o, sin nombre, de la de la nota
+    /// activa, con la nota activa elegida si es de ahí.
+    ///
+    /// # Errors
+    /// Si no hay tal carpeta en el vault (ver [`folder_to_show`]).
+    pub fn show_folder(
+        &mut self,
+        named: Option<&str>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), FolderError> {
+        let active = self.active(cx);
+        let index = self.session.read(cx).vault().snapshot();
+        let folder = folder_to_show(named, active.as_ref(), &index)?;
+        self.show(ListSource::folder(&folder), active, cx);
+        Ok(())
+    }
+
+    fn show(&mut self, source: ListSource, selected: Option<VaultPath>, cx: &mut Context<Self>) {
         self.chosen = Some(true);
         self.start(cx);
         // Lo elegido gana a la nota activa que se iba a elegir al cargar.
         self.reveal_on_load = false;
         self.source_choices += 1;
         self.scroll_on_show = true;
-        let step = self.list.set_source(source);
+        let step = self.list.set_source(source, selected);
         self.step(step, cx);
     }
 

@@ -248,6 +248,10 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.choose_list_source(window, cx);
             }
+            Effect::ShowFolder(folder) => {
+                self.sync_editors(cx);
+                self.show_folder(folder.as_deref(), window, cx);
+            }
             Effect::FocusPastEdge(Direction::Left) if self.list.read(cx).is_visible() => {
                 self.focus_list(window, cx);
             }

@@ -124,6 +124,20 @@ fn el_filtro_es_la_consulta_del_finder_en_su_lugar() {
 }
 
 #[test]
+fn otra_fuente_puede_llegar_con_su_nota_elegida() {
+    let fixture = Fixture::new();
+    let mut list = fixture.list(ListSource::Inbox, "");
+    let media = VaultPath::new("media.md").unwrap();
+    let step = list.set_source(ListSource::All, Some(media.clone()));
+    run(&mut list, step);
+    assert_eq!(list.selected_note(), Some(&media));
+    // Si la fuente no la trae, la primera fila.
+    let step = list.set_source(ListSource::Inbox, Some(media));
+    run(&mut list, step);
+    assert_eq!(list.selected_row(), Some(0));
+}
+
+#[test]
 fn la_fila_sigue_a_su_nota_cuando_la_lista_se_reordena() {
     let fixture = Fixture::new();
     let mut list = fixture.list(ListSource::All, "");
@@ -162,11 +176,11 @@ fn otra_fuente_vuelve_a_la_primera_fila() {
     let fixture = Fixture::new();
     let mut list = fixture.list(ListSource::All, "");
     list.select(3);
-    let step = list.set_source(ListSource::Inbox);
+    let step = list.set_source(ListSource::Inbox, None);
     run(&mut list, step);
     assert_eq!(rows(&list), ["nueva.md", "d/sin.md"]);
     assert_eq!(list.selected_row(), Some(0));
-    let step = list.set_source(ListSource::Folder("d".into()));
+    let step = list.set_source(ListSource::Folder("d".into()), None);
     run(&mut list, step);
     assert_eq!(rows(&list), ["d/sin.md"]);
 }
@@ -289,7 +303,7 @@ fn otra_fuente_antes_de_las_tarjetas_tampoco_muestra_la_lista_sin_orden() {
         fixture.vault.snapshot(),
         fixture.vault.tags(),
     );
-    let step = list.set_source(ListSource::All);
+    let step = list.set_source(ListSource::All, None);
     run(&mut list, step);
     assert!(list.is_empty() && !list.is_current());
     let paths = list

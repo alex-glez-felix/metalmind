@@ -17,6 +17,7 @@ mod links;
 mod mark_hover;
 mod markdown;
 mod mouse;
+mod path_header;
 mod replaced;
 mod rows;
 mod screen;
@@ -356,6 +357,7 @@ impl Render for Editor {
             .filter(|(prompt, _)| *prompt == Prompt::Command)
             .map(|(_, line)| self.command_popup(line, window.viewport_size().width, &theme, cx));
         let status = self.status(cx).map(|status| status_bar(status, &theme));
+        let header = self.path_header(&theme, cx);
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
@@ -381,6 +383,7 @@ impl Render for Editor {
                     },
                 ),
             )
+            .child(header)
             .child(
                 div()
                     .flex_1()

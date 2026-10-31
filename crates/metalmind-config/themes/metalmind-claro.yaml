@@ -49,6 +49,12 @@ ui:
   status_unfocused_foreground: text_inactive
   status_border: border_subtle
   pane_border: border_strong
+  pane_header_foreground: text
+  pane_header_folder: text_muted
+  pane_header_unfocused: text_inactive
+  pane_header_focus: accent
+  pane_header_hover: { color: text, alpha: 0.05 }
+  pane_header_border: border_subtle
   modified: warning
   status_saved: text_inactive
   status_unsaved: warning
@@ -166,6 +172,8 @@ layout:
   status_padding_y: 3
   status_gap: lg
   status_focus_max_width: 0.5  # el focus, del espacio entre el modo y la posición
+  pane_header_padding_x: 10
+  pane_header_padding_y: 3
   picker_width: 640
   picker_top: 64
   picker_rows: 12

@@ -4,8 +4,42 @@
 use std::collections::BTreeSet;
 
 use metalmind_vault::tags::{TagKey, TagQuery, Tags};
-use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath};
+use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultIndex, VaultPath};
 use serde::{Deserialize, Serialize};
+
+/// Por qué `list::show_folder` no tiene carpeta que mostrar.
+#[derive(Debug, thiserror::Error)]
+pub enum FolderError {
+    #[error("la nota no es del vault: no tiene carpeta que mostrar en la lista")]
+    NotInVault,
+    #[error(transparent)]
+    Invalid(#[from] InvalidPath),
+    #[error("{0} no es una carpeta del vault")]
+    Missing(VaultPath),
+}
+
+/// La carpeta que pide `list::show_folder`: la nombrada (con o sin `/` al
+/// final) o, sin nombre, la de `note`.
+///
+/// # Errors
+/// Si no se nombra ninguna y `note` no es del vault, o si la nombrada no es
+/// una carpeta de `index`.
+pub fn folder_to_show(
+    named: Option<&str>,
+    note: Option<&VaultPath>,
+    index: &VaultIndex,
+) -> Result<VaultPath, FolderError> {
+    let folder = match named {
+        Some(named) => VaultPath::new(named.trim().trim_end_matches('/'))?,
+        None => note
+            .and_then(VaultPath::parent)
+            .ok_or(FolderError::NotInVault)?,
+    };
+    match index.kind(&folder) {
+        Some(EntryKind::Folder) => Ok(folder),
+        _ => Err(FolderError::Missing(folder)),
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -21,6 +55,17 @@ pub enum ListSource {
 }
 
 impl ListSource {
+    /// La carpeta `folder` con sus subcarpetas; la raíz del vault son todas
+    /// las notas.
+    #[must_use]
+    pub fn folder(folder: &VaultPath) -> Self {
+        if folder.is_root() {
+            Self::All
+        } else {
+            Self::Folder(folder.as_str().to_owned())
+        }
+    }
+
     /// Cómo se nombra en la cabecera y en el picker de fuentes.
     #[must_use]
     pub fn label(&self) -> String {
@@ -212,6 +257,45 @@ mod tests {
                 "ui/",
                 "ui/hondo/",
             ]
+        );
+    }
+
+    #[rstest]
+    #[case::la_de_la_nota(None, Some("ui/hondo/viejo.md"), Ok("ui/hondo"))]
+    #[case::la_de_una_nota_en_la_raiz(None, Some("parser.md"), Ok(""))]
+    #[case::la_nombrada_gana(Some("ui/"), Some("parser.md"), Ok("ui"))]
+    #[case::sin_nota_del_vault(
+        None,
+        None,
+        Err("la nota no es del vault: no tiene carpeta que mostrar en la lista")
+    )]
+    #[case::una_nota_no_es_carpeta(
+        Some("parser.md"),
+        None,
+        Err("parser.md no es una carpeta del vault")
+    )]
+    #[case::una_que_no_esta(Some("nada"), None, Err("nada no es una carpeta del vault"))]
+    fn la_carpeta_a_mostrar(
+        #[case] named: Option<&str>,
+        #[case] note: Option<&str>,
+        #[case] expected: Result<&str, &str>,
+    ) {
+        let (_dir, vault) = vault();
+        let note = note.map(|note| VaultPath::new(note).unwrap());
+        let shown = folder_to_show(named, note.as_ref(), &vault.snapshot());
+        let shown = shown
+            .map(|folder| folder.as_str().to_owned())
+            .map_err(|error| error.to_string());
+        assert_eq!(shown, expected.map(str::to_owned).map_err(str::to_owned));
+    }
+
+    #[rstest]
+    #[case::una_carpeta("ui/hondo", ListSource::Folder("ui/hondo".into()))]
+    #[case::la_raiz_son_todas("", ListSource::All)]
+    fn la_carpeta_de_una_nota_como_fuente(#[case] folder: &str, #[case] expected: ListSource) {
+        assert_eq!(
+            ListSource::folder(&VaultPath::new(folder).unwrap()),
+            expected
         );
     }
 

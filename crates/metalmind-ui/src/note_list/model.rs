@@ -174,10 +174,11 @@ impl NoteList {
         self.source.rename_tag(from, to).then(|| self.refill())
     }
 
-    /// Otra fuente: el filtro se queda y la fila vuelve a la primera.
-    pub fn set_source(&mut self, source: ListSource) -> Step<Note> {
+    /// Otra fuente: el filtro se queda y la fila va a `selected`, si la
+    /// lista la muestra, o vuelve a la primera.
+    pub fn set_source(&mut self, source: ListSource, selected: Option<VaultPath>) -> Step<Note> {
         self.source = source;
-        self.selected = None;
+        self.selected = selected;
         self.filter.select(0);
         self.refill()
     }

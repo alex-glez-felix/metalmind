@@ -37,6 +37,9 @@ pub enum Effect {
     ToggleNoteList,
     /// Elegir de dónde salen las notas de la lista.
     ChooseListSource,
+    /// Mostrar en la lista la carpeta del vault que se nombra o, sin
+    /// nombre, la de la nota enfocada.
+    ShowFolder(Option<String>),
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
     /// paneles de ese lado, como el panel lateral, puede tomar el foco.
     FocusPastEdge(Direction),
@@ -174,6 +177,7 @@ impl Workspace {
             Command::ToggleBacklinks => Ok(Effect::TogglePanel(PanelView::Backlinks)),
             Command::ToggleNoteList => Ok(Effect::ToggleNoteList),
             Command::ChooseListSource => Ok(Effect::ChooseListSource),
+            Command::ShowFolder => Ok(Effect::ShowFolder(argument.map(str::to_owned))),
             Command::FollowLink => self.follow_link(),
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
