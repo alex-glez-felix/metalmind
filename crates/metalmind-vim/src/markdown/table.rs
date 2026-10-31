@@ -3,7 +3,7 @@
 
 use std::ops::Range;
 
-use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, Selection, Selections};
+use metalmind_buffer::{Bias, Buffer, ByteOffset, Edit, EditMap, Selection, Selections};
 use metalmind_syntax::{CellPos, CellSpot, Formatted, Step, Table};
 
 use super::LazyStyles;
@@ -58,7 +58,7 @@ pub(crate) fn align_tables(
     let mut targets = targets.iter();
     let after = selections.map(|selection| {
         Selection::cursor(match targets.next().copied().flatten() {
-            Some((index, spot)) => tables[index].place(buffer, spot),
+            Some((index, spot)) => tables[index].place(buffer, &map, spot),
             None => map.map(selection.head, bias),
         })
     });
@@ -68,6 +68,9 @@ pub(crate) fn align_tables(
 /// Una tabla de la nota y cómo queda alineada.
 struct TableFormat {
     table: Table,
+    /// Dónde empieza, antes de alinear: una fila nueva en una tabla de
+    /// arriba corre las de abajo.
+    start: ByteOffset,
     formatted: Formatted,
     /// Si `formatted` trae una fila más que la tabla.
     grown: bool,
@@ -84,6 +87,7 @@ impl TableFormat {
         }
         let formatted = table.formatted();
         Some(Self {
+            start: buffer.line_start(table.lines().start),
             table,
             formatted,
             grown: false,
@@ -146,9 +150,11 @@ impl TableFormat {
             .spot(line, at.get() - buffer.line_start(line).get())
     }
 
-    /// Dónde queda `spot` una vez aplicadas las [`TableFormat::edits`].
-    fn place(&self, buffer: &Buffer, spot: CellSpot) -> ByteOffset {
+    /// Dónde queda `spot` una vez aplicadas, con `map`, las
+    /// [`TableFormat::edits`] de todas las tablas.
+    fn place(&self, buffer: &Buffer, map: &EditMap, spot: CellSpot) -> ByteOffset {
         let (row, byte) = self.formatted.place(spot);
-        buffer.line_start(self.lines().start + row) + byte
+        let first = buffer.line_of(map.map(self.start, Bias::Before));
+        buffer.line_start(first + row) + byte
     }
 }

@@ -233,6 +233,18 @@ fn tableformat_says_why_it_did_nothing(
     "i<Tab><Tab>",
     "| a   | b   |\n| --- | --- |\n| uno | ‸dos |\n|     | ‸    |"
 )]
+// una fila nueva arriba no saca de su tabla al cursor de la de abajo
+#[case(
+    "| a |\n|-|\n| u‸no |\n\n| b | c |\n|-|-|\n| d‸os | tres |",
+    "i<Tab>",
+    "| a   |\n| --- |\n| uno |\n| ‸    |\n\n| b   | c    |\n| --- | ---- |\n| dos | ‸tres |"
+)]
+// en un Insert en bloque es un tab, que se copia a las demás líneas
+#[case(
+    "| a | b |\n|-|-|\n| u‸no | dos |\n| tres | cuatro |",
+    "<C-v>jI<Tab><Esc>",
+    "| a | b |\n|-|-|\n| u‸\tno | dos |\n| t\tres | cuatro |"
+)]
 fn tab_moves_between_cells(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     assert_eq!(run(before, keys), after);
 }
