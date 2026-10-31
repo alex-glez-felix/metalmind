@@ -2,10 +2,11 @@
 //! `<vault>/.metalmind/config.yaml` tocando solo su clave, con guardado
 //! atómico.
 
+use std::fs;
 use std::path::Path;
 
 use metalmind_config::edit::EditError;
-use metalmind_config::{Diagnostic, Loaded, SavedView, VaultConfig};
+use metalmind_config::{Diagnostic, Loaded, SavedView, Severity, VaultConfig};
 use metalmind_vault::FileError;
 use metalmind_vault::tags::TagQuery;
 
@@ -17,8 +18,17 @@ pub enum ViewsError {
     Edit(#[from] EditError),
     #[error(transparent)]
     File(#[from] FileError),
+    /// El archivo tiene un error: no se escribe hasta arreglarlo.
+    #[error("{0}")]
+    Config(Diagnostic),
     #[error("no se pudo crear {path}: {error}")]
     Folder { path: String, error: std::io::Error },
+    #[error("{0} es un enlace simbólico; las vistas no se escriben a través de él")]
+    Symlink(String),
+    #[error("ya hay una vista «{0}»")]
+    Exists(String),
+    #[error("ya no existe la vista «{0}»")]
+    Missing(String),
 }
 
 /// Las vistas del vault de `root`; las de un archivo roto, ninguna, con el
@@ -29,28 +39,49 @@ pub fn load(root: &Path) -> (Vec<SavedView>, Vec<Diagnostic>) {
     (value.views().to_vec(), diagnostics)
 }
 
-/// Aplica `change` al texto del archivo y lo guarda; devuelve las vistas
-/// que quedaron.
+/// Aplica `change` al texto del archivo, con las vistas que dice ahora, y lo
+/// guarda; devuelve las vistas que quedaron.
 ///
 /// # Errors
-/// Si el archivo no se puede leer, editar o escribir.
+/// Si el archivo no se puede leer, tiene un error, `change` falla o no se
+/// puede escribir dentro del vault.
 pub fn change(
     root: &Path,
-    change: impl FnOnce(&str) -> Result<String, EditError>,
+    change: impl FnOnce(&str, &VaultConfig) -> Result<String, ViewsError>,
 ) -> Result<Vec<SavedView>, ViewsError> {
     let file = VaultConfig::file(root);
-    let text = metalmind_vault::read(&file)?.unwrap_or_default();
-    let edited = change(&text)?;
-    if edited != text {
-        if let Some(folder) = file.parent() {
-            std::fs::create_dir_all(folder).map_err(|error| ViewsError::Folder {
-                path: folder.display().to_string(),
-                error,
-            })?;
+    let folder = file.parent().unwrap_or(root);
+    // Escribir a través de un enlace podría tocar algo fuera del vault.
+    for path in [folder, file.as_path()] {
+        if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            return Err(ViewsError::Symlink(path.display().to_string()));
         }
-        metalmind_vault::write_atomic(&file, |out| out.write_all(edited.as_bytes()))?;
+    }
+    let text = metalmind_vault::read(&file)?.unwrap_or_default();
+    let current = VaultConfig::parse(&text);
+    if let Some(error) = current
+        .diagnostics
+        .into_iter()
+        .find(|diagnostic| diagnostic.severity == Severity::Error)
+    {
+        return Err(ViewsError::Config(error.in_file(&file)));
+    }
+    let edited = change(&text, &current.value)?;
+    if edited != text {
+        fs::create_dir_all(folder).map_err(|error| ViewsError::Folder {
+            path: folder.display().to_string(),
+            error,
+        })?;
+        metalmind_vault::replace_file(&file, &edited)?;
     }
     Ok(VaultConfig::parse(&edited).value.views().to_vec())
+}
+
+/// La vista de `views` que se llama `name` sin distinguir mayúsculas.
+#[must_use]
+pub fn named<'v>(views: &'v [SavedView], name: &str) -> Option<&'v SavedView> {
+    let name = name.to_lowercase();
+    views.iter().find(|view| view.name.to_lowercase() == name)
 }
 
 /// Lo que se guarda al pedir "Guardar como vista": la consulta de la fuente
@@ -152,8 +183,8 @@ mod tests {
     #[test]
     fn cambiar_las_vistas_crea_el_archivo_y_deja_lo_demas() {
         let dir = tempfile::tempdir().unwrap();
-        let views = change(dir.path(), |text| {
-            VaultConfig::save_view(text, "gs", "#gs -#archivado")
+        let views = change(dir.path(), |text, _| {
+            Ok(VaultConfig::save_view(text, "gs", "#gs -#archivado")?)
         })
         .unwrap();
         assert_eq!(views.len(), 1);
@@ -163,8 +194,8 @@ mod tests {
             format!("# mías\n{}", fs::read_to_string(&file).unwrap()),
         )
         .unwrap();
-        let views = change(dir.path(), |text| {
-            VaultConfig::rename_view(text, "gs", "estudio")
+        let views = change(dir.path(), |text, _| {
+            Ok(VaultConfig::rename_view(text, "gs", "estudio")?)
         })
         .unwrap();
         assert_eq!(views[0].name, "estudio");
@@ -175,17 +206,65 @@ mod tests {
         assert_eq!(load(dir.path()).0, views);
     }
 
+    fn save_a(text: &str, _: &VaultConfig) -> Result<String, ViewsError> {
+        Ok(VaultConfig::save_view(text, "a", "#a")?)
+    }
+
     #[test]
     fn un_archivo_roto_no_se_toca() {
         let dir = tempfile::tempdir().unwrap();
         let file = VaultConfig::file(dir.path());
         fs::create_dir_all(file.parent().unwrap()).unwrap();
-        fs::write(&file, "views: [\n").unwrap();
-        let error = change(dir.path(), |text| VaultConfig::save_view(text, "a", "#a")).unwrap_err();
+        for broken in ["views: [\n", "views:\n  gs: [a]\n"] {
+            fs::write(&file, broken).unwrap();
+            let error = change(dir.path(), save_a).unwrap_err();
+            assert!(matches!(error, ViewsError::Config(_)), "{error:?}");
+            assert_eq!(fs::read_to_string(&file).unwrap(), broken);
+        }
+    }
+
+    #[test]
+    fn el_cambio_ve_las_vistas_del_archivo_de_ahora() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = VaultConfig::file(dir.path());
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        // Otro programa guardó «GS» mientras la pregunta estaba abierta.
+        fs::write(&file, "views:\n  GS: \"#otra\"\n").unwrap();
+        let error = change(dir.path(), |text, current| {
+            if let Some(taken) = named(current.views(), "gs") {
+                return Err(ViewsError::Exists(taken.name.clone()));
+            }
+            Ok(VaultConfig::save_view(text, "gs", "#gs")?)
+        })
+        .unwrap_err();
         assert!(
-            matches!(error, ViewsError::Edit(EditError::Unreadable(_))),
+            matches!(&error, ViewsError::Exists(name) if name == "GS"),
             "{error:?}"
         );
-        assert_eq!(fs::read_to_string(&file).unwrap(), "views: [\n");
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            "views:\n  GS: \"#otra\"\n"
+        );
+    }
+
+    #[test]
+    fn no_escribe_a_traves_de_un_enlace() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let target = outside.path().join("otro.yaml");
+        fs::write(&target, "a: 1\n").unwrap();
+        let file = VaultConfig::file(dir.path());
+        let folder = file.parent().unwrap();
+        fs::create_dir_all(folder).unwrap();
+        std::os::unix::fs::symlink(&target, &file).unwrap();
+        let error = change(dir.path(), save_a).unwrap_err();
+        assert!(matches!(error, ViewsError::Symlink(_)), "{error:?}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "a: 1\n");
+        fs::remove_file(&file).unwrap();
+        fs::remove_dir(folder).unwrap();
+        std::os::unix::fs::symlink(outside.path(), folder).unwrap();
+        let error = change(dir.path(), save_a).unwrap_err();
+        assert!(matches!(error, ViewsError::Symlink(_)), "{error:?}");
+        assert!(!outside.path().join("config.yaml").exists());
     }
 }

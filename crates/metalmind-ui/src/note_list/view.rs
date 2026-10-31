@@ -9,7 +9,7 @@ use gpui_kit::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Pixels, ScrollStrategy,
     Subscription, Task, UniformListScrollHandle, Window,
 };
-use metalmind_config::SavedView;
+use metalmind_config::{SavedView, Severity};
 use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
 use metalmind_vault::{EntryKind, VaultPath};
@@ -88,8 +88,17 @@ impl NoteListView {
     ) -> Self {
         let vault = session.read(cx).vault();
         let index = vault.snapshot();
-        // Una vista guardada se muestra con la consulta que tiene hoy.
-        let source = state.source.clone().resolve(&load_views(vault.root()).0);
+        // Una vista guardada vuelve con la consulta que tiene hoy; con la
+        // config rota se queda como estaba, para no perderla.
+        let (views, diagnostics) = load_views(vault.root());
+        let broken = diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error);
+        let source = if broken {
+            state.source.clone()
+        } else {
+            state.source.clone().resolve(&views)
+        };
         let list = NoteList::new(
             source,
             &state.filter,

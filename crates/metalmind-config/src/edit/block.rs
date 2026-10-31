@@ -15,8 +15,13 @@ pub(super) struct Line {
 
 #[derive(Debug)]
 pub(super) enum Kind {
-    /// Vacía, en blanco o solo un comentario: no es de ninguna clave.
-    Filler,
+    /// Vacía o en blanco.
+    Blank,
+    /// Solo un comentario.
+    Comment,
+    /// Lo que va antes del documento: una directiva (`%YAML 1.2`) o el
+    /// `---` que lo abre.
+    Header,
     Key(KeyLine),
     /// Algo que no es una clave de un mapa en bloque: un ítem de lista, un
     /// `---`, la continuación de un valor.
@@ -36,8 +41,13 @@ pub(super) struct KeyLine {
 }
 
 impl Line {
+    /// Si dice algo del documento: ni blanco, ni comentario, ni cabecera.
+    pub(super) fn is_data(&self) -> bool {
+        self.is_content() && !matches!(self.kind, Kind::Header)
+    }
+
     pub(super) fn is_content(&self) -> bool {
-        !matches!(self.kind, Kind::Filler)
+        !matches!(self.kind, Kind::Blank | Kind::Comment)
     }
 }
 
@@ -64,8 +74,12 @@ fn line(text: &str, start: usize, end: usize, next: usize) -> Line {
     let raw = &text[start..end];
     let content = raw.trim_start_matches(' ');
     let indent = raw.len() - content.len();
-    let kind = if content.trim().is_empty() || content.starts_with('#') {
-        Kind::Filler
+    let kind = if content.trim().is_empty() {
+        Kind::Blank
+    } else if content.starts_with('#') {
+        Kind::Comment
+    } else if content.starts_with('%') || content.trim_end() == "---" {
+        Kind::Header
     } else {
         key_line(text, start + indent, end).map_or(Kind::Other, Kind::Key)
     };
@@ -155,6 +169,26 @@ fn single_quoted(content: &str) -> Option<(String, usize)> {
     None
 }
 
+/// Hasta dónde llega un texto entre comillas, con cualquier escape: solo
+/// importa dónde cierra.
+fn quoted_len(text: &str) -> Option<usize> {
+    let quote = text.chars().next()?;
+    let mut chars = text.char_indices().skip(1).peekable();
+    while let Some((at, c)) = chars.next() {
+        match (quote, c) {
+            ('"', '\\') => {
+                chars.next();
+            }
+            ('\'', '\'') if chars.peek().is_some_and(|&(_, next)| next == '\'') => {
+                chars.next();
+            }
+            (quote, c) if c == quote => return Some(at + 1),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// El valor que sigue al `:`, sin el comentario que lo cierre.
 fn inline_value(text: &str, from: usize, end: usize) -> Option<Range<usize>> {
     let rest = &text[from..end];
@@ -164,8 +198,7 @@ fn inline_value(text: &str, from: usize, end: usize) -> Option<Range<usize>> {
     }
     let start = end - trimmed.len();
     let len = match trimmed.chars().next()? {
-        '"' => double_quoted(trimmed).map_or(trimmed.len(), |(_, len)| len),
-        '\'' => single_quoted(trimmed).map_or(trimmed.len(), |(_, len)| len),
+        '"' | '\'' => quoted_len(trimmed).unwrap_or(trimmed.len()),
         '[' | '{' => trimmed.trim_end().len(),
         _ => [" #", "\t#"]
             .iter()
@@ -200,6 +233,20 @@ pub(super) struct Map {
 pub(super) struct NotBlockMap;
 
 impl Map {
+    /// El mapa del documento, después de sus directivas y su `---`.
+    pub(super) fn root(lines: &[Line]) -> Result<Self, NotBlockMap> {
+        let start = lines
+            .iter()
+            .position(Line::is_data)
+            .map_or(lines.len(), |first| {
+                lines[..first]
+                    .iter()
+                    .rposition(|line| matches!(line.kind, Kind::Header))
+                    .map_or(0, |header| header + 1)
+            });
+        Self::read(lines, start..lines.len())
+    }
+
     /// El mapa en las líneas `region`; vacío si no tienen contenido.
     pub(super) fn read(lines: &[Line], region: Range<usize>) -> Result<Self, NotBlockMap> {
         let mut content = region.clone().filter(|&at| lines[at].is_content());
@@ -235,8 +282,21 @@ impl Map {
 }
 
 impl Entry {
+    /// Si entre las líneas de su valor hay un comentario fuera de `inner`.
+    pub(super) fn has_comment_outside(&self, lines: &[Line], inner: &Range<usize>) -> bool {
+        self.body
+            .clone()
+            .filter(|at| !inner.contains(at))
+            .any(|at| matches!(lines[at].kind, Kind::Comment))
+    }
+
     pub(super) fn has_body(&self) -> bool {
         !self.body.is_empty()
+    }
+
+    /// Los índices de su línea y las de su valor.
+    pub(super) fn lines(&self) -> Range<usize> {
+        self.line..self.body.end.max(self.line + 1)
     }
 
     /// Desde el principio de su línea hasta después del salto de la última

@@ -40,23 +40,26 @@ pub enum EditError {
 /// Si el texto no es YAML o el camino no está escrito en bloque.
 pub fn set(text: &str, path: &[&str], value: &str) -> Result<String, EditError> {
     let value_tree = read_tree(value)?;
-    edit(
-        text,
-        path,
-        |doc| doc.set(path, value),
-        |tree| {
-            tree.set(path, value_tree);
-        },
-    )
+    edit(text, path, |doc, tree| {
+        tree.set(path, value_tree);
+        doc.set(path, value)
+    })
 }
 
-/// Quita la clave `path`; un mapa que se queda vacío se va con ella. Si no
-/// está, no cambia nada.
+/// Quita la clave `path`; un mapa que se queda vacío se va con ella, salvo
+/// que tenga comentarios, que se quedan bajo su clave sin valor. Si no está,
+/// no cambia nada.
 ///
 /// # Errors
 /// Como [`set`].
 pub fn remove(text: &str, path: &[&str]) -> Result<String, EditError> {
-    edit(text, path, |doc| doc.remove(path), |tree| tree.remove(path))
+    edit(text, path, |doc, tree| {
+        let Some((splice, removed)) = doc.remove(path)? else {
+            return Ok(None);
+        };
+        tree.remove(&path[..removed]);
+        Ok(Some(splice))
+    })
 }
 
 /// Cambia el nombre de la clave `path` por `to`, en su lugar y con su valor.
@@ -64,14 +67,10 @@ pub fn remove(text: &str, path: &[&str]) -> Result<String, EditError> {
 /// # Errors
 /// Como [`set`]; además, si no existe o ya hay una clave `to` junto a ella.
 pub fn rename(text: &str, path: &[&str], to: &str) -> Result<String, EditError> {
-    edit(
-        text,
-        path,
-        |doc| doc.rename(path, to),
-        |tree| {
-            tree.rename(path, to);
-        },
-    )
+    edit(text, path, |doc, tree| {
+        tree.rename(path, to);
+        doc.rename(path, to)
+    })
 }
 
 /// `text` como texto de YAML, entre comillas dobles: así se lee igual
@@ -109,20 +108,20 @@ fn key(name: &str) -> String {
     if plain { name.to_owned() } else { string(name) }
 }
 
+/// `change` da el cambio en el texto y deja en el árbol lo que el texto
+/// cambiado tiene que decir.
 fn edit(
     text: &str,
     path: &[&str],
-    change: impl FnOnce(&Document<'_>) -> Result<Option<Splice>, EditError>,
-    expect: impl FnOnce(&mut Tree),
+    change: impl FnOnce(&Document<'_>, &mut Tree) -> Result<Option<Splice>, EditError>,
 ) -> Result<String, EditError> {
     let mut expected = read_tree(text)?;
     let document = Document::new(text);
-    let Some(splice) = change(&document)? else {
+    let Some(splice) = change(&document, &mut expected)? else {
         return Ok(text.to_owned());
     };
     let mut edited = text.to_owned();
     edited.replace_range(splice.range, &splice.text);
-    expect(&mut expected);
     match read_tree(&edited) {
         Ok(tree) if tree == expected => Ok(edited),
         _ => Err(EditError::Unsupported(path.join("."))),
@@ -130,7 +129,7 @@ fn edit(
 }
 
 fn read_tree(text: &str) -> Result<Tree, EditError> {
-    if !lines(text).iter().any(Line::is_content) {
+    if !lines(text).iter().any(Line::is_data) {
         return Ok(Tree::Map(Vec::new()));
     }
     serde_saphyr::from_str_with_options::<Tree>(text, crate::parse::options())
@@ -177,18 +176,21 @@ impl<'t> Document<'t> {
     /// falta o la última del camino.
     fn walk(&self, path: &[&str]) -> Result<Vec<Step>, EditError> {
         let mut steps: Vec<Step> = Vec::new();
-        let mut region = 0..self.lines.len();
+        let mut region = None;
         for (depth, segment) in path.iter().enumerate() {
-            let map = Map::read(&self.lines, region)
-                .map_err(|NotBlockMap| EditError::Unsupported(path[..depth].join(".")))?;
+            let map = match region.take() {
+                None => Map::root(&self.lines),
+                Some(region) => Map::read(&self.lines, region),
+            }
+            .map_err(|NotBlockMap| EditError::Unsupported(path[..depth].join(".")))?;
             let entry = map.position(segment);
             let step = Step { map, entry };
             region = match step.found() {
                 Some(found) if found.key.value.is_some() && depth + 1 < path.len() => {
                     return Err(EditError::Unsupported(path[..=depth].join(".")));
                 }
-                Some(found) => found.body.clone(),
-                None => 0..0,
+                Some(found) => Some(found.body.clone()),
+                None => Some(0..0),
             };
             let missing = step.entry.is_none();
             steps.push(step);
@@ -265,20 +267,34 @@ impl<'t> Document<'t> {
         }
     }
 
-    fn remove(&self, path: &[&str]) -> Result<Option<Splice>, EditError> {
+    /// Lo que se quita y cuántas claves del camino llega a quitar: la única
+    /// de su mapa se lleva a su padre, que quedaría vacío, salvo que el
+    /// padre tenga comentarios.
+    fn remove(&self, path: &[&str]) -> Result<Option<(Splice, usize)>, EditError> {
         let steps = self.walk(path)?;
+        let Some(leaf) = steps.last().and_then(Step::found) else {
+            return Ok(None);
+        };
         if steps.len() < path.len() {
             return Ok(None);
         }
-        // La única clave de su mapa se lleva a su padre, que quedaría vacío.
         let mut depth = steps.len();
+        let mut removed = leaf;
         while depth > 1 && steps[depth - 1].map.entries.len() == 1 {
+            let Some(parent) = steps[depth - 2].found() else {
+                break;
+            };
+            if parent.has_comment_outside(&self.lines, &removed.lines()) {
+                break;
+            }
+            removed = parent;
             depth -= 1;
         }
-        Ok(steps[depth - 1].found().map(|entry| Splice {
-            range: entry.span(&self.lines),
+        let splice = Splice {
+            range: removed.span(&self.lines),
             text: String::new(),
-        }))
+        };
+        Ok(Some((splice, depth)))
     }
 
     fn rename(&self, path: &[&str], to: &str) -> Result<Option<Splice>, EditError> {

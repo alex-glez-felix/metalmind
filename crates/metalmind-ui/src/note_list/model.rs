@@ -193,7 +193,7 @@ impl NoteList {
             end: len,
             text: "",
         });
-        self.set_source(ListSource::of_view(view))
+        self.set_source(ListSource::of_view(view), self.selected.clone())
     }
 
     /// Las vistas del archivo cambiaron; la fuente sigue a la suya, con su

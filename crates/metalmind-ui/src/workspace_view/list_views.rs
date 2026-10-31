@@ -8,7 +8,8 @@ use metalmind_config::{SavedView, VaultConfig};
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use crate::note_list::{
-    ListSource, ViewDraft, ViewNamePurpose, ViewNameQuestion, change_views, load_views,
+    ListSource, ViewDraft, ViewNamePurpose, ViewNameQuestion, ViewsError, change_views, load_views,
+    view_named,
 };
 use crate::picker::{PickerEvent, PickerOptions, PickerView};
 use crate::workspace::{ListViewChange, Message};
@@ -132,7 +133,12 @@ impl WorkspaceView {
 
     fn save_view(&mut self, name: &str, query: &str, cx: &mut Context<Self>) {
         let root = self.session.read(cx).root().to_owned();
-        let saved = change_views(&root, |text| VaultConfig::save_view(text, name, query));
+        let saved = change_views(&root, |text, current| {
+            if let Some(taken) = view_named(current.views(), name) {
+                return Err(ViewsError::Exists(taken.name.clone()));
+            }
+            Ok(VaultConfig::save_view(text, name, query)?)
+        });
         let view = match saved {
             Ok(views) => views.into_iter().find(|view| view.name == name),
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),
@@ -147,7 +153,16 @@ impl WorkspaceView {
 
     fn rename_view(&mut self, from: &str, to: &str, cx: &mut Context<Self>) {
         let root = self.session.read(cx).root().to_owned();
-        match change_views(&root, |text| VaultConfig::rename_view(text, from, to)) {
+        let renamed = change_views(&root, |text, current| {
+            if let Some(taken) = view_named(current.views(), to).filter(|view| view.name != from) {
+                return Err(ViewsError::Exists(taken.name.clone()));
+            }
+            if current.view(from).is_none() {
+                return Err(ViewsError::Missing(from.to_owned()));
+            }
+            Ok(VaultConfig::rename_view(text, from, to)?)
+        });
+        match renamed {
             Ok(views) => {
                 self.list.update(cx, |list, cx| {
                     list.follow_views(&views, Some((from, to)), cx);
@@ -161,7 +176,13 @@ impl WorkspaceView {
 
     fn delete_view(&mut self, name: &str, query: &str, cx: &mut Context<Self>) {
         let root = self.session.read(cx).root().to_owned();
-        match change_views(&root, |text| VaultConfig::delete_view(text, name)) {
+        let deleted = change_views(&root, |text, current| {
+            if current.view(name).is_none() {
+                return Err(ViewsError::Missing(name.to_owned()));
+            }
+            Ok(VaultConfig::delete_view(text, name)?)
+        });
+        match deleted {
             Ok(views) => {
                 self.list
                     .update(cx, |list, cx| list.follow_views(&views, None, cx));

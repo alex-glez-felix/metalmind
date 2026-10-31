@@ -165,3 +165,58 @@ fn lo_escrito_se_lee_como_era(#[case] text: &str) {
         )])
     );
 }
+
+#[test]
+fn un_valor_con_escapes_conserva_su_comentario() {
+    let text = "a: \"line\\n\" # conservar\nb: 'it''s' # este también\n";
+    assert_eq!(
+        set(text, &["a"], "1").unwrap(),
+        "a: 1 # conservar\nb: 'it''s' # este también\n"
+    );
+    assert_eq!(
+        set(text, &["b"], "2").unwrap(),
+        "a: \"line\\n\" # conservar\nb: 2 # este también\n"
+    );
+}
+
+#[rstest]
+#[case::marcador_de_documento("---\nviews:\n  a: \"#a\"\n")]
+#[case::directiva_y_marcador("%YAML 1.2\n---\nviews:\n  a: \"#a\"\n")]
+fn una_cabecera_de_documento_se_respeta(#[case] text: &str) {
+    assert_eq!(
+        set(text, &["views", "gs"], &string("#gs")).unwrap(),
+        format!("{text}  gs: \"#gs\"\n")
+    );
+    assert_eq!(
+        remove(text, &["views", "a"]).unwrap(),
+        text.replace("views:\n  a: \"#a\"\n", "")
+    );
+}
+
+#[test]
+fn una_cabecera_sin_mapa_recibe_la_clave_al_final() {
+    assert_eq!(
+        set("---\n", &["views", "gs"], &string("#gs")).unwrap(),
+        "---\nviews:\n  gs: \"#gs\"\n"
+    );
+}
+
+#[test]
+fn quitar_una_clave_que_no_esta_junto_a_otra_no_cambia_nada() {
+    let text = "views:\n  otra: \"#o\"\n";
+    assert_eq!(remove(text, &["views", "gs"]).unwrap(), text);
+}
+
+#[test]
+fn quitar_la_unica_deja_los_comentarios_de_su_mapa() {
+    let text = "views:\n  # para el estudio\n  gs: \"#gs\"\ntheme: x\n";
+    assert_eq!(
+        remove(text, &["views", "gs"]).unwrap(),
+        "views:\n  # para el estudio\ntheme: x\n"
+    );
+    let after = "views:\n  # para el estudio\n";
+    assert_eq!(
+        set(after, &["views", "gs"], &string("#gs")).unwrap(),
+        "views:\n  gs: \"#gs\"\n  # para el estudio\n"
+    );
+}

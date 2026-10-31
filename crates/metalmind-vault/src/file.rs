@@ -114,7 +114,10 @@ pub(crate) fn create(
 /// Como [`write_atomic`], pero sin seguir un enlace: si en `path` apareció
 /// uno después de comprobarlo, se reemplaza el enlace y no se escribe fuera
 /// del vault. Para lo que ya comprobó que `path` es un archivo.
-pub(crate) fn replace_file(path: &Path, text: &str) -> Result<(), FileError> {
+///
+/// # Errors
+/// Si falla cualquier paso de la escritura.
+pub fn replace_file(path: &Path, text: &str) -> Result<(), FileError> {
     replace_at(path, |out| out.write_all(text.as_bytes())).map_err(|source| FileError::Write {
         path: path.to_owned(),
         source,

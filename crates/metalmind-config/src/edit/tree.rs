@@ -53,19 +53,20 @@ impl Tree {
         }
     }
 
-    /// Como lo deja `edit::remove`: un mapa que se queda vacío se va con su
-    /// clave, salvo el del documento.
+    /// Quita la clave `path`. Un mapa que se queda vacío, salvo el del
+    /// documento, se queda sin valor: así queda su clave con solo comentarios.
     pub(super) fn remove(&mut self, path: &[&str]) {
         let Some((first, rest)) = path.split_first() else {
             return;
         };
-        if !rest.is_empty()
-            && let Some(child) = self.child_mut(first)
+        if let Some(child) = self.child_mut(first)
+            && !rest.is_empty()
         {
             child.remove(rest);
-            if *child != Self::Map(Vec::new()) {
-                return;
+            if rest.len() == 1 && *child == Self::Map(Vec::new()) {
+                *child = Self::Null;
             }
+            return;
         }
         if let Self::Map(entries) = self {
             entries.retain(|(k, _)| !matches!(k, Self::Str(text) if text == first));

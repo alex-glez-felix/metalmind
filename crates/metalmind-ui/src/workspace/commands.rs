@@ -20,7 +20,6 @@ use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
 use crate::tag_change::{RequestError, TagField, TagRequest};
 
-/// Lo que la ventana tiene que hacer tras un comando.
 /// Qué se le hace a una vista guardada desde la lista (06 §10).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ListViewChange {
@@ -31,6 +30,7 @@ pub enum ListViewChange {
     Delete,
 }
 
+/// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
 pub enum Effect {

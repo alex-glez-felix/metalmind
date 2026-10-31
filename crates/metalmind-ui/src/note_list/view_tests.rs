@@ -476,3 +476,24 @@ fn la_lista_sigue_a_su_vista_renombrada_o_borrada() {
         (ListSource::Inbox, vec!["c.md".to_owned()])
     );
 }
+
+#[test]
+fn con_la_config_rota_la_vista_guardada_no_se_pierde() {
+    let mut cx = TestAppContext::single();
+    let gs = ListSource::View {
+        name: "gs".into(),
+        query: "#rust -#archivado".into(),
+    };
+    let state = ListState {
+        visible: Some(true),
+        source: gs.clone(),
+        filter: String::new(),
+    };
+    let files = [
+        ("a.md", "#rust"),
+        ("b.md", "#rust #archivado"),
+        (".metalmind/config.yaml", "views: [\n"),
+    ];
+    let (fixture, cx) = fixture_state(&mut cx, &files, &state);
+    assert_eq!(shown(&fixture.list, cx), (gs, vec!["a.md".to_owned()]));
+}
