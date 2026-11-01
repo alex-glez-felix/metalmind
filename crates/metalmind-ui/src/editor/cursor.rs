@@ -7,6 +7,7 @@ use metalmind_vim::Mode;
 use super::element::shape;
 use super::layout::{FrameLayout, LaidLine};
 use super::lines::Typeface;
+use super::screen::cell_width;
 use crate::theme::Theme;
 use crate::workspace::PaneView;
 
@@ -85,12 +86,7 @@ pub fn cursor_position<'a>(
 }
 
 pub fn em_width(typeface: &Typeface, window: &Window) -> Pixels {
-    let text_system = window.text_system();
-    let font_id = text_system.resolve_font(&typeface.font);
-    text_system
-        .em_advance(font_id, typeface.size)
-        .inspect_err(|error| log::error!("sin ancho de M para el cursor: {error:#}"))
-        .unwrap_or(typeface.size)
+    cell_width(window.text_system(), &typeface.font, typeface.size)
 }
 
 /// El texto provisional del IME o de una tecla muerta, subrayado sobre el

@@ -48,6 +48,45 @@ impl Advances {
         Self::new(starts, text.len(), x)
     }
 
+    /// Como en una terminal: cada carácter ancho mide exactamente dos
+    /// `cell`, mida lo que mida su glifo en la letra de respaldo, y lo que
+    /// le sigue se corre con él. Lo que se combina con él (un acento) cae
+    /// en su principio, como un solo carácter.
+    #[must_use]
+    pub fn with_wide_cells(self, text: &str, cell: f32) -> Self {
+        let wides: Vec<Range<usize>> = wide_graphemes(text).collect();
+        if wides.is_empty() {
+            return self;
+        }
+        let mut shift = 0.0;
+        // Desde qué byte se corre lo que sigue, y cuánto en total.
+        let shifts: Vec<(usize, f32)> = wides
+            .iter()
+            .map(|wide| {
+                shift += 2.0 * cell - (self.x(wide.end) - self.x(wide.start));
+                (wide.end, shift)
+            })
+            .collect();
+        let shift_at = |byte: usize| {
+            let index = shifts.partition_point(|&(end, _)| end <= byte);
+            index
+                .checked_sub(1)
+                .and_then(|index| shifts.get(index))
+                .map_or(0.0, |&(_, shift)| shift)
+        };
+        let inside_wide = |byte: usize| {
+            let index = wides.partition_point(|wide| wide.end <= byte);
+            wides.get(index).is_some_and(|wide| wide.start < byte)
+        };
+        let starts = self
+            .starts
+            .iter()
+            .filter(|&&(byte, _)| !inside_wide(byte))
+            .map(|&(byte, x)| (byte, x + shift_at(byte)))
+            .collect();
+        Self::new(starts, self.len, self.width + shift)
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.len
@@ -131,13 +170,32 @@ impl Advances {
 
 fn cells(ch: char) -> f32 {
     use unicode_width::UnicodeWidthChar as _;
-    if ch.width() == Some(2) {
+    if is_wide(ch) {
         2.0
     } else if ch.width() == Some(0) {
         0.0
     } else {
         1.0
     }
+}
+
+fn is_wide(ch: char) -> bool {
+    use unicode_width::UnicodeWidthChar as _;
+    ch.width() == Some(2)
+}
+
+/// Los bytes de cada grafema de `text` que ocupa dos columnas: los que
+/// empiezan con un carácter ancho, como los cuenta vim.
+pub fn wide_graphemes(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
+    // Partir en grafemas es caro: solo si hay alguno ancho, que empiezan en
+    // U+1100.
+    let any = !text.is_ascii() && text.chars().any(|ch| ch >= '\u{1100}' && is_wide(ch));
+    let graphemes = any.then(|| text.grapheme_indices(true));
+    graphemes
+        .into_iter()
+        .flatten()
+        .filter(|(_, grapheme)| grapheme.chars().next().is_some_and(is_wide))
+        .map(|(start, grapheme)| start..start + grapheme.len())
 }
 
 /// Una línea en pantalla: dónde cae cada carácter y dónde empieza cada fila.

@@ -32,7 +32,7 @@ pub use resolve::{
 pub use style::{
     Advances, Conceal, Decorations, FencePart, FormulaRows, LineKind, LineRows, LineStyle, Lines,
     LinkSpot, MathPlace, MathSpot, Role, Rows, Screen, ScreenLine, ScreenLines, Span, Style,
-    Styles, TextLines, Token, TypedWikilink, is_thematic_break, quote_prefix_len,
+    Styles, TextLines, Token, TypedWikilink, is_thematic_break, quote_prefix_len, wide_graphemes,
 };
 pub use table::{Align, CellPos, CellSpot, Formatted, Step, Table};
 pub use tag::{MAX_TAG_NAME_BYTES, Tag, is_valid_tag_name};
