@@ -22,7 +22,7 @@ const JUST_BEFORE: Duration = Duration::from_millis(499);
 fn editor(
     cx: &mut TestAppContext,
     which_key: Settings,
-) -> (tempfile::TempDir, &mut VisualTestContext) {
+) -> (tempfile::TempDir, Entity<Editor>, &mut VisualTestContext) {
     let dir = tempfile::tempdir().unwrap();
     fs::write(dir.path().join("a.md"), "uno\ndos\n").unwrap();
     let (vault, updates) = Vault::open(dir.path()).unwrap();
@@ -60,7 +60,7 @@ fn editor(
     let (editor, cx) =
         cx.add_window_view(|_, cx| Editor::new(workspace, session, formulas, pane, cx));
     focus(&editor, cx);
-    (dir, cx)
+    (dir, editor, cx)
 }
 
 fn focus(editor: &Entity<Editor>, cx: &mut VisualTestContext) {
@@ -79,7 +79,7 @@ fn shown(cx: &mut VisualTestContext) -> bool {
 #[test]
 fn sale_tras_el_retraso_y_se_va_con_la_siguiente_tecla() {
     let mut cx = TestAppContext::single();
-    let (_dir, cx) = editor(&mut cx, Settings::default());
+    let (_dir, _, cx) = editor(&mut cx, Settings::default());
     cx.simulate_keystrokes("space");
     assert!(!shown(cx));
     cx.executor().advance_clock(JUST_BEFORE);
@@ -94,7 +94,7 @@ fn sale_tras_el_retraso_y_se_va_con_la_siguiente_tecla() {
 #[test]
 fn no_sale_si_el_atajo_se_completa_antes() {
     let mut cx = TestAppContext::single();
-    let (_dir, cx) = editor(&mut cx, Settings::default());
+    let (_dir, _, cx) = editor(&mut cx, Settings::default());
     cx.simulate_keystrokes("g");
     cx.executor().advance_clock(DELAY / 2);
     cx.simulate_keystrokes("g");
@@ -109,8 +109,41 @@ fn apagado_no_sale() {
         enabled: false,
         ..Settings::default()
     };
-    let (_dir, cx) = editor(&mut cx, off);
+    let (_dir, _, cx) = editor(&mut cx, off);
     cx.simulate_keystrokes("space");
     cx.executor().advance_clock(DELAY * 4);
+    assert!(!shown(cx));
+}
+
+/// Con el foco en otra vista, como el panel lateral o la paleta, no sale;
+/// al volver, tampoco, hasta la próxima tecla.
+#[test]
+fn no_sale_con_el_foco_en_otra_vista() {
+    let mut cx = TestAppContext::single();
+    let (_dir, editor, cx) = editor(&mut cx, Settings::default());
+    let elsewhere = cx.update(|_, cx| cx.focus_handle());
+    cx.simulate_keystrokes("space");
+    cx.executor().advance_clock(DELAY);
+    assert!(shown(cx));
+    cx.update(|window, cx| window.focus(&elsewhere, cx));
+    editor.update(cx, |_, cx| cx.notify());
+    assert!(!shown(cx));
+    focus(&editor, cx);
+    editor.update(cx, |_, cx| cx.notify());
+    assert!(!shown(cx));
+    cx.simulate_keystrokes("escape space");
+    cx.executor().advance_clock(DELAY);
+    assert!(shown(cx));
+}
+
+#[test]
+fn no_sale_si_el_foco_se_va_mientras_espera() {
+    let mut cx = TestAppContext::single();
+    let (_dir, editor, cx) = editor(&mut cx, Settings::default());
+    let elsewhere = cx.update(|_, cx| cx.focus_handle());
+    cx.simulate_keystrokes("space");
+    cx.update(|window, cx| window.focus(&elsewhere, cx));
+    cx.executor().advance_clock(DELAY);
+    editor.update(cx, |_, cx| cx.notify());
     assert!(!shown(cx));
 }

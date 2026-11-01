@@ -4,7 +4,8 @@
 
 use gpui_kit::{
     Anchor, AnyElement, App, Context, Div, InteractiveElement as _, IntoElement as _,
-    ParentElement as _, Styled as _, Task, anchored, deferred, div, prelude::FluentBuilder as _,
+    ParentElement as _, Styled as _, Task, Window, anchored, deferred, div,
+    prelude::FluentBuilder as _,
 };
 use metalmind_keymap::NextKey;
 
@@ -54,8 +55,12 @@ impl Editor {
     }
 
     /// Lo que muestra el panel en este frame. Un clic o un comando también
-    /// cancelan el prefijo: entonces ya no hay nada que mostrar.
-    pub(super) fn next_keys(&self, cx: &App) -> Option<NextKeys> {
+    /// cancelan el prefijo: entonces ya no hay nada que mostrar. Si el foco
+    /// se fue a otra vista, se esconde hasta la próxima tecla del editor.
+    pub(super) fn next_keys(&mut self, window: &Window, cx: &App) -> Option<NextKeys> {
+        if !self.focus_handle.is_focused(window) {
+            self.which_key = WhichKey::Hidden;
+        }
         if !matches!(self.which_key, WhichKey::Shown) {
             return None;
         }

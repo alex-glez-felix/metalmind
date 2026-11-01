@@ -364,7 +364,7 @@ impl Render for Editor {
         let status = self.status(cx).map(|status| status_bar(status, &theme));
         let header = self.path_header(&theme, cx);
         let which_key = self
-            .next_keys(cx)
+            .next_keys(window, cx)
             .map(|next_keys| which_key_panel(next_keys, &theme));
         div()
             .key_context(self.key_context())

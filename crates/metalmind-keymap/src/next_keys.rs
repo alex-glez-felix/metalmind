@@ -40,6 +40,14 @@ impl Keymap {
             })
             .filter(|(rest, _)| seen.insert(*rest))
             .collect();
+        // Como en `lookup` del motor, un atajo que es el inicio de otro más
+        // largo nunca se ejecuta: espera la tecla siguiente.
+        let longer = reachable.clone();
+        reachable.retain(|(rest, _)| {
+            !longer
+                .iter()
+                .any(|(other, _)| other.len() > rest.len() && other.starts_with(rest))
+        });
         reachable.reverse();
         group_by_action(reachable)
     }
@@ -115,6 +123,30 @@ mod tests {
         );
         assert_eq!(keymap.next_keys(Mode::Insert, &[Key::Char(' ')]), []);
         assert_eq!(keymap.next_keys(Mode::Normal, &[]), []);
+    }
+
+    #[test]
+    fn no_sale_un_atajo_que_el_inicio_de_otro_tapa() {
+        let mut bindings = Keymap::default().bindings().to_vec();
+        let gz = vec![Key::Char('g'), Key::Char('Z'), Key::Char('Z')];
+        bindings.extend([
+            Binding {
+                keys: Keys::Vim(VimContext::Normal, gz[..2].to_vec()),
+                action: Command::OpenFinder.into(),
+            },
+            Binding {
+                keys: Keys::Vim(VimContext::Normal, gz.clone()),
+                action: Command::OpenTextSearch.into(),
+            },
+        ]);
+        let keymap = Keymap::from_bindings(bindings);
+        let next = next(&keymap, Mode::Normal, &[Key::Char('g')]);
+        assert!(next.contains(&(keys(&["Z Z"]), "workspace::open_text_search")));
+        assert!(
+            next.iter()
+                .all(|(_, name)| *name != "workspace::open_finder"),
+            "{next:?}"
+        );
     }
 
     #[test]
