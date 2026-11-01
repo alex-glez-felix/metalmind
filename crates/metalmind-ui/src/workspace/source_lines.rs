@@ -18,6 +18,12 @@ pub struct SourceLines {
 }
 
 impl SourceLines {
+    /// Solo la línea `line`, como con el cursor en ella fuera de Visual.
+    #[cfg(test)]
+    pub fn only(line: usize) -> Self {
+        Self { lines: line..=line }
+    }
+
     #[must_use]
     pub fn contains(&self, line: usize) -> bool {
         self.lines.contains(&line)

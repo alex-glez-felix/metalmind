@@ -3,10 +3,10 @@
 
 use std::ops::Range;
 
-use gpui_kit::{Bounds, Pixels, SharedString, Window, point, px, size};
+use gpui_kit::{Bounds, Pixels, SharedString, point, px, size};
 use metalmind_syntax::{MathPlace, MathSpot};
 
-use super::run_slicer::RunSlicer;
+use super::shaped_slicer::ShapedSlicer;
 use super::{Line, MathFrame, Measured, RowBox};
 use crate::editor::layout::{FormulaError, LaidLine, LaidRow, Piece};
 use crate::editor::replaced::Part;
@@ -31,8 +31,7 @@ impl Builder<'_, '_> {
         row: &RowBox,
         split: &[Part],
         measured: &[Measured<'_>],
-        runs: &mut RunSlicer<'_>,
-        window: &Window,
+        slicer: &mut ShapedSlicer<'_>,
     ) {
         let mut laid = LaidRow {
             source: row.source.clone(),
@@ -47,7 +46,7 @@ impl Builder<'_, '_> {
                 Part::Text(range) => {
                     let range = range.start.max(start)..range.end.min(end);
                     if !range.is_empty() || (range.start == start && start == end) {
-                        x = self.text(&mut laid, range, x, runs, window);
+                        x = text(&mut laid, range, x, slicer);
                     }
                 }
                 Part::Formula { spot, source } => {
@@ -59,29 +58,6 @@ impl Builder<'_, '_> {
             }
         }
         self.laid.rows.push(laid);
-    }
-
-    fn text(
-        &self,
-        row: &mut LaidRow,
-        range: Range<usize>,
-        x: Pixels,
-        runs: &mut RunSlicer<'_>,
-        window: &Window,
-    ) -> Pixels {
-        let text = SharedString::from(self.line.text[range.clone()].to_owned());
-        let runs = runs.take(range.clone());
-        let shaped = window
-            .text_system()
-            .shape_line(text, self.laid.font_size, &runs, None);
-        let width = shaped.width();
-        row.pieces.push(Piece {
-            source: range,
-            x,
-            width,
-            text: Some(shaped),
-        });
-        x + width
     }
 
     /// Una fórmula en lugar de su fuente: alineada con el texto de su fila
@@ -159,6 +135,30 @@ impl Builder<'_, '_> {
             .collect();
         self.laid.errors.extend(errors);
     }
+}
+
+/// El texto de `range` en la fila, desde `x`; devuelve dónde termina.
+fn text(
+    row: &mut LaidRow,
+    range: Range<usize>,
+    x: Pixels,
+    slicer: &mut ShapedSlicer<'_>,
+) -> Pixels {
+    let shaped = match slicer.take(range.clone()) {
+        Ok(shaped) => shaped,
+        Err(error) => {
+            log::error!("{error}");
+            return x;
+        }
+    };
+    let width = shaped.width();
+    row.pieces.push(Piece {
+        source: range,
+        x,
+        width,
+        text: Some(shaped),
+    });
+    x + width
 }
 
 /// Centrada en `area`; si no cabe, desde el borde izquierdo, como el texto

@@ -2,13 +2,14 @@
 //! color, peso, cursiva, tachado y fondo, todo del tema.
 
 use gpui_kit::{Font, FontStyle, FontWeight, Hsla, Pixels, StrikethroughStyle, TextRun};
+use metalmind_config::SyntaxColors;
 use metalmind_syntax::{Decorations, LineKind, Role, Style, Token};
 
 use super::markdown::Run;
-use crate::theme::Theme;
+use crate::theme::{Gpui, Theme};
 
-/// La letra de las líneas del editor: la del texto, la de cada heading y
-/// el peso de la negrita.
+/// La letra de las líneas del editor (la del texto, la de cada heading y el
+/// peso de la negrita) y sus tintas.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Faces {
     pub font: Font,
@@ -16,6 +17,16 @@ pub struct Faces {
     pub headings: [(f32, FontWeight); 6],
     pub normal: FontWeight,
     pub strong: FontWeight,
+    inks: Inks,
+}
+
+/// Los colores del texto de una nota y el grueso de su tachado.
+#[derive(Clone, Debug, PartialEq)]
+struct Inks {
+    syntax: SyntaxColors<Gpui>,
+    foreground: Hsla,
+    error: Hsla,
+    strike: Pixels,
 }
 
 impl Faces {
@@ -26,6 +37,12 @@ impl Faces {
             headings: theme.headings,
             normal: theme.text.normal,
             strong: theme.text.strong,
+            inks: Inks {
+                syntax: theme.syntax,
+                foreground: theme.ui.foreground,
+                error: theme.ui.error,
+                strike: theme.stroke.text_line,
+            },
         }
     }
 
@@ -67,13 +84,13 @@ pub fn text_runs(
     kind: Option<LineKind>,
     faces: &Faces,
     weight: FontWeight,
-    theme: &Theme,
 ) -> Vec<TextRun> {
-    let syntax = &theme.syntax;
+    let inks = &faces.inks;
+    let syntax = &inks.syntax;
     runs.iter()
         .map(|run| {
             let style = run.style;
-            let color = ink(run, kind, theme);
+            let color = ink(run, kind, inks);
             let has = |decoration| style.decorations.contains(decoration);
             let background = if has(Decorations::CODE) {
                 Some(syntax.code_background)
@@ -89,7 +106,7 @@ pub fn text_runs(
                 background_color: background,
                 underline: None,
                 strikethrough: has(Decorations::STRIKE).then_some(StrikethroughStyle {
-                    thickness: theme.stroke.text_line,
+                    thickness: inks.strike,
                     color: Some(color),
                 }),
             }
@@ -97,18 +114,18 @@ pub fn text_runs(
         .collect()
 }
 
-fn ink(run: &Run, kind: Option<LineKind>, theme: &Theme) -> Hsla {
-    let syntax = &theme.syntax;
+fn ink(run: &Run, kind: Option<LineKind>, inks: &Inks) -> Hsla {
+    let syntax = &inks.syntax;
     let style = run.style;
     if run.failed {
-        return theme.ui.error;
+        return inks.error;
     }
     match style.role {
         Role::Text => match kind {
             Some(LineKind::Heading(_)) => syntax.heading,
             _ if style.decorations.contains(Decorations::STRONG) => syntax.bold,
             _ if style.decorations.contains(Decorations::EMPHASIS) => syntax.italic,
-            _ => theme.ui.foreground,
+            _ => inks.foreground,
         },
         Role::Markup => syntax.markup,
         Role::Heading => syntax.heading,

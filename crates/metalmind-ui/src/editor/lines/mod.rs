@@ -4,15 +4,17 @@
 
 use std::ops::Range;
 
-use gpui_kit::{Bounds, Font, PaintQuad, Pixels, Window, fill, point, px, size};
+use gpui_kit::{Bounds, Font, PaintQuad, Pixels, SharedString, Window, fill, point, px, size};
 use metalmind_syntax::{LineKind, LineStyle, MathSpot};
 use metalmind_vim::LineHeights as _;
 
 mod builder;
-mod run_slicer;
+mod shaped_slicer;
+#[cfg(test)]
+mod tests;
 
 use self::builder::{Builder, scaled};
-use self::run_slicer::RunSlicer;
+use self::shaped_slicer::ShapedSlicer;
 use super::layout::{LaidLine, PlacedFormula, Viewport};
 use super::links::Links;
 use super::markdown::runs;
@@ -200,7 +202,7 @@ impl Line<'_> {
             |spot| links.resolves(spot),
             &failed,
         );
-        let runs = text_runs(&runs, kind, &faces, weight, theme);
+        let runs = text_runs(&runs, kind, &faces, weight);
         let split = if self.show_source {
             vec![Part::Text(0..self.text.len())]
         } else {
@@ -226,9 +228,17 @@ impl Line<'_> {
             keys: Vec::new(),
             baseline: scaled(math.geometry, font_size / typeface.size),
         };
-        let mut slicer = RunSlicer::new(&runs);
+        // La misma forma con que el motor partió la línea: en el mismo frame,
+        // GPUI ya la tiene en su caché.
+        let shaped = window.text_system().shape_line(
+            SharedString::from(self.text.to_owned()),
+            font_size,
+            &runs,
+            None,
+        );
+        let mut slicer = ShapedSlicer::new(&shaped);
         for row in &self.rows {
-            builder.row(row, &split, &measured, &mut slicer, window);
+            builder.row(row, &split, &measured, &mut slicer);
         }
         for (spot, formula) in &measured {
             match formula {
