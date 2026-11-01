@@ -61,6 +61,9 @@ enum Step {
     Settle,
     /// Deja el ratón sobre una mark hasta que sale su tooltip.
     HoverMark(MarkAt),
+    /// Espera quieto a que salga lo que aparece tras una demora, como el
+    /// panel de las teclas que siguen a un prefijo.
+    AwaitDelayed(&'static str),
     /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
     SearchAfterCjk,
     /// Lleva la línea de fórmulas rotas de [`vault::LONG_FORMULAS`] al
@@ -86,6 +89,8 @@ enum MarkAt {
 }
 
 /// Cada pantalla parte de cómo dejó la ventana la anterior.
+const WHICH_KEY: Step = Step::AwaitDelayed("el panel de las teclas que siguen");
+
 const SCENES: &[(&str, &[Step])] = &[
     ("editor", &[]),
     ("editor-final", &[Step::Keys("G")]),
@@ -708,6 +713,20 @@ const SCENES: &[(&str, &[Step])] = &[
     ("tags-buffer-volver", &[Step::Keys("<Space>r")]),
     ("tags-buffer-aplicado", &[Step::Keys("<CR>")]),
     ("tags-buffer-deshecho", &[Step::Keys("<Space>z")]),
+    // El panel de las teclas que siguen a un prefijo (#86), que sale tras
+    // medio segundo sin teclear: `space`, `g` con sus tres columnas,
+    // `ctrl-w` con las dos teclas de cada acción juntas y `space` en el
+    // más angosto de cuatro paneles.
+    (
+        "which-key-space",
+        &[Step::Keys("<Esc><Esc><C-w>o<Space>"), WHICH_KEY],
+    ),
+    ("which-key-g", &[Step::Keys("<Esc>g"), WHICH_KEY]),
+    ("which-key-ctrl-w", &[Step::Keys("<Esc><C-w>"), WHICH_KEY]),
+    (
+        "which-key-angosto",
+        &[Step::Keys("<Esc><C-w>v<C-w>v<C-w>v<Space>"), WHICH_KEY],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -789,6 +808,17 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                     wait::until("el tooltip de la mark", TIMEOUT, || {
                         if window.pixels().2 == still.rgb {
                             Err("sin tooltip".to_owned())
+                        } else {
+                            Ok(())
+                        }
+                    });
+                }
+                Step::AwaitDelayed(what) => {
+                    let still = settle(&window, &frames, seen, None);
+                    seen = frame_count(&frames);
+                    wait::until(what, TIMEOUT, || {
+                        if window.pixels().2 == still.rgb {
+                            Err("no salió".to_owned())
                         } else {
                             Ok(())
                         }

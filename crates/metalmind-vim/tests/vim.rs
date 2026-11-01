@@ -983,6 +983,27 @@ fn reports_what_each_key_did() {
     assert_eq!(feed(Key::Char('x')), KeyOutcome::Inserted);
 }
 
+/// Lo que espera la siguiente tecla de un atajo, sin el count; un count,
+/// `"a` o `f` no son el inicio de ninguno.
+#[test]
+fn pending_keys_are_the_start_of_a_binding() {
+    use metalmind_vim::Key;
+
+    let mut editor = support::Editor::new("|ab");
+    editor.key(Key::Char('2'));
+    editor.key(Key::Char('g'));
+    assert_eq!(editor.vim.pending_keys(), [Key::Char('g')]);
+    editor.key(Key::Escape);
+    assert_eq!(editor.vim.pending_keys(), []);
+    editor.key(Key::Char('d'));
+    editor.key(Key::Char('i'));
+    assert_eq!(editor.vim.pending_keys(), [Key::Char('i')]);
+    editor.key(Key::Char('w'));
+    assert_eq!(editor.vim.pending_keys(), []);
+    editor.key(Key::Char('f'));
+    assert_eq!(editor.vim.pending_keys(), []);
+}
+
 #[test]
 fn actions_run_by_name() {
     use metalmind_vim::Action;

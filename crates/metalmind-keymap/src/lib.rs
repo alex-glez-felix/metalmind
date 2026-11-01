@@ -15,12 +15,14 @@ mod defaults;
 mod keymap;
 mod keystroke;
 mod named;
+mod next_keys;
 mod view;
 
 pub use action::{Action, Invocation, Owner, UnknownAction};
 pub use command::Command;
 pub use keymap::{Binding, Keymap, Keys};
 pub use keystroke::{KeyName, Keystroke};
+pub use next_keys::NextKey;
 pub use view::{
     ChangePreviewAction, ContextAction, EditorAction, ListAction, PanelAction, PickerAction, View,
     context,

@@ -289,6 +289,12 @@ color_group! {
         toast_hint,
         /// El fondo de un botón de un toast, como "Deshacer", bajo el ratón.
         toast_button_hover,
+        /// El panel de las teclas que siguen a un prefijo como `space`: su
+        /// fondo, su borde, cada tecla y lo ya tecleado arriba.
+        which_key_background,
+        which_key_border,
+        which_key_key,
+        which_key_prefix,
     }
 }
 

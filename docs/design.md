@@ -59,6 +59,10 @@ Lo que decide cada componente queda por escribir: cada sección se llena cuando 
 
 Decidido el 2026-10-27 ([#193](https://github.com/alex-glez-felix/metalmind/issues/193)): un pop-up centrado arriba, igual que la paleta y el finder (los mismos tokens `picker_*`, el mismo borde y el mismo radio). Arriba lo escrito, tras un `:` tenue, que se parte en filas en vez de recortarse; debajo, solo si hay algo que ofrecer, la lista con las filas del picker: el historial con la línea vacía, los nombres de comando al escribir uno (con la acción que corre contra el borde derecho, donde la paleta pone el atajo) o el argumento. La fila elegida muestra la tecla que la acepta (`tab`), y un clic la acepta. `/` y `?` se quedan en la barra de estado, como en vim, para no tapar lo que resaltan. El porqué y las teclas, en [03](research/03-core-architecture.md) ("Línea de `:`").
 
+### Panel de teclas (which-key)
+
+Propuesto el 2026-11-01 en [#86](https://github.com/alex-glez-felix/metalmind/issues/86), hasta que se decida su estilo: tras el inicio de un atajo en el editor y `which_key.delay_ms` sin teclear, un recuadro abajo a la derecha del panel con el foco, sobre el texto y sin tapar la barra de estado: arriba lo tecleado, tenue; debajo, en columnas de `which_key_rows` filas, cada tecla en el color de acento contra la derecha de su columna y su acción como en la paleta (`workspace: open finder`), sin el espacio de nombres solo si todas las filas lo comparten (tras `d i`, `inner word` y no `vim: inner word` en cada fila). Las teclas de una misma acción van juntas (`v / ctrl-v`). Sin animación: aparece entero y se va con la siguiente tecla. Es para aprender el teclado, así que no tiene clics: lo que muestra ya está en la paleta con su tecla.
+
 ### Menú contextual
 
 *Por decidir.*

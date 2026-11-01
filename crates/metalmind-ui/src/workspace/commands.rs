@@ -210,6 +210,7 @@ impl Workspace {
                 .toggle_markdown(Toggle::AlignTablesOnLeave, |markdown| {
                     &mut markdown.align_tables_on_leave
                 })),
+            Command::ToggleWhichKey => Ok(self.toggle_which_key()),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),

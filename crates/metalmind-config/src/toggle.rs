@@ -14,6 +14,8 @@ pub enum Toggle {
     IndentListChildren,
     /// `markdown.align_tables_on_leave`
     AlignTablesOnLeave,
+    /// `which_key.enabled`
+    WhichKey,
 }
 
 impl Toggle {
@@ -25,6 +27,7 @@ impl Toggle {
             Self::ContinueLists => ["markdown", "continue_lists"],
             Self::IndentListChildren => ["markdown", "indent_list_children"],
             Self::AlignTablesOnLeave => ["markdown", "align_tables_on_leave"],
+            Self::WhichKey => ["which_key", "enabled"],
         }
     }
 }
@@ -51,14 +54,16 @@ mod tests {
             Toggle::ContinueLists => settings.markdown.continue_lists,
             Toggle::IndentListChildren => settings.markdown.indent_list_children,
             Toggle::AlignTablesOnLeave => settings.markdown.align_tables_on_leave,
+            Toggle::WhichKey => settings.which_key.enabled,
         }
     }
 
-    const ALL: [Toggle; 4] = [
+    const ALL: [Toggle; 5] = [
         Toggle::Wrap,
         Toggle::ContinueLists,
         Toggle::IndentListChildren,
         Toggle::AlignTablesOnLeave,
+        Toggle::WhichKey,
     ];
 
     #[test]

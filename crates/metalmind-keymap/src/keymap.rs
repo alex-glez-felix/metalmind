@@ -64,6 +64,11 @@ impl Default for Keymap {
 }
 
 impl Keymap {
+    #[cfg(test)]
+    pub(crate) fn from_bindings(bindings: Vec<Binding>) -> Self {
+        Self { bindings }
+    }
+
     #[must_use]
     pub fn bindings(&self) -> &[Binding] {
         &self.bindings

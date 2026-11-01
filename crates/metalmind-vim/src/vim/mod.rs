@@ -185,6 +185,13 @@ impl Vim {
         self.mode
     }
 
+    /// Lo tecleado que es el inicio de algún atajo de la tabla, como el
+    /// `space` de `space f`; sin el count.
+    #[must_use]
+    pub fn pending_keys(&self) -> &[Key] {
+        &self.pending
+    }
+
     /// En Insert sobre un bloque, lo escrito hasta ahora en la primera
     /// línea del primero: lo que `<Esc>` repetirá en las demás, medido como
     /// al repetirlo. Vacío si se borró de más. `None` fuera de esa pasada.

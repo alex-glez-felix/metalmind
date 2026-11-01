@@ -69,6 +69,9 @@ named_actions! {
         /// Enciende o apaga `markdown.align_tables_on_leave` y lo guarda:
         /// salir de Insert tras escribir en una tabla la alinea.
         ToggleAlignTablesOnLeave = "editor::toggle_align_tables_on_leave",
+        /// Enciende o apaga `which_key.enabled` y lo guarda: tras un prefijo
+        /// como `space`, un panel con las teclas que siguen.
+        ToggleWhichKey = "workspace::toggle_which_key",
         /// `space f`: el finder de notas.
         OpenFinder = "workspace::open_finder",
         /// `space /`: la búsqueda de texto en las notas del vault.

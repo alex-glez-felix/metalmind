@@ -306,6 +306,16 @@ metric_group! {
         toast_gap: Length,
         toast_padding_x: Length,
         toast_padding_y: Length,
+        /// Las filas de cada columna del panel de las teclas que siguen a un
+        /// prefijo; con más teclas, otra columna al lado.
+        which_key_rows: Count,
+        /// Entre el panel de las teclas y los bordes de abajo y derecho del
+        /// panel de edición.
+        which_key_margin: Length,
+        which_key_padding_x: Length,
+        which_key_padding_y: Length,
+        /// Entre una tecla y su acción, y entre las columnas.
+        which_key_gap: Length,
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
         gutter_mark_columns: MarkColumns,

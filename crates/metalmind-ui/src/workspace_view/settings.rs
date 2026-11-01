@@ -42,6 +42,7 @@ fn label(toggle: Toggle) -> &'static str {
         Toggle::ContinueLists => "Continuar las listas",
         Toggle::IndentListChildren => "Mover los hijos de un ítem con >> y <<",
         Toggle::AlignTablesOnLeave => "Alinear la tabla al salir de Insert",
+        Toggle::WhichKey => "Mostrar las teclas que siguen a un prefijo",
     }
 }
 
