@@ -1,5 +1,6 @@
-//! La vista de tags del panel lateral, sin GPUI (05 §3): el [`TagTree`] del
-//! vault aplanado en filas, con lo que está abierto y lo seleccionado.
+//! La vista de tags del panel lateral, sin GPUI (05 §3): las vistas
+//! guardadas (06 §10) y el [`TagTree`] del vault aplanado en filas, con lo
+//! que está abierto y lo seleccionado.
 //!
 //! Un tag con varios padres sale bajo cada uno, así que una fila se
 //! identifica por su camino desde la raíz ([`RowId`]), no por su tag: abrir
@@ -9,14 +10,18 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use metalmind_config::SavedView;
 use metalmind_vault::tags::{Scope, ScopeFilter, TagColor, TagIcon, TagKey, TagTree, Tags};
 use metalmind_vault::{VaultChange, VaultPath};
 
+use crate::note_list::query_notes;
 use crate::panel::Outline;
 
 /// Dónde está una fila: el camino de tags desde la raíz hasta ella.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RowId {
+    /// Una vista guardada, por su nombre.
+    View(String),
     Tag(Vec<TagKey>),
     /// Una nota bajo el último tag del camino.
     Note(Vec<TagKey>, VaultPath),
@@ -35,6 +40,12 @@ pub struct Row {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RowKind {
+    /// Arriba de los tags; se abre en la lista, no aquí.
+    View {
+        view: SavedView,
+        /// Sus notas dentro del focus.
+        count: usize,
+    },
     Tag {
         /// La forma establecida (05 §6).
         name: String,
@@ -60,7 +71,16 @@ impl Row {
     pub fn tag_name(&self) -> Option<&str> {
         match &self.kind {
             RowKind::Tag { name, .. } => Some(name),
-            RowKind::Note | RowKind::Inbox { .. } => None,
+            RowKind::View { .. } | RowKind::Note | RowKind::Inbox { .. } => None,
+        }
+    }
+
+    /// La vista guardada de la fila, si es una.
+    #[must_use]
+    pub fn view(&self) -> Option<&SavedView> {
+        match &self.kind {
+            RowKind::View { view, .. } => Some(view),
+            _ => None,
         }
     }
 
@@ -69,7 +89,7 @@ impl Row {
     pub fn note(&self) -> Option<&VaultPath> {
         match &self.id {
             RowId::Note(_, path) | RowId::InboxNote(path) => Some(path),
-            RowId::Tag(_) | RowId::Inbox => None,
+            RowId::View(_) | RowId::Tag(_) | RowId::Inbox => None,
         }
     }
 
@@ -77,7 +97,7 @@ impl Row {
     pub fn is_expanded(&self) -> bool {
         match self.kind {
             RowKind::Tag { expanded, .. } | RowKind::Inbox { expanded, .. } => expanded,
-            RowKind::Note => false,
+            RowKind::View { .. } | RowKind::Note => false,
         }
     }
 
@@ -85,7 +105,7 @@ impl Row {
         match self.kind {
             RowKind::Tag { expandable, .. } => expandable,
             RowKind::Inbox { count, .. } => count > 0,
-            RowKind::Note => false,
+            RowKind::View { .. } | RowKind::Note => false,
         }
     }
 }
@@ -98,6 +118,10 @@ pub struct TagOutline {
     pending: Option<Arc<Tags>>,
     /// El focus: solo sus tags, con el conteo dentro de él (05 §3).
     scope: Scope,
+    views: Arc<[SavedView]>,
+    /// Las notas de cada vista dentro del focus, en su orden: se cuentan al
+    /// rehacer el árbol, no al abrir o cerrar un tag.
+    view_counts: Vec<usize>,
     expanded: BTreeSet<RowId>,
     selected: Option<RowId>,
     rows: Vec<Row>,
@@ -107,14 +131,16 @@ pub struct TagOutline {
 impl TagOutline {
     /// Sin filas hasta [`TagOutline::refresh`]: armar el árbol cuesta lo que
     /// el vault, y la vista puede no mostrarse nunca. Después, todo cerrado
-    /// y la primera fila seleccionada.
+    /// y la primera fila seleccionada, que es la primera vista si hay.
     #[must_use]
-    pub fn new(tags: Arc<Tags>) -> Self {
+    pub fn new(tags: Arc<Tags>, views: Arc<[SavedView]>) -> Self {
         Self {
             tags: Arc::clone(&tags),
             tree: TagTree::default(),
             pending: Some(tags),
             scope: Scope::default(),
+            views,
+            view_counts: Vec::new(),
             expanded: BTreeSet::new(),
             selected: None,
             rows: Vec::new(),
@@ -158,6 +184,15 @@ impl TagOutline {
         }
     }
 
+    /// Otras vistas guardadas; como con otros tags, las filas cambian en
+    /// [`TagOutline::refresh`].
+    pub fn set_views(&mut self, views: Arc<[SavedView]>) {
+        self.views = views;
+        if self.pending.is_none() {
+            self.pending = Some(Arc::clone(&self.tags));
+        }
+    }
+
     /// Tras un lote del watcher, antes de sus tags: la nota seleccionada
     /// sigue a sus renombres, así su fila sigue elegida aunque cambie de
     /// lugar.
@@ -181,7 +216,18 @@ impl TagOutline {
         let Some(tags) = self.pending.take() else {
             return;
         };
-        self.tree = tags.tree(&self.scope.filter(&tags));
+        let scope = self.scope.filter(&tags);
+        self.tree = tags.tree(&scope);
+        self.view_counts = self
+            .views
+            .iter()
+            .map(|view| {
+                query_notes(&view.query, &tags)
+                    .into_iter()
+                    .filter(|note| scope.contains(note))
+                    .count()
+            })
+            .collect();
         self.tags = tags;
         let previous_row = self.selected_row;
         self.rebuild();
@@ -193,6 +239,19 @@ impl TagOutline {
 
     fn rebuild(&mut self) {
         let mut rows = Vec::with_capacity(self.rows.len());
+        rows.extend(
+            self.views
+                .iter()
+                .zip(&self.view_counts)
+                .map(|(view, &count)| Row {
+                    id: RowId::View(view.name.clone()),
+                    depth: 0,
+                    kind: RowKind::View {
+                        view: view.clone(),
+                        count,
+                    },
+                }),
+        );
         let scope = self.scope.filter(&self.tags);
         for root in self.tree.roots() {
             self.push_tag(std::slice::from_ref(root), &scope, &mut rows);

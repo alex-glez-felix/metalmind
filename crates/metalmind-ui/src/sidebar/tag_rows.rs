@@ -1,5 +1,6 @@
-//! Cómo se ve la vista de tags del panel (05 §3): cada tag con su ícono,
-//! su forma establecida y su conteo; sus notas debajo, y el buzón al final.
+//! Cómo se ve la vista de tags del panel (05 §3): arriba las vistas
+//! guardadas con su consulta; cada tag con su ícono, su forma establecida y
+//! su conteo; sus notas debajo, y el buzón al final.
 
 use std::ops::Range;
 
@@ -66,6 +67,16 @@ fn tag_row(
 ) -> AnyElement {
     let frame = row_frame(at, row.depth, marks, theme, cx).text_color(theme.ui.panel_foreground);
     match &row.kind {
+        RowKind::View { view, count } => frame
+            .child(icons::arrow(None, theme))
+            .child(icons::icon(Icon::Bookmark, theme.ui.panel_muted, theme))
+            .child(div().min_w_0().truncate().child(view.name.clone()))
+            .child(
+                label(&view.query)
+                    .text_size(theme.ui_small_font_size)
+                    .text_color(theme.ui.panel_muted),
+            )
+            .child(count_label(*count, theme)),
         RowKind::Tag {
             name,
             count,

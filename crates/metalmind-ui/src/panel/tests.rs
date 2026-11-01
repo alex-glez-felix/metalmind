@@ -24,7 +24,7 @@ fn panel() -> Panel {
     let tree = FileTree::with_expanded(Arc::new(index), [path("diario")]);
     Panel::new(
         tree,
-        TagOutline::new(Arc::new(tags)),
+        TagOutline::new(Arc::new(tags), Arc::default()),
         true,
         PanelView::Folders,
     )
@@ -185,7 +185,7 @@ fn renombrar_borra_por_grafema() {
     let tree = FileTree::with_expanded(Arc::new(index), []);
     let mut panel = Panel::new(
         tree,
-        TagOutline::new(Arc::new(tags)),
+        TagOutline::new(Arc::new(tags), Arc::default()),
         true,
         PanelView::Folders,
     );
@@ -386,7 +386,12 @@ fn tags_panel() -> Panel {
     let read = |note: &VaultPath| (note.as_str() == "a.md").then(|| "#rust".to_owned());
     let tags = Tags::build(path("tags"), &index, read);
     let tree = FileTree::new(Arc::new(index));
-    Panel::new(tree, TagOutline::new(Arc::new(tags)), true, PanelView::Tags)
+    Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags), Arc::default()),
+        true,
+        PanelView::Tags,
+    )
 }
 
 /// Como en el árbol de carpetas: el clic abre o cierra un tag y abre una
@@ -547,7 +552,7 @@ fn el_arbol_de_tags_se_arma_al_mostrarse() {
     let tree = FileTree::new(Arc::new(index));
     let mut panel = Panel::new(
         tree,
-        TagOutline::new(Arc::new(tags)),
+        TagOutline::new(Arc::new(tags), Arc::default()),
         true,
         PanelView::Folders,
     );

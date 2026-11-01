@@ -18,7 +18,7 @@ mod views;
 
 pub use self::cards::{Card, read_all};
 pub use self::model::NoteList;
-pub use self::source::{FolderError, ListSource, folder_to_show};
+pub use self::source::{FolderError, ListSource, folder_to_show, query_notes};
 pub use self::tagging::tag_edit;
 pub use self::view::{NoteListEvent, NoteListView};
 pub use self::view_name::{ViewNameProblem, ViewNamePurpose, ViewNameQuestion};

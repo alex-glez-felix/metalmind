@@ -9,6 +9,7 @@ mod folders;
 mod links;
 mod selection;
 mod tags;
+mod views;
 
 pub use self::argument::{ArgumentCompletions, ArgumentList, ArgumentSources};
 pub use self::command::CommandCompletions;
@@ -16,3 +17,4 @@ pub use self::folders::{FolderCandidates, FolderCompletions};
 pub use self::links::{LinkCompletions, NoteCandidates};
 pub use self::selection::Selection;
 pub use self::tags::TagCompletions;
+pub use self::views::ViewCompletions;

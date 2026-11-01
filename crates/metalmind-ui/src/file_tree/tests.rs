@@ -321,7 +321,7 @@ fn in_scope(paths: &[&str], focus: &str) -> (Arc<VaultIndex>, Arc<crate::focus::
             .contains(&note.as_str())
             .then(|| "#rust".to_owned())
     });
-    let in_scope = crate::focus::Focus::parse(focus)
+    let in_scope = crate::focus::Focus::parse(focus, &[])
         .unwrap()
         .unwrap()
         .resolve(&index, &tags);

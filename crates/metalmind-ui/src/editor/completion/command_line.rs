@@ -37,11 +37,12 @@ impl Editor {
             return None;
         }
         let session = self.session.read(cx);
-        let (tags, index) = (session.tags(), session.vault().snapshot());
+        let (tags, index, views) = (session.tags(), session.vault().snapshot(), session.views());
         let completion = &mut self.completion;
         let sources = ArgumentSources {
             tags: completion.tag_candidates(tags),
             folders: completion.folder_candidates(index),
+            views,
             names: &mut completion.names,
             paths: &mut completion.paths,
         };

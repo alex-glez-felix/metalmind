@@ -36,7 +36,7 @@ fn vault() -> (tempfile::TempDir, Vault) {
 }
 
 fn focused(vault: &Vault, focus: &str) -> FocusedNote {
-    Focus::parse(focus)
+    Focus::parse(focus, &[])
         .unwrap()
         .unwrap()
         .new_note(&vault.tags())

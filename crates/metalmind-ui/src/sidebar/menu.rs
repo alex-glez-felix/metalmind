@@ -32,8 +32,10 @@ pub enum MenuItem {
     TagParents,
     TagIcon,
     TagTemplate,
-    /// Sobre una carpeta o un tag: ponerlo como focus, o quitarlo si ya es
-    /// el focus.
+    /// Sobre una vista guardada: mostrarla en la lista.
+    ShowInList,
+    /// Sobre una carpeta, un tag o una vista: ponerlo como focus, o
+    /// quitarlo si ya es el focus.
     Focus,
     Unfocus,
 }
@@ -55,6 +57,7 @@ impl MenuItem {
             Self::TagParents => "Padres…",
             Self::TagIcon => "Ícono…",
             Self::TagTemplate => "Plantilla…",
+            Self::ShowInList => "Mostrar en la lista",
             Self::Focus => "Enfocar",
             Self::Unfocus => "Salir del focus",
         }
@@ -79,6 +82,7 @@ impl MenuItem {
             Self::TagParents => PanelAction::EditTagParents,
             Self::TagIcon => PanelAction::SetTagIcon,
             Self::TagTemplate => PanelAction::SetTagTemplate,
+            Self::ShowInList => PanelAction::Open,
             Self::Focus | Self::Unfocus => PanelAction::ToggleFocus,
         }
     }
@@ -102,6 +106,8 @@ enum MenuTarget {
     Entry(VaultPath),
     /// Un tag de la vista de tags, por su forma establecida.
     Tag(String),
+    /// Una vista guardada, por su nombre.
+    View(String),
 }
 
 pub struct ContextMenu {
@@ -151,7 +157,18 @@ impl ContextMenu {
         }
     }
 
-    /// Sobre una carpeta o un tag: enfocarlo, o salir si ya es el focus
+    /// Sobre una vista guardada: mostrarla en la lista. Renombrarla y
+    /// borrarla son de la lista, que la muestra.
+    pub fn on_view(position: Point<Pixels>, view: String) -> Self {
+        Self {
+            position,
+            target: MenuTarget::View(view),
+            groups: vec![&[MenuItem::ShowInList]],
+            selected: 0,
+        }
+    }
+
+    /// Sobre una carpeta, un tag o una vista: enfocarlo, o salir si ya es el focus
     /// (`active`). Va al final, salvo la papelera, que siempre es lo último.
     #[must_use]
     pub fn with_focus(mut self, active: bool) -> Self {
@@ -179,6 +196,9 @@ impl ContextMenu {
     ) -> bool {
         let target = match &mut self.target {
             MenuTarget::Tag(tag) => return selected_tag == Some(tag.as_str()),
+            // Un lote del watcher no cambia las vistas: si cambian, el menú
+            // se cierra.
+            MenuTarget::View(_) => return true,
             MenuTarget::Entry(target) => target,
         };
         for change in changes {
