@@ -1,7 +1,7 @@
 //! Lo que muestra la vista de tags del panel (05 §3): un grafo por
 //! `parents` con el conteo de cada tag, sus notas y, al final, el buzón.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::path::VaultPath;
 use crate::tags::Tags;
@@ -58,6 +58,26 @@ impl TagTree {
     #[must_use]
     pub fn inbox(&self) -> &[VaultPath] {
         &self.inbox
+    }
+
+    /// Cada nodo una vez, en el orden del panel con todo expandido: un tag
+    /// con varios padres sale bajo el primero que lo muestra.
+    #[must_use]
+    pub fn flatten(&self) -> Vec<&TagNode> {
+        let mut seen = HashSet::new();
+        let mut flat = Vec::with_capacity(self.nodes.len());
+        let mut pending: Vec<&TagKey> = self.roots.iter().rev().collect();
+        while let Some(key) = pending.pop() {
+            if !seen.insert(key) {
+                continue;
+            }
+            let Some(node) = self.nodes.get(key) else {
+                continue;
+            };
+            flat.push(node);
+            pending.extend(node.children.iter().rev());
+        }
+        flat
     }
 }
 

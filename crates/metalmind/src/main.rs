@@ -58,6 +58,7 @@ fn run(command: Command, launched: Instant) -> Result<(), CliError> {
     match command {
         Command::Add(args) => commands::add(args),
         Command::Search(args) => commands::search(&args),
+        Command::Tags(args) => commands::tags(&args),
         Command::Open(args) => {
             let clock = gui::frame_clock(launched, None)?;
             let note = commands::open(&args)?;

@@ -75,6 +75,27 @@ Sin tags
     assert!(rust.has_page);
 }
 
+#[rstest]
+#[case::several_parents(fixture(), &["2024", "archivado", "lenguajes", "Rust", "gpui", "ui"])]
+#[case::closed_cycle(
+    Fixture::new(&[
+        ("tags/a.md", "---\nparents: [b]\n---\n"),
+        ("tags/b.md", "---\nparents: [a]\n---\n"),
+        ("n.md", "#b"),
+    ]),
+    &["a", "b"],
+)]
+fn the_flat_panel_has_each_tag_once(#[case] fixture: Fixture, #[case] expected: &[&str]) {
+    let tags = fixture.tags();
+    let tree = tags.tree(&Scope::default().filter(&tags));
+    let names: Vec<&str> = tree
+        .flatten()
+        .iter()
+        .map(|node| node.name.as_str())
+        .collect();
+    assert_eq!(names, expected);
+}
+
 #[test]
 fn in_focus_the_panel_counts_inside_the_scope() {
     let tags = fixture().tags();

@@ -14,7 +14,10 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 - `metalmind add`: crea una nota en el vault con el texto del argumento o de stdin,
   como `slug.md` (`idea-2.md` si ya existe) y sin pisar nunca otra. Sin `-t`, la nota queda
   en el buzón; con `-t`, los tags van al frontmatter.
-- `metalmind search`: búsqueda difusa sobre las rutas del vault.
+- `metalmind search`: búsqueda difusa sobre las rutas del vault, con la consulta de
+  tags de `space f` (`#rust -#archivado parser`, `-#` para el buzón).
+- `metalmind tags`: cada tag con su forma establecida, cuántas notas trae (con sus
+  descendientes, como el panel) y sus padres.
 - `metalmind open`: abre la app en una nota del vault.
 - `--json` en todos, con una forma estable, y códigos de salida fijos. El
   vault sale de `--vault`, `METALMIND_VAULT`, el último abierto o `vault:` de la

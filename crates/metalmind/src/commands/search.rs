@@ -1,10 +1,12 @@
-//! `metalmind search`: por ahora, solo fuzzy sobre las rutas del vault. Los tags
-//! llegan con `TagQuery` (05 §4) y el texto completo con M6.
+//! `metalmind search`: fuzzy sobre las rutas del vault y, como en `space f`,
+//! la consulta de tags (05 §4). El texto completo llega con M6.
 
 use std::borrow::Cow;
+use std::collections::HashSet;
 
 use metalmind_search::{FuzzyMatcher, Query};
-use metalmind_vault::{EntryKind, VaultPath};
+use metalmind_vault::tags::TagQuery;
+use metalmind_vault::{Entry, EntryKind, VaultIndex, VaultOptions, VaultPath, VaultRoot};
 use serde::Serialize;
 
 use super::{CliError, Config, print, root_text};
@@ -23,23 +25,31 @@ struct Hit<'a> {
     kind: EntryKind,
 }
 
-/// Imprime las rutas que coinciden, de la mejor a la peor.
+/// Imprime las rutas que coinciden, de la mejor a la peor. Con tags en la
+/// consulta, solo las notas que la cumplen; el resto de las palabras va al
+/// fuzzy.
 ///
 /// # Errors
-/// Si la consulta tiene tags, que todavía no se buscan, o no hay vault.
+/// Si la consulta tiene un tag inválido o no hay vault.
 pub fn search(args: &SearchArgs) -> Result<(), CliError> {
-    if let Some(tag) = args.query.split_whitespace().find(|word| is_tag_term(word)) {
-        return Err(CliError::Usage(format!(
-            "`{tag}`: la búsqueda por tags todavía no existe; por ahora solo se buscan rutas"
-        )));
+    let parsed = TagQuery::parse(&args.query);
+    if let Some(invalid) = parsed.invalid.first() {
+        return Err(CliError::Usage(format!("`{invalid}` no es un tag válido")));
     }
     let vault = Config::load().vault_root(&args.common)?;
     let index = vault.files();
-    let mut files: Vec<_> = index.files().collect();
+    let mut files: Vec<Entry<'_>> = index.files().collect();
+    let fuzzy = if parsed.query.is_empty() {
+        Cow::Borrowed(args.query.as_str())
+    } else {
+        let tagged = tagged(&vault, &index, &parsed.query);
+        files.retain(|entry| tagged.contains(entry.path));
+        Cow::Owned(parsed.words.join(" "))
+    };
     // El índice no tiene orden; a igual puntaje gana el orden de entrada.
     files.sort_unstable_by(|a, b| a.path.cmp(b.path));
     let candidates: Vec<&str> = files.iter().map(|entry| entry.path.as_str()).collect();
-    let mut matches = FuzzyMatcher::paths().rank(&Query::new(&args.query), &candidates);
+    let mut matches = FuzzyMatcher::paths().rank(&Query::new(&fuzzy), &candidates);
     matches.truncate(args.limit);
     let results: Vec<Hit<'_>> = matches
         .iter()
@@ -61,6 +71,13 @@ pub fn search(args: &SearchArgs) -> Result<(), CliError> {
     })
 }
 
+/// Las notas que cumplen `query`. Solo aquí se leen las notas: una consulta
+/// sin tags no las abre.
+fn tagged(vault: &VaultRoot, index: &VaultIndex, query: &TagQuery) -> HashSet<VaultPath> {
+    let tags = vault.tags(index, VaultOptions::default().tags_folder);
+    query.notes(&tags).into_iter().cloned().collect()
+}
+
 /// Un nombre con saltos de línea o secuencias de escape no puede partir la
 /// lista ni llegar crudo a la terminal: esos caracteres salen como `\n`,
 /// `\u{1b}`, … (`--json` siempre los da exactos).
@@ -79,11 +96,6 @@ fn printable(path: &str) -> Cow<'_, str> {
     }
 }
 
-/// `#tag` y `-#tag` son de la consulta de tags, que no se puede adivinar con fuzzy.
-fn is_tag_term(word: &str) -> bool {
-    word.strip_prefix('-').unwrap_or(word).starts_with('#')
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,14 +105,5 @@ mod tests {
         assert_eq!(printable("a/b ñ.md"), "a/b ñ.md");
         assert_eq!(printable("a\nb.md"), "a\\nb.md");
         assert_eq!(printable("\u{1b}[31mx.md"), "\\u{1b}[31mx.md");
-    }
-
-    #[test]
-    fn reconoce_los_terminos_de_tags() {
-        assert!(is_tag_term("#rust"));
-        assert!(is_tag_term("-#archivado"));
-        assert!(!is_tag_term("rust"));
-        assert!(!is_tag_term("c#"));
-        assert!(!is_tag_term("-x"));
     }
 }

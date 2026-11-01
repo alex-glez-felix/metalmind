@@ -40,8 +40,10 @@ pub struct Cli {
 pub enum Command {
     /// Crea una nota en el vault; sin tags, cae en el buzón
     Add(AddArgs),
-    /// Busca rutas del vault con fuzzy, como `space f`
+    /// Busca rutas del vault con fuzzy y tags, como `space f`
     Search(SearchArgs),
+    /// Lista los tags del vault con su conteo y sus padres, como el panel
+    Tags(TagsArgs),
     /// Abre la app en una nota del vault
     Open(OpenArgs),
 }
@@ -84,12 +86,19 @@ pub struct AddArgs {
 
 #[derive(Debug, Args)]
 pub struct SearchArgs {
-    /// Palabras que tienen que coincidir todas, en orden dentro de la ruta
-    #[arg(value_name = "CONSULTA")]
+    /// Palabras que tienen que coincidir todas, en orden dentro de la ruta;
+    /// `#tag` deja las notas con el tag y `-#tag` quita las que lo tienen
+    #[arg(value_name = "CONSULTA", allow_hyphen_values = true)]
     pub query: String,
     /// Cuántos resultados, del mejor al peor; 50 si falta
     #[arg(short = 'n', long, value_name = "N", default_value_t = DEFAULT_LIMIT, hide_default_value = true)]
     pub limit: usize,
+    #[command(flatten)]
+    pub common: Common,
+}
+
+#[derive(Debug, Args)]
+pub struct TagsArgs {
     #[command(flatten)]
     pub common: Common,
 }
@@ -108,6 +117,7 @@ impl Command {
         match self {
             Self::Add(args) => &args.common,
             Self::Search(args) => &args.common,
+            Self::Tags(args) => &args.common,
             Self::Open(args) => &args.common,
         }
     }
@@ -225,6 +235,7 @@ mod tests {
             &["add", "--json", "--vault", "v", "x"][..],
             &["search", "q", "--vault", "v", "--json"],
             &["open", "--json", "a.md", "--vault=v"],
+            &["tags", "--vault", "v", "--json"],
         ] {
             let cli = parse(args).unwrap();
             let common = cli.command.as_ref().unwrap().common();
@@ -256,6 +267,18 @@ mod tests {
             parse(&["search", "q", "-n", "x"]).unwrap_err(),
             ErrorKind::ValueValidation
         );
+    }
+
+    #[test]
+    fn la_consulta_puede_empezar_con_guion() {
+        for query in ["-#archivado", "-#", "-x"] {
+            let Some(Command::Search(args)) = parse(&["search", query, "-n", "3"]).unwrap().command
+            else {
+                panic!("{query}");
+            };
+            assert_eq!(args.query, query);
+            assert_eq!(args.limit, 3);
+        }
     }
 
     #[test]
@@ -301,6 +324,7 @@ mod tests {
             "Comandos:",
             "add",
             "search",
+            "tags",
             "open",
             "Argumentos:",
             "Opciones:",
@@ -315,7 +339,7 @@ mod tests {
     #[test]
     fn la_ayuda_de_cada_subcomando_esta_en_espanol() {
         let mut command = command();
-        for name in ["add", "search", "open"] {
+        for name in ["add", "search", "tags", "open"] {
             let help = command
                 .find_subcommand_mut(name)
                 .unwrap()
