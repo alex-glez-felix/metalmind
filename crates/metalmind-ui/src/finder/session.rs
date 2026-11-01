@@ -205,13 +205,17 @@ impl VaultSession {
     }
 
     /// Las vistas como quedaron en el archivo; el focus sigue a las suyas
-    /// (ver [`Focus::follow_views`]).
+    /// (ver [`Focus::follow_views`]). Si son las mismas, nadie se entera:
+    /// el panel no rehace su árbol cada vez que se abre `space v`.
     pub fn set_views(
         &mut self,
         views: Vec<SavedView>,
         renamed: Option<(&str, &str)>,
         cx: &mut Context<Self>,
     ) {
+        if renamed.is_none() && *self.views == *views {
+            return;
+        }
         self.views = views.into();
         let followed = self
             .focus
@@ -430,7 +434,14 @@ mod tests {
         let same = session.read_with(&cx, |session, _| session.views().to_vec());
         session.update(&mut cx, |session, cx| session.set_views(same, None, cx));
         cx.run_until_parked();
-        assert_eq!(events.get(), (1, 2), "el focus no cambió");
+        assert_eq!(events.get(), (1, 1), "las mismas vistas no avisan");
+        let gone = Vec::new();
+        session.update(&mut cx, |session, cx| session.set_views(gone, None, cx));
+        cx.run_until_parked();
+        assert_eq!(events.get(), (2, 2));
+        session.read_with(&cx, |session, _| {
+            assert_eq!(session.focus().unwrap().label(), "focus: #rust");
+        });
     }
 
     #[test]
