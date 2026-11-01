@@ -6,7 +6,7 @@ use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 use super::*;
 use crate::actions::bind_keys;
-use crate::tag_change::TagRequest;
+use crate::tag_change::{TagRequest, VaultConfigText};
 
 fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -37,7 +37,10 @@ fn blocked_merge() -> ChangePreview {
         from: "rust".to_owned(),
         into: "go".to_owned(),
     };
-    request.preview(&tags, |_| false).unwrap().unwrap()
+    request
+        .preview(&tags, &VaultConfigText::Missing, |_| false)
+        .unwrap()
+        .unwrap()
 }
 
 /// Un aviso que no cabe en una línea se parte: lo que dice es por qué no se
@@ -86,7 +89,10 @@ fn preview_of(request: &TagRequest, notes: usize, page: &str) -> ChangePreview {
         Some(text.to_owned())
     };
     let tags = Tags::build(path("tags"), &index, read);
-    request.preview(&tags, |_| false).unwrap().unwrap()
+    request
+        .preview(&tags, &VaultConfigText::Missing, |_| false)
+        .unwrap()
+        .unwrap()
 }
 
 fn window(cx: &mut TestAppContext, preview: ChangePreview) -> &mut gpui_kit::VisualTestContext {

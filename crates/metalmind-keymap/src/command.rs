@@ -56,11 +56,18 @@ named_actions! {
         /// `:set {opciones}`: las opciones del panel enfocado, como sus
         /// números de línea.
         Set = "editor::set",
-        /// `:set wrap!`: parte las líneas largas del panel enfocado, o deja
-        /// de partirlas y la vista se corre a lo ancho.
+        /// Parte las líneas largas en todos los paneles, o deja de
+        /// partirlas y la vista se corre a lo ancho, y lo guarda en
+        /// `editor.wrap`; `:set wrap!` cambia solo el panel enfocado.
         ToggleWrap = "editor::toggle_wrap",
-        /// Enciende o apaga `markdown.align_tables_on_leave` mientras dure
-        /// la sesión: salir de Insert tras escribir en una tabla la alinea.
+        /// Enciende o apaga `markdown.continue_lists` y lo guarda: `Enter`,
+        /// `o` y `O` en un ítem de lista abren el siguiente.
+        ToggleContinueLists = "editor::toggle_continue_lists",
+        /// Enciende o apaga `markdown.indent_list_children` y lo guarda:
+        /// `>>` y `<<` en un ítem de lista mueven también sus hijos.
+        ToggleIndentListChildren = "editor::toggle_indent_list_children",
+        /// Enciende o apaga `markdown.align_tables_on_leave` y lo guarda:
+        /// salir de Insert tras escribir en una tabla la alinea.
         ToggleAlignTablesOnLeave = "editor::toggle_align_tables_on_leave",
         /// `space f`: el finder de notas.
         OpenFinder = "workspace::open_finder",

@@ -6,6 +6,7 @@ mod actions;
 mod change_preview;
 mod clipboard;
 mod completion;
+mod config_file;
 mod context_panel;
 mod disk;
 mod document;

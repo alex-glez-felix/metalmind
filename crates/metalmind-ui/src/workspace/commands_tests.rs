@@ -529,8 +529,15 @@ fn set_con_una_opcion_desconocida_avisa() {
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
 }
 
-/// `:set nowrap` y la acción de la paleta cambian solo el panel enfocado, y
-/// un split hereda el suyo.
+fn run_command(session: &mut Session, command: Command) {
+    let invocation = Invocation {
+        action: command.into(),
+        argument: None,
+    };
+    session.effect = session.workspace.run(&invocation, &mut session.clipboard);
+}
+
+/// `:set nowrap` cambia solo el panel enfocado, y un split hereda el suyo.
 #[test]
 fn set_wrap_cambia_el_panel_enfocado_y_lo_hereda_un_split() {
     let mut session = Session::new("uno\n");
@@ -540,11 +547,7 @@ fn set_wrap_cambia_el_panel_enfocado_y_lo_hereda_un_split() {
     session.keys(":vsplit⏎");
     let right = session.pane();
     assert!(!session.view(right).wrap, "el split hereda el de su panel");
-    let toggle = Invocation {
-        action: Command::ToggleWrap.into(),
-        argument: None,
-    };
-    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    session.keys(":set wrap!⏎");
     assert!(session.view(right).wrap);
     session.keys("⌃wh");
     assert!(
@@ -553,8 +556,30 @@ fn set_wrap_cambia_el_panel_enfocado_y_lo_hereda_un_split() {
     );
 }
 
+/// Desde la paleta, `wrap` cambia en todos los paneles, al revés del
+/// enfocado, y la ventana lo guarda.
+#[test]
+fn la_paleta_cambia_wrap_en_todos_los_paneles_y_pide_guardarlo() {
+    let mut session = Session::new("uno\n");
+    session.keys(":vsplit⏎:set nowrap⏎");
+    run_command(&mut session, Command::ToggleWrap);
+    assert_eq!(
+        session.effect,
+        Effect::SaveToggle {
+            toggle: Toggle::Wrap,
+            on: true,
+        }
+    );
+    let left = session.pane();
+    session.keys("⌃wh");
+    assert!(session.view(left).wrap && session.view(session.pane()).wrap);
+    run_command(&mut session, Command::ToggleWrap);
+    assert!(!session.view(left).wrap && !session.view(session.pane()).wrap);
+}
+
 /// En una tabla, `tab` y `shift-tab` saltan de celda; desde la paleta se
-/// enciende alinearla al salir de Insert, y se vuelve a apagar.
+/// enciende alinearla al salir de Insert, se pide guardarlo, y se vuelve a
+/// apagar.
 #[test]
 fn tab_salta_de_celda_y_la_paleta_alinea_al_salir_de_insert() {
     let mut session = Session::new("| a | b |\n|-|-|\n| uno | dos |\n");
@@ -563,28 +588,55 @@ fn tab_salta_de_celda_y_la_paleta_alinea_al_salir_de_insert() {
         session.text(),
         "| a   | b    |\n| --- | ---- |\n| yuno | xdos |\n"
     );
-    let toggle = Invocation {
-        action: Command::ToggleAlignTablesOnLeave.into(),
-        argument: None,
-    };
-    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    run_command(&mut session, Command::ToggleAlignTablesOnLeave);
     assert_eq!(
-        session.workspace.messages().last(),
-        Some(&Message::Info(
-            "Alinear la tabla al salir de Insert: encendido".to_owned()
-        ))
+        session.effect,
+        Effect::SaveToggle {
+            toggle: Toggle::AlignTablesOnLeave,
+            on: true,
+        }
     );
     session.keys("azz⎋");
     assert_eq!(
         session.text(),
         "| a      | b    |\n| ------ | ---- |\n| yzzuno | xdos |\n"
     );
-    session.effect = session.workspace.run(&toggle, &mut session.clipboard);
+    run_command(&mut session, Command::ToggleAlignTablesOnLeave);
     session.keys("ix⎋");
     assert_eq!(
         session.text(),
         "| a      | b    |\n| ------ | ---- |\n| yzxzuno | xdos |\n"
     );
+}
+
+/// Cada opción de `markdown:` tiene su acción en la paleta.
+#[test]
+fn la_paleta_apaga_continuar_las_listas_y_mover_los_hijos() {
+    let mut session = Session::new("- uno\n  - hijo\n");
+    run_command(&mut session, Command::ToggleContinueLists);
+    assert_eq!(
+        session.effect,
+        Effect::SaveToggle {
+            toggle: Toggle::ContinueLists,
+            on: false,
+        }
+    );
+    session.keys("A⏎x⎋");
+    assert_eq!(session.text(), "- uno\nx\n  - hijo\n");
+    session.keys("u");
+    run_command(&mut session, Command::ToggleIndentListChildren);
+    assert_eq!(
+        session.effect,
+        Effect::SaveToggle {
+            toggle: Toggle::IndentListChildren,
+            on: false,
+        }
+    );
+    session.keys("gg>>");
+    assert_eq!(session.text(), "\t- uno\n  - hijo\n", "el hijo no se mueve");
+    run_command(&mut session, Command::ToggleContinueLists);
+    session.keys("A⏎x⎋");
+    assert_eq!(session.text(), "\t- uno\n\t- x\n  - hijo\n");
 }
 
 #[test]

@@ -120,6 +120,7 @@ impl Tags {
                 ..Changes::default()
             },
             notices,
+            rewrite: None,
         })
     }
 

@@ -8,7 +8,8 @@ use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 /// componentes separados por `/`. La cadena vacía es la raíz.
 ///
 /// Nunca sale de la raíz ni apunta a algo oculto: no admite `..`, `.`,
-/// componentes vacíos ni nombres que empiecen con punto.
+/// componentes vacíos ni nombres que empiecen con punto, salvo los archivos
+/// de Metalmind de [`VaultPath::internal`].
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct VaultPath(String);
 
@@ -55,6 +56,34 @@ impl VaultPath {
             return Err(invalid(InvalidReason::Absolute));
         }
         for component in path.split('/') {
+            check_component(component).map_err(invalid)?;
+        }
+        Ok(Self(path.to_owned()))
+    }
+
+    /// Un archivo de Metalmind en su carpeta del vault, `.metalmind/`, como
+    /// su config: como [`VaultPath::new`], pero empieza con esa carpeta. El
+    /// índice nunca la tiene; la usan los cambios que editan esos archivos
+    /// con las notas, para deshacerlos juntos.
+    ///
+    /// # Errors
+    /// Si no empieza con `.metalmind/` o tiene otro componente que
+    /// [`VaultPath::new`] no admite.
+    pub fn internal(path: &str) -> Result<Self, InvalidPath> {
+        let invalid = |reason| InvalidPath {
+            path: path.to_owned(),
+            reason,
+        };
+        if path.starts_with('/') {
+            return Err(invalid(InvalidReason::Absolute));
+        }
+        let Some(rest) = path
+            .strip_prefix(PROGRAM_FOLDER)
+            .and_then(|rest| rest.strip_prefix('/'))
+        else {
+            return Err(invalid(InvalidReason::Hidden));
+        };
+        for component in rest.split('/') {
             check_component(component).map_err(invalid)?;
         }
         Ok(Self(path.to_owned()))
@@ -178,6 +207,9 @@ impl VaultPath {
     }
 }
 
+/// La carpeta de Metalmind en el vault, la única oculta que admite [`VaultPath::internal`].
+const PROGRAM_FOLDER: &str = ".metalmind";
+
 fn check_component(name: &str) -> Result<(), InvalidReason> {
     match name {
         "" => Err(InvalidReason::EmptyComponent),
@@ -244,6 +276,26 @@ mod tests {
         assert_eq!(reason(".obsidian/app.json"), InvalidReason::Hidden);
         assert_eq!(reason("a/.trash"), InvalidReason::Hidden);
         assert_eq!(reason("a\0b"), InvalidReason::Nul);
+    }
+
+    #[test]
+    fn un_archivo_de_metalmind_puede_ir_en_una_carpeta_oculta() {
+        let config = VaultPath::internal(".metalmind/config.yaml").unwrap();
+        assert_eq!(config.as_str(), ".metalmind/config.yaml");
+        let reason = |path| VaultPath::internal(path).unwrap_err().reason;
+        assert_eq!(reason("/.metalmind/config.yaml"), InvalidReason::Absolute);
+        assert_eq!(reason(".metalmind/../a.md"), InvalidReason::Relative);
+        assert_eq!(reason(".metalmind//a"), InvalidReason::EmptyComponent);
+        assert_eq!(reason(".metalmind/.oculto"), InvalidReason::Hidden);
+        for other in [
+            "",
+            ".metalmind",
+            ".git/config",
+            ".obsidian/app.json",
+            "a/.metalmind/b",
+        ] {
+            assert_eq!(reason(other), InvalidReason::Hidden, "{other:?}");
+        }
     }
 
     #[test]

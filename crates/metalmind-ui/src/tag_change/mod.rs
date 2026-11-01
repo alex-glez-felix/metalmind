@@ -4,11 +4,13 @@
 //! ([`ChangePreview`]), que decide qué se aplica.
 
 mod field;
+mod views;
 
 use metalmind_vault::VaultPath;
 use metalmind_vault::tags::{PageChange, PlanError, PlanNotice, TagPlan, Tags, tag_name};
 
 pub use self::field::{FieldError, TagField};
+pub use self::views::{VaultConfigText, config_path};
 use crate::change_preview::{ChangePreview, Notice};
 
 /// Un cambio de tags pedido, con los nombres como se escribieron.
@@ -89,25 +91,44 @@ impl TagRequest {
         }
     }
 
-    /// La vista previa del plan sobre `tags`; `None` si no hay nada que
-    /// cambiar ni que avisar. `unsaved` dice si un archivo del vault tiene
-    /// cambios sin guardar.
+    /// La vista previa del plan sobre `tags`, con las vistas guardadas de
+    /// `config` que lo siguen; `None` si no hay nada que cambiar ni que
+    /// avisar. `unsaved` dice si un archivo del vault tiene cambios sin
+    /// guardar.
     ///
     /// # Errors
     /// Si algún nombre no es válido o no existe.
     pub fn preview(
         &self,
         tags: &Tags,
+        config: &VaultConfigText,
         unsaved: impl Fn(&VaultPath) -> bool,
     ) -> Result<Option<ChangePreview>, PlanError> {
-        let TagPlan { changes, notices } = self.plan(tags)?;
-        let notices = notices
+        let TagPlan {
+            mut changes,
+            notices,
+            rewrite,
+        } = self.plan(tags)?;
+        let mut notices: Vec<Notice> = notices
             .iter()
             .map(|notice| Notice {
                 text: notice_text(notice),
                 blocks: notice.blocks(),
             })
             .collect();
+        if let Some(rewrite) = rewrite {
+            match views::view_edits(&rewrite, config) {
+                Ok(Some(edits)) => {
+                    changes.edits.push(edits);
+                    changes.edits.sort_by(|a, b| a.path.cmp(&b.path));
+                }
+                Ok(None) => {}
+                Err(error) => notices.push(Notice {
+                    text: format!("las vistas guardadas no siguen a #{}: {error}", rewrite.to),
+                    blocks: false,
+                }),
+            }
+        }
         Ok(ChangePreview::new(self.title(), changes, notices, unsaved))
     }
 

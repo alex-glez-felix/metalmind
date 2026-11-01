@@ -9,11 +9,11 @@ use std::fmt;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gpui_kit::{Hsla, TextRun, WindowTextSystem};
+use gpui_kit::WindowTextSystem;
 use metalmind_syntax::{Advances, LineStyle, ScreenLine, ScreenLines};
 
 use super::markdown::runs;
-use super::text::Faces;
+use super::text::{Faces, text_runs};
 
 /// Cuántas líneas guarda cada generación.
 const GENERATION: usize = 4096;
@@ -56,18 +56,16 @@ impl TextScreen {
     }
 
     fn shape(&self, text: &str, style: Option<&LineStyle>, wrap: Option<f32>) -> ScreenLine {
-        let (size, weight) = self.faces.line(style.map(|style| style.kind));
-        let runs: Vec<TextRun> = runs(text.len(), style, |_| true, &[])
-            .into_iter()
-            .map(|run| TextRun {
-                len: run.len,
-                font: self.faces.run(run.style, weight),
-                color: Hsla::default(),
-                background_color: None,
-                underline: None,
-                strikethrough: None,
-            })
-            .collect();
+        let kind = style.map(|style| style.kind);
+        let (size, weight) = self.faces.line(kind);
+        // Con los tramos y colores con que la pinta la vista: GPUI separa su
+        // caché donde cambia el color, y así la vista corta esta misma forma.
+        let runs = text_runs(
+            &runs(text.len(), style, |_| true, &[]),
+            kind,
+            &self.faces,
+            weight,
+        );
         let layout = self.text_system.layout_line(text, size, &runs, None);
         let mut starts: Vec<(usize, f32)> = layout
             .runs
