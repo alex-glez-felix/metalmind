@@ -25,11 +25,16 @@ pub struct LineEdit {
 
 impl Splice {
     /// Lo de antes no se mueve, ni lo que está justo donde se insertó; lo de
-    /// después se corre y lo borrado cae al inicio del reemplazo.
+    /// después se corre y lo borrado cae al inicio del reemplazo. En un
+    /// movimiento de líneas (`:m`), cada byte va con su línea, como el
+    /// cursor de las otras ventanas con `mark_adjust` de vim.
     #[must_use]
     pub fn map(&self, offset: ByteOffset) -> ByteOffset {
-        let start = self.start.get();
         let offset = offset.get();
+        if let Some(moved) = self.lines.moved_offset(offset) {
+            return ByteOffset::new(moved);
+        }
+        let start = self.start.get();
         let old_end = start + self.removed;
         ByteOffset::new(if offset <= start {
             offset

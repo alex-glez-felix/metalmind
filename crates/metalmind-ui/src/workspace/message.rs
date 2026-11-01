@@ -44,8 +44,8 @@ impl Message {
     pub fn wrapped(wrap: Wrap) -> Self {
         Self::Info(
             match wrap {
-                Wrap::ToTop => "la búsqueda llegó al final y siguió desde el principio",
-                Wrap::ToBottom => "la búsqueda llegó al principio y siguió desde el final",
+                Wrap::ToTop => "search hit BOTTOM, continuing at TOP",
+                Wrap::ToBottom => "search hit TOP, continuing at BOTTOM",
             }
             .to_owned(),
         )
@@ -58,7 +58,7 @@ impl Message {
     }
 
     /// Como vim al abrir: `"a.md" 3L, 20B`, `"a.md" [noeol] 1L, 3B` si le
-    /// falta el `\n` final, o `[Nuevo]` si todavía no existe.
+    /// falta el `\n` final, o `[New]` si todavía no existe.
     #[must_use]
     pub fn opened(document: &Document) -> Self {
         let path = document.display_name();
@@ -66,13 +66,13 @@ impl Message {
             let noeol = if document.noeol() { "[noeol] " } else { "" };
             Self::Info(format!("\"{path}\" {noeol}{}", document.opened_stats()))
         } else {
-            Self::Info(format!("\"{path}\" [Nuevo]"))
+            Self::Info(format!("\"{path}\" [New]"))
         }
     }
 
     #[must_use]
     pub fn written(name: &str, stats: FileStats) -> Self {
-        Self::Info(format!("\"{name}\" {stats} escritos"))
+        Self::Info(format!("\"{name}\" {stats} written"))
     }
 
     /// Un guardado que falló, con la causa primero. `name` es el archivo, si
@@ -221,11 +221,11 @@ mod tests {
     fn la_busqueda_avisa_hacia_donde_dio_la_vuelta() {
         assert_eq!(
             Message::wrapped(Wrap::ToTop),
-            Message::Info("la búsqueda llegó al final y siguió desde el principio".to_owned())
+            Message::Info("search hit BOTTOM, continuing at TOP".to_owned())
         );
         assert_eq!(
             Message::wrapped(Wrap::ToBottom),
-            Message::Info("la búsqueda llegó al principio y siguió desde el final".to_owned())
+            Message::Info("search hit TOP, continuing at BOTTOM".to_owned())
         );
     }
 
@@ -234,7 +234,7 @@ mod tests {
         let document = Document::new(Path::new("a.md"), "");
         assert_eq!(
             Message::opened(&document),
-            Message::Info("\"a.md\" [Nuevo]".to_owned())
+            Message::Info("\"a.md\" [New]".to_owned())
         );
     }
 }

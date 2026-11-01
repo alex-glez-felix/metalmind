@@ -580,7 +580,10 @@ mod command_typing_tests;
 #[cfg(test)]
 mod link_typing_tests;
 #[cfg(test)]
-mod panes_oracle;
+#[path = "messages_oracle_tests.rs"]
+mod messages_oracle_tests;
+#[cfg(test)]
+pub(crate) mod panes_oracle;
 #[cfg(test)]
 #[path = "source_lines_tests.rs"]
 mod source_lines_tests;

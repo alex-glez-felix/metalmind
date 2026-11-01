@@ -580,6 +580,13 @@ const SCENES: &[(&str, &[Step])] = &[
     ("toasts-historial", &[Step::Keys(":messages<CR>")]),
     ("toasts-historial-filtrado", &[Step::Keys("E486")]),
     ("toasts-de-nuevo", &[Step::Keys("<CR>")]),
+    // Los avisos de vim, con su texto de nvim (#40): grabando una macro, una
+    // búsqueda desde el final que sigue desde el principio. `q` termina la
+    // macro en la escena siguiente.
+    (
+        "aviso-de-vim",
+        &[Step::Keys("<Esc><Esc><C-w>l<C-w>l<Esc>qaG$/a<CR>")],
+    ),
     // Renombrar desde el árbol una nota con muchos links (las reuniones y
     // `listas.md` enlazan a `Metalmind/plan`; con el filtro, es la última
     // fila del árbol): la vista previa con el renombre primero y elegido (su
@@ -589,7 +596,7 @@ const SCENES: &[(&str, &[Step])] = &[
     (
         "renombrar-nota",
         &[Step::Keys(concat!(
-            "<Esc><Space>e/Metalmind/plan<CR>Gr<BS><BS><BS><BS>",
+            "q<Esc><Space>e/Metalmind/plan<CR>Gr<BS><BS><BS><BS>",
             "plan del proyecto con un nombre largo para ver como se recorta<CR>",
         ))],
     ),

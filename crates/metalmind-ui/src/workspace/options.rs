@@ -14,9 +14,9 @@ pub struct PaneOptions {
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum OptionError {
-    #[error("E471: falta el argumento")]
+    #[error("E471: Argument required")]
     MissingArgument,
-    #[error("E518: opción desconocida: {0}")]
+    #[error("E518: Unknown option: {0}")]
     Unknown(String),
 }
 

@@ -541,7 +541,7 @@ fn set_con_una_opcion_desconocida_avisa() {
     session.keys(":set list⏎");
     assert_eq!(
         session.workspace.messages().last(),
-        Some(&Message::Error("E518: opción desconocida: list".to_owned()))
+        Some(&Message::Error("E518: Unknown option: list".to_owned()))
     );
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
 }
@@ -1061,12 +1061,12 @@ fn wa_muestra_un_solo_toast() {
     session.keys("iy⎋:wa⏎");
     let toasts = session.workspace.messages().toasts();
     assert_eq!(toasts.len(), 1, "{toasts:?}");
-    assert!(toasts[0].1.text().ends_with("escritos"));
+    assert!(toasts[0].1.text().ends_with(" written"));
     let written = session
         .workspace
         .messages()
         .history()
-        .filter(|(_, message)| message.text().ends_with("escritos"))
+        .filter(|(_, message)| message.text().ends_with(" written"))
         .count();
     assert_eq!(written, 2);
 }
