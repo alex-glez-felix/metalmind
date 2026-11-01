@@ -200,7 +200,7 @@ impl Focus {
             match views
                 .iter()
                 .find(|view| view.name == name)
-                .filter(|view| view_tags(view).is_ok())
+                .filter(|view| focusable(view))
             {
                 Some(view) => words.push(Written::of_view(view)),
                 None => words.extend(
@@ -270,6 +270,12 @@ impl Written {
             query: view.query.clone(),
         }
     }
+}
+
+/// Si `view` se puede enfocar: su consulta es solo de tags.
+#[must_use]
+pub fn focusable(view: &SavedView) -> bool {
+    view_tags(view).is_ok()
 }
 
 /// `@gs` nombra la vista `gs`; escapado (`\@gs`), es una carpeta.

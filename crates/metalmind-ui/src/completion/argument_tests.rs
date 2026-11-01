@@ -62,6 +62,10 @@ impl Fixture {
                     query: "#gs -#archivado".to_owned(),
                 },
                 SavedView {
+                    name: "con texto".to_owned(),
+                    query: "#gs parser".to_owned(),
+                },
+                SavedView {
                     name: "Para hoy".to_owned(),
                     query: "#hoy".to_owned(),
                 },
@@ -138,12 +142,14 @@ fn lo_demas_ofrece_carpetas(#[case] typed: &str, #[case] expected: &[&str]) {
 }
 
 /// Tras `@` van las vistas guardadas, en el orden del archivo, y aceptar
-/// escribe su nombre escapado para que `:focus` lo lea igual.
+/// escribe su nombre escapado para que `:focus` lo lea igual. Una con algo
+/// que no es de tags no se ofrece: `:focus` no la acepta.
 #[rstest::rstest]
 #[case::todas("@", &["@gs", r"@Para\ hoy"])]
 #[case::por_nombre("@par", &[r"@Para\ hoy"])]
 #[case::escapada(r"\@g", &[])]
 #[case::nada_coincide("@zzz", &[])]
+#[case::con_texto("@con", &[])]
 fn una_arroba_ofrece_vistas(#[case] typed: &str, #[case] expected: &[&str]) {
     assert_eq!(Fixture::new().offered(typed), expected);
 }
@@ -159,7 +165,7 @@ fn la_vista_elegida_sigue_elegida_con_otras_vistas() {
             name: "nueva".to_owned(),
             query: "#n".to_owned(),
         },
-        fixture.views[1].clone(),
+        fixture.views[2].clone(),
     ]);
     let list = fixture.open("@", Some(list)).unwrap();
     assert_eq!(list.accept(), r"@Para\ hoy");

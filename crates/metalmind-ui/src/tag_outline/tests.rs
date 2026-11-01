@@ -19,7 +19,7 @@ const FILES: &[(&str, &str)] = &[
 
 /// Ya armado, como al mostrar la vista de tags.
 fn outline_of(tags: Arc<Tags>) -> TagOutline {
-    let mut outline = TagOutline::new(tags);
+    let mut outline = TagOutline::new(tags, Arc::default());
     outline.refresh();
     outline
 }
@@ -309,8 +309,7 @@ fn views(views: &[(&str, &str)]) -> Arc<[SavedView]> {
 
 /// Las vistas antes de la primera vez que se arma, como al abrir el panel.
 fn with_views(saved: &[(&str, &str)]) -> TagOutline {
-    let mut outline = TagOutline::new(tags_of(FILES));
-    outline.set_views(views(saved));
+    let mut outline = TagOutline::new(tags_of(FILES), views(saved));
     outline.refresh();
     outline
 }

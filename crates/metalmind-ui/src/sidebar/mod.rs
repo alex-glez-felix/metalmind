@@ -92,7 +92,7 @@ impl Sidebar {
     ) -> Self {
         let vault = session.read(cx).vault();
         let tree = FileTree::with_expanded(vault.snapshot(), state.expanded());
-        let tags = TagOutline::new(session.read(cx).tags());
+        let tags = TagOutline::new(session.read(cx).tags(), session.read(cx).views());
         let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
             sidebar.apply(update, cx);
         });
@@ -110,8 +110,7 @@ impl Sidebar {
         });
         // La nota activa se marca en el árbol: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
-        let mut panel = Panel::new(tree, tags, state.visible, state.view());
-        panel.set_views(session.read(cx).views());
+        let panel = Panel::new(tree, tags, state.visible, state.view());
         Self {
             panel,
             vault,

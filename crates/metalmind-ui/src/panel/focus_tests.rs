@@ -29,7 +29,12 @@ fn panel(view: PanelView) -> Panel {
         (note.as_str() == "a/b/nota.md").then(|| "#rust".to_owned())
     });
     let tree = FileTree::new(Arc::clone(&index));
-    let mut panel = Panel::new(tree, TagOutline::new(Arc::new(tags)), true, view);
+    let mut panel = Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags), Arc::default()),
+        true,
+        view,
+    );
     panel.tags.refresh();
     panel
 }
@@ -80,6 +85,23 @@ fn f_sobre_una_vista_enfoca_su_consulta() {
     tags.outline_mut().select_first();
     tags.switch_view();
     assert_eq!(tags.selected_view(), None);
+}
+
+/// Al abrir con el panel en tags, la primera fila elegida es la primera
+/// vista: `enter` o `F` justo al abrir actúan sobre ella, no sobre un tag.
+#[test]
+fn al_abrir_en_tags_la_elegida_es_la_primera_vista() {
+    let index = Arc::new(VaultIndex::from_entries([(path("a.md"), EntryKind::Note)]));
+    let tags = Tags::build(path("tags"), &index, |_: &VaultPath| {
+        Some("#rust".to_owned())
+    });
+    let gs = SavedView {
+        name: "gs".to_owned(),
+        query: "#rust".to_owned(),
+    };
+    let outline = TagOutline::new(Arc::new(tags), Arc::from([gs.clone()]));
+    let panel = Panel::new(FileTree::new(index), outline, true, PanelView::Tags);
+    assert_eq!(panel.selected_view(), Some(&gs));
 }
 
 /// Con `a/b/` de focus el árbol muestra `a` y su `b`: crear sobre `a`

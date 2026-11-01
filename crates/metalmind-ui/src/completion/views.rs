@@ -1,5 +1,6 @@
 //! La lista de vistas guardadas de `:focus @…` (06 §10), sin GPUI: cuáles
-//! coinciden con lo escrito tras `@` y cuál está elegida.
+//! coinciden con lo escrito tras `@` y cuál está elegida. Una vista con algo
+//! que no es de tags no se ofrece: `:focus` no la acepta.
 
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use metalmind_config::SavedView;
 use metalmind_search::{FuzzyMatcher, Query};
 
 use super::Selection;
+use crate::focus::focusable;
 
 pub struct ViewCompletions {
     views: Arc<[SavedView]>,
@@ -21,11 +23,17 @@ impl ViewCompletions {
     /// escrito; `None` si ninguna vista coincide.
     #[must_use]
     pub fn open(views: Arc<[SavedView]>, typed: &str, matcher: &mut FuzzyMatcher) -> Option<Self> {
-        let names: Vec<&str> = views.iter().map(|view| view.name.as_str()).collect();
+        let offered: Vec<usize> = (0..views.len())
+            .filter(|&index| focusable(&views[index]))
+            .collect();
+        let names: Vec<&str> = offered
+            .iter()
+            .map(|&index| views[index].name.as_str())
+            .collect();
         let shown: Vec<usize> = matcher
             .rank(&Query::literal(typed), &names)
             .into_iter()
-            .map(|ranked| ranked.index)
+            .map(|ranked| offered[ranked.index])
             .collect();
         (!shown.is_empty()).then(|| Self {
             typed: typed.to_owned(),
