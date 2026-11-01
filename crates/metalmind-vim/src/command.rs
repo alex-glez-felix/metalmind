@@ -3,6 +3,7 @@
 //! motor las reconoce y devuelve su nombre sin saber qué hacen.
 
 use crate::SearchError;
+use crate::argument::BLANKS;
 
 /// El nombre de una acción ajena al motor, como `workspace::open_finder`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -74,6 +75,29 @@ impl HostCommand {
     #[must_use]
     pub fn takes_argument(&self) -> bool {
         self.argument != ArgumentKind::None
+    }
+}
+
+impl ArgumentKind {
+    /// `rest`, lo que sigue al nombre, desde donde empieza el argumento. Una
+    /// ruta se separa solo con espacios y tabs, como en vim: otro blanco
+    /// puede ser parte del nombre.
+    fn start_in(self, rest: &str) -> &str {
+        match self {
+            Self::FileName => rest.trim_start_matches(BLANKS),
+            Self::None | Self::Words => rest.trim_start(),
+        }
+    }
+
+    /// El argumento en `rest`. El final de una ruta se queda: un espacio
+    /// escapado es parte del nombre, y los demás los quita
+    /// [`file_name`](crate::file_name).
+    fn argument_in(self, rest: &str) -> &str {
+        let argument = self.start_in(rest);
+        match self {
+            Self::FileName => argument,
+            Self::None | Self::Words => argument.trim_end(),
+        }
     }
 }
 
@@ -199,13 +223,14 @@ pub(crate) fn parse<'a>(
     line: &str,
     commands: &'a [HostCommand],
 ) -> Result<Option<Parsed<'a>>, CommandError> {
-    let typed = line.trim_start_matches([' ', ':']).trim_end();
-    if typed.is_empty() {
+    let typed = line.trim_start_matches([' ', ':']);
+    if typed.trim_end().is_empty() {
         return Ok(None);
     }
     let (name, rest) = split_name(typed);
-    let command = find(name, commands).ok_or_else(|| CommandError::Unknown(typed.to_owned()))?;
-    let argument = rest.trim_start();
+    let command =
+        find(name, commands).ok_or_else(|| CommandError::Unknown(typed.trim_end().to_owned()))?;
+    let argument = command.argument.argument_in(rest);
     if argument.is_empty() {
         return Ok(Some(Parsed {
             command,
@@ -231,7 +256,7 @@ pub(crate) fn argument_start<'a>(
     let typed = line.trim_start_matches([' ', ':']);
     let (name, rest) = split_name(typed);
     let command = find(name, commands).filter(|command| command.takes_argument())?;
-    let argument = rest.trim_start();
+    let argument = command.argument.start_in(rest);
     (argument.len() < rest.len()).then(|| (command, line.len() - argument.len()))
 }
 
@@ -310,13 +335,15 @@ mod tests {
         assert_eq!(invocation("   "), Ok(None));
     }
 
+    /// El final de una ruta se queda: puede llevar un espacio escapado, y
+    /// los demás los quita `file_name`.
     #[test]
     fn el_argumento_es_el_resto_de_la_linea() {
         assert_eq!(
             invocation("w   notas/b c.md  "),
             Ok(Some(Invocation {
                 action: SAVE,
-                argument: Some("notas/b c.md".to_owned()),
+                argument: Some("notas/b c.md  ".to_owned()),
             }))
         );
         assert_eq!(

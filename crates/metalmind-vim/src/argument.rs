@@ -67,7 +67,7 @@ pub fn escape_argument(text: &str) -> String {
 }
 
 /// Los blancos que separan en la línea de `:` de vim.
-const BLANKS: [char; 2] = [' ', '\t'];
+pub(crate) const BLANKS: [char; 2] = [' ', '\t'];
 
 /// La ruta de un comando de archivo como `:e` o `:w`, como la lee vim: `\`
 /// quita lo especial al carácter que sigue y se ignoran los espacios y tabs

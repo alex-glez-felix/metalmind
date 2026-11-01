@@ -134,6 +134,8 @@ const FILE_NAMES: &[(&str, &str)] = &[
     (r"x\#y", "x#y"),
     (r"x\", r"x\"),
     ("lead.md  ", "lead.md"),
+    (r"a\ ", "a "),
+    ("\u{a0}x", "\u{a0}x"),
     ("\tlead.md\t", "lead.md"),
     ("x\u{a0}", "x\u{a0}"),
     (r"a\ b\ c", "a b c"),
@@ -143,6 +145,21 @@ const FILE_NAMES: &[(&str, &str)] = &[
 fn lee_la_ruta_de_e_como_vim() {
     for &(argument, expected) in FILE_NAMES {
         assert_eq!(metalmind_vim::file_name(argument), expected, "{argument:?}");
+    }
+}
+
+/// De la línea de `:` a la ruta: lo que `parse` deja del argumento también
+/// se lee como en nvim, con el espacio escapado del final.
+#[test]
+fn la_linea_de_e_llega_entera_a_la_ruta() {
+    for &(argument, expected) in FILE_NAMES {
+        let mut editor = support::Editor::app("|a");
+        let outcome = editor.keys(&format!(":e {argument}<CR>"));
+        let Some(metalmind_vim::KeyOutcome::Dispatch(invocation)) = outcome else {
+            panic!("{argument:?}: {outcome:?}");
+        };
+        let read = invocation.argument.as_deref().map(metalmind_vim::file_name);
+        assert_eq!(read.as_deref(), Some(expected), "{argument:?}");
     }
 }
 
