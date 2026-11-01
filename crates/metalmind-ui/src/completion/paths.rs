@@ -72,8 +72,19 @@ impl PathCompletions {
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
         let all: Vec<usize> = (0..candidates.paths.len()).collect();
+        Self::among(candidates, &all, typed, matcher)
+    }
+
+    /// Como [`PathCompletions::open`], mirando solo los candidatos `pool`,
+    /// en orden creciente.
+    fn among(
+        candidates: Arc<PathCandidates>,
+        pool: &[usize],
+        typed: &str,
+        matcher: &mut FuzzyMatcher,
+    ) -> Option<Self> {
         let shown: Vec<usize> = matcher
-            .rank_among(&Query::literal(typed), &candidates.haystacks, &all)
+            .rank_among(&Query::literal(typed), &candidates.haystacks, pool)
             .into_iter()
             .map(|ranked| ranked.index)
             .collect();
@@ -88,7 +99,32 @@ impl PathCompletions {
     /// Si abrirla para `typed` entre `candidates` daría esta misma lista.
     #[must_use]
     pub fn is_for(&self, candidates: &Arc<PathCandidates>, typed: &str) -> bool {
-        Arc::ptr_eq(&self.candidates, candidates) && self.typed == typed
+        self.is_among(candidates) && self.typed == typed
+    }
+
+    /// Si es una lista entre `candidates`, con lo escrito que sea.
+    #[must_use]
+    pub fn is_among(&self, candidates: &Arc<PathCandidates>) -> bool {
+        Arc::ptr_eq(&self.candidates, candidates)
+    }
+
+    #[must_use]
+    pub fn typed(&self) -> &str {
+        &self.typed
+    }
+
+    /// La lista con otro `typed` entre los mismos candidatos. Si sigue a lo
+    /// escrito, solo filtra las rutas que ya coincidían: lo que no coincide
+    /// con `ab` tampoco con `abc`.
+    #[must_use]
+    pub fn retyped(&self, typed: &str, matcher: &mut FuzzyMatcher) -> Option<Self> {
+        let candidates = Arc::clone(&self.candidates);
+        if !typed.starts_with(&self.typed) {
+            return Self::open(candidates, typed, matcher);
+        }
+        let mut pool = self.shown.clone();
+        pool.sort_unstable();
+        Self::among(candidates, &pool, typed, matcher)
     }
 
     /// Esta lista entre los `candidates` de un lote nuevo del vault, con lo

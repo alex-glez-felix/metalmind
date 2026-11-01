@@ -59,7 +59,7 @@ mod word;
 pub use action::{Action, InsertAt, PasteSide};
 pub use argument::{ArgumentWord, argument_words, escape_argument, file_name};
 pub use block::VisualBlock;
-pub use command::{ActionName, CommandError, HostCommand, Invocation, RangeRule};
+pub use command::{ActionName, ArgumentKind, CommandError, HostCommand, Invocation, RangeRule};
 pub use command_names::CommandName;
 pub use doc::{DocState, Layout};
 pub use error::VimError;

@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
+use metalmind_vault::VaultPath;
 use metalmind_vault::tags::TagCompletion;
 use metalmind_vim::{ArgumentWord, escape_argument};
 
@@ -115,8 +116,11 @@ impl ArgumentCompletions {
         })
     }
 
-    /// La lista de `word` en `:e`, entre los archivos `files`, siguiendo a
-    /// `previous` como [`ArgumentCompletions::focus`].
+    /// La lista de la ruta `word` de `:e` entre los archivos `files`. Si
+    /// sigue a la de `previous` con más escrito, solo filtra entre lo que
+    /// esta mostraba; con lo mismo escrito, como [`ArgumentCompletions::focus`].
+    /// Una ruta que no puede ser del vault (absoluta, con `..`) no tiene
+    /// lista: lo que se escribe es relativo a la raíz del vault.
     #[must_use]
     pub fn edit(
         word: &ArgumentWord,
@@ -124,12 +128,18 @@ impl ArgumentCompletions {
         matcher: &mut FuzzyMatcher,
         previous: Option<Self>,
     ) -> Option<Self> {
-        if word.range.is_empty() {
+        let typed = word.text.as_str();
+        if typed.is_empty() || VaultPath::new(typed.trim_end_matches('/')).is_err() {
             return None;
         }
-        let list = match Self::same_word(word, previous) {
-            Some(ArgumentList::Files(list)) => following(list, files, &word.text, matcher),
-            _ => PathCompletions::open(files, &word.text, matcher),
+        let list = match previous.map(|previous| previous.list) {
+            Some(ArgumentList::Files(list)) if list.typed() == typed => {
+                following(list, files, typed, matcher)
+            }
+            Some(ArgumentList::Files(list)) if list.is_among(&files) => {
+                list.retyped(typed, matcher)
+            }
+            _ => PathCompletions::open(files, typed, matcher),
         }?;
         Some(Self {
             word: word.clone(),

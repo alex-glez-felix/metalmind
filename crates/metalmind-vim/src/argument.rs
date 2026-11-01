@@ -66,16 +66,21 @@ pub fn escape_argument(text: &str) -> String {
     escaped
 }
 
+/// Los blancos que separan en la línea de `:` de vim.
+const BLANKS: [char; 2] = [' ', '\t'];
+
 /// La ruta de un comando de archivo como `:e` o `:w`, como la lee vim: `\`
-/// quita lo especial al carácter que sigue y se ignoran los blancos de los
-/// bordes que no van escapados. Lo que escribe [`escape_argument`] se lee
-/// igual.
+/// quita lo especial al carácter que sigue y se ignoran los espacios y tabs
+/// de los bordes que no van escapados; uno en medio es parte del nombre. A
+/// diferencia de vim, `"`, `|`, `%` y `#` no son especiales: la línea de `:`
+/// no tiene comentarios, ni encadena comandos, ni nombres de buffer. Lo que
+/// escribe [`escape_argument`] se lee igual.
 #[must_use]
 pub fn file_name(argument: &str) -> String {
     let mut name = String::with_capacity(argument.len());
     // Hasta dónde llega lo que no son blancos sin escapar del final.
     let mut kept = 0;
-    let mut chars = argument.trim_start().chars();
+    let mut chars = argument.trim_start_matches(BLANKS).chars();
     while let Some(c) = chars.next() {
         let escaped = c == '\\';
         name.push(if escaped {
@@ -83,7 +88,7 @@ pub fn file_name(argument: &str) -> String {
         } else {
             c
         });
-        if escaped || !c.is_whitespace() {
+        if escaped || !BLANKS.contains(&c) {
             kept = name.len();
         }
     }

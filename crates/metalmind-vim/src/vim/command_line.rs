@@ -4,12 +4,12 @@
 use std::ops::Range;
 
 use super::Vim;
-use crate::argument::{ArgumentWord, argument_words};
+use crate::argument::{ArgumentWord, argument_words, file_name};
 use crate::command::argument_start;
 use crate::command_names::names_starting_with;
 use crate::ex::{LineRange, skip_blanks};
 use crate::history::History;
-use crate::{ActionName, KeyOutcome, Mode, Prompt, VimError};
+use crate::{ActionName, ArgumentKind, KeyOutcome, Mode, Prompt, VimError};
 use crate::{CommandName, Target};
 
 /// La palabra que se escribe en el argumento de un comando ajeno, para
@@ -17,7 +17,8 @@ use crate::{CommandName, Target};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypedArgument {
     pub action: ActionName,
-    /// La última, con su rango en bytes de la línea; tras un espacio, vacía.
+    /// Con su rango en bytes de la línea: la última de unas palabras (tras
+    /// un espacio, vacía) o la ruta entera de un comando de archivo.
     pub word: ArgumentWord,
 }
 
@@ -49,7 +50,8 @@ impl Vim {
     }
 
     /// Lo que se escribe tras `:` cuando es el argumento de un comando
-    /// ajeno: `:focus proyectos/ #ru` da `workspace::focus` y `#ru`.
+    /// ajeno: `:focus proyectos/ #ru` da `workspace::focus` y `#ru`, y
+    /// `:e Mis\ no` da `editor::edit` y `Mis no`.
     #[must_use]
     pub fn typed_argument(&self) -> Option<TypedArgument> {
         if self.prompt != Prompt::Command {
@@ -57,6 +59,16 @@ impl Vim {
         }
         let line = self.command_line()?;
         let (command, start) = argument_start(line, self.keymap.commands())?;
+        if command.argument == ArgumentKind::FileName {
+            return Some(TypedArgument {
+                action: command.action,
+                word: ArgumentWord {
+                    range: start..line.len(),
+                    text: file_name(&line[start..]),
+                    literal_start: false,
+                },
+            });
+        }
         let word = argument_words(&line[start..])
             .pop()
             .filter(|word| start + word.range.end == line.len())

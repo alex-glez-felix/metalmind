@@ -68,6 +68,9 @@ const TYPED_ARGUMENTS: &[(&str, Option<Completed>)] = &[
     (r#"focus "Mis no"#, Some((Command::Focus, "Mis no", true))),
     ("focus #rust ", Some((Command::Focus, "", false))),
     ("  :e  not", Some((Command::Edit, "not", false))),
+    (r"e Mis\ no", Some((Command::Edit, "Mis no", false))),
+    ("e Mis no", Some((Command::Edit, "Mis no", false))),
+    (r#"e "Mis"#, Some((Command::Edit, "\"Mis", false))),
     ("focus", None),
     ("wa x", None),
     ("nada x", None),
@@ -131,6 +134,8 @@ const FILE_NAMES: &[(&str, &str)] = &[
     (r"x\#y", "x#y"),
     (r"x\", r"x\"),
     ("lead.md  ", "lead.md"),
+    ("\tlead.md\t", "lead.md"),
+    ("x\u{a0}", "x\u{a0}"),
     (r"a\ b\ c", "a b c"),
 ];
 
@@ -147,4 +152,13 @@ fn nvim_abre_la_misma_ruta() {
     let arguments: Vec<&str> = FILE_NAMES.iter().map(|&(argument, _)| argument).collect();
     let expected: Vec<&str> = FILE_NAMES.iter().map(|&(_, name)| name).collect();
     assert_eq!(support::nvim::file_names(&arguments), expected);
+}
+
+/// En `:e` se completa la ruta entera, aunque lleve espacios sin escapar.
+#[test]
+fn completar_en_e_cambia_la_ruta_entera() {
+    let mut editor = support::Editor::app("|a");
+    editor.keys(":e Mis no");
+    editor.vim.complete_argument(r"Mis\ notas/rust.md");
+    assert_eq!(editor.vim.command_line(), Some(r"e Mis\ notas/rust.md"));
 }

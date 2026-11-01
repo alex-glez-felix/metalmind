@@ -2,7 +2,7 @@
 //! paneles, los pickers y el panel lateral son de la UI. Se invocan por su
 //! nombre desde `:`, los atajos y la paleta.
 
-use metalmind_vim::{ActionName, HostCommand, RangeRule};
+use metalmind_vim::{ActionName, ArgumentKind, HostCommand, RangeRule};
 
 use crate::named::named_actions;
 
@@ -188,27 +188,25 @@ const EX: &[(&str, usize, Command)] = &[
 ];
 
 impl Command {
-    /// Si acepta lo escrito tras su nombre en `:`.
+    /// Qué acepta tras su nombre en `:`.
     #[must_use]
-    pub fn takes_argument(self) -> bool {
-        matches!(
-            self,
-            Self::Save
-                | Self::ForceSave
-                | Self::SaveAndQuit
-                | Self::Edit
-                | Self::ForceEdit
-                | Self::Set
-                | Self::RenameTag
-                | Self::MergeTag
-                | Self::NewNoteFromTemplate
-                | Self::EditTagAliases
-                | Self::EditTagParents
-                | Self::SetTagIcon
-                | Self::SetTagTemplate
-                | Self::OpenTagPage
-                | Self::Focus
-        )
+    pub fn argument(self) -> ArgumentKind {
+        match self {
+            Self::Save | Self::ForceSave | Self::SaveAndQuit | Self::Edit | Self::ForceEdit => {
+                ArgumentKind::FileName
+            }
+            Self::Set
+            | Self::RenameTag
+            | Self::MergeTag
+            | Self::NewNoteFromTemplate
+            | Self::EditTagAliases
+            | Self::EditTagParents
+            | Self::SetTagIcon
+            | Self::SetTagTemplate
+            | Self::OpenTagPage
+            | Self::Focus => ArgumentKind::Words,
+            _ => ArgumentKind::None,
+        }
     }
 
     /// El error que da en `:` con un rango, que ninguno admite.
@@ -247,7 +245,7 @@ pub(crate) fn ex_commands() -> impl Iterator<Item = HostCommand> {
         name,
         min,
         action: ActionName::new(command.name()),
-        takes_argument: command.takes_argument(),
+        argument: command.argument(),
         with_range: command.with_range(),
     })
 }

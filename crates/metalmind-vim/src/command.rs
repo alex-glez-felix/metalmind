@@ -52,9 +52,29 @@ pub struct HostCommand {
     /// Cuántas letras bastan para abreviarlo, como en vim.
     pub min: usize,
     pub action: ActionName,
-    pub takes_argument: bool,
+    pub argument: ArgumentKind,
     /// Qué error da con un rango, que ninguno admite.
     pub with_range: RangeRule,
+}
+
+/// Qué lleva un comando ajeno tras su nombre, y cómo se lee para
+/// autocompletarlo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArgumentKind {
+    None,
+    /// Palabras, como `:focus Mis\ notas/ #rust`: se completa la última
+    /// (ver [`argument_words`](crate::argument_words)).
+    Words,
+    /// Una sola ruta, espacios incluidos, como `:e Mis notas/a.md`: se
+    /// completa entera (ver [`file_name`](crate::file_name)).
+    FileName,
+}
+
+impl HostCommand {
+    #[must_use]
+    pub fn takes_argument(&self) -> bool {
+        self.argument != ArgumentKind::None
+    }
 }
 
 /// Por qué un comando ajeno no corre con rango.
@@ -192,7 +212,7 @@ pub(crate) fn parse<'a>(
             argument: None,
         }));
     }
-    if !command.takes_argument {
+    if !command.takes_argument() {
         return Err(CommandError::TrailingCharacters(argument.to_owned()));
     }
     Ok(Some(Parsed {
@@ -210,7 +230,7 @@ pub(crate) fn argument_start<'a>(
 ) -> Option<(&'a HostCommand, usize)> {
     let typed = line.trim_start_matches([' ', ':']);
     let (name, rest) = split_name(typed);
-    let command = find(name, commands).filter(|command| command.takes_argument)?;
+    let command = find(name, commands).filter(|command| command.takes_argument())?;
     let argument = rest.trim_start();
     (argument.len() < rest.len()).then(|| (command, line.len() - argument.len()))
 }
@@ -259,14 +279,14 @@ mod tests {
             name: "write",
             min: 1,
             action: SAVE,
-            takes_argument: true,
+            argument: ArgumentKind::FileName,
             with_range: RangeRule::PartialWrite,
         },
         HostCommand {
             name: "quit",
             min: 1,
             action: QUIT,
-            takes_argument: false,
+            argument: ArgumentKind::None,
             with_range: RangeRule::Unsupported,
         },
     ];

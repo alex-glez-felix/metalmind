@@ -10,7 +10,7 @@ use metalmind_buffer::Selection;
 use metalmind_config::Toggle;
 use metalmind_keymap::{Action, Command, Invocation};
 use metalmind_vault::SaveKind;
-use metalmind_vim::{Clipboard, Markdown, Mode, file_name};
+use metalmind_vim::{ArgumentKind, Clipboard, Markdown, Mode, file_name};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
@@ -144,7 +144,9 @@ impl Workspace {
         command: Command,
         argument: Option<&str>,
     ) -> Result<Effect, WorkspaceError> {
-        let file = argument.map(file_name);
+        let file = argument
+            .filter(|_| command.argument() == ArgumentKind::FileName)
+            .map(file_name);
         let path = file.as_deref().map(Path::new);
         match command {
             Command::Save => self.save(path, false).map(|_| Effect::Stay),

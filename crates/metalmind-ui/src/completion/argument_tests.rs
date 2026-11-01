@@ -1,6 +1,6 @@
 use metalmind_vault::tags::TagKey;
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
-use metalmind_vim::argument_words;
+use metalmind_vim::{argument_words, file_name};
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -151,12 +151,28 @@ fn la_fila_elegida_sigue_elegida_con_otro_lote() {
     assert_eq!(list.accept(), "proyectos/");
 }
 
+/// La ruta de `:e` tras `typed`, como la da `Vim::typed_argument`.
+fn path_word(typed: &str) -> ArgumentWord {
+    ArgumentWord {
+        range: 0..typed.len(),
+        text: file_name(typed),
+        literal_start: false,
+    }
+}
+
+fn edit(typed: &str, previous: Option<ArgumentCompletions>) -> Option<ArgumentCompletions> {
+    let files = Arc::new(PathCandidates::files(vault()));
+    ArgumentCompletions::edit(
+        &path_word(typed),
+        files,
+        &mut FuzzyMatcher::paths(),
+        previous,
+    )
+}
+
 /// Lo que escribe aceptar cada fila de `:e` tras `typed`, en orden.
 fn edit_offers(typed: &str) -> Vec<String> {
-    let files = Arc::new(PathCandidates::files(vault()));
-    let Some(mut list) =
-        ArgumentCompletions::edit(&word(typed), files, &mut FuzzyMatcher::paths(), None)
-    else {
+    let Some(mut list) = edit(typed, None) else {
         return Vec::new();
     };
     (0..list.len())
@@ -168,12 +184,17 @@ fn edit_offers(typed: &str) -> Vec<String> {
 }
 
 /// `:e` ofrece los archivos y no las carpetas, escritos como los lee: con
-/// sus espacios escapados, y `#` no es un tag (#45).
+/// sus espacios escapados (#45). La ruta es todo el argumento, como al
+/// abrirla: un espacio sin escapar es parte de ella y las comillas son
+/// texto.
 #[rstest::rstest]
 #[case::por_ruta("plan", &["proyectos/app/plan.md"])]
 #[case::por_carpeta("proy", &["proyectos/app/plan.md"])]
 #[case::con_espacio(r"Mis\ n", &[r"Mis\ notas/rust.md"])]
-#[case::entre_comillas(r#""Mis n"#, &[r"Mis\ notas/rust.md"])]
+#[case::con_espacio_sin_escapar("Mis n", &[r"Mis\ notas/rust.md"])]
+#[case::comillas(r#""Mis n"#, &[])]
+#[case::absoluta("/proyectos", &[])]
+#[case::fuera_del_vault("../plan", &[])]
 #[case::nada_coincide("zzz", &[])]
 fn e_ofrece_archivos(#[case] typed: &str, #[case] expected: &[&str]) {
     assert_eq!(edit_offers(typed), expected);
@@ -181,7 +202,35 @@ fn e_ofrece_archivos(#[case] typed: &str, #[case] expected: &[&str]) {
 
 #[test]
 fn e_sin_nada_escrito_no_hay_lista() {
-    assert_eq!(edit_offers(""), [""; 0]);
+    assert!(edit("", None).is_none());
+}
+
+/// Al escribir más se filtra solo entre lo que ya se mostraba, y al
+/// borrar se mira todo otra vez: las dos dan lo mismo que abrir de cero.
+#[test]
+fn e_al_escribir_o_borrar_da_lo_mismo_que_abrir_de_cero() {
+    let files = Arc::new(PathCandidates::files(vault()));
+    let mut matcher = FuzzyMatcher::paths();
+    let mut rows = |steps: &[&str]| {
+        let mut list = None;
+        for typed in steps {
+            list = ArgumentCompletions::edit(
+                &path_word(typed),
+                Arc::clone(&files),
+                &mut matcher,
+                list,
+            );
+        }
+        let mut list = list.unwrap();
+        (0..list.len())
+            .map(|row| {
+                list.selection_mut().select(row);
+                list.accept()
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(rows(&["p", "pl", "pla"]), rows(&["pla"]));
+    assert_eq!(rows(&["pla", "p"]), rows(&["p"]));
 }
 
 /// Un lote nuevo del vault no cambia el archivo que eligió el usuario.
@@ -189,7 +238,7 @@ fn e_sin_nada_escrito_no_hay_lista() {
 fn e_sigue_con_el_archivo_elegido_con_otro_lote() {
     let mut matcher = FuzzyMatcher::paths();
     let files = |paths: &[&str]| Arc::new(PathCandidates::files(index(paths)));
-    let typed = word("md");
+    let typed = path_word("md");
     let first = files(&["a.md", "b.md"]);
     let mut list = ArgumentCompletions::edit(&typed, first, &mut matcher, None).unwrap();
     list.selection_mut().select(1);
