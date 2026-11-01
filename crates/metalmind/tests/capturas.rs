@@ -664,12 +664,12 @@ const SCENES: &[(&str, &[Step])] = &[
     ("opcion-guardada", &[Step::Keys("<C-u>continue lists<CR>")]),
     // Las vistas guardadas en el panel y en focus (#209): arriba de los
     // tags con su consulta y sus notas, el menú de la de nombre largo,
-    // `enter` sobre «Rust al dia» la muestra en la lista y `F` la enfoca (el
+    // `enter` sobre «diseño» la muestra en la lista y `F` la enfoca (el
     // panel cuenta dentro del focus); tras `@`, `:focus` ofrece las vistas,
     // y una que no existe es un error.
     ("vistas-panel", &[Step::Keys("<Esc><Esc><C-w>o<Space>tgg")]),
     ("vistas-panel-menu", &[Step::RightClickRow(0)]),
-    ("vistas-panel-lista", &[Step::Keys("<Esc>jj<CR>")]),
+    ("vistas-panel-lista", &[Step::Keys("<Esc>j<CR>")]),
     ("vistas-focus-panel", &[Step::Keys("<C-w>hF")]),
     (
         "vistas-focus-completar",
