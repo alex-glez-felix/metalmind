@@ -30,8 +30,9 @@ pub enum CountError {
     },
     #[error("los volcados de callgrind: {0}")]
     Dumps(io::Error),
-    #[error("callgrind no pasó por la función medida")]
-    NotMeasured,
+    /// Con lo que dijo valgrind, que es lo único que dice por qué.
+    #[error("callgrind no pasó por la función medida; valgrind dijo:\n{stderr}")]
+    NotMeasured { stderr: String },
     #[error("la función medida corrió más de una vez")]
     MeasuredTwice,
     #[error("el volcado de callgrind no tiene el total de instrucciones")]
@@ -70,18 +71,20 @@ pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountEr
         .env("TMPDIR", &scratch)
         .output()
         .map_err(CountError::Valgrind)?;
+    let stderr = String::from_utf8_lossy(&stderr).into_owned();
     if !status.success() {
         return Err(CountError::Failed {
             size,
             status,
-            stderr: String::from_utf8_lossy(&stderr).into_owned(),
+            stderr,
         });
     }
-    measured_part(&dumps)
+    measured_part(&dumps)?.ok_or(CountError::NotMeasured { stderr })
 }
 
-/// Las instrucciones del volcado que cierra la función medida.
-fn measured_part(dir: &Path) -> Result<u64, CountError> {
+/// Las instrucciones del volcado que cierra la función medida; `None` si
+/// ningún volcado la cierra.
+fn measured_part(dir: &Path) -> Result<Option<u64>, CountError> {
     let mut after = Vec::new();
     for entry in fs::read_dir(dir).map_err(CountError::Dumps)? {
         let part = fs::read_to_string(entry.map_err(CountError::Dumps)?.path())
@@ -91,12 +94,13 @@ fn measured_part(dir: &Path) -> Result<u64, CountError> {
         }
     }
     let part = match after.as_slice() {
-        [] => return Err(CountError::NotMeasured),
+        [] => return Ok(None),
         [part] => part,
         _ => return Err(CountError::MeasuredTwice),
     };
     part.lines()
         .find_map(|line| line.strip_prefix("summary:"))
         .and_then(|count| count.trim().parse().ok())
+        .map(Some)
         .ok_or(CountError::NoSummary)
 }
