@@ -75,6 +75,10 @@ Theme {
         toast_error: #f7768e,
         toast_hint: #9aa0a6,
         toast_button_hover: #d7dae0 α0.06,
+        which_key_background: #16181d,
+        which_key_border: #5c6370,
+        which_key_key: #7aa2f7,
+        which_key_prefix: #9aa0a6,
     },
     cursor: CursorColors {
         normal: #7aa2f7 α0.5,
@@ -342,6 +346,21 @@ Theme {
             ),
             toast_padding_y: Length(
                 8.0,
+            ),
+            which_key_rows: Count(
+                12,
+            ),
+            which_key_margin: Length(
+                12.0,
+            ),
+            which_key_padding_x: Length(
+                12.0,
+            ),
+            which_key_padding_y: Length(
+                8.0,
+            ),
+            which_key_gap: Length(
+                12.0,
             ),
             gutter_mark_columns: MarkColumns(
                 3,

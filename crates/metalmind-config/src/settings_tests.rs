@@ -53,6 +53,10 @@ markdown:
   continue_lists: false
   indent_list_children: false
   align_tables_on_leave: true
+
+which_key:
+  enabled: false
+  delay_ms: 0
 ";
 
 fn every_setting() -> Settings {
@@ -103,6 +107,10 @@ fn every_setting() -> Settings {
             continue_lists: false,
             indent_list_children: false,
             align_tables_on_leave: true,
+        },
+        which_key: WhichKey {
+            enabled: false,
+            delay_ms: WhichKeyDelay(0),
         },
     }
 }
@@ -173,7 +181,8 @@ fn la_misma_config_en_json_puro_carga_igual() {
     "template": "diario"
   },
   "history": { "keep_all_hours": 12, "hourly_days": 7, "daily_days": 365, "deleted_days": 30 },
-  "markdown": { "continue_lists": false, "indent_list_children": false, "align_tables_on_leave": true }
+  "markdown": { "continue_lists": false, "indent_list_children": false, "align_tables_on_leave": true },
+  "which_key": { "enabled": false, "delay_ms": 0 }
 }"#;
     let loaded = Settings::parse(json);
     assert_eq!(loaded.diagnostics, []);
@@ -287,6 +296,7 @@ fn valor_fuera_de_rango_es_error() {
         ("editor:\n  tabstop: 0", 2),
         ("editor:\n  autosave_delay_ms: 99", 2),
         ("editor:\n  autosave_delay_ms: 60001", 2),
+        ("which_key:\n  delay_ms: 10001", 2),
         ("editor:\n  padding:\n    vertical: 300", 3),
         ("editor:\n  padding:\n    horizontal: -1", 3),
     ] {
@@ -331,4 +341,11 @@ fn las_notas_del_dia_vienen_apagadas() {
     assert_eq!(daily.folder, "diario/2026");
     assert_eq!(daily.format, "YYYY-MM-DD");
     assert_eq!(daily.template, None);
+}
+
+#[test]
+fn el_which_key_viene_encendido_a_medio_segundo() {
+    let which_key = Settings::default().which_key;
+    assert!(which_key.enabled);
+    assert_eq!(which_key.delay_ms.get(), Duration::from_millis(500));
 }

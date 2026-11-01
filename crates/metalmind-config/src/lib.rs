@@ -22,7 +22,7 @@ pub use history::HistoryRetention;
 pub use paths::{NoHomeDir, Paths};
 pub use settings::{
     AutosaveDelay, Daily, Editor, Font, FontSize, Markdown, Padding, Panel, PanelWidth, Panes,
-    Search, Settings, TabStop,
+    Search, Settings, TabStop, WhichKey, WhichKeyDelay,
 };
 pub use theme::{
     BUILTIN_THEMES, Color, Count, CursorColors, DEFAULT_THEME, Factor, Fraction, Heading, Headings,

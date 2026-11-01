@@ -25,6 +25,7 @@ mod scroll;
 mod spans;
 mod status_bar;
 mod text;
+mod which_key;
 
 use std::ops::Range;
 use std::path::PathBuf;
@@ -48,6 +49,7 @@ use self::screen::TextScreen;
 use self::scroll::{Anchor, Scroll};
 use self::status_bar::{Status, status_bar};
 use self::text::Faces;
+use self::which_key::{WhichKey, which_key_panel};
 use crate::actions::{self, Dispatch};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession};
@@ -93,6 +95,7 @@ pub struct Editor {
     /// Con qué mide el motor las líneas de este panel, mientras la letra
     /// sea la misma.
     text_screen: Option<Arc<TextScreen>>,
+    which_key: WhichKey,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _focus_changed: Subscription,
@@ -137,6 +140,7 @@ impl Editor {
             mark_hover: None,
             completion: self::completion::Completion::default(),
             text_screen: None,
+            which_key: WhichKey::default(),
             _repaint: repaint,
             _vault_changed: vault_changed,
             _focus_changed: focus_changed,
@@ -230,6 +234,7 @@ impl Editor {
                 let outcome = self.update_workspace(cx, |workspace, pane, cx| {
                     workspace.feed(pane, key, &mut SystemClipboard(cx))
                 });
+                self.schedule_which_key(cx);
                 self.handle_outcome(outcome, window, cx);
             }
             Route::TextInput => FrameClock::input(cx),
@@ -358,6 +363,9 @@ impl Render for Editor {
             .map(|(_, line)| self.command_popup(line, window.viewport_size().width, &theme, cx));
         let status = self.status(cx).map(|status| status_bar(status, &theme));
         let header = self.path_header(&theme, cx);
+        let which_key = self
+            .next_keys(window, cx)
+            .map(|next_keys| which_key_panel(next_keys, &theme));
         div()
             .key_context(self.key_context())
             .track_focus(&self.focus_handle)
@@ -386,6 +394,7 @@ impl Render for Editor {
             .child(header)
             .child(
                 div()
+                    .relative()
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
@@ -397,7 +406,8 @@ impl Render for Editor {
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::on_left_up))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_left_up))
                     .on_mouse_down(MouseButton::Middle, cx.listener(Self::on_middle_down))
-                    .child(EditorElement::new(cx.entity(), theme.clone())),
+                    .child(EditorElement::new(cx.entity(), theme.clone()))
+                    .children(which_key),
             )
             .children(status)
             .children(popup)

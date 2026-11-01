@@ -61,6 +61,10 @@ enum Step {
     Settle,
     /// Deja el ratón sobre una mark hasta que sale su tooltip.
     HoverMark(MarkAt),
+    /// Con la ventana quieta, teclea el inicio de un atajo, que solo no
+    /// cambia nada de lo que se ve, y espera a que salga el panel de las
+    /// teclas que siguen.
+    Prefix(&'static str),
     /// Borra lo escrito y escribe [`vault::SEARCHED_AFTER_CJK`].
     SearchAfterCjk,
     /// Lleva la línea de fórmulas rotas de [`vault::LONG_FORMULAS`] al
@@ -715,6 +719,26 @@ const SCENES: &[(&str, &[Step])] = &[
     ("tags-buffer-volver", &[Step::Keys("<Space>r")]),
     ("tags-buffer-aplicado", &[Step::Keys("<CR>")]),
     ("tags-buffer-deshecho", &[Step::Keys("<Space>z")]),
+    // El panel de las teclas que siguen a un prefijo (#86), que sale tras
+    // medio segundo sin teclear: `space`, `g` con sus tres columnas,
+    // `ctrl-w` con las dos teclas de cada acción juntas y `space` en el
+    // más angosto de cuatro paneles.
+    (
+        "which-key-space",
+        &[Step::Keys("<Esc><Esc><C-w>o"), Step::Prefix("<Space>")],
+    ),
+    ("which-key-g", &[Step::Keys("<Esc>"), Step::Prefix("g")]),
+    (
+        "which-key-ctrl-w",
+        &[Step::Keys("<Esc>"), Step::Prefix("<C-w>")],
+    ),
+    (
+        "which-key-angosto",
+        &[
+            Step::Keys("<Esc><C-w>v<C-w>v<C-w>v"),
+            Step::Prefix("<Space>"),
+        ],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -796,6 +820,18 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                     wait::until("el tooltip de la mark", TIMEOUT, || {
                         if window.pixels().2 == still.rgb {
                             Err("sin tooltip".to_owned())
+                        } else {
+                            Ok(())
+                        }
+                    });
+                }
+                Step::Prefix(keys) => {
+                    let still = settle(&window, &frames, seen, None);
+                    seen = frame_count(&frames);
+                    window.type_keys(keys);
+                    wait::until("el panel de las teclas que siguen", TIMEOUT, || {
+                        if window.pixels().2 == still.rgb {
+                            Err("no salió".to_owned())
                         } else {
                             Ok(())
                         }

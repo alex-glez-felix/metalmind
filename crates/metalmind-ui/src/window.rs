@@ -130,6 +130,7 @@ pub fn open_window(
         },
     };
     let autosave = editor.autosave.then_some(editor.autosave_delay_ms.get());
+    let which_key = config.settings.which_key;
     let file = document.path().map(ToOwned::to_owned);
     let notes = NoteSettings {
         templates_folder: config.settings.templates_folder.clone(),
@@ -142,6 +143,7 @@ pub fn open_window(
             let keymap = AppKeymap::get(cx);
             let mut workspace = Workspace::new(document, pane, workspace_options, keymap);
             workspace.set_disk(disk);
+            workspace.set_which_key(which_key);
             workspace
                 .set_autosave(autosave.map(|delay| Autosave::new(delay, Rc::new(SystemClock))));
             if let Err(error) = workspace.restore_jumps(&root, &jumps) {

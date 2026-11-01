@@ -27,7 +27,21 @@ pub struct Settings {
     pub templates_folder: String,
     pub daily: Daily,
     pub markdown: Markdown,
+    pub which_key: WhichKey,
 }
+
+/// El panel con las teclas que siguen a un prefijo como `space` (#86).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct WhichKey {
+    pub enabled: bool,
+    pub delay_ms: WhichKeyDelay,
+}
+
+/// Cuánto esperar tras el prefijo antes de mostrar el panel, en milisegundos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
+pub struct WhichKeyDelay(u32);
 
 /// La edición de markdown del editor; cada parte se puede apagar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
@@ -192,6 +206,16 @@ impl Default for Settings {
             templates_folder: "plantillas".to_owned(),
             daily: Daily::default(),
             markdown: Markdown::default(),
+            which_key: WhichKey::default(),
+        }
+    }
+}
+
+impl Default for WhichKey {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            delay_ms: WhichKeyDelay(500),
         }
     }
 }
@@ -357,6 +381,30 @@ impl TryFrom<u32> for AutosaveDelay {
             Err(format!(
                 "autosave_delay_ms debe estar entre {} y {}, no {ms}",
                 Self::MIN,
+                Self::MAX
+            ))
+        }
+    }
+}
+
+impl WhichKeyDelay {
+    const MAX: u32 = 10_000;
+
+    #[must_use]
+    pub fn get(self) -> Duration {
+        Duration::from_millis(u64::from(self.0))
+    }
+}
+
+impl TryFrom<u32> for WhichKeyDelay {
+    type Error = String;
+
+    fn try_from(ms: u32) -> Result<Self, String> {
+        if ms <= Self::MAX {
+            Ok(Self(ms))
+        } else {
+            Err(format!(
+                "which_key.delay_ms debe estar entre 0 y {}, no {ms}",
                 Self::MAX
             ))
         }

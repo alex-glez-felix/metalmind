@@ -35,12 +35,14 @@ mod scrolling;
 mod show;
 mod source_lines;
 mod tag_typing;
+mod which_key;
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
+use metalmind_config::WhichKey;
 use metalmind_keymap::{Keymap, UnknownAction};
 use metalmind_syntax::Screen;
 use metalmind_vim::{
@@ -66,6 +68,7 @@ pub use self::options::PaneOptions;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
 pub use self::tag_typing::TypedTag;
+pub use self::which_key::NextKeys;
 use crate::disk::{Disk, Files};
 use crate::document::{Document, Editable};
 use crate::tag_change::RequestError;
@@ -140,6 +143,7 @@ pub struct Workspace {
     disk: Rc<dyn Disk>,
     /// `None` si `editor.autosave` está apagado: todo es como en vim.
     autosave: Option<Autosave>,
+    which_key: WhichKey,
 }
 
 /// Lo que vale igual en todos los paneles.
@@ -261,6 +265,7 @@ impl Workspace {
             link_choice: None,
             disk: Rc::new(Files),
             autosave: None,
+            which_key: WhichKey::default(),
         }
     }
 

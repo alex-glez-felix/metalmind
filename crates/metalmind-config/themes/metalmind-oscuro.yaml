@@ -95,6 +95,10 @@ ui:
   toast_error: danger
   toast_hint: text_muted
   toast_button_hover: { color: text, alpha: 0.06 }
+  which_key_background: surface
+  which_key_border: border_strong
+  which_key_key: accent
+  which_key_prefix: text_muted
 
 cursor:
   # El bloque deja ver el carácter que tapa.
@@ -223,6 +227,11 @@ layout:
   toast_gap: sm        # entre toasts, y entre el ícono, el texto y la tecla
   toast_padding_x: md
   toast_padding_y: sm
+  which_key_rows: 12
+  which_key_margin: md   # de los bordes de abajo y derecho del panel de edición
+  which_key_padding_x: md
+  which_key_padding_y: sm
+  which_key_gap: md      # entre la tecla y su acción, y entre columnas
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio
   note_max_width: 80      # columnas de texto; en un panel más ancho la nota se centra
   math_padding: 1
