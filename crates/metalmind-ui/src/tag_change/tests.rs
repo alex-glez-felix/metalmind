@@ -122,6 +122,32 @@ fn armarla_de_nuevo_deja_lo_quitado() {
     assert_eq!(new.row(0).unwrap().line, Some(2), "a.md cambió de línea");
 }
 
+/// Si lo editado entre medio agrega filas antes de la elegida, sigue
+/// elegida la misma fila, no la que quedó en su número; si ya no está, la
+/// de su lugar.
+#[test]
+fn armarla_de_nuevo_elige_la_misma_fila_aunque_se_corra() {
+    let request = rename("rust", "lang");
+    let mut old = preview(&request, &rust_notes());
+    old.select(1);
+    let elegida = old.row(1).unwrap();
+    let (path, before) = (elegida.path.clone(), elegida.before.to_owned());
+    let more = tags(&[
+        ("a.md", "uno #rust\notro #rust\n"),
+        ("b.md", "#rust\ndos #Rust\n"),
+    ]);
+    let mut new = preview(&request, &more);
+    new.carry_over(&old);
+    let row = new.row(new.selected()).unwrap();
+    assert_eq!((row.path, row.before), (&path, before.as_str()));
+    assert_eq!(new.selected(), 2, "a.md tiene una fila más");
+
+    let gone = tags(&[("a.md", "uno #rust\n")]);
+    let mut fewer = preview(&request, &gone);
+    fewer.carry_over(&old);
+    assert_eq!(fewer.selected(), 0, "b.md ya no está: la de su lugar");
+}
+
 #[test]
 fn quitar_una_fila_la_saca_de_lo_que_se_aplica() {
     let mut preview = preview(&rename("rust", "lang"), &rust_notes());

@@ -98,3 +98,19 @@ fn una_edicion_invalida_no_aplica_ninguna() {
     editor.keys("u");
     assert_eq!(editor.text(), "#a\n");
 }
+
+/// El modo no cambia: un Visual sigue con su selección, que sigue al texto.
+#[test]
+fn un_visual_sigue_con_su_seleccion() {
+    let mut editor = Editor::new("#a |uno dos\n");
+    editor.keys("vl");
+    editor
+        .run(|vim, t| vim.apply_edits(vec![replace(0, 2, "#abc")], t))
+        .unwrap();
+    assert_eq!(
+        editor.vim.mode(),
+        metalmind_vim::Mode::Visual(metalmind_vim::VisualKind::Char)
+    );
+    editor.keys("d");
+    assert_eq!(editor.text(), "#abc o dos\n");
+}

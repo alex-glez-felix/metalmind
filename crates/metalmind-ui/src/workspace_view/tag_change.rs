@@ -241,9 +241,16 @@ impl WorkspaceView {
             }
             Err(ApplyError::Interrupted { applied, cause }) => {
                 self.follow_applied(&vault, &applied, cx);
-                let message = Message::Error(format!(
-                    "{title} se paró a medias ({cause}). :vaultundo deshace lo hecho"
-                ));
+                let mut text =
+                    format!("{title} se paró a medias ({cause}). :vaultundo deshace lo hecho");
+                if !buffers.is_empty() {
+                    let paths: Vec<&str> = buffers.iter().map(|file| file.path.as_str()).collect();
+                    text = format!(
+                        "{text}; los buffers sin guardar no se tocaron: {}",
+                        paths.join(", ")
+                    );
+                }
+                let message = Message::Error(text);
                 self.remember_change(title, *applied, Vec::new(), cx);
                 message
             }

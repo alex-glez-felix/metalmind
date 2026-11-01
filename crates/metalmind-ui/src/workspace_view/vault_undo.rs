@@ -73,6 +73,12 @@ impl VaultUndo {
         self.toast.take()
     }
 
+    /// Lo que devolvería deshacer en los buffers que recibieron el último
+    /// cambio.
+    pub fn buffers(&self) -> &[FileEdits] {
+        self.last.as_ref().map_or(&[], |last| &last.buffers)
+    }
+
     /// La lista de notas siguió al último cambio.
     pub fn list_followed(&mut self, followed: ListFollowed) {
         if let Some(last) = &mut self.last {
@@ -189,6 +195,11 @@ pub(super) fn leftovers(report: &UndoReport) -> String {
 
 impl WorkspaceView {
     pub(super) fn undo_vault_change(&mut self, cx: &mut Context<Self>) {
+        if let Some(typing) = self.typing_in_buffers(self.vault_undo.buffers(), cx) {
+            let text =
+                format!("no se deshizo: {typing} se está editando en Insert; sal de Insert antes");
+            return self.tell(Message::Error(text), cx);
+        }
         let unsaved = self.unsaved_paths(cx);
         let vault = self.session.read(cx).vault();
         let mut undone = match self.vault_undo.undo(&vault, |path| unsaved.contains(path)) {
@@ -403,6 +414,7 @@ mod tests {
             applied,
             vec![back.clone()],
         );
+        assert_eq!(undo.buffers(), std::slice::from_ref(&back));
         undo.list_followed(ListFollowed {
             from: "rust".to_owned(),
             to: "lang".to_owned(),
@@ -410,6 +422,7 @@ mod tests {
         });
         let mut undone = undo.undo(&vault, |_| false).unwrap();
         assert_eq!(undone.buffers, [back]);
+        assert!(undo.buffers().is_empty(), "ya no queda nada que deshacer");
         assert!(undone.list_back().is_some());
         undone.left_in_buffers = vec![path("b.md")];
         assert_eq!(undone.list_back(), None);

@@ -87,6 +87,10 @@ impl Workspace {
         if self.document(id)?.buffer().has_open_transaction() {
             return Err(FileEditError::Typing(path.to_owned()));
         }
+        // Un documento que ni se ve ni está oculto no tiene cursor que mover.
+        if self.panes_showing(id).next().is_none() && !self.hidden.contains_key(&id) {
+            return Err(WorkspaceError::NoDocument(id).into());
+        }
         Ok(id)
     }
 

@@ -1,7 +1,7 @@
 //! Ediciones que no salen de una tecla, como renombrar un tag en un buffer
 //! con cambios sin guardar (05 §5).
 
-use metalmind_buffer::{Edit, Selection, Splice};
+use metalmind_buffer::{Edit, Goal, Selection, Splice};
 
 use super::Vim;
 use crate::lines::clamp_normal;
@@ -12,7 +12,8 @@ impl Vim {
     /// de undo: `u` las deshace juntas y devuelve el cursor a donde estaba.
     /// Los cursores siguen al texto, y las marks y la jumplist también, como
     /// tras cualquier edición. No es un cambio para `.`, y lo pendiente
-    /// (count, operador) se cancela, como al pegar.
+    /// (count, operador) se cancela; el modo no cambia, porque puede ser el
+    /// de otro documento, como un Visual en otro panel.
     ///
     /// # Errors
     /// Si hay un Insert abierto, que ya tiene su transacción, o alguna
@@ -20,7 +21,7 @@ impl Vim {
     pub fn apply_edits(&mut self, edits: Vec<Edit>, t: &mut Target<'_>) -> Result<(), VimError> {
         let version = t.buffer.version();
         t.buffer.begin_transaction(t.selections.clone())?;
-        self.cursor_moved();
+        self.reset();
         let count = t.buffer.splice_count();
         if let Err(error) = t.buffer.apply(edits) {
             t.buffer.commit_transaction(t.selections.clone())?;
@@ -31,10 +32,15 @@ impl Vim {
         let buffer = &*t.buffer;
         let splices = buffer.splices_since(count);
         let after = t.selections.map(|selection| {
-            Selection::cursor(clamp_normal(
-                buffer,
-                Splice::map_all(splices, selection.head),
-            ))
+            let head = Splice::map_all(splices, selection.head);
+            if selection.anchor == selection.head {
+                return Selection::cursor(clamp_normal(buffer, head));
+            }
+            Selection {
+                anchor: Splice::map_all(splices, selection.anchor),
+                head,
+                goal: Goal::None,
+            }
         });
         t.buffer.commit_transaction(after.clone())?;
         *t.selections = after;

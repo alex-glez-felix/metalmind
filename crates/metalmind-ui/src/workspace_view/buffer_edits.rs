@@ -9,6 +9,7 @@ use metalmind_vault::{Changes, FileEdits, Vault, VaultPath};
 
 use super::WorkspaceView;
 use crate::tag_change::VaultConfigText;
+use crate::workspace::FileEditError;
 
 /// Un cambio partido: lo que se escribe en disco y las ediciones de los
 /// archivos con cambios sin guardar, que van a su buffer.
@@ -87,6 +88,26 @@ impl WorkspaceView {
                 .check_file_edits(&root.join(file.path.as_str()), file)
                 .map_err(|error| error.to_string())
         })
+    }
+
+    /// El primero de `buffers` cuyo documento tiene un Insert abierto: no
+    /// se le puede meter un paso de undo sin mezclarlo con lo tecleado.
+    pub(super) fn typing_in_buffers(
+        &self,
+        buffers: &[FileEdits],
+        cx: &Context<Self>,
+    ) -> Option<VaultPath> {
+        let root = self.session.read(cx).root();
+        let workspace = self.workspace.read(cx);
+        buffers
+            .iter()
+            .find(|file| {
+                matches!(
+                    workspace.check_file_edits(&root.join(file.path.as_str()), file),
+                    Err(FileEditError::Typing(_))
+                )
+            })
+            .map(|file| file.path.clone())
     }
 
     /// Aplica `buffers` a sus buffers, cada uno como un paso de su undo.

@@ -52,6 +52,7 @@ pub use self::autosave::{Autosave, SaveState, SystemClock};
 pub use self::commands::{Effect, FocusCommand, ListViewChange};
 pub use self::documents::DocumentId;
 use self::documents::Documents;
+pub use self::file_edits::FileEditError;
 use self::file_ids::FileIds;
 pub use self::files::{LinePosition, Placement, shown_path};
 pub use self::gutter_marks::{GutterMarks, MarkLabel};
