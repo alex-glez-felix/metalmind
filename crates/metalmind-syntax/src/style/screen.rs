@@ -50,19 +50,23 @@ impl Advances {
 
     /// Como en una terminal: cada carácter ancho mide exactamente dos
     /// `cell`, mida lo que mida su glifo en la letra de respaldo, y lo que
-    /// le sigue se corre con él.
+    /// le sigue se corre con él. Lo que se combina con él (un acento) cae
+    /// en su principio, como un solo carácter.
     #[must_use]
     pub fn with_wide_cells(self, text: &str, cell: f32) -> Self {
-        let mut shift = 0.0;
-        // Desde qué byte se corre lo que sigue, y cuánto en total.
-        let mut shifts = Vec::new();
-        for wide in wide_graphemes(text) {
-            shift += 2.0 * cell - (self.x(wide.end) - self.x(wide.start));
-            shifts.push((wide.end, shift));
-        }
-        if shifts.is_empty() {
+        let wides: Vec<Range<usize>> = wide_graphemes(text).collect();
+        if wides.is_empty() {
             return self;
         }
+        let mut shift = 0.0;
+        // Desde qué byte se corre lo que sigue, y cuánto en total.
+        let shifts: Vec<(usize, f32)> = wides
+            .iter()
+            .map(|wide| {
+                shift += 2.0 * cell - (self.x(wide.end) - self.x(wide.start));
+                (wide.end, shift)
+            })
+            .collect();
         let shift_at = |byte: usize| {
             let index = shifts.partition_point(|&(end, _)| end <= byte);
             index
@@ -70,9 +74,14 @@ impl Advances {
                 .and_then(|index| shifts.get(index))
                 .map_or(0.0, |&(_, shift)| shift)
         };
+        let inside_wide = |byte: usize| {
+            let index = wides.partition_point(|wide| wide.end <= byte);
+            wides.get(index).is_some_and(|wide| wide.start < byte)
+        };
         let starts = self
             .starts
             .iter()
+            .filter(|&&(byte, _)| !inside_wide(byte))
             .map(|&(byte, x)| (byte, x + shift_at(byte)))
             .collect();
         Self::new(starts, self.len, self.width + shift)

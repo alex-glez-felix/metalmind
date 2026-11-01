@@ -217,6 +217,35 @@ fn un_caracter_ancho_ocupa_dos_celdas() {
     });
 }
 
+/// Un clic en la mitad izquierda de las dos celdas de un carácter ancho cae
+/// en él y uno en la derecha, en el siguiente, aunque su glifo sea más
+/// angosto que sus celdas.
+#[test]
+fn un_clic_en_un_ancho_cae_en_la_celda_mas_cercana() {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let text = "日本語";
+        let xs = starts(text, window);
+        let laid = lay(text, false, 10_000., window);
+        let row = &laid.rows[0];
+        for (index, (byte, _)) in text.char_indices().enumerate() {
+            let (left, right) = (xs[index], xs[index + 1]);
+            let quarter = (right - left) / 4.;
+            assert_eq!(
+                row.closest_index_for_x(px(left + quarter), true),
+                byte,
+                "cuarto izquierdo de {byte}"
+            );
+            assert_eq!(
+                row.closest_index_for_x(px(right - quarter), true),
+                byte + 3,
+                "cuarto derecho de {byte}"
+            );
+        }
+    });
+}
+
 /// Los tramos de `runs` que caen en `range`, recortados a él.
 fn clip(runs: &[TextRun], range: Range<usize>) -> Vec<TextRun> {
     let mut start = 0;

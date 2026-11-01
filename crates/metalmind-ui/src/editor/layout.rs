@@ -4,6 +4,7 @@ use std::sync::Arc;
 use gpui_kit::{Bounds, Pixels, Point, RenderImage, ShapedLine, SharedString, point, px};
 
 use super::scroll::{Scroll, to_line};
+use crate::math::half;
 
 /// El área del texto, lo que mide una línea de texto y desde dónde se ve.
 #[derive(Clone, Copy, Debug)]
@@ -144,7 +145,7 @@ impl LaidRow {
             };
         };
         match &piece.text {
-            Some(text) => piece.source.start + text.closest_index_for_x(x - piece.x),
+            Some(text) => piece.source.start + closest_in(text, x - piece.x, piece.width),
             None => piece.source.start,
         }
     }
@@ -158,6 +159,21 @@ impl LaidRow {
             glyphs.map(|glyph| glyph.index).next_back()
         });
         piece.source.start + inside.unwrap_or(0)
+    }
+}
+
+/// El byte de `text` más cercano a `x` en un trozo de `width`. Pasado el
+/// principio del último glifo, GPUI da el final: se elige entre los dos
+/// por la mitad de lo que ocupa ese carácter, que en uno ancho son sus dos
+/// celdas y no su glifo.
+fn closest_in(text: &ShapedLine, x: Pixels, width: Pixels) -> usize {
+    let index = text.closest_index_for_x(x);
+    let last = text.runs.iter().flat_map(|run| &run.glyphs).next_back();
+    match last {
+        Some(glyph) if index == text.len() && x < px(half(f32::from(glyph.position.x + width))) => {
+            glyph.index
+        }
+        _ => index,
     }
 }
 

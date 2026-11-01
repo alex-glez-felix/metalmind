@@ -139,12 +139,29 @@ fn un_caracter_ancho_mide_dos_celdas() {
 
 #[test]
 fn un_ancho_al_final_y_con_marca_combinada() {
-    // "x本\u{302}": el acento cuelga del ancho y va con él.
+    // "x本\u{302}": el acento cuelga del ancho y cae en su principio.
     let text = "x本\u{302}";
     let starts = vec![(0, 0.0), (1, 6.0), (4, 19.0)];
     let advances = Advances::new(starts, text.len(), 21.0).with_wide_cells(text, 6.0);
-    assert_eq!([1, 4, 6].map(|byte| advances.x(byte)), [6.0, 19.0, 18.0]);
+    assert_eq!([1, 4, 6].map(|byte| advances.x(byte)), [6.0, 6.0, 18.0]);
     assert_eq!(advances.width(), 18.0);
+}
+
+/// Con texto después, los caracteres siguen en orden a lo ancho: así
+/// `byte_at` encuentra cada uno.
+#[test]
+fn una_marca_sobre_un_ancho_no_desordena_lo_que_sigue() {
+    let text = "本\u{302}ab";
+    let starts = vec![(0, 0.0), (3, 13.0), (5, 15.0), (6, 21.0)];
+    let advances = Advances::new(starts, text.len(), 27.0).with_wide_cells(text, 6.0);
+    assert_eq!(
+        [0, 3, 5, 6, 7].map(|byte| advances.x(byte)),
+        [0.0, 0.0, 12.0, 18.0, 24.0]
+    );
+    assert_eq!(
+        [0.0, 11.9, 12.0, 18.0].map(|x| advances.byte_at(x)),
+        [0, 0, 5, 6]
+    );
 }
 
 #[test]
