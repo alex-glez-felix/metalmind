@@ -3,7 +3,12 @@
 //! elegida en la paleta. La raíz le mueve el foco a esa vista y la vuelve a
 //! despachar.
 
-use metalmind_keymap::Owner;
+use gpui_kit::{Context, Window};
+use metalmind_keymap::{Invocation, Owner};
+
+use super::WorkspaceView;
+use crate::actions::Dispatch;
+use crate::workspace::Message;
 
 /// Qué vistas de fuera de los paneles se pintan.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -40,6 +45,38 @@ pub(super) fn reroute(owner: Owner, visible: Visible, overlay_open: bool) -> Rer
         | Owner::Picker
         | Owner::ChangePreview
         | Owner::Window => Reroute::Nowhere,
+    }
+}
+
+impl WorkspaceView {
+    /// Una acción que llegó a la raíz sin que la atendiera su vista.
+    pub(super) fn reroute(
+        &mut self,
+        invocation: &Invocation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let visible = Visible {
+            sidebar: self.sidebar.read(cx).is_visible(),
+            list: self.list.read(cx).is_visible(),
+            context: self.context.read(cx).is_visible(),
+        };
+        match reroute(invocation.action.owner(), visible, self.overlay.is_some()) {
+            Reroute::Sidebar => self.focus_sidebar(window, cx),
+            Reroute::List => self.focus_list(window, cx),
+            Reroute::Context => self.focus_context(window, cx),
+            Reroute::Editor => self.focus(window, cx),
+            Reroute::Nowhere => {
+                let name = invocation.action.name();
+                let error = format!("{name} no tiene a quién llegar: su vista no está abierta");
+                self.workspace.update(cx, |workspace, _| {
+                    workspace.show_message(Message::Error(error));
+                });
+                cx.notify();
+                return;
+            }
+        }
+        window.dispatch_action(Box::new(Dispatch(invocation.clone())), cx);
     }
 }
 
