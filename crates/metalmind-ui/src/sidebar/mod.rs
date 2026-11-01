@@ -20,12 +20,13 @@ use gpui_kit::{
     App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
     UniformListScrollHandle, Window,
 };
+use metalmind_config::SavedView;
 use metalmind_vault::{Vault, VaultPath, VaultUpdate};
 
 use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
-use crate::finder::{FocusChanged, VaultChanged, VaultSession};
+use crate::finder::{FocusChanged, VaultChanged, VaultSession, ViewsChanged};
 use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_change::TagRequest;
@@ -57,6 +58,9 @@ pub enum SidebarEvent {
     /// Crear esta nota y abrirla: la ventana le pone los tags del focus y
     /// la plantilla que pidan.
     CreateNote(VaultPath),
+    /// Mostrar esta vista guardada en la lista; con `focus_list`, el foco
+    /// pasa a la lista y si no se queda en el panel.
+    ShowView { view: SavedView, focus_list: bool },
 }
 
 pub struct Sidebar {
@@ -72,6 +76,7 @@ pub struct Sidebar {
     menu: Option<ContextMenu>,
     _changes: Subscription,
     _focus: Subscription,
+    _views: Subscription,
     _workspace: Subscription,
 }
 
@@ -97,9 +102,16 @@ impl Sidebar {
             sidebar.scroll_to_selection();
             cx.notify();
         });
+        let views = cx.subscribe(session, |sidebar, session, _: &ViewsChanged, cx| {
+            sidebar.menu = None;
+            sidebar.panel.set_views(session.read(cx).views());
+            sidebar.scroll_to_selection();
+            cx.notify();
+        });
         // La nota activa se marca en el árbol: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
-        let panel = Panel::new(tree, tags, state.visible, state.view());
+        let mut panel = Panel::new(tree, tags, state.visible, state.view());
+        panel.set_views(session.read(cx).views());
         Self {
             panel,
             vault,
@@ -111,6 +123,7 @@ impl Sidebar {
             menu: None,
             _changes: changes,
             _focus: focus,
+            _views: views,
             _workspace: workspace_changes,
         }
     }

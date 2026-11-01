@@ -1,3 +1,4 @@
+use metalmind_config::SavedView;
 use metalmind_vault::tags::TagKey;
 use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use metalmind_vim::argument_words;
@@ -45,6 +46,7 @@ fn folders() -> Arc<FolderCandidates> {
 struct Fixture {
     tags: Arc<[TagCompletion]>,
     folders: Arc<FolderCandidates>,
+    views: Arc<[SavedView]>,
     names: FuzzyMatcher,
     paths: FuzzyMatcher,
 }
@@ -54,6 +56,16 @@ impl Fixture {
         Self {
             tags: tags(),
             folders: folders(),
+            views: Arc::from([
+                SavedView {
+                    name: "gs".to_owned(),
+                    query: "#gs -#archivado".to_owned(),
+                },
+                SavedView {
+                    name: "Para hoy".to_owned(),
+                    query: "#hoy".to_owned(),
+                },
+            ]),
             names: FuzzyMatcher::text(),
             paths: FuzzyMatcher::paths(),
         }
@@ -68,6 +80,7 @@ impl Fixture {
         let sources = ArgumentSources {
             tags: Arc::clone(&self.tags),
             folders: Arc::clone(&self.folders),
+            views: Arc::clone(&self.views),
             names: &mut self.names,
             paths: &mut self.paths,
         };
@@ -122,6 +135,34 @@ fn un_tag_ofrece_tags(#[case] typed: &str, #[case] expected: &[&str]) {
 #[case::nada_coincide("zzz", &[])]
 fn lo_demas_ofrece_carpetas(#[case] typed: &str, #[case] expected: &[&str]) {
     assert_eq!(Fixture::new().offered(typed), expected);
+}
+
+/// Tras `@` van las vistas guardadas, en el orden del archivo, y aceptar
+/// escribe su nombre escapado para que `:focus` lo lea igual.
+#[rstest::rstest]
+#[case::todas("@", &["@gs", r"@Para\ hoy"])]
+#[case::por_nombre("@par", &[r"@Para\ hoy"])]
+#[case::escapada(r"\@g", &[])]
+#[case::nada_coincide("@zzz", &[])]
+fn una_arroba_ofrece_vistas(#[case] typed: &str, #[case] expected: &[&str]) {
+    assert_eq!(Fixture::new().offered(typed), expected);
+}
+
+/// Si cambian las vistas con la lista abierta, la elegida sigue elegida.
+#[test]
+fn la_vista_elegida_sigue_elegida_con_otras_vistas() {
+    let mut fixture = Fixture::new();
+    let mut list = fixture.open("@", None).unwrap();
+    list.selection_mut().select(1);
+    fixture.views = Arc::from([
+        SavedView {
+            name: "nueva".to_owned(),
+            query: "#n".to_owned(),
+        },
+        fixture.views[1].clone(),
+    ]);
+    let list = fixture.open("@", Some(list)).unwrap();
+    assert_eq!(list.accept(), r"@Para\ hoy");
 }
 
 #[test]

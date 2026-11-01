@@ -1,5 +1,6 @@
 use std::fs;
 
+use metalmind_config::SavedView;
 use metalmind_vault::Vault;
 use metalmind_vault::tags::ScopeWord;
 use pretty_assertions::assert_eq;
@@ -49,6 +50,9 @@ fn shown(outline: &TagOutline) -> Vec<String> {
             };
             let indent = "  ".repeat(row.depth);
             let label = match &row.kind {
+                RowKind::View { view, count } => {
+                    format!("  @{} {} ({count})", view.name, view.query)
+                }
                 RowKind::Tag {
                     name,
                     count,
@@ -291,4 +295,100 @@ fn en_focus_quedan_sus_tags_con_el_conteo_de_dentro() {
             " ▸ Buzón (2)",
         ]
     );
+}
+
+fn views(views: &[(&str, &str)]) -> Arc<[SavedView]> {
+    views
+        .iter()
+        .map(|(name, query)| SavedView {
+            name: (*name).to_owned(),
+            query: (*query).to_owned(),
+        })
+        .collect()
+}
+
+/// Las vistas antes de la primera vez que se arma, como al abrir el panel.
+fn with_views(saved: &[(&str, &str)]) -> TagOutline {
+    let mut outline = TagOutline::new(tags_of(FILES));
+    outline.set_views(views(saved));
+    outline.refresh();
+    outline
+}
+
+/// Las vistas guardadas van arriba, en el orden del archivo, con su consulta
+/// y sus notas; una con algo que no es de tags no tiene ninguna (06 §10).
+#[test]
+fn las_vistas_van_arriba_con_su_consulta_y_su_conteo() {
+    let mut outline = outline_of(tags_of(FILES));
+    outline.set_views(views(&[
+        ("rust vivo", "#rust -#ui"),
+        ("sin tags", "-#"),
+        ("con texto", "#rust parser"),
+    ]));
+    assert_eq!(outline.rows().len(), 3, "sin refresh, las filas no cambian");
+    outline.refresh();
+    outline.select_first();
+    assert_eq!(
+        shown(&outline),
+        [
+            ">  @rust vivo #rust -#ui (2)",
+            "   @sin tags -# (2)",
+            "   @con texto #rust parser (0)",
+            " ▸ #Rust (3)",
+            " ▸ #ui (2)",
+            " ▸ Buzón (2)",
+        ]
+    );
+    assert_eq!(
+        outline.selected_entry().and_then(Row::view),
+        Some(&views(&[("rust vivo", "#rust -#ui")])[0])
+    );
+    assert_eq!(outline.selected_entry().unwrap().tag_name(), None);
+}
+
+/// Una vista no se abre en el panel: `l` y `enter` la muestran en la lista.
+#[test]
+fn una_vista_no_se_abre_en_el_panel() {
+    let mut outline = with_views(&[("gs", "#ui")]);
+    let before = shown(&outline);
+    outline.toggle_selected();
+    outline.expand_or_enter();
+    assert_eq!(shown(&outline), before);
+    outline.select_next();
+    outline.collapse_or_parent();
+    assert_eq!(
+        outline.selected_row(),
+        Some(1),
+        "un tag raíz no sube a la vista"
+    );
+}
+
+/// En focus, cada vista cuenta solo sus notas dentro de él, y se ve aunque
+/// no tenga ninguna: es por donde se entra a ella.
+#[test]
+fn en_focus_las_vistas_cuentan_lo_de_dentro() {
+    let mut outline = with_views(&[("rust", "#rust"), ("sin tags", "-#")]);
+    outline.set_scope(Scope::from_words([ScopeWord::Tag("#ui")]).unwrap());
+    outline.refresh();
+    assert_eq!(
+        shown(&outline)[..2],
+        [">  @rust #rust (1)", "   @sin tags -# (0)"]
+    );
+}
+
+/// Al cambiar las vistas, la elegida sigue elegida en su fila nueva.
+#[test]
+fn la_vista_elegida_sigue_elegida_al_cambiar_las_vistas() {
+    let mut outline = with_views(&[("a", "#ui"), ("b", "#rust")]);
+    outline.select_next();
+    outline.set_views(views(&[("b", "#rust"), ("a", "#ui")]));
+    outline.refresh();
+    assert_eq!(
+        outline
+            .selected_entry()
+            .and_then(Row::view)
+            .map(|view| view.name.as_str()),
+        Some("b")
+    );
+    assert_eq!(outline.selected_row(), Some(0));
 }

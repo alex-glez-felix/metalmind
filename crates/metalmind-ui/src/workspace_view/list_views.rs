@@ -59,20 +59,49 @@ impl WorkspaceView {
         self.ask_view_name(ViewNameQuestion::new(purpose, &views), window, cx);
     }
 
-    /// Las vistas del vault; si su config está rota, lo dice y da `None`.
+    /// Una vista elegida en el panel: la lista la muestra, si no la mostraba
+    /// ya, y se abre si estaba plegada.
+    pub(super) fn show_view(
+        &mut self,
+        view: &SavedView,
+        focus_list: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let source = ListSource::of_view(view);
+        let list = self.list.read(cx);
+        if !(list.is_visible() && list.state().source == source) {
+            self.list.update(cx, |list, cx| list.set_source(source, cx));
+        }
+        if focus_list {
+            self.focus_list(window, cx);
+        }
+    }
+
+    /// Las vistas del vault, que la sesión toma como las de ahora; si su
+    /// config está rota, lo dice y da `None`.
     pub(super) fn vault_views(&mut self, cx: &mut Context<Self>) -> Option<Vec<SavedView>> {
         let root = self.session.read(cx).root().to_owned();
         let (views, diagnostics) = load_views(&root);
-        match diagnostics
+        if let Some(error) = diagnostics
             .into_iter()
             .find(|diagnostic| diagnostic.severity == metalmind_config::Severity::Error)
         {
-            Some(error) => {
-                self.tell(Message::Error(error.to_string()), cx);
-                None
-            }
-            None => Some(views),
+            self.tell(Message::Error(error.to_string()), cx);
+            return None;
         }
+        self.views_changed(views.clone(), None, cx);
+        Some(views)
+    }
+
+    fn views_changed(
+        &self,
+        views: Vec<SavedView>,
+        renamed: Option<(&str, &str)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.session
+            .update(cx, |session, cx| session.set_views(views, renamed, cx));
     }
 
     fn ask_view_name(
@@ -140,7 +169,11 @@ impl WorkspaceView {
             Ok(VaultConfig::save_view(text, name, query)?)
         });
         let view = match saved {
-            Ok(views) => views.into_iter().find(|view| view.name == name),
+            Ok(views) => {
+                let view = views.iter().find(|view| view.name == name).cloned();
+                self.views_changed(views, None, cx);
+                view
+            }
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),
         };
         if let Some(view) = view {
@@ -164,9 +197,7 @@ impl WorkspaceView {
         });
         match renamed {
             Ok(views) => {
-                self.list.update(cx, |list, cx| {
-                    list.follow_views(&views, Some((from, to)), cx);
-                });
+                self.views_changed(views, Some((from, to)), cx);
                 let text = format!("la vista «{from}» se llama ahora «{to}»");
                 self.tell(Message::Info(text), cx);
             }
@@ -184,8 +215,7 @@ impl WorkspaceView {
         });
         match deleted {
             Ok(views) => {
-                self.list
-                    .update(cx, |list, cx| list.follow_views(&views, None, cx));
+                self.views_changed(views, None, cx);
                 let text = format!("se borró la vista «{name}» ({query}); sus notas no cambian");
                 self.tell(Message::Info(text), cx);
             }

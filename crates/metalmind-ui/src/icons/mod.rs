@@ -30,11 +30,13 @@ pub enum Icon {
     Inbox,
     Backlinks,
     NoteList,
+    /// Una vista guardada.
+    Bookmark,
 }
 
 impl Icon {
     #[cfg(test)]
-    const ALL: [Self; 11] = [
+    const ALL: [Self; 12] = [
         Self::Folder,
         Self::FolderOpen,
         Self::Note,
@@ -46,6 +48,7 @@ impl Icon {
         Self::Inbox,
         Self::Backlinks,
         Self::NoteList,
+        Self::Bookmark,
     ];
 
     /// La ruta que GPUI le pide a [`Assets`].
@@ -62,6 +65,7 @@ impl Icon {
             Self::Inbox => "icons/tabler/inbox.svg",
             Self::Backlinks => "icons/tabler/arrow-back-up.svg",
             Self::NoteList => "icons/tabler/list.svg",
+            Self::Bookmark => "icons/tabler/bookmark.svg",
         }
     }
 }

@@ -265,3 +265,22 @@ fn el_menu_ofrece_enfocar_o_salir_del_focus() {
     );
     assert_eq!(MenuItem::Unfocus.label(), "Salir del focus");
 }
+
+/// Sobre una vista: mostrarla en la lista con `enter` y enfocarla con `F`.
+#[test]
+fn el_menu_de_una_vista_la_muestra_o_la_enfoca() {
+    let keymap = Keymap::default();
+    let items: Vec<(&str, Option<String>)> =
+        ContextMenu::on_view(Point::default(), "gs".to_owned())
+            .with_focus(false)
+            .items()
+            .map(|item| (item.label(), item.keys(&keymap)))
+            .collect();
+    assert_eq!(
+        items,
+        [
+            ("Mostrar en la lista", Some("enter".to_owned())),
+            ("Enfocar", Some("F".to_owned())),
+        ]
+    );
+}

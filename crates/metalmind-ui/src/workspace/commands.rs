@@ -16,7 +16,6 @@ use super::options;
 use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
-use crate::focus::Focus;
 use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
 use crate::tag_change::{RequestError, TagField, TagRequest};
@@ -76,9 +75,11 @@ pub enum Effect {
     OpenDailyNote,
     /// `:tagpage #tag`: la ventana, que tiene los tags, abre su página.
     OpenTagPage(String),
-    /// `:focus` con un alcance o `:unfocus`: la ventana, que tiene la
-    /// sesión del vault, pone o quita el focus.
-    SetFocus(Option<Focus>),
+    /// `:focus` con un alcance: la ventana, que tiene la sesión del vault y
+    /// sus vistas guardadas, lo lee y lo pone.
+    Focus(String),
+    /// `:unfocus`: la ventana quita el focus.
+    ClearFocus,
     /// `:focus` sin alcance: la ventana dice el de ahora.
     ShowFocus,
     /// `:messages`: el historial de avisos.
@@ -224,11 +225,11 @@ impl Workspace {
                 Some(tag) if !tag.is_empty() => Ok(Effect::OpenTagPage(tag.to_owned())),
                 _ => Err(RequestError::Usage(":tagpage #tag").into()),
             },
-            Command::Focus => Ok(match Focus::parse(argument.unwrap_or_default())? {
-                Some(focus) => Effect::SetFocus(Some(focus)),
+            Command::Focus => Ok(match argument.filter(|text| !text.trim().is_empty()) {
+                Some(text) => Effect::Focus(text.to_owned()),
                 None => Effect::ShowFocus,
             }),
-            Command::ClearFocus => Ok(Effect::SetFocus(None)),
+            Command::ClearFocus => Ok(Effect::ClearFocus),
         }
     }
 

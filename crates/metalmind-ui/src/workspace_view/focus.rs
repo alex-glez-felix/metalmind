@@ -9,6 +9,18 @@ use crate::focus::Focus;
 use crate::workspace::Message;
 
 impl WorkspaceView {
+    /// `:focus` con un alcance, que puede nombrar vistas guardadas (`@gs`).
+    pub(super) fn focus_on(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let views = self.session.read(cx).views();
+        match Focus::parse(text, &views) {
+            Ok(focus) => self.set_focus(focus, window, cx),
+            Err(error) => {
+                self.tell(Message::Error(error.to_string()), cx);
+                self.focus(window, cx);
+            }
+        }
+    }
+
     pub(super) fn set_focus(
         &mut self,
         focus: Option<Focus>,

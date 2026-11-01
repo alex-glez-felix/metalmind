@@ -11,7 +11,7 @@ use std::sync::{Arc, mpsc};
 use std::{fs, thread};
 
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
-use metalmind_config::Paths;
+use metalmind_config::{Paths, SavedView};
 use metalmind_vault::tags::Tags;
 use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultUpdate};
 
@@ -37,6 +37,12 @@ pub struct WatchLost(pub Unwatched);
 /// Se puso, cambió o se quitó el focus.
 pub struct FocusChanged;
 
+/// Las vistas guardadas del vault cambiaron; `renamed`, si fue porque una
+/// cambió de nombre (de, a), para que lo que la mostraba la siga.
+pub struct ViewsChanged {
+    pub renamed: Option<(String, String)>,
+}
+
 pub struct VaultSession {
     /// Compartido con el panel lateral, que hace las operaciones de archivo.
     vault: Rc<Vault>,
@@ -48,6 +54,8 @@ pub struct VaultSession {
     tags: Arc<Tags>,
     /// El focus de la sesión (05 §3): al reabrir, la app empieza sin él.
     focus: Option<(Focus, Arc<InScope>)>,
+    /// Las vistas guardadas (06 §10), como se leyeron la última vez.
+    views: Arc<[SavedView]>,
     unwatched: Option<Unwatched>,
     _updates: Task<()>,
     _quit: Subscription,
@@ -56,6 +64,7 @@ pub struct VaultSession {
 impl EventEmitter<VaultChanged> for VaultSession {}
 impl EventEmitter<WatchLost> for VaultSession {}
 impl EventEmitter<FocusChanged> for VaultSession {}
+impl EventEmitter<ViewsChanged> for VaultSession {}
 
 /// Lo que se prepara antes de abrir la ventana: los hilos que siguen al
 /// vault y guardan los recientes, y los recientes guardados.
@@ -117,6 +126,8 @@ impl VaultSession {
         let notes = notes(&vault.snapshot(), &recents);
         let tags = vault.tags();
         let unwatched = vault.unwatched();
+        // Con la config rota, ninguna: quien la lee al abrir lo dice.
+        let (views, _) = crate::note_list::load_views(vault.root());
         Self {
             vault: Rc::new(vault),
             recents,
@@ -124,6 +135,7 @@ impl VaultSession {
             notes,
             tags,
             focus: None,
+            views: views.into(),
             unwatched,
             _updates: updates,
             _quit: quit,
@@ -185,6 +197,33 @@ impl VaultSession {
             .focus()
             .is_some_and(|current| current.same_scope(&focus));
         self.set_focus((!same).then_some(focus), cx);
+    }
+
+    #[must_use]
+    pub fn views(&self) -> Arc<[SavedView]> {
+        Arc::clone(&self.views)
+    }
+
+    /// Las vistas como quedaron en el archivo; el focus sigue a las suyas
+    /// (ver [`Focus::follow_views`]).
+    pub fn set_views(
+        &mut self,
+        views: Vec<SavedView>,
+        renamed: Option<(&str, &str)>,
+        cx: &mut Context<Self>,
+    ) {
+        self.views = views.into();
+        let followed = self
+            .focus
+            .as_mut()
+            .is_some_and(|(focus, _)| focus.follow_views(&self.views, renamed));
+        if followed && let Some((focus, _)) = self.focus.take() {
+            self.set_focus(Some(focus), cx);
+        }
+        cx.emit(ViewsChanged {
+            renamed: renamed.map(|(from, to)| (from.to_owned(), to.to_owned())),
+        });
+        cx.notify();
     }
 
     /// Las notas del finder en `index`, dentro del focus si hay uno.
@@ -331,7 +370,68 @@ fn read_recents(file: &Path) -> Recents {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
+    use gpui_kit::{AppContext as _, TestAppContext};
+
     use super::*;
+
+    /// Las vistas se leen del vault al abrir; cuando cambian, el focus de
+    /// una sigue a su nombre y su consulta nuevos, y se avisa de las dos
+    /// cosas.
+    #[test]
+    fn el_focus_sigue_a_su_vista() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.md"), "#rust").unwrap();
+        fs::write(dir.path().join("b.md"), "#gs").unwrap();
+        fs::create_dir(dir.path().join(".metalmind")).unwrap();
+        fs::write(
+            dir.path().join(".metalmind/config.yaml"),
+            "views:\n  gs: \"#gs\"\n",
+        )
+        .unwrap();
+        let (vault, updates) = Vault::open(dir.path()).unwrap();
+        let prepared = Prepared::new(vault, updates, None).unwrap();
+        let mut cx = TestAppContext::single();
+        let session = cx.update(|cx| cx.new(|cx| VaultSession::new(prepared, cx)));
+        let views = session.read_with(&cx, |session, _| session.views());
+        assert_eq!(views.len(), 1);
+        let focus = Focus::parse("@gs", &views).unwrap();
+        session.update(&mut cx, |session, cx| session.set_focus(focus, cx));
+        let events = Rc::new(Cell::new((0, 0)));
+        let (on_focus, on_views) = (Rc::clone(&events), Rc::clone(&events));
+        cx.update(|cx| {
+            cx.subscribe(&session, move |_, _: &FocusChanged, _| {
+                let (focus, views) = on_focus.get();
+                on_focus.set((focus + 1, views));
+            })
+            .detach();
+            cx.subscribe(&session, move |_, _: &ViewsChanged, _| {
+                let (focus, views) = on_views.get();
+                on_views.set((focus, views + 1));
+            })
+            .detach();
+        });
+        let estudio = SavedView {
+            name: "estudio".to_owned(),
+            query: "#rust".to_owned(),
+        };
+        session.update(&mut cx, |session, cx| {
+            session.set_views(vec![estudio], Some(("gs", "estudio")), cx);
+        });
+        cx.run_until_parked();
+        assert_eq!(events.get(), (1, 1));
+        session.read_with(&cx, |session, _| {
+            assert_eq!(session.focus().unwrap().label(), "focus: @estudio");
+            let in_scope = session.in_scope().unwrap();
+            assert!(in_scope.contains_file(&VaultPath::new("a.md").unwrap()));
+            assert!(!in_scope.contains_file(&VaultPath::new("b.md").unwrap()));
+        });
+        let same = session.read_with(&cx, |session, _| session.views().to_vec());
+        session.update(&mut cx, |session, cx| session.set_views(same, None, cx));
+        cx.run_until_parked();
+        assert_eq!(events.get(), (1, 2), "el focus no cambió");
+    }
 
     #[test]
     fn los_recientes_se_leen_de_lo_guardado() {

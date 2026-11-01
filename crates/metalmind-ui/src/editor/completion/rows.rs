@@ -11,8 +11,9 @@ use metalmind_vault::EntryKind;
 use super::super::completion_menu::MenuRow;
 use crate::completion::{
     ArgumentCompletions, ArgumentList, CommandCompletions, LinkCompletions, TagCompletions,
+    ViewCompletions,
 };
-use crate::icons;
+use crate::icons::{self, Icon};
 use crate::theme::Theme;
 
 pub(super) fn tags(list: &TagCompletions, visible: Range<usize>, theme: &Theme) -> Vec<MenuRow> {
@@ -73,6 +74,7 @@ pub(super) fn argument(
 ) -> Vec<MenuRow> {
     let folders = match list.list() {
         ArgumentList::Tags { list, .. } => return tags(list, visible, theme),
+        ArgumentList::Views(list) => return views(list, visible, theme),
         ArgumentList::Folders(folders) => folders,
     };
     folders
@@ -83,6 +85,19 @@ pub(super) fn argument(
             icon: icons::entry(EntryKind::Folder, false, theme),
             name: format!("{folder}/"),
             detail: None,
+            count: None,
+        })
+        .collect()
+}
+
+fn views(list: &ViewCompletions, visible: Range<usize>, theme: &Theme) -> Vec<MenuRow> {
+    list.rows()
+        .skip(visible.start)
+        .take(visible.len())
+        .map(|view| MenuRow {
+            icon: icons::icon(Icon::Bookmark, theme.ui.panel_muted, theme),
+            name: view.name.clone(),
+            detail: Some(view.query.clone()),
             count: None,
         })
         .collect()

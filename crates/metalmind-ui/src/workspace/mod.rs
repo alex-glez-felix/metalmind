@@ -42,7 +42,6 @@ use std::rc::Rc;
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Goal, Selection, Selections, Splice};
 use metalmind_keymap::{Keymap, UnknownAction};
 use metalmind_syntax::Screen;
-use metalmind_vault::tags::ScopeError;
 use metalmind_vim::{
     Action, Clipboard, FileId, Indent, Layout, Markdown, Mode, PaneState, Pattern, Prompt, Target,
     Viewport, Vim, VimError,
@@ -83,8 +82,6 @@ pub enum WorkspaceError {
     UnknownAction(#[from] UnknownAction),
     #[error(transparent)]
     TagRequest(#[from] RequestError),
-    #[error(transparent)]
-    Focus(#[from] ScopeError),
 }
 
 /// Lo que muestra un panel.

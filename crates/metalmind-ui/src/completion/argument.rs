@@ -1,24 +1,27 @@
 //! La lista del autocompletado de la palabra que se escribe en el
 //! argumento de un comando de `:` (#156), sin GPUI. En `:focus`, tras `#` o
-//! `-#` van los tags, los mismos que en `#` dentro de una nota, y si no las
-//! carpetas del vault. Aceptar escribe la palabra entera, con sus escapes.
+//! `-#` van los tags, los mismos que en `#` dentro de una nota, tras `@` las
+//! vistas guardadas, y si no las carpetas del vault. Aceptar escribe la
+//! palabra entera, con sus escapes.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use metalmind_config::SavedView;
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
 use metalmind_vault::tags::TagCompletion;
-use metalmind_vim::ArgumentWord;
+use metalmind_vim::{ArgumentWord, escape_argument};
 
-use super::{FolderCandidates, FolderCompletions, Selection, TagCompletions};
+use super::{FolderCandidates, FolderCompletions, Selection, TagCompletions, ViewCompletions};
 use crate::focus::folder_argument;
 
 /// Lo que se puede ofrecer, ya preparado para filtrar.
 pub struct ArgumentSources<'a> {
     pub tags: Arc<[TagCompletion]>,
     pub folders: Arc<FolderCandidates>,
-    /// Para nombres de tags.
+    pub views: Arc<[SavedView]>,
+    /// Para nombres de tags y de vistas.
     pub names: &'a mut FuzzyMatcher,
     /// Para rutas.
     pub paths: &'a mut FuzzyMatcher,
@@ -38,11 +41,14 @@ pub enum ArgumentList {
         negated: bool,
     },
     Folders(FolderCompletions),
+    /// `@gs`.
+    Views(ViewCompletions),
 }
 
 /// Lo que pide una palabra de `:focus`.
 enum FocusWord<'w> {
     Tag { typed: &'w str, negated: bool },
+    View(&'w str),
     Folder(&'w str),
 }
 
@@ -61,6 +67,9 @@ impl<'w> FocusWord<'w> {
                     typed,
                     negated: false,
                 };
+            }
+            if let Some(typed) = text.strip_prefix('@') {
+                return Self::View(typed);
             }
         }
         Self::Folder(text)
@@ -113,6 +122,17 @@ impl ArgumentCompletions {
                 FolderCompletions::open(sources.folders, typed, sources.paths)
                     .map(ArgumentList::Folders)
             }
+            (FocusWord::View(typed), Some(ArgumentList::Views(list))) => {
+                if list.is_for(&sources.views, typed) {
+                    Some(list)
+                } else {
+                    list.with_views(sources.views, sources.names)
+                }
+                .map(ArgumentList::Views)
+            }
+            (FocusWord::View(typed), _) => {
+                ViewCompletions::open(sources.views, typed, sources.names).map(ArgumentList::Views)
+            }
         }?;
         Some(Self {
             word: word.clone(),
@@ -130,6 +150,7 @@ impl ArgumentCompletions {
         match &self.list {
             ArgumentList::Tags { list, .. } => list.rows().len(),
             ArgumentList::Folders(list) => list.rows().len(),
+            ArgumentList::Views(list) => list.rows().len(),
         }
     }
 
@@ -138,6 +159,7 @@ impl ArgumentCompletions {
         match &self.list {
             ArgumentList::Tags { list, .. } => list.selection(),
             ArgumentList::Folders(list) => list.selection(),
+            ArgumentList::Views(list) => list.selection(),
         }
     }
 
@@ -145,11 +167,12 @@ impl ArgumentCompletions {
         match &mut self.list {
             ArgumentList::Tags { list, .. } => list.selection_mut(),
             ArgumentList::Folders(list) => list.selection_mut(),
+            ArgumentList::Views(list) => list.selection_mut(),
         }
     }
 
     /// La palabra que escribe aceptar en lugar de la escrita: `#Rust`,
-    /// `-#Rust` o `Mis\ notas/`.
+    /// `-#Rust`, `@Para\ hoy` o `Mis\ notas/`.
     #[must_use]
     pub fn accept(&self) -> String {
         match &self.list {
@@ -158,6 +181,7 @@ impl ArgumentCompletions {
                 format!("{sign}{}", list.accept())
             }
             ArgumentList::Folders(list) => folder_argument(list.accept()),
+            ArgumentList::Views(list) => format!("@{}", escape_argument(&list.accept().name)),
         }
     }
 }

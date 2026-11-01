@@ -210,10 +210,11 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Files(changed_outside)],
     ),
     // La vista de tags del panel, al final para no cambiar las demás: las
-    // raíces, `#Rust` abierto con `#diseño` (su hijo, con ícono) abierto
-    // dentro, el buzón al final y el menú de una nota junto al borde.
+    // dos vistas guardadas arriba, las raíces, `#Rust` abierto con `#diseño`
+    // (su hijo, con ícono) abierto dentro, el buzón al final y el menú de
+    // una nota junto al borde.
     ("tags", &[Step::Keys("<Esc><Space>t")]),
-    ("tags-abierto", &[Step::Keys("jjjjjlll")]),
+    ("tags-abierto", &[Step::Keys("jjjjjjjlll")]),
     ("tags-buzon", &[Step::Keys("GlG")]),
     ("tags-menu-borde", &[Step::RightClickBottomRow]),
     // El autocompletado de `#`: la lista, por un alias, eligiendo con
@@ -254,8 +255,9 @@ const SCENES: &[(&str, &[Step])] = &[
     (
         "tags-menu-tag",
         &[
+            // Bajo las dos vistas guardadas.
             Step::Keys("<Esc><Esc><C-w>o<Space>tgg"),
-            Step::RightClickRow(0),
+            Step::RightClickRow(2),
         ],
     ),
     // Renombrar es la séptima entrada del menú de un tag.
@@ -295,7 +297,7 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::Settle,
             Step::Keys("<Esc><Esc><C-w>o<C-w>h"),
             // `#Rust`, cuya página pide `rust/capitulo`.
-            Step::RightClickRow(9),
+            Step::RightClickRow(11),
         ],
     ),
     ("tags-nueva-nota", &[Step::Keys("<CR>")]),
@@ -326,7 +328,7 @@ const SCENES: &[(&str, &[Step])] = &[
     // previa y aplicada, un ícono que no vale y la página abierta.
     (
         "tags-menu-completo",
-        &[Step::Keys("<C-w>h"), Step::RightClickRow(9)],
+        &[Step::Keys("<C-w>h"), Step::RightClickRow(11)],
     ),
     ("tags-alias-pregunta", &[Step::Keys("<Esc>e")]),
     (
@@ -425,9 +427,9 @@ const SCENES: &[(&str, &[Step])] = &[
     ("focus-finder-vacio", &[Step::Keys("<Space>f")]),
     (
         "focus-desde-el-panel",
-        &[Step::Keys("<Esc>:unfocus<CR><C-w>hTggF")],
+        &[Step::Keys("<Esc>:unfocus<CR><C-w>hTggjjF")],
     ),
-    ("focus-menu-salir", &[Step::RightClickRow(1)]),
+    ("focus-menu-salir", &[Step::RightClickRow(3)]),
     ("sin-focus", &[Step::Keys("<Esc>F")]),
     // El panel de contexto: muchas notas con rutas hondas, líneas largas y
     // multibyte que enlazan a `Metalmind/plan` (llegan como de otro
@@ -660,6 +662,21 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<Esc><C-S-p>editor: toggle")],
     ),
     ("opcion-guardada", &[Step::Keys("<C-u>continue lists<CR>")]),
+    // Las vistas guardadas en el panel y en focus (#209): arriba de los
+    // tags con su consulta y sus notas, el menú de la de nombre largo,
+    // `enter` sobre «Rust al dia» la muestra en la lista y `F` la enfoca (el
+    // panel cuenta dentro del focus); tras `@`, `:focus` ofrece las vistas,
+    // y una que no existe es un error.
+    ("vistas-panel", &[Step::Keys("<Esc><Esc><C-w>o<Space>tgg")]),
+    ("vistas-panel-menu", &[Step::RightClickRow(0)]),
+    ("vistas-panel-lista", &[Step::Keys("<Esc>jj<CR>")]),
+    ("vistas-focus-panel", &[Step::Keys("<C-w>hF")]),
+    (
+        "vistas-focus-completar",
+        &[Step::Keys("<C-w>l<C-w>l:unfocus<CR>:focus Proyectos/ @")],
+    ),
+    ("vistas-focus-escrito", &[Step::Keys("<Tab><CR>")]),
+    ("vistas-focus-error", &[Step::Keys(":focus @nada<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

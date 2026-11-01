@@ -8,7 +8,9 @@ use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 use pretty_assertions::assert_eq;
 
 use super::*;
-use crate::focus::Focus;
+use metalmind_config::SavedView;
+
+use crate::focus::{Focus, FocusError};
 use crate::picker::LineEdit;
 
 fn path(path: &str) -> VaultPath {
@@ -33,7 +35,7 @@ fn panel(view: PanelView) -> Panel {
 }
 
 fn focus_on(panel: &mut Panel, text: &str) {
-    let focus = Focus::parse(text).unwrap().unwrap();
+    let focus = Focus::parse(text, &[]).unwrap().unwrap();
     let in_scope = focus.resolve(panel.tree.index(), panel.tags.tags());
     panel.set_focus(focus.scope().clone(), Some(Arc::new(in_scope)));
 }
@@ -41,11 +43,43 @@ fn focus_on(panel: &mut Panel, text: &str) {
 #[test]
 fn f_enfoca_la_carpeta_o_el_tag_elegido_pero_no_un_archivo() {
     let mut folders = panel(PanelView::Folders);
-    assert_eq!(folders.selected_focus(), Some(Focus::folder(path("a"))));
+    assert_eq!(folders.selected_focus(), Some(Ok(Focus::folder(path("a")))));
     folders.outline_mut().select_row(1);
     assert_eq!(folders.selected_focus(), None, "c.md no es un alcance");
     let tags = panel(PanelView::Tags);
-    assert_eq!(tags.selected_focus(), Some(Focus::tag("rust")));
+    assert_eq!(tags.selected_focus(), Some(Ok(Focus::tag("rust"))));
+}
+
+/// `F` sobre una vista es su consulta; una con texto no se enfoca y lo
+/// dice. Sin la vista de tags a la vista, no hay vista elegida.
+#[test]
+fn f_sobre_una_vista_enfoca_su_consulta() {
+    let gs = SavedView {
+        name: "gs".to_owned(),
+        query: "#rust".to_owned(),
+    };
+    let with_text = SavedView {
+        name: "texto".to_owned(),
+        query: "#rust parser".to_owned(),
+    };
+    let mut tags = panel(PanelView::Tags);
+    tags.set_views(Arc::from([gs.clone(), with_text.clone()]));
+    tags.outline_mut().select_first();
+    assert_eq!(tags.selected_view(), Some(&gs));
+    assert_eq!(tags.selected_focus(), Some(Focus::view(&gs)));
+    tags.outline_mut().select_next();
+    assert_eq!(
+        tags.selected_focus(),
+        Some(Err(FocusError::NotTags {
+            name: "texto".to_owned(),
+            word: "parser".to_owned(),
+        }))
+    );
+    tags.outline_mut().select_next();
+    assert_eq!(tags.selected_view(), None, "un tag no es una vista");
+    tags.outline_mut().select_first();
+    tags.switch_view();
+    assert_eq!(tags.selected_view(), None);
 }
 
 /// Con `a/b/` de focus el árbol muestra `a` y su `b`: crear sobre `a`

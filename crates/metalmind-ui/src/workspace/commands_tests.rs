@@ -998,28 +998,19 @@ fn w_bang_a_la_ruta_de_otro_buffer_abierto_da_e139() {
     assert_eq!(fs::read_to_string(&b).unwrap(), before);
 }
 
-/// `:focus` lee el alcance y la ventana lo pone; sin alcance, dice el de
-/// ahora, y uno inválido es un error que no cambia nada (05 §3).
+/// `:focus` le pasa el alcance a la ventana, que conoce las vistas
+/// guardadas y lo lee; sin alcance, dice el de ahora (05 §3).
 #[test]
 fn focus_y_unfocus_los_pone_la_ventana() {
     let mut session = Session::new("uno\n");
-    session.keys(":focus  proyectos/   #rust -#archivado⏎");
-    let Effect::SetFocus(Some(focus)) = &session.effect else {
-        panic!("{:?}", session.effect);
-    };
-    assert_eq!(focus.label(), "focus: proyectos/ #rust -#archivado");
+    session.keys(":focus  proyectos/   @gs⏎");
+    assert_eq!(session.effect, Effect::Focus("proyectos/   @gs".to_owned()));
     session.keys(":focus⏎");
     assert_eq!(session.effect, Effect::ShowFocus);
+    session.keys(":focus   ⏎");
+    assert_eq!(session.effect, Effect::ShowFocus);
     session.keys(":unfocus⏎");
-    assert_eq!(session.effect, Effect::SetFocus(None));
-    session.keys(":focus a/ b/⏎");
-    assert_eq!(session.effect, Effect::Stay);
-    assert_eq!(
-        error(&session),
-        Some("un alcance tiene una sola carpeta: `a/` y `b/`")
-    );
-    session.keys(":focus #2024/10⏎");
-    assert_eq!(error(&session), Some("`#2024/10` no es un tag válido"));
+    assert_eq!(session.effect, Effect::ClearFocus);
     assert_eq!(session.text(), "uno\n");
 }
 

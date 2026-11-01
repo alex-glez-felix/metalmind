@@ -88,6 +88,7 @@ impl Sidebar {
         let current = self.session.read(cx).focus();
         self.panel
             .selected_focus()
+            .and_then(Result::ok)
             .zip(current)
             .is_some_and(|(chosen, current)| chosen.same_scope(current))
     }
@@ -224,6 +225,7 @@ impl Sidebar {
         // `j` y `k`.
         let click = self.panel.click(at, event.click_count());
         self.scroll_to_selection();
+        self.show_selected_view(event.click_count() > 1, cx);
         if let Some(click) = click {
             let placement = crate::workspace::Placement::Current;
             self.open(&click.path, placement, click.focus_editor, cx);
@@ -252,12 +254,15 @@ impl Sidebar {
                 }
             }),
             PanelView::Tags => self.panel.tags.selected_entry().and_then(|row| {
-                match (row.note(), row.tag_name()) {
-                    (Some(note), _) => Some(ContextMenu::on_note(position, note.clone())),
-                    (None, Some(tag)) => {
+                match (row.note(), row.tag_name(), row.view()) {
+                    (Some(note), _, _) => Some(ContextMenu::on_note(position, note.clone())),
+                    (None, Some(tag), _) => {
                         Some(ContextMenu::on_tag(position, tag.to_owned()).with_focus(focus))
                     }
-                    (None, None) => None,
+                    (None, None, Some(view)) => {
+                        Some(ContextMenu::on_view(position, view.name.clone()).with_focus(focus))
+                    }
+                    (None, None, None) => None,
                 }
             }),
         };
