@@ -50,8 +50,9 @@ pub struct ListItem {
 
 impl ListItem {
     /// El ítem que empieza `line`, que no lleva su `\n`, tras la sangría y
-    /// los `>` de una cita. El marcador va seguido de un blanco o del fin de
-    /// la línea: `-x` no es un ítem, ni una regla como `- - -`.
+    /// los `>` de una cita. El marcador y la casilla van seguidos de un
+    /// blanco o del fin de la línea, con o sin su `\r`: `-x` no es un ítem,
+    /// ni una regla como `- - -`.
     #[must_use]
     pub fn parse(line: &str) -> Option<Self> {
         if is_thematic_break(line) {

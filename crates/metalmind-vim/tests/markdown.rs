@@ -229,6 +229,7 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("|-  [x] a", "<toggle>", "|-  [ ] [x] a")]
 #[case("|- [\t] a", "<toggle>", "|- [ ] a")]
 #[case("|- []] a", "<toggle>", "|- [ ] []] a")]
+#[case("|- [ ]\r", "<toggle>", "|- [x]\r")]
 fn markdown_editing(
     #[case] before: &str,
     #[case] keys: &str,
