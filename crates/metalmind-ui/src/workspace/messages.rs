@@ -3,6 +3,8 @@
 
 use std::collections::VecDeque;
 
+use metalmind_keymap::Command;
+
 use super::Message;
 
 /// Cuántos avisos guarda el historial, como `messagesopt=history:500` de nvim;
@@ -36,6 +38,15 @@ struct Logged {
     message: Message,
     /// Su toast, si se ve.
     shown: Option<ToastId>,
+    action: Option<ToastAction>,
+}
+
+/// Un botón en un toast que invoca un comando, como "Deshacer" tras
+/// aplicar un cambio al vault.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ToastAction {
+    pub label: &'static str,
+    pub command: Command,
 }
 
 impl Messages {
@@ -52,6 +63,34 @@ impl Messages {
         id
     }
 
+    /// Como [`Messages::push`], con un botón en su toast. Lo que el botón
+    /// hace puede dejar de valer: [`Messages::retire`] se lo quita.
+    pub fn push_with_action(&mut self, message: Message, action: ToastAction) -> MessageId {
+        let id = self.push(message);
+        if let Some(logged) = self.log.iter_mut().find(|logged| logged.id == id) {
+            logged.action = Some(action);
+        }
+        id
+    }
+
+    /// Cierra el toast de `id`, si se ve, y le quita el botón: lo que hacía
+    /// ya no vale, como deshacer un cambio que ya se deshizo.
+    pub fn retire(&mut self, id: MessageId) {
+        if let Some(logged) = self.log.iter_mut().find(|logged| logged.id == id) {
+            logged.shown = None;
+            logged.action = None;
+        }
+    }
+
+    /// El botón del toast `toast`, si se ve y tiene uno.
+    #[must_use]
+    pub fn action(&self, toast: ToastId) -> Option<ToastAction> {
+        self.log
+            .iter()
+            .find(|logged| logged.shown == Some(toast))
+            .and_then(|logged| logged.action)
+    }
+
     /// Lo anota en el historial sin mostrarlo, como el `"a.md" 3L, 20B` de
     /// cada nota que se abre.
     pub fn record(&mut self, message: Message) -> MessageId {
@@ -66,6 +105,7 @@ impl Messages {
             id,
             message,
             shown: None,
+            action: None,
         });
         id
     }
@@ -165,6 +205,32 @@ mod tests {
             .into_iter()
             .map(|(_, message)| message.text())
             .collect()
+    }
+
+    const UNDO: ToastAction = ToastAction {
+        label: "Deshacer",
+        command: Command::UndoVaultChange,
+    };
+
+    /// El botón es del toast que lo trae, también si vuelve a mostrarse
+    /// desde el historial, hasta que lo que hace deja de valer.
+    #[test]
+    fn el_boton_se_queda_con_su_toast_hasta_retirarlo() {
+        let mut messages = Messages::default();
+        let id = messages.push_with_action(info("2 cambios"), UNDO);
+        messages.push(info("otro"));
+        let toasts = messages.toasts();
+        assert_eq!(messages.action(toasts[0].0), Some(UNDO));
+        assert_eq!(messages.action(toasts[1].0), None);
+        messages.dismiss_all();
+        messages.show(id);
+        let (again, _) = messages.toasts()[0];
+        assert_eq!(messages.action(again), Some(UNDO));
+        messages.retire(id);
+        assert_eq!(shown(&messages), Vec::<&str>::new());
+        messages.show(id);
+        let (later, _) = messages.toasts()[0];
+        assert_eq!(messages.action(later), None, "ya no deshace nada");
     }
 
     #[test]

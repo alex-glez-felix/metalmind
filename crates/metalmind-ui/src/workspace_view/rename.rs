@@ -239,7 +239,7 @@ impl WorkspaceView {
         });
         match renamed {
             Ok(applied) => {
-                self.vault_undo.remember(title(from, to), applied);
+                self.remember_change(title(from, to), applied, Vec::new(), cx);
                 self.reveal_renamed(to, cx);
             }
             // Solo hay un renombre: si se paró, no se hizo nada y basta su causa.
@@ -281,13 +281,9 @@ impl WorkspaceView {
             Ok(applied) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
-                self.vault_undo.remember(title, applied);
+                self.remember_change(title, applied, Vec::new(), cx);
                 self.reveal_renamed(to, cx);
-                // Corto: la barra recorta lo que no cabe, y el título ya se vio.
-                self.tell(
-                    Message::Info(format!("{summary}; :vaultundo lo deshace")),
-                    cx,
-                );
+                self.tell_undoable(summary, cx);
             }
             Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
                 self.rename_failed(format!("{title}: no se cambió nada: {cause}"), cx);

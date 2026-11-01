@@ -11,6 +11,7 @@ mod macros;
 mod marks;
 mod operate;
 mod outcome;
+mod outside;
 mod repeat;
 mod scroll;
 mod search;
