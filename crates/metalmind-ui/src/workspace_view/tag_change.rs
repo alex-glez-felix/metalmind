@@ -5,13 +5,15 @@
 use std::collections::HashSet;
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::{ApplyError, Changes, FileOpError, Rename, Vault, VaultPath};
+use metalmind_config::VaultConfig;
+use metalmind_vault::{Applied, ApplyError, Changes, FileOpError, Rename, Vault, VaultPath};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
 use super::vault_undo::ListFollowed;
 use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
-use crate::tag_change::TagRequest;
+use crate::note_list::load_views;
+use crate::tag_change::{TagRequest, VaultConfigText};
 use crate::workspace::{Message, shown_path};
 
 impl WorkspaceView {
@@ -22,8 +24,9 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         let unsaved = self.unsaved_paths(cx);
-        let tags = self.session.read(cx).tags();
-        let preview = match request.preview(&tags, |path| unsaved.contains(path)) {
+        let session = self.session.read(cx);
+        let (tags, config) = (session.tags(), VaultConfigText::read(session.root()));
+        let preview = match request.preview(&tags, &config, |path| unsaved.contains(path)) {
             Ok(Some(preview)) => preview,
             Ok(None) => {
                 let text = format!("{}: no hay nada que cambiar", request.title());
@@ -103,6 +106,7 @@ impl WorkspaceView {
                 whole = true;
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
+                self.follow_saved_views(&applied, cx);
                 self.vault_undo.remember(title, applied);
                 // Corto: la barra recorta lo que no cabe, y el título ya se vio.
                 Message::Info(format!("{summary}; :vaultundo lo deshace"))
@@ -113,6 +117,7 @@ impl WorkspaceView {
             Err(ApplyError::Interrupted { applied, cause }) => {
                 self.follow_renames(&vault, applied.renamed(), cx);
                 self.reread(&vault, applied.touched(), cx);
+                self.follow_saved_views(&applied, cx);
                 let message = Message::Error(format!(
                     "{title} se paró a medias ({cause}). :vaultundo deshace lo hecho"
                 ));
@@ -204,6 +209,21 @@ impl WorkspaceView {
             }
             cx.notify();
         });
+    }
+
+    /// Si `applied` reescribió la config del vault, la lista sigue a sus
+    /// vistas: la que muestra trae las notas de su consulta nueva.
+    pub(super) fn follow_saved_views(&mut self, applied: &Applied, cx: &mut Context<Self>) {
+        if !applied
+            .touched()
+            .any(|path| path.as_str() == VaultConfig::PATH)
+        {
+            return;
+        }
+        let root = self.session.read(cx).root().to_owned();
+        let (views, _) = load_views(&root);
+        self.list
+            .update(cx, |list, cx| list.follow_views(&views, None, cx));
     }
 
     pub(super) fn tell(&mut self, message: Message, cx: &mut Context<Self>) {

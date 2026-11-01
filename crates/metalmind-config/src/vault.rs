@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
-use crate::diagnostic::Loaded;
-use crate::edit::{self, EditError};
+use crate::diagnostic::{Loaded, Severity};
+use crate::edit::{self, EditError, LineEdit};
 use crate::file::{YamlFile, read_yaml};
 use crate::parse::parse;
 
@@ -32,10 +32,13 @@ pub struct SavedView {
 }
 
 impl VaultConfig {
+    /// Dónde está, relativa a la raíz del vault y con `/`.
+    pub const PATH: &str = ".metalmind/config.yaml";
+
     /// Dónde está la del vault de `root`.
     #[must_use]
     pub fn file(root: &Path) -> PathBuf {
-        root.join(".metalmind").join("config.yaml")
+        root.join(Self::PATH)
     }
 
     /// Sin archivo, vacía; con uno inválido también, y el error vuelve en
@@ -106,6 +109,46 @@ impl VaultConfig {
     /// Los de [`edit::remove`].
     pub fn delete_view(text: &str, name: &str) -> Result<String, EditError> {
         edit::remove(text, &[VIEWS, name])
+    }
+}
+
+impl VaultConfig {
+    /// Las vistas de `text` cuya consulta cambia `requery`, cada una como un
+    /// cambio de sus líneas en `text`: se aplican juntas o por separado.
+    ///
+    /// # Errors
+    /// Si el archivo tiene un error o una vista no se puede editar sin tocar
+    /// otras claves.
+    pub fn requery_views(
+        text: &str,
+        requery: impl Fn(&str) -> Option<String>,
+    ) -> Result<Vec<LineEdit>, EditError> {
+        let current = Self::parse(text);
+        if let Some(error) = current
+            .diagnostics
+            .into_iter()
+            .find(|diagnostic| diagnostic.severity == Severity::Error)
+        {
+            return Err(EditError::Unreadable(error));
+        }
+        let mut expected = current.value.views;
+        let mut edits = Vec::new();
+        for view in &mut expected.0 {
+            let Some(query) = requery(&view.query) else {
+                continue;
+            };
+            let edited = Self::save_view(text, &view.name, &query)?;
+            edits.extend(LineEdit::between(text, &edited));
+            view.query = query;
+        }
+        let mut together = text.to_owned();
+        for edit in edits.iter().rev() {
+            together.replace_range(edit.range.clone(), &edit.new);
+        }
+        if Self::parse(&together).value.views != expected {
+            return Err(EditError::Unsupported(VIEWS.to_owned()));
+        }
+        Ok(edits)
     }
 }
 
@@ -213,6 +256,50 @@ mod tests {
         let text = VaultConfig::delete_view(&text, "estudio").unwrap();
         let text = VaultConfig::delete_view(&text, "Para hoy: \"ya\"").unwrap();
         assert_eq!(text, "");
+    }
+
+    #[test]
+    fn las_consultas_cambian_cada_una_en_su_linea() {
+        let text = "# mis vistas\nviews:\n  gs: \"#gs -#archivado\"  # estudio\n  hoy: \"#hoy\"\n  otra: \"#gs\"\n";
+        let requery = |query: &str| {
+            query
+                .contains("#gs")
+                .then(|| query.replace("#gs", "#estudio"))
+        };
+        let edits = VaultConfig::requery_views(text, requery).unwrap();
+        let lines: Vec<(usize, &str, &str)> = edits
+            .iter()
+            .map(|edit| (edit.line, edit.old.as_str(), edit.new.as_str()))
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                (
+                    2,
+                    "  gs: \"#gs -#archivado\"  # estudio\n",
+                    "  gs: \"#estudio -#archivado\"  # estudio\n"
+                ),
+                (4, "  otra: \"#gs\"\n", "  otra: \"#estudio\"\n"),
+            ]
+        );
+        for edit in &edits {
+            assert_eq!(&text[edit.range.clone()], edit.old);
+        }
+        assert_eq!(VaultConfig::requery_views(text, |_| None).unwrap(), []);
+        assert_eq!(VaultConfig::requery_views("", requery).unwrap(), []);
+    }
+
+    #[test]
+    fn una_config_rota_o_en_otra_forma_no_se_reescribe() {
+        let requery = |_: &str| Some("#b".to_owned());
+        assert!(matches!(
+            VaultConfig::requery_views("views: [\n", requery),
+            Err(EditError::Unreadable(_))
+        ));
+        assert!(matches!(
+            VaultConfig::requery_views("views: {a: \"#a\"}\n", requery),
+            Err(EditError::Unsupported(_))
+        ));
     }
 
     #[test]

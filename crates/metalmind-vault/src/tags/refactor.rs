@@ -8,6 +8,7 @@ use crate::changes::Changes;
 use crate::edit::{FileEdits, TextEdit};
 use crate::path::VaultPath;
 use crate::tags::key::TagKey;
+use crate::tags::query::{QueryWord, TagQuery};
 
 /// Lo que la vista previa tiene que decir.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +43,49 @@ impl PlanNotice {
 pub struct TagPlan {
     pub changes: Changes,
     pub notices: Vec<PlanNotice>,
+    /// El tag que deja de escribirse así, si el plan lo renombra o fusiona:
+    /// las consultas que lo nombran, como las vistas guardadas, lo siguen.
+    pub rewrite: Option<TagRewrite>,
+}
+
+/// Lo que era `#from` pasa a escribirse `#to`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagRewrite {
+    pub from: TagKey,
+    pub to: String,
+}
+
+impl TagRewrite {
+    /// `query` (05 §4) con `#from` y `-#from` escritos con el nombre nuevo;
+    /// `None` si no lo nombra. Una palabra que queda repetida se quita, y
+    /// las demás quedan separadas por un espacio.
+    #[must_use]
+    pub fn query(&self, query: &str) -> Option<String> {
+        let to = TagKey::new(&self.to);
+        let mut renamed = false;
+        let mut kept: Vec<QueryWord> = Vec::new();
+        let mut words: Vec<String> = Vec::new();
+        for (range, word) in TagQuery::words(query) {
+            let original = &query[range];
+            let (word, written) = match word {
+                QueryWord::Include(key) if key == self.from => {
+                    (QueryWord::Include(to.clone()), format!("#{}", self.to))
+                }
+                QueryWord::Exclude(key) if key == self.from => {
+                    (QueryWord::Exclude(to.clone()), format!("-#{}", self.to))
+                }
+                word => (word, original.to_owned()),
+            };
+            renamed |= written != original;
+            let tag = !matches!(word, QueryWord::Text | QueryWord::Invalid);
+            if tag && kept.contains(&word) {
+                continue;
+            }
+            kept.push(word);
+            words.push(written);
+        }
+        renamed.then(|| words.join(" "))
+    }
 }
 
 impl TagPlan {

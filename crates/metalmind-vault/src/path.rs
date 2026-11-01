@@ -8,7 +8,8 @@ use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 /// componentes separados por `/`. La cadena vacía es la raíz.
 ///
 /// Nunca sale de la raíz ni apunta a algo oculto: no admite `..`, `.`,
-/// componentes vacíos ni nombres que empiecen con punto.
+/// componentes vacíos ni nombres que empiecen con punto, salvo los archivos
+/// de Metalmind de [`VaultPath::internal`].
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct VaultPath(String);
 
@@ -56,6 +57,30 @@ impl VaultPath {
         }
         for component in path.split('/') {
             check_component(component).map_err(invalid)?;
+        }
+        Ok(Self(path.to_owned()))
+    }
+
+    /// Un archivo de Metalmind en una carpeta oculta del vault, como su
+    /// config (`.metalmind/config.yaml`): como [`VaultPath::new`], pero
+    /// admite nombres con punto. El índice nunca la tiene; la usan los
+    /// cambios que editan esos archivos con las notas, para deshacerlos juntos.
+    ///
+    /// # Errors
+    /// Si es absoluta o tiene `.`, `..`, componentes vacíos o bytes nulos.
+    pub fn internal(path: &str) -> Result<Self, InvalidPath> {
+        let invalid = |reason| InvalidPath {
+            path: path.to_owned(),
+            reason,
+        };
+        if path.starts_with('/') {
+            return Err(invalid(InvalidReason::Absolute));
+        }
+        for component in path.split('/') {
+            match check_component(component) {
+                Ok(()) | Err(InvalidReason::Hidden) => {}
+                Err(reason) => return Err(invalid(reason)),
+            }
         }
         Ok(Self(path.to_owned()))
     }
@@ -244,6 +269,17 @@ mod tests {
         assert_eq!(reason(".obsidian/app.json"), InvalidReason::Hidden);
         assert_eq!(reason("a/.trash"), InvalidReason::Hidden);
         assert_eq!(reason("a\0b"), InvalidReason::Nul);
+    }
+
+    #[test]
+    fn un_archivo_de_metalmind_puede_ir_en_una_carpeta_oculta() {
+        let config = VaultPath::internal(".metalmind/config.yaml").unwrap();
+        assert_eq!(config.as_str(), ".metalmind/config.yaml");
+        let reason = |path| VaultPath::internal(path).unwrap_err().reason;
+        assert_eq!(reason(""), InvalidReason::EmptyComponent);
+        assert_eq!(reason("/.metalmind/config.yaml"), InvalidReason::Absolute);
+        assert_eq!(reason(".metalmind/../a.md"), InvalidReason::Relative);
+        assert_eq!(reason(".metalmind//a"), InvalidReason::EmptyComponent);
     }
 
     #[test]

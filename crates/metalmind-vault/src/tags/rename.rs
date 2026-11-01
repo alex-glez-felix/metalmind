@@ -8,7 +8,7 @@ use crate::tags::Tags;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::metadata::not_portable;
 use crate::tags::note::{TagOccurrence, TagSource};
-use crate::tags::refactor::{Edits, PlanError, PlanNotice, TagPlan};
+use crate::tags::refactor::{Edits, PlanError, PlanNotice, TagPlan, TagRewrite};
 
 /// Qué ocurrencias reescribe un plan y cómo se escriben después.
 struct Rewrite<'n> {
@@ -79,7 +79,10 @@ impl Tags {
 
     fn rename_tag(&self, from: &TagKey, to: &str) -> TagPlan {
         let rewrite = Rewrite::new(from, to);
-        let mut plan = TagPlan::default();
+        let mut plan = TagPlan {
+            rewrite: Some(rewrite.queries()),
+            ..TagPlan::default()
+        };
         let target = self.graph.resolve(&rewrite.key).clone();
         if &target != from && self.exists(&rewrite.key) {
             plan.notices.push(PlanNotice::Merges {
@@ -113,6 +116,7 @@ impl Tags {
         let rewrite = Rewrite::new(alias, to);
         let mut plan = TagPlan {
             notices: vec![PlanNotice::RenamesAlias { of: owner.clone() }],
+            rewrite: Some(rewrite.queries()),
             ..TagPlan::default()
         };
         if &rewrite.key != alias {
@@ -232,6 +236,13 @@ impl<'n> Rewrite<'n> {
             from,
             name,
             key: TagKey::new(name),
+        }
+    }
+
+    fn queries(&self) -> TagRewrite {
+        TagRewrite {
+            from: self.from.clone(),
+            to: self.name.to_owned(),
         }
     }
 

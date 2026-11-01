@@ -394,3 +394,50 @@ fn a_renamed_page_gets_an_nfc_name_and_a_portability_notice() {
         }]
     );
 }
+
+/// Las consultas guardadas siguen al tag: renombrar, fusionar y renombrar
+/// un alias dicen qué nombre cambia, y `:tagmain` no, porque el alias sigue
+/// valiendo.
+#[test]
+fn a_plan_says_how_queries_follow_the_tag() {
+    let tags = fixture().tags();
+    let rewrite = |plan: crate::tags::TagPlan| {
+        plan.rewrite
+            .map(|rewrite| (rewrite.from.as_str().to_owned(), rewrite.to))
+    };
+    let pair = |from: &str, to: &str| Some((from.to_owned(), to.to_owned()));
+    assert_eq!(
+        rewrite(tags.plan_rename("rust", "Oxido").unwrap()),
+        pair("rust", "Oxido")
+    );
+    assert_eq!(
+        rewrite(tags.plan_rename("rs", "rr").unwrap()),
+        pair("rs", "rr")
+    );
+    assert_eq!(
+        rewrite(tags.plan_merge("rs", "nota").unwrap()),
+        pair("rust", "nota")
+    );
+    assert_eq!(rewrite(tags.plan_use_main_name("rs").unwrap()), None);
+}
+
+#[test]
+fn a_query_follows_a_renamed_tag() {
+    let rewrite = crate::tags::TagRewrite {
+        from: key("gs"),
+        to: "Estudio".to_owned(),
+    };
+    let cases = [
+        ("#gs -#archivado", Some("#Estudio -#archivado")),
+        ("#GS  texto", Some("#Estudio texto")),
+        ("-#gs #otro", Some("-#Estudio #otro")),
+        ("#gs #estudio", Some("#Estudio")),
+        ("#estudio #gs -#", Some("#estudio -#")),
+        ("#gsx #gs/a gs", None),
+        ("#Estudio", None),
+        ("", None),
+    ];
+    for (query, expected) in cases {
+        assert_eq!(rewrite.query(query).as_deref(), expected, "{query:?}");
+    }
+}

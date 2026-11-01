@@ -8,10 +8,13 @@
 //! Es texto a texto: quien llama lee el archivo y lo guarda de forma atómica.
 
 mod block;
+mod change;
 mod tree;
 
 use std::fmt::Write as _;
 use std::ops::Range;
+
+pub use self::change::LineEdit;
 
 use self::block::{Entry, Line, Map, NotBlockMap, lines};
 use self::tree::Tree;

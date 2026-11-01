@@ -133,7 +133,7 @@ views:
   Para hoy: "#hoy -#hecho"
 ```
 
-No hace falta escribirlo a mano: en la lista, `s` (o `vista` en su pie, o `list::save_view` en la paleta) guarda la fuente y los tags del filtro como una vista, y con una vista en la lista, `renombrar` y `borrar` (`list::rename_view`, `list::delete_view`) la cambian. Metalmind escribe solo la clave de esa vista: los comentarios y el resto del archivo quedan como estaban. Si el archivo tiene un error, las vistas no se cargan, se dice dónde, y no se escribe nada hasta arreglarlo.
+No hace falta escribirlo a mano: en la lista, `s` (o `vista` en su pie, o `list::save_view` en la paleta) guarda la fuente y los tags del filtro como una vista, y con una vista en la lista, `renombrar` y `borrar` (`list::rename_view`, `list::delete_view`) la cambian. Metalmind escribe solo la clave de esa vista: los comentarios y el resto del archivo quedan como estaban. Si el archivo tiene un error, las vistas no se cargan, se dice dónde, y no se escribe nada hasta arreglarlo. Renombrar o fusionar un tag (`:tagrename`, `:tagmerge`) también cambia las vistas que lo nombran: salen en la vista previa con las notas, y `:vaultundo` las devuelve.
 
 ## Temas
 
