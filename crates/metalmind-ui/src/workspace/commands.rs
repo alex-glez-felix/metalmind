@@ -30,6 +30,18 @@ pub enum ListViewChange {
     Delete,
 }
 
+/// `:focus` y `:unfocus` (05 §3), que hace la ventana: tiene la sesión del
+/// vault y sus vistas guardadas.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FocusCommand {
+    /// `:focus` con un alcance, tal cual se escribió.
+    Set(String),
+    /// `:focus` sin alcance: dice el de ahora.
+    Show,
+    /// `:unfocus`.
+    Clear,
+}
+
 /// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
@@ -75,13 +87,7 @@ pub enum Effect {
     OpenDailyNote,
     /// `:tagpage #tag`: la ventana, que tiene los tags, abre su página.
     OpenTagPage(String),
-    /// `:focus` con un alcance: la ventana, que tiene la sesión del vault y
-    /// sus vistas guardadas, lo lee y lo pone.
-    Focus(String),
-    /// `:unfocus`: la ventana quita el focus.
-    ClearFocus,
-    /// `:focus` sin alcance: la ventana dice el de ahora.
-    ShowFocus,
+    Focus(FocusCommand),
     /// `:messages`: el historial de avisos.
     OpenMessages,
     /// Una opción cambió desde la paleta: la ventana la guarda en
@@ -226,10 +232,10 @@ impl Workspace {
                 _ => Err(RequestError::Usage(":tagpage #tag").into()),
             },
             Command::Focus => Ok(match argument.filter(|text| !text.trim().is_empty()) {
-                Some(text) => Effect::Focus(text.to_owned()),
-                None => Effect::ShowFocus,
+                Some(text) => Effect::Focus(FocusCommand::Set(text.to_owned())),
+                None => Effect::Focus(FocusCommand::Show),
             }),
-            Command::ClearFocus => Ok(Effect::ClearFocus),
+            Command::ClearFocus => Ok(Effect::Focus(FocusCommand::Clear)),
         }
     }
 

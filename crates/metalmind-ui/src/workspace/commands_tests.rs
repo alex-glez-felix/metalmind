@@ -1004,13 +1004,14 @@ fn w_bang_a_la_ruta_de_otro_buffer_abierto_da_e139() {
 fn focus_y_unfocus_los_pone_la_ventana() {
     let mut session = Session::new("uno\n");
     session.keys(":focus  proyectos/   @gs⏎");
-    assert_eq!(session.effect, Effect::Focus("proyectos/   @gs".to_owned()));
+    let set = FocusCommand::Set("proyectos/   @gs".to_owned());
+    assert_eq!(session.effect, Effect::Focus(set));
     session.keys(":focus⏎");
-    assert_eq!(session.effect, Effect::ShowFocus);
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
     session.keys(":focus   ⏎");
-    assert_eq!(session.effect, Effect::ShowFocus);
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
     session.keys(":unfocus⏎");
-    assert_eq!(session.effect, Effect::ClearFocus);
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Clear));
     assert_eq!(session.text(), "uno\n");
 }
 

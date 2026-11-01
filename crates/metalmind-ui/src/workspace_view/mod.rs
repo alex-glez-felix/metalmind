@@ -303,17 +303,9 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.open_tag_page(&tag, window, cx);
             }
-            Effect::Focus(text) => {
+            Effect::Focus(command) => {
                 self.sync_editors(cx);
-                self.focus_on(&text, window, cx);
-            }
-            Effect::ClearFocus => {
-                self.sync_editors(cx);
-                self.set_focus(None, window, cx);
-            }
-            Effect::ShowFocus => {
-                self.sync_editors(cx);
-                self.show_focus(window, cx);
+                self.run_focus(command, window, cx);
             }
             Effect::OpenMessages => {
                 self.sync_editors(cx);
