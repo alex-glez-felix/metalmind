@@ -32,7 +32,7 @@ impl Builder<'_, '_> {
         split: &[Part],
         measured: &[Measured<'_>],
         slicer: &mut ShapedSlicer<'_>,
-        advances: &Advances,
+        advances: Option<&Advances>,
     ) {
         let mut laid = LaidRow {
             source: row.source.clone(),
@@ -143,10 +143,11 @@ impl Builder<'_, '_> {
 }
 
 /// Cómo se corta el texto de una línea en trozos: cada carácter ancho va
-/// en el suyo, en las dos celdas que le dan sus `advances`.
+/// en el suyo, en las dos celdas que le dan sus `advances`. Una línea sin
+/// anchos no los trae.
 struct Cut<'a> {
     text: &'a str,
-    advances: &'a Advances,
+    advances: Option<&'a Advances>,
 }
 
 impl Cut<'_> {
@@ -166,7 +167,9 @@ impl Cut<'_> {
                     return x;
                 }
             };
-            let width = px(self.advances.x(piece.end) - self.advances.x(piece.start));
+            let width = self.advances.map_or(shaped.width(), |advances| {
+                px(advances.x(piece.end) - advances.x(piece.start))
+            });
             row.pieces.push(Piece {
                 source: piece,
                 x,
@@ -181,6 +184,9 @@ impl Cut<'_> {
     /// `range` partido antes y después de cada carácter ancho; vacío, un
     /// solo trozo vacío.
     fn pieces(&self, range: Range<usize>) -> Vec<Range<usize>> {
+        if self.advances.is_none() {
+            return vec![range];
+        }
         let offset = range.start;
         let mut pieces = Vec::new();
         let mut at = range.start;

@@ -178,7 +178,10 @@ fn is_wide(ch: char) -> bool {
 /// Los bytes de cada grafema de `text` que ocupa dos columnas: los que
 /// empiezan con un carácter ancho, como los cuenta vim.
 pub fn wide_graphemes(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
-    let graphemes = (!text.is_ascii()).then(|| text.grapheme_indices(true));
+    // Partir en grafemas es caro: solo si hay alguno ancho, que empiezan en
+    // U+1100.
+    let any = !text.is_ascii() && text.chars().any(|ch| ch >= '\u{1100}' && is_wide(ch));
+    let graphemes = any.then(|| text.grapheme_indices(true));
     graphemes
         .into_iter()
         .flatten()

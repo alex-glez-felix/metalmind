@@ -10,7 +10,7 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use gpui_kit::{Font, LineLayout, Pixels, TextSystem, WindowTextSystem};
-use metalmind_syntax::{Advances, LineStyle, ScreenLine, ScreenLines};
+use metalmind_syntax::{Advances, LineStyle, ScreenLine, ScreenLines, wide_graphemes};
 
 use super::markdown::runs;
 use super::text::{Faces, text_runs};
@@ -67,7 +67,7 @@ impl TextScreen {
             weight,
         );
         let layout = self.text_system.layout_line(text, size, &runs, None);
-        let cell = cell_width(&self.text_system, &self.faces.font, size);
+        let cell = || cell_width(&self.text_system, &self.faces.font, size);
         ScreenLine::new(text, advances(&layout, text, cell), style, wrap)
     }
 
@@ -96,7 +96,8 @@ impl TextScreen {
 
 /// Dónde cae cada carácter de `text` con la forma `layout`, con los anchos
 /// en dos celdas de `cell`: lo mismo para partir la línea que para pintarla.
-pub fn advances(layout: &LineLayout, text: &str, cell: Pixels) -> Advances {
+/// La celda se mide solo si hay algún ancho.
+pub fn advances(layout: &LineLayout, text: &str, cell: impl FnOnce() -> Pixels) -> Advances {
     let mut starts: Vec<(usize, f32)> = layout
         .runs
         .iter()
@@ -105,8 +106,11 @@ pub fn advances(layout: &LineLayout, text: &str, cell: Pixels) -> Advances {
         .collect();
     starts.sort_by_key(|&(byte, _)| byte);
     starts.dedup_by_key(|&mut (byte, _)| byte);
-    Advances::new(starts, text.len(), f32::from(layout.width))
-        .with_wide_cells(text, f32::from(cell))
+    let advances = Advances::new(starts, text.len(), f32::from(layout.width));
+    if wide_graphemes(text).next().is_none() {
+        return advances;
+    }
+    advances.with_wide_cells(text, f32::from(cell()))
 }
 
 /// Lo que mide una columna de texto con `font` en `size`: el ancho de una

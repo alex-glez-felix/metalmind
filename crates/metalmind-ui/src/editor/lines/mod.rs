@@ -5,7 +5,7 @@
 use std::ops::Range;
 
 use gpui_kit::{Bounds, Font, PaintQuad, Pixels, SharedString, Window, fill, point, px, size};
-use metalmind_syntax::{LineKind, LineStyle, MathSpot};
+use metalmind_syntax::{LineKind, LineStyle, MathSpot, wide_graphemes};
 use metalmind_vim::LineHeights as _;
 
 mod builder;
@@ -237,11 +237,15 @@ impl Line<'_> {
             &runs,
             None,
         );
-        let cell = cell_width(window.text_system(), &typeface.font, font_size);
-        let advances = advances(&shaped, self.text, cell);
+        // Sin anchos, cada trozo mide lo que mide su forma.
+        let advances = wide_graphemes(self.text).next().map(|_| {
+            advances(&shaped, self.text, || {
+                cell_width(window.text_system(), &typeface.font, font_size)
+            })
+        });
         let mut slicer = ShapedSlicer::new(&shaped);
         for row in &self.rows {
-            builder.row(row, &split, &measured, &mut slicer, &advances);
+            builder.row(row, &split, &measured, &mut slicer, advances.as_ref());
         }
         for (spot, formula) in &measured {
             match formula {
