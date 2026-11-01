@@ -225,6 +225,11 @@ fn nvim_markdown_oracle(#[case] before: &str, #[case] keys: &str, #[case] after:
 #[case("|- [ ] a\n- [ ] b", "<toggle>j.", "- [x] a\n|- [x] b")]
 #[case("|- [ ] a\n- [ ] b", "<toggle>u", "|- [ ] a\n- [ ] b")]
 #[case("- [ ] a\n- [ ] |b\nc", "Vk<toggle>", "- [x] |a\n- [x] b\nc")]
+// La casilla es la que se pinta: tras dos blancos es texto, y un tab adentro la marca.
+#[case("|-  [x] a", "<toggle>", "|-  [ ] [x] a")]
+#[case("|- [\t] a", "<toggle>", "|- [ ] a")]
+#[case("|- []] a", "<toggle>", "|- [ ] []] a")]
+#[case("|- [ ]\r", "<toggle>", "|- [x]\r")]
 fn markdown_editing(
     #[case] before: &str,
     #[case] keys: &str,

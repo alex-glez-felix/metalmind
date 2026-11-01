@@ -10,6 +10,7 @@ use super::flatten::{Layer, Layers};
 use super::paragraph::Paragraph;
 use super::pieces::Pieces;
 use super::{Conceal, LineKind, LineStyle, LinkSpot, MathPlace, MathSpot, Role};
+use crate::list_item::ListMarker;
 use crate::markdown_link::MarkdownLink;
 use crate::math::Math;
 use crate::scanner::{self, RegionEnd};
@@ -226,13 +227,13 @@ impl Painter<'_> {
                     true
                 }
                 BlockKind::Item(item) => {
-                    let marker = base + item.marker.start..base + item.marker.end;
+                    let marker = base + item.marker_range.start..base + item.marker_range.end;
                     layers.push(marker.clone(), Layer::Role(Role::ListMarker));
-                    if item.bullet {
+                    if matches!(item.marker, ListMarker::Bullet(_)) {
                         layers.push(marker.clone(), Layer::Conceal(Conceal::Bullet));
                     }
                     content = marker.end;
-                    if let Some(task) = item.task {
+                    if let Some(task) = item.checkbox {
                         let task_range = base + task.range.start..base + task.range.end;
                         layers.push(task_range.clone(), Layer::Role(Role::Checkbox));
                         let checked = task.checked;

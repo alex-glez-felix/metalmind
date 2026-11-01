@@ -37,7 +37,7 @@ impl Newline {
         let line = buffer.line_of(head);
         let text = buffer.line_text(line);
         let column = head.get() - buffer.line_start(line).get();
-        let Some(item) = ListItem::parse(&text).filter(|item| column >= item.content) else {
+        let Some(item) = ListItem::parse(&text).filter(|item| column >= item.content()) else {
             return Self::Plain;
         };
         if styles.outline(buffer).is_literal(line) {
@@ -72,7 +72,7 @@ pub(crate) fn opened_item(
     let marker = if below {
         item.next_marker()?
     } else {
-        item.marker
+        item.marker()
     };
     Some(item.sibling(marker))
 }

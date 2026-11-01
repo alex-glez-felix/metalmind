@@ -5,6 +5,8 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
+use crate::list_item;
+
 /// Fin de la línea que empieza en `start`, sin contar el salto.
 pub(crate) fn line_end(text: &str, start: usize) -> usize {
     text[start..].find('\n').map_or(text.len(), |i| start + i)
@@ -51,13 +53,8 @@ pub(crate) fn fence(line: &str) -> Option<(Fence, &str)> {
 
 /// Lo que sigue a `- `, `* `, `+ `, `1. ` o `1) ` al principio de `line`.
 fn strip_list_marker(line: &str) -> Option<&str> {
-    let digits = line.bytes().take_while(u8::is_ascii_digit).count();
-    let marker = match line.as_bytes().get(digits) {
-        Some(b'.' | b')') if (1..=9).contains(&digits) => digits + 1,
-        Some(b'-' | b'*' | b'+') if digits == 0 => 1,
-        _ => return None,
-    };
-    let after = &line[marker..];
+    let (_, len) = list_item::marker(line)?;
+    let after = &line[len..];
     after.starts_with([' ', '\t']).then_some(after)
 }
 
