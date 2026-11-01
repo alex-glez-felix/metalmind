@@ -144,8 +144,12 @@ fn text(
     x: Pixels,
     slicer: &mut ShapedSlicer<'_>,
 ) -> Pixels {
-    let Some(shaped) = slicer.take(range.clone()) else {
-        return x;
+    let shaped = match slicer.take(range.clone()) {
+        Ok(shaped) => shaped,
+        Err(error) => {
+            log::error!("{error}");
+            return x;
+        }
     };
     let width = shaped.width();
     row.pieces.push(Piece {

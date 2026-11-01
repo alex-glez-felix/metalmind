@@ -21,29 +21,39 @@ impl<'s> ShapedSlicer<'s> {
         }
     }
 
-    /// Los bytes `range` con su forma, desde 0. `None` si `range` empieza
-    /// antes de donde terminó el anterior o parte un carácter, lo que sería
-    /// un bug de quien arma las filas.
-    pub(super) fn take(&mut self, range: Range<usize>) -> Option<ShapedLine> {
+    /// Los bytes `range` con su forma, desde 0.
+    ///
+    /// # Errors
+    /// Si `range` empieza antes de donde terminó el anterior o parte un
+    /// carácter, lo que sería un bug de quien arma las filas.
+    pub(super) fn take(&mut self, range: Range<usize>) -> Result<ShapedLine, Misplaced> {
         let fits = self.at <= range.start
             && range.start <= range.end
             && range.end <= self.text.len()
             && self.text.is_char_boundary(range.start)
             && self.text.is_char_boundary(range.end);
         if !fits {
-            log::error!(
-                "trozo {range:?} fuera de orden tras el byte {} de {:?}",
-                self.at,
-                self.text
-            );
-            return None;
+            return Err(Misplaced {
+                range,
+                at: self.at,
+                len: self.text.len(),
+            });
         }
         if self.at < range.start {
             self.cursor.take_until(range.start);
         }
         self.at = range.end;
-        Some(self.cursor.take_until(range.end))
+        Ok(self.cursor.take_until(range.end))
     }
+}
+
+/// Un trozo que no se puede cortar de la línea. Sin su texto: es de la nota.
+#[derive(Debug, thiserror::Error)]
+#[error("trozo {range:?} fuera de orden tras el byte {at} de una línea de {len} bytes")]
+pub(super) struct Misplaced {
+    range: Range<usize>,
+    at: usize,
+    len: usize,
 }
 
 #[cfg(test)]
@@ -88,7 +98,11 @@ mod tests {
                 whole.width() - whole.x_for_index(rest),
                 "el trozo mide lo que ocupa en la línea"
             );
-            assert!(slicer.take(3..5).is_none(), "un trozo de atrás es un bug");
+            let behind = slicer.take(3..5).unwrap_err().to_string();
+            assert!(
+                !behind.contains("más texto"),
+                "sin el texto de la nota: {behind}"
+            );
             assert_eq!(slicer.take(text.len()..text.len()).unwrap().len(), 0);
         });
     }
@@ -112,7 +126,7 @@ mod tests {
                     .text_system()
                     .shape_line(SharedString::from(text), px(15.), &runs, None);
             let mut slicer = ShapedSlicer::new(&whole);
-            assert!(slicer.take(0..2).is_none(), "la í ocupa los bytes 1 y 2");
+            assert!(slicer.take(0..2).is_err(), "la í ocupa los bytes 1 y 2");
             assert_eq!(slicer.take(0..3).unwrap().text.as_ref(), "lí");
         });
     }
