@@ -127,7 +127,7 @@ Abierto **(propuesta)**:
 
 **Por qué.** Capturar tiene que costar un comando, desde donde sea. Y un agente que puede consultar el vault en JSON lo usa mejor que uno que tiene que leer los archivos a mano.
 
-Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; la referencia es [`cli.md`](../cli.md)):
+Comandos (2026-10-18: `add`, `search` por rutas, `open` y `--json` hechos; 2026-11-01: `tags` y `search` con tags; la referencia es [`cli.md`](../cli.md)):
 
 | Comando | Qué hace |
 |---|---|

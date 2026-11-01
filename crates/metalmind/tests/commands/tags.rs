@@ -6,18 +6,22 @@ use serde_json::{Value, json};
 
 use super::{Sandbox, assert_json_error, assert_ok, assert_shape, json_line, run, stdout};
 
-/// `#Rust` y `#rust` son un tag; `gpui` tiene a `rust` y a `ui` de padres, y
-/// `rust` a `lenguajes`, que no tiene página ni nota.
+/// `#Rust` y `#rust` son un tag, con `#rs` de alias; `gpui` tiene a `rust` y a
+/// `ui` de padres, y `rust` a `lenguajes`, que no tiene página ni nota.
 fn with_tags() -> Sandbox {
     let sandbox = Sandbox::new();
     for (path, text) in [
-        ("tags/rust.md", "---\nparents: [lenguajes]\n---\n"),
+        (
+            "tags/rust.md",
+            "---\naliases: [rs]\nparents: [lenguajes]\n---\n",
+        ),
         ("tags/gpui.md", "---\nparents: [rust, ui]\n---\n"),
         ("parser.md", "#Rust y el parser"),
         ("proyectos/ventana.md", "---\ntags: [gpui]\n---\nUn parser"),
         ("viejo.md", "#Rust #archivado"),
         ("ideas/parser-de-rust.md", "#rust otra vez #Rust"),
         ("sin-tags.md", "Nada."),
+        ("corta.md", "Con el alias: #rs"),
         ("img/rust.png", ""),
     ] {
         let full = sandbox.vault.join(path);
@@ -50,8 +54,8 @@ fn tags_cuenta_como_el_panel_con_la_forma_mas_usada_y_los_padres() {
         stdout(&output),
         "\
 1  archivado
-4  lenguajes
-4  Rust  ← lenguajes
+5  lenguajes
+5  Rust  ← lenguajes
 1  gpui  ← Rust, ui
 1  ui
 "
@@ -98,29 +102,52 @@ fn tags_de_un_vault_sin_tags_sale_vacio() {
 #[test]
 fn search_con_tags_filtra_y_el_resto_va_al_fuzzy() {
     let sandbox = with_tags();
-    let cases: [(&str, &[&str]); 7] = [
-        (
-            "#rust",
-            &[
-                "ideas/parser-de-rust.md",
-                "parser.md",
-                "proyectos/ventana.md",
-                "viejo.md",
-            ],
-        ),
+    let rust: &[&str] = &[
+        "corta.md",
+        "ideas/parser-de-rust.md",
+        "parser.md",
+        "proyectos/ventana.md",
+        "viejo.md",
+    ];
+    let cases: [(&str, &[&str]); 10] = [
+        ("#rust", rust),
+        ("#RS", rust),
         (
             "#lenguajes -#archivado parser",
             &["ideas/parser-de-rust.md", "parser.md"],
         ),
         ("#RUST #ui", &["proyectos/ventana.md"]),
         ("-#archivado #gpui", &["proyectos/ventana.md"]),
+        ("#rust -#rs", &[]),
         ("-#", &["sin-tags.md"]),
+        ("-# #rust", &[]),
         ("#no-existe", &[]),
         ("-#no-existe rust", &["ideas/parser-de-rust.md"]),
     ];
     for (query, expected) in cases {
         assert_eq!(search(&sandbox, query), expected, "{query:?}");
     }
+}
+
+#[test]
+fn search_acepta_opciones_despues_de_una_consulta_con_guion() {
+    let sandbox = with_tags();
+    let output = run(&mut sandbox.bare(), &["search", "-#", "--json", "--vault"]);
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "a `--vault` le falta la carpeta"
+    );
+    let vault = sandbox.vault.to_str().unwrap();
+    let output = run(
+        &mut sandbox.bare(),
+        &["search", "-#", "--json", "--vault", vault],
+    );
+    assert_ok(&output);
+    assert_eq!(
+        json_line(stdout(&output))["results"][0]["path"],
+        "sin-tags.md"
+    );
 }
 
 #[test]

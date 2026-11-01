@@ -59,7 +59,7 @@ Fuzzy sobre las rutas del vault (notas y adjuntos), el mismo de `space f`: palab
 
 **Con tags**, la consulta de `space f` ([05](research/05-tags.md) §4): `#rust` deja las notas con el tag, sus alias o sus descendientes por `parents`; `-#archivado` quita las que lo tienen; `-#` deja el buzón, las notas sin tags. Varios se combinan con "y", sin importar mayúsculas ni la forma escrita (`#RUST` = `#rust`), y las demás palabras van al fuzzy sobre las notas que quedan: `metalmind search "#rust -#archivado parser"`. Con tags solo salen notas: ni adjuntos ni páginas de tag. Un tag que no existe no deja ninguna nota si se pide y no quita ninguna si se excluye. Un `#` que no es un tag válido (`#2024/10`) es error de uso. La consulta puede empezar con `-` sin `--` (`metalmind search -#`); por eso, sin otra palabra, una opción mal escrita (`metalmind search --jsonn`) se busca como texto.
 
-Solo una consulta con tags lee las notas, una vez, como al abrir el vault (el índice de tags de [05](research/05-tags.md) §2); sin tags se buscan las rutas sin abrir ninguna. El texto completo llega con M6.
+Solo una consulta con tags lee las notas, una vez, como al abrir el vault (el índice de tags de [05](research/05-tags.md) §2); sin tags se buscan las rutas sin abrir ninguna. Como en la app, una nota que no se puede leer (o no es UTF-8) cuenta como nota sin tags: sale con `-#` y no es error, solo un aviso en stderr. Lo mismo vale para `metalmind tags`. El texto completo llega con M6.
 
 Sin coincidencias no es error: sale vacío y con código 0. En texto, una ruta por línea; si un nombre trae caracteres de control (un salto de línea, una secuencia de escape), salen escapados como `\n` o `\u{1b}`. `--json` da siempre la ruta exacta.
 
