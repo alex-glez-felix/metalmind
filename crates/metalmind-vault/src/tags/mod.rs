@@ -34,7 +34,7 @@ pub use metadata::{PageChange, yaml_scalar};
 pub use note::{FrontmatterSpot, NoteTags, Snippet, TagOccurrence, TagSource};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage, parse_template};
 pub use query::{ParsedQuery, QueryWord, TagQuery};
-pub use refactor::{PlanError, PlanNotice, TagPlan};
+pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
 pub use scope::{Scope, ScopeError, ScopeFilter, ScopeWord};
 pub use tree::{TagNode, TagTree};
 

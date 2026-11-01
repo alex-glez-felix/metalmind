@@ -220,3 +220,25 @@ fn quitar_la_unica_deja_los_comentarios_de_su_mapa() {
         "views:\n  gs: \"#gs\"\n  # para el estudio\n"
     );
 }
+
+#[test]
+fn set_change_da_solo_el_valor_o_la_clave_entera() {
+    let change = set_change(CONFIG, &["views", "gs"], &string("#estudio"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (change.old.as_str(), change.new.as_str(), change.line),
+        ("\"#gs -#archivado\"", "\"#estudio\"", 9)
+    );
+    assert_eq!(&CONFIG[change.range], "\"#gs -#archivado\"");
+    let block = "views:\n  gs:\n    - x\ntheme: x\n";
+    let change = set_change(block, &["views", "gs"], "1").unwrap().unwrap();
+    assert_eq!(
+        (change.old.as_str(), change.new.as_str(), change.line),
+        ("  gs:\n    - x\n", "  gs: 1\n", 1)
+    );
+    assert_eq!(
+        set_change(CONFIG, &["editor", "wrap"], "true").unwrap(),
+        None
+    );
+}

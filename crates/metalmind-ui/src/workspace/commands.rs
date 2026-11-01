@@ -7,9 +7,10 @@ use std::path::Path;
 use std::rc::Rc;
 
 use metalmind_buffer::Selection;
+use metalmind_config::Toggle;
 use metalmind_keymap::{Action, Command, Invocation};
 use metalmind_vault::SaveKind;
-use metalmind_vim::{Clipboard, Mode};
+use metalmind_vim::{Clipboard, Markdown, Mode};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
@@ -80,6 +81,12 @@ pub enum Effect {
     ShowFocus,
     /// `:messages`: el historial de avisos.
     OpenMessages,
+    /// Una opción cambió desde la paleta: la ventana la guarda en
+    /// `config.yaml` y dice cómo quedó.
+    SaveToggle {
+        toggle: Toggle,
+        on: bool,
+    },
 }
 
 fn page_change(field: TagField, argument: Option<&str>) -> Result<Effect, WorkspaceError> {
@@ -175,11 +182,19 @@ impl Workspace {
                 Ok(Effect::Stay)
             }
             Command::Set => self.set_options(argument),
-            Command::ToggleWrap => self.set_options(Some("wrap!")),
-            Command::ToggleAlignTablesOnLeave => {
-                self.toggle_align_tables_on_leave();
-                Ok(Effect::Stay)
-            }
+            Command::ToggleWrap => Ok(self.toggle_wrap()),
+            Command::ToggleContinueLists => Ok(self
+                .toggle_markdown(Toggle::ContinueLists, |markdown| {
+                    &mut markdown.continue_lists
+                })),
+            Command::ToggleIndentListChildren => Ok(self
+                .toggle_markdown(Toggle::IndentListChildren, |markdown| {
+                    &mut markdown.indent_list_children
+                })),
+            Command::ToggleAlignTablesOnLeave => Ok(self
+                .toggle_markdown(Toggle::AlignTablesOnLeave, |markdown| {
+                    &mut markdown.align_tables_on_leave
+                })),
             Command::OpenFinder => Ok(Effect::OpenFinder),
             Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
             Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),
@@ -469,18 +484,33 @@ impl Workspace {
         Ok(Effect::Stay)
     }
 
-    fn toggle_align_tables_on_leave(&mut self) {
+    /// `wrap` al revés de como lo tiene el panel enfocado, en todos.
+    fn toggle_wrap(&mut self) -> Effect {
+        let on = !self
+            .panes
+            .get(&self.focused())
+            .is_some_and(|pane| pane.options.wrap);
+        for pane in self.panes.values_mut() {
+            pane.options.wrap = on;
+        }
+        Effect::SaveToggle {
+            toggle: Toggle::Wrap,
+            on,
+        }
+    }
+
+    /// La opción de markdown `option`, que se guarda como `toggle`, al revés.
+    fn toggle_markdown(
+        &mut self,
+        toggle: Toggle,
+        option: fn(&mut Markdown) -> &mut bool,
+    ) -> Effect {
         let mut markdown = self.vim.markdown();
-        markdown.align_tables_on_leave = !markdown.align_tables_on_leave;
+        let value = option(&mut markdown);
+        *value = !*value;
+        let on = *value;
         self.vim.set_markdown(markdown);
-        let state = if markdown.align_tables_on_leave {
-            "encendido"
-        } else {
-            "apagado"
-        };
-        self.messages.push(Message::Info(format!(
-            "Alinear la tabla al salir de Insert: {state}"
-        )));
+        Effect::SaveToggle { toggle, on }
     }
 
     /// `ctrl-w o`: cierra los demás paneles; sus documentos quedan ocultos.

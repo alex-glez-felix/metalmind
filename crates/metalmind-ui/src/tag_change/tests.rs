@@ -32,7 +32,10 @@ fn rust_notes() -> Tags {
 }
 
 fn preview(request: &TagRequest, tags: &Tags) -> ChangePreview {
-    request.preview(tags, |_| false).unwrap().unwrap()
+    request
+        .preview(tags, &VaultConfigText::Missing, |_| false)
+        .unwrap()
+        .unwrap()
 }
 
 fn rename(from: &str, to: &str) -> TagRequest {
@@ -152,7 +155,9 @@ fn sin_cambios_no_se_aplica() {
 fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
     let request = rename("rust", "lang");
     let mut preview = request
-        .preview(&rust_notes(), |file| file.as_str() == "a.md")
+        .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
+            file.as_str() == "a.md"
+        })
         .unwrap()
         .unwrap();
     assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
@@ -170,7 +175,9 @@ fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
 fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
     let request = rename("rust", "lang");
     let mut preview = request
-        .preview(&rust_notes(), |file| file.as_str() == "a.md")
+        .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
+            file.as_str() == "a.md"
+        })
         .unwrap()
         .unwrap();
     assert!(preview.blocked().is_some());
@@ -185,7 +192,9 @@ fn un_buffer_sin_guardar_en_el_destino_bloquea() {
     let tags = tags(&[("a.md", "#rust\n"), ("tags/rust.md", "Del lenguaje.\n")]);
     let request = rename("rust", "lang");
     let preview = request
-        .preview(&tags, |file| file.as_str() == "tags/lang.md")
+        .preview(&tags, &VaultConfigText::Missing, |file| {
+            file.as_str() == "tags/lang.md"
+        })
         .unwrap()
         .unwrap();
     let last = preview.row(preview.len() - 1).unwrap();
@@ -219,7 +228,10 @@ fn un_bloqueo_sin_cambios_se_muestra_y_nada_no() {
         from: "a".to_owned(),
         into: "b".to_owned(),
     };
-    let preview = request.preview(&pages, |_| false).unwrap().unwrap();
+    let preview = request
+        .preview(&pages, &VaultConfigText::Missing, |_| false)
+        .unwrap()
+        .unwrap();
     assert!(matches!(
         preview.blocked(),
         Some(Blocked::Notice(Notice { blocks: true, text })) if text.contains("tienen página")
@@ -228,7 +240,12 @@ fn un_bloqueo_sin_cambios_se_muestra_y_nada_no() {
         from: "a".to_owned(),
         to: "a".to_owned(),
     };
-    assert!(nothing.preview(&pages, |_| false).unwrap().is_none());
+    assert!(
+        nothing
+            .preview(&pages, &VaultConfigText::Missing, |_| false)
+            .unwrap()
+            .is_none()
+    );
 }
 
 /// Si los dos tags tienen página, el plan lo marca y no se aplica.
@@ -394,4 +411,72 @@ fn la_fila_muestra_solo_las_lineas_que_cambian() {
             "---\nicon: lucide:book\n---".to_owned()
         )
     );
+}
+
+const VIEWS: &str =
+    "# vistas\nviews:\n  rust: \"#rust -#archivado\"  # la de siempre\n  hoy: \"#hoy\"\n";
+
+fn rows(preview: &ChangePreview) -> Vec<(String, Option<usize>, String, String)> {
+    (0..preview.len())
+        .filter_map(|row| preview.row(row))
+        .map(|row| {
+            let (before, after) = (row.before.to_owned(), row.after.to_owned());
+            (row.path.as_str().to_owned(), row.line, before, after)
+        })
+        .collect()
+}
+
+/// Una vista guardada que nombra el tag sale como una fila más, en la
+/// config del vault; las demás vistas no cambian.
+#[test]
+fn las_vistas_que_nombran_el_tag_lo_siguen() {
+    let config = VaultConfigText::Text(VIEWS.to_owned());
+    let preview = rename("rust", "lang")
+        .preview(&rust_notes(), &config, |_| false)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        rows(&preview)[0],
+        (
+            ".metalmind/config.yaml".to_owned(),
+            Some(3),
+            "\"#rust -#archivado\"".to_owned(),
+            "\"#lang -#archivado\"".to_owned()
+        )
+    );
+    assert_eq!(preview.summary(), "4 cambios en 3 archivos");
+    let merge = TagRequest::Merge {
+        from: "hoy".to_owned(),
+        into: "rust".to_owned(),
+    };
+    let tags = tags(&[("a.md", "#rust #hoy\n")]);
+    let preview = merge.preview(&tags, &config, |_| false).unwrap().unwrap();
+    let (_, _, before, after) = rows(&preview).swap_remove(0);
+    assert_eq!((before.as_str(), after.as_str()), ("\"#hoy\"", "\"#rust\""));
+}
+
+/// Una config que no se puede reescribir no impide renombrar el tag:
+/// la vista previa dice que sus vistas no lo siguen.
+#[test]
+fn una_config_rota_avisa_sin_bloquear() {
+    for config in [
+        VaultConfigText::Text("views: [\n".to_owned()),
+        VaultConfigText::Text("views: {rust: \"#rust\"}\n".to_owned()),
+        VaultConfigText::Unreadable("permiso denegado".to_owned()),
+    ] {
+        let preview = rename("rust", "lang")
+            .preview(&rust_notes(), &config, |_| false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(preview.len(), 3, "{config:?}");
+        let notice = &preview.notices()[0];
+        assert!(!notice.blocks);
+        assert!(
+            notice
+                .text
+                .starts_with("las vistas guardadas no siguen a #lang: "),
+            "{}",
+            notice.text
+        );
+    }
 }

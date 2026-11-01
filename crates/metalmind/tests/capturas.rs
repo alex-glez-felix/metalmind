@@ -639,6 +639,25 @@ const SCENES: &[(&str, &[Step])] = &[
         )],
     ),
     ("splits-carpeta", &[Step::Keys("<Space>c")]),
+    // Una vista guardada sigue a su tag (#210): la vista previa de renombrar
+    // `#rust` trae la config del vault con la consulta de la vista, que
+    // cambia al aplicar y vuelve con `:vaultundo`.
+    (
+        "vista-tag-renombrar",
+        &[Step::Keys(concat!(
+            "<Esc><Esc><C-w>o<Space>v#rust<CR><Space>f-#archivado<CR>sRust al dia<CR>",
+            "<C-w>l:tagrename #rust #lenguaje-de-programacion-con-un-nombre-larguisimo-que-no-cabe<CR>",
+        ))],
+    ),
+    ("vista-tag-renombrado", &[Step::Keys("<CR>")]),
+    ("vista-tag-deshecho", &[Step::Keys(":vaultundo<CR>")]),
+    // Las opciones de la paleta se guardan en `config.yaml` (#204), y el
+    // aviso lo dice.
+    (
+        "paleta-opciones",
+        &[Step::Keys("<Esc><C-S-p>editor: toggle")],
+    ),
+    ("opcion-guardada", &[Step::Keys("<C-u>continue lists<CR>")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

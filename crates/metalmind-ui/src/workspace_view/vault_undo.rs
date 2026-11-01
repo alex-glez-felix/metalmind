@@ -170,6 +170,7 @@ impl WorkspaceView {
         // Donde haya quedado cada archivo, aunque un renombre no se haya
         // podido deshacer.
         self.reread(&vault, undone.applied.touched(), cx);
+        self.follow_saved_views(&undone.applied, cx);
         if let Some(back) = undone.list_back()
             && self.list.read(cx).source_choices() == back.choices
         {
@@ -188,6 +189,7 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
+    use crate::tag_change::{TagRequest, VaultConfigText};
 
     fn path(path: &str) -> VaultPath {
         VaultPath::new(path).unwrap()
@@ -312,6 +314,34 @@ mod tests {
             )
         );
         assert_eq!(undone.list_back(), None);
+    }
+
+    /// Renombrar un tag reescribe la vista guardada que lo nombra, y
+    /// deshacerlo la devuelve con el resto del archivo intacto.
+    #[test]
+    fn deshacer_un_renombre_de_tag_devuelve_sus_vistas() {
+        let (dir, vault) = vault(&[("a.md", "#gs\n")]);
+        let config = "views:\n  estudio: \"#gs -#archivado\"  # mía\n  otra: \"#x\"\n";
+        fs::create_dir(dir.path().join(".metalmind")).unwrap();
+        fs::write(dir.path().join(".metalmind/config.yaml"), config).unwrap();
+        let request = TagRequest::Rename {
+            from: "gs".to_owned(),
+            to: "estudio".to_owned(),
+        };
+        let preview = request
+            .preview(&vault.tags(), &VaultConfigText::read(dir.path()), |_| false)
+            .unwrap()
+            .unwrap();
+        let mut undo = VaultUndo::default();
+        undo.remember(request.title(), vault.apply(&preview.changes()).unwrap());
+        assert_eq!(read(&dir, "a.md"), "#estudio\n");
+        assert_eq!(
+            read(&dir, ".metalmind/config.yaml"),
+            config.replace("\"#gs ", "\"#estudio ")
+        );
+        undo.undo(&vault, |_| false).unwrap();
+        assert_eq!(read(&dir, "a.md"), "#gs\n");
+        assert_eq!(read(&dir, ".metalmind/config.yaml"), config);
     }
 
     /// Un cambio de tags y un renombre comparten el deshacer: siempre se
