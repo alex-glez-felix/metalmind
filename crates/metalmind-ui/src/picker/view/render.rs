@@ -1,5 +1,6 @@
 //! Cómo se ve un picker: el input con su cursor y la lista virtual, con
-//! lo que coincide resaltado solo en las filas visibles.
+//! lo que coincide resaltado solo en las filas visibles, y a su derecha la
+//! vista previa si el delegado la tiene y cabe en la ventana.
 
 use std::ops::Range;
 
@@ -11,15 +12,23 @@ use gpui_kit::{
 
 use super::row_line::RowLine;
 use super::{PickerDelegate, PickerEvent, PickerView};
-use crate::picker::fit;
+use crate::picker::{fit, preview_width};
 use crate::theme::Theme;
 
 impl<D: PickerDelegate> Render for PickerView<D> {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
         let row_height = theme.picker_row_height();
+        let preview = self.preview_width(&theme, window);
+        // Con vista previa, la lista no se encoge con los resultados: el
+        // panel de al lado no cambia de alto.
+        let rows = if preview.is_some() {
+            usize::from(theme.layout.picker_rows)
+        } else {
+            self.delegate.len()
+        };
         let list_height = fit::list_height(
-            self.delegate.len(),
+            rows,
             theme.layout.picker_rows,
             f32::from(row_height),
             f32::from(theme.stroke.border),
@@ -29,8 +38,8 @@ impl<D: PickerDelegate> Render for PickerView<D> {
             .track_focus(&self.focus_handle)
             .on_action(cx.listener(Self::on_dispatch))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(PickerEvent::Dismissed)))
-            .w(theme.layout.picker_width)
-            .max_w(relative(0.9))
+            .w(theme.layout.picker_width + preview.unwrap_or_default())
+            .max_w(relative(theme.layout.picker_max_share))
             .flex()
             .flex_col()
             .overflow_hidden()
@@ -42,9 +51,17 @@ impl<D: PickerDelegate> Render for PickerView<D> {
             .child(
                 div()
                     .h(px(list_height))
+                    .flex()
                     .border_t(theme.stroke.border)
                     .border_color(theme.ui.picker_border)
-                    .child(self.render_list(&theme, row_height, cx)),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .child(self.render_list(&theme, row_height, cx)),
+                    )
+                    .children(preview.map(|width| self.render_preview(&theme, width))),
             )
     }
 }
@@ -56,6 +73,21 @@ fn piece() -> gpui_kit::Div {
 }
 
 impl<D: PickerDelegate> PickerView<D> {
+    /// El ancho de la vista previa, si el delegado la tiene y cabe.
+    fn preview_width(&self, theme: &Theme, window: &Window) -> Option<Pixels> {
+        if !self.delegate.has_preview() {
+            return None;
+        }
+        preview_width(
+            f32::from(window.viewport_size().width),
+            theme.layout.picker_max_share,
+            f32::from(theme.layout.picker_width),
+            f32::from(theme.layout.picker_preview_width),
+            f32::from(theme.layout.picker_preview_min_width),
+        )
+        .map(px)
+    }
+
     fn render_input(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let line = self.delegate.line();
         let marked = self.marked.clone().unwrap_or_default();

@@ -237,6 +237,9 @@ Theme {
             picker_width: Length(
                 640.0,
             ),
+            picker_max_share: Fraction(
+                0.9,
+            ),
             picker_top: Length(
                 64.0,
             ),
@@ -254,6 +257,12 @@ Theme {
             ),
             picker_detail_share: Fraction(
                 0.4,
+            ),
+            picker_preview_width: Length(
+                560.0,
+            ),
+            picker_preview_min_width: Length(
+                320.0,
             ),
             change_preview_detail_lines: Count(
                 4,

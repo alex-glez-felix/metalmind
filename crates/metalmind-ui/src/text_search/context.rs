@@ -28,16 +28,28 @@ pub fn row_text(line: &LineMatch) -> RowText {
     let kept = indent.min(first);
     let start = kept.max(start_before(&line.text[..first], CONTEXT));
     let end = end_after(&line.text, first, 2 * CONTEXT);
-    let prefix = if start > kept { ELLIPSIS } else { "" };
-    let suffix = if end < line.text.trim_end().len() {
-        ELLIPSIS
-    } else {
-        ""
+    let cut = Cut {
+        before: start > kept,
+        after: end < line.text.trim_end().len(),
     };
-    let shown = line.text[start..end].replace('\t', " ");
-    let shift = |offset: usize| offset.clamp(start, end) - start + prefix.len();
-    let highlights = line
-        .matches
+    crop(&line.text, start..end, cut, &line.matches)
+}
+
+/// Si a un tramo le falta texto antes o después, que se marca con elipsis.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Cut {
+    pub before: bool,
+    pub after: bool,
+}
+
+/// El tramo `range` de `text`, con los tabs como espacios, la elipsis de
+/// lo que le falta y los resaltados de `matches` que caen en él.
+pub(super) fn crop(text: &str, range: Range<usize>, cut: Cut, matches: &[Range<usize>]) -> RowText {
+    let prefix = if cut.before { ELLIPSIS } else { "" };
+    let suffix = if cut.after { ELLIPSIS } else { "" };
+    let shown = text[range.clone()].replace('\t', " ");
+    let shift = |offset: usize| offset.clamp(range.start, range.end) - range.start + prefix.len();
+    let highlights = matches
         .iter()
         .map(|found| shift(found.start)..shift(found.end))
         .filter(|range| !range.is_empty())
@@ -57,7 +69,7 @@ fn start_before(text: &str, count: usize) -> usize {
 }
 
 /// El byte donde terminan `count` grafemas de `text` desde `start`.
-fn end_after(text: &str, start: usize, count: usize) -> usize {
+pub(super) fn end_after(text: &str, start: usize, count: usize) -> usize {
     text[start..]
         .grapheme_indices(true)
         .nth(count)

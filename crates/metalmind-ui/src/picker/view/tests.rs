@@ -1,5 +1,6 @@
 //! El input del picker con un texto que no cabe (#147): el texto se corre y
-//! el cursor siempre queda dentro de la caja; un focus largo se recorta.
+//! el cursor siempre queda dentro de la caja; un focus largo se recorta. La
+//! vista previa (#77) va a la derecha si cabe, con su resultado centrado.
 
 use gpui_kit::{Bounds, Entity, Pixels, TestAppContext, VisualTestContext};
 use metalmind_config::Config;
@@ -7,6 +8,7 @@ use metalmind_keymap::Keymap;
 
 use super::*;
 use crate::actions::bind_keys;
+use crate::picker::Preview;
 use crate::theme::Theme;
 
 /// Un picker sin filas: solo importa lo escrito.
@@ -55,6 +57,14 @@ fn picker<'a>(
     cx: &'a mut TestAppContext,
     focus: Option<&str>,
 ) -> (Entity<PickerView<Typing>>, &'a mut VisualTestContext) {
+    with_delegate(cx, focus, Typing::default())
+}
+
+fn with_delegate<'a, D: PickerDelegate>(
+    cx: &'a mut TestAppContext,
+    focus: Option<&str>,
+    delegate: D,
+) -> (Entity<PickerView<D>>, &'a mut VisualTestContext) {
     cx.update(|cx| {
         bind_keys(Keymap::default(), cx);
         cx.set_global(Theme::with_font(
@@ -67,7 +77,7 @@ fn picker<'a>(
         splits: false,
         focus: focus.map(|focus| SharedString::from(focus.to_owned())),
     };
-    cx.add_window_view(|_, cx| PickerView::new(Typing::default(), options, cx))
+    cx.add_window_view(|_, cx| PickerView::new(delegate, options, cx))
 }
 
 fn edit(view: &Entity<PickerView<Typing>>, cx: &mut VisualTestContext, edit: LineEdit<'_>) {
@@ -136,4 +146,111 @@ fn un_focus_largo_no_tapa_lo_escrito() {
         "{focus:?} en {input:?}"
     );
     assert_visible(cx);
+}
+
+/// Un picker con una fila y la vista previa de 61 líneas con el resultado
+/// en la 31.
+struct Previewing {
+    line: InputLine,
+    preview: Preview,
+}
+
+impl Default for Previewing {
+    fn default() -> Self {
+        let lines = (1..=61)
+            .map(|number| crate::picker::PreviewLine {
+                number,
+                text: format!("línea {number}"),
+                highlights: Vec::new(),
+            })
+            .collect();
+        Self {
+            line: InputLine::default(),
+            preview: Preview::Lines {
+                lines,
+                focus: Some(30),
+            },
+        }
+    }
+}
+
+impl PickerDelegate for Previewing {
+    fn line(&self) -> &InputLine {
+        &self.line
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn selected(&self) -> usize {
+        0
+    }
+
+    fn select(&mut self, _: usize) {}
+
+    fn select_next(&mut self) {}
+
+    fn select_previous(&mut self) {}
+
+    fn edit(&mut self, edit: LineEdit<'_>, _: &mut Context<PickerView<Self>>) {
+        self.line.apply(edit);
+    }
+
+    fn choose(&mut self, _: Open, _: &mut Context<PickerView<Self>>) -> Option<Chosen> {
+        None
+    }
+
+    fn row(&mut self, _: usize) -> PickerRow {
+        PickerRow {
+            text: "una fila".to_owned(),
+            ..PickerRow::default()
+        }
+    }
+
+    fn empty(&self) -> SharedString {
+        "Nada".into()
+    }
+
+    fn has_preview(&self) -> bool {
+        true
+    }
+
+    fn preview(&self) -> Option<&Preview> {
+        Some(&self.preview)
+    }
+}
+
+fn previewing(cx: &mut TestAppContext, width: f32) -> &mut VisualTestContext {
+    let (_, cx) = with_delegate(cx, None, Previewing::default());
+    cx.simulate_resize(gpui_kit::size(gpui_kit::px(width), gpui_kit::px(1080.)));
+    cx.run_until_parked();
+    cx
+}
+
+/// Con lugar, la vista previa va a la derecha de la lista con su ancho del
+/// tema, la lista no se encoge con una fila y el resultado queda centrado.
+#[test]
+fn la_vista_previa_va_a_la_derecha_con_el_resultado_al_centro() {
+    let mut cx = TestAppContext::single();
+    let cx = previewing(&mut cx, 1920.);
+    let theme = cx.update(|_, cx| Theme::get(cx).clone());
+    let preview = cx.debug_bounds("picker-preview").unwrap();
+    let input = cx.debug_bounds("picker-input").unwrap();
+    assert_eq!(preview.size.width, theme.layout.picker_preview_width);
+    assert!(preview.left() >= input.left() + theme.layout.picker_width - gpui_kit::px(2.));
+    let rows = theme.picker_row_height() * f32::from(theme.layout.picker_rows);
+    assert!(preview.size.height >= rows, "{preview:?}");
+    let focus = cx.debug_bounds("picker-preview-focus").unwrap();
+    let off_center = (focus.center().y - preview.center().y).abs();
+    assert!(off_center <= theme.ui_line(), "{focus:?} en {preview:?}");
+}
+
+/// En una ventana donde no cabe junto a la lista, no se muestra.
+#[test]
+fn en_una_ventana_angosta_no_hay_vista_previa() {
+    let mut cx = TestAppContext::single();
+    let cx = previewing(&mut cx, 1000.);
+    assert!(cx.debug_bounds("picker-preview").is_none());
+    assert!(cx.debug_bounds("picker-input").is_some());
 }

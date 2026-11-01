@@ -163,6 +163,14 @@ impl Theme {
         self.ui_line().max(detail) + self.rows.picker_padding * 2.
     }
 
+    /// Alto del texto de la vista previa de un picker: el de la lista entera,
+    /// sin el aire de arriba y abajo.
+    #[must_use]
+    pub fn picker_preview_text_height(&self) -> Pixels {
+        self.picker_row_height() * f32::from(self.layout.picker_rows)
+            - self.rows.picker_padding * 2.
+    }
+
     /// Alto del cambio elegido bajo la vista previa de un cambio en el vault:
     /// sus líneas de texto con el aire del input del picker y el borde que
     /// lo separa de la lista.

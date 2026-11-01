@@ -339,7 +339,7 @@ impl Render for ChangePreviewView {
             .on_action(cx.listener(Self::on_dispatch))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(ChangePreviewEvent::Cancel)))
             .w(theme.layout.picker_width)
-            .max_w(relative(0.9))
+            .max_w(relative(theme.layout.picker_max_share))
             .max_h(relative(1.))
             .flex()
             .flex_col()
