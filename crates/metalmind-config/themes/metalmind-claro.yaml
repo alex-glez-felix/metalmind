@@ -78,6 +78,7 @@ ui:
   panel_border: border_subtle
   panel_folder: accent
   panel_note: text_muted
+  panel_tab: accent
   panel_match: orange
   menu_background: background
   menu_border: border_subtle
@@ -152,6 +153,7 @@ stroke:
   border: 1
   caret: 2
   text_line: 1
+  tab: 2  # bajo la pestaña que se ve
 
 # Tamaño (veces `font.size` de config.yaml) e interlineado (veces el tamaño).
 text:
@@ -196,6 +198,7 @@ layout:
   list_row_gap: 2
   list_excerpt_lines: 2
   list_open_min_width: 1600  # sin estado guardado: a 1280 arranca plegada
+  context_width: 380
   menu_width: 240
   menu_padding: xs
   menu_item_padding_x: sm

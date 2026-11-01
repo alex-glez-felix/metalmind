@@ -64,6 +64,7 @@ Theme {
         panel_folder: #2e5cd6,
         panel_note: #5f6670,
         panel_match: #b35a00,
+        panel_tab: #2e5cd6,
         menu_background: #f5f6f8,
         menu_border: #d2d6dc,
         menu_hover: #2e5cd6 α0.15,
@@ -172,6 +173,9 @@ Theme {
             ),
             text_line: Px(
                 1.0,
+            ),
+            tab: Px(
+                2.0,
             ),
         },
         text: Text {
@@ -292,6 +296,9 @@ Theme {
             ),
             list_open_min_width: Length(
                 1600.0,
+            ),
+            context_width: Length(
+                380.0,
             ),
             menu_width: Length(
                 240.0,

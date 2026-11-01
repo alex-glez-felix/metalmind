@@ -8,11 +8,12 @@ use gpui_kit::{
     ParentElement as _, SharedString, StatefulInteractiveElement as _, Styled as _, StyledText,
     canvas, div, prelude::FluentBuilder as _,
 };
-use metalmind_keymap::ListAction;
+use metalmind_keymap::{ListAction, View};
 
 use super::model::Prompt;
-use super::render::{dispatch, key_hint};
+use super::render::dispatch;
 use super::view::NoteListView;
+use crate::key_button::key_hint;
 use crate::picker::InputLine;
 use crate::theme::Theme;
 
@@ -80,7 +81,7 @@ impl NoteListView {
                 .on_click(|_, window, cx| dispatch(ListAction::Filter, window, cx))
                 .relative()
                 .child(content)
-                .children(key_hint(ListAction::Filter, theme, cx))
+                .children(key_hint(ListAction::Filter, View::NoteList, theme, cx))
                 .children(editing.then(|| self.input_handler(cx))),
         )
     }

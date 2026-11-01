@@ -59,6 +59,16 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "como en el árbol: la fila sin marcar reserva su borde transparente para no brincar al marcarse",
     ),
     (
+        "src/context_panel/rows.rs",
+        "gpui_kit::transparent_black()",
+        "como en el árbol: la fila sin marcar reserva su borde transparente para no brincar al marcarse",
+    ),
+    (
+        "src/context_panel/render.rs",
+        "gpui_kit::transparent_black()",
+        "la pestaña que no se ve reserva su subrayado, transparente: si no, las pestañas brincarían al cambiar",
+    ),
+    (
         "src/sidebar/render.rs",
         "gpui_kit::transparent_black()",
         "una fila sin marcar reserva su borde, transparente: si no, la fila brincaría un píxel al marcarse",

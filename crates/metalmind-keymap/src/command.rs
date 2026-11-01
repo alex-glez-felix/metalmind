@@ -73,8 +73,9 @@ named_actions! {
         ToggleFolders = "panel::toggle_folders",
         /// `space t`: lo mismo con la vista de tags.
         ToggleTags = "panel::toggle_tags",
-        /// `space b`: lo mismo con los backlinks de la nota activa.
-        ToggleBacklinks = "panel::toggle_backlinks",
+        /// `space b`: muestra el panel de contexto de la nota activa, a la
+        /// derecha (#164), o lo cierra.
+        ToggleContext = "context::toggle",
         /// `space l`: muestra la lista de notas, o la pliega y deja la nota
         /// sola.
         ToggleNoteList = "list::toggle",

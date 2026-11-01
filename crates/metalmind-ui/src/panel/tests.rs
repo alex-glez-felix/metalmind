@@ -42,8 +42,7 @@ fn mostrar_una_vista_o_esconder_si_ya_se_ve_con_el_foco() {
     assert!(panel.toggle(PanelView::Folders, false).visible);
     assert!(panel.toggle(PanelView::Tags, true).visible);
     assert_eq!(panel.view, PanelView::Tags);
-    assert_eq!(panel.view.next(), PanelView::Backlinks);
-    assert_eq!(PanelView::Backlinks.next(), PanelView::Folders);
+    assert_eq!(panel.view.next(), PanelView::Folders);
 }
 
 /// Desde el editor, `space e` con el árbol ya a la vista no lo esconde: le
@@ -560,7 +559,7 @@ fn el_arbol_de_tags_se_arma_al_mostrarse() {
 }
 
 /// `Escape` sin pregunta quita el filtro de carpetas solo si esa vista se
-/// ve: en las de tags y backlinks no se toca lo que no está a la vista.
+/// ve: en la de tags no se toca lo que no está a la vista.
 #[test]
 fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
     let mut panel = panel();
@@ -568,9 +567,6 @@ fn escape_en_la_vista_de_tags_no_quita_el_filtro_de_carpetas() {
     type_text(&mut panel, "hoy");
     panel.confirm();
     panel.switch_view();
-    panel.escape();
-    assert_eq!(panel.tree.filter(), "hoy");
-    panel.toggle(PanelView::Backlinks, false);
     panel.escape();
     assert_eq!(panel.tree.filter(), "hoy");
     panel.toggle(PanelView::Folders, false);
@@ -601,21 +597,4 @@ fn volver_a_tags_lleva_a_la_vista_la_fila_que_se_movio() {
     });
     panel.set_tags(Arc::new(tags));
     assert_eq!(panel.toggle(PanelView::Tags, false).moved, Some(2));
-}
-
-/// En la vista de backlinks, las teclas de archivo (`a`, `A`, `r`, `m`, `d`,
-/// `/`) no preguntan nada: actuarían sobre el árbol, que no se ve.
-#[test]
-fn en_backlinks_las_teclas_de_archivo_no_preguntan() {
-    let mut panel = panel();
-    panel.tree.select(&path("a.md"));
-    panel.toggle(PanelView::Backlinks, false);
-    panel.start_create(NewEntry::Note);
-    panel.start_create(NewEntry::Folder);
-    panel.start_rename();
-    panel.start_move();
-    panel.start_delete(path("a.md"), false);
-    panel.start_filter();
-    assert_eq!(panel.prompt(), None);
-    assert_eq!(panel.confirm(), None);
 }

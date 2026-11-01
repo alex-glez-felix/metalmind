@@ -127,7 +127,7 @@ mod tests {
     use metalmind_vim::{Mode, Operator, VisualKind};
 
     use super::*;
-    use crate::{Command, KeyName, PanelAction};
+    use crate::{Command, ContextAction, KeyName, PanelAction};
 
     const MODES: [Mode; 14] = [
         Mode::Normal,
@@ -243,6 +243,25 @@ mod tests {
                 .keys_for(Command::FocusRight.into(), |_| false)
                 .as_deref(),
             Some("ctrl-w l")
+        );
+    }
+
+    /// En el panel de contexto, `space b` lo cierra como lo abrió, `tab`
+    /// cambia de pestaña, `esc` lo cierra y `ctrl-w h` vuelve a la nota.
+    #[test]
+    fn el_panel_de_contexto_se_cierra_como_se_abre() {
+        let keymap = Keymap::default();
+        let context = |view| view == View::Context;
+        let keys = |action: Action| keymap.keys_for(action, context);
+        assert_eq!(
+            keys(Command::ToggleContext.into()).as_deref(),
+            Some("space b")
+        );
+        assert_eq!(keys(ContextAction::NextTab.into()).as_deref(), Some("tab"));
+        assert_eq!(keys(ContextAction::Close.into()).as_deref(), Some("escape"));
+        assert_eq!(
+            keys(ContextAction::FocusEditor.into()).as_deref(),
+            Some("ctrl-w ctrl-h")
         );
     }
 

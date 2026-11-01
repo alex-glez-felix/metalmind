@@ -264,7 +264,8 @@ pub fn write_tables(root: &Path) {
     fs::write(root.join(TABLES), note).expect("escribir la nota de tablas");
 }
 
-/// Notas que enlazan a `Proyectos/Metalmind/plan.md`: muchas, en una
+/// Notas que enlazan a `Proyectos/Metalmind/plan.md`, y lo que enlaza ella
+/// (dos reuniones y dos notas que no existen): muchas, en una
 /// carpeta honda, con líneas más largas que el panel, un link a un heading,
 /// multibyte y alguna con varios links.
 pub fn write_backlinks(root: &Path) {
@@ -293,6 +294,12 @@ pub fn write_backlinks(root: &Path) {
             &body,
         );
     }
+    file(
+        "Proyectos/Metalmind/plan.md",
+        "# Plan\n\nLo que sigue: [[reunión 03 — 🦀 rust y emoji 🎉✨]], [[reunión 12 — arquitectura del núcleo]] y otra vez \
+         [[reunión 03 — 🦀 rust y emoji 🎉✨]].\n\nPendiente: [[Una nota que todavía no existe y tiene un nombre \
+         larguísimo para ver cómo se recorta en el panel]] y [[日本語のノート/未作成のメモ]].\n",
+    );
 }
 
 /// Una nota con muchos links que no llevan a nada: un nombre larguísimo,

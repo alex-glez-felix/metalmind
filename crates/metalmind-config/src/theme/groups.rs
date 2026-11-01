@@ -271,6 +271,9 @@ color_group! {
         panel_note,
         /// Las letras que coinciden con el filtro del panel.
         panel_match,
+        /// El subrayado de la pestaña que se ve, como en el panel de
+        /// contexto.
+        panel_tab,
         /// Los menús contextuales.
         menu_background,
         menu_border,

@@ -3,7 +3,10 @@
 
 use metalmind_vim::Action as VimAction;
 
-use crate::{ChangePreviewAction, Command, EditorAction, ListAction, PanelAction, PickerAction};
+use crate::{
+    ChangePreviewAction, Command, ContextAction, EditorAction, ListAction, PanelAction,
+    PickerAction,
+};
 
 /// Una acción con nombre, de cualquier parte de la app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +17,7 @@ pub enum Action {
     Editor(EditorAction),
     Panel(PanelAction),
     List(ListAction),
+    Context(ContextAction),
     Picker(PickerAction),
     ChangePreview(ChangePreviewAction),
 }
@@ -26,6 +30,7 @@ pub enum Owner {
     Editor,
     Panel,
     List,
+    Context,
     Picker,
     ChangePreview,
 }
@@ -39,6 +44,7 @@ impl Action {
             Self::Editor(action) => action.name(),
             Self::Panel(action) => action.name(),
             Self::List(action) => action.name(),
+            Self::Context(action) => action.name(),
             Self::Picker(action) => action.name(),
             Self::ChangePreview(action) => action.name(),
         }
@@ -56,6 +62,7 @@ impl Action {
         let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
         let list = ListAction::ALL.iter().copied().map(Self::List);
+        let context = ContextAction::ALL.iter().copied().map(Self::Context);
         let picker = PickerAction::ALL.iter().copied().map(Self::Picker);
         let change_preview = ChangePreviewAction::ALL
             .iter()
@@ -65,6 +72,7 @@ impl Action {
             .chain(editor)
             .chain(panel)
             .chain(list)
+            .chain(context)
             .chain(picker)
             .chain(change_preview)
     }
@@ -76,6 +84,7 @@ impl Action {
             Self::Editor(_) => Owner::Editor,
             Self::Panel(_) => Owner::Panel,
             Self::List(_) => Owner::List,
+            Self::Context(_) => Owner::Context,
             Self::Picker(_) => Owner::Picker,
             Self::ChangePreview(_) => Owner::ChangePreview,
         }
@@ -103,6 +112,12 @@ impl From<PanelAction> for Action {
 impl From<ListAction> for Action {
     fn from(action: ListAction) -> Self {
         Self::List(action)
+    }
+}
+
+impl From<ContextAction> for Action {
+    fn from(action: ContextAction) -> Self {
+        Self::Context(action)
     }
 }
 
@@ -164,7 +179,13 @@ macro_rules! invocations {
     };
 }
 
-invocations!(Command, EditorAction, PanelAction, PickerAction);
+invocations!(
+    Command,
+    EditorAction,
+    PanelAction,
+    ContextAction,
+    PickerAction
+);
 
 impl TryFrom<metalmind_vim::Invocation> for Invocation {
     type Error = UnknownAction;

@@ -1,5 +1,6 @@
-//! La vista de backlinks del panel lateral, sin GPUI: los links que llegan a
-//! la nota activa, agrupados por la nota donde están, cada uno con su línea.
+//! La pestaña de backlinks del panel de contexto, sin GPUI: los links que
+//! llegan a la nota activa, agrupados por la nota donde están, cada uno con
+//! su línea.
 //! Sale de `LinkIndex::backlinks`, que es buscar en un mapa: se rehace
 //! cuando cambia la nota activa o llega otro índice del watcher.
 
@@ -167,15 +168,24 @@ impl BacklinkOutline {
         &self.rows
     }
 
-    /// Qué fila está elegida, aunque las filas todavía no se hayan rehecho.
-    #[must_use]
-    pub fn selected_id(&self) -> Option<&RowId> {
-        self.selected.as_ref()
-    }
-
     #[must_use]
     pub fn selected_entry(&self) -> Option<&Row> {
         self.rows.get(self.selected_row?)
+    }
+
+    /// Cuántas notas enlazan a la activa.
+    #[must_use]
+    pub fn note_count(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|row| matches!(row, Row::Note { .. }))
+            .count()
+    }
+
+    /// Si la fila elegida es una nota y no uno de sus links.
+    #[must_use]
+    pub fn is_note_selected(&self) -> bool {
+        matches!(self.selected_entry(), Some(Row::Note { .. }))
     }
 
     fn rebuild(&mut self) {
@@ -310,4 +320,5 @@ impl Outline for BacklinkOutline {
 }
 
 #[cfg(test)]
+#[path = "backlinks_tests.rs"]
 mod tests;

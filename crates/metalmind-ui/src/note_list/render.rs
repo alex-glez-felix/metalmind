@@ -20,7 +20,8 @@ use super::cards::{Card, stem};
 use super::date::when;
 use super::source::ListSource;
 use super::view::NoteListView;
-use crate::actions::{AppKeymap, Dispatch};
+use crate::actions::Dispatch;
+use crate::key_button::{key_button, key_hint};
 use crate::panel::{Fill, RowMarks};
 use crate::theme::Theme;
 
@@ -81,7 +82,12 @@ impl NoteListView {
                     .font_weight(theme.text.strong)
                     .child(self.list.source().label()),
             )
-            .children(key_hint(Command::ChooseListSource, theme, cx));
+            .children(key_hint(
+                Command::ChooseListSource,
+                View::NoteList,
+                theme,
+                cx,
+            ));
         div()
             .flex()
             .flex_none()
@@ -130,7 +136,9 @@ impl NoteListView {
                         .text_color(theme.ui.panel_muted)
                         .child(query.clone()),
                 )
-                .children(buttons.map(|(id, label, action)| button(id, label, action, theme, cx))),
+                .children(buttons.map(|(id, label, action)| {
+                    key_button(id, label, action, View::NoteList, theme, cx)
+                })),
         )
     }
 
@@ -350,58 +358,14 @@ fn footer(theme: &Theme, cx: &mut Context<NoteListView>) -> Div {
         .border_t(theme.stroke.border)
         .border_color(theme.ui.panel_border)
         .map(|footer| theme.ui_small_text(footer))
-        .children(buttons.map(|(id, label, action)| button(id, label, action, theme, cx)))
-}
-
-/// Un botón de texto apagado, con su tecla si tiene.
-fn button(
-    id: &'static str,
-    label: &'static str,
-    action: Action,
-    theme: &Theme,
-    cx: &gpui_kit::App,
-) -> impl IntoElement {
-    div()
-        .id(id)
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(theme.layout.panel_button_padding_x)
-        .px(theme.layout.panel_button_padding_x)
-        .rounded(theme.radius.md)
-        .text_color(theme.ui.panel_muted)
-        .hover(|button| {
-            button
-                .bg(theme.ui.panel_hover)
-                .text_color(theme.ui.panel_foreground)
-        })
-        .on_click(move |_, window, cx| dispatch(action, window, cx))
-        .children(key_hint(action, theme, cx))
-        .child(label)
+        .children(
+            buttons.map(|(id, label, action)| {
+                key_button(id, label, action, View::NoteList, theme, cx)
+            }),
+        )
 }
 
 pub(super) fn dispatch(action: impl Into<Action>, window: &mut Window, cx: &mut gpui_kit::App) {
     let action: Action = action.into();
     window.dispatch_action(Box::new(Dispatch(action.into())), cx);
-}
-
-/// La tecla de `action` en la lista, en una cajita, si tiene una.
-pub(super) fn key_hint(
-    action: impl Into<Action>,
-    theme: &Theme,
-    cx: &gpui_kit::App,
-) -> Option<Div> {
-    let keys = AppKeymap::get(cx).keys_for(action.into(), |view| view == View::NoteList)?;
-    Some(
-        div()
-            .flex_none()
-            .px(theme.layout.panel_button_padding_x)
-            .border(theme.stroke.border)
-            .border_color(theme.ui.panel_border)
-            .rounded(theme.radius.sm)
-            .text_color(theme.ui.panel_muted)
-            .map(|hint| theme.ui_small_text(hint))
-            .font_weight(theme.text.normal)
-            .child(keys),
-    )
 }

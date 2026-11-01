@@ -110,7 +110,6 @@ impl Sidebar {
         let title = match self.panel.view {
             PanelView::Folders => "Carpetas",
             PanelView::Tags => "Tags",
-            PanelView::Backlinks => "Backlinks",
         };
         let buttons = div()
             .flex()
@@ -157,7 +156,6 @@ impl Sidebar {
         };
         match self.panel.view {
             PanelView::Tags => return self.tag_body(theme, focused, cx),
-            PanelView::Backlinks => return self.backlink_body(theme, focused, cx),
             PanelView::Folders => {}
         }
         let rows = self.panel.tree.rows().len();
@@ -262,11 +260,6 @@ impl Sidebar {
                     (None, None) => None,
                 }
             }),
-            PanelView::Backlinks => self
-                .panel
-                .backlinks
-                .selected_entry()
-                .map(|row| ContextMenu::on_note(position, row.source().clone())),
         };
         cx.notify();
     }

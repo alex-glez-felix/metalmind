@@ -218,39 +218,3 @@ fn una_nota_cerrada_renombrada_sigue_cerrada() {
     );
     assert_eq!(outline.selected_file(), Some(&path("viejas/b.md")));
 }
-
-/// Lo que mira el menú de un backlink para seguir abierto: la fila elegida
-/// cambia si su link desaparece, no si solo se renombra su nota.
-#[test]
-fn la_eleccion_cambia_solo_si_su_link_ya_no_esta() {
-    let mut outline = outline("plan.md");
-    outline.select_row(2);
-    let chosen = outline.selected_id().cloned();
-    outline.set_index(index(&[
-        ("plan.md", "# Plan\n"),
-        ("diario.md", "lunes: ver el [[plan]]\n"),
-        ("ideas/b.md", "Una idea para el [[plan]].\n"),
-    ]));
-    outline.refresh();
-    assert_ne!(outline.selected_id(), chosen.as_ref());
-    outline.select_row(3);
-    let chosen = outline.selected_id().cloned();
-    outline.follow(&[VaultChange::Renamed {
-        from: path("ideas/b.md"),
-        to: path("ideas/c.md"),
-        kind: EntryKind::Note,
-    }]);
-    outline.set_index(index(&[
-        ("plan.md", "# Plan\n"),
-        ("diario.md", "lunes: ver el [[plan]]\n"),
-        ("ideas/c.md", "Una idea para el [[plan]].\n"),
-    ]));
-    let renamed = outline.selected_id().cloned();
-    outline.refresh();
-    assert_ne!(renamed, chosen, "la ruta cambió");
-    assert_eq!(
-        outline.selected_id(),
-        renamed.as_ref(),
-        "pero es la misma fila"
-    );
-}
