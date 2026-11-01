@@ -12,13 +12,54 @@ pub(crate) struct LineMove {
     first: usize,
     last: usize,
     below: usize,
+    swap: Swap,
+}
+
+/// Lo mismo en bytes del texto de antes: los tramos `start..middle` y
+/// `middle..end`, de líneas enteras, cambian de lugar. Si el segundo llega
+/// a la última línea, `end` pasa un byte del final, como si tuviera salto.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Swap {
+    start: usize,
+    middle: usize,
+    end: usize,
 }
 
 impl LineMove {
     /// `None` si quedan donde están: debajo de la de antes o de la última.
-    pub fn new(lines: &RangeInclusive<usize>, below: usize) -> Option<Self> {
+    /// `starts` son los bytes, en el texto de antes, donde empiezan la
+    /// primera línea, la que le sigue a la última y la de `below`; una línea
+    /// después de la última empieza un byte más allá del final del texto.
+    pub fn new(lines: &RangeInclusive<usize>, below: usize, starts: [usize; 3]) -> Option<Self> {
         let (first, last) = (*lines.start(), *lines.end());
-        (below != first && below != last + 1).then_some(Self { first, last, below })
+        if below == first || below == last + 1 {
+            return None;
+        }
+        let [first_start, after_last, below_start] = starts;
+        let [start, middle, end] = if below < first {
+            [below_start, first_start, after_last]
+        } else {
+            [first_start, after_last, below_start]
+        };
+        Some(Self {
+            first,
+            last,
+            below,
+            swap: Swap { start, middle, end },
+        })
+    }
+
+    /// Dónde queda el byte `offset` del texto de antes: con su línea, en la
+    /// misma columna.
+    pub fn offset(&self, offset: usize) -> usize {
+        let Swap { start, middle, end } = self.swap;
+        if (start..middle).contains(&offset) {
+            offset + (end - middle)
+        } else if (middle..end).contains(&offset) {
+            offset - (middle - start)
+        } else {
+            offset
+        }
     }
 
     /// Lo que sigue a su línea va con ella; la columna no cambia.
@@ -57,7 +98,8 @@ mod tests {
     /// Dónde queda cada una de `count` líneas tras mover `lines` debajo de
     /// `below`.
     fn moved(count: usize, lines: RangeInclusive<usize>, below: usize) -> Vec<usize> {
-        let line_move = LineMove::new(&lines, below).unwrap();
+        let starts = [*lines.start(), lines.end() + 1, below];
+        let line_move = LineMove::new(&lines, below, starts).unwrap();
         (0..count).map(|line| line_move.line(line)).collect()
     }
 
@@ -77,13 +119,37 @@ mod tests {
 
     #[test]
     fn below_the_line_before_or_the_last_one_is_no_move() {
-        assert_eq!(LineMove::new(&(1..=2), 1), None);
-        assert_eq!(LineMove::new(&(1..=2), 3), None);
+        assert_eq!(LineMove::new(&(1..=2), 1, [1, 3, 1]), None);
+        assert_eq!(LineMove::new(&(1..=2), 3, [1, 3, 3]), None);
     }
 
     #[test]
     fn the_column_stays() {
-        let line_move = LineMove::new(&(2..=2), 0).unwrap();
+        let line_move = LineMove::new(&(2..=2), 0, [2, 3, 0]).unwrap();
         assert_eq!(line_move.point(Point::new(2, 5)), Point::new(0, 5));
+    }
+
+    /// "a\nbb\nc" sin salto final: las líneas empiezan en 0, 2 y 5, y la
+    /// que seguiría, en 7.
+    #[test]
+    fn bytes_go_with_their_line() {
+        let starts = [0, 2, 5, 7];
+        let bytes = |lines: RangeInclusive<usize>, below| {
+            let at = [
+                starts[*lines.start()],
+                starts[lines.end() + 1],
+                starts[below],
+            ];
+            let line_move = LineMove::new(&lines, below, at).unwrap();
+            (0..=6)
+                .map(|offset| line_move.offset(offset))
+                .collect::<Vec<_>>()
+        };
+        // "c\na\nbb"
+        assert_eq!(bytes(2..=2, 0), [2, 3, 4, 5, 6, 0, 1]);
+        // "bb\nc\na"
+        assert_eq!(bytes(0..=0, 3), [5, 6, 0, 1, 2, 3, 4]);
+        // "bb\na\nc"
+        assert_eq!(bytes(1..=1, 0), [3, 4, 0, 1, 2, 5, 6]);
     }
 }

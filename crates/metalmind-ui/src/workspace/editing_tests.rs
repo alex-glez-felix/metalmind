@@ -1,11 +1,14 @@
 //! `ctrl-shift-c` y `ctrl-shift-v`, y lo que la búsqueda deja para pintar.
 
+use std::fs;
+
 use metalmind_buffer::ByteOffset;
 use metalmind_vim::{Key, Mode};
 use pretty_assertions::assert_eq;
+use tempfile::TempDir;
 
-use crate::workspace::PaneId;
 use crate::workspace::test_session::Session;
+use crate::workspace::{PaneId, panes_oracle};
 
 #[test]
 fn copiar_en_v_incluye_el_ultimo_caracter() {
@@ -98,6 +101,26 @@ fn pegar_en_normal_mueve_la_jumplist_las_marks_y_el_otro_panel() {
     );
     session.keys("gg'A");
     assert_eq!(session.line(session.pane()), 4, "la mark A también");
+}
+
+/// `:m` en un panel lleva con su línea, en la misma columna, el cursor del
+/// otro panel del mismo buffer, como `mark_adjust` en `ex_move` de vim.
+#[rstest::rstest]
+#[case::sube_sobre_el_cursor("4G$<C-w>w:4m0<CR>")]
+#[case::baja_bajo_el_cursor("3Gl<C-w>w:1,2m$<CR>")]
+#[case::el_cursor_entre_lo_que_se_mueve("2Gl<C-w>w:4,5m1<CR>")]
+#[case::la_ultima_sin_salto_sube("5Gl<C-w>w:5m0<CR>")]
+#[case::al_final_sin_salto("1G$<C-w>w:1m$<CR>")]
+#[case::y_deshacerlo("4G$<C-w>w:4m0<CR>u")]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn m_lleva_el_cursor_del_otro_panel_con_su_linea(#[case] keys: &str) {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "uno\ndos\ntres\ncuatro\ncinco").unwrap();
+    let mut session = Session::open(&dir.path().join("a.md"));
+    let typed = keys.replace("<CR>", "⏎").replace("<C-w>", "⌃w");
+    session.keys(&format!("⌃wv{typed}"));
+    let nvim = panes_oracle::run(dir.path(), "a.md", &format!("<C-w>v{keys}"));
+    assert_eq!(session.panes(dir.path()), nvim);
 }
 
 fn highlighted(session: &Session, pane: PaneId) -> Option<String> {
