@@ -32,7 +32,7 @@ use crate::{TagPlace, TagSpot};
 pub(crate) use block::{BlockKind, block_line};
 pub use cache::Styles;
 pub use rows::{FormulaRows, LineRows, Rows};
-pub use screen::{Advances, Screen, ScreenLine, ScreenLines};
+pub use screen::{Advances, Screen, ScreenLine, ScreenLines, wide_graphemes};
 pub use typed_link::TypedWikilink;
 
 /// Dónde termina el prefijo de cita de `line` (`> `, `> > `), como lo ve

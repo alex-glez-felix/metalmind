@@ -117,3 +117,43 @@ fn los_bytes_de_un_caracter_caen_en_el() {
         [None, Some(0), Some(1), Some(3)]
     );
 }
+
+/// La letra de respaldo de "日本" mide 15 por carácter y la de "ab", 6: el
+/// ancho queda en dos celdas exactas y lo de después se corre con él.
+#[test]
+fn un_caracter_ancho_mide_dos_celdas() {
+    let text = "a日本b";
+    let starts = vec![(0, 0.0), (1, 6.0), (4, 21.0), (7, 36.0)];
+    let advances = Advances::new(starts, text.len(), 42.0).with_wide_cells(text, 6.0);
+    assert_eq!(
+        [0, 1, 4, 7, 8].map(|byte| advances.x(byte)),
+        [0.0, 6.0, 18.0, 30.0, 36.0]
+    );
+    assert_eq!(advances.width(), 36.0);
+    assert_eq!(
+        advances,
+        Advances::monospace(text, 6.0),
+        "como una línea monoespaciada"
+    );
+}
+
+#[test]
+fn un_ancho_al_final_y_con_marca_combinada() {
+    // "x本\u{302}": el acento cuelga del ancho y va con él.
+    let text = "x本\u{302}";
+    let starts = vec![(0, 0.0), (1, 6.0), (4, 19.0)];
+    let advances = Advances::new(starts, text.len(), 21.0).with_wide_cells(text, 6.0);
+    assert_eq!([1, 4, 6].map(|byte| advances.x(byte)), [6.0, 19.0, 18.0]);
+    assert_eq!(advances.width(), 18.0);
+}
+
+#[test]
+fn sin_anchos_no_cambia() {
+    let advances = Advances::new(vec![(0, 0.0), (1, 7.5)], 2, 15.0);
+    assert_eq!(advances.clone().with_wide_cells("ab", 6.0), advances);
+    assert_eq!(wide_graphemes("año").count(), 0);
+    assert_eq!(
+        wide_graphemes("a日\u{302}b😀").collect::<Vec<_>>(),
+        [1..6, 7..11]
+    );
+}

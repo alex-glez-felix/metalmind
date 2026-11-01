@@ -112,8 +112,8 @@ impl LaidRow {
             return px(0.);
         };
         match &piece.text {
+            _ if index >= piece.source.end => piece.x + piece.width,
             Some(text) => piece.x + text.x_for_index(index.saturating_sub(piece.source.start)),
-            None if index >= piece.source.end => piece.x + piece.width,
             None => piece.x,
         }
     }

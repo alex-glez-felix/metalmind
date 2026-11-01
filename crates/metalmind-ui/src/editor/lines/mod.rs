@@ -20,6 +20,7 @@ use super::links::Links;
 use super::markdown::runs;
 use super::replaced::{Part, parts};
 use super::rows::place;
+use super::screen::{advances, cell_width};
 use super::text::{Faces, text_runs};
 use crate::math::{FormulaBox, Formulas, Geometry, ImageKey, Look, MathError};
 use crate::theme::Theme;
@@ -236,9 +237,11 @@ impl Line<'_> {
             &runs,
             None,
         );
+        let cell = cell_width(window.text_system(), &typeface.font, font_size);
+        let advances = advances(&shaped, self.text, cell);
         let mut slicer = ShapedSlicer::new(&shaped);
         for row in &self.rows {
-            builder.row(row, &split, &measured, &mut slicer);
+            builder.row(row, &split, &measured, &mut slicer, &advances);
         }
         for (spot, formula) in &measured {
             match formula {

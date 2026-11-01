@@ -9,7 +9,7 @@ use std::fmt;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use gpui_kit::WindowTextSystem;
+use gpui_kit::{Font, LineLayout, Pixels, TextSystem, WindowTextSystem};
 use metalmind_syntax::{Advances, LineStyle, ScreenLine, ScreenLines};
 
 use super::markdown::runs;
@@ -67,16 +67,8 @@ impl TextScreen {
             weight,
         );
         let layout = self.text_system.layout_line(text, size, &runs, None);
-        let mut starts: Vec<(usize, f32)> = layout
-            .runs
-            .iter()
-            .flat_map(|run| &run.glyphs)
-            .map(|glyph| (glyph.index, f32::from(glyph.position.x)))
-            .collect();
-        starts.sort_by_key(|&(byte, _)| byte);
-        starts.dedup_by_key(|&mut (byte, _)| byte);
-        let advances = Advances::new(starts, text.len(), f32::from(layout.width));
-        ScreenLine::new(text, advances, style, wrap)
+        let cell = cell_width(&self.text_system, &self.faces.font, size);
+        ScreenLine::new(text, advances(&layout, text, cell), style, wrap)
     }
 
     fn key(&self, text: &str, style: Option<&LineStyle>, wrap: Option<f32>) -> Key {
@@ -100,6 +92,31 @@ impl TextScreen {
             wrap: wrap.map(f32::to_bits),
         }
     }
+}
+
+/// Dónde cae cada carácter de `text` con la forma `layout`, con los anchos
+/// en dos celdas de `cell`: lo mismo para partir la línea que para pintarla.
+pub fn advances(layout: &LineLayout, text: &str, cell: Pixels) -> Advances {
+    let mut starts: Vec<(usize, f32)> = layout
+        .runs
+        .iter()
+        .flat_map(|run| &run.glyphs)
+        .map(|glyph| (glyph.index, f32::from(glyph.position.x)))
+        .collect();
+    starts.sort_by_key(|&(byte, _)| byte);
+    starts.dedup_by_key(|&mut (byte, _)| byte);
+    Advances::new(starts, text.len(), f32::from(layout.width))
+        .with_wide_cells(text, f32::from(cell))
+}
+
+/// Lo que mide una columna de texto con `font` en `size`: el ancho de una
+/// `m`, la celda de una letra monoespaciada.
+pub fn cell_width(text_system: &TextSystem, font: &Font, size: Pixels) -> Pixels {
+    let font_id = text_system.resolve_font(font);
+    text_system
+        .em_advance(font_id, size)
+        .inspect_err(|error| log::error!("sin ancho de M: {error:#}"))
+        .unwrap_or(size)
 }
 
 impl ScreenLines for TextScreen {

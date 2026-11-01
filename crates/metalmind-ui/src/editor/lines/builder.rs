@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use gpui_kit::{Bounds, Pixels, SharedString, point, px, size};
-use metalmind_syntax::{MathPlace, MathSpot};
+use metalmind_syntax::{Advances, MathPlace, MathSpot, wide_graphemes};
 
 use super::shaped_slicer::ShapedSlicer;
 use super::{Line, MathFrame, Measured, RowBox};
@@ -32,6 +32,7 @@ impl Builder<'_, '_> {
         split: &[Part],
         measured: &[Measured<'_>],
         slicer: &mut ShapedSlicer<'_>,
+        advances: &Advances,
     ) {
         let mut laid = LaidRow {
             source: row.source.clone(),
@@ -46,7 +47,11 @@ impl Builder<'_, '_> {
                 Part::Text(range) => {
                     let range = range.start.max(start)..range.end.min(end);
                     if !range.is_empty() || (range.start == start && start == end) {
-                        x = text(&mut laid, range, x, slicer);
+                        let cut = Cut {
+                            text: self.line.text,
+                            advances,
+                        };
+                        x = cut.text(&mut laid, range, x, slicer);
                     }
                 }
                 Part::Formula { spot, source } => {
@@ -137,28 +142,66 @@ impl Builder<'_, '_> {
     }
 }
 
-/// El texto de `range` en la fila, desde `x`; devuelve dónde termina.
-fn text(
-    row: &mut LaidRow,
-    range: Range<usize>,
-    x: Pixels,
-    slicer: &mut ShapedSlicer<'_>,
-) -> Pixels {
-    let shaped = match slicer.take(range.clone()) {
-        Ok(shaped) => shaped,
-        Err(error) => {
-            log::error!("{error}");
-            return x;
+/// Cómo se corta el texto de una línea en trozos: cada carácter ancho va
+/// en el suyo, en las dos celdas que le dan sus `advances`.
+struct Cut<'a> {
+    text: &'a str,
+    advances: &'a Advances,
+}
+
+impl Cut<'_> {
+    /// El texto de `range` en la fila, desde `x`; devuelve dónde termina.
+    fn text(
+        &self,
+        row: &mut LaidRow,
+        range: Range<usize>,
+        mut x: Pixels,
+        slicer: &mut ShapedSlicer<'_>,
+    ) -> Pixels {
+        for piece in self.pieces(range) {
+            let shaped = match slicer.take(piece.clone()) {
+                Ok(shaped) => shaped,
+                Err(error) => {
+                    log::error!("{error}");
+                    return x;
+                }
+            };
+            let width = px(self.advances.x(piece.end) - self.advances.x(piece.start));
+            row.pieces.push(Piece {
+                source: piece,
+                x,
+                width,
+                text: Some(shaped),
+            });
+            x += width;
         }
-    };
-    let width = shaped.width();
-    row.pieces.push(Piece {
-        source: range,
-        x,
-        width,
-        text: Some(shaped),
-    });
-    x + width
+        x
+    }
+
+    /// `range` partido antes y después de cada carácter ancho; vacío, un
+    /// solo trozo vacío.
+    fn pieces(&self, range: Range<usize>) -> Vec<Range<usize>> {
+        let offset = range.start;
+        let mut pieces = Vec::new();
+        let mut at = range.start;
+        let wide = self
+            .text
+            .get(range.clone())
+            .into_iter()
+            .flat_map(wide_graphemes)
+            .map(|wide| wide.start + offset..wide.end + offset);
+        for wide in wide {
+            if at < wide.start {
+                pieces.push(at..wide.start);
+            }
+            at = wide.end;
+            pieces.push(wide);
+        }
+        if at < range.end || pieces.is_empty() {
+            pieces.push(at..range.end);
+        }
+        pieces
+    }
 }
 
 /// Centrada en `area`; si no cabe, desde el borde izquierdo, como el texto
