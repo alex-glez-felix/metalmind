@@ -18,7 +18,7 @@ use super::cards::read_all;
 use super::model::{NoteList, Prompt};
 use super::source::{FolderError, ListSource, folder_to_show};
 use super::views::load as load_views;
-use crate::finder::{Note, VaultChanged, VaultSession};
+use crate::finder::{Note, VaultChanged, VaultSession, ViewsChanged};
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
 use crate::workspace::{Placement, Workspace, shown_path};
@@ -74,6 +74,7 @@ pub struct NoteListView {
     /// Un lote del watcher no mueve el scroll.
     pub(super) scroll_on_show: bool,
     _changes: Subscription,
+    _views: Subscription,
     _workspace: Subscription,
 }
 
@@ -113,6 +114,14 @@ impl NoteListView {
                 view.read_cards(unread, cx);
             }
         });
+        let views_changes = cx.subscribe(session, |view, session, changed: &ViewsChanged, cx| {
+            let views = session.read(cx).views();
+            let renamed = changed
+                .renamed
+                .as_ref()
+                .map(|(from, to)| (from.as_str(), to.as_str()));
+            view.follow_views(&views, renamed, cx);
+        });
         // La nota activa se marca en la lista: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         let mut view = Self {
@@ -134,6 +143,7 @@ impl NoteListView {
             started: false,
             scroll_on_show: false,
             _changes: changes,
+            _views: views_changes,
             _workspace: workspace_changes,
         };
         if view.is_visible() {
@@ -256,7 +266,7 @@ impl NoteListView {
     }
 
     /// Las vistas del vault cambiaron: la fuente sigue a la suya.
-    pub fn follow_views(
+    fn follow_views(
         &mut self,
         views: &[SavedView],
         renamed: Option<(&str, &str)>,

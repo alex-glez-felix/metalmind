@@ -47,7 +47,7 @@ impl Editor {
     /// completan su argumento.
     pub(super) fn argument_list(&mut self, typed: &TypedArgument, cx: &App) -> Option<List> {
         let session = self.session.read(cx);
-        let (tags, index) = (session.tags(), session.vault().snapshot());
+        let (tags, index, views) = (session.tags(), session.vault().snapshot(), session.views());
         let completion = &mut self.completion;
         let previous = match completion.list.take() {
             Some(List::Argument(list)) => Some(list),
@@ -57,6 +57,7 @@ impl Editor {
             let sources = FocusSources {
                 tags: completion.tag_candidates(tags),
                 folders: completion.folder_candidates(index),
+                views,
                 names: &mut completion.names,
                 paths: &mut completion.paths,
             };

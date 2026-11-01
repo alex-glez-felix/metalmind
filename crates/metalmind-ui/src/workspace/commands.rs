@@ -16,7 +16,6 @@ use super::options;
 use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
-use crate::focus::Focus;
 use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
 use crate::tag_change::{RequestError, TagField, TagRequest};
@@ -29,6 +28,18 @@ pub enum ListViewChange {
     /// La vista que muestra la lista.
     Rename,
     Delete,
+}
+
+/// `:focus` y `:unfocus` (05 §3), que hace la ventana: tiene la sesión del
+/// vault y sus vistas guardadas.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FocusCommand {
+    /// `:focus` con un alcance, tal cual se escribió.
+    Set(String),
+    /// `:focus` sin alcance: dice el de ahora.
+    Show,
+    /// `:unfocus`.
+    Clear,
 }
 
 /// Lo que la ventana tiene que hacer tras un comando.
@@ -76,11 +87,7 @@ pub enum Effect {
     OpenDailyNote,
     /// `:tagpage #tag`: la ventana, que tiene los tags, abre su página.
     OpenTagPage(String),
-    /// `:focus` con un alcance o `:unfocus`: la ventana, que tiene la
-    /// sesión del vault, pone o quita el focus.
-    SetFocus(Option<Focus>),
-    /// `:focus` sin alcance: la ventana dice el de ahora.
-    ShowFocus,
+    Focus(FocusCommand),
     /// `:messages`: el historial de avisos.
     OpenMessages,
     /// Una opción cambió desde la paleta: la ventana la guarda en
@@ -227,11 +234,11 @@ impl Workspace {
                 Some(tag) if !tag.is_empty() => Ok(Effect::OpenTagPage(tag.to_owned())),
                 _ => Err(RequestError::Usage(":tagpage #tag").into()),
             },
-            Command::Focus => Ok(match Focus::parse(argument.unwrap_or_default())? {
-                Some(focus) => Effect::SetFocus(Some(focus)),
-                None => Effect::ShowFocus,
+            Command::Focus => Ok(match argument.filter(|text| !text.trim().is_empty()) {
+                Some(text) => Effect::Focus(FocusCommand::Set(text.to_owned())),
+                None => Effect::Focus(FocusCommand::Show),
             }),
-            Command::ClearFocus => Ok(Effect::SetFocus(None)),
+            Command::ClearFocus => Ok(Effect::Focus(FocusCommand::Clear)),
         }
     }
 

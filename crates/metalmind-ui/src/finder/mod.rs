@@ -13,7 +13,7 @@ use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 pub use self::recents::Recents;
 pub use self::session::{
-    FocusChanged, Prepared, SessionError, VaultChanged, VaultSession, WatchLost,
+    FocusChanged, Prepared, SessionError, VaultChanged, VaultSession, ViewsChanged, WatchLost,
 };
 pub(crate) use self::session::{canonical, relative_to};
 pub use self::tags::TagFilter;

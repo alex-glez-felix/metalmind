@@ -81,16 +81,22 @@ impl Sidebar {
         self.navigate(cx, |outline| outline.collapse_or_parent());
     }
 
+    /// Una vista se abre en la lista.
     fn expand_or_open(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        if self.show_selected_view(true, cx) {
+            return;
+        }
         if self.open_selected_file(Placement::Current, cx) {
             return;
         }
         self.navigate(cx, |outline| outline.expand_or_enter());
     }
 
-    /// Un archivo se abre; una carpeta o un tag se abre o se cierra.
+    /// Un archivo se abre; una carpeta o un tag se abre o se cierra, y una
+    /// vista se muestra en la lista.
     fn open_selected(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        if !self.open_selected_file(Placement::Current, cx) {
+        self.menu = None;
+        if !self.show_selected_view(true, cx) && !self.open_selected_file(Placement::Current, cx) {
             self.navigate(cx, |outline| outline.toggle_selected());
         }
     }
@@ -103,6 +109,16 @@ impl Sidebar {
             return false;
         };
         self.open(&path, placement, true, cx);
+        true
+    }
+
+    /// Muestra en la lista la vista de la fila elegida; si no hay, devuelve
+    /// `false`.
+    pub(super) fn show_selected_view(&mut self, focus_list: bool, cx: &mut Context<Self>) -> bool {
+        let Some(view) = self.panel.selected_view().cloned() else {
+            return false;
+        };
+        cx.emit(SidebarEvent::ShowView { view, focus_list });
         true
     }
 
@@ -173,9 +189,12 @@ impl Sidebar {
 
     fn toggle_focus(&mut self, cx: &mut Context<Self>) {
         self.menu = None;
-        if let Some(focus) = self.panel.selected_focus() {
-            self.session
-                .update(cx, |session, cx| session.toggle_focus(focus, cx));
+        match self.panel.selected_focus() {
+            Some(Ok(focus)) => self
+                .session
+                .update(cx, |session, cx| session.toggle_focus(focus, cx)),
+            Some(Err(error)) => self.panel.report(&error),
+            None => {}
         }
         cx.notify();
     }

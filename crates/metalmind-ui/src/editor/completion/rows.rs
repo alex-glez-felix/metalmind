@@ -12,8 +12,9 @@ use metalmind_vault::{EntryKind, VaultPath};
 use super::super::completion_menu::MenuRow;
 use crate::completion::{
     ArgumentCompletions, ArgumentList, CommandCompletions, LinkCompletions, TagCompletions,
+    ViewCompletions,
 };
-use crate::icons;
+use crate::icons::{self, Icon};
 use crate::theme::Theme;
 
 pub(super) fn tags(list: &TagCompletions, visible: Range<usize>, theme: &Theme) -> Vec<MenuRow> {
@@ -73,6 +74,7 @@ pub(super) fn argument(
 ) -> Vec<MenuRow> {
     let (paths, folders) = match list.list() {
         ArgumentList::Tags { list, .. } => return tags(list, visible, theme),
+        ArgumentList::Views(list) => return views(list, visible, theme),
         ArgumentList::Folders(folders) => (folders, true),
         ArgumentList::Files(files) => (files, false),
     };
@@ -101,6 +103,19 @@ fn folder_of(path: &VaultPath) -> Option<String> {
     path.parent()
         .filter(|parent| !parent.is_root())
         .map(|parent| parent.as_str().to_owned())
+}
+
+fn views(list: &ViewCompletions, visible: Range<usize>, theme: &Theme) -> Vec<MenuRow> {
+    list.rows()
+        .skip(visible.start)
+        .take(visible.len())
+        .map(|view| MenuRow {
+            icon: icons::icon(Icon::Bookmark, theme.ui.panel_muted, theme),
+            name: view.name.clone(),
+            detail: Some(view.query.clone()),
+            count: None,
+        })
+        .collect()
 }
 
 fn muted_glyph(glyph: &'static str, theme: &Theme) -> Div {
