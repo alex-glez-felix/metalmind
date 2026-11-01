@@ -164,7 +164,8 @@ proptest! {
     }
 
     /// Por los `Splice`, cada byte, como el cursor de otro panel, queda en
-    /// una línea con el mismo texto y en la misma columna.
+    /// su línea, donde la deja `:m`, con el mismo texto y en la misma
+    /// columna.
     #[test]
     fn splices_take_every_offset_with_its_line(
         count in 1..8usize,
@@ -179,24 +180,31 @@ proptest! {
         let last = (first + len).min(count - 1);
         prop_assume!(below <= count && !(first + 1..=last).contains(&below));
         let mut buffer = Buffer::from(text.as_str());
+        // Dónde queda cada línea, contado aparte: las vacías y las repetidas
+        // no se distinguen por su texto.
+        let mut order: Vec<usize> = (0..count).collect();
+        let moved: Vec<usize> = order.drain(first..=last).collect();
+        let at = if below > last { below - moved.len() } else { below };
+        order.splice(at..at, moved);
         let before: Vec<_> = text
             .char_indices()
             .map(|(offset, _)| offset)
             .chain([text.len()])
             .map(|offset| {
                 let point = buffer.point_at(ByteOffset::new(offset)).unwrap();
-                (offset, buffer.line_text(point.line).into_owned(), point.column)
+                let line = order.iter().position(|&old| old == point.line).unwrap();
+                (offset, line, buffer.line_text(point.line).into_owned(), point.column)
             })
             .collect();
         buffer.take_splices();
         move_lines(&mut buffer, first..=last, below);
         let splices = buffer.take_splices();
-        for (offset, line, column) in before {
+        for (offset, line, text_of_line, column) in before {
             let moved = Splice::map_all(&splices, ByteOffset::new(offset));
             let point = buffer.point_at(moved).unwrap();
             prop_assert_eq!(
-                (buffer.line_text(point.line).into_owned(), point.column),
-                (line, column),
+                (point.line, buffer.line_text(point.line).into_owned(), point.column),
+                (line, text_of_line, column),
                 "byte {} de {:?}", offset, text
             );
         }
