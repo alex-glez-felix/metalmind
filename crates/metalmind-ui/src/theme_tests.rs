@@ -104,6 +104,16 @@ fn las_medidas_de_fabrica_son_las_de_antes() {
         ("status_padding_y", theme.layout.status_padding_y, 3.),
         ("status_gap", theme.layout.status_gap, 16.),
         ("picker_width", theme.layout.picker_width, 640.),
+        (
+            "picker_preview_width",
+            theme.layout.picker_preview_width,
+            560.,
+        ),
+        (
+            "picker_preview_min_width",
+            theme.layout.picker_preview_min_width,
+            320.,
+        ),
         ("picker_top", theme.layout.picker_top, 64.),
         ("picker_padding_x", theme.layout.picker_padding_x, 12.),
         ("picker_row_height", theme.picker_row_height(), 33.),

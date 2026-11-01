@@ -129,9 +129,9 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "como en la lista del autocompletado: la tecla de una fila no elegida guarda su columna, transparente",
     ),
     (
-        "src/picker/view/render.rs",
-        "relative(0.9)",
-        "tope del picker en una ventana angosta, como fracción de la ventana; es una pregunta abierta de la auditoría",
+        "src/picker/preview.rs",
+        "fit.saturating_sub(1) / 2",
+        "la mitad de las líneas que caben, para centrar el resultado: un conteo, no una medida",
     ),
 ];
 
@@ -322,13 +322,9 @@ fn las_reglas_atrapan_lo_suelto() {
 #[test]
 fn una_excepcion_no_tapa_otro_valor_de_la_misma_linea() {
     let dir = tempfile::tempdir().unwrap();
-    let view = dir.path().join("src/picker/view");
+    let view = dir.path().join("src/change_preview");
     fs::create_dir_all(&view).unwrap();
-    fs::write(
-        view.join("render.rs"),
-        ".max_w(relative(0.9)).px(px(10.))\n",
-    )
-    .unwrap();
+    fs::write(view.join("view.rs"), ".max_w(relative(0.9)).px(px(10.))\n").unwrap();
     let loose: Vec<String> = findings(dir.path())
         .into_iter()
         .filter(|finding| !excepted(finding))

@@ -255,6 +255,12 @@ Theme {
             picker_detail_share: Fraction(
                 0.4,
             ),
+            picker_preview_width: Length(
+                560.0,
+            ),
+            picker_preview_min_width: Length(
+                320.0,
+            ),
             change_preview_detail_lines: Count(
                 4,
             ),

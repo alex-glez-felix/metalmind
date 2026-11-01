@@ -1,10 +1,12 @@
 //! La vista de un picker: el input, la lista virtual y las acciones
 //! `picker::`, iguales para cualquier picker. Qué se lista y cómo se busca
-//! lo decide su [`PickerDelegate`], como en el `Picker` de Zed. Lo que se
-//! elige sale como [`PickerEvent`]; qué hacer con eso lo decide quien lo
+//! lo decide su [`PickerDelegate`], como en el `Picker` de Zed, y también si
+//! hay una vista previa de la fila marcada a la derecha de la lista. Lo que
+//! se elige sale como [`PickerEvent`]; qué hacer con eso lo decide quien lo
 //! abrió.
 
 mod input;
+mod preview;
 mod render;
 mod row_line;
 
@@ -17,7 +19,7 @@ use gpui_kit::{
 
 use metalmind_keymap::{Action, PickerAction, context};
 
-use super::{Chosen, InputLine, LineEdit, Open};
+use super::{Chosen, InputLine, LineEdit, Open, Preview};
 use crate::actions::Dispatch;
 
 /// Lo que se lista y cómo se busca. Sus métodos que reciben el contexto de
@@ -63,6 +65,21 @@ pub trait PickerDelegate: Sized + 'static {
     fn status(&self) -> Option<SharedString> {
         None
     }
+
+    /// Si el picker tiene vista previa: su panel se ve aunque esté vacío,
+    /// así nada se mueve al llegar.
+    fn has_preview(&self) -> bool {
+        false
+    }
+
+    /// Lo que se ve en la vista previa ahora.
+    fn preview(&self) -> Option<&Preview> {
+        None
+    }
+
+    /// Cambió la fila marcada o lo que hay en ella: el delegado puede
+    /// preparar su vista previa en el fondo.
+    fn selection_changed(&mut self, _cx: &mut Context<PickerView<Self>>) {}
 }
 
 /// Una fila de la lista. Siempre ocupa una línea: lo que no cabe se
@@ -157,9 +174,10 @@ impl<D: PickerDelegate> PickerView<D> {
         result
     }
 
-    fn changed(&self, cx: &mut Context<Self>) {
+    fn changed(&mut self, cx: &mut Context<Self>) {
         self.scroll
             .scroll_to_item(self.delegate.selected(), ScrollStrategy::Nearest);
+        self.delegate.selection_changed(cx);
         cx.notify();
     }
 

@@ -2,11 +2,13 @@
 //! de Telescope. Es el picker genérico con un delegado que busca con el
 //! `TextSearcher` de `metalmind-search` en un hilo propio; cada fila es una
 //! línea que coincide, con su nota y su número, y elegirla abre la nota en
-//! esa línea.
+//! esa línea. Junto a la lista, la vista previa de la nota alrededor de la
+//! línea marcada.
 
 mod context;
 mod delegate;
 mod model;
+mod preview;
 mod worker;
 
 use metalmind_buffer::Snapshot;
@@ -16,6 +18,7 @@ use metalmind_vault::VaultPath;
 pub use self::context::{RowText, row_text};
 pub(crate) use self::delegate::TextSearch;
 pub use self::model::{MAX_HITS, Search, Status, TextSearchState};
+pub use self::preview::{Loaded, PreviewJob, PreviewState, excerpt};
 pub use self::worker::{Event, SearchWorker};
 
 /// Una línea que coincide, en su nota.

@@ -122,7 +122,13 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<C-u>#rust -#nada #2024/10 idea")],
     ),
     ("finder-buzon", &[Step::Keys("<C-u>-#")]),
+    // A la derecha, la vista previa de la nota alrededor de la fila marcada
+    // (#77), también más abajo en la lista.
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
+    (
+        "buscar-otra-fila",
+        &[Step::Keys("<C-n><C-n><C-n><C-n><C-n><C-n>")],
+    ),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     (
         "buscar-escrito-largo",

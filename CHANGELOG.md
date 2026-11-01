@@ -268,6 +268,10 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   ventana nunca se traba, aunque el vault tenga 50 000 notas. Con más de
   10 000 líneas se corta y lo dice.
 - También desde la paleta (`workspace: open text search`).
+- A la derecha de los resultados, una vista previa de la nota alrededor de la
+  línea marcada, con lo que coincide resaltado, como la de Telescope. Se lee en
+  segundo plano; en una ventana angosta, donde no cabe junto a la lista, no se
+  muestra.
 
 #### Configuración
 
