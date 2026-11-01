@@ -175,3 +175,69 @@ fn en_una_ventana_baja_los_botones_se_ven() {
     assert!(apply.bottom() <= gpui_kit::px(360.), "{apply:?}");
     assert_eq!(detail.size.height, theme.change_preview_detail_height());
 }
+
+/// La vista previa de renombrar `#rust`, que tiene página, con `o`, el
+/// foco y lo que emite.
+fn openable(
+    cx: &mut TestAppContext,
+    opens_lines: bool,
+) -> (
+    &mut gpui_kit::VisualTestContext,
+    std::rc::Rc<std::cell::RefCell<Vec<ChangePreviewEvent>>>,
+) {
+    let request = TagRequest::Rename {
+        from: "rust".to_owned(),
+        to: "lang".to_owned(),
+    };
+    let preview = preview_of(&request, 1, "R\n");
+    cx.update(|cx| {
+        bind_keys(Keymap::default(), cx);
+        cx.set_global(Theme::with_font(
+            &Config::defaults().unwrap(),
+            "Mono".into(),
+        ));
+    });
+    let (view, cx) = cx.add_window_view(|_, cx| {
+        let view = ChangePreviewView::new(preview, cx);
+        if opens_lines {
+            view.with_open_line()
+        } else {
+            view
+        }
+    });
+    let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let seen = std::rc::Rc::clone(&events);
+    cx.update(|window, cx| {
+        cx.subscribe(&view, move |_, event: &ChangePreviewEvent, _| {
+            seen.borrow_mut().push(*event);
+        })
+        .detach();
+        let handle = view.read(cx).focus_handle(cx);
+        window.focus(&handle, cx);
+    });
+    cx.run_until_parked();
+    (cx, events)
+}
+
+/// `o` abre la línea de una edición; el renombre de la página, la última
+/// fila, no tiene línea, y su botón se apaga.
+#[test]
+fn o_abre_la_linea_de_una_edicion() {
+    let mut cx = TestAppContext::single();
+    let (cx, events) = openable(&mut cx, true);
+    assert!(cx.debug_bounds("change-preview-Abrir línea").is_some());
+    cx.simulate_keystrokes("o");
+    assert_eq!(*events.borrow(), [ChangePreviewEvent::OpenLine]);
+    cx.simulate_keystrokes("k o");
+    assert_eq!(events.borrow().len(), 1, "un renombre no tiene línea");
+}
+
+/// Sin quien sepa volver a ella, `o` no hace nada ni hay botón.
+#[test]
+fn sin_abrir_lineas_o_no_hace_nada() {
+    let mut cx = TestAppContext::single();
+    let (cx, events) = openable(&mut cx, false);
+    assert!(cx.debug_bounds("change-preview-Abrir línea").is_none());
+    cx.simulate_keystrokes("o");
+    assert!(events.borrow().is_empty());
+}

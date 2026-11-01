@@ -8,6 +8,7 @@
 //! de los avisos, arriba a la derecha.
 
 mod autosave;
+mod buffer_edits;
 mod context;
 mod finder;
 mod focus;
@@ -57,6 +58,7 @@ use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
 use self::reroute::{Reroute, Visible, reroute};
+use self::tag_change::ParkedTagChange;
 use self::toasts::ToastTimers;
 use self::vault_undo::VaultUndo;
 
@@ -77,6 +79,8 @@ pub struct WorkspaceView {
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
     vault_undo: VaultUndo,
+    /// La vista previa de tags que se dejó para abrir una línea.
+    parked_tag_change: Option<ParkedTagChange>,
     /// El plan de un renombre que se está armando, antes de su vista previa.
     renaming: Option<Task<()>>,
     notes: NoteSettings,
@@ -139,6 +143,7 @@ impl WorkspaceView {
             autosave: None,
             toast_timers: ToastTimers::default(),
             vault_undo: VaultUndo::default(),
+            parked_tag_change: None,
             renaming: None,
             notes,
             _subscriptions: [repaint, events, list_events, context_events, activation],
@@ -291,6 +296,7 @@ impl WorkspaceView {
                 self.undo_vault_change(cx);
                 self.focus(window, cx);
             }
+            Effect::ResumeTagChange => self.resume_tag_change(window, cx),
             Effect::NewNote(request) => {
                 self.sync_editors(cx);
                 self.new_note(request, window, cx);

@@ -677,6 +677,24 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("vistas-focus-escrito", &[Step::Keys("<Tab><CR>")]),
     ("vistas-focus-error", &[Step::Keys(":focus @nada<CR>")]),
+    // Un cambio de tags con un buffer sin guardar (#141, #142): la nota de
+    // la ruta más larga sigue sin poder guardarse, y `#ideas`, que también
+    // nombra una vista guardada, está en ella (sin acentos: XTest no los
+    // teclea). La vista previa la marca, `o` abre su línea con el aviso
+    // para volver, `space r` vuelve, aplicar deja el aviso con "Deshacer" y
+    // `space z` lo deshace en el buffer. Sin el focus de las vistas de
+    // antes, para que el finder llegue a la nota.
+    (
+        "tags-buffer-vista-previa",
+        &[Step::Keys(concat!(
+            "<Esc><Esc><C-w>o:unfocus<CR><Space>ffondo<CR>Go#ideas tambien aqui, todavia sin guardar<Esc>",
+            ":tagrename #ideas #ideas-con-un-nombre-larguisimo-para-ver-donde-se-corta-la-ruta<CR>jj",
+        ))],
+    ),
+    ("tags-buffer-abrir-linea", &[Step::Keys("o")]),
+    ("tags-buffer-volver", &[Step::Keys("<Space>r")]),
+    ("tags-buffer-aplicado", &[Step::Keys("<CR>")]),
+    ("tags-buffer-deshecho", &[Step::Keys("<Space>z")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

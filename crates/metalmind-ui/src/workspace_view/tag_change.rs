@@ -1,19 +1,48 @@
 //! `:tagrename` y `:tagmerge` en la ventana: arma el plan con los tags del
-//! vault, muestra su vista previa, aplica lo que quedó con [`Vault::apply`]
-//! y lo guarda para `:vaultundo` (05 §5).
+//! vault y el texto de los buffers sin guardar, muestra su vista previa,
+//! aplica lo que quedó (al disco con [`Vault::apply`], y a cada buffer con
+//! cambios como un paso de su undo) y lo guarda para `:vaultundo` (05 §5).
+//! Desde la vista previa se abre la línea de un cambio y se vuelve a ella
+//! con `space r`.
 
 use std::collections::HashSet;
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
 use metalmind_config::VaultConfig;
-use metalmind_vault::{Applied, ApplyError, Changes, FileOpError, Rename, Vault, VaultPath};
+use metalmind_keymap::Command;
+use metalmind_vault::{
+    Applied, ApplyError, Changes, EntryKind, FileEdits, FileOpError, Rename, Vault, VaultPath,
+};
 
 use super::WorkspaceView;
+use super::buffer_edits::{Routed, route};
 use super::overlay::Overlay;
 use super::vault_undo::ListFollowed;
 use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
-use crate::tag_change::{TagRequest, VaultConfigText, config_path};
-use crate::workspace::{Message, shown_path};
+use crate::picker::Open;
+use crate::tag_change::{TagRequest, config_path};
+use crate::workspace::{LinePosition, Message, MessageId, ToastAction, shown_path};
+
+/// El botón del aviso tras aplicar un cambio al vault.
+const UNDO: ToastAction = ToastAction {
+    label: "Deshacer",
+    command: Command::UndoVaultChange,
+};
+
+/// El botón del aviso tras dejar una vista previa para abrir una línea.
+const RESUME: ToastAction = ToastAction {
+    label: "Volver",
+    command: Command::ResumeTagChange,
+};
+
+/// Una vista previa de tags que se dejó para abrir la línea de un cambio:
+/// lo que se pidió y cómo estaba, para rehacerla al volver con lo que se
+/// haya editado entre medio.
+pub(super) struct ParkedTagChange {
+    request: TagRequest,
+    view: Entity<ChangePreviewView>,
+    toast: MessageId,
+}
 
 impl WorkspaceView {
     pub(super) fn change_tags(
@@ -22,10 +51,48 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if let Some(parked) = self.parked_tag_change.take() {
+            self.retire_toast(parked.toast, cx);
+        }
+        self.show_tag_change(request, None, window, cx);
+    }
+
+    /// `space r`: la vista previa que se dejó, rehecha sobre lo de ahora y
+    /// con las filas quitadas y la elegida como estaban.
+    pub(super) fn resume_tag_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Una macro pudo cambiar los paneles antes.
+        self.sync_editors(cx);
+        let Some(parked) = self.parked_tag_change.take() else {
+            let text = "no hay vista previa a la que volver: space r vuelve a la de un cambio de \
+                        tags tras abrir una de sus líneas";
+            return self.tell(Message::Info(text.to_owned()), cx);
+        };
+        self.retire_toast(parked.toast, cx);
+        self.show_tag_change(&parked.request, Some(&parked.view), window, cx);
+    }
+
+    /// La vista previa de `request` sobre los tags del vault, con los
+    /// buffers con cambios sin guardar como si estuvieran guardados: sus
+    /// ediciones van a ellos. Con `old`, se queda con lo que se había
+    /// quitado y elegido en ella.
+    fn show_tag_change(
+        &mut self,
+        request: &TagRequest,
+        old: Option<&Entity<ChangePreviewView>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let texts = self.unsaved_texts(cx);
         let unsaved = self.unsaved_paths(cx);
         let session = self.session.read(cx);
-        let (tags, config) = (session.tags(), VaultConfigText::read(session.root()));
-        let preview = match request.preview(&tags, &config, |path| unsaved.contains(path)) {
+        let notes = texts
+            .notes
+            .iter()
+            .filter(|(path, _)| EntryKind::of_file(path) == EntryKind::Note)
+            .map(|(path, text)| (path, text.as_str()));
+        let tags = session.tags().with_unsaved(notes);
+        let config = texts.config(session.root());
+        let mut preview = match request.preview(&tags, &config, |path| unsaved.contains(path)) {
             Ok(Some(preview)) => preview,
             Ok(None) => {
                 let text = format!("{}: no hay nada que cambiar", request.title());
@@ -33,15 +100,13 @@ impl WorkspaceView {
             }
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),
         };
-        let view = cx.new(|cx| ChangePreviewView::new(preview, cx));
-        // La lista de notas sigue a un tag renombrado o fusionado.
-        let renamed = match request {
-            TagRequest::Rename { from, to } => Some((from.clone(), to.clone())),
-            TagRequest::Merge { from, into } => Some((from.clone(), into.clone())),
-            TagRequest::Page { .. } => None,
-        };
+        if let Some(old) = old {
+            preview.carry_over(old.read(cx).preview());
+        }
+        let view = cx.new(|cx| ChangePreviewView::new(preview, cx).with_open_line());
+        let asked = request.clone();
         let events = cx.subscribe_in(&view, window, move |this, view, event, window, cx| {
-            this.on_tag_change_event(view, *event, renamed.as_ref(), window, cx);
+            this.on_tag_change_event(view, *event, &asked, window, cx);
         });
         self.show(
             Overlay::ChangePreview {
@@ -58,10 +123,13 @@ impl WorkspaceView {
         &mut self,
         view: &Entity<ChangePreviewView>,
         event: ChangePreviewEvent,
-        renamed: Option<&(String, String)>,
+        request: &TagRequest,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if event == ChangePreviewEvent::OpenLine {
+            return self.park_tag_change(view, request, window, cx);
+        }
         let apply = (event == ChangePreviewEvent::Apply).then(|| {
             let preview = view.read(cx).preview();
             (
@@ -73,6 +141,12 @@ impl WorkspaceView {
         self.close_overlay(window, cx);
         let Some((title, summary, changes)) = apply else {
             return;
+        };
+        // La lista de notas sigue a un tag renombrado o fusionado.
+        let renamed = match request {
+            TagRequest::Rename { from, to } => Some((from, to)),
+            TagRequest::Merge { from, into } => Some((from, into)),
+            TagRequest::Page { .. } => None,
         };
         if self.apply_tag_changes(title, &summary, &changes, cx)
             && let Some((from, to)) = renamed
@@ -89,8 +163,44 @@ impl WorkspaceView {
         }
     }
 
-    /// Aplica `changes` y lo guarda para `:vaultundo`; `summary` es el aviso si
-    /// todo sale bien. Devuelve si se aplicó entero.
+    /// Deja la vista previa para abrir el archivo del cambio elegido en su
+    /// línea; el aviso dice cómo volver.
+    fn park_tag_change(
+        &mut self,
+        view: &Entity<ChangePreviewView>,
+        request: &TagRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let preview = view.read(cx).preview();
+        let Some((path, line)) = preview
+            .row(preview.selected())
+            .and_then(|row| Some((row.path.clone(), row.line?)))
+        else {
+            return;
+        };
+        self.close_overlay(window, cx);
+        let at = LinePosition {
+            line: line.saturating_sub(1),
+            column: 0,
+        };
+        self.open_note_at(&path, at, Open::Here, window, cx);
+        let toast = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            let text = "la vista previa sigue guardada".to_owned();
+            workspace.show_message_with(Message::Info(text), RESUME)
+        });
+        self.parked_tag_change = Some(ParkedTagChange {
+            request: request.clone(),
+            view: view.clone(),
+            toast,
+        });
+    }
+
+    /// Aplica `changes` y lo guarda para `:vaultundo`; `summary` es el
+    /// aviso si todo sale bien. Las ediciones de los archivos con cambios
+    /// sin guardar van a su buffer, como un paso de su undo, solo si lo
+    /// demás se escribió entero. Devuelve si se aplicó entero.
     pub(super) fn apply_tag_changes(
         &mut self,
         title: String,
@@ -98,35 +208,89 @@ impl WorkspaceView {
         changes: &Changes,
         cx: &mut Context<Self>,
     ) -> bool {
+        let unsaved = self.unsaved_paths(cx);
+        let Routed { disk, buffers } = route(changes, |path| unsaved.contains(path));
+        if let Err(error) = self.check_buffers(&buffers, cx) {
+            self.tell(
+                Message::Error(format!("{title}: no se cambió nada: {error}")),
+                cx,
+            );
+            return false;
+        }
         let vault = self.session.read(cx).vault();
-        let mut whole = false;
-        let message = match vault.apply(changes) {
+        let message = match vault.apply(&disk) {
             Ok(applied) => {
-                whole = true;
-                self.follow_renames(&vault, applied.renamed(), cx);
-                self.reread(&vault, applied.touched(), cx);
-                self.follow_saved_views(&applied, cx);
-                self.vault_undo.remember(title, applied);
-                // Corto: la barra recorta lo que no cabe, y el título ya se vio.
-                Message::Info(format!("{summary}; :vaultundo lo deshace"))
+                self.follow_applied(&vault, &applied, cx);
+                let (undo, failed) = self.edit_buffers(&buffers, cx);
+                self.remember_change(title.clone(), applied, undo, cx);
+                if failed.is_empty() {
+                    self.tell_undoable(summary.to_owned(), cx);
+                    return true;
+                }
+                let failed: Vec<String> = failed
+                    .into_iter()
+                    .map(|(path, error)| format!("{path} ({error})"))
+                    .collect();
+                Message::Error(format!(
+                    "{title}: no se cambió {}. :vaultundo deshace lo demás",
+                    failed.join(", ")
+                ))
             }
             Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
                 Message::Error(format!("{title}: no se cambió nada: {cause}"))
             }
             Err(ApplyError::Interrupted { applied, cause }) => {
-                self.follow_renames(&vault, applied.renamed(), cx);
-                self.reread(&vault, applied.touched(), cx);
-                self.follow_saved_views(&applied, cx);
+                self.follow_applied(&vault, &applied, cx);
                 let message = Message::Error(format!(
                     "{title} se paró a medias ({cause}). :vaultundo deshace lo hecho"
                 ));
-                self.vault_undo.remember(title, *applied);
+                self.remember_change(title, *applied, Vec::new(), cx);
                 message
             }
             Err(error) => Message::Error(format!("{title}: no se cambió nada: {error}")),
         };
         self.tell(message, cx);
-        whole
+        false
+    }
+
+    /// Los documentos abiertos y la lista siguen a lo que `applied` escribió
+    /// y renombró.
+    fn follow_applied(&mut self, vault: &Vault, applied: &Applied, cx: &mut Context<Self>) {
+        self.follow_renames(vault, applied.renamed(), cx);
+        self.reread(vault, applied.touched(), cx);
+        self.follow_saved_views(applied, cx);
+    }
+
+    /// `applied`, y `buffers`, lo que devuelve los buffers que recibieron
+    /// el cambio, pasan a ser lo que deshace `:vaultundo`. El "Deshacer"
+    /// del aviso de un cambio anterior ya no vale.
+    pub(super) fn remember_change(
+        &mut self,
+        title: String,
+        applied: Applied,
+        buffers: Vec<FileEdits>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(toast) = self.vault_undo.take_toast() {
+            self.retire_toast(toast, cx);
+        }
+        self.vault_undo.remember(title, applied, buffers);
+    }
+
+    /// El aviso de lo que se acaba de aplicar, con "Deshacer".
+    pub(super) fn tell_undoable(&mut self, text: String, cx: &mut Context<Self>) {
+        let toast = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            workspace.show_message_with(Message::Info(text), UNDO)
+        });
+        self.vault_undo.set_toast(toast);
+    }
+
+    pub(super) fn retire_toast(&mut self, toast: MessageId, cx: &mut Context<Self>) {
+        self.workspace.update(cx, |workspace, cx| {
+            workspace.retire_message(toast);
+            cx.notify();
+        });
     }
 
     /// `:tagpage`: la página de `tag`, o la de su tag si es un alias. Si no

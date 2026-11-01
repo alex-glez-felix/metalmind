@@ -17,6 +17,9 @@ pub struct ChangePreview {
     unsaved: BTreeSet<VaultPath>,
     /// Los renombres son lo que se pidió: no se pueden quitar.
     fixed_renames: bool,
+    /// Las ediciones de un archivo con cambios sin guardar van a su buffer
+    /// en vez de al disco, así que no bloquean (05 §5).
+    edits_in_buffers: bool,
 }
 
 /// Algo que dice el plan sobre sí mismo, como que dos tags se fusionan.
@@ -51,6 +54,9 @@ pub struct PreviewRow<'a> {
     /// El archivo con cambios sin guardar que pisaría: el que edita, o el
     /// origen o el destino de un renombre.
     pub unsaved: Option<&'a VaultPath>,
+    /// Una edición que va al buffer con cambios sin guardar de su archivo,
+    /// como un paso de su undo.
+    pub in_buffer: bool,
 }
 
 /// Por qué no se puede aplicar.
@@ -93,6 +99,7 @@ impl ChangePreview {
             selected: 0,
             unsaved: BTreeSet::new(),
             fixed_renames: false,
+            edits_in_buffers: false,
         };
         preview.set_unsaved(unsaved);
         Some(preview)
@@ -108,6 +115,15 @@ impl ChangePreview {
         self.rows
             .sort_by_key(|change| !matches!(change, Change::Rename(_)));
         self.selected = 0;
+        self
+    }
+
+    /// Con las ediciones de los archivos con cambios sin guardar armadas
+    /// sobre el texto de su buffer: van a él, y solo un renombre o un
+    /// archivo nuevo sobre uno de ellos bloquea.
+    #[must_use]
+    pub fn with_edits_in_buffers(mut self) -> Self {
+        self.edits_in_buffers = true;
         self
     }
 
@@ -177,13 +193,18 @@ impl ChangePreview {
     pub fn row(&self, row: usize) -> Option<PreviewRow<'_>> {
         let changes = &self.changes;
         let unsaved = |path: &VaultPath| self.unsaved.get(path);
+        let mut in_buffer = false;
         let (path, line, before, after, unsaved) = match *self.rows.get(row)? {
             Change::Edit { file, edit } => {
                 let file = changes.edits.get(file)?;
                 let edit = file.edits.get(edit)?;
                 let (before, after, skipped) = changed_lines(&edit.old, &edit.new);
                 let line = Some(edit.line + skipped + 1);
-                (&file.path, line, before, after, unsaved(&file.path))
+                let mut busy = unsaved(&file.path);
+                if self.edits_in_buffers {
+                    in_buffer = busy.take().is_some();
+                }
+                (&file.path, line, before, after, busy)
             }
             Change::Create(index) => {
                 let create = changes.creates.get(index)?;
@@ -205,6 +226,7 @@ impl ChangePreview {
             dropped: self.dropped.contains(&row),
             fixed: self.is_fixed(row),
             unsaved,
+            in_buffer,
         })
     }
 

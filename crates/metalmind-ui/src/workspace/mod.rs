@@ -18,6 +18,7 @@ mod command_typing;
 mod commands;
 mod documents;
 mod editing;
+mod file_edits;
 mod file_ids;
 mod files;
 mod gutter_marks;
@@ -59,7 +60,7 @@ pub use self::link_typing::TypedLink;
 pub use self::links::LinkChoice;
 use self::links::VaultLinks;
 pub use self::message::Message;
-pub use self::messages::{MessageId, Messages, ToastId};
+pub use self::messages::{MessageId, Messages, ToastAction, ToastId};
 pub use self::options::PaneOptions;
 pub use self::pane_tree::{Axis, Direction, Node, PaneId, PaneTree};
 pub use self::source_lines::SourceLines;
@@ -286,6 +287,16 @@ impl Workspace {
     /// Lo anota y lo muestra en un toast.
     pub fn show_message(&mut self, message: Message) {
         self.messages.push(message);
+    }
+
+    /// Como [`Workspace::show_message`], con un botón en su toast.
+    pub fn show_message_with(&mut self, message: Message, action: ToastAction) -> MessageId {
+        self.messages.push_with_action(message, action)
+    }
+
+    /// Le quita el botón al toast de `id` y lo cierra ([`Messages::retire`]).
+    pub fn retire_message(&mut self, id: MessageId) {
+        self.messages.retire(id);
     }
 
     /// Cierra ese toast, como un clic en él.

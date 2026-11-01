@@ -149,38 +149,42 @@ fn sin_cambios_no_se_aplica() {
     assert_eq!(preview.blocked(), Some(Blocked::Nothing));
 }
 
-/// Un archivo con cambios sin guardar bloquea mientras tenga alguna fila
-/// que se aplica.
+/// Las ediciones de un archivo con cambios sin guardar van a su buffer: se
+/// marcan y no bloquean (05 §5).
 #[test]
-fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
+fn una_edicion_en_un_buffer_sin_guardar_no_bloquea() {
     let request = rename("rust", "lang");
-    let mut preview = request
+    let preview = request
         .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
             file.as_str() == "a.md"
         })
         .unwrap()
         .unwrap();
-    assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
+    let row = preview.row(0).unwrap();
     assert_eq!(
-        preview.blocked(),
-        Some(Blocked::Unsaved(vec![&path("a.md")]))
+        (row.path, row.unsaved, row.in_buffer),
+        (&path("a.md"), None, true)
     );
-    preview.toggle_selected();
+    assert!(!preview.row(1).unwrap().in_buffer, "b.md va al disco");
     assert_eq!(preview.blocked(), None);
 }
 
-/// Si se guarda con la vista previa abierta, como al autoguardar, deja de
-/// bloquear.
+/// La página con cambios sin guardar no se renombra por debajo de su
+/// buffer: bloquea mientras no se guarde, como al autoguardar.
 #[test]
-fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
+fn renombrar_una_pagina_sin_guardar_bloquea_hasta_guardarla() {
+    let tags = tags(&[("a.md", "#rust\n"), ("tags/rust.md", "Del lenguaje.\n")]);
     let request = rename("rust", "lang");
     let mut preview = request
-        .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
-            file.as_str() == "a.md"
+        .preview(&tags, &VaultConfigText::Missing, |file| {
+            file.as_str() == "tags/rust.md"
         })
         .unwrap()
         .unwrap();
-    assert!(preview.blocked().is_some());
+    assert_eq!(
+        preview.blocked(),
+        Some(Blocked::Unsaved(vec![&path("tags/rust.md")]))
+    );
     preview.set_unsaved(|_| false);
     assert_eq!(preview.blocked(), None);
 }

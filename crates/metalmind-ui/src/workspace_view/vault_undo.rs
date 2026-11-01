@@ -6,20 +6,26 @@
 use std::collections::BTreeSet;
 
 use gpui_kit::Context;
-use metalmind_vault::{Applied, Rename, UndoReport, Vault, VaultPath};
+use metalmind_vault::{Applied, FileEdits, Rename, UndoReport, Vault, VaultPath};
 
 use super::WorkspaceView;
-use crate::workspace::Message;
+use crate::workspace::{Message, MessageId};
 
 /// El último cambio aplicado al vault, para deshacerlo.
 #[derive(Default)]
 pub(super) struct VaultUndo {
     last: Option<LastChange>,
+    /// El aviso con "Deshacer" de `last`, que deja de valer al deshacerlo
+    /// o al aplicar otro cambio.
+    toast: Option<MessageId>,
 }
 
 struct LastChange {
     title: String,
     applied: Applied,
+    /// Lo que devuelve a como estaban los buffers con cambios sin guardar
+    /// que recibieron el cambio en vez del disco.
+    buffers: Vec<FileEdits>,
     list_followed: Option<ListFollowed>,
 }
 
@@ -39,18 +45,32 @@ pub(super) struct Undone {
     title: String,
     pub applied: Applied,
     pub report: UndoReport,
+    /// Lo que hay que devolver en los buffers que recibieron el cambio.
+    pub buffers: Vec<FileEdits>,
+    /// Los de `buffers` que no se pudieron devolver.
+    pub left_in_buffers: Vec<VaultPath>,
     list_followed: Option<ListFollowed>,
 }
 
 impl VaultUndo {
     /// `applied`, llamado `title` en los avisos, pasa a ser lo que se
-    /// deshace.
-    pub fn remember(&mut self, title: String, applied: Applied) {
+    /// deshace, con `buffers`, lo que devuelve los buffers que recibieron
+    /// el cambio.
+    pub fn remember(&mut self, title: String, applied: Applied, buffers: Vec<FileEdits>) {
         self.last = Some(LastChange {
             title,
             applied,
+            buffers,
             list_followed: None,
         });
+    }
+
+    pub fn set_toast(&mut self, toast: MessageId) {
+        self.toast = Some(toast);
+    }
+
+    pub fn take_toast(&mut self) -> Option<MessageId> {
+        self.toast.take()
     }
 
     /// La lista de notas siguió al último cambio.
@@ -96,6 +116,8 @@ impl VaultUndo {
                 title: last.title,
                 applied: last.applied,
                 report,
+                buffers: last.buffers,
+                left_in_buffers: Vec::new(),
                 list_followed: last.list_followed,
             }),
             Err(error) => {
@@ -124,21 +146,28 @@ impl Undone {
     /// deshizo todo: lo que cambió después sigue con el tag nuevo, y la
     /// lista se quedaría sin esas notas.
     pub fn list_back(&self) -> Option<&ListFollowed> {
-        self.list_followed
-            .as_ref()
-            .filter(|_| is_clean(&self.report))
+        self.list_followed.as_ref().filter(|_| self.is_clean())
+    }
+
+    fn is_clean(&self) -> bool {
+        is_clean(&self.report) && self.left_in_buffers.is_empty()
     }
 
     pub fn message(&self) -> Message {
-        if is_clean(&self.report) {
-            Message::Info(format!("se deshizo: {}", self.title))
-        } else {
-            Message::Error(format!(
-                "se deshizo {} salvo lo que cambió después o falló: {}",
-                self.title,
-                leftovers(&self.report)
-            ))
+        if self.is_clean() {
+            return Message::Info(format!("se deshizo: {}", self.title));
         }
+        let mut left = leftovers(&self.report);
+        for path in &self.left_in_buffers {
+            if !left.is_empty() {
+                left.push_str(", ");
+            }
+            left.push_str(path.as_str());
+        }
+        Message::Error(format!(
+            "se deshizo {} salvo lo que cambió después o falló: {left}",
+            self.title
+        ))
     }
 }
 
@@ -162,10 +191,14 @@ impl WorkspaceView {
     pub(super) fn undo_vault_change(&mut self, cx: &mut Context<Self>) {
         let unsaved = self.unsaved_paths(cx);
         let vault = self.session.read(cx).vault();
-        let undone = match self.vault_undo.undo(&vault, |path| unsaved.contains(path)) {
+        let mut undone = match self.vault_undo.undo(&vault, |path| unsaved.contains(path)) {
             Ok(undone) => undone,
             Err(message) => return self.tell(message, cx),
         };
+        if let Some(toast) = self.vault_undo.take_toast() {
+            self.retire_toast(toast, cx);
+        }
+        undone.left_in_buffers = self.undo_buffers(&vault, &undone.buffers, cx);
         self.follow_renames(&vault, undone.moved_back().iter(), cx);
         // Donde haya quedado cada archivo, aunque un renombre no se haya
         // podido deshacer.
@@ -214,7 +247,7 @@ mod tests {
     fn rename(undo: &mut VaultUndo, vault: &Vault, from: &str, to: &str) {
         let plan = vault.links().rename_plan(&path(from), &path(to)).unwrap();
         let applied = vault.apply(&plan.changes()).unwrap();
-        undo.remember(format!("Renombrar {from} a {to}"), applied);
+        undo.remember(format!("Renombrar {from} a {to}"), applied, Vec::new());
     }
 
     /// Renombrar una nota reescribe sus links; deshacer la devuelve a su
@@ -333,7 +366,11 @@ mod tests {
             .unwrap()
             .unwrap();
         let mut undo = VaultUndo::default();
-        undo.remember(request.title(), vault.apply(&preview.changes()).unwrap());
+        undo.remember(
+            request.title(),
+            vault.apply(&preview.changes()).unwrap(),
+            Vec::new(),
+        );
         assert_eq!(read(&dir, "a.md"), "#estudio\n");
         assert_eq!(
             read(&dir, ".metalmind/config.yaml"),
@@ -342,6 +379,47 @@ mod tests {
         undo.undo(&vault, |_| false).unwrap();
         assert_eq!(read(&dir, "a.md"), "#gs\n");
         assert_eq!(read(&dir, ".metalmind/config.yaml"), config);
+    }
+
+    /// Lo que entró en buffers vuelve con el deshacer para devolverlo por el
+    /// mismo camino; si no se pudo, se avisa y la lista no se devuelve.
+    #[test]
+    fn lo_de_los_buffers_vuelve_con_el_deshacer() {
+        let (_dir, vault) = vault(&[("a.md", "#rust\n")]);
+        let mut undo = VaultUndo::default();
+        let back = FileEdits {
+            path: path("b.md"),
+            edits: vec![TextEdit {
+                range: 0..5,
+                old: "#lang".to_owned(),
+                new: "#rust".to_owned(),
+                line: 0,
+            }],
+            base_len: None,
+        };
+        let applied = vault.apply(&Changes::default()).unwrap();
+        undo.remember(
+            "Renombrar #rust a #lang".to_owned(),
+            applied,
+            vec![back.clone()],
+        );
+        undo.list_followed(ListFollowed {
+            from: "rust".to_owned(),
+            to: "lang".to_owned(),
+            choices: 1,
+        });
+        let mut undone = undo.undo(&vault, |_| false).unwrap();
+        assert_eq!(undone.buffers, [back]);
+        assert!(undone.list_back().is_some());
+        undone.left_in_buffers = vec![path("b.md")];
+        assert_eq!(undone.list_back(), None);
+        assert_eq!(
+            undone.message(),
+            Message::Error(
+                "se deshizo Renombrar #rust a #lang salvo lo que cambió después o falló: b.md"
+                    .to_owned()
+            )
+        );
     }
 
     /// Un cambio de tags y un renombre comparten el deshacer: siempre se
@@ -364,6 +442,7 @@ mod tests {
         undo.remember(
             "Renombrar #rust a #lang".to_owned(),
             vault.apply(&tags).unwrap(),
+            Vec::new(),
         );
         rename(&mut undo, &vault, "b.md", "c.md");
         assert_eq!(read(&dir, "a.md"), "#lang [[c]]\n");

@@ -89,6 +89,7 @@ ui:
   toast_warning: warning
   toast_error: danger
   toast_hint: text_muted
+  toast_button_hover: { color: text, alpha: 0.05 }
 
 cursor:
   normal: { color: blue, alpha: 0.4 }

@@ -83,6 +83,8 @@ const LEADER: &[(char, Command, bool)] = &[
     ('c', Command::ShowFolder, false),
     ('n', Command::NewNoteFromTemplate, true),
     ('d', Command::OpenDailyNote, true),
+    ('z', Command::UndoVaultChange, true),
+    ('r', Command::ResumeTagChange, true),
 ];
 
 fn leader() -> impl Iterator<Item = Binding> {
@@ -315,6 +317,7 @@ const CHANGE_PREVIEW: &[(&[Keystroke], ChangePreviewAction)] = &[
     (&[named(KeyName::Up)], ChangePreviewAction::SelectPrevious),
     (&[ctrl('p')], ChangePreviewAction::SelectPrevious),
     (&[k('x')], ChangePreviewAction::ToggleChange),
+    (&[k('o')], ChangePreviewAction::OpenLine),
     (&[named(KeyName::Enter)], ChangePreviewAction::Apply),
     (&[k('q')], ChangePreviewAction::Cancel),
     (&[named(KeyName::Escape)], ChangePreviewAction::Cancel),

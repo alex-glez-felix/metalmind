@@ -94,7 +94,8 @@ impl TagRequest {
     /// La vista previa del plan sobre `tags`, con las vistas guardadas de
     /// `config` que lo siguen; `None` si no hay nada que cambiar ni que
     /// avisar. `unsaved` dice si un archivo del vault tiene cambios sin
-    /// guardar.
+    /// guardar: `tags` y `config` tienen que ser los de sus buffers
+    /// ([`Tags::with_unsaved`]), porque sus ediciones van a ellos.
     ///
     /// # Errors
     /// Si algún nombre no es válido o no existe.
@@ -129,7 +130,8 @@ impl TagRequest {
                 }),
             }
         }
-        Ok(ChangePreview::new(self.title(), changes, notices, unsaved))
+        Ok(ChangePreview::new(self.title(), changes, notices, unsaved)
+            .map(ChangePreview::with_edits_in_buffers))
     }
 
     /// Lo que encabeza la vista previa y el aviso al aplicar.

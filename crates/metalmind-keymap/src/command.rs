@@ -112,9 +112,13 @@ named_actions! {
         /// `:tagmerge #a #b`: la vista previa de pasar las notas de `#a` a
         /// `#b`.
         MergeTag = "tags::merge",
-        /// `:vaultundo` (o `:tagundo`): deshace el último cambio aplicado al
-        /// vault, sea de tags o el renombre de una nota con sus links.
+        /// `:vaultundo` (o `:tagundo`), `space z` o "Deshacer" en el aviso
+        /// al aplicar: deshace el último cambio aplicado al vault, sea de
+        /// tags o el renombre de una nota con sus links.
         UndoVaultChange = "vault::undo",
+        /// `space r` o "Volver" en el aviso: la vista previa de tags que se
+        /// dejó para abrir la línea de un cambio, rehecha con lo de ahora.
+        ResumeTagChange = "tags::resume_preview",
         /// `:tagaliases #tag [alias…]`: la vista previa de dejar esos alias
         /// en la página del tag; sin ninguno, de quitarlos.
         EditTagAliases = "tags::edit_aliases",

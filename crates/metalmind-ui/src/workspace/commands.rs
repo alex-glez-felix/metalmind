@@ -80,6 +80,9 @@ pub enum Effect {
     ChangeTags(TagRequest),
     /// `:vaultundo`: la ventana deshace el último cambio que aplicó al vault.
     UndoVaultChange,
+    /// `space r`: la ventana vuelve a la vista previa de tags que se dejó
+    /// para abrir una línea.
+    ResumeTagChange,
     /// `:template`: la ventana, que tiene el vault, lee las plantillas y
     /// pregunta lo que falte.
     NewNote(NoteRequest),
@@ -221,6 +224,7 @@ impl Workspace {
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
             Command::UndoVaultChange => Ok(Effect::UndoVaultChange),
+            Command::ResumeTagChange => Ok(Effect::ResumeTagChange),
             Command::NewNoteFromTemplate => Ok(Effect::NewNote(NoteRequest::parse(argument))),
             Command::OpenDailyNote => Ok(Effect::OpenDailyNote),
             Command::EditTagAliases => page_change(TagField::Aliases, argument),
