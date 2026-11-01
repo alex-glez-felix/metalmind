@@ -2,7 +2,7 @@
 //! renombre del plan, cada una se puede quitar, y lo que queda es lo que se
 //! aplica.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use metalmind_vault::{Changes, FileEdits, TextEdit, VaultPath};
 
@@ -21,6 +21,10 @@ pub struct ChangePreview {
     /// en vez de al disco, así que no bloquean (05 §5).
     edits_in_buffers: bool,
 }
+
+/// Una fila por su cambio (ruta, lo de antes y lo nuevo) y cuántas iguales
+/// hay antes que ella.
+type RowKey = ((VaultPath, String, String), usize);
 
 /// Algo que dice el plan sobre sí mismo, como que dos tags se fusionan.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -128,32 +132,45 @@ impl ChangePreview {
     }
 
     /// Esta vista previa, armada de nuevo, deja quitadas las filas que se
-    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo) y
+    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo, y
+    /// cuántas iguales hay antes, por dos líneas iguales en un archivo) y
     /// elige la misma fila, o la de su lugar si ya no está.
     pub fn carry_over(&mut self, old: &Self) {
-        let key = |preview: &Self, row: usize| {
-            preview.row(row).map(|row| {
-                (
-                    row.path.clone(),
-                    row.before.to_owned(),
-                    row.after.to_owned(),
-                )
-            })
-        };
-        let dropped: HashSet<_> = old
+        let (old_keys, keys) = (old.row_keys(), self.row_keys());
+        let dropped: HashSet<&RowKey> = old
             .dropped
             .iter()
-            .filter_map(|&row| key(old, row))
+            .filter_map(|&row| old_keys.get(row))
             .collect();
         self.dropped = (0..self.rows.len())
             .filter(|&row| {
-                !self.is_fixed(row) && key(self, row).is_some_and(|key| dropped.contains(&key))
+                !self.is_fixed(row) && keys.get(row).is_some_and(|key| dropped.contains(key))
             })
             .collect();
-        let selected = key(old, old.selected);
-        self.selected = (0..self.rows.len())
-            .find(|&row| selected.is_some() && key(self, row) == selected)
+        let selected = old_keys.get(old.selected);
+        self.selected = keys
+            .iter()
+            .position(|key| Some(key) == selected)
             .unwrap_or_else(|| old.selected.min(self.rows.len().saturating_sub(1)));
+    }
+
+    /// Lo que identifica a cada fila entre dos armados del mismo plan.
+    fn row_keys(&self) -> Vec<RowKey> {
+        let mut seen: HashMap<(VaultPath, String, String), usize> = HashMap::new();
+        (0..self.rows.len())
+            .filter_map(|row| self.row(row))
+            .map(|row| {
+                let change = (
+                    row.path.clone(),
+                    row.before.to_owned(),
+                    row.after.to_owned(),
+                );
+                let count = seen.entry(change.clone()).or_default();
+                let key = (change, *count);
+                *count += 1;
+                key
+            })
+            .collect()
     }
 
     /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como

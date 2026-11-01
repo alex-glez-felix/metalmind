@@ -148,6 +148,24 @@ fn armarla_de_nuevo_elige_la_misma_fila_aunque_se_corra() {
     assert_eq!(fewer.selected(), 0, "b.md ya no está: la de su lugar");
 }
 
+/// Dos líneas iguales dan dos filas iguales: quitar la segunda no quita la
+/// primera al rehacerla, y la elegida sigue siendo la segunda.
+#[test]
+fn dos_filas_iguales_se_distinguen_al_rehacerla() {
+    let request = rename("rust", "lang");
+    let same = tags(&[("a.md", "uno #rust\nuno #rust\n")]);
+    let mut old = preview(&request, &same);
+    old.select(1);
+    old.toggle_selected();
+    let mut new = preview(&request, &same);
+    new.carry_over(&old);
+    let dropped: Vec<bool> = (0..new.len())
+        .map(|row| new.row(row).unwrap().dropped)
+        .collect();
+    assert_eq!(dropped, [false, true]);
+    assert_eq!(new.selected(), 1);
+}
+
 #[test]
 fn quitar_una_fila_la_saca_de_lo_que_se_aplica() {
     let mut preview = preview(&rename("rust", "lang"), &rust_notes());
