@@ -119,6 +119,27 @@ fn una_linea_enorme_se_corta() {
     assert_eq!(lines[1], ">2:[idea]");
 }
 
+/// Un tab se pinta como un espacio y cuenta como una columna al cortar.
+#[test]
+fn un_tab_cuenta_como_una_columna() {
+    let line = format!("{}idea", "\t".repeat(40));
+    let preview = excerpt(&line, &hit("a.md", 0, &line, &[(40, 44)]));
+    let expected = format!(">1:…{}[idea]", " ".repeat(BEFORE_MATCH));
+    assert_eq!(shown(&preview), [expected]);
+}
+
+/// Una búsqueda nueva vuelve a leer la nota, que pudo cambiar en disco.
+#[test]
+fn otra_busqueda_vuelve_a_leer_la_nota() {
+    let dir = vault(&[("a.md", "idea uno\n")]);
+    let mut state = PreviewState::new(dir.path().to_owned(), &[]);
+    load(&mut state, &hit("a.md", 0, "idea uno", &[(0, 4)])).unwrap();
+    fs::write(dir.path().join("a.md"), "idea dos\n").unwrap();
+    state.searched_again();
+    let preview = load(&mut state, &hit("a.md", 0, "idea dos", &[(0, 4)])).unwrap();
+    assert_eq!(shown(&preview), [">1:[idea] dos"]);
+}
+
 #[test]
 fn los_tabs_se_ven_como_espacios() {
     let preview = excerpt("\tidea\n", &hit("a.md", 0, "\tidea", &[(1, 5)]));

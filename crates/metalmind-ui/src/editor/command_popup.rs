@@ -41,7 +41,7 @@ impl Editor {
             .debug_selector(|| "command-popup".to_owned())
             .occlude()
             .w(theme.layout.picker_width)
-            .max_w(relative(0.9))
+            .max_w(relative(theme.layout.picker_max_share))
             .flex()
             .flex_col()
             .overflow_hidden()

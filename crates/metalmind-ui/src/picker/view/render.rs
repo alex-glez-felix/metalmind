@@ -15,10 +15,6 @@ use super::{PickerDelegate, PickerEvent, PickerView};
 use crate::picker::{fit, preview_width};
 use crate::theme::Theme;
 
-/// Lo más de la ventana que ocupa un picker a lo ancho, con su vista previa.
-/// Fijo y no del tema: es una pregunta abierta de la auditoría de tokens.
-const MAX_SHARE: f32 = 0.9;
-
 impl<D: PickerDelegate> Render for PickerView<D> {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
@@ -43,7 +39,7 @@ impl<D: PickerDelegate> Render for PickerView<D> {
             .on_action(cx.listener(Self::on_dispatch))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(PickerEvent::Dismissed)))
             .w(theme.layout.picker_width + preview.unwrap_or_default())
-            .max_w(relative(MAX_SHARE))
+            .max_w(relative(theme.layout.picker_max_share))
             .flex()
             .flex_col()
             .overflow_hidden()
@@ -84,7 +80,7 @@ impl<D: PickerDelegate> PickerView<D> {
         }
         preview_width(
             f32::from(window.viewport_size().width),
-            MAX_SHARE,
+            theme.layout.picker_max_share,
             f32::from(theme.layout.picker_width),
             f32::from(theme.layout.picker_preview_width),
             f32::from(theme.layout.picker_preview_min_width),

@@ -18,7 +18,7 @@ use metalmind_buffer::Snapshot;
 use metalmind_search::LineMatch;
 use metalmind_vault::VaultPath;
 use unicode_segmentation::UnicodeSegmentation as _;
-use unicode_width::{UnicodeWidthChar as _, UnicodeWidthStr as _};
+use unicode_width::UnicodeWidthChar as _;
 
 use super::context::{Cut, crop, end_after};
 use super::{Hit, OpenNote};
@@ -120,6 +120,12 @@ impl PreviewState {
         })
     }
 
+    /// Se lanzó otra búsqueda, que lee las notas del disco de nuevo: lo leído
+    /// antes puede ser viejo.
+    pub fn searched_again(&mut self) {
+        self.read = None;
+    }
+
     /// Volvió un [`PreviewJob`]: si es del último pedido, se muestra.
     pub fn finish(&mut self, loaded: Loaded) {
         if loaded.version != self.version {
@@ -209,23 +215,29 @@ fn found_line(line: &str, found: &LineMatch) -> super::RowText {
     capped(line, start, &found.matches)
 }
 
-/// Si `text` ocupa más de `columns` columnas: un carácter CJK ocupa dos.
-fn wider_than(text: &str, columns: usize) -> bool {
+/// Las columnas de `c` en la vista previa: un carácter CJK ocupa dos y un
+/// tab, que se pinta como espacio, una.
+fn columns(c: char) -> usize {
+    c.width().unwrap_or(1)
+}
+
+/// Si `text` ocupa más de `limit` columnas.
+fn wider_than(text: &str, limit: usize) -> bool {
     let mut width = 0;
     text.chars().any(|c| {
-        width += c.width().unwrap_or(0);
-        width > columns
+        width += columns(c);
+        width > limit
     })
 }
 
-/// El byte desde donde lo que queda de `text` ocupa a lo sumo `columns`
+/// El byte desde donde lo que queda de `text` ocupa a lo sumo `limit`
 /// columnas, sin partir un grafema.
-fn last_columns(text: &str, columns: usize) -> usize {
+fn last_columns(text: &str, limit: usize) -> usize {
     let mut width = 0;
     let mut start = text.len();
     for (at, grapheme) in text.grapheme_indices(true).rev() {
-        width += grapheme.width();
-        if width > columns {
+        width += grapheme.chars().map(columns).sum::<usize>();
+        if width > limit {
             break;
         }
         start = at;

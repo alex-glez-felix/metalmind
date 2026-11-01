@@ -11,7 +11,8 @@ pub enum Preview {
     Lines {
         lines: Vec<PreviewLine>,
         /// La línea del resultado, en `lines`, que se pinta marcada y se
-        /// centra; `None` si ya no está en el texto.
+        /// centra; `None` si el texto ya no llega a ella, y entonces se ve
+        /// su final, lo más cerca de donde estaba.
         focus: Option<usize>,
     },
     /// Por qué no hay líneas, apagado.
@@ -28,12 +29,14 @@ pub struct PreviewLine {
 }
 
 /// Las líneas de `count` que se ven con `focus` lo más centrado posible, en
-/// un panel de `fit` líneas.
+/// un panel de `fit` líneas; sin `focus`, las del final.
 #[must_use]
 pub fn visible_lines(count: usize, focus: Option<usize>, fit: usize) -> Range<usize> {
     let fit = fit.min(count);
     let start = focus
-        .map_or(0, |focus| focus.saturating_sub(fit.saturating_sub(1) / 2))
+        .map_or(count, |focus| {
+            focus.saturating_sub(fit.saturating_sub(1) / 2)
+        })
         .min(count - fit);
     start..start + fit
 }
@@ -95,7 +98,7 @@ mod tests {
     #[case::al_principio(61, Some(2), 11, 0..11)]
     #[case::al_final(61, Some(59), 11, 50..61)]
     #[case::caben_todas(5, Some(4), 11, 0..5)]
-    #[case::sin_resultado(61, None, 11, 0..11)]
+    #[case::sin_resultado(61, None, 11, 50..61)]
     #[case::par(20, Some(10), 4, 9..13)]
     #[case::vacia(0, None, 11, 0..0)]
     fn centra_la_linea_del_resultado(

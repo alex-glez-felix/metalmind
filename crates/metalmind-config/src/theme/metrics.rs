@@ -234,6 +234,10 @@ metric_group! {
         /// no se encoge como las demás; si no cabe, se recorta.
         pane_header_folder_max_share: Fraction,
         picker_width: Length,
+        /// Lo más de la ventana que ocupa a lo ancho el picker, con su vista
+        /// previa, y lo que flota como él: la línea de `:` y la vista previa
+        /// de un cambio en el vault.
+        picker_max_share: Fraction,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,
         /// Cuántas filas se ven antes de hacer scroll.

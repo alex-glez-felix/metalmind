@@ -187,6 +187,7 @@ layout:
   pane_header_padding_y: 3
   pane_header_folder_max_share: 0.5  # la carpeta de la nota, de la ruta sobre el panel
   picker_width: 640
+  picker_max_share: 0.9  # lo más de la ventana que ocupa a lo ancho el picker (y la línea de `:`)
   picker_top: 64
   picker_rows: 12
   picker_padding_x: md

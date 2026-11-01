@@ -237,6 +237,9 @@ Theme {
             picker_width: Length(
                 640.0,
             ),
+            picker_max_share: Fraction(
+                0.9,
+            ),
             picker_top: Length(
                 64.0,
             ),

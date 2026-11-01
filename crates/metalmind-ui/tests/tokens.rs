@@ -114,16 +114,6 @@ const EXCEPTIONS: &[(&str, &str, &str)] = &[
         "el tope de la caché en bytes de memoria, no una medida de la UI",
     ),
     (
-        "src/change_preview/view.rs",
-        "relative(0.9)",
-        "el mismo tope que el picker, sobre el que flota igual",
-    ),
-    (
-        "src/editor/command_popup.rs",
-        "relative(0.9)",
-        "el mismo tope que el picker, con el que se ve igual",
-    ),
-    (
         "src/editor/command_popup.rs",
         "keys.text_color(gpui_kit::transparent_black())",
         "como en la lista del autocompletado: la tecla de una fila no elegida guarda su columna, transparente",
@@ -322,9 +312,9 @@ fn las_reglas_atrapan_lo_suelto() {
 #[test]
 fn una_excepcion_no_tapa_otro_valor_de_la_misma_linea() {
     let dir = tempfile::tempdir().unwrap();
-    let view = dir.path().join("src/change_preview");
-    fs::create_dir_all(&view).unwrap();
-    fs::write(view.join("view.rs"), ".max_w(relative(0.9)).px(px(10.))\n").unwrap();
+    let math = dir.path().join("src/math");
+    fs::create_dir_all(&math).unwrap();
+    fs::write(math.join("geometry.rs"), "let x = value * 2.0 + px(10.);\n").unwrap();
     let loose: Vec<String> = findings(dir.path())
         .into_iter()
         .filter(|finding| !excepted(finding))

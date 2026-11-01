@@ -25,6 +25,9 @@ pub struct TextSearch {
     /// Por qué no se pudo lanzar el hilo, si no se pudo.
     worker: Result<SearchWorker, String>,
     preview: PreviewState,
+    /// La lectura de la última vista previa pedida: reemplazarla suelta la
+    /// anterior, que si no empezó ya no corre.
+    loading: Option<Task<()>>,
     _events: Task<()>,
 }
 
@@ -67,6 +70,7 @@ impl TextSearch {
             },
             worker,
             preview,
+            loading: None,
             _events: events,
         }
     }
@@ -85,6 +89,7 @@ impl TextSearch {
     }
 
     fn launch(&mut self, search: Search) {
+        self.preview.searched_again();
         match &self.worker {
             Ok(worker) => worker.search(search),
             Err(error) => self.state.failed(search.version, error.clone()),
@@ -175,16 +180,15 @@ impl PickerDelegate for TextSearch {
         let Some(job) = self.preview.request(hit) else {
             return;
         };
-        // Lo que vuelva de un pedido viejo lo descarta `PreviewState`.
         let loading = cx.background_executor().spawn(async move { job.run() });
-        cx.spawn(async move |this, cx| {
+        let task = cx.spawn(async move |this, cx| {
             let loaded = loading.await;
             // Si el picker ya se cerró, no hay nada que mostrar.
             let _ = this.update(cx, |view, cx| {
                 view.update_delegate(cx, |search, _| search.preview.finish(loaded));
             });
-        })
-        .detach();
+        });
+        drop(self.loading.replace(task));
     }
 
     fn status(&self) -> Option<SharedString> {
@@ -210,3 +214,7 @@ fn reason(error: &str) -> &str {
     let last = error.lines().last().unwrap_or(error);
     last.strip_prefix("error: ").unwrap_or(last)
 }
+
+#[cfg(test)]
+#[path = "delegate_tests.rs"]
+mod tests;
