@@ -303,13 +303,9 @@ impl WorkspaceView {
                 self.sync_editors(cx);
                 self.open_tag_page(&tag, window, cx);
             }
-            Effect::SetFocus(focus) => {
+            Effect::Focus(command) => {
                 self.sync_editors(cx);
-                self.set_focus(focus, window, cx);
-            }
-            Effect::ShowFocus => {
-                self.sync_editors(cx);
-                self.show_focus(window, cx);
+                self.run_focus(command, window, cx);
             }
             Effect::OpenMessages => {
                 self.sync_editors(cx);
@@ -385,6 +381,9 @@ impl WorkspaceView {
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
             SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
             SidebarEvent::CreateNote(path) => self.create_panel_note(&path, window, cx),
+            SidebarEvent::ShowView { view, focus_list } => {
+                self.show_view(&view, focus_list, window, cx);
+            }
         }
         cx.notify();
     }

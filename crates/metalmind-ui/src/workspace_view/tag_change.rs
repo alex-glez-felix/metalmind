@@ -12,7 +12,6 @@ use super::WorkspaceView;
 use super::overlay::Overlay;
 use super::vault_undo::ListFollowed;
 use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
-use crate::note_list::load_views;
 use crate::tag_change::{TagRequest, VaultConfigText, config_path};
 use crate::workspace::{Message, shown_path};
 
@@ -212,19 +211,16 @@ impl WorkspaceView {
         });
     }
 
-    /// Si `applied` reescribió la config del vault, la lista sigue a sus
-    /// vistas: la que muestra trae las notas de su consulta nueva.
+    /// Si `applied` reescribió la config del vault, la sesión relee sus
+    /// vistas: la lista, el panel y el focus traen las notas de su consulta
+    /// nueva.
     pub(super) fn follow_saved_views(&mut self, applied: &Applied, cx: &mut Context<Self>) {
-        if !applied
+        if applied
             .touched()
             .any(|path| path.as_str() == VaultConfig::PATH)
         {
-            return;
+            self.vault_views(cx);
         }
-        let root = self.session.read(cx).root().to_owned();
-        let (views, _) = load_views(&root);
-        self.list
-            .update(cx, |list, cx| list.follow_views(&views, None, cx));
     }
 
     pub(super) fn tell(&mut self, message: Message, cx: &mut Context<Self>) {

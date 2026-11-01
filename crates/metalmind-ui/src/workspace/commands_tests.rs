@@ -58,6 +58,23 @@ fn e_abre_otro_archivo_en_el_panel() {
     );
 }
 
+/// La ruta se lee como en vim: `\ ` es un espacio del nombre, así se
+/// abre lo que escribe el autocompletado de `:e` (#45).
+#[test]
+fn e_y_w_leen_los_escapes_de_la_ruta() {
+    let (dir, mut session) = two_files();
+    fs::create_dir(path(&dir, "Mis notas")).unwrap();
+    fs::write(path(&dir, "Mis notas/c.md"), "c\n").unwrap();
+    let escaped = |name: &str| format!("{}/{name}", dir.path().display());
+    session.keys(&format!(":e {}⏎", escaped(r"Mis\ notas/c.md")));
+    assert_eq!(shown(&session), path(&dir, "Mis notas/c.md"));
+    session.keys(&format!(":w {}⏎", escaped(r"otra\ copia.md")));
+    assert_eq!(
+        fs::read_to_string(path(&dir, "otra copia.md")).unwrap(),
+        "c\n"
+    );
+}
+
 #[test]
 fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
     let (dir, mut session) = two_files();
@@ -998,28 +1015,20 @@ fn w_bang_a_la_ruta_de_otro_buffer_abierto_da_e139() {
     assert_eq!(fs::read_to_string(&b).unwrap(), before);
 }
 
-/// `:focus` lee el alcance y la ventana lo pone; sin alcance, dice el de
-/// ahora, y uno inválido es un error que no cambia nada (05 §3).
+/// `:focus` le pasa el alcance a la ventana, que conoce las vistas
+/// guardadas y lo lee; sin alcance, dice el de ahora (05 §3).
 #[test]
 fn focus_y_unfocus_los_pone_la_ventana() {
     let mut session = Session::new("uno\n");
-    session.keys(":focus  proyectos/   #rust -#archivado⏎");
-    let Effect::SetFocus(Some(focus)) = &session.effect else {
-        panic!("{:?}", session.effect);
-    };
-    assert_eq!(focus.label(), "focus: proyectos/ #rust -#archivado");
+    session.keys(":focus  proyectos/   @gs⏎");
+    let set = FocusCommand::Set("proyectos/   @gs".to_owned());
+    assert_eq!(session.effect, Effect::Focus(set));
     session.keys(":focus⏎");
-    assert_eq!(session.effect, Effect::ShowFocus);
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
+    session.keys(":focus   ⏎");
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
     session.keys(":unfocus⏎");
-    assert_eq!(session.effect, Effect::SetFocus(None));
-    session.keys(":focus a/ b/⏎");
-    assert_eq!(session.effect, Effect::Stay);
-    assert_eq!(
-        error(&session),
-        Some("un alcance tiene una sola carpeta: `a/` y `b/`")
-    );
-    session.keys(":focus #2024/10⏎");
-    assert_eq!(error(&session), Some("`#2024/10` no es un tag válido"));
+    assert_eq!(session.effect, Effect::Focus(FocusCommand::Clear));
     assert_eq!(session.text(), "uno\n");
 }
 

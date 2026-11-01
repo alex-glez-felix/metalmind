@@ -102,12 +102,10 @@ impl ListSource {
     pub fn notes(&self, index: &VaultIndex, tags: &Tags) -> Vec<VaultPath> {
         match self {
             Self::Inbox | Self::Tag(_) | Self::View { .. } => {
-                let text = self.query().unwrap_or_default();
-                let parsed = TagQuery::parse(&text);
-                if !parsed.invalid.is_empty() || !parsed.words.is_empty() {
-                    return Vec::new();
-                }
-                parsed.query.notes(tags).into_iter().cloned().collect()
+                query_notes(&self.query().unwrap_or_default(), tags)
+                    .into_iter()
+                    .cloned()
+                    .collect()
             }
             Self::All => notes_where(index, |_| true),
             Self::Folder(folder) => match VaultPath::new(folder) {
@@ -208,6 +206,17 @@ impl ListSource {
             .chain(folders.into_iter().map(Self::Folder))
             .collect()
     }
+}
+
+/// Las notas de una consulta escrita, en orden de ruta; una con algo que
+/// no es de tags no tiene ninguna.
+#[must_use]
+pub fn query_notes<'t>(text: &str, tags: &'t Tags) -> Vec<&'t VaultPath> {
+    let parsed = TagQuery::parse(text);
+    if !parsed.invalid.is_empty() || !parsed.words.is_empty() {
+        return Vec::new();
+    }
+    parsed.query.notes(tags)
 }
 
 fn notes_where(index: &VaultIndex, keep: impl Fn(&VaultPath) -> bool) -> Vec<VaultPath> {

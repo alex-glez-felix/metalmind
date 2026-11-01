@@ -8,6 +8,7 @@ mod outline;
 
 use std::sync::Arc;
 
+use metalmind_config::SavedView;
 use metalmind_syntax::note_name;
 use metalmind_vault::tags::{Scope, Tags, tag_name};
 use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
@@ -15,7 +16,7 @@ use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
 use crate::file_tree::FileTree;
-use crate::focus::{Focus, InScope};
+use crate::focus::{Focus, FocusError, InScope};
 use crate::picker::InputLine;
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
@@ -224,6 +225,12 @@ impl Panel {
         self.refresh_shown();
     }
 
+    /// Las vistas guardadas del vault, arriba en la vista de tags.
+    pub fn set_views(&mut self, views: Arc<[SavedView]>) {
+        self.tags.set_views(views);
+        self.refresh_shown();
+    }
+
     /// Rehace la vista de tags si se ve; devuelve su fila elegida si con eso
     /// cambió de lugar.
     fn refresh_shown(&mut self) -> Option<usize> {
@@ -374,18 +381,31 @@ impl Panel {
         self.refresh_shown();
     }
 
-    /// El focus de la fila elegida: una carpeta o un tag. Un archivo no es
-    /// un alcance.
+    /// El focus de la fila elegida: una carpeta, un tag o una vista. Un
+    /// archivo no es un alcance; una vista con algo que no es de tags es un
+    /// error.
     #[must_use]
-    pub fn selected_focus(&self) -> Option<Focus> {
+    pub fn selected_focus(&self) -> Option<Result<Focus, FocusError>> {
         match self.view {
             PanelView::Folders => self
                 .tree
                 .selected_entry()
                 .filter(|row| row.is_folder())
-                .map(|row| Focus::folder(row.path.clone())),
-            PanelView::Tags => self.selected_tag().as_deref().map(Focus::tag),
+                .map(|row| Ok(Focus::folder(row.path.clone()))),
+            PanelView::Tags => match self.selected_view() {
+                Some(view) => Some(Focus::view(view)),
+                None => self.selected_tag().as_deref().map(Focus::tag).map(Ok),
+            },
         }
+    }
+
+    /// La vista guardada de la fila elegida, si se ve la vista de tags.
+    #[must_use]
+    pub fn selected_view(&self) -> Option<&SavedView> {
+        if self.view != PanelView::Tags {
+            return None;
+        }
+        self.tags.selected_entry()?.view()
     }
 
     /// La forma establecida del tag de la fila elegida en la vista de tags.

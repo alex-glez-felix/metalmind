@@ -21,6 +21,7 @@ use crate::workspace::{LineNumbers, Options, PaneOptions};
 
 struct Fixture {
     _dir: tempfile::TempDir,
+    session: Entity<VaultSession>,
     list: Entity<NoteListView>,
     events: Rc<RefCell<Vec<NoteListEvent>>>,
 }
@@ -109,6 +110,7 @@ fn fixture_state<'c>(
     });
     let fixture = Fixture {
         _dir: dir,
+        session,
         list,
         events,
     };
@@ -459,8 +461,8 @@ fn la_lista_sigue_a_su_vista_renombrada_o_borrada() {
         name: "estudio".into(),
         ..gs
     };
-    fixture.list.update(cx, |list, cx| {
-        list.follow_views(std::slice::from_ref(&estudio), Some(("gs", "estudio")), cx);
+    fixture.session.update(cx, |session, cx| {
+        session.set_views(vec![estudio.clone()], Some(("gs", "estudio")), cx);
     });
     cx.run_until_parked();
     assert_eq!(
@@ -468,8 +470,8 @@ fn la_lista_sigue_a_su_vista_renombrada_o_borrada() {
         (ListSource::of_view(&estudio), vec!["a.md".to_owned()])
     );
     fixture
-        .list
-        .update(cx, |list, cx| list.follow_views(&[], None, cx));
+        .session
+        .update(cx, |session, cx| session.set_views(Vec::new(), None, cx));
     cx.run_until_parked();
     assert_eq!(
         shown(&fixture.list, cx),

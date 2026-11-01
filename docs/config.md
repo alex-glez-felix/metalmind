@@ -129,7 +129,7 @@ Lo que sí sigue siendo YAML:
 
 ## Config del vault
 
-Cada vault puede tener la suya en `<vault>/.metalmind/config.yaml`, que viaja con él (git, Syncthing). Por ahora guarda sus **vistas guardadas**: una consulta de tags con nombre, como se escribe en `space f`, que sale como fuente de la lista de notas en `space v`.
+Cada vault puede tener la suya en `<vault>/.metalmind/config.yaml`, que viaja con él (git, Syncthing). Por ahora guarda sus **vistas guardadas**: una consulta de tags con nombre, como se escribe en `space f`, que sale como fuente de la lista de notas en `space v`, arriba de la vista de tags del panel lateral y como alcance de `:focus @nombre`.
 
 ```yaml
 views:

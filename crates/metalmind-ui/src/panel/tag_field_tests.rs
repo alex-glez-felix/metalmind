@@ -38,7 +38,12 @@ fn panel() -> Panel {
     };
     let tags = Tags::build(path("tags"), &index, read);
     let tree = FileTree::new(Arc::new(index));
-    let mut panel = Panel::new(tree, TagOutline::new(Arc::new(tags)), true, PanelView::Tags);
+    let mut panel = Panel::new(
+        tree,
+        TagOutline::new(Arc::new(tags), Arc::default()),
+        true,
+        PanelView::Tags,
+    );
     // `#rust` está dentro de su padre.
     for tag in ["lenguajes", "rust"] {
         let row = panel
