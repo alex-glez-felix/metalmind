@@ -82,7 +82,7 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
         .border_color(theme.ui.status_border)
         .children(status.mode.map(|mode| fixed().child(mode_label(mode))))
         .when_some(status.recording, |bar, register| {
-            bar.child(fixed().child(format!("grabando @{register}")))
+            bar.child(fixed().child(recording_label(register)))
         })
         .child(match Middle::of(status.command_line) {
             Middle::Typing(line) => command_line(line, theme),
@@ -94,6 +94,11 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
                 .max_w(relative(theme.layout.status_focus_max_width))
         }))
         .child(fixed().child(format!("{line}:{column}")))
+}
+
+/// Como `'showmode'` de vim al grabar una macro.
+fn recording_label(register: char) -> String {
+    format!("recording @{register}")
 }
 
 /// Lo que nunca se recorta: modo, macro, indicador y posición.
@@ -190,6 +195,15 @@ mod tests {
     use metalmind_vim::Prompt;
 
     use super::*;
+
+    #[test]
+    #[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+    fn grabar_una_macro_se_anuncia_como_en_nvim() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("a.md"), "uno\n").unwrap();
+        let nvim = crate::workspace::panes_oracle::shown(dir.path(), "a.md", "qa");
+        assert_eq!(recording_label('a'), nvim.showmode);
+    }
 
     #[test]
     fn lo_que_se_teclea_ocupa_todo_el_medio() {
