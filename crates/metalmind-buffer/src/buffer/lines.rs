@@ -55,7 +55,14 @@ impl Buffer {
             return Err(BufferError::InvalidMove { first, last, below });
         }
         self.history.ensure_open()?;
-        let Some(line_move) = LineMove::new(&lines, below) else {
+        let line_start = |line| {
+            if line < self.line_count() {
+                self.line_start(line).get()
+            } else {
+                self.len().get() + 1
+            }
+        };
+        let Some(line_move) = LineMove::new(&lines, below, line_start) else {
             return Ok(());
         };
         // Primero la inserción: si cae justo donde empieza el borrado (las

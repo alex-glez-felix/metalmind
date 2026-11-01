@@ -109,6 +109,16 @@ impl LineChange {
         }
     }
 
+    /// Si la edición es parte de un movimiento de líneas, dónde queda el
+    /// byte `offset` del texto de antes del movimiento: con su línea.
+    pub(crate) fn moved_offset(&self, offset: usize) -> Option<usize> {
+        match &self.0 {
+            Shape::Move(moved) => Some(moved.offset(offset)),
+            Shape::Unchanged => Some(offset),
+            Shape::Replace(_) => None,
+        }
+    }
+
     /// Como [`Self::adjust`], pero si su línea se borra queda en la primera
     /// línea de lo borrado, como las entradas de la jumplist de vim
     /// (`one_adjust_nodel`).
