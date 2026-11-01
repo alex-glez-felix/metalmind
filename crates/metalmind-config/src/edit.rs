@@ -8,13 +8,10 @@
 //! Es texto a texto: quien llama lee el archivo y lo guarda de forma atómica.
 
 mod block;
-mod change;
 mod tree;
 
 use std::fmt::Write as _;
 use std::ops::Range;
-
-pub use self::change::LineEdit;
 
 use self::block::{Entry, Line, Map, NotBlockMap, lines};
 use self::tree::Tree;
@@ -42,11 +39,38 @@ pub enum EditError {
 /// # Errors
 /// Si el texto no es YAML o el camino no está escrito en bloque.
 pub fn set(text: &str, path: &[&str], value: &str) -> Result<String, EditError> {
+    Ok(applied(text, set_change(text, path, value)?))
+}
+
+/// Lo que cambia [`set`], como un rango de `text`; `None` si ya lo dice.
+/// Con un valor escrito en la línea de su clave, el rango es solo el valor.
+///
+/// # Errors
+/// Como [`set`].
+pub fn set_change(text: &str, path: &[&str], value: &str) -> Result<Option<Change>, EditError> {
     let value_tree = read_tree(value)?;
     edit(text, path, |doc, tree| {
         tree.set(path, value_tree);
         doc.set(path, value)
     })
+}
+
+/// Cambiar `range` del texto, que dice `old`, por `new`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    pub range: Range<usize>,
+    pub old: String,
+    pub new: String,
+    /// La línea donde empieza, desde cero.
+    pub line: usize,
+}
+
+fn applied(text: &str, change: Option<Change>) -> String {
+    let mut edited = text.to_owned();
+    if let Some(change) = change {
+        edited.replace_range(change.range, &change.new);
+    }
+    edited
 }
 
 /// Quita la clave `path`; un mapa que se queda vacío se va con ella, salvo
@@ -56,13 +80,14 @@ pub fn set(text: &str, path: &[&str], value: &str) -> Result<String, EditError> 
 /// # Errors
 /// Como [`set`].
 pub fn remove(text: &str, path: &[&str]) -> Result<String, EditError> {
-    edit(text, path, |doc, tree| {
+    let change = edit(text, path, |doc, tree| {
         let Some((splice, removed)) = doc.remove(path)? else {
             return Ok(None);
         };
         tree.remove(&path[..removed]);
         Ok(Some(splice))
-    })
+    })?;
+    Ok(applied(text, change))
 }
 
 /// Cambia el nombre de la clave `path` por `to`, en su lugar y con su valor.
@@ -70,10 +95,11 @@ pub fn remove(text: &str, path: &[&str]) -> Result<String, EditError> {
 /// # Errors
 /// Como [`set`]; además, si no existe o ya hay una clave `to` junto a ella.
 pub fn rename(text: &str, path: &[&str], to: &str) -> Result<String, EditError> {
-    edit(text, path, |doc, tree| {
+    let change = edit(text, path, |doc, tree| {
         tree.rename(path, to);
         doc.rename(path, to)
-    })
+    })?;
+    Ok(applied(text, change))
 }
 
 /// `text` como texto de YAML, entre comillas dobles: así se lee igual
@@ -117,16 +143,21 @@ fn edit(
     text: &str,
     path: &[&str],
     change: impl FnOnce(&Document<'_>, &mut Tree) -> Result<Option<Splice>, EditError>,
-) -> Result<String, EditError> {
+) -> Result<Option<Change>, EditError> {
     let mut expected = read_tree(text)?;
     let document = Document::new(text);
     let Some(splice) = change(&document, &mut expected)? else {
-        return Ok(text.to_owned());
+        return Ok(None);
     };
     let mut edited = text.to_owned();
-    edited.replace_range(splice.range, &splice.text);
+    edited.replace_range(splice.range.clone(), &splice.text);
     match read_tree(&edited) {
-        Ok(tree) if tree == expected => Ok(edited),
+        Ok(tree) if tree == expected => Ok(Some(Change {
+            line: text[..splice.range.start].matches('\n').count(),
+            old: text[splice.range.clone()].to_owned(),
+            range: splice.range,
+            new: splice.text,
+        })),
         _ => Err(EditError::Unsupported(path.join("."))),
     }
 }

@@ -440,8 +440,8 @@ fn las_vistas_que_nombran_el_tag_lo_siguen() {
         (
             ".metalmind/config.yaml".to_owned(),
             Some(3),
-            "  rust: \"#rust -#archivado\"  # la de siempre".to_owned(),
-            "  rust: \"#lang -#archivado\"  # la de siempre".to_owned()
+            "\"#rust -#archivado\"".to_owned(),
+            "\"#lang -#archivado\"".to_owned()
         )
     );
     assert_eq!(preview.summary(), "4 cambios en 3 archivos");
@@ -452,10 +452,7 @@ fn las_vistas_que_nombran_el_tag_lo_siguen() {
     let tags = tags(&[("a.md", "#rust #hoy\n")]);
     let preview = merge.preview(&tags, &config, |_| false).unwrap().unwrap();
     let (_, _, before, after) = rows(&preview).swap_remove(0);
-    assert_eq!(
-        (before.as_str(), after.as_str()),
-        ("  hoy: \"#hoy\"", "  hoy: \"#rust\"")
-    );
+    assert_eq!((before.as_str(), after.as_str()), ("\"#hoy\"", "\"#rust\""));
 }
 
 /// Una config que no se puede reescribir no impide renombrar el tag:

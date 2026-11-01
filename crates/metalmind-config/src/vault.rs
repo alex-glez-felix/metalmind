@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 
 use crate::diagnostic::{Loaded, Severity};
-use crate::edit::{self, EditError, LineEdit};
+use crate::edit::{self, Change, EditError};
 use crate::file::{YamlFile, read_yaml};
 use crate::parse::parse;
 
@@ -110,11 +110,9 @@ impl VaultConfig {
     pub fn delete_view(text: &str, name: &str) -> Result<String, EditError> {
         edit::remove(text, &[VIEWS, name])
     }
-}
 
-impl VaultConfig {
-    /// Las vistas de `text` cuya consulta cambia `requery`, cada una como un
-    /// cambio de sus líneas en `text`: se aplican juntas o por separado.
+    /// Las vistas de `text` cuya consulta cambia `requery`, cada una como el
+    /// cambio de su valor en `text`: se aplican juntas o por separado.
     ///
     /// # Errors
     /// Si el archivo tiene un error o una vista no se puede editar sin tocar
@@ -122,7 +120,7 @@ impl VaultConfig {
     pub fn requery_views(
         text: &str,
         requery: impl Fn(&str) -> Option<String>,
-    ) -> Result<Vec<LineEdit>, EditError> {
+    ) -> Result<Vec<Change>, EditError> {
         let current = Self::parse(text);
         if let Some(error) = current
             .diagnostics
@@ -132,23 +130,26 @@ impl VaultConfig {
             return Err(EditError::Unreadable(error));
         }
         let mut expected = current.value.views;
-        let mut edits = Vec::new();
+        let mut changes = Vec::new();
         for view in &mut expected.0 {
             let Some(query) = requery(&view.query) else {
                 continue;
             };
-            let edited = Self::save_view(text, &view.name, &query)?;
-            edits.extend(LineEdit::between(text, &edited));
+            changes.extend(edit::set_change(
+                text,
+                &[VIEWS, &view.name],
+                &edit::string(&query),
+            )?);
             view.query = query;
         }
         let mut together = text.to_owned();
-        for edit in edits.iter().rev() {
-            together.replace_range(edit.range.clone(), &edit.new);
+        for change in changes.iter().rev() {
+            together.replace_range(change.range.clone(), &change.new);
         }
         if Self::parse(&together).value.views != expected {
             return Err(EditError::Unsupported(VIEWS.to_owned()));
         }
-        Ok(edits)
+        Ok(changes)
     }
 }
 
@@ -274,12 +275,8 @@ mod tests {
         assert_eq!(
             lines,
             [
-                (
-                    2,
-                    "  gs: \"#gs -#archivado\"  # estudio\n",
-                    "  gs: \"#estudio -#archivado\"  # estudio\n"
-                ),
-                (4, "  otra: \"#gs\"\n", "  otra: \"#estudio\"\n"),
+                (2, "\"#gs -#archivado\"", "\"#estudio -#archivado\""),
+                (4, "\"#gs\"", "\"#estudio\""),
             ]
         );
         for edit in &edits {
