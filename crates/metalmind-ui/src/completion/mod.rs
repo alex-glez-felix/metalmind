@@ -5,14 +5,14 @@
 
 mod argument;
 mod command;
-mod folders;
 mod links;
+mod paths;
 mod selection;
 mod tags;
 
-pub use self::argument::{ArgumentCompletions, ArgumentList, ArgumentSources};
+pub use self::argument::{ArgumentCompletions, ArgumentList, FocusSources};
 pub use self::command::CommandCompletions;
-pub use self::folders::{FolderCandidates, FolderCompletions};
 pub use self::links::{LinkCompletions, NoteCandidates};
+pub use self::paths::{PathCandidates, PathCompletions};
 pub use self::selection::Selection;
 pub use self::tags::TagCompletions;

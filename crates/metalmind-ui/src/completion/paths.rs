@@ -1,8 +1,9 @@
-//! La lista de carpetas del vault de un argumento de `:` (`:focus`), sin
-//! GPUI: cuáles coinciden con lo escrito y cuál está elegida.
+//! La lista de rutas del vault de un argumento de `:`, sin GPUI: las
+//! carpetas de `:focus` o los archivos de `:e` (#45), cuáles coinciden con
+//! lo escrito y cuál está elegida.
 //!
 //! Se filtra con `nucleo` por la ruta, tal cual: un espacio es parte del
-//! nombre. Con nada escrito van en el orden del árbol.
+//! nombre. Con nada escrito van en orden alfabético.
 
 use std::sync::Arc;
 
@@ -11,55 +12,66 @@ use metalmind_vault::{EntryKind, VaultIndex, VaultPath};
 
 use super::Selection;
 
-/// Las carpetas de un índice del vault, ya convertidas para filtrar: se
-/// arman una vez por lote, no en cada tecla.
-pub struct FolderCandidates {
+/// Las carpetas o los archivos de un índice del vault, ya convertidos para
+/// filtrar: se arman una vez por lote, no en cada tecla.
+pub struct PathCandidates {
     index: Arc<VaultIndex>,
-    folders: Vec<VaultPath>,
+    paths: Vec<VaultPath>,
     haystacks: Haystacks,
 }
 
-impl FolderCandidates {
+impl PathCandidates {
+    /// Las carpetas, para `:focus`.
     #[must_use]
-    pub fn new(index: Arc<VaultIndex>) -> Self {
-        let mut folders: Vec<VaultPath> = index
+    pub fn folders(index: Arc<VaultIndex>) -> Self {
+        Self::new(index, |kind| kind == EntryKind::Folder)
+    }
+
+    /// Las notas y los adjuntos, para `:e`.
+    #[must_use]
+    pub fn files(index: Arc<VaultIndex>) -> Self {
+        Self::new(index, |kind| kind != EntryKind::Folder)
+    }
+
+    fn new(index: Arc<VaultIndex>, wanted: impl Fn(EntryKind) -> bool) -> Self {
+        let mut paths: Vec<VaultPath> = index
             .iter()
-            .filter(|entry| entry.kind == EntryKind::Folder)
+            .filter(|entry| wanted(entry.kind))
             .map(|entry| entry.path.clone())
             .collect();
-        folders.sort_unstable();
-        let haystacks = Haystacks::new(folders.iter().map(VaultPath::as_str));
+        paths.sort_unstable();
+        let haystacks = Haystacks::new(paths.iter().map(VaultPath::as_str));
         Self {
             index,
-            folders,
+            paths,
             haystacks,
         }
     }
 
-    /// Si son las carpetas de `index`.
+    /// Si son las rutas de `index`.
     #[must_use]
     pub fn is_of(&self, index: &Arc<VaultIndex>) -> bool {
         Arc::ptr_eq(&self.index, index)
     }
 }
 
-pub struct FolderCompletions {
-    candidates: Arc<FolderCandidates>,
+pub struct PathCompletions {
+    candidates: Arc<PathCandidates>,
     typed: String,
     /// En los candidatos.
     shown: Vec<usize>,
     selection: Selection,
 }
 
-impl FolderCompletions {
-    /// La lista para `typed`; `None` si ninguna carpeta coincide.
+impl PathCompletions {
+    /// La lista para `typed`; `None` si ninguna ruta coincide.
     #[must_use]
     pub fn open(
-        candidates: Arc<FolderCandidates>,
+        candidates: Arc<PathCandidates>,
         typed: &str,
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
-        let all: Vec<usize> = (0..candidates.folders.len()).collect();
+        let all: Vec<usize> = (0..candidates.paths.len()).collect();
         let shown: Vec<usize> = matcher
             .rank_among(&Query::literal(typed), &candidates.haystacks, &all)
             .into_iter()
@@ -75,36 +87,36 @@ impl FolderCompletions {
 
     /// Si abrirla para `typed` entre `candidates` daría esta misma lista.
     #[must_use]
-    pub fn is_for(&self, candidates: &Arc<FolderCandidates>, typed: &str) -> bool {
+    pub fn is_for(&self, candidates: &Arc<PathCandidates>, typed: &str) -> bool {
         Arc::ptr_eq(&self.candidates, candidates) && self.typed == typed
     }
 
     /// Esta lista entre los `candidates` de un lote nuevo del vault, con lo
-    /// mismo escrito: la carpeta que eligió el usuario sigue elegida si
+    /// mismo escrito: la ruta que eligió el usuario sigue elegida si
     /// todavía coincide; si no eligió, la primera fila.
     #[must_use]
     pub fn with_candidates(
         &self,
-        candidates: Arc<FolderCandidates>,
+        candidates: Arc<PathCandidates>,
         matcher: &mut FuzzyMatcher,
     ) -> Option<Self> {
         let mut list = Self::open(candidates, &self.typed, matcher)?;
         let Some(chosen) = self.selection.chosen() else {
             return Some(list);
         };
-        let chosen = &self.candidates.folders[self.shown[chosen]];
-        let row = list.rows().position(|folder| folder == chosen);
+        let chosen = &self.candidates.paths[self.shown[chosen]];
+        let row = list.rows().position(|path| path == chosen);
         if let Some(row) = row {
             list.selection.keep(row, &self.selection);
         }
         Some(list)
     }
 
-    /// Las carpetas de la lista, en orden.
+    /// Las rutas de la lista, en orden.
     pub fn rows(&self) -> impl ExactSizeIterator<Item = &VaultPath> {
         self.shown
             .iter()
-            .map(|&index| &self.candidates.folders[index])
+            .map(|&index| &self.candidates.paths[index])
     }
 
     #[must_use]
@@ -116,9 +128,9 @@ impl FolderCompletions {
         &mut self.selection
     }
 
-    /// La carpeta elegida.
+    /// La ruta elegida.
     #[must_use]
     pub fn accept(&self) -> &VaultPath {
-        &self.candidates.folders[self.shown[self.selection.selected()]]
+        &self.candidates.paths[self.shown[self.selection.selected()]]
     }
 }

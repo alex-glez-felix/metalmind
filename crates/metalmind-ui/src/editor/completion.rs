@@ -21,7 +21,7 @@ use super::Editor;
 use crate::actions::EDITOR_CONTEXT;
 use crate::clipboard::SystemClipboard;
 use crate::completion::{
-    ArgumentCompletions, CommandCompletions, FolderCandidates, LinkCompletions, NoteCandidates,
+    ArgumentCompletions, CommandCompletions, LinkCompletions, NoteCandidates, PathCandidates,
     Selection, TagCompletions,
 };
 use crate::finder::Note;
@@ -106,7 +106,9 @@ pub(super) struct Completion {
     /// Las notas de `[[`: se arman de nuevo solo si cambian.
     notes: Option<Arc<NoteCandidates>>,
     /// Las carpetas de un índice del vault, para `:focus`.
-    folders: Option<Arc<FolderCandidates>>,
+    folders: Option<Arc<PathCandidates>>,
+    /// Sus archivos, para `:e`.
+    files: Option<Arc<PathCandidates>>,
     /// Para nombres de tags.
     names: FuzzyMatcher,
     /// Para rutas de notas.
@@ -120,6 +122,7 @@ impl Default for Completion {
             tags: None,
             notes: None,
             folders: None,
+            files: None,
             names: FuzzyMatcher::text(),
             paths: FuzzyMatcher::paths(),
         }

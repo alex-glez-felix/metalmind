@@ -119,3 +119,32 @@ fn sin_argumento_que_completar_no_cambia_nada() {
     assert_eq!(editor.vim.command_line(), Some("focus #r"));
     assert_eq!(editor.vim.typed_argument(), None);
 }
+
+/// El argumento de `:e` y la ruta que lee Metalmind.
+const FILE_NAMES: &[(&str, &str)] = &[
+    ("notas/a.md", "notas/a.md"),
+    (r"Mis\ notas/a.md", "Mis notas/a.md"),
+    ("a b.md", "a b.md"),
+    (r"x\ay", "xay"),
+    (r"x\\y", r"x\y"),
+    (r#"x\"y"#, "x\"y"),
+    (r"x\#y", "x#y"),
+    (r"x\", r"x\"),
+    ("lead.md  ", "lead.md"),
+    (r"a\ b\ c", "a b c"),
+];
+
+#[test]
+fn lee_la_ruta_de_e_como_vim() {
+    for &(argument, expected) in FILE_NAMES {
+        assert_eq!(metalmind_vim::file_name(argument), expected, "{argument:?}");
+    }
+}
+
+#[test]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn nvim_abre_la_misma_ruta() {
+    let arguments: Vec<&str> = FILE_NAMES.iter().map(|&(argument, _)| argument).collect();
+    let expected: Vec<&str> = FILE_NAMES.iter().map(|&(_, name)| name).collect();
+    assert_eq!(support::nvim::file_names(&arguments), expected);
+}
