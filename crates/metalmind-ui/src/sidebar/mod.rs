@@ -30,7 +30,7 @@ use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_change::TagRequest;
 use crate::tag_outline::TagOutline;
-use crate::workspace::{LinePosition, Placement, Workspace, shown_path};
+use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -245,13 +245,11 @@ impl Sidebar {
         self.vault_path(document.path()?)
     }
 
-    /// Abre `path` donde dice `placement`, en `at` si se da; si el panel de
-    /// edición enfocado lo muestra y `focus_editor`, la ventana le pasa el
-    /// foco.
+    /// Abre `path` donde dice `placement`; si el panel de edición enfocado
+    /// lo muestra y `focus_editor`, la ventana le pasa el foco.
     fn open(
         &mut self,
         path: &VaultPath,
-        at: Option<LinePosition>,
         placement: Placement,
         focus_editor: bool,
         cx: &mut Context<Self>,
@@ -259,14 +257,12 @@ impl Sidebar {
         let file = shown_path(&self.vault.root().join(path.as_str()));
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
-            match at {
-                Some(at) => workspace.open_file_at(&file, placement, at),
-                None => workspace.open_file(&file, placement),
-            }
-            .unwrap_or_else(|error| {
-                workspace.report(&error);
-                false
-            })
+            workspace
+                .open_file(&file, placement)
+                .unwrap_or_else(|error| {
+                    workspace.report(&error);
+                    false
+                })
         });
         if !opened {
             return;

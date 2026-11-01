@@ -54,7 +54,7 @@ fn l_baja_a_los_links_y_luego_abre() {
     assert_eq!(context.outline().selected_row(), Some(1));
     assert_eq!(
         context.expand_or_open(),
-        Some(ClickOpen {
+        Some(RowOpen {
             path: path("b.md"),
             at: Some(LinePosition { line: 0, column: 3 }),
             focus_editor: true,

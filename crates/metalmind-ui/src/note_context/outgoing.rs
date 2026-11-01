@@ -1,6 +1,6 @@
-//! La pestaña de salientes del panel de contexto, sin GPUI: a qué notas
-//! llevan los links de la nota activa, una fila por destino en el orden en
-//! que aparecen, y al final los que no llevan a una sola nota.
+//! La pestaña de salientes del panel de contexto, sin GPUI: a qué notas y
+//! adjuntos llevan los links de la nota activa, una fila por destino en el
+//! orden en que aparecen, y al final los que no llevan a un solo archivo.
 
 use std::sync::Arc;
 
@@ -12,7 +12,8 @@ use crate::workspace::LinePosition;
 /// A dónde llevan los links de una fila.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Destination {
-    Note(VaultPath),
+    /// Una nota, o un adjunto como el de `![[foto.png]]`.
+    File(VaultPath),
     /// Varias notas empatan con lo escrito: `gd` sobre el link deja elegir.
     Ambiguous(String),
     /// Ninguna nota se llama así.
@@ -84,7 +85,7 @@ impl OutgoingOutline {
             if let Some(note) = &mut self.note {
                 moved(note);
             }
-            if let Some(Destination::Note(path)) = &mut self.selected {
+            if let Some(Destination::File(path)) = &mut self.selected {
                 moved(path);
             }
         }
@@ -121,10 +122,21 @@ impl OutgoingOutline {
     pub fn selected_entry(&self) -> Option<&Row> {
         self.rows.get(self.selected_row?)
     }
+
+    /// Dónde abre la fila elegida: un archivo, donde quedó el cursor la
+    /// última vez; lo que no lleva a uno, en el link.
+    #[must_use]
+    pub fn selected_position(&self) -> Option<LinePosition> {
+        let row = self.selected_entry()?;
+        match row.destination {
+            Destination::File(_) => None,
+            Destination::Ambiguous(_) | Destination::Missing(_) => Some(row.first),
+        }
+    }
 }
 
-/// Una fila por destino, en el orden de su primer link; las notas antes
-/// que lo que no lleva a una sola, que es lo que hay que arreglar.
+/// Una fila por destino, en el orden de su primer link; los archivos antes
+/// que lo que no lleva a uno solo, que es lo que hay que arreglar.
 fn rows(links: &[IndexedLink]) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     for link in links {
@@ -143,7 +155,7 @@ fn rows(links: &[IndexedLink]) -> Vec<Row> {
             }),
         }
     }
-    rows.sort_by_key(|row| !matches!(row.destination, Destination::Note(_)));
+    rows.sort_by_key(|row| !matches!(row.destination, Destination::File(_)));
     rows
 }
 
@@ -151,7 +163,7 @@ fn rows(links: &[IndexedLink]) -> Vec<Row> {
 fn destination(link: &IndexedLink) -> Option<Destination> {
     match &link.target {
         LinkTarget::SameNote => None,
-        LinkTarget::Resolved(path) => Some(Destination::Note(path.clone())),
+        LinkTarget::Resolved(path) => Some(Destination::File(path.clone())),
         LinkTarget::Ambiguous(_) => Some(Destination::Ambiguous(link.target_text.clone())),
         LinkTarget::Unresolved => Some(Destination::Missing(link.target_text.clone())),
     }
@@ -183,20 +195,12 @@ impl Outline for OutgoingOutline {
         self.selected_file()
     }
 
-    /// Una nota abre esa nota; lo que no lleva a una sola abre la activa en
+    /// Un archivo se abre; lo que no lleva a uno solo abre la nota activa en
     /// el link, para arreglarlo o elegir con `gd`.
     fn selected_file(&self) -> Option<&VaultPath> {
         match &self.selected_entry()?.destination {
-            Destination::Note(path) => Some(path),
+            Destination::File(path) => Some(path),
             Destination::Ambiguous(_) | Destination::Missing(_) => self.note.as_ref(),
-        }
-    }
-
-    fn selected_position(&self) -> Option<LinePosition> {
-        let row = self.selected_entry()?;
-        match row.destination {
-            Destination::Note(_) => None,
-            Destination::Ambiguous(_) | Destination::Missing(_) => Some(row.first),
         }
     }
 }

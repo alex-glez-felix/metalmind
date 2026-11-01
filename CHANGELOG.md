@@ -206,8 +206,8 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   `space b` lo cierran). En "Enlazan aquí", cada nota que la enlaza y, debajo,
   la línea de cada link: se recorre con `j`/`k`, `h`/`l` pliegan, y `enter` o
   un clic abren la nota con el cursor en el link. `tab` pasa a "Salientes":
-  las notas a las que lleva, con cuántos links, y al final los links que no
-  llevan a una sola nota, que abren la nota activa en el link.
+  las notas y adjuntos a los que lleva, con cuántos links, y al final los
+  links que no llevan a un solo archivo, que abren la nota activa en el link.
 - `space u` lista los links del vault que no llevan a ninguna nota, con su
   nota y su línea; `enter` abre la nota en el link.
 - Renombrar o mover una nota (o una carpeta) desde el panel actualiza los

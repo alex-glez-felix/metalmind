@@ -173,6 +173,12 @@ impl BacklinkOutline {
         self.rows.get(self.selected_row?)
     }
 
+    /// Dónde abre la fila elegida su nota.
+    #[must_use]
+    pub fn selected_position(&self) -> Option<LinePosition> {
+        self.selected_entry().map(Row::position)
+    }
+
     /// Cuántas notas enlazan a la activa.
     #[must_use]
     pub fn note_count(&self) -> usize {
@@ -312,10 +318,6 @@ impl Outline for BacklinkOutline {
     /// Toda fila abre su nota: la de un link, en el link.
     fn selected_file(&self) -> Option<&VaultPath> {
         self.selected_path()
-    }
-
-    fn selected_position(&self) -> Option<LinePosition> {
-        self.selected_entry().map(Row::position)
     }
 }
 

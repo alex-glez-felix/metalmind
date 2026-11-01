@@ -14,6 +14,7 @@ use metalmind_vault::{EntryKind, LinkContext, VaultPath};
 use unicode_width::UnicodeWidthChar as _;
 
 use super::ContextPanel;
+use super::render::muted;
 use crate::icons;
 use crate::note_context::ContextTab;
 use crate::note_context::backlinks::Row;
@@ -155,7 +156,7 @@ fn backlink_row(
     .into_any_element()
 }
 
-/// Una nota con cuántos links llevan a ella; lo que no lleva a una sola,
+/// Un archivo con cuántos links llevan a él; lo que no lleva a uno solo,
 /// tenue y con lo que le pasa.
 fn outgoing_row(
     row: &OutgoingRow,
@@ -166,8 +167,8 @@ fn outgoing_row(
 ) -> AnyElement {
     let frame = row_frame(at, 0, marks, theme, cx);
     let frame = match &row.destination {
-        Destination::Note(path) => frame
-            .child(icons::entry(EntryKind::Note, false, theme))
+        Destination::File(path) => frame
+            .child(icons::entry(EntryKind::of_file(path), false, theme))
             .child(note_label(path, theme)),
         Destination::Ambiguous(written) => unclear(frame, written, "varias notas", theme),
         Destination::Missing(written) => unclear(frame, written, "sin nota", theme),
@@ -229,12 +230,6 @@ fn note_label(source: &VaultPath, theme: &Theme) -> Div {
                 .truncate()
                 .child(folder.as_str().to_owned())
         }))
-}
-
-fn muted(theme: &Theme) -> Div {
-    div()
-        .text_size(theme.ui_small_font_size)
-        .text_color(theme.ui.panel_muted)
 }
 
 /// La línea del link desde poco antes de él, con el link en el color de

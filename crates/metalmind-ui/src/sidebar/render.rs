@@ -226,7 +226,7 @@ impl Sidebar {
         self.scroll_to_selection();
         if let Some(click) = click {
             let placement = crate::workspace::Placement::Current;
-            self.open(&click.path, click.at, placement, click.focus_editor, cx);
+            self.open(&click.path, placement, click.focus_editor, cx);
         }
         cx.notify();
     }

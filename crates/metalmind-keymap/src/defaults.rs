@@ -252,7 +252,7 @@ const LIST_INPUT: &[(&[Keystroke], ListAction)] = &[
     (&[ctrl('p')], ListAction::SelectPrevious),
 ];
 
-/// Como los backlinks en el árbol; `tab` cambia de pestaña y `esc` o `q`
+/// Como el árbol; `tab` cambia de pestaña y `esc` o `q`
 /// cierran el panel, que solo se ve mientras se pide.
 const CONTEXT: &[(&[Keystroke], ContextAction)] = &[
     (&[k('j')], ContextAction::SelectNext),

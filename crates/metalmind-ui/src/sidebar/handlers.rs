@@ -102,8 +102,7 @@ impl Sidebar {
         let Some(path) = outline.selected_file().cloned() else {
             return false;
         };
-        let at = outline.selected_position();
-        self.open(&path, at, placement, true, cx);
+        self.open(&path, placement, true, cx);
         true
     }
 

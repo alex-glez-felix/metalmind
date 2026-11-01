@@ -17,8 +17,8 @@ use gpui_kit::{
 use metalmind_vault::VaultPath;
 
 use crate::finder::{VaultChanged, VaultSession};
-use crate::note_context::{ContextTab, NoteContext};
-use crate::panel::{ClickOpen, Outline as _};
+use crate::note_context::{ContextTab, NoteContext, RowOpen};
+use crate::panel::Outline;
 use crate::workspace::{Placement, Workspace, shown_path};
 
 /// Lo que la ventana tiene que hacer por el panel.
@@ -152,9 +152,17 @@ impl ContextPanel {
         }
     }
 
+    /// Cada pestaña lleva su scroll a su selección, se vea o no: otra nota
+    /// o un lote del watcher la mueven también en la escondida.
     fn scroll_to_selection(&self) {
-        if let Some(row) = self.context.outline().selected_row() {
-            self.scroll().scroll_to_item(row, ScrollStrategy::Nearest);
+        let tabs: [(&dyn Outline, &UniformListScrollHandle); 2] = [
+            (&self.context.backlinks, &self.backlink_scroll),
+            (&self.context.outgoing, &self.outgoing_scroll),
+        ];
+        for (outline, handle) in tabs {
+            if let Some(row) = outline.selected_row() {
+                handle.scroll_to_item(row, ScrollStrategy::Nearest);
+            }
         }
     }
 
@@ -177,7 +185,7 @@ impl ContextPanel {
         cx.notify();
     }
 
-    fn open(&mut self, open: &ClickOpen, placement: Placement, cx: &mut Context<Self>) {
+    fn open(&mut self, open: &RowOpen, placement: Placement, cx: &mut Context<Self>) {
         let file = shown_path(&self.root.join(open.path.as_str()));
         let opened = self.workspace.update(cx, |workspace, cx| {
             cx.notify();

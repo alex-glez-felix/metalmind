@@ -171,6 +171,7 @@ fn footer(theme: &Theme, cx: &mut Context<ContextPanel>) -> Div {
         )
 }
 
-fn muted(theme: &Theme) -> Div {
+/// Lo secundario: conteos y carpetas, en chico y apagado.
+pub(super) fn muted(theme: &Theme) -> Div {
     theme.ui_small_text(div().text_color(theme.ui.panel_muted))
 }

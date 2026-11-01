@@ -11,7 +11,19 @@ use metalmind_vault::{LinkIndex, VaultChange, VaultPath};
 
 use self::backlinks::BacklinkOutline;
 use self::outgoing::OutgoingOutline;
-use crate::panel::{ClickOpen, Outline};
+use crate::panel::Outline;
+use crate::workspace::LinePosition;
+
+/// Lo que abre una fila: el archivo y, si la fila lo dice, dónde.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowOpen {
+    pub path: VaultPath,
+    /// `None` es donde quedó el cursor la última vez.
+    pub at: Option<LinePosition>,
+    /// El doble clic, `enter` y `l` le pasan el foco al editor; el clic
+    /// simple lo deja en el panel.
+    pub focus_editor: bool,
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ContextTab {
@@ -109,7 +121,7 @@ impl NoteContext {
 
     /// `l`: en una nota de los backlinks la abre o baja a sus links, como
     /// una carpeta; lo demás abre su fila. Devuelve qué abrir, si algo.
-    pub fn expand_or_open(&mut self) -> Option<ClickOpen> {
+    pub fn expand_or_open(&mut self) -> Option<RowOpen> {
         if self.tab == ContextTab::Backlinks && self.backlinks.is_note_selected() {
             self.backlinks.expand_or_enter();
             return None;
@@ -119,18 +131,21 @@ impl NoteContext {
 
     /// Lo que abre la fila elegida.
     #[must_use]
-    pub fn selected_open(&self, focus_editor: bool) -> Option<ClickOpen> {
-        let outline = self.outline();
-        Some(ClickOpen {
-            path: outline.selected_file()?.clone(),
-            at: outline.selected_position(),
+    pub fn selected_open(&self, focus_editor: bool) -> Option<RowOpen> {
+        let at = match self.tab {
+            ContextTab::Backlinks => self.backlinks.selected_position(),
+            ContextTab::Outgoing => self.outgoing.selected_position(),
+        };
+        Some(RowOpen {
+            path: self.outline().selected_file()?.clone(),
+            at,
             focus_editor,
         })
     }
 
     /// Un clic en la fila `at`, el `count`-ésimo seguido: la elige y la
     /// abre; el doble clic le pasa el foco al editor.
-    pub fn click(&mut self, at: usize, count: usize) -> Option<ClickOpen> {
+    pub fn click(&mut self, at: usize, count: usize) -> Option<RowOpen> {
         self.outline_mut().select_row(at);
         self.selected_open(count > 1)
     }

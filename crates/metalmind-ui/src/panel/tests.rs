@@ -281,7 +281,6 @@ fn un_clic_abre_o_cierra_la_carpeta_y_abre_el_archivo() {
     let open = |focus_editor| {
         Some(ClickOpen {
             path: path("a.md"),
-            at: None,
             focus_editor,
         })
     };
@@ -400,7 +399,6 @@ fn en_la_vista_de_tags_el_clic_abre_el_tag_y_la_nota() {
     let open = |focus_editor| {
         Some(ClickOpen {
             path: path("a.md"),
-            at: None,
             focus_editor,
         })
     };

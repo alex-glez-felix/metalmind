@@ -9,13 +9,16 @@ fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
 }
 
+/// Las notas con su texto; lo que no termina en `.md` es un adjunto.
 fn index(notes: &[(&str, &str)]) -> Arc<LinkIndex> {
     let texts: HashMap<VaultPath, String> = notes
         .iter()
         .map(|&(name, text)| (path(name), text.to_owned()))
         .collect();
     Arc::new(LinkIndex::build(
-        texts.keys().map(|name| (name.clone(), EntryKind::Note)),
+        texts
+            .keys()
+            .map(|name| (name.clone(), EntryKind::of_file(name))),
         |name| texts.get(name).cloned(),
     ))
 }
@@ -48,7 +51,7 @@ fn shown(outline: &OutgoingOutline) -> Vec<String> {
         .iter()
         .map(|row| {
             let name = match &row.destination {
-                Destination::Note(path) => path.as_str().to_owned(),
+                Destination::File(path) => path.as_str().to_owned(),
                 Destination::Ambiguous(text) => format!("{text}?"),
                 Destination::Missing(text) => format!("{text}!"),
             };
@@ -115,4 +118,17 @@ fn la_eleccion_sigue_a_su_destino() {
     outline.show_note(Some(path("plan.md")));
     outline.refresh();
     assert_eq!(outline.selected_row(), None);
+}
+
+/// Un embed lleva a su adjunto, que sale como destino y se abre.
+#[test]
+fn un_adjunto_tambien_es_un_destino() {
+    let mut outline = OutgoingOutline::new(index(&[
+        ("foto.png", ""),
+        ("nota.md", "mira ![[foto.png]]\n"),
+    ]));
+    outline.show_note(Some(path("nota.md")));
+    outline.refresh();
+    assert_eq!(shown(&outline), ["foto.png (1) 1:5"]);
+    assert_eq!(outline.selected_file(), Some(&path("foto.png")));
 }

@@ -19,7 +19,6 @@ use crate::focus::{Focus, InScope};
 use crate::picker::InputLine;
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
-use crate::workspace::LinePosition;
 
 /// Las vistas del panel: carpetas y tags (05 §3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -53,8 +52,6 @@ pub struct Shown {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClickOpen {
     pub path: VaultPath,
-    /// Dónde, si la fila lo dice (un backlink).
-    pub at: Option<LinePosition>,
     /// El doble clic le pasa el foco al editor; el simple lo deja en el
     /// árbol.
     pub focus_editor: bool,
@@ -267,7 +264,6 @@ impl Panel {
         if let Some(path) = outline.selected_file() {
             return Some(ClickOpen {
                 path: path.clone(),
-                at: outline.selected_position(),
                 focus_editor: count > 1,
             });
         }
