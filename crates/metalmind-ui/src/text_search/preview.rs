@@ -121,9 +121,13 @@ impl PreviewState {
     }
 
     /// Se lanzó otra búsqueda, que lee las notas del disco de nuevo: lo leído
-    /// antes puede ser viejo.
+    /// antes, o lo que se está leyendo, puede ser viejo. El resultado marcado
+    /// se vuelve a pedir aunque sea el mismo; lo que se ve se queda hasta que
+    /// llegue.
     pub fn searched_again(&mut self) {
         self.read = None;
+        self.version += 1;
+        self.wanted = None;
     }
 
     /// Volvió un [`PreviewJob`]: si es del último pedido, se muestra.

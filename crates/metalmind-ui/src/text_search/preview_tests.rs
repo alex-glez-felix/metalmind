@@ -140,6 +140,28 @@ fn otra_busqueda_vuelve_a_leer_la_nota() {
     assert_eq!(shown(&preview), [">1:[idea] dos"]);
 }
 
+/// Lo que se estaba leyendo antes de otra búsqueda puede ser viejo: no se
+/// muestra ni se guarda, y el mismo resultado se vuelve a pedir.
+#[test]
+fn otra_busqueda_descarta_lo_que_se_estaba_leyendo() {
+    let dir = vault(&[("a.md", "idea uno\n")]);
+    let mut state = PreviewState::new(dir.path().to_owned(), &[]);
+    let found = hit("a.md", 0, "idea uno", &[(0, 4)]);
+    load(&mut state, &found).unwrap();
+    let other = hit("a.md", 0, "idea uno", &[(0, 2)]);
+    let in_flight = state.request(Some(&other)).unwrap().run();
+    fs::write(dir.path().join("a.md"), "idea uno\nnueva\n").unwrap();
+    state.searched_again();
+    state.finish(in_flight);
+    assert_eq!(
+        shown(state.shown().unwrap()),
+        [">1:[idea] uno"],
+        "lo de antes"
+    );
+    let preview = load(&mut state, &other).expect("el mismo resultado se pide otra vez");
+    assert_eq!(shown(&preview), [">1:[id]ea uno", "2:nueva"]);
+}
+
 #[test]
 fn los_tabs_se_ven_como_espacios() {
     let preview = excerpt("\tidea\n", &hit("a.md", 0, "\tidea", &[(1, 5)]));
