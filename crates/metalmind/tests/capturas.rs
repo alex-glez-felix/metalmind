@@ -110,6 +110,13 @@ const SCENES: &[(&str, &[Step])] = &[
         "linea-de-comandos-historial",
         &[Step::Keys("<Esc>:noh<CR>:focus #rust<CR>:unfocus<CR>:")],
     ),
+    // `:e` completa los archivos del vault por su ruta (#45): muchos que
+    // coinciden y uno con carpeta y nombre que no caben.
+    ("linea-de-comandos-e", &[Step::Keys("<Esc>:e idea")]),
+    (
+        "linea-de-comandos-e-ruta-larga",
+        &[Step::Keys(r"<Esc>:e Una\ carpeta\ con")],
+    ),
     ("finder", &[Step::Keys("<Esc><Space>f")]),
     ("finder-filtrado", &[Step::Keys("idea")]),
     ("finder-ruta-larga", &[Step::Keys("<C-u>honda")]),

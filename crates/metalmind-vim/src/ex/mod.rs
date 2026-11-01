@@ -267,7 +267,7 @@ mod tests {
             name,
             min,
             action: ActionName::new(action),
-            takes_argument: false,
+            argument: crate::ArgumentKind::None,
             with_range,
         }
     }

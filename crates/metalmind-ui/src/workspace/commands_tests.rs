@@ -58,6 +58,23 @@ fn e_abre_otro_archivo_en_el_panel() {
     );
 }
 
+/// La ruta se lee como en vim: `\ ` es un espacio del nombre, así se
+/// abre lo que escribe el autocompletado de `:e` (#45).
+#[test]
+fn e_y_w_leen_los_escapes_de_la_ruta() {
+    let (dir, mut session) = two_files();
+    fs::create_dir(path(&dir, "Mis notas")).unwrap();
+    fs::write(path(&dir, "Mis notas/c.md"), "c\n").unwrap();
+    let escaped = |name: &str| format!("{}/{name}", dir.path().display());
+    session.keys(&format!(":e {}⏎", escaped(r"Mis\ notas/c.md")));
+    assert_eq!(shown(&session), path(&dir, "Mis notas/c.md"));
+    session.keys(&format!(":w {}⏎", escaped(r"otra\ copia.md")));
+    assert_eq!(
+        fs::read_to_string(path(&dir, "otra copia.md")).unwrap(),
+        "c\n"
+    );
+}
+
 #[test]
 fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
     let (dir, mut session) = two_files();

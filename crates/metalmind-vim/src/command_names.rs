@@ -61,7 +61,7 @@ pub(crate) fn names_starting_with(typed: &str, commands: &[HostCommand]) -> Vec<
                 CommandName {
                     name: command.name,
                     action: Some(command.action),
-                    takes_argument: command.takes_argument,
+                    takes_argument: command.takes_argument(),
                 },
             )
         });
@@ -95,7 +95,11 @@ mod tests {
             name,
             min,
             action: ActionName::new("host::action"),
-            takes_argument,
+            argument: if takes_argument {
+                crate::ArgumentKind::Words
+            } else {
+                crate::ArgumentKind::None
+            },
             with_range: RangeRule::NotAllowed,
         }
     }

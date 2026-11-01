@@ -148,3 +148,30 @@ pub fn command_names(lines: &[&str]) -> Vec<String> {
     let dump = std::fs::read_to_string(output.path()).unwrap();
     dump.lines().map(str::to_owned).collect()
 }
+
+const FILE_NAME_SCRIPT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/file_name.lua");
+
+/// El archivo que abre nvim con `:e` y cada argumento, desde una carpeta
+/// vacía: así el nombre sale relativo y tal cual.
+pub fn file_names(arguments: &[&str]) -> Vec<String> {
+    assert_eq!(
+        installed_version(),
+        VERSION,
+        "el oráculo necesita {VERSION}; el `nvim` del PATH es otro"
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let output = dir.path().join("salida");
+    let status = Command::new("nvim")
+        .args(["--clean", "--headless", "-n", "-l", FILE_NAME_SCRIPT])
+        .arg(&output)
+        .args(arguments)
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success(), "nvim terminó con {status}");
+    let dump = std::fs::read_to_string(output).unwrap();
+    dump.lines().map(str::to_owned).collect()
+}
