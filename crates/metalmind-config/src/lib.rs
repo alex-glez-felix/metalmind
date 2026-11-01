@@ -13,6 +13,7 @@ mod parse;
 mod paths;
 mod settings;
 mod theme;
+mod toggle;
 mod vault;
 
 pub use config::Config;
@@ -29,4 +30,5 @@ pub use theme::{
     Rows, Spacing, Stroke, SyntaxColors, Text, TextColumns, TextStyle, Theme, Themes, UiColors,
     Units, Weight,
 };
+pub use toggle::Toggle;
 pub use vault::{SavedView, VaultConfig};

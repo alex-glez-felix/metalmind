@@ -7,6 +7,7 @@ mod backlinks;
 mod change_preview;
 mod clipboard;
 mod completion;
+mod config_file;
 mod disk;
 mod document;
 mod editor;

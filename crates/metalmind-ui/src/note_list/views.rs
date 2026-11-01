@@ -6,23 +6,18 @@ use std::fs;
 use std::path::Path;
 
 use metalmind_config::edit::EditError;
-use metalmind_config::{Diagnostic, Loaded, SavedView, Severity, VaultConfig};
-use metalmind_vault::FileError;
+use metalmind_config::{Diagnostic, Loaded, SavedView, VaultConfig};
 use metalmind_vault::tags::{QueryWord, TagQuery};
 
 use super::source::ListSource;
+use crate::config_file::{self, ConfigFileError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ViewsError {
     #[error("{0}")]
     Edit(#[from] EditError),
     #[error(transparent)]
-    File(#[from] FileError),
-    /// El archivo tiene un error: no se escribe hasta arreglarlo.
-    #[error("{0}")]
-    Config(Diagnostic),
-    #[error("no se pudo crear {path}: {error}")]
-    Folder { path: String, error: std::io::Error },
+    File(#[from] ConfigFileError),
     #[error("{0} es un enlace simbólico; las vistas no se escriben a través de él")]
     Symlink(String),
     #[error("ya hay una vista «{0}»")]
@@ -57,24 +52,8 @@ pub fn change(
             return Err(ViewsError::Symlink(path.display().to_string()));
         }
     }
-    let text = metalmind_vault::read(&file)?.unwrap_or_default();
-    let current = VaultConfig::parse(&text);
-    if let Some(error) = current
-        .diagnostics
-        .into_iter()
-        .find(|diagnostic| diagnostic.severity == Severity::Error)
-    {
-        return Err(ViewsError::Config(error.in_file(&file)));
-    }
-    let edited = change(&text, &current.value)?;
-    if edited != text {
-        fs::create_dir_all(folder).map_err(|error| ViewsError::Folder {
-            path: folder.display().to_string(),
-            error,
-        })?;
-        metalmind_vault::replace_file(&file, &edited)?;
-    }
-    Ok(VaultConfig::parse(&edited).value.views().to_vec())
+    let config = config_file::change(&file, VaultConfig::parse, change)?;
+    Ok(config.views().to_vec())
 }
 
 /// La vista de `views` que se llama `name` sin distinguir mayúsculas.
@@ -238,7 +217,10 @@ mod tests {
         for broken in ["views: [\n", "views:\n  gs: [a]\n"] {
             fs::write(&file, broken).unwrap();
             let error = change(dir.path(), save_a).unwrap_err();
-            assert!(matches!(error, ViewsError::Config(_)), "{error:?}");
+            assert!(
+                matches!(error, ViewsError::File(ConfigFileError::Config(_))),
+                "{error:?}"
+            );
             assert_eq!(fs::read_to_string(&file).unwrap(), broken);
         }
     }

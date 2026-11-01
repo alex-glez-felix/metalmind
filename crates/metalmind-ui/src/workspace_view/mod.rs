@@ -18,6 +18,7 @@ mod overlay;
 mod palette;
 mod rename;
 mod reroute;
+mod settings;
 mod tag_change;
 mod text_search;
 mod toasts;
@@ -301,6 +302,11 @@ impl WorkspaceView {
             Effect::OpenMessages => {
                 self.sync_editors(cx);
                 self.open_messages(window, cx);
+            }
+            Effect::SaveToggle { toggle, on } => {
+                self.sync_editors(cx);
+                self.save_toggle(toggle, on, cx);
+                self.focus(window, cx);
             }
         }
     }
