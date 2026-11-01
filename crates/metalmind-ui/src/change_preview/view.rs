@@ -22,10 +22,14 @@ use crate::theme::Theme;
 pub enum ChangePreviewEvent {
     Apply,
     Cancel,
+    /// Abrir el archivo del cambio elegido en su línea.
+    OpenLine,
 }
 
 pub struct ChangePreviewView {
     preview: ChangePreview,
+    /// Si quien la muestra sabe volver a ella tras abrir una línea.
+    opens_lines: bool,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
 }
@@ -42,9 +46,28 @@ impl ChangePreviewView {
     pub fn new(preview: ChangePreview, cx: &mut Context<Self>) -> Self {
         Self {
             preview,
+            opens_lines: false,
             focus_handle: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
         }
+    }
+
+    /// Con `o` y el botón "Abrir línea", que abren el archivo del cambio
+    /// elegido en su línea ([`ChangePreviewEvent::OpenLine`]).
+    #[must_use]
+    pub fn with_open_line(mut self) -> Self {
+        self.opens_lines = true;
+        self
+    }
+
+    /// Si se puede abrir la línea del cambio elegido: un renombre o un
+    /// archivo nuevo no tienen.
+    fn can_open_line(&self) -> bool {
+        self.opens_lines
+            && self
+                .preview
+                .row(self.preview.selected())
+                .is_some_and(|row| row.line.is_some())
     }
 
     #[must_use]
@@ -76,6 +99,11 @@ impl ChangePreviewView {
                 }
             }
             ChangePreviewAction::Cancel => cx.emit(ChangePreviewEvent::Cancel),
+            ChangePreviewAction::OpenLine => {
+                if self.can_open_line() {
+                    cx.emit(ChangePreviewEvent::OpenLine);
+                }
+            }
         }
         self.changed(cx);
     }
@@ -196,7 +224,14 @@ impl ChangePreviewView {
         let selected = row == self.preview.selected();
         let hover = theme.ui.picker_hover;
         // Un renombre ya dice su ruta en el cambio.
-        let place = change.line.map(|line| format!("{}:{line}", change.path));
+        let place = change.line.map(|line| {
+            let place = format!("{}:{line}", change.path);
+            if change.in_buffer {
+                format!("{place} · sin guardar")
+            } else {
+                place
+            }
+        });
         let text = one_line(&change);
         let color = change_color(&change, theme);
         div()
@@ -304,6 +339,15 @@ impl ChangePreviewView {
 
     fn render_footer(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
         let blocked = self.preview.blocked().is_some();
+        let open = self.opens_lines.then(|| {
+            button(
+                "Abrir línea",
+                ChangePreviewAction::OpenLine,
+                !self.can_open_line(),
+                theme,
+                cx,
+            )
+        });
         div()
             .flex_none()
             .flex()
@@ -313,6 +357,7 @@ impl ChangePreviewView {
             .py(theme.layout.picker_input_padding_y)
             .border_t(theme.stroke.border)
             .border_color(theme.ui.picker_border)
+            .children(open)
             .child(button(
                 "Cancelar",
                 ChangePreviewAction::Cancel,
@@ -339,7 +384,7 @@ impl Render for ChangePreviewView {
             .on_action(cx.listener(Self::on_dispatch))
             .on_mouse_down_out(cx.listener(|_, _, _, cx| cx.emit(ChangePreviewEvent::Cancel)))
             .w(theme.layout.picker_width)
-            .max_w(relative(0.9))
+            .max_w(relative(theme.layout.picker_max_share))
             .max_h(relative(1.))
             .flex()
             .flex_col()

@@ -42,21 +42,73 @@ fn x_quita_un_cambio_de_la_vista_previa() {
     assert_eq!(smoke.read("b.md"), "#rust dos\n");
 }
 
-/// Con cambios sin guardar en `a.md`, `enter` no aplica nada; quitada su
-/// fila, se aplica lo demás y el buffer queda como estaba.
+/// Con cambios sin guardar en `a.md`, el renombre entra en su buffer, sin
+/// escribir su archivo, y el resto va al disco; guardar lo escribe todo.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
-fn un_buffer_sin_guardar_bloquea_hasta_quitar_su_fila() {
+fn un_buffer_sin_guardar_recibe_el_cambio_sin_tocar_el_disco() {
     let smoke = Smoke::new();
     smoke.without_autosave();
     two_notes(&smoke);
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
-    window.type_keys("Ax<Esc>:tagrename #rust #lang<CR><CR>x<CR>");
+    window.type_keys("Oy<Esc>:tagrename #rust #lang<CR><CR>");
     smoke.wait_contents("b.md", "#lang dos\n");
     assert_eq!(smoke.read("a.md"), "uno #rust\n");
     window.type_keys(":w<CR>");
-    smoke.wait_contents("a.md", "uno #rustx\n");
+    smoke.wait_contents("a.md", "y\nuno #lang\n");
+}
+
+/// En el buffer, el renombre es un paso de undo propio: `u` lo quita y deja
+/// lo que se había tecleado.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn u_deshace_el_renombre_en_el_buffer_sin_guardar() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("Oy<Esc>:tagrename #rust #lang<CR><CR>");
+    smoke.wait_contents("b.md", "#lang dos\n");
+    window.type_keys("u:w<CR>");
+    smoke.wait_contents("a.md", "y\nuno #rust\n");
+}
+
+/// `:tagundo` también devuelve lo que entró en el buffer sin guardar, en
+/// el buffer, y `space z` es lo mismo que `:tagundo`.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn tagundo_devuelve_tambien_el_buffer_sin_guardar() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("Oy<Esc>:tagrename #rust #lang<CR><CR>");
+    smoke.wait_contents("b.md", "#lang dos\n");
+    window.type_keys(" z");
+    smoke.wait_contents("b.md", "#rust dos\n");
+    assert_eq!(smoke.read("a.md"), "uno #rust\n");
+    window.type_keys(":w<CR>");
+    smoke.wait_contents("a.md", "y\nuno #rust\n");
+}
+
+/// `o` abre la línea del cambio elegido (`j` baja a `b.md`) y `space r`
+/// vuelve a la vista previa, rehecha con lo que se tecleó entre medio.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn o_abre_la_linea_y_space_r_vuelve_a_la_vista_previa() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    two_notes(&smoke);
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys(":tagrename #rust #lang<CR>joA!<Esc> r<CR>");
+    smoke.wait_contents("a.md", "uno #lang\n");
+    assert_eq!(smoke.read("b.md"), "#rust dos\n");
+    window.type_keys(":w<CR>");
+    smoke.wait_contents("b.md", "#lang dos!\n");
 }
 
 /// `:tagmerge` pasa las notas de un tag a otro que ya existe, con su forma
@@ -111,8 +163,8 @@ fn tagundo_no_pisa_un_buffer_sin_guardar() {
     assert_eq!(smoke.read("a.md"), "uno #lang\nx\n");
 }
 
-/// Con la vista previa bloqueada por un buffer sin guardar, el autoguardado
-/// la desbloquea sin cerrarla.
+/// Si el autoguardado guarda el buffer con la vista previa abierta, el
+/// cambio va al disco como el de cualquier nota guardada.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn el_autoguardado_desbloquea_la_vista_previa() {

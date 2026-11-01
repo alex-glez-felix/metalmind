@@ -89,6 +89,7 @@ ui:
   toast_warning: warning
   toast_error: danger
   toast_hint: text_muted
+  toast_button_hover: { color: text, alpha: 0.05 }
 
 cursor:
   normal: { color: blue, alpha: 0.4 }
@@ -178,12 +179,15 @@ layout:
   pane_header_padding_y: 3
   pane_header_folder_max_share: 0.5  # la carpeta de la nota, de la ruta sobre el panel
   picker_width: 640
+  picker_max_share: 0.9  # lo más de la ventana que ocupa a lo ancho el picker (y la línea de `:`)
   picker_top: 64
   picker_rows: 12
   picker_padding_x: md
   picker_input_padding_y: md
   picker_gap: lg
   picker_detail_share: 0.4  # fracción de la fila que se queda el detalle si el texto no cabe
+  picker_preview_width: 560  # la vista previa de `space /`, a la derecha de la lista
+  picker_preview_min_width: 320  # más angosta que esto, no se muestra
   change_preview_detail_lines: 4  # el cambio elegido, entero, bajo la vista previa de un cambio en el vault
   panel_padding_x: sm
   panel_padding_y: 6

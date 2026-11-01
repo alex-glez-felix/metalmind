@@ -1,6 +1,7 @@
 //! `space /` en el picker: cada patrón nuevo va al hilo de [`SearchWorker`],
 //! que cancela la búsqueda anterior y lanza la nueva. En el hilo de la UI
-//! solo se valida el patrón y se reciben los resultados, de a lotes.
+//! solo se valida el patrón y se reciben los resultados, de a lotes. La
+//! vista previa de la fila marcada se lee en el executor de fondo.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -11,16 +12,22 @@ use metalmind_vault::VaultPath;
 
 use super::context::row_text;
 use super::model::{MAX_HITS, Search, Status, TextSearchState};
+use super::preview::PreviewState;
 use super::worker::{Event, SearchWorker};
 use super::{Hit, OpenNote};
 use crate::picker::{
-    Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerEvent, PickerRow, PickerView,
+    Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerEvent, PickerRow,
+    PickerView, Preview,
 };
 
 pub struct TextSearch {
     state: TextSearchState,
     /// Por qué no se pudo lanzar el hilo, si no se pudo.
     worker: Result<SearchWorker, String>,
+    preview: PreviewState,
+    /// La lectura de la última vista previa pedida: reemplazarla suelta la
+    /// anterior, que si no empezó ya no corre.
+    loading: Option<Task<()>>,
     _events: Task<()>,
 }
 
@@ -35,6 +42,7 @@ impl TextSearch {
         cx: &mut Context<PickerView<Self>>,
     ) -> Self {
         let (sender, events) = async_channel::unbounded();
+        let preview = PreviewState::new(root.to_owned(), &open);
         let worker = SearchWorker::spawn(root.to_owned(), open, sender)
             .map_err(|error| format!("no se pudo lanzar el hilo de búsqueda: {error}"));
         let events = cx.spawn(async move |this, cx| {
@@ -61,6 +69,8 @@ impl TextSearch {
                 None => state,
             },
             worker,
+            preview,
+            loading: None,
             _events: events,
         }
     }
@@ -79,6 +89,7 @@ impl TextSearch {
     }
 
     fn launch(&mut self, search: Search) {
+        self.preview.searched_again();
         match &self.worker {
             Ok(worker) => worker.search(search),
             Err(error) => self.state.failed(search.version, error.clone()),
@@ -156,6 +167,30 @@ impl PickerDelegate for TextSearch {
         }
     }
 
+    fn has_preview(&self) -> bool {
+        true
+    }
+
+    fn preview(&self) -> Option<&Preview> {
+        self.preview.shown()
+    }
+
+    fn selection_changed(&mut self, cx: &mut Context<PickerView<Self>>) {
+        let hit = self.state.hit(self.state.selected());
+        let Some(job) = self.preview.request(hit) else {
+            return;
+        };
+        let loading = cx.background_executor().spawn(async move { job.run() });
+        let task = cx.spawn(async move |this, cx| {
+            let loaded = loading.await;
+            // Si el picker ya se cerró, no hay nada que mostrar.
+            let _ = this.update(cx, |view, cx| {
+                view.update_delegate(cx, |search, _| search.preview.finish(loaded));
+            });
+        });
+        drop(self.loading.replace(task));
+    }
+
     fn status(&self) -> Option<SharedString> {
         let count = self.state.len();
         match self.state.status() {
@@ -179,3 +214,7 @@ fn reason(error: &str) -> &str {
     let last = error.lines().last().unwrap_or(error);
     last.strip_prefix("error: ").unwrap_or(last)
 }
+
+#[cfg(test)]
+#[path = "delegate_tests.rs"]
+mod tests;

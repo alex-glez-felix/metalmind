@@ -1,5 +1,6 @@
 //! Lo que deja nvim en los paneles tras unas teclas: el oráculo de los
-//! tests que cambian de panel o de archivo desde un modo a medias.
+//! tests que cambian de panel o de archivo desde un modo a medias, y de los
+//! mensajes de vim que Metalmind muestra con su texto original.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -36,8 +37,28 @@ pub(crate) struct Panes {
     pub windows: Vec<Window>,
 }
 
+/// Lo que nvim le muestra al usuario fuera del texto.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Shown {
+    /// El último mensaje, error o aviso, aunque no quede en `:messages`
+    /// (como `search hit BOTTOM, continuing at TOP`); vacío si no hubo.
+    pub message: String,
+    /// Lo que muestra `'showmode'`, como `recording @a`.
+    pub showmode: String,
+}
+
 /// Abre `file` de `dir` en `nvim --clean` y teclea `keys`.
 pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
+    dump(dir, file, keys, false).0
+}
+
+/// Como [`run`], pero devuelve los mensajes. La UI que los recibe cambia lo
+/// demás: tras dos errores seguidos, nvim pide confirmar.
+pub(crate) fn shown(dir: &Path, file: &str, keys: &str) -> Shown {
+    dump(dir, file, keys, true).1
+}
+
+fn dump(dir: &Path, file: &str, keys: &str, messages: bool) -> (Panes, Shown) {
     let version = Command::new("nvim").arg("--version").output().unwrap();
     let version = String::from_utf8(version.stdout).unwrap();
     assert_eq!(
@@ -52,6 +73,7 @@ pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
         .arg(file)
         .arg(keys)
         .arg(output.path())
+        .arg(if messages { "1" } else { "0" })
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -62,6 +84,10 @@ pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
     let mut lines = dump.lines();
     let mode = lines.next().unwrap().to_owned();
     let error = lines.next().unwrap().to_owned();
+    let shown = Shown {
+        message: lines.next().unwrap().to_owned(),
+        showmode: lines.next().unwrap().to_owned(),
+    };
     let modified = lines
         .next()
         .unwrap()
@@ -80,10 +106,11 @@ pub(crate) fn run(dir: &Path, file: &str, keys: &str) -> Panes {
         })
         .collect();
     windows.sort();
-    Panes {
+    let panes = Panes {
         mode,
         error,
         modified,
         windows,
-    }
+    };
+    (panes, shown)
 }

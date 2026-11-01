@@ -2,7 +2,7 @@
 //! renombre del plan, cada una se puede quitar, y lo que queda es lo que se
 //! aplica.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use metalmind_vault::{Changes, FileEdits, TextEdit, VaultPath};
 
@@ -17,7 +17,14 @@ pub struct ChangePreview {
     unsaved: BTreeSet<VaultPath>,
     /// Los renombres son lo que se pidió: no se pueden quitar.
     fixed_renames: bool,
+    /// Las ediciones de un archivo con cambios sin guardar van a su buffer
+    /// en vez de al disco, así que no bloquean (05 §5).
+    edits_in_buffers: bool,
 }
+
+/// Una fila por su cambio (ruta, lo de antes y lo nuevo) y cuántas iguales
+/// hay antes que ella.
+type RowKey = ((VaultPath, String, String), usize);
 
 /// Algo que dice el plan sobre sí mismo, como que dos tags se fusionan.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -51,6 +58,9 @@ pub struct PreviewRow<'a> {
     /// El archivo con cambios sin guardar que pisaría: el que edita, o el
     /// origen o el destino de un renombre.
     pub unsaved: Option<&'a VaultPath>,
+    /// Una edición que va al buffer con cambios sin guardar de su archivo,
+    /// como un paso de su undo.
+    pub in_buffer: bool,
 }
 
 /// Por qué no se puede aplicar.
@@ -93,6 +103,7 @@ impl ChangePreview {
             selected: 0,
             unsaved: BTreeSet::new(),
             fixed_renames: false,
+            edits_in_buffers: false,
         };
         preview.set_unsaved(unsaved);
         Some(preview)
@@ -111,30 +122,55 @@ impl ChangePreview {
         self
     }
 
+    /// Con las ediciones de los archivos con cambios sin guardar armadas
+    /// sobre el texto de su buffer: van a él, y solo un renombre o un
+    /// archivo nuevo sobre uno de ellos bloquea.
+    #[must_use]
+    pub fn with_edits_in_buffers(mut self) -> Self {
+        self.edits_in_buffers = true;
+        self
+    }
+
     /// Esta vista previa, armada de nuevo, deja quitadas las filas que se
-    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo) y la
-    /// elegida donde estaba.
+    /// habían quitado en `old` (la misma ruta, lo de antes y lo nuevo, y
+    /// cuántas iguales hay antes, por dos líneas iguales en un archivo) y
+    /// elige la misma fila, o la de su lugar si ya no está.
     pub fn carry_over(&mut self, old: &Self) {
-        let key = |preview: &Self, row: usize| {
-            preview.row(row).map(|row| {
-                (
-                    row.path.clone(),
-                    row.before.to_owned(),
-                    row.after.to_owned(),
-                )
-            })
-        };
-        let dropped: HashSet<_> = old
+        let (old_keys, keys) = (old.row_keys(), self.row_keys());
+        let dropped: HashSet<&RowKey> = old
             .dropped
             .iter()
-            .filter_map(|&row| key(old, row))
+            .filter_map(|&row| old_keys.get(row))
             .collect();
         self.dropped = (0..self.rows.len())
             .filter(|&row| {
-                !self.is_fixed(row) && key(self, row).is_some_and(|key| dropped.contains(&key))
+                !self.is_fixed(row) && keys.get(row).is_some_and(|key| dropped.contains(key))
             })
             .collect();
-        self.selected = old.selected.min(self.rows.len().saturating_sub(1));
+        let selected = old_keys.get(old.selected);
+        self.selected = keys
+            .iter()
+            .position(|key| Some(key) == selected)
+            .unwrap_or_else(|| old.selected.min(self.rows.len().saturating_sub(1)));
+    }
+
+    /// Lo que identifica a cada fila entre dos armados del mismo plan.
+    fn row_keys(&self) -> Vec<RowKey> {
+        let mut seen: HashMap<(VaultPath, String, String), usize> = HashMap::new();
+        (0..self.rows.len())
+            .filter_map(|row| self.row(row))
+            .map(|row| {
+                let change = (
+                    row.path.clone(),
+                    row.before.to_owned(),
+                    row.after.to_owned(),
+                );
+                let count = seen.entry(change.clone()).or_default();
+                let key = (change, *count);
+                *count += 1;
+                key
+            })
+            .collect()
     }
 
     /// Vuelve a mirar qué archivos del plan tienen cambios sin guardar, como
@@ -177,13 +213,18 @@ impl ChangePreview {
     pub fn row(&self, row: usize) -> Option<PreviewRow<'_>> {
         let changes = &self.changes;
         let unsaved = |path: &VaultPath| self.unsaved.get(path);
+        let mut in_buffer = false;
         let (path, line, before, after, unsaved) = match *self.rows.get(row)? {
             Change::Edit { file, edit } => {
                 let file = changes.edits.get(file)?;
                 let edit = file.edits.get(edit)?;
                 let (before, after, skipped) = changed_lines(&edit.old, &edit.new);
                 let line = Some(edit.line + skipped + 1);
-                (&file.path, line, before, after, unsaved(&file.path))
+                let mut busy = unsaved(&file.path);
+                if self.edits_in_buffers {
+                    in_buffer = busy.take().is_some();
+                }
+                (&file.path, line, before, after, busy)
             }
             Change::Create(index) => {
                 let create = changes.creates.get(index)?;
@@ -205,6 +246,7 @@ impl ChangePreview {
             dropped: self.dropped.contains(&row),
             fixed: self.is_fixed(row),
             unsaved,
+            in_buffer,
         })
     }
 

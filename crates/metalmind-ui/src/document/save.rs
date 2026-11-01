@@ -57,7 +57,7 @@ impl Document {
 
     /// Lo que se escribe en el archivo: el buffer y, salvo que esté vacío, un
     /// `\n` al final.
-    fn file_text(&self) -> String {
+    pub(crate) fn file_text(&self) -> String {
         format!("{}{}", self.buffer, self.final_eol())
     }
 

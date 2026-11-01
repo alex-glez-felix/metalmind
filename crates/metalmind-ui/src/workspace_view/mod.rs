@@ -8,6 +8,8 @@
 //! de los avisos, arriba a la derecha.
 
 mod autosave;
+mod buffer_edits;
+mod commands;
 mod context;
 mod finder;
 mod focus;
@@ -19,8 +21,10 @@ mod note_list;
 mod overlay;
 mod palette;
 mod rename;
+mod render;
 mod reroute;
 mod settings;
+mod sidebar;
 mod tag_change;
 mod text_search;
 mod toasts;
@@ -30,33 +34,23 @@ mod vault_undo;
 use std::collections::HashMap;
 use std::path::Path;
 
-use gpui_kit::{
-    AnyElement, AppContext as _, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Render, Styled as _, Subscription, Task, Window, div,
-    prelude::FluentBuilder as _,
-};
+use gpui_kit::{AppContext as _, Context, Entity, Subscription, Task, Window};
 use metalmind_config::Paths;
-use metalmind_keymap::{Action, Invocation};
 
-use crate::actions::Dispatch;
-use crate::clipboard::SystemClipboard;
 use crate::context_panel::ContextPanel;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
-use crate::frames::FrameClock;
 use crate::math::Formulas;
 use crate::new_note::NoteSettings;
 use crate::note_list::NoteListView;
-use crate::panel::PanelView;
 use crate::session::{self, VaultState};
-use crate::sidebar::{self, Sidebar, SidebarEvent};
-use crate::theme::Theme;
-use crate::workspace::{Axis, Direction, Effect, Message, Node, PaneId, Workspace};
+use crate::sidebar::Sidebar;
+use crate::workspace::{PaneId, Workspace};
 
 use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
-use self::reroute::{Reroute, Visible, reroute};
+use self::tag_change::ParkedTagChange;
 use self::toasts::ToastTimers;
 use self::vault_undo::VaultUndo;
 
@@ -77,6 +71,8 @@ pub struct WorkspaceView {
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
     vault_undo: VaultUndo,
+    /// La vista previa de tags que se dejó para abrir una línea.
+    parked_tag_change: Option<ParkedTagChange>,
     /// El plan de un renombre que se está armando, antes de su vista previa.
     renaming: Option<Task<()>>,
     notes: NoteSettings,
@@ -139,6 +135,7 @@ impl WorkspaceView {
             autosave: None,
             toast_timers: ToastTimers::default(),
             vault_undo: VaultUndo::default(),
+            parked_tag_change: None,
             renaming: None,
             notes,
             _subscriptions: [repaint, events, list_events, context_events, activation],
@@ -157,22 +154,6 @@ impl WorkspaceView {
             let handle = editor.read(cx).focus_handle().clone();
             window.focus(&handle, cx);
         }
-    }
-
-    /// Selecciona `file` en el árbol del panel lateral.
-    pub fn reveal(&self, file: &std::path::Path, cx: &mut Context<Self>) {
-        self.sidebar
-            .update(cx, |sidebar, cx| sidebar.reveal(file, cx));
-    }
-
-    #[must_use]
-    pub fn sidebar_visible(&self, cx: &Context<Self>) -> bool {
-        self.sidebar.read(cx).is_visible()
-    }
-
-    pub fn focus_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let handle = self.sidebar.read(cx).focus_handle().clone();
-        window.focus(&handle, cx);
     }
 
     /// Lo consulta la ventana cuando el compositor pide cerrarla. Si hay
@@ -220,174 +201,6 @@ impl WorkspaceView {
         }
     }
 
-    fn run(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
-        let effect = self.workspace.update(cx, |workspace, cx| {
-            cx.notify();
-            workspace.run(invocation, &mut SystemClipboard(cx))
-        });
-        match effect {
-            Effect::CloseWindow => {
-                self.save_state(cx);
-                window.remove_window();
-            }
-            Effect::Stay => {
-                self.sync_editors(cx);
-                self.focus(window, cx);
-                self.touch_focused(cx);
-            }
-            // Una macro pudo cambiar los paneles antes de abrir el picker.
-            Effect::OpenFinder => {
-                self.sync_editors(cx);
-                self.open_finder(window, cx);
-            }
-            Effect::OpenTextSearch => {
-                self.sync_editors(cx);
-                self.open_text_search(window, cx);
-            }
-            Effect::OpenCommandPalette => {
-                self.sync_editors(cx);
-                self.open_palette(window, cx);
-            }
-            Effect::OpenUnresolvedLinks => {
-                self.sync_editors(cx);
-                self.open_unresolved_links(window, cx);
-            }
-            Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
-            Effect::ToggleContext => self.toggle_context(window, cx),
-            Effect::ToggleNoteList => self.toggle_list(window, cx),
-            Effect::ChooseListSource => {
-                self.sync_editors(cx);
-                self.choose_list_source(window, cx);
-            }
-            Effect::ShowFolder(folder) => {
-                self.sync_editors(cx);
-                self.show_folder(folder.as_deref(), window, cx);
-            }
-            Effect::ListView(change) => self.change_list_view(change, window, cx),
-            Effect::FocusPastEdge(Direction::Left) if self.list.read(cx).is_visible() => {
-                self.focus_list(window, cx);
-            }
-            Effect::FocusPastEdge(Direction::Left) if self.sidebar.read(cx).is_visible() => {
-                self.focus_sidebar(window, cx);
-            }
-            Effect::FocusPastEdge(Direction::Right) if self.context.read(cx).is_visible() => {
-                self.focus_context(window, cx);
-            }
-            Effect::FocusPastEdge(_) => {}
-            Effect::ChooseLink => {
-                self.sync_editors(cx);
-                self.open_link_choice(window, cx);
-            }
-            Effect::Dispatch(action) => {
-                self.sync_editors(cx);
-                window.dispatch_action(Box::new(Dispatch(action.into())), cx);
-            }
-            Effect::ChangeTags(request) => {
-                self.sync_editors(cx);
-                self.change_tags(&request, window, cx);
-            }
-            Effect::UndoVaultChange => {
-                self.sync_editors(cx);
-                self.undo_vault_change(cx);
-                self.focus(window, cx);
-            }
-            Effect::NewNote(request) => {
-                self.sync_editors(cx);
-                self.new_note(request, window, cx);
-            }
-            Effect::OpenDailyNote => {
-                self.sync_editors(cx);
-                self.open_daily_note(window, cx);
-            }
-            Effect::OpenTagPage(tag) => {
-                self.sync_editors(cx);
-                self.open_tag_page(&tag, window, cx);
-            }
-            Effect::Focus(command) => {
-                self.sync_editors(cx);
-                self.run_focus(command, window, cx);
-            }
-            Effect::OpenMessages => {
-                self.sync_editors(cx);
-                self.open_messages(window, cx);
-            }
-            Effect::SaveToggle { toggle, on } => {
-                self.sync_editors(cx);
-                self.save_toggle(toggle, on, cx);
-                self.focus(window, cx);
-            }
-        }
-    }
-
-    /// Una acción que llegó a la raíz sin que la atendiera su vista.
-    fn reroute(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
-        let visible = Visible {
-            sidebar: self.sidebar.read(cx).is_visible(),
-            list: self.list.read(cx).is_visible(),
-            context: self.context.read(cx).is_visible(),
-        };
-        match reroute(invocation.action.owner(), visible, self.overlay.is_some()) {
-            Reroute::Sidebar => self.focus_sidebar(window, cx),
-            Reroute::List => self.focus_list(window, cx),
-            Reroute::Context => self.focus_context(window, cx),
-            Reroute::Editor => self.focus(window, cx),
-            Reroute::Nowhere => {
-                let name = invocation.action.name();
-                let error = format!("{name} no tiene a quién llegar: su vista no está abierta");
-                self.workspace.update(cx, |workspace, _| {
-                    workspace.show_message(Message::Error(error));
-                });
-                cx.notify();
-                return;
-            }
-        }
-        window.dispatch_action(Box::new(Dispatch(invocation.clone())), cx);
-    }
-
-    fn toggle_panel(&mut self, view: PanelView, window: &mut Window, cx: &mut Context<Self>) {
-        let visible = self
-            .sidebar
-            .update(cx, |sidebar, cx| sidebar.toggle(view, window, cx));
-        if visible {
-            self.focus_sidebar(window, cx);
-        } else {
-            self.focus(window, cx);
-        }
-        cx.notify();
-    }
-
-    fn on_sidebar_event(
-        &mut self,
-        event: SidebarEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            SidebarEvent::Opened { focus_editor } => {
-                self.sync_editors(cx);
-                if focus_editor {
-                    self.focus(window, cx);
-                }
-                self.touch_focused(cx);
-            }
-            SidebarEvent::PanesChanged => self.sync_editors(cx),
-            // A la derecha del panel está la lista, si se ve.
-            SidebarEvent::FocusEditor if self.list.read(cx).is_visible() => {
-                self.focus_list(window, cx);
-            }
-            SidebarEvent::FocusEditor => self.focus(window, cx),
-            SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
-            SidebarEvent::Rename { from, to } => self.rename_entry(&from, &to, window, cx),
-            SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
-            SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
-            SidebarEvent::CreateNote(path) => self.create_panel_note(&path, window, cx),
-            SidebarEvent::ShowView { view, focus_list } => {
-                self.show_view(&view, focus_list, window, cx);
-            }
-        }
-        cx.notify();
-    }
-
     /// Un editor por panel del árbol, ni uno más.
     fn sync_editors(&mut self, cx: &mut Context<Self>) {
         let panes = self.workspace.read(cx).tree().panes();
@@ -419,110 +232,5 @@ impl WorkspaceView {
         self.overlay = None;
         self.focus(window, cx);
         cx.notify();
-    }
-
-    fn update_title(&mut self, window: &mut Window, cx: &Context<Self>) {
-        let workspace = self.workspace.read(cx);
-        let Ok(view) = workspace.view(workspace.focused()) else {
-            return;
-        };
-        let modified = if view.unsaved() { " [+]" } else { "" };
-        let title = format!("{}{modified} — Metalmind", view.document.display_name());
-        if title != self.title {
-            window.set_window_title(&title);
-            self.title = title;
-        }
-    }
-
-    fn render_node(&self, node: &Node, theme: &Theme) -> AnyElement {
-        match node {
-            Node::Pane(pane) => div()
-                .size_full()
-                .children(self.editors.get(pane).cloned())
-                .into_any_element(),
-            Node::Split { axis, children } => {
-                let cells = children.iter().enumerate().map(|(index, child)| {
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .min_h_0()
-                        .border_color(theme.ui.pane_border)
-                        .when(index > 0, |cell| match axis {
-                            Axis::Row => cell.border_l(theme.pane_border_width),
-                            Axis::Column => cell.border_t(theme.pane_border_width),
-                        })
-                        .child(self.render_node(child, theme))
-                });
-                div()
-                    .size_full()
-                    .flex()
-                    .map(|split| match axis {
-                        Axis::Row => split.flex_row(),
-                        Axis::Column => split.flex_col(),
-                    })
-                    .children(cells)
-                    .into_any_element()
-            }
-        }
-    }
-}
-
-impl Render for WorkspaceView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        FrameClock::render_started(cx);
-        // Un frame de la ventana, no de cada panel: lo que pide cualquier
-        // panel en este frame no sale de la caché.
-        self.formulas
-            .update(cx, |formulas, _| formulas.next_frame());
-        self.update_title(window, cx);
-        // Aquí y no al cambiar el workspace: un aviso que llega sin avisar
-        // también tiene su temporizador, que cuenta desde que se ve.
-        self.schedule_toasts(cx);
-        let theme = Theme::get(cx).clone();
-        let width = window.viewport_size().width;
-        self.list.update(cx, |list, cx| {
-            list.settle_visibility(width, theme.layout.list_open_min_width, cx);
-        });
-        let root = self.workspace.read(cx).tree().root().clone();
-        let element = div()
-            .size_full()
-            .font_family(theme.font_family.clone())
-            .map(|element| theme.ui_text(element))
-            .text_color(theme.ui.foreground)
-            .bg(theme.ui.background)
-            // Los comandos y las acciones del motor llegan aquí desde
-            // cualquier vista; lo demás llega solo si su vista no tenía el
-            // foco.
-            .on_action(
-                cx.listener(|view, Dispatch(invocation): &Dispatch, window, cx| {
-                    match invocation.action {
-                        Action::Command(_) => view.run(invocation, window, cx),
-                        Action::Vim(action) => view.execute_vim(action, window, cx),
-                        _ => view.reroute(invocation, window, cx),
-                    }
-                }),
-            );
-        let shown = self.sidebar.read(cx).shown();
-        let list = self.list.read(cx).is_visible();
-        let context = self.context.read(cx).is_visible();
-        element
-            .relative()
-            .flex()
-            .flex_row()
-            .child(sidebar::rail(shown, context, list, &theme))
-            .when(shown.is_some(), |element| {
-                element.child(self.sidebar.clone())
-            })
-            .when(list, |element| element.child(self.list.clone()))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(self.render_node(&root, &theme)),
-            )
-            .when(context, |element| element.child(self.context.clone()))
-            .children(self.render_toasts(&theme, cx))
-            .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }
 }

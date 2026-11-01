@@ -110,6 +110,13 @@ const SCENES: &[(&str, &[Step])] = &[
         "linea-de-comandos-historial",
         &[Step::Keys("<Esc>:noh<CR>:focus #rust<CR>:unfocus<CR>:")],
     ),
+    // `:e` completa los archivos del vault por su ruta (#45): muchos que
+    // coinciden y uno con carpeta y nombre que no caben.
+    ("linea-de-comandos-e", &[Step::Keys("<Esc>:e idea")]),
+    (
+        "linea-de-comandos-e-ruta-larga",
+        &[Step::Keys(r"<Esc>:e Una\ carpeta\ con")],
+    ),
     ("finder", &[Step::Keys("<Esc><Space>f")]),
     ("finder-filtrado", &[Step::Keys("idea")]),
     ("finder-ruta-larga", &[Step::Keys("<C-u>honda")]),
@@ -122,7 +129,13 @@ const SCENES: &[(&str, &[Step])] = &[
         &[Step::Keys("<C-u>#rust -#nada #2024/10 idea")],
     ),
     ("finder-buzon", &[Step::Keys("<C-u>-#")]),
+    // A la derecha, la vista previa de la nota alrededor de la fila marcada
+    // (#77), también más abajo en la lista.
     ("buscar", &[Step::Keys("<Esc><Space>/"), Step::Search]),
+    (
+        "buscar-otra-fila",
+        &[Step::Keys("<C-n><C-n><C-n><C-n><C-n><C-n>")],
+    ),
     ("buscar-vacio", &[Step::Keys("<C-u>zzqqxx")]),
     (
         "buscar-escrito-largo",
@@ -562,6 +575,13 @@ const SCENES: &[(&str, &[Step])] = &[
     ("toasts-historial", &[Step::Keys(":messages<CR>")]),
     ("toasts-historial-filtrado", &[Step::Keys("E486")]),
     ("toasts-de-nuevo", &[Step::Keys("<CR>")]),
+    // Los avisos de vim, con su texto de nvim (#40): grabando una macro, una
+    // búsqueda desde el final que sigue desde el principio. `q` termina la
+    // macro en la escena siguiente.
+    (
+        "aviso-de-vim",
+        &[Step::Keys("<Esc><Esc><C-w>l<C-w>l<Esc>qaG$/a<CR>")],
+    ),
     // Renombrar desde el árbol una nota con muchos links (las reuniones y
     // `listas.md` enlazan a `Metalmind/plan`; con el filtro, es la última
     // fila del árbol): la vista previa con el renombre primero y elegido (su
@@ -571,7 +591,7 @@ const SCENES: &[(&str, &[Step])] = &[
     (
         "renombrar-nota",
         &[Step::Keys(concat!(
-            "<Esc><Space>e/Metalmind/plan<CR>Gr<BS><BS><BS><BS>",
+            "q<Esc><Space>e/Metalmind/plan<CR>Gr<BS><BS><BS><BS>",
             "plan del proyecto con un nombre largo para ver como se recorta<CR>",
         ))],
     ),
@@ -677,6 +697,24 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("vistas-focus-escrito", &[Step::Keys("<Tab><CR>")]),
     ("vistas-focus-error", &[Step::Keys(":focus @nada<CR>")]),
+    // Un cambio de tags con un buffer sin guardar (#141, #142): la nota de
+    // la ruta más larga sigue sin poder guardarse, y `#ideas`, que también
+    // nombra una vista guardada, está en ella (sin acentos: XTest no los
+    // teclea). La vista previa la marca, `o` abre su línea con el aviso
+    // para volver, `space r` vuelve, aplicar deja el aviso con "Deshacer" y
+    // `space z` lo deshace en el buffer. Sin el focus de las vistas de
+    // antes, para que el finder llegue a la nota.
+    (
+        "tags-buffer-vista-previa",
+        &[Step::Keys(concat!(
+            "<Esc><Esc><C-w>o:unfocus<CR><Space>ffondo<CR>Go#ideas tambien aqui, todavia sin guardar<Esc>",
+            ":tagrename #ideas #ideas-con-un-nombre-larguisimo-para-ver-donde-se-corta-la-ruta<CR>jj",
+        ))],
+    ),
+    ("tags-buffer-abrir-linea", &[Step::Keys("o")]),
+    ("tags-buffer-volver", &[Step::Keys("<Space>r")]),
+    ("tags-buffer-aplicado", &[Step::Keys("<CR>")]),
+    ("tags-buffer-deshecho", &[Step::Keys("<Space>z")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

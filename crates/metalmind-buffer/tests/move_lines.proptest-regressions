@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc baf4bad0e0f444fb906067bfb11c3c73eba6d436c2fb8372ce21bc6c4277d08d # shrinks to count = 5, first = 4, len = 0, below = 3, empty = [false, false, false, true, false, false, false, false, false, false, false, false]
+cc 7924280df73632e71693b56a76fe6e985832860e61b6da0ee8263b2a22baf541 # shrinks to count = 4, first = 3, len = 0, below = 0, widths = [0, 0, 0, 1, 0, 0, 0, 0]

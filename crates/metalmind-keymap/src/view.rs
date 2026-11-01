@@ -152,6 +152,9 @@ named_actions! {
         SelectPrevious = "change_preview::select_previous",
         /// Quita el cambio elegido de lo que se aplica, o lo devuelve.
         ToggleChange = "change_preview::toggle_change",
+        /// Abre el archivo del cambio elegido en su línea; la vista previa
+        /// queda guardada para volver a ella.
+        OpenLine = "change_preview::open_line",
         /// Escribe lo que queda en el vault.
         Apply = "change_preview::apply",
         /// Cierra la vista previa sin tocar nada.

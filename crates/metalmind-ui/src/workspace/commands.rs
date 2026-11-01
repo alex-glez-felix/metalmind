@@ -10,7 +10,7 @@ use metalmind_buffer::Selection;
 use metalmind_config::Toggle;
 use metalmind_keymap::{Action, Command, Invocation};
 use metalmind_vault::SaveKind;
-use metalmind_vim::{Clipboard, Markdown, Mode};
+use metalmind_vim::{ArgumentKind, Clipboard, Markdown, Mode, file_name};
 
 use super::options;
 use super::pane_tree::{Axis, Direction};
@@ -80,6 +80,9 @@ pub enum Effect {
     ChangeTags(TagRequest),
     /// `:vaultundo`: la ventana deshace el último cambio que aplicó al vault.
     UndoVaultChange,
+    /// `space r`: la ventana vuelve a la vista previa de tags que se dejó
+    /// para abrir una línea.
+    ResumeTagChange,
     /// `:template`: la ventana, que tiene el vault, lee las plantillas y
     /// pregunta lo que falte.
     NewNote(NoteRequest),
@@ -151,7 +154,10 @@ impl Workspace {
         command: Command,
         argument: Option<&str>,
     ) -> Result<Effect, WorkspaceError> {
-        let path = argument.map(Path::new);
+        let file = argument
+            .filter(|_| command.argument() == ArgumentKind::FileName)
+            .map(file_name);
+        let path = file.as_deref().map(Path::new);
         match command {
             Command::Save => self.save(path, false).map(|_| Effect::Stay),
             Command::ForceSave => self.save(path, true).map(|_| Effect::Stay),
@@ -221,6 +227,7 @@ impl Workspace {
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
             Command::UndoVaultChange => Ok(Effect::UndoVaultChange),
+            Command::ResumeTagChange => Ok(Effect::ResumeTagChange),
             Command::NewNoteFromTemplate => Ok(Effect::NewNote(NoteRequest::parse(argument))),
             Command::OpenDailyNote => Ok(Effect::OpenDailyNote),
             Command::EditTagAliases => page_change(TagField::Aliases, argument),

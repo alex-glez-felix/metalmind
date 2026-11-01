@@ -122,6 +122,50 @@ fn armarla_de_nuevo_deja_lo_quitado() {
     assert_eq!(new.row(0).unwrap().line, Some(2), "a.md cambió de línea");
 }
 
+/// Si lo editado entre medio agrega filas antes de la elegida, sigue
+/// elegida la misma fila, no la que quedó en su número; si ya no está, la
+/// de su lugar.
+#[test]
+fn armarla_de_nuevo_elige_la_misma_fila_aunque_se_corra() {
+    let request = rename("rust", "lang");
+    let mut old = preview(&request, &rust_notes());
+    old.select(1);
+    let elegida = old.row(1).unwrap();
+    let (path, before) = (elegida.path.clone(), elegida.before.to_owned());
+    let more = tags(&[
+        ("a.md", "uno #rust\notro #rust\n"),
+        ("b.md", "#rust\ndos #Rust\n"),
+    ]);
+    let mut new = preview(&request, &more);
+    new.carry_over(&old);
+    let row = new.row(new.selected()).unwrap();
+    assert_eq!((row.path, row.before), (&path, before.as_str()));
+    assert_eq!(new.selected(), 2, "a.md tiene una fila más");
+
+    let gone = tags(&[("a.md", "uno #rust\n")]);
+    let mut fewer = preview(&request, &gone);
+    fewer.carry_over(&old);
+    assert_eq!(fewer.selected(), 0, "b.md ya no está: la de su lugar");
+}
+
+/// Dos líneas iguales dan dos filas iguales: quitar la segunda no quita la
+/// primera al rehacerla, y la elegida sigue siendo la segunda.
+#[test]
+fn dos_filas_iguales_se_distinguen_al_rehacerla() {
+    let request = rename("rust", "lang");
+    let same = tags(&[("a.md", "uno #rust\nuno #rust\n")]);
+    let mut old = preview(&request, &same);
+    old.select(1);
+    old.toggle_selected();
+    let mut new = preview(&request, &same);
+    new.carry_over(&old);
+    let dropped: Vec<bool> = (0..new.len())
+        .map(|row| new.row(row).unwrap().dropped)
+        .collect();
+    assert_eq!(dropped, [false, true]);
+    assert_eq!(new.selected(), 1);
+}
+
 #[test]
 fn quitar_una_fila_la_saca_de_lo_que_se_aplica() {
     let mut preview = preview(&rename("rust", "lang"), &rust_notes());
@@ -149,38 +193,42 @@ fn sin_cambios_no_se_aplica() {
     assert_eq!(preview.blocked(), Some(Blocked::Nothing));
 }
 
-/// Un archivo con cambios sin guardar bloquea mientras tenga alguna fila
-/// que se aplica.
+/// Las ediciones de un archivo con cambios sin guardar van a su buffer: se
+/// marcan y no bloquean (05 §5).
 #[test]
-fn un_archivo_sin_guardar_bloquea_mientras_se_toque() {
+fn una_edicion_en_un_buffer_sin_guardar_no_bloquea() {
     let request = rename("rust", "lang");
-    let mut preview = request
+    let preview = request
         .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
             file.as_str() == "a.md"
         })
         .unwrap()
         .unwrap();
-    assert_eq!(preview.row(0).unwrap().unsaved, Some(&path("a.md")));
+    let row = preview.row(0).unwrap();
     assert_eq!(
-        preview.blocked(),
-        Some(Blocked::Unsaved(vec![&path("a.md")]))
+        (row.path, row.unsaved, row.in_buffer),
+        (&path("a.md"), None, true)
     );
-    preview.toggle_selected();
+    assert!(!preview.row(1).unwrap().in_buffer, "b.md va al disco");
     assert_eq!(preview.blocked(), None);
 }
 
-/// Si se guarda con la vista previa abierta, como al autoguardar, deja de
-/// bloquear.
+/// La página con cambios sin guardar no se renombra por debajo de su
+/// buffer: bloquea mientras no se guarde, como al autoguardar.
 #[test]
-fn guardar_con_la_vista_previa_abierta_la_desbloquea() {
+fn renombrar_una_pagina_sin_guardar_bloquea_hasta_guardarla() {
+    let tags = tags(&[("a.md", "#rust\n"), ("tags/rust.md", "Del lenguaje.\n")]);
     let request = rename("rust", "lang");
     let mut preview = request
-        .preview(&rust_notes(), &VaultConfigText::Missing, |file| {
-            file.as_str() == "a.md"
+        .preview(&tags, &VaultConfigText::Missing, |file| {
+            file.as_str() == "tags/rust.md"
         })
         .unwrap()
         .unwrap();
-    assert!(preview.blocked().is_some());
+    assert_eq!(
+        preview.blocked(),
+        Some(Blocked::Unsaved(vec![&path("tags/rust.md")]))
+    );
     preview.set_unsaved(|_| false);
     assert_eq!(preview.blocked(), None);
 }

@@ -68,6 +68,9 @@ const TYPED_ARGUMENTS: &[(&str, Option<Completed>)] = &[
     (r#"focus "Mis no"#, Some((Command::Focus, "Mis no", true))),
     ("focus #rust ", Some((Command::Focus, "", false))),
     ("  :e  not", Some((Command::Edit, "not", false))),
+    (r"e Mis\ no", Some((Command::Edit, "Mis no", false))),
+    ("e Mis no", Some((Command::Edit, "Mis no", false))),
+    (r#"e "Mis"#, Some((Command::Edit, "\"Mis", false))),
     ("focus", None),
     ("wa x", None),
     ("nada x", None),
@@ -118,4 +121,61 @@ fn sin_argumento_que_completar_no_cambia_nada() {
     editor.vim.complete_argument("#Rust");
     assert_eq!(editor.vim.command_line(), Some("focus #r"));
     assert_eq!(editor.vim.typed_argument(), None);
+}
+
+/// El argumento de `:e` y la ruta que lee Metalmind.
+const FILE_NAMES: &[(&str, &str)] = &[
+    ("notas/a.md", "notas/a.md"),
+    (r"Mis\ notas/a.md", "Mis notas/a.md"),
+    ("a b.md", "a b.md"),
+    (r"x\ay", "xay"),
+    (r"x\\y", r"x\y"),
+    (r#"x\"y"#, "x\"y"),
+    (r"x\#y", "x#y"),
+    (r"x\", r"x\"),
+    ("lead.md  ", "lead.md"),
+    (r"a\ ", "a "),
+    ("\u{a0}x", "\u{a0}x"),
+    ("\tlead.md\t", "lead.md"),
+    ("x\u{a0}", "x\u{a0}"),
+    (r"a\ b\ c", "a b c"),
+];
+
+#[test]
+fn lee_la_ruta_de_e_como_vim() {
+    for &(argument, expected) in FILE_NAMES {
+        assert_eq!(metalmind_vim::file_name(argument), expected, "{argument:?}");
+    }
+}
+
+/// De la línea de `:` a la ruta: lo que `parse` deja del argumento también
+/// se lee como en nvim, con el espacio escapado del final.
+#[test]
+fn la_linea_de_e_llega_entera_a_la_ruta() {
+    for &(argument, expected) in FILE_NAMES {
+        let mut editor = support::Editor::app("|a");
+        let outcome = editor.keys(&format!(":e {argument}<CR>"));
+        let Some(metalmind_vim::KeyOutcome::Dispatch(invocation)) = outcome else {
+            panic!("{argument:?}: {outcome:?}");
+        };
+        let read = invocation.argument.as_deref().map(metalmind_vim::file_name);
+        assert_eq!(read.as_deref(), Some(expected), "{argument:?}");
+    }
+}
+
+#[test]
+#[cfg_attr(not(nvim_available), ignore = "nvim no está en el PATH")]
+fn nvim_abre_la_misma_ruta() {
+    let arguments: Vec<&str> = FILE_NAMES.iter().map(|&(argument, _)| argument).collect();
+    let expected: Vec<&str> = FILE_NAMES.iter().map(|&(_, name)| name).collect();
+    assert_eq!(support::nvim::file_names(&arguments), expected);
+}
+
+/// En `:e` se completa la ruta entera, aunque lleve espacios sin escapar.
+#[test]
+fn completar_en_e_cambia_la_ruta_entera() {
+    let mut editor = support::Editor::app("|a");
+    editor.keys(":e Mis no");
+    editor.vim.complete_argument(r"Mis\ notas/rust.md");
+    assert_eq!(editor.vim.command_line(), Some(r"e Mis\ notas/rust.md"));
 }

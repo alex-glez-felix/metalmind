@@ -287,6 +287,8 @@ color_group! {
         toast_error,
         /// La tecla que cierra los toasts.
         toast_hint,
+        /// El fondo de un botón de un toast, como "Deshacer", bajo el ratón.
+        toast_button_hover,
     }
 }
 

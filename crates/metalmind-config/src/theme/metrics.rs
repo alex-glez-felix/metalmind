@@ -234,6 +234,10 @@ metric_group! {
         /// no se encoge como las demás; si no cabe, se recorta.
         pane_header_folder_max_share: Fraction,
         picker_width: Length,
+        /// Lo más de la ventana que ocupa a lo ancho el picker, con su vista
+        /// previa, y lo que flota como él: la línea de `:` y la vista previa
+        /// de un cambio en el vault.
+        picker_max_share: Fraction,
         /// Del borde de arriba de la ventana al picker.
         picker_top: Length,
         /// Cuántas filas se ven antes de hacer scroll.
@@ -246,6 +250,12 @@ metric_group! {
         /// Lo mínimo de una fila del picker que se queda el detalle (la
         /// ruta, el atajo) cuando el texto no cabe: una fracción de la fila.
         picker_detail_share: Fraction,
+        /// El ancho de la vista previa a la derecha de la lista, en los
+        /// pickers que la tienen (`space /`).
+        picker_preview_width: Length,
+        /// Lo mínimo que ocupa la vista previa: si no cabe junto a la lista,
+        /// no se muestra.
+        picker_preview_min_width: Length,
         /// Las líneas del cambio elegido, entero, bajo la lista de la vista
         /// previa de un cambio en el vault; lo que no cabe se recorta.
         change_preview_detail_lines: Count,

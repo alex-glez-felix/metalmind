@@ -163,15 +163,18 @@ impl WorkspaceView {
         cx.notify();
     }
 
-    /// Agrega `tags` al frontmatter de `note`. Como un cambio de tags, no
-    /// escribe por debajo de un buffer con cambios y `:vaultundo` lo deshace.
+    /// Agrega `tags` al frontmatter de `note`. Como un cambio de tags, si
+    /// tiene cambios sin guardar va a su buffer, y `:vaultundo` lo deshace.
     fn tag_note(&mut self, note: &VaultPath, tags: &[String], cx: &mut Context<Self>) {
-        if self.unsaved_paths(cx).contains(note) {
-            let text = format!("no se etiquetó {note}: tiene cambios sin guardar; guárdala antes");
-            return self.tell(Message::Error(text), cx);
-        }
         let root = self.session.read(cx).root().to_owned();
-        let text = match metalmind_vault::read(&root.join(note.as_str())) {
+        let file = root.join(note.as_str());
+        let buffer = self
+            .unsaved_paths(cx)
+            .contains(note)
+            .then(|| self.workspace.read(cx).file_text(&file))
+            .flatten();
+        let text = match buffer.map_or_else(|| metalmind_vault::read(&file), |text| Ok(Some(text)))
+        {
             Ok(Some(text)) => text,
             Ok(None) => String::new(),
             Err(error) => return self.tell(Message::Error(error.to_string()), cx),

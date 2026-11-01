@@ -1,7 +1,8 @@
 //! La lista del autocompletado de la palabra que se escribe en el
 //! argumento de un comando de `:` (#156), sin GPUI. En `:focus`, tras `#` o
 //! `-#` van los tags, los mismos que en `#` dentro de una nota, tras `@` las
-//! vistas guardadas, y si no las carpetas del vault. Aceptar escribe la
+//! vistas guardadas, y si no las carpetas del vault; en `:e`, sus archivos
+//! (#45). Aceptar escribe la palabra entera, con sus escapes.
 //! palabra entera, con sus escapes.
 
 use std::collections::BTreeSet;
@@ -10,16 +11,17 @@ use std::sync::Arc;
 use metalmind_config::SavedView;
 use metalmind_search::FuzzyMatcher;
 use metalmind_syntax::TagPlace;
+use metalmind_vault::VaultPath;
 use metalmind_vault::tags::TagCompletion;
 use metalmind_vim::{ArgumentWord, escape_argument};
 
-use super::{FolderCandidates, FolderCompletions, Selection, TagCompletions, ViewCompletions};
+use super::{PathCandidates, PathCompletions, Selection, TagCompletions, ViewCompletions};
 use crate::focus::folder_argument;
 
-/// Lo que se puede ofrecer, ya preparado para filtrar.
-pub struct ArgumentSources<'a> {
+/// Lo que puede ofrecer `:focus`, ya preparado para filtrar.
+pub struct FocusSources<'a> {
     pub tags: Arc<[TagCompletion]>,
-    pub folders: Arc<FolderCandidates>,
+    pub folders: Arc<PathCandidates>,
     pub views: Arc<[SavedView]>,
     /// Para nombres de tags y de vistas.
     pub names: &'a mut FuzzyMatcher,
@@ -40,9 +42,11 @@ pub enum ArgumentList {
         list: TagCompletions,
         negated: bool,
     },
-    Folders(FolderCompletions),
+    Folders(PathCompletions),
     /// `@gs`.
     Views(ViewCompletions),
+    /// Los archivos de `:e`.
+    Files(PathCompletions),
 }
 
 /// Lo que pide una palabra de `:focus`.
@@ -83,16 +87,13 @@ impl ArgumentCompletions {
     #[must_use]
     pub fn focus(
         word: &ArgumentWord,
-        sources: ArgumentSources<'_>,
+        sources: FocusSources<'_>,
         previous: Option<Self>,
     ) -> Option<Self> {
         if word.range.is_empty() {
             return None;
         }
-        let previous = previous
-            .filter(|previous| previous.word.text == word.text)
-            .filter(|previous| previous.word.literal_start == word.literal_start)
-            .map(|previous| previous.list);
+        let previous = Self::same_word(word, previous);
         let list = match (FocusWord::of(word), previous) {
             (FocusWord::Tag { typed, negated }, Some(ArgumentList::Tags { list, .. })) => {
                 if list.is_for(&sources.tags, typed, TagPlace::Inline) {
@@ -111,15 +112,10 @@ impl ArgumentCompletions {
             )
             .map(|list| ArgumentList::Tags { list, negated }),
             (FocusWord::Folder(typed), Some(ArgumentList::Folders(list))) => {
-                if list.is_for(&sources.folders, typed) {
-                    Some(list)
-                } else {
-                    list.with_candidates(sources.folders, sources.paths)
-                }
-                .map(ArgumentList::Folders)
+                following(list, sources.folders, typed, sources.paths).map(ArgumentList::Folders)
             }
             (FocusWord::Folder(typed), _) => {
-                FolderCompletions::open(sources.folders, typed, sources.paths)
+                PathCompletions::open(sources.folders, typed, sources.paths)
                     .map(ArgumentList::Folders)
             }
             (FocusWord::View(typed), Some(ArgumentList::Views(list))) => {
@@ -140,6 +136,45 @@ impl ArgumentCompletions {
         })
     }
 
+    /// La lista de la ruta `word` de `:e` entre los archivos `files`. Si
+    /// sigue a la de `previous` con más escrito, solo filtra entre lo que
+    /// esta mostraba; con lo mismo escrito, como [`ArgumentCompletions::focus`].
+    /// Una ruta que no puede ser del vault (absoluta, con `..`) no tiene
+    /// lista: lo que se escribe es relativo a la raíz del vault.
+    #[must_use]
+    pub fn edit(
+        word: &ArgumentWord,
+        files: Arc<PathCandidates>,
+        matcher: &mut FuzzyMatcher,
+        previous: Option<Self>,
+    ) -> Option<Self> {
+        let typed = word.text.as_str();
+        if typed.is_empty() || VaultPath::new(typed.trim_end_matches('/')).is_err() {
+            return None;
+        }
+        let list = match previous.map(|previous| previous.list) {
+            Some(ArgumentList::Files(list)) if list.typed() == typed => {
+                following(list, files, typed, matcher)
+            }
+            Some(ArgumentList::Files(list)) if list.is_among(&files) => {
+                list.retyped(typed, matcher)
+            }
+            _ => PathCompletions::open(files, typed, matcher),
+        }?;
+        Some(Self {
+            word: word.clone(),
+            list: ArgumentList::Files(list),
+        })
+    }
+
+    /// La lista de `previous` si es de la misma palabra que `word`.
+    fn same_word(word: &ArgumentWord, previous: Option<Self>) -> Option<ArgumentList> {
+        previous
+            .filter(|previous| previous.word.text == word.text)
+            .filter(|previous| previous.word.literal_start == word.literal_start)
+            .map(|previous| previous.list)
+    }
+
     #[must_use]
     pub fn list(&self) -> &ArgumentList {
         &self.list
@@ -149,7 +184,7 @@ impl ArgumentCompletions {
     pub fn len(&self) -> usize {
         match &self.list {
             ArgumentList::Tags { list, .. } => list.rows().len(),
-            ArgumentList::Folders(list) => list.rows().len(),
+            ArgumentList::Folders(list) | ArgumentList::Files(list) => list.rows().len(),
             ArgumentList::Views(list) => list.rows().len(),
         }
     }
@@ -158,7 +193,7 @@ impl ArgumentCompletions {
     pub fn selection(&self) -> &Selection {
         match &self.list {
             ArgumentList::Tags { list, .. } => list.selection(),
-            ArgumentList::Folders(list) => list.selection(),
+            ArgumentList::Folders(list) | ArgumentList::Files(list) => list.selection(),
             ArgumentList::Views(list) => list.selection(),
         }
     }
@@ -166,13 +201,13 @@ impl ArgumentCompletions {
     pub fn selection_mut(&mut self) -> &mut Selection {
         match &mut self.list {
             ArgumentList::Tags { list, .. } => list.selection_mut(),
-            ArgumentList::Folders(list) => list.selection_mut(),
+            ArgumentList::Folders(list) | ArgumentList::Files(list) => list.selection_mut(),
             ArgumentList::Views(list) => list.selection_mut(),
         }
     }
 
     /// La palabra que escribe aceptar en lugar de la escrita: `#Rust`,
-    /// `-#Rust`, `@Para\ hoy` o `Mis\ notas/`.
+    /// `-#Rust`, `@Para\ hoy`, `Mis\ notas/` o `Mis\ notas/rust.md`.
     #[must_use]
     pub fn accept(&self) -> String {
         match &self.list {
@@ -182,7 +217,22 @@ impl ArgumentCompletions {
             }
             ArgumentList::Folders(list) => folder_argument(list.accept()),
             ArgumentList::Views(list) => format!("@{}", escape_argument(&list.accept().name)),
+            ArgumentList::Files(list) => escape_argument(list.accept().as_str()),
         }
+    }
+}
+
+/// `list` entre `candidates`, con `typed` escrito: la misma si nada cambió.
+fn following(
+    list: PathCompletions,
+    candidates: Arc<PathCandidates>,
+    typed: &str,
+    matcher: &mut FuzzyMatcher,
+) -> Option<PathCompletions> {
+    if list.is_for(&candidates, typed) {
+        Some(list)
+    } else {
+        list.with_candidates(candidates, matcher)
     }
 }
 

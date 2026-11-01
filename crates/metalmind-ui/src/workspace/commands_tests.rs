@@ -58,6 +58,23 @@ fn e_abre_otro_archivo_en_el_panel() {
     );
 }
 
+/// La ruta se lee como en vim: `\ ` es un espacio del nombre, así se
+/// abre lo que escribe el autocompletado de `:e` (#45).
+#[test]
+fn e_y_w_leen_los_escapes_de_la_ruta() {
+    let (dir, mut session) = two_files();
+    fs::create_dir(path(&dir, "Mis notas")).unwrap();
+    fs::write(path(&dir, "Mis notas/c.md"), "c\n").unwrap();
+    let escaped = |name: &str| format!("{}/{name}", dir.path().display());
+    session.keys(&format!(":e {}⏎", escaped(r"Mis\ notas/c.md")));
+    assert_eq!(shown(&session), path(&dir, "Mis notas/c.md"));
+    session.keys(&format!(":w {}⏎", escaped(r"otra\ copia.md")));
+    assert_eq!(
+        fs::read_to_string(path(&dir, "otra copia.md")).unwrap(),
+        "c\n"
+    );
+}
+
 #[test]
 fn e_de_un_archivo_sin_salto_final_avisa_noeol() {
     let (dir, mut session) = two_files();
@@ -524,7 +541,7 @@ fn set_con_una_opcion_desconocida_avisa() {
     session.keys(":set list⏎");
     assert_eq!(
         session.workspace.messages().last(),
-        Some(&Message::Error("E518: opción desconocida: list".to_owned()))
+        Some(&Message::Error("E518: Unknown option: list".to_owned()))
     );
     assert_eq!(numbers(&session, session.pane()), LineNumbers::HYBRID);
 }
@@ -1044,12 +1061,12 @@ fn wa_muestra_un_solo_toast() {
     session.keys("iy⎋:wa⏎");
     let toasts = session.workspace.messages().toasts();
     assert_eq!(toasts.len(), 1, "{toasts:?}");
-    assert!(toasts[0].1.text().ends_with("escritos"));
+    assert!(toasts[0].1.text().ends_with(" written"));
     let written = session
         .workspace
         .messages()
         .history()
-        .filter(|(_, message)| message.text().ends_with("escritos"))
+        .filter(|(_, message)| message.text().ends_with(" written"))
         .count();
     assert_eq!(written, 2);
 }
