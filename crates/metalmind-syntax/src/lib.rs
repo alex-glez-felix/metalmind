@@ -10,6 +10,7 @@ mod anchor;
 mod code;
 mod frontmatter;
 mod link;
+mod list_item;
 mod markdown_link;
 mod math;
 pub mod note_name;
@@ -26,6 +27,7 @@ pub use anchor::{BlockId, Heading};
 pub use code::fenced_block_end;
 pub use frontmatter::{Entry, Frontmatter, Property, PropertyValue, Value};
 pub use link::{Link, LinkSyntax, Subpath};
+pub use list_item::{Checkbox, ListItem, ListMarker, MAX_LIST_NUMBER};
 pub use resolve::{
     Resolution, TargetKey, path_keys, path_parent_key, resolve, resolve_from, target_key,
 };

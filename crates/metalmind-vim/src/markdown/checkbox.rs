@@ -21,12 +21,12 @@ pub(crate) fn toggle_checkboxes(
                 return None;
             }
             let start = buffer.line_start(line);
-            Some(match item.checkbox.clone() {
+            Some(match item.checkbox() {
                 Some(inside) => {
                     let mark = if item.is_checked() { " " } else { "x" };
                     Edit::replace(start + inside.start..start + inside.end, mark)
                 }
-                None => Edit::insert(start + item.content, "[ ] "),
+                None => Edit::insert(start + item.content(), "[ ] "),
             })
         })
         .collect()
