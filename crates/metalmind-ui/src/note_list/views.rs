@@ -3,7 +3,7 @@
 //! atómico.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use metalmind_config::edit::EditError;
 use metalmind_config::{Diagnostic, Loaded, SavedView, VaultConfig};
@@ -44,16 +44,23 @@ pub fn change(
     root: &Path,
     change: impl FnOnce(&str, &VaultConfig) -> Result<String, ViewsError>,
 ) -> Result<Vec<SavedView>, ViewsError> {
-    let file = VaultConfig::file(root);
-    let folder = file.parent().unwrap_or(root);
-    // Escribir a través de un enlace podría tocar algo fuera del vault.
-    for path in [folder, file.as_path()] {
-        if fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-            return Err(ViewsError::Symlink(path.display().to_string()));
-        }
+    if let Some(link) = symlink(root) {
+        return Err(ViewsError::Symlink(link.display().to_string()));
     }
+    let file = VaultConfig::file(root);
     let config = config_file::change(&file, VaultConfig::parse, change)?;
     Ok(config.views().to_vec())
+}
+
+/// `.metalmind/` o su config, si es un enlace simbólico: escribir a través
+/// de él podría tocar algo fuera del vault.
+#[must_use]
+pub fn symlink(root: &Path) -> Option<PathBuf> {
+    let file = VaultConfig::file(root);
+    let folder = file.parent().unwrap_or(root).to_owned();
+    [folder, file].into_iter().find(|path| {
+        fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+    })
 }
 
 /// La vista de `views` que se llama `name` sin distinguir mayúsculas.

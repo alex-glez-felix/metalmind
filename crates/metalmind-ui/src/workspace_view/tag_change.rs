@@ -13,7 +13,7 @@ use super::overlay::Overlay;
 use super::vault_undo::ListFollowed;
 use crate::change_preview::{ChangePreviewEvent, ChangePreviewView};
 use crate::note_list::load_views;
-use crate::tag_change::{TagRequest, VaultConfigText};
+use crate::tag_change::{TagRequest, VaultConfigText, config_path};
 use crate::workspace::{Message, shown_path};
 
 impl WorkspaceView {
@@ -168,10 +168,11 @@ impl WorkspaceView {
     /// Los archivos del vault con cambios sin guardar en un buffer.
     pub(super) fn unsaved_paths(&self, cx: &Context<Self>) -> HashSet<VaultPath> {
         let session = self.session.read(cx);
+        let root = session.root();
         self.workspace
             .read(cx)
             .unsaved_files()
-            .filter_map(|(file, _)| session.vault_path(file))
+            .filter_map(|(file, _)| session.vault_path(file).or_else(|| config_path(root, file)))
             .collect()
     }
 

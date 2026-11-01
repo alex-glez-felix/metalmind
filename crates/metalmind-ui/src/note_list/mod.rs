@@ -23,4 +23,6 @@ pub use self::tagging::tag_edit;
 pub use self::view::{NoteListEvent, NoteListView};
 pub use self::view_name::{ViewNameProblem, ViewNamePurpose, ViewNameQuestion};
 pub use self::views::{DraftError, ViewDraft, ViewsError};
-pub use self::views::{change as change_views, load as load_views, named as view_named};
+pub use self::views::{
+    change as change_views, load as load_views, named as view_named, symlink as views_symlink,
+};

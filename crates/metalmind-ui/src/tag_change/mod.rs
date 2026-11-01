@@ -10,7 +10,7 @@ use metalmind_vault::VaultPath;
 use metalmind_vault::tags::{PageChange, PlanError, PlanNotice, TagPlan, Tags, tag_name};
 
 pub use self::field::{FieldError, TagField};
-pub use self::views::VaultConfigText;
+pub use self::views::{VaultConfigText, config_path};
 use crate::change_preview::{ChangePreview, Notice};
 
 /// Un cambio de tags pedido, con los nombres como se escribieron.
