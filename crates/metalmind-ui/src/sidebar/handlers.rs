@@ -81,15 +81,8 @@ impl Sidebar {
         self.navigate(cx, |outline| outline.collapse_or_parent());
     }
 
-    /// En los backlinks, `l` en una nota la abre o baja a sus links, como
-    /// en una carpeta, y en un link lo abre.
     fn expand_or_open(&mut self, _: &mut Window, cx: &mut Context<Self>) {
-        let is_backlink_note = self.panel.view == PanelView::Backlinks
-            && matches!(
-                self.panel.backlinks.selected_entry(),
-                Some(crate::backlinks::Row::Note { .. })
-            );
-        if !is_backlink_note && self.open_selected_file(Placement::Current, cx) {
+        if self.open_selected_file(Placement::Current, cx) {
             return;
         }
         self.navigate(cx, |outline| outline.expand_or_enter());
@@ -109,8 +102,7 @@ impl Sidebar {
         let Some(path) = outline.selected_file().cloned() else {
             return false;
         };
-        let at = outline.selected_position();
-        self.open(&path, at, placement, true, cx);
+        self.open(&path, placement, true, cx);
         true
     }
 
@@ -237,7 +229,6 @@ impl Sidebar {
     fn toggle_view(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         let moved = self.panel.switch_view();
-        self.release_backlinks(cx);
         self.reveal_tag_row(moved);
         cx.notify();
     }

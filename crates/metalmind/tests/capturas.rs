@@ -429,11 +429,11 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("focus-menu-salir", &[Step::RightClickRow(1)]),
     ("sin-focus", &[Step::Keys("<Esc>F")]),
-    // El panel de backlinks: muchas notas con rutas hondas, líneas largas y
+    // El panel de contexto: muchas notas con rutas hondas, líneas largas y
     // multibyte que enlazan a `Metalmind/plan` (llegan como de otro
-    // programa), el final de la lista, una nota cerrada, el menú de la
-    // última fila junto al borde y la nota abierta en su link, que no tiene
-    // backlinks.
+    // programa), el final de la lista, una nota cerrada, los salientes con
+    // nombres larguísimos que no llevan a nada y la nota abierta en su
+    // link, que no tiene backlinks.
     (
         "backlinks",
         &[
@@ -444,9 +444,10 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("backlinks-final", &[Step::Keys("G")]),
     ("backlinks-plegado", &[Step::Keys("ggjhh")]),
-    ("backlinks-menu-borde", &[Step::RightClickBottomRow]),
-    ("backlinks-abierto", &[Step::Keys("<Esc>gg<CR>")]),
-    // Los links sin destino (`space u`): muchos, con nombres más largos que
+    ("contexto-salientes", &[Step::Keys("<Tab>")]),
+    ("backlinks-abierto", &[Step::Keys("<Tab>gg<CR>")]),
+    // Los links sin destino (`space u`), con el panel de contexto ya
+    // cerrado: muchos, con nombres más largos que
     // el picker, multibyte y emoji (llegan como de otro programa); filtrados,
     // sin resultados y el elegido abierto en el editor, donde se ve con el
     // color de los links sin destino.
@@ -455,7 +456,8 @@ const SCENES: &[(&str, &[Step])] = &[
         &[
             Step::Files(vault::write_unresolved),
             Step::Settle,
-            Step::Keys("<Space>u"),
+            // El panel de contexto se queda abierto hasta que se cierra.
+            Step::Keys("<Space>b<Esc><Space>u"),
         ],
     ),
     ("sin-destino-filtrado", &[Step::Keys("tarea 1")]),

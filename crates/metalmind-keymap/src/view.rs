@@ -94,6 +94,32 @@ named_actions! {
 }
 
 named_actions! {
+    /// Del panel de contexto (#164): las pestañas de links que llegan a la
+    /// nota activa y de los que salen de ella, y moverse y abrir como en el
+    /// árbol.
+    pub enum ContextAction {
+        SelectNext = "context::select_next",
+        SelectPrevious = "context::select_previous",
+        SelectFirst = "context::select_first",
+        SelectLast = "context::select_last",
+        /// Cierra la nota o sube a la que contiene el link.
+        CollapseOrParent = "context::collapse_or_parent",
+        /// Abre la nota o baja a su primer link; en un link, lo abre.
+        ExpandOrOpen = "context::expand_or_open",
+        /// Abre la fila elegida en el panel de edición y le pasa el foco.
+        Open = "context::open",
+        OpenSplitRight = "context::open_split_right",
+        OpenSplitDown = "context::open_split_down",
+        /// La otra pestaña: enlazan aquí o salientes.
+        NextTab = "context::next_tab",
+        /// Cierra el panel y le devuelve el foco al editor.
+        Close = "context::close",
+        /// Le devuelve el foco al panel de edición, sin cerrar.
+        FocusEditor = "context::focus_editor",
+    }
+}
+
+named_actions! {
     /// De cualquier picker: moverse por la lista como en Telescope y Zed, y
     /// editar el input como en readline.
     pub enum PickerAction {
@@ -160,6 +186,8 @@ pub mod context {
     pub const NOTE_LIST: &str = "NoteList";
     /// Escribiendo el filtro o los tags en la lista de notas.
     pub const NOTE_LIST_INPUT: &str = "NoteListInput";
+    /// El panel de contexto con el foco.
+    pub const CONTEXT: &str = "Context";
     /// Lo que se agrega al de un picker si abre en un split.
     pub const SPLITS: &str = "splits";
 }
@@ -183,6 +211,7 @@ pub enum View {
     ChangePreview,
     NoteList,
     NoteListInput,
+    Context,
 }
 
 impl View {
@@ -202,6 +231,7 @@ impl View {
             Self::ChangePreview => context::CHANGE_PREVIEW,
             Self::NoteList => context::NOTE_LIST,
             Self::NoteListInput => context::NOTE_LIST_INPUT,
+            Self::Context => context::CONTEXT,
         }
     }
 }

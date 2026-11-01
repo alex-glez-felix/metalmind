@@ -501,6 +501,16 @@ fn tree_row(row: i16) -> (i16, i16) {
     (RAIL + 60, ROW + ROW * row + ROW / 2)
 }
 
+/// El centro de la fila `row` del panel de contexto, a la derecha de la
+/// ventana de 1280 px: mide 380 y empieza con su encabezado y sus pestañas,
+/// cada uno de una fila y con su borde de 1 px abajo.
+fn context_row(row: i16) -> (i16, i16) {
+    const WIDTH: i16 = 1280;
+    const PANEL: i16 = 380;
+    const ROW: i16 = 26;
+    (WIDTH - PANEL / 2, 2 * (ROW + 1) + ROW * row + ROW / 2)
+}
+
 /// Como nvim con `hidden`: abrir otra nota desde el árbol con la actual
 /// modificada no da E37; la de antes vuelve con sus cambios, y `:q` con
 /// una nota oculta modificada no sale: la muestra.
@@ -926,8 +936,9 @@ fn la_lista_de_links_escribe_el_destino_que_no_empata() {
     smoke.wait_contents("a.md", "hola [[proyectos/plan]] y\n");
 }
 
-/// `space b` muestra los backlinks de la nota activa; `j` baja al link de
-/// `b.md` y `enter` abre esa nota con el cursor en el link.
+/// `space b` abre el panel de contexto en los backlinks de la nota activa;
+/// `j` baja al link de `b.md` y `enter` abre esa nota con el cursor en el
+/// link.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn los_backlinks_abren_la_nota_en_el_link() {
@@ -941,9 +952,35 @@ fn los_backlinks_abren_la_nota_en_el_link() {
     smoke.wait_contents("b.md", "uno\ndos X[[a]] tres\n");
 }
 
-/// Un clic en un backlink abre su nota y deja el foco en el panel: la
-/// lista sigue siendo la de la nota de antes, así que `j j` y `enter` abren
-/// el link de la otra nota.
+/// En el panel de contexto, `tab` pasa a los links que salen de la nota y
+/// `enter` abre el destino elegido.
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn los_salientes_abren_su_destino() {
+    let smoke = Smoke::new();
+    smoke.without_autosave();
+    smoke.write(
+        "a.md",
+        "ver [[c]] y [[b]]
+",
+    );
+    smoke.write(
+        "b.md", "nada
+",
+    );
+    smoke.write(
+        "c.md", "ce
+",
+    );
+    let mut metalmind = smoke.launch(&["a.md"]);
+    let window = metalmind.window();
+    window.type_keys("<Space>b<Tab>j<CR>");
+    window.wait_title("de b.md", |title| title.starts_with("b.md"));
+}
+
+/// Un clic en un backlink abre su nota y deja el foco en el panel de
+/// contexto: sigue siendo el de la nota de antes, así que `j j` y `enter`
+/// abren el link de la otra nota.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
 fn un_clic_en_un_backlink_deja_recorrer_la_lista() {
@@ -955,7 +992,7 @@ fn un_clic_en_un_backlink_deja_recorrer_la_lista() {
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
     window.type_keys("<Space>b");
-    let (x, y) = tree_row(1);
+    let (x, y) = context_row(1);
     window.click(x, y);
     window.wait_title("de b.md", |title| title.starts_with("b.md"));
     window.type_keys("jj<CR>");
@@ -964,12 +1001,12 @@ fn un_clic_en_un_backlink_deja_recorrer_la_lista() {
     smoke.wait_contents("c.md", "y X[[a]]\n");
 }
 
-/// Tras abrir un backlink con un clic, cambiar de vista suelta la lista: al
-/// volver muestra los backlinks de la nota abierta. Aquí `b.md` tiene uno
-/// de `c.md`, así que `enter` lo abre.
+/// Tras abrir un backlink con un clic, cerrar el panel lo suelta: al volver
+/// muestra los backlinks de la nota abierta. Aquí `b.md` tiene uno de
+/// `c.md`, así que `enter` lo abre.
 #[test]
 #[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
-fn cambiar_de_vista_suelta_la_lista_de_backlinks() {
+fn cerrar_el_panel_de_contexto_suelta_su_nota() {
     let smoke = Smoke::new();
     smoke.without_autosave();
     smoke.write("a.md", "# A\n");
@@ -978,10 +1015,10 @@ fn cambiar_de_vista_suelta_la_lista_de_backlinks() {
     let mut metalmind = smoke.launch(&["a.md"]);
     let window = metalmind.window();
     window.type_keys("<Space>b");
-    let (x, y) = tree_row(1);
+    let (x, y) = context_row(1);
     window.click(x, y);
     window.wait_title("de b.md", |title| title.starts_with("b.md"));
-    window.type_keys("TTTj<CR>");
+    window.type_keys("<Esc><Space>bj<CR>");
     window.wait_title("de c.md", |title| title.starts_with("c.md"));
     window.type_keys("iX<Esc>:w<CR>");
     smoke.wait_contents("c.md", "y X[[b]]\n");

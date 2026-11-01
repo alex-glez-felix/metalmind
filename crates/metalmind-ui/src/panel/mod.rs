@@ -14,22 +14,18 @@ use metalmind_vault::{EntryKind, InvalidPath, VaultChange, VaultPath};
 
 pub use self::marks::{Fill, RowMarks};
 pub use self::outline::Outline;
-use crate::backlinks::BacklinkOutline;
 use crate::file_tree::FileTree;
 use crate::focus::{Focus, InScope};
 use crate::picker::InputLine;
 use crate::tag_change::{FieldError, TagField, TagRequest};
 use crate::tag_outline::TagOutline;
-use crate::workspace::LinePosition;
 
-/// Las vistas del panel: carpetas, tags (05 §3) y los backlinks de la
-/// nota activa.
+/// Las vistas del panel: carpetas y tags (05 §3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PanelView {
     #[default]
     Folders,
     Tags,
-    Backlinks,
 }
 
 impl PanelView {
@@ -38,8 +34,7 @@ impl PanelView {
     pub fn next(self) -> Self {
         match self {
             Self::Folders => Self::Tags,
-            Self::Tags => Self::Backlinks,
-            Self::Backlinks => Self::Folders,
+            Self::Tags => Self::Folders,
         }
     }
 }
@@ -57,8 +52,6 @@ pub struct Shown {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClickOpen {
     pub path: VaultPath,
-    /// Dónde, si la fila lo dice (un backlink).
-    pub at: Option<LinePosition>,
     /// El doble clic le pasa el foco al editor; el simple lo deja en el
     /// árbol.
     pub focus_editor: bool,
@@ -159,7 +152,6 @@ pub struct Panel {
     pub view: PanelView,
     pub tree: FileTree,
     pub tags: TagOutline,
-    pub backlinks: BacklinkOutline,
     prompt: Option<Prompt>,
     /// El último error de una operación, hasta la próxima.
     error: Option<String>,
@@ -175,7 +167,6 @@ impl Panel {
             view,
             tree,
             tags,
-            backlinks: BacklinkOutline::new(Arc::default()),
             prompt: None,
             error: None,
             focus_folder: None,
@@ -251,7 +242,6 @@ impl Panel {
         match self.view {
             PanelView::Folders => &self.tree,
             PanelView::Tags => &self.tags,
-            PanelView::Backlinks => &self.backlinks,
         }
     }
 
@@ -259,7 +249,6 @@ impl Panel {
         match self.view {
             PanelView::Folders => &mut self.tree,
             PanelView::Tags => &mut self.tags,
-            PanelView::Backlinks => &mut self.backlinks,
         }
     }
 
@@ -275,7 +264,6 @@ impl Panel {
         if let Some(path) = outline.selected_file() {
             return Some(ClickOpen {
                 path: path.clone(),
-                at: outline.selected_position(),
                 focus_editor: count > 1,
             });
         }
@@ -387,7 +375,7 @@ impl Panel {
     }
 
     /// El focus de la fila elegida: una carpeta o un tag. Un archivo no es
-    /// un alcance, ni una fila de los backlinks.
+    /// un alcance.
     #[must_use]
     pub fn selected_focus(&self) -> Option<Focus> {
         match self.view {
@@ -397,7 +385,6 @@ impl Panel {
                 .filter(|row| row.is_folder())
                 .map(|row| Focus::folder(row.path.clone())),
             PanelView::Tags => self.selected_tag().as_deref().map(Focus::tag),
-            PanelView::Backlinks => None,
         }
     }
 

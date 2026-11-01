@@ -128,6 +128,7 @@ fn las_medidas_de_fabrica_son_las_de_antes() {
         ("rail_width", theme.layout.rail_width, 36.),
         ("rail_button_size", theme.layout.rail_button_size, 28.),
         ("list_width", theme.layout.list_width, 360.),
+        ("context_width", theme.layout.context_width, 380.),
         (
             "list_open_min_width",
             theme.layout.list_open_min_width,

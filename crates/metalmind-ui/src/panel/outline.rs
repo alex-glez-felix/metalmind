@@ -4,8 +4,6 @@
 
 use metalmind_vault::VaultPath;
 
-use crate::workspace::LinePosition;
-
 pub trait Outline {
     fn selected_row(&self) -> Option<usize>;
     /// Selecciona `row`, o la última si no hay tantas.
@@ -20,11 +18,6 @@ pub trait Outline {
     fn selected_path(&self) -> Option<&VaultPath>;
     /// El archivo que abre la fila seleccionada: no una carpeta ni un tag.
     fn selected_file(&self) -> Option<&VaultPath>;
-    /// Dónde abre ese archivo; `None` es donde quedó el cursor la última vez.
-    fn selected_position(&self) -> Option<LinePosition> {
-        None
-    }
-
     fn select_next(&mut self) {
         let row = self.selected_row().map_or(0, |row| row + 1);
         self.select_row(row);

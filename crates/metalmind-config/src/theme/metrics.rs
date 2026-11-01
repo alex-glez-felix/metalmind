@@ -182,6 +182,8 @@ metric_group! {
         caret: Px,
         /// El subrayado del texto provisional y el tachado.
         text_line: Px,
+        /// Bajo la pestaña que se ve, como en el panel de contexto.
+        tab: Px,
     }
 }
 
@@ -272,6 +274,8 @@ metric_group! {
         /// Sin estado guardado, la lista arranca abierta en una ventana al
         /// menos así de ancha, y plegada en una más angosta.
         list_open_min_width: Length,
+        /// El ancho del panel de contexto, a la derecha de los paneles.
+        context_width: Length,
         /// El ancho del menú contextual; crece si una fila no cabe.
         menu_width: Length,
         /// Alrededor de las entradas del menú y de sus separadores.

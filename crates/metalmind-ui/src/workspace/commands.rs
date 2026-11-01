@@ -44,6 +44,8 @@ pub enum Effect {
     OpenUnresolvedLinks,
     /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
     TogglePanel(PanelView),
+    /// Mostrar el panel de contexto o cerrarlo.
+    ToggleContext,
     /// Mostrar la lista de notas o plegarla.
     ToggleNoteList,
     /// Elegir de dónde salen las notas de la lista.
@@ -201,7 +203,7 @@ impl Workspace {
             Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
             Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
             Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
-            Command::ToggleBacklinks => Ok(Effect::TogglePanel(PanelView::Backlinks)),
+            Command::ToggleContext => Ok(Effect::ToggleContext),
             Command::ToggleNoteList => Ok(Effect::ToggleNoteList),
             Command::ChooseListSource => Ok(Effect::ChooseListSource),
             Command::ShowFolder => Ok(Effect::ShowFolder(argument.map(str::to_owned))),

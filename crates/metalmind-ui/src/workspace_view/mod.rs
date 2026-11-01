@@ -1,5 +1,6 @@
 //! La raíz de la ventana: la barra de botones, el panel lateral, la lista de
-//! notas y el árbol de paneles, un [`Editor`] por hoja. Ejecuta los comandos de `:`,
+//! notas, el árbol de paneles, un [`Editor`] por hoja, y el panel de contexto
+//! a la derecha. Ejecuta los comandos de `:`,
 //! `ctrl-w` y `space` sobre el [`Workspace`]. La lógica vive en el
 //! workspace y en el panel; aquí solo se crean y sueltan editores y se
 //! mueve el foco de GPUI adonde digan. Encima de los paneles flota, si está
@@ -7,6 +8,7 @@
 //! de los avisos, arriba a la derecha.
 
 mod autosave;
+mod context;
 mod finder;
 mod focus;
 mod link_choice;
@@ -38,6 +40,7 @@ use metalmind_keymap::{Action, Invocation};
 
 use crate::actions::Dispatch;
 use crate::clipboard::SystemClipboard;
+use crate::context_panel::ContextPanel;
 use crate::editor::Editor;
 use crate::finder::VaultSession;
 use crate::frames::FrameClock;
@@ -53,7 +56,7 @@ use crate::workspace::{Axis, Direction, Effect, Message, Node, PaneId, Workspace
 use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
-use self::reroute::{Reroute, reroute};
+use self::reroute::{Reroute, Visible, reroute};
 use self::toasts::ToastTimers;
 use self::vault_undo::VaultUndo;
 
@@ -61,6 +64,7 @@ pub struct WorkspaceView {
     workspace: Entity<Workspace>,
     sidebar: Entity<Sidebar>,
     list: Entity<NoteListView>,
+    context: Entity<ContextPanel>,
     editors: HashMap<PaneId, Entity<Editor>>,
     title: String,
     /// Dónde guardar el estado de cada vault; `None` si no hay `HOME`.
@@ -76,7 +80,7 @@ pub struct WorkspaceView {
     /// El plan de un renombre que se está armando, antes de su vista previa.
     renaming: Option<Task<()>>,
     notes: NoteSettings,
-    _subscriptions: [Subscription; 4],
+    _subscriptions: [Subscription; 5],
 }
 
 impl WorkspaceView {
@@ -90,9 +94,9 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let sidebar =
-            cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), window, cx));
+        let sidebar = cx.new(|cx| Sidebar::new(&session, &state.panel, workspace.clone(), cx));
         let list = cx.new(|cx| NoteListView::new(&session, &state.list, workspace.clone(), cx));
+        let context = cx.new(|cx| ContextPanel::new(&session, workspace.clone(), window, cx));
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
             view.refresh_change_preview(cx);
@@ -104,6 +108,9 @@ impl WorkspaceView {
         });
         let list_events = cx.subscribe_in(&list, window, |view, _, event, window, cx| {
             view.on_list_event(event.clone(), window, cx);
+        });
+        let context_events = cx.subscribe_in(&context, window, |view, _, event, window, cx| {
+            view.on_context_event(event, window, cx);
         });
         let pane = workspace.read(cx).focused();
         let formulas = cx.new(|_| Formulas::default());
@@ -121,6 +128,7 @@ impl WorkspaceView {
             workspace,
             sidebar,
             list,
+            context,
             editors: HashMap::from([(pane, first)]),
             title: String::new(),
             paths,
@@ -133,7 +141,7 @@ impl WorkspaceView {
             vault_undo: VaultUndo::default(),
             renaming: None,
             notes,
-            _subscriptions: [repaint, events, list_events, activation],
+            _subscriptions: [repaint, events, list_events, context_events, activation],
         }
     }
 
@@ -245,6 +253,7 @@ impl WorkspaceView {
                 self.open_unresolved_links(window, cx);
             }
             Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
+            Effect::ToggleContext => self.toggle_context(window, cx),
             Effect::ToggleNoteList => self.toggle_list(window, cx),
             Effect::ChooseListSource => {
                 self.sync_editors(cx);
@@ -260,6 +269,9 @@ impl WorkspaceView {
             }
             Effect::FocusPastEdge(Direction::Left) if self.sidebar.read(cx).is_visible() => {
                 self.focus_sidebar(window, cx);
+            }
+            Effect::FocusPastEdge(Direction::Right) if self.context.read(cx).is_visible() => {
+                self.focus_context(window, cx);
             }
             Effect::FocusPastEdge(_) => {}
             Effect::ChooseLink => {
@@ -313,16 +325,15 @@ impl WorkspaceView {
 
     /// Una acción que llegó a la raíz sin que la atendiera su vista.
     fn reroute(&mut self, invocation: &Invocation, window: &mut Window, cx: &mut Context<Self>) {
-        let sidebar = self.sidebar.read(cx).is_visible();
-        let list = self.list.read(cx).is_visible();
-        match reroute(
-            invocation.action.owner(),
-            sidebar,
-            list,
-            self.overlay.is_some(),
-        ) {
+        let visible = Visible {
+            sidebar: self.sidebar.read(cx).is_visible(),
+            list: self.list.read(cx).is_visible(),
+            context: self.context.read(cx).is_visible(),
+        };
+        match reroute(invocation.action.owner(), visible, self.overlay.is_some()) {
             Reroute::Sidebar => self.focus_sidebar(window, cx),
             Reroute::List => self.focus_list(window, cx),
+            Reroute::Context => self.focus_context(window, cx),
             Reroute::Editor => self.focus(window, cx),
             Reroute::Nowhere => {
                 let name = invocation.action.name();
@@ -494,11 +505,12 @@ impl Render for WorkspaceView {
             );
         let shown = self.sidebar.read(cx).shown();
         let list = self.list.read(cx).is_visible();
+        let context = self.context.read(cx).is_visible();
         element
             .relative()
             .flex()
             .flex_row()
-            .child(sidebar::rail(shown, list, &theme))
+            .child(sidebar::rail(shown, context, list, &theme))
             .when(shown.is_some(), |element| {
                 element.child(self.sidebar.clone())
             })
@@ -510,6 +522,7 @@ impl Render for WorkspaceView {
                     .h_full()
                     .child(self.render_node(&root, &theme)),
             )
+            .when(context, |element| element.child(self.context.clone()))
             .children(self.render_toasts(&theme, cx))
             .children(self.overlay.as_ref().map(|overlay| overlay.render(&theme)))
     }

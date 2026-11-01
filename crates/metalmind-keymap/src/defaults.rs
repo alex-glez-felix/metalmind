@@ -5,7 +5,7 @@
 use metalmind_vim::{Context as VimContext, Key};
 
 use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, ListAction};
-use crate::{ChangePreviewAction, PanelAction, PickerAction, View};
+use crate::{ChangePreviewAction, ContextAction, PanelAction, PickerAction, View};
 
 pub(crate) fn bindings() -> Vec<Binding> {
     // `q` pliega la lista, como `space l`; va antes para que la lista muestre
@@ -29,6 +29,7 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(table(View::ChangePreview, CHANGE_PREVIEW));
     bindings.extend(table(View::NoteList, LIST));
     bindings.extend(table(View::NoteListInput, LIST_INPUT));
+    bindings.extend(table(View::Context, CONTEXT));
     bindings
 }
 
@@ -67,14 +68,15 @@ fn table<A: Into<Action> + Copy>(
 }
 
 /// `space` y una tecla, en Normal (03 §3). Con `also_in_panels`, la misma
-/// tecla vale en el árbol del panel lateral y en la lista de notas.
+/// tecla vale en el árbol del panel lateral, en la lista de notas y en el
+/// panel de contexto.
 const LEADER: &[(char, Command, bool)] = &[
     ('f', Command::OpenFinder, false),
     ('/', Command::OpenTextSearch, false),
     ('p', Command::OpenCommandPalette, false),
     ('e', Command::ToggleFolders, true),
     ('t', Command::ToggleTags, true),
-    ('b', Command::ToggleBacklinks, true),
+    ('b', Command::ToggleContext, true),
     ('u', Command::OpenUnresolvedLinks, true),
     ('l', Command::ToggleNoteList, true),
     ('v', Command::ChooseListSource, true),
@@ -86,7 +88,7 @@ const LEADER: &[(char, Command, bool)] = &[
 fn leader() -> impl Iterator<Item = Binding> {
     LEADER.iter().flat_map(|&(key, command, also_in_panels)| {
         let editor = in_normal(vec![Key::Char(' '), Key::Char(key)], command);
-        let panels = [View::FileTree, View::NoteList]
+        let panels = [View::FileTree, View::NoteList, View::Context]
             .into_iter()
             .filter(move |_| also_in_panels)
             .map(move |view| in_view(view, &[k(' '), k(key)], command));
@@ -111,6 +113,8 @@ const PANES: &[(char, Command)] = &[
 
 /// Desde el árbol y la lista, que están a la izquierda de los paneles.
 const PANES_FROM_TREE: &[(char, PanelAction)] = &[('l', PanelAction::FocusEditor)];
+/// Desde el panel de contexto, que está a la derecha de los paneles.
+const PANES_FROM_CONTEXT: &[(char, ContextAction)] = &[('h', ContextAction::FocusEditor)];
 const PANES_FROM_LIST: &[(char, ListAction)] = &[
     ('l', ListAction::FocusEditor),
     ('h', ListAction::FocusSidebar),
@@ -126,7 +130,10 @@ fn panes() -> impl Iterator<Item = Binding> {
     let list = PANES_FROM_LIST.iter().flat_map(|&(key, action)| {
         [k(key), ctrl(key)].map(|next| in_view(View::NoteList, &[ctrl('w'), next], action))
     });
-    editor.chain(tree).chain(list)
+    let context = PANES_FROM_CONTEXT.iter().flat_map(|&(key, action)| {
+        [k(key), ctrl(key)].map(|next| in_view(View::Context, &[ctrl('w'), next], action))
+    });
+    editor.chain(tree).chain(list).chain(context)
 }
 
 fn links() -> impl Iterator<Item = Binding> {
@@ -243,6 +250,28 @@ const LIST_INPUT: &[(&[Keystroke], ListAction)] = &[
     (&[ctrl('n')], ListAction::SelectNext),
     (&[named(KeyName::Up)], ListAction::SelectPrevious),
     (&[ctrl('p')], ListAction::SelectPrevious),
+];
+
+/// Como el árbol; `tab` cambia de pestaña y `esc` o `q`
+/// cierran el panel, que solo se ve mientras se pide.
+const CONTEXT: &[(&[Keystroke], ContextAction)] = &[
+    (&[k('j')], ContextAction::SelectNext),
+    (&[named(KeyName::Down)], ContextAction::SelectNext),
+    (&[k('k')], ContextAction::SelectPrevious),
+    (&[named(KeyName::Up)], ContextAction::SelectPrevious),
+    (&[k('g'), k('g')], ContextAction::SelectFirst),
+    (&[k('G')], ContextAction::SelectLast),
+    (&[k('h')], ContextAction::CollapseOrParent),
+    (&[named(KeyName::Left)], ContextAction::CollapseOrParent),
+    (&[k('l')], ContextAction::ExpandOrOpen),
+    (&[named(KeyName::Right)], ContextAction::ExpandOrOpen),
+    (&[k('o')], ContextAction::Open),
+    (&[named(KeyName::Enter)], ContextAction::Open),
+    (&[ctrl('v')], ContextAction::OpenSplitRight),
+    (&[ctrl('s')], ContextAction::OpenSplitDown),
+    (&[named(KeyName::Tab)], ContextAction::NextTab),
+    (&[k('q')], ContextAction::Close),
+    (&[named(KeyName::Escape)], ContextAction::Close),
 ];
 
 const PICKER: &[(&[Keystroke], PickerAction)] = &[

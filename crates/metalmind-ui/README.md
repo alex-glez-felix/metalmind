@@ -8,7 +8,7 @@ Sin GPUI:
 - `document.rs`: una nota abierta, o un buffer `[No Name]`; el `fixeol` y el guardado.
 - `file_tree/`: el árbol de carpetas del panel lateral sobre el `VaultIndex`: filas visibles, carpetas abiertas, selección, filtro difuso y los cambios del watcher. Benchmark en `benches/file_tree.rs`.
 - `panel/`: el panel lateral entero (si se ve, en qué vista) y lo que le pregunta al usuario: un nombre, el filtro o confirmar un borrado. Confirmar da un `Request` con la operación de archivo.
-- `backlinks/`: la vista de backlinks del panel: los links que llegan a la nota activa, agrupados por nota, con su línea y dónde abre cada fila.
+- `note_context/`: el panel de contexto (#164) en dos pestañas: los links que llegan a la nota activa, agrupados por nota, con su línea, y los destinos de los que salen de ella; y dónde abre cada fila.
 - `unresolved/`: `space u`, los links sin destino del vault como filas del picker.
 - `session.rs`: lo que se recuerda entre sesiones en el directorio de estado: el último vault y, por vault, el panel.
 - `picker/model.rs`: el estado del picker difuso (`PickerState`) del finder y la paleta. Benchmark en `benches/picker.rs`.
@@ -20,6 +20,7 @@ Con GPUI:
 - `workspace_view.rs`: la raíz. La barra de botones, el panel lateral y un `Editor` por panel; mueve el foco entre ellos.
 - `editor/`: un panel de edición. Pinta solo lo visible y le pasa las teclas al motor vim.
 - `picker/`: la vista de un picker (`PickerView`), una sola para el finder, la paleta y `space /`; lo que cambia lo pone su `PickerDelegate`.
+- `context_panel/`: el panel de contexto, a la derecha y solo mientras se pide (`space b`); lo que hace cada acción `context::*`.
 - `sidebar/`: el panel lateral. El árbol en una `uniform_list` (solo se pintan las filas visibles), el menú del clic derecho, los botones y lo que hace cada acción `file_tree::*` y `panel::*`; sus nombres y atajos son de `metalmind-keymap`.
 - `actions.rs`: GPUI como transporte del registro de `metalmind-keymap`. Los atajos de las vistas salen del keymap de la app y cada acción viaja como `Dispatch` por el foco; `dispatch(nombre, argumento)` es lo que hacen `:`, la paleta y los atajos que resuelve el motor.
 - `theme.rs`: todo color y tamaño de la UI sale de aquí: los grupos del tema ya convertidos a GPUI (`theme.layout.picker_gap`) y lo que se calcula con la fuente.
@@ -28,7 +29,7 @@ Con GPUI:
 
 | Tecla | Acción | Qué hace |
 |---|---|---|
-| `space e` / `space t` / `space b` (en un editor) | `panel::toggle_folders` / `panel::toggle_tags` / `panel::toggle_backlinks` | Muestra el panel en esa vista con el foco, o lo esconde si ya la muestra. También con los botones de la barra de la izquierda. |
+| `space e` / `space t` (en un editor) | `panel::toggle_folders` / `panel::toggle_tags` | Muestra el panel en esa vista con el foco, o lo esconde si ya la muestra. También con los botones de la barra de la izquierda. |
 | `j` `k` `gg` `G` | `file_tree::select_next` … | Moverse por las filas. |
 | `h` / `l` | `file_tree::collapse_or_parent` / `file_tree::expand_or_open` | Cerrar la carpeta o subir; abrir la carpeta, bajar a su contenido o abrir el archivo. |
 | `o` `Enter`, doble clic | `file_tree::open` | Abrir en el panel de edición enfocado (o abrir y cerrar una carpeta). |
@@ -37,7 +38,20 @@ Con GPUI:
 | `a` / `A` | `file_tree::new_note` / `file_tree::new_folder` | Crear dentro de la carpeta seleccionada (o junto al archivo). Un nombre que termina en `/` es una carpeta; a una nota sin `.md` se le agrega. |
 | `r` / `m` | `file_tree::rename` / `file_tree::move` | Renombrar (el nombre) o mover (la ruta entera). Los buffers abiertos siguen al archivo. |
 | `d` | `file_tree::delete` | Mandar a la papelera del vault (`.trash/`), tras confirmar con `y` o `Enter`. |
-| `T` / `q` | `panel::toggle_view` / `panel::hide` | La vista que sigue (carpetas, tags, backlinks); esconder el panel. |
+| `T` / `q` | `panel::toggle_view` / `panel::hide` | La otra vista (carpetas o tags); esconder el panel. |
 | `ctrl-w l` | `panel::focus_editor` | Volver al editor; desde el editor, `ctrl-w h` sin panel a la izquierda vuelve al árbol. |
 
 Con el ratón, un clic selecciona (y abre o cierra una carpeta), el doble clic abre y el clic derecho abre un menú con las mismas acciones.
+
+## El panel de contexto
+
+| Tecla | Acción | Qué hace |
+|---|---|---|
+| `space b` | `context::toggle` | Abre a la derecha el contexto de la nota activa con el foco, o lo cierra. También con el botón `↩` de la barra. |
+| `j` `k` `gg` `G` | `context::select_next` … | Moverse por las filas. |
+| `h` / `l` | `context::collapse_or_parent` / `context::expand_or_open` | En "Enlazan aquí", cerrar la nota o subir a ella; abrirla, bajar a sus links o abrir el link. |
+| `o` `Enter`, clic | `context::open` | Abrir la fila: un backlink en su link, un saliente en su nota. El clic simple deja el foco en el panel, que se queda en su nota para recorrerla. |
+| `ctrl-v` / `ctrl-s` | `context::open_split_right` / `context::open_split_down` | Abrir en un split; también con los botones de abajo. |
+| `tab` | `context::next_tab` | Cambiar entre "Enlazan aquí" y "Salientes"; también con un clic en la pestaña. |
+| `esc` / `q` | `context::close` | Cerrar el panel y volver a la nota. |
+| `ctrl-w h` | `context::focus_editor` | Volver a la nota sin cerrarlo; desde el editor, `ctrl-w l` sin panel a la derecha vuelve al contexto. |

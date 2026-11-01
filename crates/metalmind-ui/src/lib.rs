@@ -3,11 +3,11 @@
 //! no importa GPUI, y aquí solo se pinta y se traduce la entrada.
 
 mod actions;
-mod backlinks;
 mod change_preview;
 mod clipboard;
 mod completion;
 mod config_file;
+mod context_panel;
 mod disk;
 mod document;
 mod editor;
@@ -18,8 +18,10 @@ mod focus_indicator;
 mod frames;
 mod icons;
 mod ime;
+mod key_button;
 pub mod math;
 mod new_note;
+mod note_context;
 pub mod note_list;
 mod palette;
 mod panel;
