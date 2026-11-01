@@ -27,23 +27,20 @@ struct Swap {
 
 impl LineMove {
     /// `None` si quedan donde están: debajo de la de antes o de la última.
-    /// `line_start` da el byte donde empieza cada línea del texto de antes
-    /// y, para la que sigue a la última, uno más que el largo del texto.
-    pub fn new(
-        lines: &RangeInclusive<usize>,
-        below: usize,
-        line_start: impl Fn(usize) -> usize,
-    ) -> Option<Self> {
+    /// `starts` son los bytes, en el texto de antes, donde empiezan la
+    /// primera línea, la que le sigue a la última y la de `below`; una línea
+    /// después de la última empieza un byte más allá del final del texto.
+    pub fn new(lines: &RangeInclusive<usize>, below: usize, starts: [usize; 3]) -> Option<Self> {
         let (first, last) = (*lines.start(), *lines.end());
         if below == first || below == last + 1 {
             return None;
         }
+        let [first_start, after_last, below_start] = starts;
         let [start, middle, end] = if below < first {
-            [below, first, last + 1]
+            [below_start, first_start, after_last]
         } else {
-            [first, last + 1, below]
-        }
-        .map(line_start);
+            [first_start, after_last, below_start]
+        };
         Some(Self {
             first,
             last,
@@ -101,7 +98,8 @@ mod tests {
     /// Dónde queda cada una de `count` líneas tras mover `lines` debajo de
     /// `below`.
     fn moved(count: usize, lines: RangeInclusive<usize>, below: usize) -> Vec<usize> {
-        let line_move = LineMove::new(&lines, below, |line| line).unwrap();
+        let starts = [*lines.start(), lines.end() + 1, below];
+        let line_move = LineMove::new(&lines, below, starts).unwrap();
         (0..count).map(|line| line_move.line(line)).collect()
     }
 
@@ -121,13 +119,13 @@ mod tests {
 
     #[test]
     fn below_the_line_before_or_the_last_one_is_no_move() {
-        assert_eq!(LineMove::new(&(1..=2), 1, |line| line), None);
-        assert_eq!(LineMove::new(&(1..=2), 3, |line| line), None);
+        assert_eq!(LineMove::new(&(1..=2), 1, [1, 3, 1]), None);
+        assert_eq!(LineMove::new(&(1..=2), 3, [1, 3, 3]), None);
     }
 
     #[test]
     fn the_column_stays() {
-        let line_move = LineMove::new(&(2..=2), 0, |line| line).unwrap();
+        let line_move = LineMove::new(&(2..=2), 0, [2, 3, 0]).unwrap();
         assert_eq!(line_move.point(Point::new(2, 5)), Point::new(0, 5));
     }
 
@@ -137,7 +135,12 @@ mod tests {
     fn bytes_go_with_their_line() {
         let starts = [0, 2, 5, 7];
         let bytes = |lines: RangeInclusive<usize>, below| {
-            let line_move = LineMove::new(&lines, below, |line| starts[line]).unwrap();
+            let at = [
+                starts[*lines.start()],
+                starts[lines.end() + 1],
+                starts[below],
+            ];
+            let line_move = LineMove::new(&lines, below, at).unwrap();
             (0..=6)
                 .map(|offset| line_move.offset(offset))
                 .collect::<Vec<_>>()

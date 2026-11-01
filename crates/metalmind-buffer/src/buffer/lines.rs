@@ -55,22 +55,29 @@ impl Buffer {
             return Err(BufferError::InvalidMove { first, last, below });
         }
         self.history.ensure_open()?;
-        let line_start = |line| {
-            if line < self.line_count() {
-                self.line_start(line).get()
-            } else {
-                self.len().get() + 1
-            }
+        let insertion = self.lines_insertion(below, &self.lines_text(first..last + 1));
+        let deletion = self.lines_deletion(&lines);
+        // Las dos ediciones ya saben dónde empiezan las líneas que cambian de
+        // lugar: buscarlas otra vez en el rope encarece `:g/^/m0`.
+        let past_end = self.len().get() + 1;
+        let (first_start, after_last) = if last < self.last_line() {
+            (deletion.range.start.get(), deletion.range.end.get())
+        } else {
+            // Las últimas no tienen salto propio: se borra el de antes.
+            (deletion.range.start.get() + 1, past_end)
         };
-        let Some(line_move) = LineMove::new(&lines, below, line_start) else {
+        let below_start = if below < self.line_count() {
+            insertion.range.start.get()
+        } else {
+            past_end
+        };
+        let starts = [first_start, after_last, below_start];
+        let Some(line_move) = LineMove::new(&lines, below, starts) else {
             return Ok(());
         };
         // Primero la inserción: si cae justo donde empieza el borrado (las
         // últimas líneas suben sobre una vacía), va antes de él.
-        let edits = vec![
-            self.lines_insertion(below, &self.lines_text(first..last + 1)),
-            self.lines_deletion(&lines),
-        ];
+        let edits = vec![insertion, deletion];
         self.apply_following(edits, Some(line_move)).map(drop)
     }
 }
