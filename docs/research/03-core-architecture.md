@@ -10,7 +10,7 @@
 - **Vim**: motor propio, puro, en su crate (`metalmind-vim`), sin dependencia de la GUI. Arquitectura copiada de Zed: **keymap declarativo + contextos + acciones con nombre**. Así vim aplica igual al buffer, al árbol de archivos, a la paleta y al picker.
 - **Vault**: `ignore` (walk paralelo) + `notify` 8 con un debounce propio + índice de links **en memoria** (fuente de verdad = los `.md`) con caché opcional en `redb`. `nucleo` para el fuzzy finder, `tantivy` para la búsqueda full-text (después del MVP).
 - **Hilos**: la UI nunca bloquea. Un hilo de UI, un pool de fondo (el executor del framework o `rayon`), canales (`crossbeam-channel`/`flume`). Escrituras atómicas con `tempfile::NamedTempFile::persist`.
-- **Repo**: cargo workspace con ~7 crates pequeños; `insta` + `proptest` como especificación ejecutable; `cargo-dist` para tarballs y GitHub Releases. AppImage/Flatpak/AUR van por fuera de cargo-dist.
+- **Repo**: cargo workspace de crates pequeños (§6); `insta` + `proptest` como especificación ejecutable; `cargo-dist` para tarballs y GitHub Releases. AppImage/Flatpak/AUR van por fuera de cargo-dist.
 
 ---
 

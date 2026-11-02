@@ -48,7 +48,7 @@
 **Lo que el núcleo le promete a la app es el vault en disco, no una API.** La app está escrita en Kotlin y no enlaza ningún crate de este repo: escribe cada captura como un `.md` nuevo, y la sincronización la hace la herramienta que se use. Así que:
 
 - Una nota es un `.md` plano, sin frontmatter obligatorio y sin ID (§1). Una nota sin tags es del buzón (§9), sin hacer nada más.
-- Un archivo nuevo en una carpeta del vault se ve solo, salvo donde el índice no entra (ocultos, `.gitignore`; 03 §4), con la app abierta o cerrada. Un audio en `adjuntos/` enlazado con `![[…]]` es un adjunto cualquiera (§6): el escritorio no sabe de transcripción.
+- Un archivo nuevo en una carpeta del vault se ve solo, salvo donde el índice no entra, como los ocultos o lo que dice `.gitignore` (la regla completa, en 03 §4), con la app abierta o cerrada. Un audio en `adjuntos/` enlazado con `![[…]]` es un adjunto cualquiera (§6): el escritorio no sabe de transcripción.
 - La app repite tres reglas de este repo: el nombre que da `metalmind add` ([`cli.md`](../cli.md)), qué es un tag (05) y el destino más corto de un wikilink (`LinkIndex::wikilink_target`, 03 §4). Si una cambia aquí, hay que cambiarla allá: cada una vive una vez por repo, sin una prueba que las compare.
 - Lo demás no es parte del trato: caché, historial y estado de UI son de cada máquina y la app no cuenta con ellos.
 

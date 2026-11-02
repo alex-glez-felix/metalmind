@@ -19,6 +19,8 @@ match vim.feed(Key::Char('d'), &mut target)? {
 }
 ```
 
+Una macro se pausa en esos dos resultados: al terminar con ellos, quien aloja el motor llama a `Vim::resume_macro` para seguirla, o a `Vim::abort_macro` si el comando falló o se llevó las teclas.
+
 - **Teclas y acciones.** `Key` → `Keymap` (tabla tipada de contexto + teclas + acción) → `Action`. Cada acción tiene nombre (`Action::name`, `Action::from_name`). `Vim::feed` recibe una tecla y `Vim::execute` una acción, como las que invoca la paleta. `Key` se escribe como los atajos de GPUI (`ctrl-w`, `space`).
 - **`Target`, lo que se le presta.** `Vim` guarda lo que es de todo el editor: el modo y lo pendiente, los registros, las macros, las marks `A`–`Z`, los historiales de `:` y `/`. Lo demás llega en cada tecla, prestado por referencia: el `Buffer` y las `Selections` del panel, el `DocState` del documento, el `PaneState` del panel (su `Viewport` y su `JumpList`), el `FileId` y, si hay, el `Clipboard` que atiende `"+` y `"*`. Un `Target` armado con las piezas de otro panel o de otro documento es igual de válido.
 - **Lo editado lo sigue el motor solo**: el `DocState` sabe hasta qué `Splice` del buffer siguieron la jumplist y las marks `A`–`Z` (`Buffer::splice_count`). Quien saque los reemplazos con `Buffer::take_splices` antes de la próxima llamada al motor se los quita; en la app, el workspace los saca justo después de él.
