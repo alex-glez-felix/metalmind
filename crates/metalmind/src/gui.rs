@@ -82,6 +82,9 @@ pub fn prepare(session: Session, target: &Target) -> Result<Prepared, StartError
         history: paths
             .as_ref()
             .map(|paths| history(paths, &root, &config.settings.history)),
+        cache: paths
+            .as_ref()
+            .map(|paths| paths.vault_note_cache(root.path())),
         ..VaultOptions::default()
     };
     let (vault, updates) = Vault::open_with(root.path(), options)?;

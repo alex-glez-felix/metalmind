@@ -1,13 +1,13 @@
 /// Una clave del primer nivel del frontmatter y su valor, sea cual sea:
 /// el frontmatter entero, solo para leer. Los escalares son su texto, como
 /// en los campos que Metalmind entiende.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Property {
     pub key: String,
     pub value: PropertyValue,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PropertyValue {
     Null,
     Text(String),

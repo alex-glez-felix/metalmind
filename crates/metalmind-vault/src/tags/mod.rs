@@ -31,12 +31,15 @@ pub use index::{TagEntry, TagIndex};
 pub use key::{TagKey, tag_name};
 pub use layout::{PageEntry, PageLayout};
 pub use metadata::{PageChange, yaml_scalar};
+pub(crate) use note::tags_of;
 pub use note::{FrontmatterSpot, NoteTags, Snippet, TagOccurrence, TagSource};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage, parse_template};
 pub use query::{ParsedQuery, QueryWord, TagQuery};
 pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
 pub use scope::{Scope, ScopeError, ScopeFilter, ScopeWord};
 pub use tree::{TagNode, TagTree};
+
+use metalmind_syntax::Property;
 
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
@@ -80,6 +83,38 @@ impl Tags {
         let scanned = scan_all(&tags.folder, &notes, &read);
         for (path, note, page) in scanned {
             tags.store(path, note, page);
+        }
+        tags.graph = tags.rebuild_graph();
+        tags
+    }
+
+    /// Con lo ya escaneado de cada nota (ruta, ocurrencias y frontmatter). Solo
+    /// lee las páginas de tag, que son pocas y guardan más de lo escaneado:
+    /// [`TagPage`] sale del texto.
+    pub(crate) fn from_scans(
+        folder: VaultPath,
+        mut scans: Vec<(VaultPath, NoteTags, Vec<Property>)>,
+        read: impl ReadNote,
+    ) -> Self {
+        scans.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        let mut tags = Self::empty(folder);
+        let pages: Vec<&VaultPath> = scans
+            .iter()
+            .map(|(path, _, _)| path)
+            .filter(|path| page_name(&tags.folder, path).is_some())
+            .collect();
+        let mut pages = scan_all(&tags.folder, &pages, &read).into_iter();
+        for (path, note, frontmatter) in scans {
+            if page_name(&tags.folder, &path).is_none() {
+                let note = IndexedNote {
+                    tags: note,
+                    page: false,
+                    frontmatter,
+                };
+                tags.store(path, note, None);
+            } else if let Some((path, note, page)) = pages.next() {
+                tags.store(path, note, page);
+            }
         }
         tags.graph = tags.rebuild_graph();
         tags

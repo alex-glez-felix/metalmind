@@ -59,6 +59,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 38.7 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 479 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
+| Abrir con la caché al día, 5 k / 50 k notas (servidor virtual de 2 hilos, no comparable con lo de arriba: ver "Caché de las notas") | ≤ 200 ms / ≤ 2 s | 168 ms / 1.55 s | ✅ | `metalmind-vault` `abrir_5k_notas_con_cache`, `abrir_50k_notas_con_cache` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `metalmind-vault` `indexar_links`, `indexar_links_nombres_unicos` |
 | Índice de links, un cambio del watcher: modificar una nota / crear una cuyo nombre usan 300 links | ≤ 16 ms | 23 µs / 0.35 ms | ✅ | `metalmind-vault` `modificar_una_nota`, `crear_una_nota_que_empata` |
 | Publicar el índice de links en cada lote (clonarlo), 5 k / 50 k | ≤ 16 / 160 ms | 5.7 / 88 ms | ⚠️ | `metalmind-vault` `clonar_el_indice` |
@@ -110,6 +111,26 @@ Los tags (05 §9), medidos el 2026-10-18 en la misma máquina: el vault de `meta
 El estilo de las líneas del editor (03 §2, "Estilo en el editor"), medido el 2026-10-18 en la misma máquina: tras cada tecla se repinta el tramo editado (hasta la línea en blanco o la cerca que lo cierran) y lo que falta de la ventana, y lo de abajo se reusa en cuanto el estado coincide. Pintar de cero solo pasa la primera vez que se va al final de una nota larga: al abrirla se pinta la ventana. Abrir una cerca que no cierra cambia el estado de todo lo de abajo, pero se pinta solo la ventana; lo que cuesta con 50 k líneas es correr un lugar las 50 k entradas del estilo. La tecla del motor en Insert subió un 2 % en instrucciones (22.3 k a 22.8 k con 5 k líneas): mover la ventana ahora mide lo que mide cada línea.
 
 Las filas de la UI se miden con lavapipe (abajo), que no es la máquina de pruebas: el arranque queda en ⚠️ hasta medir la app ahí. Bajo lavapipe entra en el objetivo, pero no se puede trasladar: con GPU, el spike midió 244–297 ms, más que lo que da lavapipe en una máquina de escritorio.
+
+
+## Caché de las notas
+
+Abrir el vault con y sin la [caché en disco](research/03-core-architecture.md) ([#241](https://github.com/alex-glez-felix/metalmind/issues/241)), en un servidor virtual x86_64 de 2 hilos y disco virtual, con otros procesos corriendo: sirve para comparar entre sí, no con las tablas de arriba. Dos vaults: el de `abrir_50k_notas`, notas de ~140 B que son casi puros links, y uno de notas de 1.5 KB con 6 links y 2 o 3 tags. Mediana de 5 a 7 corridas, cada una en su proceso, de `Vault::open_with` hasta que vuelve; en frío, de 3. "Frío" es con los datos de las notas y de la caché fuera de la caché del sistema (`posix_fadvise`), pero con los inodos todavía en memoria: tras un reinicio, los dos casos pagan además esos inodos.
+
+| | 5 k, puros links | 50 k, puros links | 50 k, de 1.5 KB |
+|---|---:|---:|---:|
+| Antes: cada índice lee y escanea por su cuenta | 225 ms | 2.47 s | 3.95 s |
+| Sin caché todavía: una lectura y un scan por nota | 179 ms | 1.80 s | 2.94 s |
+| Caché al día | 168 ms | 1.55 s | 1.58 s |
+| Antes, frío | 1.37 s | 9.45 s | 10.2 s |
+| Caché al día, frío | 97 ms | 1.88 s | 1.62 s |
+| Lo que pesan las notas / la caché | 0.7 / 2.4 MB | 6.9 / 24.8 MB | 74 / 39.8 MB |
+| Pico de memoria, antes / caché al día | 32 / 33 MB | 285 / 288 MB | 776 / 742 MB |
+
+- **Lo que más se nota es el disco frío**: de 10.2 a 1.6 s. Con el disco caliente, lo que gana depende de cuánto hay que leer y escanear: 2.5 veces con notas de 1.5 KB, 1.6 con las de puros links.
+- **Ya no manda leer ni escanear, sino `LinkIndex`.** Por fases, con la caché al día y 50 k notas de 1.5 KB: walk 69 ms, cargar la caché 166 ms, mirar el sello de cada nota 295 ms, **resolver y registrar los links 813 ms**, tags 160 ms.
+- La caché guarda el contexto de cada link (hasta 80 bytes a cada lado), así que en notas que son casi puros links pesa más que ellas.
+- Reescribirla cuando algo cambió cuesta unos 250 ms con 50 k notas de puros links, en el hilo del vault: no demora la apertura.
 
 ## Benchmark de la UI
 

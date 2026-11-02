@@ -4,14 +4,14 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use metalmind_syntax::{Frontmatter, Value, note_name};
+use metalmind_syntax::{Frontmatter, Scan, Value, note_name};
 
 use crate::path::VaultPath;
 use crate::tags::key::{TagKey, tag_name};
 use crate::tags::page::TagPage;
 
 /// De dónde salió una ocurrencia.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TagSource {
     /// Un `#tag` del cuerpo.
     Inline,
@@ -20,7 +20,7 @@ pub enum TagSource {
 }
 
 /// Cómo reescribir o quitar un valor del frontmatter sin tocar el resto.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FrontmatterSpot {
     /// El escalar como está escrito, si el YAML no escribe el nombre tal
     /// cual (escapes, varias líneas): el rango lo cubre entero y se
@@ -34,7 +34,7 @@ pub struct FrontmatterSpot {
 
 /// Un tramo de la nota y lo que dice, para que una edición compruebe que
 /// sigue ahí.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Snippet {
     pub range: Range<usize>,
     pub text: String,
@@ -50,7 +50,7 @@ impl Snippet {
 }
 
 /// Un tag escrito en una nota.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TagOccurrence {
     pub key: TagKey,
     /// Como lo escribió el usuario, sin `#`: solo para mostrar.
@@ -123,7 +123,7 @@ impl<'t> Lines<'t> {
 }
 
 /// Las ocurrencias de una nota, en orden de aparición.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct NoteTags {
     pub occurrences: Vec<TagOccurrence>,
 }
@@ -132,6 +132,11 @@ pub struct NoteTags {
 /// saca su metadata.
 pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {
     let scan = metalmind_syntax::scan(text);
+    (tags_of(text, &scan), scan.frontmatter)
+}
+
+/// Las ocurrencias de `text`, ya escaneado.
+pub(crate) fn tags_of(text: &str, scan: &Scan) -> NoteTags {
     let mut lines = Lines::new(text);
     let mut occurrences: Vec<TagOccurrence> = scan
         .frontmatter
@@ -149,7 +154,7 @@ pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {
             source: TagSource::Inline,
         }
     }));
-    (NoteTags { occurrences }, scan.frontmatter)
+    NoteTags { occurrences }
 }
 
 /// Qué es un archivo de la carpeta de tags.

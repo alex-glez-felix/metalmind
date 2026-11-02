@@ -3,14 +3,13 @@
 //! así que aplicar cambios llega al mismo índice que armarlo de cero.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::num::NonZeroUsize;
 use std::sync::Arc;
-use std::thread;
 
 use super::names::key_of;
 use super::note::scan_links;
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::index::EntryKind;
+use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
@@ -22,19 +21,33 @@ impl LinkIndex {
         files: impl IntoIterator<Item = (VaultPath, EntryKind)>,
         read: impl Fn(&VaultPath) -> Option<String> + Sync,
     ) -> Self {
+        let files: Vec<(VaultPath, EntryKind)> = files.into_iter().collect();
+        let notes: Vec<VaultPath> = files
+            .iter()
+            .filter(|(_, kind)| *kind == EntryKind::Note)
+            .map(|(path, _)| path.clone())
+            .collect();
+        let scans = in_parallel(notes, |path| {
+            let links = read(&path).as_deref().map(scan_links).unwrap_or_default();
+            (path, links)
+        });
+        Self::from_scans(files, scans)
+    }
+
+    /// Indexa `files` con los links ya escaneados de cada nota: los resuelve
+    /// en varios hilos sin leer nada.
+    pub(crate) fn from_scans(
+        files: impl IntoIterator<Item = (VaultPath, EntryKind)>,
+        scans: Vec<(VaultPath, Vec<IndexedLink>)>,
+    ) -> Self {
         let mut index = Self::default();
-        let mut notes = Vec::new();
         for (path, kind) in files {
-            match kind {
-                EntryKind::Folder => continue,
-                EntryKind::Note => notes.push(path.clone()),
-                EntryKind::Attachment => {}
+            if kind != EntryKind::Folder {
+                index.names.insert(&path);
             }
-            index.names.insert(&path);
         }
         let names = &index.names;
-        let resolved = in_parallel(notes, |path| {
-            let mut links = read(&path).as_deref().map(scan_links).unwrap_or_default();
+        let resolved = in_parallel(scans, |(path, mut links)| {
             for link in &mut links {
                 link.target = names.resolve(&path, &link.target_text);
             }
@@ -198,37 +211,6 @@ impl LinkIndex {
             }
         }
     }
-}
-
-/// `work` sobre cada elemento, repartido en un hilo por núcleo, con los
-/// resultados en el orden de `items`.
-fn in_parallel<T: Send, R: Send>(items: Vec<T>, work: impl Fn(T) -> R + Sync) -> Vec<R> {
-    let threads = thread::available_parallelism().map_or(1, NonZeroUsize::get);
-    let chunk = items.len().div_ceil(threads).max(1);
-    let mut chunks = Vec::new();
-    let mut items = items.into_iter();
-    loop {
-        let part: Vec<T> = items.by_ref().take(chunk).collect();
-        if part.is_empty() {
-            break;
-        }
-        chunks.push(part);
-    }
-    let work = &work;
-    thread::scope(|scope| {
-        let handles: Vec<_> = chunks
-            .into_iter()
-            .map(|part| scope.spawn(move || part.into_iter().map(work).collect::<Vec<R>>()))
-            .collect();
-        handles
-            .into_iter()
-            .flat_map(|handle| {
-                handle
-                    .join()
-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            })
-            .collect()
-    })
 }
 
 fn add_incoming(

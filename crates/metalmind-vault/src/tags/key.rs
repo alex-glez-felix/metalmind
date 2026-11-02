@@ -5,7 +5,9 @@ use unicode_normalization::UnicodeNormalization as _;
 /// La identidad de un tag: su nombre en NFC y con el *case folding* de
 /// Unicode, sin el `#`. `#Rust`, `#RUST` y `#rust` son la misma clave;
 /// `#canción` y `#cancion`, no.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct TagKey(String);
 
 impl TagKey {

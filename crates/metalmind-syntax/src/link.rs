@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 /// Cómo está escrito el link.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LinkSyntax {
     /// `[[nota]]`
     Wiki,

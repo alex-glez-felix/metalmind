@@ -22,6 +22,7 @@ use crate::index::VaultIndex;
 use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
+use crate::note_scan::index_notes;
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
@@ -112,6 +113,9 @@ pub struct VaultOptions {
     /// Dónde y cuánto historial de versiones guardar (06 §3); sin esto, el
     /// vault no tiene historial.
     pub history: Option<HistoryOptions>,
+    /// El archivo de la caché de las notas (03 §4), fuera del vault; sin esto,
+    /// cada apertura lee todas las notas.
+    pub cache: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +132,7 @@ impl Default for VaultOptions {
             tags_folder: VaultPath::fixed(DEFAULT_TAGS_FOLDER),
             attachments_folder: VaultPath::fixed(DEFAULT_ATTACHMENTS_FOLDER),
             history: None,
+            cache: None,
         }
     }
 }
@@ -237,6 +242,9 @@ impl Vault {
     /// y borrados que ve el watcher, y guarda como versión lo que cambie una
     /// nota desde fuera.
     ///
+    /// Con `options.cache`, las notas que no cambiaron desde la última
+    /// apertura no se leen; sin ella o si no sirve, se leen todas.
+    ///
     /// Si no quedan watches de inotify, el vault abre igual pero no ve los
     /// cambios de fuera: ver [`Vault::unwatched`].
     ///
@@ -258,13 +266,8 @@ impl Vault {
         let watch = FolderWatch::start(&root, debouncer, Arc::clone(&unwatched))?;
         let watch = Arc::new(Mutex::new(watch));
         let files = scan(&root, Some(before_reading(&watch)));
-        let links = LinkIndex::build(
-            files.files().map(|entry| (entry.path.clone(), entry.kind)),
-            |path| read_note(&root, path),
-        );
-        let tags = Tags::build(options.tags_folder, &files, |path: &VaultPath| {
-            read_note(&root, path)
-        });
+        let (links, tags, cache_refresh) =
+            index_notes(&root, &files, options.tags_folder, options.cache.as_deref());
         let history = options
             .history
             .map(|options| Arc::new(History::new(options.dir, options.retention)));
@@ -280,6 +283,7 @@ impl Vault {
             links: Arc::clone(&links),
             tags: Arc::clone(&tags),
             history: history.as_ref().map(Arc::clone),
+            cache_refresh,
             saving: Arc::clone(&saving),
             updates,
             stop: Arc::clone(&stop),
