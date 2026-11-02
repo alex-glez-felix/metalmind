@@ -108,7 +108,7 @@ mod tests {
         Context, FocusHandle, InteractiveElement as _, IntoElement, KeyContext, ParentElement as _,
         Render, TestAppContext, VisualTestContext, div,
     };
-    use metalmind_keymap::{Action as AnyAction, Command};
+    use metalmind_keymap::{Action as AnyAction, Command, WindowCommand};
 
     use super::*;
 
@@ -181,7 +181,7 @@ mod tests {
         let (probe, cx) = probe(&mut cx);
         cx.simulate_keystrokes("ctrl-shift-p");
         let received = probe.read_with(cx, |probe, _| probe.received.clone());
-        assert_eq!(received, [Command::OpenCommandPalette.into()]);
+        assert_eq!(received, [WindowCommand::OpenCommandPalette.into()]);
     }
 
     /// Cada atajo de una vista, con las teclas como las escribe GPUI, llega
@@ -219,11 +219,10 @@ mod tests {
     fn gpui_no_construye_acciones_del_registro() {
         let cx = TestAppContext::single();
         cx.update(|cx| {
-            for &command in Command::ALL {
-                assert!(
-                    cx.build_action(command.name(), None).is_err(),
-                    "{command:?}"
-                );
+            let commands = Command::ALL.iter().map(|command| command.name());
+            let window = WindowCommand::ALL.iter().map(|command| command.name());
+            for name in commands.chain(window) {
+                assert!(cx.build_action(name, None).is_err(), "{name}");
             }
         });
     }

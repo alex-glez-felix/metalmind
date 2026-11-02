@@ -51,7 +51,7 @@ use metalmind_vim::{
 };
 
 pub use self::autosave::{Autosave, SaveState, SystemClock};
-pub use self::commands::{Effect, FocusCommand, ListViewChange};
+pub use self::commands::Effect;
 pub use self::documents::DocumentId;
 use self::documents::Documents;
 pub use self::file_edits::FileEditError;

@@ -13,7 +13,7 @@
 )]
 mod support;
 
-use metalmind_keymap::Command;
+use metalmind_keymap::{Command, WindowCommand};
 use pretty_assertions::assert_eq;
 
 /// Lo escrito, el comando de Metalmind y el nombre completo en nvim.
@@ -55,22 +55,34 @@ fn nvim_entiende_lo_mismo() {
 }
 
 /// El comando, el texto de la palabra y si empieza literal.
-type Completed = (Command, &'static str, bool);
+type Completed = (&'static str, &'static str, bool);
 
 /// Lo escrito tras `:`, y el comando y la palabra que se completarían.
 const TYPED_ARGUMENTS: &[(&str, Option<Completed>)] = &[
-    ("focus #ru", Some((Command::Focus, "#ru", false))),
+    (
+        "focus #ru",
+        Some((WindowCommand::Focus.name(), "#ru", false)),
+    ),
     (
         "focus proyectos/ -#ar",
-        Some((Command::Focus, "-#ar", false)),
+        Some((WindowCommand::Focus.name(), "-#ar", false)),
     ),
-    (r"focus Mis\ no", Some((Command::Focus, "Mis no", false))),
-    (r#"focus "Mis no"#, Some((Command::Focus, "Mis no", true))),
-    ("focus #rust ", Some((Command::Focus, "", false))),
-    ("  :e  not", Some((Command::Edit, "not", false))),
-    (r"e Mis\ no", Some((Command::Edit, "Mis no", false))),
-    ("e Mis no", Some((Command::Edit, "Mis no", false))),
-    (r#"e "Mis"#, Some((Command::Edit, "\"Mis", false))),
+    (
+        r"focus Mis\ no",
+        Some((WindowCommand::Focus.name(), "Mis no", false)),
+    ),
+    (
+        r#"focus "Mis no"#,
+        Some((WindowCommand::Focus.name(), "Mis no", true)),
+    ),
+    (
+        "focus #rust ",
+        Some((WindowCommand::Focus.name(), "", false)),
+    ),
+    ("  :e  not", Some((Command::Edit.name(), "not", false))),
+    (r"e Mis\ no", Some((Command::Edit.name(), "Mis no", false))),
+    ("e Mis no", Some((Command::Edit.name(), "Mis no", false))),
+    (r#"e "Mis"#, Some((Command::Edit.name(), "\"Mis", false))),
     ("focus", None),
     ("wa x", None),
     ("nada x", None),
@@ -88,7 +100,7 @@ fn sabe_que_palabra_del_argumento_se_escribe() {
         });
         let expected = expected.map(|(command, text, literal)| {
             (
-                metalmind_vim::ActionName::new(command.name()),
+                metalmind_vim::ActionName::new(command),
                 text.to_owned(),
                 literal,
             )

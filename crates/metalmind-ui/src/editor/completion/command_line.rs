@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use gpui_kit::{App, Context};
-use metalmind_keymap::Command;
+use metalmind_keymap::{Command, WindowCommand};
 use metalmind_vault::VaultIndex;
 use metalmind_vim::{ActionName, TypedArgument};
 
@@ -15,7 +15,7 @@ use super::{Completion, List, rows};
 use crate::completion::{ArgumentCompletions, FocusSources, PathCandidates};
 use crate::theme::Theme;
 
-const FOCUS: ActionName = ActionName::new(Command::Focus.name());
+const FOCUS: ActionName = ActionName::new(WindowCommand::Focus.name());
 const EDIT: ActionName = ActionName::new(Command::Edit.name());
 const FORCE_EDIT: ActionName = ActionName::new(Command::ForceEdit.name());
 

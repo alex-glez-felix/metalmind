@@ -27,8 +27,8 @@ pub fn app_vim() -> Vim {
 }
 
 /// Lo que devuelve el motor cuando se invoca `command` sin argumento.
-pub fn dispatched(command: metalmind_keymap::Command) -> KeyOutcome {
-    KeyOutcome::Dispatch(metalmind_vim::ActionName::new(command.name()).into())
+pub fn dispatched(command: impl Into<metalmind_keymap::Action>) -> KeyOutcome {
+    KeyOutcome::Dispatch(metalmind_vim::ActionName::new(command.into().name()).into())
 }
 
 pub fn parse(marked: &str) -> (Buffer, Selections) {

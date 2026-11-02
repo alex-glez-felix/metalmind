@@ -14,7 +14,7 @@
 )]
 mod support;
 
-use metalmind_keymap::Command;
+use metalmind_keymap::{Command, WindowCommand};
 use metalmind_vim::{
     Action, ActionName, CommandError, Invocation, KeyOutcome, Mode, Vim, VisualKind,
 };
@@ -44,13 +44,13 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case(":sp<CR>", Command::SplitDown)]
 #[case(":on<CR>", Command::Only)]
 #[case(":set<CR>", Command::Set)]
-#[case(":tagundo<CR>", Command::UndoVaultChange)]
-#[case(":vaultundo<CR>", Command::UndoVaultChange)]
-#[case(":template<CR>", Command::NewNoteFromTemplate)]
-#[case(":today<CR>", Command::OpenDailyNote)]
+#[case(":tagundo<CR>", WindowCommand::UndoVaultChange)]
+#[case(":vaultundo<CR>", WindowCommand::UndoVaultChange)]
+#[case(":template<CR>", WindowCommand::NewNoteFromTemplate)]
+#[case(":today<CR>", WindowCommand::OpenDailyNote)]
 #[case(":tagpage<CR>", Command::OpenTagPage)]
-#[case(":focus<CR>", Command::Focus)]
-#[case(":unfocus<CR>", Command::ClearFocus)]
+#[case(":focus<CR>", WindowCommand::Focus)]
+#[case(":unfocus<CR>", WindowCommand::ClearFocus)]
 #[case("<C-w>v", Command::SplitRight)]
 #[case("<C-w><C-v>", Command::SplitRight)]
 #[case("<C-w>s", Command::SplitDown)]
@@ -63,18 +63,18 @@ fn submit(keys: &str) -> (KeyOutcome, Vim, String) {
 #[case("<C-w>q", Command::Quit)]
 #[case("<C-w>o", Command::Only)]
 #[case("3<C-w>v", Command::SplitRight)]
-#[case(" f", Command::OpenFinder)]
-#[case(" /", Command::OpenTextSearch)]
-#[case(" p", Command::OpenCommandPalette)]
-#[case(" e", Command::ToggleFolders)]
-#[case(" t", Command::ToggleTags)]
-#[case(" b", Command::ToggleContext)]
-#[case(" u", Command::OpenUnresolvedLinks)]
-#[case(" n", Command::NewNoteFromTemplate)]
-#[case(" d", Command::OpenDailyNote)]
+#[case(" f", WindowCommand::OpenFinder)]
+#[case(" /", WindowCommand::OpenTextSearch)]
+#[case(" p", WindowCommand::OpenCommandPalette)]
+#[case(" e", WindowCommand::ToggleFolders)]
+#[case(" t", WindowCommand::ToggleTags)]
+#[case(" b", WindowCommand::ToggleContext)]
+#[case(" u", WindowCommand::OpenUnresolvedLinks)]
+#[case(" n", WindowCommand::NewNoteFromTemplate)]
+#[case(" d", WindowCommand::OpenDailyNote)]
 #[case("gd", Command::FollowLink)]
 #[case("<CR>", Command::FollowLink)]
-fn envia_el_comando(#[case] keys: &str, #[case] command: Command) {
+fn envia_el_comando(#[case] keys: &str, #[case] command: impl Into<metalmind_keymap::Action>) {
     let (outcome, vim, _) = submit(keys);
     assert_eq!(outcome, support::dispatched(command));
     assert_eq!(vim.mode(), Mode::Normal);
@@ -99,20 +99,24 @@ fn e_lleva_la_ruta() {
 #[case(":tagmerge #rs #rust<CR>", Command::MergeTag, "#rs #rust")]
 #[case(
     ":template entrevista Backend senior<CR>",
-    Command::NewNoteFromTemplate,
+    WindowCommand::NewNoteFromTemplate,
     "entrevista Backend senior"
 )]
-#[case(":focus proyectos/ #rust<CR>", Command::Focus, "proyectos/ #rust")]
+#[case(
+    ":focus proyectos/ #rust<CR>",
+    WindowCommand::Focus,
+    "proyectos/ #rust"
+)]
 fn llevan_lo_escrito_tras_el_nombre(
     #[case] keys: &str,
-    #[case] command: Command,
+    #[case] command: impl Into<metalmind_keymap::Action>,
     #[case] argument: &str,
 ) {
     let (outcome, _, text) = submit(keys);
     assert_eq!(
         outcome,
         KeyOutcome::Dispatch(Invocation {
-            action: ActionName::new(command.name()),
+            action: ActionName::new(command.into().name()),
             argument: Some(argument.to_owned()),
         })
     );

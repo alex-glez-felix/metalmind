@@ -5,7 +5,7 @@ use metalmind_vim::Action as VimAction;
 
 use crate::{
     ChangePreviewAction, Command, ContextAction, EditorAction, ListAction, PanelAction,
-    PickerAction,
+    PickerAction, WindowCommand,
 };
 
 /// Una acción con nombre, de cualquier parte de la app.
@@ -13,7 +13,10 @@ use crate::{
 pub enum Action {
     /// Del motor, sobre el panel enfocado.
     Vim(VimAction),
+    /// Del modelo de la ventana, que decide qué pasa.
     Command(Command),
+    /// De las vistas de la ventana: el modelo solo corta la macro.
+    Window(WindowCommand),
     Editor(EditorAction),
     Panel(PanelAction),
     List(ListAction),
@@ -41,6 +44,7 @@ impl Action {
         match self {
             Self::Vim(action) => action.name(),
             Self::Command(command) => command.name(),
+            Self::Window(command) => command.name(),
             Self::Editor(action) => action.name(),
             Self::Panel(action) => action.name(),
             Self::List(action) => action.name(),
@@ -59,6 +63,7 @@ impl Action {
     pub fn all() -> impl Iterator<Item = Self> {
         let vim = VimAction::ALL.iter().copied().map(Self::Vim);
         let commands = Command::ALL.iter().copied().map(Self::Command);
+        let window = WindowCommand::ALL.iter().copied().map(Self::Window);
         let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
         let list = ListAction::ALL.iter().copied().map(Self::List);
@@ -69,6 +74,7 @@ impl Action {
             .copied()
             .map(Self::ChangePreview);
         vim.chain(commands)
+            .chain(window)
             .chain(editor)
             .chain(panel)
             .chain(list)
@@ -80,7 +86,7 @@ impl Action {
     #[must_use]
     pub fn owner(self) -> Owner {
         match self {
-            Self::Vim(_) | Self::Command(_) => Owner::Window,
+            Self::Vim(_) | Self::Command(_) | Self::Window(_) => Owner::Window,
             Self::Editor(_) => Owner::Editor,
             Self::Panel(_) => Owner::Panel,
             Self::List(_) => Owner::List,
@@ -94,6 +100,12 @@ impl Action {
 impl From<Command> for Action {
     fn from(command: Command) -> Self {
         Self::Command(command)
+    }
+}
+
+impl From<WindowCommand> for Action {
+    fn from(command: WindowCommand) -> Self {
+        Self::Window(command)
     }
 }
 
@@ -181,6 +193,7 @@ macro_rules! invocations {
 
 invocations!(
     Command,
+    WindowCommand,
     EditorAction,
     PanelAction,
     ContextAction,

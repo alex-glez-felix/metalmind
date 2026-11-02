@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use metalmind_buffer::ByteOffset;
-use metalmind_keymap::{Command, Invocation, Keymap};
+use metalmind_keymap::{Action, Invocation, Keymap};
 use metalmind_vault::SaveKind;
 use metalmind_vim::{ActionName, Clipboard, Key, KeyOutcome, Markdown, Mode, SystemRegister};
 
@@ -309,6 +309,6 @@ fn vim_mode(mode: Mode) -> &'static str {
 }
 
 /// Lo que devuelve el motor cuando se teclea `command` sin argumento.
-pub fn dispatched(command: Command) -> KeyOutcome {
-    KeyOutcome::Dispatch(ActionName::new(command.name()).into())
+pub fn dispatched(command: impl Into<Action>) -> KeyOutcome {
+    KeyOutcome::Dispatch(ActionName::new(command.into().name()).into())
 }

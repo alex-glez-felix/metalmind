@@ -3,11 +3,14 @@
 //! fuera de él ([`Effect`]) lo hace cada submódulo de la ventana.
 
 use gpui_kit::{Context, Window};
-use metalmind_keymap::{Action, Invocation};
+use metalmind_keymap::{Action, Invocation, WindowCommand};
 
 use super::WorkspaceView;
+use super::list_views::ListViewChange;
 use crate::actions::Dispatch;
 use crate::clipboard::SystemClipboard;
+use crate::new_note::NoteRequest;
+use crate::panel::PanelView;
 use crate::workspace::{Direction, Effect};
 
 impl WorkspaceView {
@@ -20,7 +23,7 @@ impl WorkspaceView {
         cx: &mut Context<Self>,
     ) {
         match invocation.action {
-            Action::Command(_) => self.run(invocation, window, cx),
+            Action::Command(_) | Action::Window(_) => self.run(invocation, window, cx),
             Action::Vim(action) => self.execute_vim(action, window, cx),
             _ => self.reroute(invocation, window, cx),
         }
@@ -53,36 +56,62 @@ impl WorkspaceView {
                 self.focus(window, cx);
                 self.touch_focused(cx);
             }
-            Effect::OpenFinder => self.open_finder(window, cx),
-            Effect::OpenTextSearch => self.open_text_search(window, cx),
-            Effect::OpenCommandPalette => self.open_palette(window, cx),
-            Effect::OpenUnresolvedLinks => self.open_unresolved_links(window, cx),
-            Effect::TogglePanel(view) => self.toggle_panel(view, window, cx),
-            Effect::ToggleContext => self.toggle_context(window, cx),
-            Effect::ToggleNoteList => self.toggle_list(window, cx),
-            Effect::ChooseListSource => self.choose_list_source(window, cx),
-            Effect::ShowFolder(folder) => self.show_folder(folder.as_deref(), window, cx),
-            Effect::ListView(change) => self.change_list_view(change, window, cx),
+            Effect::Window(command, argument) => {
+                self.run_window_command(command, argument.as_deref(), window, cx);
+            }
             Effect::FocusPastEdge(direction) => self.focus_past_edge(direction, window, cx),
             Effect::ChooseLink => self.open_link_choice(window, cx),
             Effect::Dispatch(action) => {
                 window.dispatch_action(Box::new(Dispatch(action.into())), cx);
             }
             Effect::ChangeTags(request) => self.change_tags(&request, window, cx),
-            Effect::UndoVaultChange => {
-                self.undo_vault_change(cx);
-                self.focus(window, cx);
-            }
-            Effect::ResumeTagChange => self.resume_tag_change(window, cx),
-            Effect::NewNote(request) => self.new_note(request, window, cx),
-            Effect::OpenDailyNote => self.open_daily_note(window, cx),
             Effect::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
-            Effect::Focus(command) => self.run_focus(command, window, cx),
-            Effect::OpenMessages => self.open_messages(window, cx),
             Effect::SaveToggle { toggle, on } => {
                 self.save_toggle(toggle, on, cx);
                 self.focus(window, cx);
             }
+        }
+    }
+
+    fn run_window_command(
+        &mut self,
+        command: WindowCommand,
+        argument: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match command {
+            WindowCommand::OpenFinder => self.open_finder(window, cx),
+            WindowCommand::OpenTextSearch => self.open_text_search(window, cx),
+            WindowCommand::OpenCommandPalette => self.open_palette(window, cx),
+            WindowCommand::OpenUnresolvedLinks => self.open_unresolved_links(window, cx),
+            WindowCommand::ToggleFolders => self.toggle_panel(PanelView::Folders, window, cx),
+            WindowCommand::ToggleTags => self.toggle_panel(PanelView::Tags, window, cx),
+            WindowCommand::ToggleContext => self.toggle_context(window, cx),
+            WindowCommand::ToggleNoteList => self.toggle_list(window, cx),
+            WindowCommand::ChooseListSource => self.choose_list_source(window, cx),
+            WindowCommand::ShowFolder => self.show_folder(argument, window, cx),
+            WindowCommand::SaveListView => {
+                self.change_list_view(ListViewChange::Save, window, cx);
+            }
+            WindowCommand::RenameListView => {
+                self.change_list_view(ListViewChange::Rename, window, cx);
+            }
+            WindowCommand::DeleteListView => {
+                self.change_list_view(ListViewChange::Delete, window, cx);
+            }
+            WindowCommand::UndoVaultChange => {
+                self.undo_vault_change(cx);
+                self.focus(window, cx);
+            }
+            WindowCommand::ResumeTagChange => self.resume_tag_change(window, cx),
+            WindowCommand::NewNoteFromTemplate => {
+                self.new_note(NoteRequest::parse(argument), window, cx);
+            }
+            WindowCommand::OpenDailyNote => self.open_daily_note(window, cx),
+            WindowCommand::Focus => self.run_focus(argument, window, cx),
+            WindowCommand::ClearFocus => self.set_focus(None, window, cx),
+            WindowCommand::ShowMessages => self.open_messages(window, cx),
         }
     }
 

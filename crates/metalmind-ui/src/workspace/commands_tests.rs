@@ -660,11 +660,11 @@ fn la_paleta_apaga_continuar_las_listas_y_mover_los_hijos() {
 fn space_f_space_barra_y_space_p_piden_el_finder_la_busqueda_y_la_paleta() {
     let mut session = Session::new("uno\n");
     session.keys(" f");
-    assert_eq!(session.effect, Effect::OpenFinder);
+    assert_eq!(session.effect, window(WindowCommand::OpenFinder));
     session.keys(" /");
-    assert_eq!(session.effect, Effect::OpenTextSearch);
+    assert_eq!(session.effect, window(WindowCommand::OpenTextSearch));
     session.keys(" p");
-    assert_eq!(session.effect, Effect::OpenCommandPalette);
+    assert_eq!(session.effect, window(WindowCommand::OpenCommandPalette));
     session.keys("ix⎋");
     assert_eq!(session.text(), "xuno\n", "space no deja nada pendiente");
 }
@@ -673,15 +673,18 @@ fn space_f_space_barra_y_space_p_piden_el_finder_la_busqueda_y_la_paleta() {
 fn la_carpeta_en_la_lista_la_muestra_la_ventana() {
     let mut session = Session::new("uno\n");
     session.keys(" c");
-    assert_eq!(session.effect, Effect::ShowFolder(None));
+    assert_eq!(session.effect, window(WindowCommand::ShowFolder));
     let crumb = Invocation {
-        action: Command::ShowFolder.into(),
+        action: WindowCommand::ShowFolder.into(),
         argument: Some("proyectos/metalmind".to_owned()),
     };
     session.effect = session.workspace.run(&crumb, &mut session.clipboard);
     assert_eq!(
         session.effect,
-        Effect::ShowFolder(Some("proyectos/metalmind".to_owned()))
+        Effect::Window(
+            WindowCommand::ShowFolder,
+            Some("proyectos/metalmind".to_owned())
+        )
     );
     session.keys("ix⎋");
     assert_eq!(session.text(), "xuno\n", "space c no deja nada pendiente");
@@ -690,23 +693,20 @@ fn la_carpeta_en_la_lista_la_muestra_la_ventana() {
 #[test]
 fn las_notas_nuevas_las_pide_la_ventana() {
     let mut session = Session::new("uno\n");
-    let asked = |template: Option<&str>, name: Option<&str>| {
-        Effect::NewNote(NoteRequest {
-            template: template.map(str::to_owned),
-            name: name.map(str::to_owned),
-        })
-    };
     session.keys(" n");
-    assert_eq!(session.effect, asked(None, None));
+    assert_eq!(session.effect, window(WindowCommand::NewNoteFromTemplate));
     session.keys(":template entrevista entrevistas/Backend senior⏎");
     assert_eq!(
         session.effect,
-        asked(Some("entrevista"), Some("entrevistas/Backend senior"))
+        Effect::Window(
+            WindowCommand::NewNoteFromTemplate,
+            Some("entrevista entrevistas/Backend senior".to_owned())
+        )
     );
     session.keys(" d");
-    assert_eq!(session.effect, Effect::OpenDailyNote);
+    assert_eq!(session.effect, window(WindowCommand::OpenDailyNote));
     session.keys(":today⏎");
-    assert_eq!(session.effect, Effect::OpenDailyNote);
+    assert_eq!(session.effect, window(WindowCommand::OpenDailyNote));
     assert_eq!(session.text(), "uno\n");
 }
 
@@ -746,8 +746,28 @@ fn abrir_el_finder_corta_la_macro() {
     session.keys("⎋q");
     session.keys("ix⎋");
     session.keys("@a");
-    assert_eq!(session.effect, Effect::OpenFinder);
+    assert_eq!(session.effect, window(WindowCommand::OpenFinder));
     assert_eq!(session.workspace.vim.recording(), None);
+}
+
+/// Con cualquiera de las vistas la macro se corta, y el modelo les pasa lo
+/// escrito sin mirarlo.
+#[test]
+fn los_comandos_de_las_vistas_llegan_a_la_ventana_con_lo_escrito() {
+    for &command in WindowCommand::ALL {
+        let mut session = Session::new("uno\n");
+        let invocation = Invocation {
+            action: command.into(),
+            argument: Some("x".to_owned()),
+        };
+        let effect = session.workspace.run(&invocation, &mut session.clipboard);
+        assert_eq!(effect, Effect::Window(command, Some("x".to_owned())));
+        assert_eq!(session.text(), "uno\n");
+    }
+}
+
+fn window(command: WindowCommand) -> Effect {
+    Effect::Window(command, None)
 }
 
 #[test]
@@ -848,9 +868,9 @@ enum Opened {
 fn space_e_y_space_t_le_piden_el_panel_lateral_a_la_ventana() {
     let mut session = Session::new("texto");
     session.keys(" e");
-    assert_eq!(session.effect, Effect::TogglePanel(PanelView::Folders));
+    assert_eq!(session.effect, window(WindowCommand::ToggleFolders));
     session.keys(" t");
-    assert_eq!(session.effect, Effect::TogglePanel(PanelView::Tags));
+    assert_eq!(session.effect, window(WindowCommand::ToggleTags));
     assert_eq!(session.cursor(), ByteOffset::ZERO, "space no se movió");
 }
 
@@ -1016,19 +1036,17 @@ fn w_bang_a_la_ruta_de_otro_buffer_abierto_da_e139() {
 }
 
 /// `:focus` le pasa el alcance a la ventana, que conoce las vistas
-/// guardadas y lo lee; sin alcance, dice el de ahora (05 §3).
+/// guardadas y lo lee (05 §3).
 #[test]
 fn focus_y_unfocus_los_pone_la_ventana() {
     let mut session = Session::new("uno\n");
     session.keys(":focus  proyectos/   @gs⏎");
-    let set = FocusCommand::Set("proyectos/   @gs".to_owned());
-    assert_eq!(session.effect, Effect::Focus(set));
+    let scope = Some("proyectos/   @gs".to_owned());
+    assert_eq!(session.effect, Effect::Window(WindowCommand::Focus, scope));
     session.keys(":focus⏎");
-    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
-    session.keys(":focus   ⏎");
-    assert_eq!(session.effect, Effect::Focus(FocusCommand::Show));
+    assert_eq!(session.effect, window(WindowCommand::Focus));
     session.keys(":unfocus⏎");
-    assert_eq!(session.effect, Effect::Focus(FocusCommand::Clear));
+    assert_eq!(session.effect, window(WindowCommand::ClearFocus));
     assert_eq!(session.text(), "uno\n");
 }
 
@@ -1038,7 +1056,7 @@ fn messages_abre_el_historial_y_dismiss_cierra_los_toasts() {
     session.keys(":nada⏎");
     assert_eq!(session.workspace.messages().toasts().len(), 1);
     session.keys(":mes⏎");
-    assert_eq!(session.effect, Effect::OpenMessages);
+    assert_eq!(session.effect, window(WindowCommand::ShowMessages));
     let dismiss = Invocation {
         action: Command::DismissMessages.into(),
         argument: None,
