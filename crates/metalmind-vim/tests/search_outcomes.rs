@@ -188,7 +188,7 @@ fn multiple_cursors(#[case] before: &str, #[case] keys: &str, #[case] after: &st
     assert_eq!(support::run_engine(before, keys).text, after);
 }
 
-/// Donde Metalmind se aparta de vim a propósito (ver el README del crate).
+/// Donde Metalmind se aparta de vim a propósito (ver `docs/vim.md`).
 #[rstest]
 #[case("|a,b", r":s/,/\n/<CR>", "a\n|b")]
 #[case("|x ~a", "/~a<CR>", "x |~a")]

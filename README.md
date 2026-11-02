@@ -17,7 +17,12 @@ Formato: **Markdown plano en carpetas**, legible y editable con cualquier otra h
 M0 y M1 hechos; M2 en curso: `metalmind carpeta/` abre la carpeta como vault, con un panel lateral con el árbol de carpetas, y `metalmind archivo.md` abre el archivo en el vault de su carpeta. Se edita con vim y se guarda con `:w` de forma atómica.
 
 - `crates/metalmind-buffer`: texto, selecciones, undo.
-- `crates/metalmind-vim`: motor vim puro, verificado contra `nvim --headless`, con una línea de comandos mínima.
+- `crates/metalmind-syntax`: la sintaxis de las notas y el estilo de cada línea.
+- `crates/metalmind-vim`: motor vim puro, verificado contra `nvim` ([`docs/vim.md`](docs/vim.md)).
+- `crates/metalmind-keymap`: el registro de acciones y los atajos de toda la app.
+- `crates/metalmind-config`: rutas, `config.yaml` y temas.
+- `crates/metalmind-template`: plantillas y nota del día.
+- `crates/metalmind-perf`: datos y pruebas para los benchmarks, solo en desarrollo.
 - `crates/metalmind-vault`: el vault en disco: índice de archivos, watcher, operaciones de archivo y guardado atómico.
 - `crates/metalmind-search`: búsqueda difusa para el finder y la paleta, y de texto completo en las notas (esta, sin interfaz todavía).
 - `crates/metalmind-ui` y `crates/metalmind`: el editor, el panel lateral con el árbol de carpetas (`space e`), el finder (`space f`), la búsqueda de texto (`space /`), la paleta de comandos (`ctrl-shift-p` o `space p`) y el binario; los únicos que dependen de GPUI ([`metalmind-ui`](crates/metalmind-ui/README.md)).
@@ -39,6 +44,7 @@ Las librerías de sistema que pide GPUI y cómo correrlo en Arch están en [Prim
 - [05 — Tags: el eje de organización](docs/research/05-tags.md)
 - [06 — Decisiones de fondo](docs/research/06-decisiones-de-fondo.md)
 - [Primeros pasos](docs/GETTING-STARTED.md)
+- [Vim en Metalmind](docs/vim.md)
 - [Tests y smoke de la app](docs/testing.md)
 - [Presupuestos de rendimiento](docs/performance.md)
 - [Cómo se hace un release](docs/release.md) y [CHANGELOG](CHANGELOG.md)

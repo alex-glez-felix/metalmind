@@ -58,7 +58,6 @@ Los tags son el eje de organización desde M2.5 ([05](research/05-tags.md)). Lo 
 
 Ver [06 — Decisiones de fondo](research/06-decisiones-de-fondo.md), que dice qué restringe cada una desde ya.
 
-- **Celular**: quizá una app simple de captura rápida; la principal es la de escritorio ([06 §2](research/06-decisiones-de-fondo.md#2-celular)).
 - **Cifrado de notas**: deseable, sin fecha; nada derivado guarda en claro una nota cifrada ([06 §4](research/06-decisiones-de-fondo.md#4-cifrado-de-notas)).
 - **Grafo**: deseable, prioridad baja ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
 - **Plantillas de notas** y **daily notes** (apagadas por defecto): el núcleo está en `metalmind-template`; faltan la UI y la CLI ([06 §11](research/06-decisiones-de-fondo.md#11-baratas-sin-restricción-de-arquitectura)).
