@@ -14,7 +14,7 @@ use std::cell::Cell;
 use std::hint::black_box;
 use std::thread;
 
-use self::callgrind::{CountError, child, instructions};
+use self::callgrind::{CountError, child, instructions, measure};
 
 /// Cuánto más grande es la entrada grande.
 pub const FACTOR: usize = 16;
@@ -47,7 +47,8 @@ pub fn growth<T, R>(n: usize, setup: impl Fn(usize) -> T, mut run: impl FnMut(T)
         if call == target {
             // Sin soltar la salida: no cuenta, y soltar una ventana espera a
             // los hilos del vault. Lo que siga en la prueba es del padre.
-            std::mem::forget(measured(&mut run, setup(size)));
+            let input = setup(size);
+            std::mem::forget(measure(|| black_box(run(black_box(input)))));
             std::process::exit(0);
         }
         return 1.0;
@@ -113,11 +114,6 @@ pub fn assert_flat<T, R>(n: usize, setup: impl Fn(usize) -> T, run: impl FnMut(T
     );
 }
 
-#[inline(never)]
-fn measured<T, R>(run: &mut impl FnMut(T) -> R, input: T) -> R {
-    black_box(run(black_box(input)))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +167,15 @@ mod tests {
     #[should_panic(expected = "constante")]
     fn a_linear_pass_is_not_flat() {
         assert_flat(1_000_000, numbers, |values| sum(&values));
+    }
+
+    #[test]
+    #[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
+    fn the_count_includes_other_threads() {
+        let ratio = growth(1_000_000, numbers, |values| {
+            thread::spawn(move || sum(&values)).join()
+        });
+        assert!(ratio > MAX_FLAT_GROWTH, "contó ×{ratio:.1}");
     }
 
     #[test]

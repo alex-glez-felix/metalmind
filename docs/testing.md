@@ -8,11 +8,11 @@ Los casos de `metalmind-vim` también corren en `nvim --headless` 0.12.6; sin es
 
 ## Pruebas de complejidad y guardas de rendimiento
 
-Las pruebas `complexity.rs` (y las `…_lineal` de los tests unitarios) cuentan instrucciones con callgrind: necesitan `valgrind` en el PATH al compilar y al correr. Sin él salen como ignoradas, igual que los casos del oráculo sin `nvim`; el job `test` del CI lo instala y falla si no está.
+Las pruebas `complexity.rs` (y las `…_lineal` de los tests unitarios) cuentan instrucciones con callgrind: necesitan `valgrind` en el PATH al compilar y al correr. Sin él salen como ignoradas, igual que los casos del oráculo sin `nvim`; el job `test` del CI lo instala y falla si no está. Compilar cualquier test del workspace pide además `clang` (bindgen, por las client requests de `valgrind-requests`); sin sus headers el build falla con `'stdbool.h' file not found`. Sin los headers de valgrind compila, pero las pruebas de complejidad fallan pidiéndolos: `VALGRIND_REQUESTS_VALGRIND_INCLUDE` indica dónde están si no vienen en el paquete.
 
 ```sh
-sudo pacman -S --needed valgrind          # Arch
-sudo apt-get install -y valgrind          # Debian/Ubuntu
+sudo pacman -S --needed valgrind clang    # Arch
+sudo apt-get install -y valgrind clang    # Debian/Ubuntu
 
 cargo nextest run --workspace                                   # las incluye, en paralelo
 cargo nextest run --workspace --success-output final \
