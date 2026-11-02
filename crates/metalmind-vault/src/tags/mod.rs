@@ -69,11 +69,13 @@ impl Tags {
     /// Escanea todas las notas de `vault`, en paralelo.
     #[must_use]
     pub fn build(folder: VaultPath, vault: &VaultIndex, read: impl ReadNote) -> Self {
-        let notes: Vec<&VaultPath> = vault
+        let mut notes: Vec<&VaultPath> = vault
             .files()
             .filter(|entry| entry.kind == EntryKind::Note)
             .map(|entry| entry.path)
             .collect();
+        // La forma de los árboles del índice depende del orden en que se llenan.
+        notes.sort_unstable();
         let mut tags = Self::empty(folder);
         let scanned = scan_all(&tags.folder, &notes, &read);
         for (path, note, page) in scanned {
