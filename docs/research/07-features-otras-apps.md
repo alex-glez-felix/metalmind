@@ -144,7 +144,7 @@ Lo que hacen bien las apps de tags primero y qué aprovecha Metalmind está en e
 
 | Feature | Qué es | Apps y fuente | Encaje con Metalmind | Cimientos | Clasificación |
 |---|---|---|---|---|---|
-| Escanear documentos | La cámara escanea y adjunta | [Apple Notes](https://support.apple.com/guide/notes/not18ab658ed/mac) | Bajo: es cosa del celular, que está fuera de alcance (06 §2). | — | **No encaja** |
+| Escanear documentos | La cámara escanea y adjunta | [Apple Notes](https://support.apple.com/guide/notes/not18ab658ed/mac) | Bajo: es cosa del celular, y esa app captura texto y voz (06 §2). | — | **No encaja** |
 | OCR | Ver §2.3 | — | — | Regla de cifrado | **Baja** |
 | Redimensionar imágenes | — | Inkdrop (sin verificar) | Medio. Obsidian usa `![[img.png\|300]]`; si se adopta, es sintaxis. | Sí, si se adopta la sintaxis | **Después** |
 | Limpiar adjuntos huérfanos | Listar los adjuntos que ninguna nota usa | (sin verificar en estas apps; plugin común en Obsidian) | Alto: 06 §6 dice que nada borra adjuntos solo, así que se acumulan. Un comando que los liste encaja. | No | **Después** |

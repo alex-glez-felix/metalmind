@@ -8,7 +8,7 @@
 | # | Decisión | Restricción principal desde ya |
 |---|---|---|
 | 1 | La identidad de una nota es su **ruta**; sin ID en el frontmatter | Índice e historial siguen los renombres, también los que llegan por el watcher como borrar + crear |
-| 2 | Celular: quizá algún día una app de captura; fuera de alcance | Núcleo sin GPUI ni supuestos de escritorio; archivos planos; cambios externos en cualquier momento |
+| 2 | Celular: una app de captura y consulta, en su propio repo; la principal sigue siendo la de escritorio | Lo que comparten es el vault en disco, no código; núcleo sin GPUI ni supuestos de escritorio; cambios externos en cualquier momento |
 | 3 | Historial de versiones por nota, escondido (`:history`) | Vive en el directorio de **datos**, por vault; no depende de git |
 | 4 | Cifrado de notas: deseable, sin fecha; la ruta queda en claro y las notas cifradas van ocultas en la UI | Nada derivado guarda en claro el contenido de una nota cifrada, tampoco sus tags, sus links ni su historial |
 | 5 | Sin sistema de tareas | No indexar tareas "por si acaso" |
@@ -41,9 +41,16 @@
 
 ## 2. Celular
 
-**Decisión.** Fuera de alcance hoy. Si algún día hay algo, será una app simple de captura rápida; la app principal es la de escritorio.
+**Decisión.** La app existe y vive en su propio repo, [metalmind-android](https://github.com/alex-glez-felix/metalmind-android): capturar y encontrar, con búsqueda y lectura de notas. Editarlas y reorganizarlas se hace en el escritorio, que sigue siendo la app principal; este repo no tiene código de celular.
 
-**Por qué.** Lo que el autor necesita del celular es capturar, no editar ni navegar el vault; eso lo cubre la CLI (§7) más cualquier herramienta de sincronización.
+**Por qué.** Lo que el autor necesita del celular es capturar y encontrar, no refinar. Para capturar sin la app sigue estando la CLI (§7).
+
+**Lo que el núcleo le promete a la app es el vault en disco, no una API.** La app está escrita en Kotlin y no enlaza ningún crate de este repo: escribe cada captura como un `.md` nuevo, y la sincronización la hace la herramienta que se use. Así que:
+
+- Una nota es un `.md` plano, sin frontmatter obligatorio y sin ID (§1). Una nota sin tags es del buzón (§9), sin hacer nada más.
+- Un archivo nuevo en una carpeta del vault se ve solo, salvo donde el índice no entra (ocultos, `.gitignore`; 03 §4), con la app abierta o cerrada. Un audio en `adjuntos/` enlazado con `![[…]]` es un adjunto cualquiera (§6): el escritorio no sabe de transcripción.
+- La app repite tres reglas de este repo: el nombre que da `metalmind add` ([`cli.md`](../cli.md)), qué es un tag (05) y el destino más corto de un wikilink (`LinkIndex::wikilink_target`, 03 §4). Si una cambia aquí, hay que cambiarla allá: cada una vive una vez por repo, sin una prueba que las compare.
+- Lo demás no es parte del trato: caché, historial y estado de UI son de cada máquina y la app no cuenta con ellos.
 
 **Restricciones desde ya:**
 
@@ -272,4 +279,4 @@ Sin hitos nuevos (03 §8) **(propuesta)**:
 
 - La CLI (`metalmind add`, `search`, `tags`, con `--json`) y el buzón, junto con M2.5 o justo después: necesitan el walk de M2 y el `TagIndex` de M2.5, y nada más.
 - El historial de versiones (§3), en M6, junto con el autosave, que es lo que decide su retención.
-- Daily notes y plantillas ya están (§11: núcleo, UI y `metalmind add`). El grafo sigue en post-MVP. Celular y cifrado no tienen lugar en el roadmap ([`IDEAS.md`](../IDEAS.md)).
+- Daily notes y plantillas ya están (§11: núcleo, UI y `metalmind add`). El grafo sigue en post-MVP. El cifrado no tiene lugar en el roadmap ([`IDEAS.md`](../IDEAS.md)), y la app de celular lleva el suyo en su repo (§2).
