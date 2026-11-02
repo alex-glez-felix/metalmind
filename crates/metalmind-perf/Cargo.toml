@@ -13,6 +13,7 @@ metalmind-syntax.workspace = true
 metalmind-vim.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+valgrind-requests.workspace = true
 
 [dev-dependencies]
 gungraun.workspace = true
