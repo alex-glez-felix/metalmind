@@ -15,7 +15,9 @@ use std::thread;
 use crate::changes::Rename;
 use crate::index::{EntryKind, VaultIndex};
 use crate::path::VaultPath;
-use crate::tags::{DEFAULT_TAGS_FOLDER, Scope, ScopeError, ScopeWord, TagKey, TagPlan, Tags};
+use crate::tags::{
+    DEFAULT_TAGS_FOLDER, Scope, ScopeError, ScopeWord, TagKey, TagPlan, Tags, scan_all,
+};
 
 pub(super) fn path(path: &str) -> VaultPath {
     VaultPath::new(path).unwrap()
@@ -128,4 +130,18 @@ fn las_notas_se_indexan_en_orden_de_ruta() {
     for tramo in reads.values() {
         assert!(tramo.is_sorted(), "{tramo:?}");
     }
+}
+
+#[test]
+fn escanear_en_paralelo_conserva_el_orden() {
+    let notes: Vec<VaultPath> = (0..500)
+        .map(|note| path(&format!("nota-{note:03}.md")))
+        .collect();
+    let scanned = scan_all(
+        &VaultPath::fixed(DEFAULT_TAGS_FOLDER),
+        &notes.iter().collect::<Vec<_>>(),
+        &|_: &VaultPath| Some(String::new()),
+    );
+    let scanned: Vec<VaultPath> = scanned.into_iter().map(|(note, ..)| note).collect();
+    assert_eq!(scanned, notes);
 }
