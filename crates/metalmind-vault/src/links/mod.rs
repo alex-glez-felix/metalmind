@@ -7,7 +7,7 @@ mod attachments;
 mod complete;
 mod follow;
 mod names;
-mod note;
+pub(crate) mod note;
 mod rename;
 mod update;
 
@@ -24,18 +24,19 @@ use crate::path::VaultPath;
 use names::Names;
 
 /// A dónde apunta un link.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum LinkTarget {
     /// `[[#Heading]]`: la nota donde está el link.
     SameNote,
     Resolved(VaultPath),
     /// Las rutas que empatan, en orden.
     Ambiguous(Vec<VaultPath>),
+    #[default]
     Unresolved,
 }
 
 /// Lo que va tras el `#` del destino, ya decodificado.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum LinkSubpath {
     Heading(String),
     /// Sin el `^`.
@@ -43,7 +44,7 @@ pub enum LinkSubpath {
 }
 
 /// La línea de un link, recortada alrededor de él.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LinkContext {
     pub text: String,
     /// Dónde está el link dentro de `text`.
@@ -52,7 +53,7 @@ pub struct LinkContext {
 
 /// Un link de una nota, con sus rangos en bytes sobre el archivo tal como
 /// se leyó.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IndexedLink {
     pub syntax: LinkSyntax,
     pub embed: bool,
@@ -67,6 +68,8 @@ pub struct IndexedLink {
     /// Dónde empieza el link en su línea, en bytes.
     pub column: usize,
     pub context: LinkContext,
+    /// Depende del resto del vault: la caché no la guarda.
+    #[serde(skip)]
     pub target: LinkTarget,
     /// Un destino markdown entre `<…>`, que admite espacios.
     bracketed: bool,

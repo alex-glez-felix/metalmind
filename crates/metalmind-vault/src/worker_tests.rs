@@ -23,6 +23,7 @@ fn worker(root: &Path, history: &Arc<History>) -> Worker {
             |_: &VaultPath| None,
         ))),
         history: Some(Arc::clone(history)),
+        cache_refresh: None,
         saving: Arc::new(Mutex::new(())),
         updates,
         stop: Arc::new(AtomicBool::new(false)),

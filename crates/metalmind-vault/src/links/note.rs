@@ -11,13 +11,17 @@ const CONTEXT_BYTES: usize = 80;
 
 /// Los links de `text`, en orden de aparición y con `LinkTarget::Unresolved`.
 pub(super) fn scan_links(text: &str) -> Vec<IndexedLink> {
+    links_of(text, &metalmind_syntax::scan(text).links)
+}
+
+/// Lo mismo, con los links de `text` ya escaneados.
+pub(crate) fn links_of(text: &str, scanned: &[Link]) -> Vec<IndexedLink> {
     let mut lines = Lines::new(text);
-    metalmind_syntax::scan(text)
-        .links
-        .into_iter()
+    scanned
+        .iter()
         .map(|link| {
             let (number, line) = lines.at(link.span.start);
-            indexed(text, &link, number, &line)
+            indexed(text, link, number, &line)
         })
         .collect()
 }

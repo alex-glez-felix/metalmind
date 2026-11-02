@@ -40,7 +40,7 @@ use store::{IndexEntry, Store};
 
 /// El hash del contenido de una versión: dos versiones iguales comparten lo
 /// que ocupan en disco.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ContentHash([u8; 32]);
 
 impl ContentHash {

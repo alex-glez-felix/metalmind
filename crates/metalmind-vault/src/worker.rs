@@ -15,6 +15,7 @@ use crate::file;
 use crate::history::{History, HistoryError, VersionId};
 use crate::index::{EntryKind, VaultIndex};
 use crate::links::LinkIndex;
+use crate::note_cache::CacheRefresh;
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::tags::Tags;
@@ -46,6 +47,8 @@ pub(crate) struct Worker {
     pub tags: Arc<ArcSwap<Tags>>,
     /// `None` si el vault no tiene historial.
     pub history: Option<Arc<History>>,
+    /// Lo que hay que reescribir de la caché, si cambió algo desde la última vez.
+    pub cache_refresh: Option<CacheRefresh>,
     /// Lo toma `Vault::save` mientras escribe y manda su versión: con él
     /// tomado, lo que haya en disco es posterior a todo guardado ya enviado.
     pub saving: Arc<Mutex<()>>,
@@ -62,6 +65,9 @@ impl Worker {
             links: LinkIndex::clone(&self.links.load()),
             tags: Tags::clone(&self.tags.load()),
         };
+        if let Some(refresh) = &self.cache_refresh {
+            refresh.write(&indexes.links, &indexes.tags);
+        }
         self.open_history(&indexes.files);
         let mut inbox = Inbox::new(messages);
         while let Some(message) = inbox.next() {

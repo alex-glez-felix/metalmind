@@ -224,6 +224,8 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 
 #### Vault y panel lateral (M2)
 
+- Abrir un vault no vuelve a leer las notas que no cambiaron: se acuerda de ellas en una
+  caché que se puede borrar sin perder nada. Con 50 k notas y el disco frío, de unos 10 s a 1.6 s.
 - Un clic en una nota del árbol la abre y deja el foco en el árbol, como en
   Zed; el doble clic pasa al editor. `space e` con el árbol a la vista le da
   el foco en vez de esconderlo. El cursor del árbol se ve con el acento del

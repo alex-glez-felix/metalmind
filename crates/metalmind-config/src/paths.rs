@@ -88,6 +88,16 @@ impl Paths {
         self.data.join("vaults").join(vault_key(root))
     }
 
+    /// El archivo de la caché de las notas del vault con raíz `root`, que
+    /// debe venir canonicalizada. Se puede borrar: se rehace de los `.md`.
+    #[must_use]
+    pub fn vault_note_cache(&self, root: &Path) -> PathBuf {
+        self.cache
+            .join("vaults")
+            .join(vault_key(root))
+            .join("notes")
+    }
+
     #[must_use]
     pub fn config_file(&self) -> PathBuf {
         self.config.join("config.yaml")
@@ -252,6 +262,14 @@ mod tests {
         );
         assert_eq!(paths.config, home.path().join(".config/metalmind"));
         assert_eq!(paths.cache, home.path().join(".cache/metalmind"));
+    }
+
+    #[test]
+    fn la_cache_de_las_notas_es_de_cada_vault() {
+        let paths = Paths::under(Path::new("/datos"));
+        let notas = paths.vault_note_cache(Path::new("/a/Mis notas"));
+        assert!(notas.starts_with("/datos/cache/vaults"));
+        assert_ne!(notas, paths.vault_note_cache(Path::new("/b/Mis notas")));
     }
 
     #[test]
