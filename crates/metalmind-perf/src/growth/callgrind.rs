@@ -1,17 +1,18 @@
 //! Contar con callgrind las instrucciones de una medición, en un proceso
 //! aparte: el mismo binario de tests, corriendo solo esa prueba.
 
+use std::ffi::CStr;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::{env, fs, io};
 
+use valgrind_requests::callgrind;
+
 /// Le dice al proceso hijo qué medición de su prueba contar y con qué tamaño.
 const CHILD: &str = "METALMIND_CRECIMIENTO";
 
-/// La función que callgrind delimita con un volcado antes y otro después. Con
-/// el mismo patrón en las dos opciones, callgrind solo hace caso de una.
-const BEFORE_MEASURED: &str = "*growth::measured*";
-const AFTER_MEASURED: &str = "*metalmind_perf::growth::measured*";
+/// Con qué motivo se escribe el volcado de lo medido.
+const MEASURED: &CStr = c"metalmind_perf::growth::measure";
 
 #[derive(Debug, thiserror::Error)]
 pub enum CountError {
@@ -31,10 +32,8 @@ pub enum CountError {
     #[error("los volcados de callgrind: {0}")]
     Dumps(io::Error),
     /// Con lo que dijo valgrind, que es lo único que dice por qué.
-    #[error("callgrind no pasó por la función medida; valgrind dijo:\n{stderr}")]
+    #[error("el proceso de callgrind no llegó a la medición; valgrind dijo:\n{stderr}")]
     NotMeasured { stderr: String },
-    #[error("la función medida corrió más de una vez")]
-    MeasuredTwice,
     #[error("el volcado de callgrind no tiene el total de instrucciones")]
     NoSummary,
 }
@@ -44,6 +43,16 @@ pub fn child() -> Option<(usize, usize)> {
     let value = env::var(CHILD).ok()?;
     let (call, size) = value.split_once(':')?;
     Some((call.parse().ok()?, size.parse().ok()?))
+}
+
+/// En el proceso hijo, corre `work` y deja sus instrucciones en un volcado
+/// propio. Son client requests y no opciones con el nombre de una función:
+/// callgrind las reconoce aunque no entienda los símbolos del binario.
+pub fn measure<R>(work: impl FnOnce() -> R) -> R {
+    callgrind::dump_stats();
+    let output = work();
+    callgrind::dump_stats_at(MEASURED);
+    output
 }
 
 /// Las instrucciones de la medición `call` de la prueba `test` con tamaño
@@ -62,8 +71,6 @@ pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountEr
     let Output { status, stderr, .. } = Command::new("valgrind")
         .arg("--tool=callgrind")
         .arg(format!("--callgrind-out-file={}", out.display()))
-        .arg(format!("--dump-before={BEFORE_MEASURED}"))
-        .arg(format!("--dump-after={AFTER_MEASURED}"))
         .arg(exe)
         .args([test, "--exact", "--include-ignored", "--nocapture"])
         .args(["--test-threads", "1"])
@@ -82,25 +89,24 @@ pub fn instructions(test: &str, call: usize, size: usize) -> Result<u64, CountEr
     measured_part(&dumps)?.ok_or(CountError::NotMeasured { stderr })
 }
 
-/// Las instrucciones del volcado que cierra la función medida; `None` si
-/// ningún volcado la cierra.
+/// Las instrucciones del volcado de lo medido; `None` si ninguno lo es.
 fn measured_part(dir: &Path) -> Result<Option<u64>, CountError> {
-    let mut after = Vec::new();
     for entry in fs::read_dir(dir).map_err(CountError::Dumps)? {
         let part = fs::read_to_string(entry.map_err(CountError::Dumps)?.path())
             .map_err(CountError::Dumps)?;
-        if part.contains("desc: Trigger: --dump-after") {
-            after.push(part);
+        if part.lines().any(is_measured_trigger) {
+            return part
+                .lines()
+                .find_map(|line| line.strip_prefix("summary:"))
+                .and_then(|count| count.trim().parse().ok())
+                .map(Some)
+                .ok_or(CountError::NoSummary);
         }
     }
-    let part = match after.as_slice() {
-        [] => return Ok(None),
-        [part] => part,
-        _ => return Err(CountError::MeasuredTwice),
-    };
-    part.lines()
-        .find_map(|line| line.strip_prefix("summary:"))
-        .and_then(|count| count.trim().parse().ok())
-        .map(Some)
-        .ok_or(CountError::NoSummary)
+    Ok(None)
+}
+
+fn is_measured_trigger(line: &str) -> bool {
+    line.strip_prefix("desc: Trigger: Client Request: ")
+        .is_some_and(|reason| reason.as_bytes() == MEASURED.to_bytes())
 }

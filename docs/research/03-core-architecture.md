@@ -577,7 +577,7 @@ dbg_macro = "deny"
 | Fuzzing | `cargo-fuzz` 0.13 (libFuzzer, nightly solo ahí) + `arbitrary` 1.5 | Lo inesperado: pánicos, offsets fuera de frontera de char, estados inválidos del motor vim. Crate `fuzz/` fuera del workspace; corre a diario en `fuzz.yml`, no en las PRs. Ver `docs/fuzzing.md`. |
 | Diff legible | `pretty_assertions` 1.4 | |
 | Runner | `cargo-nextest` 0.9.148 | Paralelo, rápido en CI. |
-| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) y `gungraun` 0.20 (conteo de instrucciones con callgrind, para CI) | Tiempos por operación contra el [presupuesto](../performance.md); en cada PR, conteo de instrucciones contra la base y pruebas de complejidad N contra 16N, también en instrucciones. |
+| Bench | `divan` 0.1.21 (elegido en M2: menos dependencias que `criterion` 0.8.2 y sin harness propio que configurar) y `gungraun` 0.20 (conteo de instrucciones con callgrind, para CI) con `valgrind-requests` 1.2 para delimitar las pruebas de complejidad | Tiempos por operación contra el [presupuesto](../performance.md); en cada PR, conteo de instrucciones contra la base y pruebas de complejidad N contra 16N, también en instrucciones. |
 | UI | test del framework (GPUI `TestAppContext`; iced: lógica pura en `update`) | Mínimo; la lógica vive fuera de la UI. |
 
 Formato de test de vim recomendado (copiado de cómo Zed testea su vim, con `|` como cursor **(estilo, sin verificar literalmente)**):
