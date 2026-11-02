@@ -123,7 +123,7 @@ Las claves no cambian de significado; si se agrega una, los que no la conocen la
 | Código | `kind` | Cuándo |
 |---|---|---|
 | 0 | — | Salió bien, aunque la búsqueda no encuentre nada |
-| 1 | `io` | Falló una lectura o escritura (sin permiso de escritura en el vault, disco lleno, stdin roto, una nota que no es UTF-8) o `open` no pudo abrir la ventana |
+| 1 | `io` | Falló una lectura o escritura (sin permiso de escritura en el vault, disco lleno, stdin roto) o `open` no pudo leer la nota (no es UTF-8, por ejemplo) o abrir la ventana |
 | 2 | `usage` | Lo pedido no vale: argumentos (los errores de clap también salen con 2, en texto), nota vacía, tag o título inválido, stdin que no es UTF-8, tag inválido en la consulta, `open` de algo que no es una nota del vault |
 | 3 | `vault` | No hay vault, o el elegido no existe, no es una carpeta o no se puede leer |
 
