@@ -17,6 +17,7 @@ mod keystroke;
 mod named;
 mod next_keys;
 mod view;
+mod window_command;
 
 pub use action::{Action, Invocation, Owner, UnknownAction};
 pub use command::Command;
@@ -27,3 +28,4 @@ pub use view::{
     ChangePreviewAction, ContextAction, EditorAction, ListAction, PanelAction, PickerAction, View,
     context,
 };
+pub use window_command::WindowCommand;

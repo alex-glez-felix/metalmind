@@ -7,7 +7,7 @@ use gpui_kit::{
     AnyElement, Div, InteractiveElement as _, IntoElement, ParentElement as _,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _,
 };
-use metalmind_keymap::Command;
+use metalmind_keymap::WindowCommand;
 
 use crate::actions::Dispatch;
 use crate::icons::{self, Icon};
@@ -33,28 +33,28 @@ pub fn rail(shown: Option<PanelView>, context: bool, list: bool, theme: &Theme) 
             "rail-folders",
             shown == Some(PanelView::Folders),
             Icon::Folder,
-            Command::ToggleFolders,
+            WindowCommand::ToggleFolders,
             theme,
         ))
         .child(rail_button(
             "rail-tags",
             shown == Some(PanelView::Tags),
             Icon::Tags,
-            Command::ToggleTags,
+            WindowCommand::ToggleTags,
             theme,
         ))
         .child(rail_button(
             "rail-context",
             context,
             Icon::Backlinks,
-            Command::ToggleContext,
+            WindowCommand::ToggleContext,
             theme,
         ))
         .child(rail_button(
             "rail-list",
             list,
             Icon::NoteList,
-            Command::ToggleNoteList,
+            WindowCommand::ToggleNoteList,
             theme,
         ))
 }
@@ -63,7 +63,7 @@ fn rail_button(
     id: &'static str,
     active: bool,
     icon: Icon,
-    command: Command,
+    command: WindowCommand,
     theme: &Theme,
 ) -> AnyElement {
     let color = if active {

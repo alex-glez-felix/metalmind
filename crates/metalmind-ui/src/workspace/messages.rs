@@ -3,7 +3,7 @@
 
 use std::collections::VecDeque;
 
-use metalmind_keymap::Command;
+use metalmind_keymap::WindowCommand;
 
 use super::Message;
 
@@ -46,7 +46,7 @@ struct Logged {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ToastAction {
     pub label: &'static str,
-    pub command: Command,
+    pub command: WindowCommand,
 }
 
 impl Messages {
@@ -209,7 +209,7 @@ mod tests {
 
     const UNDO: ToastAction = ToastAction {
         label: "Deshacer",
-        command: Command::UndoVaultChange,
+        command: WindowCommand::UndoVaultChange,
     };
 
     /// El botón es del toast que lo trae, también si vuelve a mostrarse

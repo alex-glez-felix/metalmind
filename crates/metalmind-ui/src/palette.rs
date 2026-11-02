@@ -116,7 +116,7 @@ pub fn label(name: &str) -> String {
 mod tests {
     use std::collections::HashSet;
 
-    use metalmind_keymap::{EditorAction, PanelAction};
+    use metalmind_keymap::{EditorAction, PanelAction, WindowCommand};
     use metalmind_vim::{Action as VimAction, Motion};
 
     use super::*;
@@ -153,14 +153,14 @@ mod tests {
         let copy = entry(&entries, EditorAction::Copy).unwrap();
         assert_eq!(copy.keys.as_deref(), Some("ctrl-shift-c"));
         assert_eq!(
-            entry(&entries, Command::OpenFinder)
+            entry(&entries, WindowCommand::OpenFinder)
                 .unwrap()
                 .keys
                 .as_deref(),
             Some("space f")
         );
         assert_eq!(
-            entry(&entries, Command::OpenCommandPalette)
+            entry(&entries, WindowCommand::OpenCommandPalette)
                 .unwrap()
                 .keys
                 .as_deref(),
@@ -202,6 +202,9 @@ mod tests {
             .filter(|command| !typed_only.contains(command))
             .collect();
         assert_eq!(listed, expected);
+        for &command in WindowCommand::ALL {
+            assert!(entry(&entries, command).is_some(), "{command:?}");
+        }
     }
 
     #[test]
@@ -211,7 +214,7 @@ mod tests {
         let new_folder = entry(&entries, PanelAction::NewFolder).unwrap();
         assert_eq!(new_folder.keys.as_deref(), Some("A"));
         assert_eq!(
-            entry(&entries, Command::ToggleFolders)
+            entry(&entries, WindowCommand::ToggleFolders)
                 .unwrap()
                 .keys
                 .as_deref(),

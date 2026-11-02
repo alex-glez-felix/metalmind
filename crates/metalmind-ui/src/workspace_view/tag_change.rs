@@ -9,7 +9,7 @@ use std::collections::HashSet;
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
 use metalmind_config::VaultConfig;
-use metalmind_keymap::Command;
+use metalmind_keymap::WindowCommand;
 use metalmind_vault::{
     Applied, ApplyError, Changes, EntryKind, FileEdits, FileOpError, Rename, Vault, VaultPath,
 };
@@ -26,13 +26,13 @@ use crate::workspace::{LinePosition, Message, MessageId, ToastAction, shown_path
 /// El botón del aviso tras aplicar un cambio al vault.
 const UNDO: ToastAction = ToastAction {
     label: "Deshacer",
-    command: Command::UndoVaultChange,
+    command: WindowCommand::UndoVaultChange,
 };
 
 /// El botón del aviso tras dejar una vista previa para abrir una línea.
 const RESUME: ToastAction = ToastAction {
     label: "Volver",
-    command: Command::ResumeTagChange,
+    command: WindowCommand::ResumeTagChange,
 };
 
 /// Una vista previa de tags que se dejó para abrir la línea de un cambio:

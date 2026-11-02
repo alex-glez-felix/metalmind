@@ -77,7 +77,7 @@ mod tests {
     use metalmind_vim::{Context as VimContext, Motion, Operator, TextObject};
 
     use super::*;
-    use crate::{Binding, Command};
+    use crate::{Binding, WindowCommand};
 
     fn next(keymap: &Keymap, mode: Mode, typed: &[Key]) -> Vec<(Vec<String>, &'static str)> {
         keymap
@@ -132,11 +132,11 @@ mod tests {
         bindings.extend([
             Binding {
                 keys: Keys::Vim(VimContext::Normal, gz[..2].to_vec()),
-                action: Command::OpenFinder.into(),
+                action: WindowCommand::OpenFinder.into(),
             },
             Binding {
                 keys: Keys::Vim(VimContext::Normal, gz.clone()),
-                action: Command::OpenTextSearch.into(),
+                action: WindowCommand::OpenTextSearch.into(),
             },
         ]);
         let keymap = Keymap::from_bindings(bindings);
@@ -154,7 +154,7 @@ mod tests {
         let mut bindings = Keymap::default().bindings().to_vec();
         bindings.push(Binding {
             keys: Keys::Vim(VimContext::Normal, vec![Key::Char('g'), Key::Char('g')]),
-            action: Command::OpenFinder.into(),
+            action: WindowCommand::OpenFinder.into(),
         });
         let keymap = Keymap::from_bindings(bindings);
         let next = next(&keymap, Mode::Normal, &[Key::Char('g')]);

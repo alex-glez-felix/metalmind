@@ -7,7 +7,7 @@ use gpui_kit::{
     Context, Div, InteractiveElement as _, MouseButton, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, relative,
 };
-use metalmind_keymap::{Command, Invocation, View};
+use metalmind_keymap::{Invocation, View, WindowCommand};
 use metalmind_vault::VaultPath;
 
 use super::Editor;
@@ -59,8 +59,9 @@ impl Editor {
             None => (PanePath::new(None, ""), false),
         };
         let split = self.workspace.read(cx).tree().len() > 1;
-        let key =
-            AppKeymap::get(cx).keys_for(Command::ShowFolder.into(), |view| view == View::Editor);
+        let key = AppKeymap::get(cx).keys_for(WindowCommand::ShowFolder.into(), |view| {
+            view == View::Editor
+        });
         let full: SharedString = note
             .map_or_else(|| path.name.clone(), |note| note.to_string())
             .into();
@@ -178,7 +179,7 @@ fn crumb(
     }
     .into();
     let invocation = Invocation {
-        action: Command::ShowFolder.into(),
+        action: WindowCommand::ShowFolder.into(),
         argument: Some(folder.as_str().to_owned()),
     };
     div()

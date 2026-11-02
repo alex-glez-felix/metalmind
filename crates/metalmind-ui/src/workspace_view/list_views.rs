@@ -12,9 +12,19 @@ use crate::note_list::{
     view_named,
 };
 use crate::picker::{PickerEvent, PickerOptions, PickerView};
-use crate::workspace::{ListViewChange, Message};
+use crate::workspace::Message;
 
 pub type ViewNamePicker = PickerView<ViewNameQuestion>;
+
+/// Qué se le hace a una vista guardada desde la lista (06 §10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ListViewChange {
+    /// La fuente y los tags del filtro, como una vista nueva.
+    Save,
+    /// La vista que muestra la lista.
+    Rename,
+    Delete,
+}
 
 impl WorkspaceView {
     pub(super) fn change_list_view(

@@ -5,6 +5,7 @@
 use metalmind_vim::{ActionName, Bound, Context as VimContext, Key};
 
 use crate::command::ex_commands;
+use crate::window_command;
 use crate::{Action, Keystroke, View, defaults};
 
 /// Dónde vale un atajo y con qué teclas.
@@ -92,7 +93,7 @@ impl Keymap {
                 bound,
             })
         });
-        metalmind_vim::Keymap::new(bindings, ex_commands())
+        metalmind_vim::Keymap::new(bindings, ex_commands().chain(window_command::ex_commands()))
     }
 
     /// Los atajos que resuelve la ventana.
@@ -132,7 +133,7 @@ mod tests {
     use metalmind_vim::{Mode, Operator, VisualKind};
 
     use super::*;
-    use crate::{Command, ContextAction, KeyName, PanelAction};
+    use crate::{Command, ContextAction, KeyName, PanelAction, WindowCommand};
 
     const MODES: [Mode; 14] = [
         Mode::Normal,
@@ -234,7 +235,10 @@ mod tests {
             .collect();
         assert_eq!(
             toggles,
-            [Command::ToggleFolders.into(), Command::ToggleFolders.into()]
+            [
+                WindowCommand::ToggleFolders.into(),
+                WindowCommand::ToggleFolders.into()
+            ]
         );
         let tree = |view| view == View::FileTree;
         assert_eq!(
@@ -259,7 +263,7 @@ mod tests {
         let context = |view| view == View::Context;
         let keys = |action: Action| keymap.keys_for(action, context);
         assert_eq!(
-            keys(Command::ToggleContext.into()).as_deref(),
+            keys(WindowCommand::ToggleContext.into()).as_deref(),
             Some("space b")
         );
         assert_eq!(keys(ContextAction::NextTab.into()).as_deref(), Some("tab"));
@@ -273,7 +277,7 @@ mod tests {
     #[test]
     fn el_atajo_de_la_vista_enfocada_gana_al_del_motor() {
         let keymap = Keymap::default();
-        let palette = Command::OpenCommandPalette.into();
+        let palette = WindowCommand::OpenCommandPalette.into();
         assert_eq!(
             keymap
                 .keys_for(palette, |view| view == View::Editor)

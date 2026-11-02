@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use metalmind_buffer::Selection;
 use metalmind_config::Toggle;
-use metalmind_keymap::{Action, Command, Invocation};
+use metalmind_keymap::{Action, Command, Invocation, WindowCommand};
 use metalmind_vault::SaveKind;
 use metalmind_vim::{ArgumentKind, Clipboard, Markdown, Mode, file_name};
 
@@ -16,31 +16,7 @@ use super::options;
 use super::pane_tree::{Axis, Direction};
 use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError, clamp_cursor};
 use crate::document::{Document, SaveError};
-use crate::new_note::NoteRequest;
-use crate::panel::PanelView;
 use crate::tag_change::{RequestError, TagField, TagRequest};
-
-/// Qué se le hace a una vista guardada desde la lista (06 §10).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ListViewChange {
-    /// La fuente y los tags del filtro, como una vista nueva.
-    Save,
-    /// La vista que muestra la lista.
-    Rename,
-    Delete,
-}
-
-/// `:focus` y `:unfocus` (05 §3), que hace la ventana: tiene la sesión del
-/// vault y sus vistas guardadas.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FocusCommand {
-    /// `:focus` con un alcance, tal cual se escribió.
-    Set(String),
-    /// `:focus` sin alcance: dice el de ahora.
-    Show,
-    /// `:unfocus`.
-    Clear,
-}
 
 /// Lo que la ventana tiene que hacer tras un comando.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,24 +24,9 @@ pub enum FocusCommand {
 pub enum Effect {
     Stay,
     CloseWindow,
-    OpenFinder,
-    OpenTextSearch,
-    OpenCommandPalette,
-    /// `space u`: los links sin destino del vault.
-    OpenUnresolvedLinks,
-    /// Mostrar el panel lateral en esa vista, o esconderlo si ya la muestra.
-    TogglePanel(PanelView),
-    /// Mostrar el panel de contexto o cerrarlo.
-    ToggleContext,
-    /// Mostrar la lista de notas o plegarla.
-    ToggleNoteList,
-    /// Elegir de dónde salen las notas de la lista.
-    ChooseListSource,
-    /// Mostrar en la lista la carpeta del vault que se nombra o, sin
-    /// nombre, la de la nota enfocada.
-    ShowFolder(Option<String>),
-    /// Guardar, renombrar o borrar una vista guardada desde la lista.
-    ListView(ListViewChange),
+    /// Un comando que solo le toca a las vistas, con lo que se le escribió
+    /// tras su nombre en `:`.
+    Window(WindowCommand, Option<String>),
     /// `ctrl-w` hacia un lado sin panel vecino: lo que haya fuera de los
     /// paneles de ese lado, como el panel lateral, puede tomar el foco.
     FocusPastEdge(Direction),
@@ -78,21 +39,8 @@ pub enum Effect {
     /// `:tagrename` o `:tagmerge`: la ventana, que tiene los tags del vault,
     /// arma el plan y muestra su vista previa.
     ChangeTags(TagRequest),
-    /// `:vaultundo`: la ventana deshace el último cambio que aplicó al vault.
-    UndoVaultChange,
-    /// `space r`: la ventana vuelve a la vista previa de tags que se dejó
-    /// para abrir una línea.
-    ResumeTagChange,
-    /// `:template`: la ventana, que tiene el vault, lee las plantillas y
-    /// pregunta lo que falte.
-    NewNote(NoteRequest),
-    /// `:today`
-    OpenDailyNote,
     /// `:tagpage #tag`: la ventana, que tiene los tags, abre su página.
     OpenTagPage(String),
-    Focus(FocusCommand),
-    /// `:messages`: el historial de avisos.
-    OpenMessages,
     /// Una opción cambió desde la paleta: la ventana la guarda en
     /// `config.yaml` y dice cómo quedó.
     SaveToggle {
@@ -115,6 +63,7 @@ impl Workspace {
         loop {
             let effect = match invocation.action {
                 Action::Command(command) => self.run_one(command, invocation.argument.as_deref()),
+                Action::Window(command) => Effect::Window(command, invocation.argument),
                 action => Effect::Dispatch(action),
             };
             if effect != Effect::Stay {
@@ -164,7 +113,6 @@ impl Workspace {
             Command::Quit => Ok(self.quit(false)),
             Command::ForceQuit => Ok(self.quit(true)),
             Command::SaveAndQuit => self.save_and_quit(path),
-            Command::ShowMessages => Ok(Effect::OpenMessages),
             Command::DismissMessages => {
                 self.messages.dismiss_all();
                 Ok(Effect::Stay)
@@ -211,26 +159,9 @@ impl Workspace {
                     &mut markdown.align_tables_on_leave
                 })),
             Command::ToggleWhichKey => Ok(self.toggle_which_key()),
-            Command::OpenFinder => Ok(Effect::OpenFinder),
-            Command::OpenTextSearch => Ok(Effect::OpenTextSearch),
-            Command::OpenUnresolvedLinks => Ok(Effect::OpenUnresolvedLinks),
-            Command::OpenCommandPalette => Ok(Effect::OpenCommandPalette),
-            Command::ToggleFolders => Ok(Effect::TogglePanel(PanelView::Folders)),
-            Command::ToggleTags => Ok(Effect::TogglePanel(PanelView::Tags)),
-            Command::ToggleContext => Ok(Effect::ToggleContext),
-            Command::ToggleNoteList => Ok(Effect::ToggleNoteList),
-            Command::ChooseListSource => Ok(Effect::ChooseListSource),
-            Command::ShowFolder => Ok(Effect::ShowFolder(argument.map(str::to_owned))),
-            Command::SaveListView => Ok(Effect::ListView(ListViewChange::Save)),
-            Command::RenameListView => Ok(Effect::ListView(ListViewChange::Rename)),
-            Command::DeleteListView => Ok(Effect::ListView(ListViewChange::Delete)),
             Command::FollowLink => self.follow_link(),
             Command::RenameTag => Ok(Effect::ChangeTags(TagRequest::rename(argument)?)),
             Command::MergeTag => Ok(Effect::ChangeTags(TagRequest::merge(argument)?)),
-            Command::UndoVaultChange => Ok(Effect::UndoVaultChange),
-            Command::ResumeTagChange => Ok(Effect::ResumeTagChange),
-            Command::NewNoteFromTemplate => Ok(Effect::NewNote(NoteRequest::parse(argument))),
-            Command::OpenDailyNote => Ok(Effect::OpenDailyNote),
             Command::EditTagAliases => page_change(TagField::Aliases, argument),
             Command::EditTagParents => page_change(TagField::Parents, argument),
             Command::SetTagIcon => page_change(TagField::Icon, argument),
@@ -239,11 +170,6 @@ impl Workspace {
                 Some(tag) if !tag.is_empty() => Ok(Effect::OpenTagPage(tag.to_owned())),
                 _ => Err(RequestError::Usage(":tagpage #tag").into()),
             },
-            Command::Focus => Ok(match argument.filter(|text| !text.trim().is_empty()) {
-                Some(text) => Effect::Focus(FocusCommand::Set(text.to_owned())),
-                None => Effect::Focus(FocusCommand::Show),
-            }),
-            Command::ClearFocus => Ok(Effect::Focus(FocusCommand::Clear)),
         }
     }
 

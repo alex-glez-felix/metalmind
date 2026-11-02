@@ -12,7 +12,7 @@ use gpui_kit::{
     prelude::FluentBuilder as _, uniform_list,
 };
 use jiff::Zoned;
-use metalmind_keymap::{Action, Command, ListAction, View};
+use metalmind_keymap::{Action, ListAction, View, WindowCommand};
 use metalmind_vault::VaultPath;
 use metalmind_vault::tags::TagKey;
 
@@ -74,7 +74,7 @@ impl NoteListView {
             .px(theme.layout.panel_button_padding_x)
             .rounded(theme.radius.md)
             .hover(|source| source.bg(theme.ui.panel_hover))
-            .on_click(|_, window, cx| dispatch(Command::ChooseListSource, window, cx))
+            .on_click(|_, window, cx| dispatch(WindowCommand::ChooseListSource, window, cx))
             .child(
                 div()
                     .min_w_0()
@@ -83,7 +83,7 @@ impl NoteListView {
                     .child(self.list.source().label()),
             )
             .children(key_hint(
-                Command::ChooseListSource,
+                WindowCommand::ChooseListSource,
                 View::NoteList,
                 theme,
                 cx,
@@ -115,9 +115,13 @@ impl NoteListView {
             (
                 "list-rename-view",
                 "renombrar",
-                Command::RenameListView.into(),
+                WindowCommand::RenameListView.into(),
             ),
-            ("list-delete-view", "borrar", Command::DeleteListView.into()),
+            (
+                "list-delete-view",
+                "borrar",
+                WindowCommand::DeleteListView.into(),
+            ),
         ];
         Some(
             div()
@@ -344,9 +348,13 @@ fn small(theme: &Theme) -> Div {
 /// Abrir es un clic en la fila.
 fn footer(theme: &Theme, cx: &mut Context<NoteListView>) -> Div {
     let buttons: [(&'static str, &'static str, Action); 3] = [
-        ("list-save-view", "vista", Command::SaveListView.into()),
+        (
+            "list-save-view",
+            "vista",
+            WindowCommand::SaveListView.into(),
+        ),
         ("list-tag", "etiquetar", ListAction::Tag.into()),
-        ("list-fold", "plegar", Command::ToggleNoteList.into()),
+        ("list-fold", "plegar", WindowCommand::ToggleNoteList.into()),
     ];
     div()
         .flex()

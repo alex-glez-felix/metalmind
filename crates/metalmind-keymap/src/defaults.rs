@@ -5,14 +5,14 @@
 use metalmind_vim::{Context as VimContext, Key};
 
 use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, ListAction};
-use crate::{ChangePreviewAction, ContextAction, PanelAction, PickerAction, View};
+use crate::{ChangePreviewAction, ContextAction, PanelAction, PickerAction, View, WindowCommand};
 
 pub(crate) fn bindings() -> Vec<Binding> {
     // `q` pliega la lista, como `space l`; va antes para que la lista muestre
     // `space l`, el último que se declara.
     let mut bindings = vec![
-        in_view(View::NoteList, &[k('q')], Command::ToggleNoteList),
-        in_view(View::NoteList, &[k('s')], Command::SaveListView),
+        in_view(View::NoteList, &[k('q')], WindowCommand::ToggleNoteList),
+        in_view(View::NoteList, &[k('s')], WindowCommand::SaveListView),
     ];
     bindings.extend(leader());
     bindings.extend(panes());
@@ -70,21 +70,21 @@ fn table<A: Into<Action> + Copy>(
 /// `space` y una tecla, en Normal (03 §3). Con `also_in_panels`, la misma
 /// tecla vale en el árbol del panel lateral, en la lista de notas y en el
 /// panel de contexto.
-const LEADER: &[(char, Command, bool)] = &[
-    ('f', Command::OpenFinder, false),
-    ('/', Command::OpenTextSearch, false),
-    ('p', Command::OpenCommandPalette, false),
-    ('e', Command::ToggleFolders, true),
-    ('t', Command::ToggleTags, true),
-    ('b', Command::ToggleContext, true),
-    ('u', Command::OpenUnresolvedLinks, true),
-    ('l', Command::ToggleNoteList, true),
-    ('v', Command::ChooseListSource, true),
-    ('c', Command::ShowFolder, false),
-    ('n', Command::NewNoteFromTemplate, true),
-    ('d', Command::OpenDailyNote, true),
-    ('z', Command::UndoVaultChange, true),
-    ('r', Command::ResumeTagChange, true),
+const LEADER: &[(char, WindowCommand, bool)] = &[
+    ('f', WindowCommand::OpenFinder, false),
+    ('/', WindowCommand::OpenTextSearch, false),
+    ('p', WindowCommand::OpenCommandPalette, false),
+    ('e', WindowCommand::ToggleFolders, true),
+    ('t', WindowCommand::ToggleTags, true),
+    ('b', WindowCommand::ToggleContext, true),
+    ('u', WindowCommand::OpenUnresolvedLinks, true),
+    ('l', WindowCommand::ToggleNoteList, true),
+    ('v', WindowCommand::ChooseListSource, true),
+    ('c', WindowCommand::ShowFolder, false),
+    ('n', WindowCommand::NewNoteFromTemplate, true),
+    ('d', WindowCommand::OpenDailyNote, true),
+    ('z', WindowCommand::UndoVaultChange, true),
+    ('r', WindowCommand::ResumeTagChange, true),
 ];
 
 fn leader() -> impl Iterator<Item = Binding> {
@@ -151,7 +151,11 @@ fn editor() -> impl Iterator<Item = Binding> {
     [
         in_view(View::Editor, &shortcut('c'), EditorAction::Copy),
         in_view(View::Editor, &shortcut('v'), EditorAction::Paste),
-        in_view(View::Editor, &shortcut('p'), Command::OpenCommandPalette),
+        in_view(
+            View::Editor,
+            &shortcut('p'),
+            WindowCommand::OpenCommandPalette,
+        ),
     ]
     .into_iter()
 }

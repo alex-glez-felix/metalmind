@@ -6,7 +6,7 @@ use gpui_kit::{
     Context, Div, InteractiveElement as _, IntoElement, MouseButton, ParentElement as _, Render,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _,
 };
-use metalmind_keymap::{Command, ContextAction, View, context};
+use metalmind_keymap::{ContextAction, View, WindowCommand, context};
 use metalmind_syntax::note_name;
 
 use super::ContextPanel;
@@ -77,7 +77,7 @@ impl ContextPanel {
             .child(key_button(
                 "context-close",
                 "cerrar",
-                Command::ToggleContext,
+                WindowCommand::ToggleContext,
                 View::Context,
                 theme,
                 cx,
