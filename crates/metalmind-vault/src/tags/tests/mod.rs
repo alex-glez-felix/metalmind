@@ -8,7 +8,9 @@ mod panel;
 mod query;
 mod rename;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Mutex;
+use std::thread;
 
 use crate::changes::Rename;
 use crate::index::{EntryKind, VaultIndex};
@@ -98,4 +100,32 @@ pub(super) fn owned(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
         .iter()
         .map(|(file, text)| ((*file).to_owned(), (*text).to_owned()))
         .collect()
+}
+
+/// `VaultIndex` no tiene orden: sin ordenar, cada proceso llenaría el índice
+/// en otro orden. Cada hilo lee un tramo, así que basta verlos por separado.
+#[test]
+fn las_notas_se_indexan_en_orden_de_ruta() {
+    let notes = 500;
+    let index = VaultIndex::from_entries(
+        (0..notes).map(|note| (path(&format!("nota-{note}.md")), EntryKind::Note)),
+    );
+    let reads = Mutex::new(HashMap::<_, Vec<VaultPath>>::new());
+    let _ = Tags::build(
+        VaultPath::fixed(DEFAULT_TAGS_FOLDER),
+        &index,
+        |note: &VaultPath| {
+            let mut reads = reads.lock().unwrap();
+            reads
+                .entry(thread::current().id())
+                .or_default()
+                .push(note.clone());
+            Some(String::new())
+        },
+    );
+    let reads = reads.into_inner().unwrap();
+    assert_eq!(reads.values().map(Vec::len).sum::<usize>(), notes);
+    for tramo in reads.values() {
+        assert!(tramo.is_sorted(), "{tramo:?}");
+    }
 }
