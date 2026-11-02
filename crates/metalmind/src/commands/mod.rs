@@ -5,6 +5,7 @@ mod add;
 mod error;
 mod open;
 mod search;
+mod tags;
 
 use std::borrow::Cow;
 use std::io::{self, Write};
@@ -18,6 +19,7 @@ pub use add::add;
 pub use error::CliError;
 pub use open::open;
 pub use search::search;
+pub use tags::tags;
 
 use crate::cli::Common;
 use crate::target::{Sources, TargetError, default_vault};

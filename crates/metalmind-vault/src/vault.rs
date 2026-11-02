@@ -165,6 +165,13 @@ impl VaultRoot {
         scan_within(&self.0, folders)
     }
 
+    /// Los tags de todas las notas de `files`, leídas de disco como al abrir
+    /// el vault: lo que necesita quien consulta tags sin abrirlo.
+    #[must_use]
+    pub fn tags(&self, files: &VaultIndex, folder: VaultPath) -> Tags {
+        Tags::build(folder, files, |path: &VaultPath| read_note(&self.0, path))
+    }
+
     /// Crea en la raíz una nota con `note` como `slug.md`, que nunca pisa
     /// otra; `now` solo nombra la que no tiene slug. Es lo que hace `metalmind add`.
     ///

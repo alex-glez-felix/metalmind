@@ -8,6 +8,8 @@ wl-paste | metalmind add -t receta                 # el texto desde stdin
 metalmind add --title "Reunión" -t trabajo < acta.txt
 metalmind add --template entrevista --title "Backend senior" "Sabe Rust"
 metalmind search imprenta                          # rutas, de la mejor a la peor
+metalmind search "#rust -#archivado parser"         # notas con #rust, sin #archivado
+metalmind tags                                     # cada tag con su conteo y sus padres
 metalmind open llamar-a-la-imprenta.md  # abre la app en esa nota
 ```
 
@@ -55,7 +57,9 @@ Imprime la ruta creada, relativa al vault.
 
 Fuzzy sobre las rutas del vault (notas y adjuntos), el mismo de `space f`: palabras separadas por espacio que tienen que coincidir todas; mayúsculas y acentos cuentan solo si la consulta los lleva. Da los `N` mejores (50 si falta), del mejor al peor; con la consulta vacía (`""`), las primeras `N` ordenadas por ruta; para todo el vault, un `-n` grande.
 
-**Por ahora solo rutas.** La consulta de tags (`#rust -#archivado`, [05](research/05-tags.md) §4) llega con el índice de tags ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)) y el texto completo con M6. Mientras tanto, un término que empieza con `#` o `-#` es error de uso en vez de buscarse como texto: así, cuando llegue, ninguna consulta que hoy funciona cambia de respuesta.
+**Con tags**, la consulta de `space f` ([05](research/05-tags.md) §4): `#rust` deja las notas con el tag, sus alias o sus descendientes por `parents`; `-#archivado` quita las que lo tienen; `-#` deja el buzón, las notas sin tags. Varios se combinan con "y", sin importar mayúsculas ni la forma escrita (`#RUST` = `#rust`), y las demás palabras van al fuzzy sobre las notas que quedan: `metalmind search "#rust -#archivado parser"`. Con tags solo salen notas: ni adjuntos ni páginas de tag. Un tag que no existe no deja ninguna nota si se pide y no quita ninguna si se excluye. Un `#` que no es un tag válido (`#2024/10`) es error de uso. La consulta puede empezar con `-` sin `--` (`metalmind search -#`); por eso, sin otra palabra, una opción mal escrita (`metalmind search --jsonn`) se busca como texto.
+
+Solo una consulta con tags lee las notas, una vez, como al abrir el vault (el índice de tags de [05](research/05-tags.md) §2); sin tags se buscan las rutas sin abrir ninguna. Como en la app, una nota que no se puede leer (o no es UTF-8) cuenta como nota sin tags: sale con `-#` y no es error, solo un aviso en stderr. Lo mismo vale para `metalmind tags`. El texto completo llega con M6.
 
 Sin coincidencias no es error: sale vacío y con código 0. En texto, una ruta por línea; si un nombre trae caracteres de control (un salto de línea, una secuencia de escape), salen escapados como `\n` o `\u{1b}`. `--json` da siempre la ruta exacta.
 
@@ -67,7 +71,18 @@ Este sí abre la ventana. Con `--json`, imprime qué va a abrir una vez leída l
 
 ## `metalmind tags`
 
-Todavía no existe: espera al índice de tags ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)).
+Los tags del vault con los números del panel ([05](research/05-tags.md) §2–§3), del mismo índice: cada tag una vez, con su forma establecida (la más escrita, contando el nombre de su página), cuántas notas distintas lo traen, contando sus alias y sus descendientes, y sus padres por `parents`. Las páginas de tag no cuentan como notas. Van en el orden del panel con todo expandido: los tags sin padres por nombre, cada uno seguido de sus hijos; un tag con varios padres sale bajo el primero. Los alias no salen aparte: suman a su tag. Un tag que solo nombra un `parents` (sin nota ni página) sale con su conteo, que es el de sus hijos.
+
+```sh
+$ metalmind tags
+1  archivado
+4  lenguajes
+4  Rust  ← lenguajes
+1  gpui  ← Rust, ui
+1  ui
+```
+
+Sin tags en el vault sale vacío, con código 0.
 
 ## Salida para agentes: `--json`
 
@@ -82,6 +97,7 @@ Todos los subcomandos aceptan `--json` y `--vault`. Con `--json`:
 |---|---|
 | `add` | `{"vault": string, "path": string, "tags": [string], "template": string \| null, "problems": [string]}` |
 | `search` | `{"vault": string, "query": string, "results": [{"path": string, "kind": "note" \| "attachment"}]}` |
+| `tags` | `{"vault": string, "tags": [{"name": string, "count": number, "parents": [string]}]}` |
 | `open` | `{"vault": string, "path": string}` |
 
 Ejemplos:
@@ -93,8 +109,11 @@ $ echo "probar el watcher" | metalmind add -t metalmind --json
 $ metalmind search watcher --json
 {"vault":"/home/usuario/notas","query":"watcher","results":[{"path":"probar-el-watcher.md","kind":"note"}]}
 
-$ metalmind search "#nota" --json
-{"error":{"kind":"usage","message":"`#nota`: la búsqueda por tags todavía no existe; por ahora solo se buscan rutas"}}
+$ metalmind tags --json
+{"vault":"/home/usuario/notas","tags":[{"name":"metalmind","count":1,"parents":[]}]}
+
+$ metalmind search "#2024/10" --json
+{"error":{"kind":"usage","message":"`#2024/10` no es un tag válido"}}
 ```
 
 Las claves no cambian de significado; si se agrega una, los que no la conocen la ignoran.
@@ -104,8 +123,8 @@ Las claves no cambian de significado; si se agrega una, los que no la conocen la
 | Código | `kind` | Cuándo |
 |---|---|---|
 | 0 | — | Salió bien, aunque la búsqueda no encuentre nada |
-| 1 | `io` | Falló una lectura o escritura (sin permiso de escritura en el vault, disco lleno, stdin roto, una nota que no es UTF-8) o `open` no pudo abrir la ventana |
-| 2 | `usage` | Lo pedido no vale: argumentos (los errores de clap también salen con 2, en texto), nota vacía, tag o título inválido, stdin que no es UTF-8, consulta con tags, `open` de algo que no es una nota del vault |
+| 1 | `io` | Falló una lectura o escritura (sin permiso de escritura en el vault, disco lleno, stdin roto) o `open` no pudo leer la nota (no es UTF-8, por ejemplo) o abrir la ventana |
+| 2 | `usage` | Lo pedido no vale: argumentos (los errores de clap también salen con 2, en texto), nota vacía, tag o título inválido, stdin que no es UTF-8, tag inválido en la consulta, `open` de algo que no es una nota del vault |
 | 3 | `vault` | No hay vault, o el elegido no existe, no es una carpeta o no se puede leer |
 
 ## Desde un agente
@@ -123,8 +142,12 @@ path=$(printf '%s\n' "El build falla sin libxkbcommon-x11-dev." "Se instala con 
 metalmind search --json "build gpui" | jq -r '.results[] | select(.kind == "note") | .path' \
   | while read -r note; do cat "$METALMIND_VAULT/$note"; done
 
+# Lo etiquetado #build que no esté archivado, y qué tags hay.
+metalmind search --json "#build -#archivado" | jq -r '.results[].path'
+metalmind tags --json | jq -r '.tags[] | "\(.count) \(.name)"'
+
 # Un error se reconoce por el código, sin leer el mensaje.
-metalmind search --json "#build" 2>err.json; [ $? -eq 2 ] && jq -r .error.message err.json
+metalmind search --json "#2024/10" 2>err.json; [ $? -eq 2 ] && jq -r .error.message err.json
 ```
 
 Lo que el agente crea sin `-t` queda en el buzón, para que una persona lo revise y lo etiquete.

@@ -17,6 +17,8 @@ use pretty_assertions::assert_eq;
 use serde_json::Value;
 use tempfile::TempDir;
 
+#[path = "commands/tags.rs"]
+mod tags;
 #[path = "commands/templates.rs"]
 mod templates;
 
@@ -308,16 +310,6 @@ fn search_sin_coincidencias_no_es_error() {
 }
 
 #[test]
-fn search_por_tags_todavia_no_existe() {
-    let sandbox = Sandbox::new();
-    let output = run(
-        &mut sandbox.metalmind(),
-        &["search", "--json", "parser -#archivado"],
-    );
-    assert_json_error(&output, "usage", 2);
-}
-
-#[test]
 fn sin_vault_lo_dice_con_su_codigo() {
     let sandbox = Sandbox::new();
     let output = run(&mut sandbox.bare(), &["add", "--json", "x"]);
@@ -488,12 +480,12 @@ fn la_ayuda_de_un_subcomando_no_abre_nada() {
 /// En un vault de 500 notas los subcomandos terminan sin pantalla (ver
 /// arriba): no arrancan la GUI.
 #[test]
-fn add_y_search_terminan_en_un_vault_de_500_notas() {
+fn los_subcomandos_terminan_en_un_vault_de_500_notas() {
     let sandbox = Sandbox::new();
     for i in 0..500 {
         fs::write(sandbox.vault.join(format!("nota-{i}.md")), "x\n").unwrap();
     }
-    for args in [&["add", "rápida"][..], &["search", "nota 42"]] {
+    for args in [&["add", "rápida"][..], &["search", "nota 42"], &["tags"]] {
         assert_ok(&run(&mut sandbox.metalmind(), args));
     }
 }

@@ -127,13 +127,13 @@ Abierto **(propuesta)**:
 
 **Por qué.** Capturar tiene que costar un comando, desde donde sea. Y un agente que puede consultar el vault en JSON lo usa mejor que uno que tiene que leer los archivos a mano.
 
-Comandos (2026-10-18: `add`, `search` solo con rutas, `open` y `--json` hechos; la referencia es [`cli.md`](../cli.md)):
+Comandos (2026-10-18: `add`, `search` por rutas, `open` y `--json` hechos; 2026-11-01: `tags` y `search` con tags; la referencia es [`cli.md`](../cli.md)):
 
 | Comando | Qué hace |
 |---|---|
 | `metalmind add "texto" -t tag` | Crea una nota. Sin `-t`, cae en el buzón (§9). Sin texto, lee de stdin (`wl-paste \| metalmind add`). |
-| `metalmind search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. Hoy solo rutas: un término `#…` es error de uso hasta que la CLI use el `TagIndex` ([#47](https://github.com/alex-glez-felix/metalmind/issues/47)). |
-| `metalmind tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7). Pendiente en [#47](https://github.com/alex-glez-felix/metalmind/issues/47), sobre el `TagIndex`. |
+| `metalmind search "#rust gpui"` | La misma consulta que `space f` (05 §4): tags más fuzzy sobre rutas; full-text cuando llegue M6. |
+| `metalmind tags` | Los tags con conteo y sus padres (el grafo de `parents` de las páginas de tag, 05 §7), del mismo índice que el panel. |
 | `metalmind open <ruta>` | Abre la app en esa nota. La ruta es relativa al vault. |
 | `--json` en todos | Salida estable para que la consuman agentes y scripts: un objeto por línea, errores con `kind` y código de salida fijos. |
 
