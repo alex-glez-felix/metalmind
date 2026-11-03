@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::time::Duration;
 
@@ -8,6 +9,7 @@ use tempfile::TempDir;
 use super::*;
 use crate::debounce::{Batch, Debouncer};
 use crate::history::TEST_RETENTION;
+use crate::note_scan::index_notes;
 use crate::scan::scan;
 use crate::watcher::FolderWatch;
 
@@ -73,7 +75,7 @@ fn un_guardado_ya_escrito_se_registra_antes_de_seguir_un_renombre() {
         to: b.clone(),
         kind: EntryKind::Note,
     }];
-    worker.follow_disk_changes(&changes, &mut Inbox::new(&received));
+    worker.follow_disk_changes(&changes, Vec::new(), &mut Inbox::new(&received));
     assert_eq!(contents(&history, &b), ["uno", "dos"]);
 }
 
@@ -105,7 +107,7 @@ fn un_guardado_en_el_destino_de_un_renombre_espera_al_renombre() {
         kind: EntryKind::Note,
     }];
     let mut inbox = Inbox::new(&received);
-    worker.follow_disk_changes(&changes, &mut inbox);
+    worker.follow_disk_changes(&changes, Vec::new(), &mut inbox);
     let Some(Message::Save(save)) = inbox.next() else {
         panic!("el guardado tenía que seguir esperando");
     };
@@ -136,7 +138,7 @@ fn al_renombrarse_lo_que_tiene_la_nota_tambien_es_una_version() {
     worker.follow_in_history(&changes);
     let edited: Vec<VaultPath> = changes.iter().filter_map(edited_note).cloned().collect();
     let (_messages, received) = mpsc::channel();
-    worker.record_external(&edited, &mut Inbox::new(&received));
+    read_and_record(&worker, &edited, &mut Inbox::new(&received));
     assert_eq!(contents(&history, &b), ["uno", "dos"]);
 }
 
@@ -160,7 +162,11 @@ fn un_guardado_que_espera_se_registra_antes_que_lo_que_ya_hay_en_disco() {
         }))
         .unwrap();
     fs::write(root.path().join("a.md"), "nueva").unwrap();
-    worker.record_external(std::slice::from_ref(&note), &mut Inbox::new(&received));
+    read_and_record(
+        &worker,
+        std::slice::from_ref(&note),
+        &mut Inbox::new(&received),
+    );
 
     assert!(recorded.try_recv().unwrap().unwrap().is_some());
     assert_eq!(contents(&history, &note), ["vieja", "nueva"]);
@@ -227,4 +233,111 @@ fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
     assert_eq!(contents(&history, &b), ["uno", "dos", "tres"]);
     assert_eq!(history.content(&b, after).unwrap(), "tres");
     assert_eq!(history.deleted_notes().unwrap(), []);
+}
+
+/// Lo que hace un lote con `edited` en el historial, sin lo demás del lote.
+fn read_and_record(worker: &Worker, edited: &[VaultPath], inbox: &mut Inbox) {
+    let read = |path: &VaultPath| read_note(&worker.root, path);
+    let mut notes = NoteBatch::new(&read);
+    for save in worker.read_external(edited, &mut notes, inbox) {
+        worker.record(&save);
+    }
+    worker.record_external(notes.into_texts(edited));
+}
+
+/// Un guardado que llega después de leer el disco no puede registrarse antes
+/// que lo leído: la versión vieja quedaría como la última.
+#[test]
+fn lo_guardado_despues_de_leer_va_detras_de_lo_leido() {
+    let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let history = Arc::new(History::new(data.path(), TEST_RETENTION));
+    let worker = worker(root.path(), &history);
+    let note = VaultPath::new("a.md").unwrap();
+    fs::write(root.path().join("a.md"), "de fuera").unwrap();
+    let read = |path: &VaultPath| read_note(&worker.root, path);
+    let mut notes = NoteBatch::new(&read);
+    let (messages, received) = mpsc::channel();
+    let mut inbox = Inbox::new(&received);
+    let external = std::slice::from_ref(&note);
+    let saves = worker.read_external(external, &mut notes, &mut inbox);
+    assert!(saves.is_empty());
+
+    let (save, _recorded) = queued_save(&note, "guardada");
+    messages.send(save).unwrap();
+    let saves = worker.follow_disk_changes(&[], saves, &mut inbox);
+    assert!(saves.is_empty(), "no toca a un renombre: espera su turno");
+    worker.record_external(notes.into_texts(external));
+    let Some(Message::Save(save)) = inbox.next() else {
+        panic!("el guardado tenía que seguir esperando");
+    };
+    worker.record(&save);
+    assert_eq!(contents(&history, &note), ["de fuera", "guardada"]);
+}
+
+const TAGS_FOLDER: &str = crate::tags::DEFAULT_TAGS_FOLDER;
+
+fn full_indexes(root: &Path) -> Indexes {
+    let read = |path: &VaultPath| read_note(root, path);
+    let files = scan(root, None);
+    let (links, tags, _) = index_notes(root, &files, &VaultPath::fixed(TAGS_FOLDER), None, &read);
+    Indexes { files, links, tags }
+}
+
+/// Cada nota que el lote mira se lee una vez: los links, los tags y el
+/// historial ven el mismo contenido. Una renombrada sin cambios la lee solo el
+/// historial, y lo que no tocó el lote no se lee.
+#[test]
+fn un_lote_lee_cada_nota_una_sola_vez() {
+    let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let root = root.path().canonicalize().unwrap();
+    let history = Arc::new(History::new(data.path(), TEST_RETENTION));
+    let write = |name: &str, text: &str| fs::write(root.join(name), text).unwrap();
+    fs::create_dir(root.join("tags")).unwrap();
+    write("editada.md", "[[nueva]] #uno");
+    write("movida.md", "[[editada]] #dos");
+    write("quieta.md", "[[editada]] #tres");
+    write("tags/uno.md", "");
+    let mut indexes = full_indexes(&root);
+    let worker = worker(&root, &history);
+    worker.index.store(Arc::new(indexes.files.clone()));
+
+    write("editada.md", "[[nueva]] [[movida-2]] #otro");
+    write("nueva.md", "#cuatro");
+    write("tags/uno.md", "---\ncolor: naranja\n---\n#cinco");
+    fs::rename(root.join("movida.md"), root.join("movida-2.md")).unwrap();
+    let vault_path = |name: &str| VaultPath::new(name).unwrap();
+    let written = ["editada.md", "nueva.md", "tags/uno.md"].map(vault_path);
+    let mut touched = Touched {
+        renames: vec![(vault_path("movida.md"), vault_path("movida-2.md"))],
+        written: written.iter().cloned().collect(),
+        // Un chmod sobre lo mismo no la vuelve a leer.
+        reread: BTreeSet::from([vault_path("editada.md")]),
+        ..Touched::default()
+    };
+    touched.paths.extend(written);
+    touched
+        .paths
+        .extend(["movida.md", "movida-2.md"].map(vault_path));
+
+    let reads = Mutex::new(BTreeMap::<String, usize>::new());
+    let read = |path: &VaultPath| {
+        let mut reads = reads.lock().unwrap();
+        *reads.entry(path.to_string()).or_default() += 1;
+        read_note(&root, path)
+    };
+    let (_messages, received) = mpsc::channel();
+    worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
+
+    let once: BTreeMap<String, usize> = ["editada.md", "movida-2.md", "nueva.md", "tags/uno.md"]
+        .map(|name| (name.to_owned(), 1))
+        .into();
+    assert_eq!(reads.into_inner().unwrap(), once);
+    let full = full_indexes(&root);
+    assert_eq!(indexes.links, full.links);
+    assert_eq!(indexes.tags, full.tags);
+    assert_eq!(
+        contents(&history, &vault_path("editada.md")),
+        ["[[nueva]] [[movida-2]] #otro"]
+    );
+    assert_eq!(*worker.links.load_full(), full.links);
 }

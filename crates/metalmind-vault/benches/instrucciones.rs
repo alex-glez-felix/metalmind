@@ -29,7 +29,7 @@ use gungraun::{Callgrind, EventKind};
 use metalmind_perf::{NoteNames, linked_vault};
 use metalmind_vault::tags::{Scope, ScopeWord, TagCompletion, TagPlan, TagQuery, TagTree, Tags};
 use metalmind_vault::{
-    Destination, EntryKind, LinkIndex, RenamePlan, Vault, VaultChange, VaultPath,
+    Destination, EntryKind, LinkIndex, NoteBatch, RenamePlan, Vault, VaultChange, VaultPath,
 };
 use tempfile::TempDir;
 
@@ -91,7 +91,10 @@ fn links_cambio_del_watcher(
 // la función medida, y el `--toggle-collect` de gungraun apagaría la cuenta
 // al entrar ahí.
 fn apply(index: &mut LinkIndex, change: &VaultChange, text: &str) {
-    index.apply(change, |_| Some(text.to_owned()));
+    index.apply(
+        change,
+        &mut NoteBatch::new(&|_: &VaultPath| Some(text.to_owned())),
+    );
 }
 
 fn modified(names: NoteNames) -> (LinkIndex, VaultChange, String) {

@@ -2,7 +2,7 @@
 //! watcher y es el único que escribe el historial, así que las versiones y
 //! los renombres le llegan en el orden en que pasaron.
 
-use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc};
@@ -13,12 +13,14 @@ use arc_swap::ArcSwap;
 use crate::debounce::Batch;
 use crate::file;
 use crate::history::{History, HistoryError, VersionId};
+use crate::inbox::Inbox;
 use crate::index::{EntryKind, VaultIndex};
 use crate::links::LinkIndex;
+use crate::note_batch::NoteBatch;
 use crate::note_cache::CacheRefresh;
 use crate::path::VaultPath;
 use crate::refresh::{Touched, VaultChange, refresh};
-use crate::tags::Tags;
+use crate::tags::{TagKey, Tags};
 use crate::vault::{SaveKind, VaultUpdate};
 use crate::watch::{touched, touched_by_errors};
 use crate::watcher::{Watch, before_reading};
@@ -91,42 +93,47 @@ impl Worker {
         if self.stop.load(Ordering::Acquire) {
             return;
         }
-        let Indexes { files, links, tags } = indexes;
         let read = |path: &VaultPath| read_note(&self.root, path);
+        self.on_touched(indexes, &touched, &read, inbox);
+    }
+
+    /// Lleva índices e historial a lo que dice `touched`, y lo publica. `read`
+    /// es la única puerta al contenido de las notas en todo el lote.
+    fn on_touched(
+        &self,
+        indexes: &mut Indexes,
+        touched: &Touched,
+        read: &dyn Fn(&VaultPath) -> Option<String>,
+        inbox: &mut Inbox,
+    ) {
         let watching = self.watch().lost().is_none();
-        let changes = self.refresh(files, &touched);
+        let changes = self.refresh(&mut indexes.files, touched);
         let lost = watching && self.watch().lost().is_some();
-        for change in &changes {
-            links.apply(change, read);
-        }
-        let mut reread = false;
-        for path in &touched.reread {
-            reread |= links.reread(path, read);
-        }
-        let mut tag_changes = tags.apply(&changes, files, &read);
-        // Un chmod no cambia el índice de archivos, pero puede volver legible una nota.
-        let rescans: Vec<VaultChange> = touched
-            .reread
-            .iter()
-            .map(|path| VaultChange::Modified { path: path.clone() })
-            .collect();
-        tag_changes.extend(tags.apply(&rescans, files, &read));
-        tag_changes.sort_unstable();
-        tag_changes.dedup();
+        let mut notes = NoteBatch::new(read);
+        let external: Vec<VaultPath> = changes.iter().filter_map(edited_note).cloned().collect();
+        let saves = self.read_external(&external, &mut notes, inbox);
+        let (reread, tag_changes) = indexes.apply(&changes, touched, &mut notes);
         // Perder la vigilancia también se publica: sin eso no llegaría otro lote.
         if changes.is_empty() && !reread && tag_changes.is_empty() && !lost {
             return;
         }
         // Antes de publicar, para que quien reciba el cambio ya vea el
         // historial en la ruta nueva.
-        self.follow_disk_changes(&changes, inbox);
-        let snapshot = Arc::new(files.clone());
-        let published = Arc::new(links.clone());
-        let published_tags = Arc::new(tags.clone());
+        let saves = self.follow_disk_changes(&changes, saves, inbox);
+        self.publish(indexes, changes, tag_changes);
+        for save in saves {
+            self.record(&save);
+        }
+        self.record_external(notes.into_texts(&external));
+    }
+
+    fn publish(&self, indexes: &Indexes, changes: Vec<VaultChange>, tag_changes: Vec<TagKey>) {
+        let snapshot = Arc::new(indexes.files.clone());
+        let published = Arc::new(indexes.links.clone());
+        let published_tags = Arc::new(indexes.tags.clone());
         self.index.store(Arc::clone(&snapshot));
         self.links.store(Arc::clone(&published));
         self.tags.store(Arc::clone(&published_tags));
-        let external: Vec<VaultPath> = changes.iter().filter_map(edited_note).cloned().collect();
         // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
         let _ = self.updates.send(VaultUpdate {
             changes,
@@ -135,14 +142,18 @@ impl Worker {
             tags: published_tags,
             tag_changes,
         });
-        self.record_external(&external, inbox);
     }
 
     /// Sigue los renombres y borrados del lote. Antes registra los guardados
     /// ya escritos en una ruta que el lote renombra o borra: se escribieron
-    /// antes del cambio, y si no su versión quedaría en la ruta vieja. Los
-    /// demás, como uno en el destino de un renombre, van después y esperan.
-    fn follow_disk_changes(&self, changes: &[VaultChange], inbox: &mut Inbox) {
+    /// antes del cambio, y si no su versión quedaría en la ruta vieja. Devuelve
+    /// los demás de `saves`, como uno en el destino de un renombre: van después.
+    fn follow_disk_changes(
+        &self,
+        changes: &[VaultChange],
+        saves: Vec<Save>,
+        inbox: &mut Inbox,
+    ) -> Vec<Save> {
         let gone: Vec<&VaultPath> = changes
             .iter()
             .filter_map(|change| match change {
@@ -151,14 +162,18 @@ impl Worker {
                 _ => None,
             })
             .collect();
-        let saves = {
+        let in_gone = |save: &Save| gone.iter().any(|path| save.path.starts_with(path));
+        let (mut before, after): (Vec<Save>, Vec<Save>) =
+            saves.into_iter().partition(|save| in_gone(save));
+        {
             let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
-            inbox.pending_saves(|save| gone.iter().any(|path| save.path.starts_with(path)))
-        };
-        for save in saves {
+            before.extend(inbox.pending_saves(in_gone));
+        }
+        for save in before {
             self.record(&save);
         }
         self.follow_in_history(changes);
+        after
     }
 
     /// Solo llegan guardados si hay historial.
@@ -177,35 +192,36 @@ impl Worker {
         let _ = save.done.send(result);
     }
 
+    /// Lee `external` para el historial y devuelve los guardados ya escritos,
+    /// que van antes: el disco tiene algo igual o más nuevo que ellos. Lo que
+    /// se guarde después llega al canal y queda tras lo leído aquí.
+    fn read_external(
+        &self,
+        external: &[VaultPath],
+        notes: &mut NoteBatch<'_>,
+        inbox: &mut Inbox,
+    ) -> Vec<Save> {
+        if self.history.is_none() || external.is_empty() {
+            return Vec::new();
+        }
+        // Solo mientras se lee: registrar puede tardar y un guardado esperaría.
+        let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
+        for path in external {
+            notes.text(path);
+        }
+        inbox.pending_saves(|_| true)
+    }
+
     /// Lo que cambió fuera de Metalmind también es una versión (06 §3). Un
     /// guardado propio llega aquí igual, pero ya es la última versión y no
-    /// crea otra. Los guardados ya escritos se registran antes de leer el
-    /// disco, que tiene algo igual o más nuevo que ellos.
-    fn record_external(&self, notes: &[VaultPath], inbox: &mut Inbox) {
+    /// crea otra.
+    fn record_external(&self, texts: Vec<(VaultPath, String)>) {
         let Some(history) = &self.history else {
             return;
         };
-        if notes.is_empty() {
-            return;
-        }
-        // Solo mientras se lee: registrar puede tardar y un guardado esperaría.
-        let (saves, texts) = {
-            let _saving = self.saving.lock().unwrap_or_else(PoisonError::into_inner);
-            (inbox.pending_saves(|_| true), self.read_notes(notes))
-        };
-        for save in saves {
-            self.record(&save);
-        }
         if let Err(error) = history.record_all(texts, SystemTime::now()) {
             log::warn!("{error}");
         }
-    }
-
-    fn read_notes(&self, notes: &[VaultPath]) -> Vec<(VaultPath, String)> {
-        notes
-            .iter()
-            .filter_map(|path| Some((path.clone(), read_note(&self.root, path)?)))
-            .collect()
     }
 
     /// Al abrir el vault, el historial se alinea con lo que pasó con el vault
@@ -312,53 +328,33 @@ struct Indexes {
     tags: Tags,
 }
 
-/// Los mensajes del hilo, con los que ya se sacaron del canal y esperan su
-/// turno en orden.
-struct Inbox<'a> {
-    receiver: &'a mpsc::Receiver<Message>,
-    queue: VecDeque<Message>,
-}
-
-impl<'a> Inbox<'a> {
-    fn new(receiver: &'a mpsc::Receiver<Message>) -> Self {
-        Self {
-            receiver,
-            queue: VecDeque::new(),
+impl Indexes {
+    /// Pone links y tags al día con `files`, ya actualizado. Devuelve si un
+    /// chmod cambió algún link y las claves de tag que cambiaron.
+    fn apply(
+        &mut self,
+        changes: &[VaultChange],
+        touched: &Touched,
+        notes: &mut NoteBatch<'_>,
+    ) -> (bool, Vec<TagKey>) {
+        for change in changes {
+            self.links.apply(change, notes);
         }
-    }
-
-    fn next(&mut self) -> Option<Message> {
-        self.queue.pop_front().or_else(|| self.receiver.recv().ok())
-    }
-
-    /// El siguiente evento de disco si es lo próximo que espera, sin bloquear.
-    fn next_disk(&mut self) -> Option<Batch> {
-        let message = match self.queue.pop_front() {
-            Some(message) => message,
-            None => self.receiver.try_recv().ok()?,
-        };
-        match message {
-            Message::Disk(result) => Some(result),
-            other => {
-                self.queue.push_front(other);
-                None
-            }
+        let mut reread = false;
+        for path in &touched.reread {
+            reread |= self.links.reread(path, notes);
         }
-    }
-
-    /// Los guardados que ya llegaron, en orden; el resto sigue esperando.
-    fn pending_saves(&mut self, wanted: impl Fn(&Save) -> bool) -> Vec<Save> {
-        self.queue.extend(self.receiver.try_iter());
-        let mut saves = Vec::new();
-        let mut rest = VecDeque::with_capacity(self.queue.len());
-        for message in self.queue.drain(..) {
-            match message {
-                Message::Save(save) if wanted(&save) => saves.push(save),
-                other => rest.push_back(other),
-            }
-        }
-        self.queue = rest;
-        saves
+        let mut tag_changes = self.tags.apply(changes, &self.files, notes);
+        // Un chmod no cambia el índice de archivos, pero puede volver legible una nota.
+        let rescans: Vec<VaultChange> = touched
+            .reread
+            .iter()
+            .map(|path| VaultChange::Modified { path: path.clone() })
+            .collect();
+        tag_changes.extend(self.tags.apply(&rescans, &self.files, notes));
+        tag_changes.sort_unstable();
+        tag_changes.dedup();
+        (reread, tag_changes)
     }
 }
 

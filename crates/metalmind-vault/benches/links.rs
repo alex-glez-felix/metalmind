@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use divan::Bencher;
 use metalmind_perf::{NoteNames, linked_vault};
-use metalmind_vault::{EntryKind, LinkIndex, VaultChange, VaultPath};
+use metalmind_vault::{EntryKind, LinkIndex, NoteBatch, VaultChange, VaultPath};
 
 fn main() {
     divan::main();
@@ -57,7 +57,12 @@ fn modificar_una_nota(bencher: Bencher) {
     let change = VaultChange::Modified { path };
     bencher
         .with_inputs(|| index.clone())
-        .bench_local_refs(|index| index.apply(&change, |_| Some(text.clone())));
+        .bench_local_refs(|index| {
+            index.apply(
+                &change,
+                &mut NoteBatch::new(&|_: &VaultPath| Some(text.clone())),
+            );
+        });
 }
 
 /// `nota-8` está en las 100 carpetas: 300 links de 100 notas vuelven a resolver.
@@ -70,7 +75,12 @@ fn crear_una_nota_que_empata(bencher: Bencher) {
     };
     bencher
         .with_inputs(|| index.clone())
-        .bench_local_refs(|index| index.apply(&change, |_| Some(String::new())));
+        .bench_local_refs(|index| {
+            index.apply(
+                &change,
+                &mut NoteBatch::new(&|_: &VaultPath| Some(String::new())),
+            );
+        });
 }
 
 /// Lo que paga el watcher por lote para publicar el índice.

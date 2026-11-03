@@ -31,3 +31,14 @@ pub(crate) fn in_parallel<T: Send, R: Send>(items: Vec<T>, work: impl Fn(T) -> R
             .collect()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conserva_el_orden() {
+        let items: Vec<usize> = (0..500).collect();
+        assert_eq!(in_parallel(items.clone(), |item| item), items);
+    }
+}

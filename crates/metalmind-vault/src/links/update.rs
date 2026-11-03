@@ -9,6 +9,7 @@ use super::names::key_of;
 use super::note::scan_links;
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::index::EntryKind;
+use crate::note_batch::NoteBatch;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
@@ -59,19 +60,15 @@ impl LinkIndex {
         index
     }
 
-    /// Aplica un cambio del watcher. `read` da el contenido actual de una
-    /// nota creada o modificada.
-    pub fn apply(
-        &mut self,
-        change: &VaultChange,
-        mut read: impl FnMut(&VaultPath) -> Option<String>,
-    ) {
+    /// Aplica un cambio del watcher. `notes` da lo escaneado de una nota creada
+    /// o modificada.
+    pub fn apply(&mut self, change: &VaultChange, notes: &mut NoteBatch<'_>) {
         match change {
             VaultChange::Created {
                 kind: EntryKind::Folder,
                 ..
             } => {}
-            VaultChange::Created { path, .. } => self.add_file(path, &mut read),
+            VaultChange::Created { path, .. } => self.add_file(path, notes),
             VaultChange::Removed { path, .. } => {
                 let mut keys = HashSet::new();
                 for file in self.names.within(path) {
@@ -80,11 +77,10 @@ impl LinkIndex {
                 }
                 self.resolve_again(&keys);
             }
-            VaultChange::Renamed { from, to, .. } => self.rename(from, to, &mut read),
+            VaultChange::Renamed { from, to, .. } => self.rename(from, to, notes),
             VaultChange::Modified { path } => {
                 if self.notes.contains_key(path) {
-                    let text = read(path);
-                    self.replace_links(path, text.as_deref().map(scan_links).unwrap_or_default());
+                    self.replace_links(path, notes.scan(path).links.clone());
                 }
             }
         }
@@ -93,42 +89,31 @@ impl LinkIndex {
     /// Vuelve a leer las notas en `path` (y dentro, si es una carpeta) sin
     /// que el vault haya cambiado: un chmod puede volver legible o ilegible
     /// una nota. Devuelve si cambió algún link.
-    pub(crate) fn reread(
-        &mut self,
-        path: &VaultPath,
-        mut read: impl FnMut(&VaultPath) -> Option<String>,
-    ) -> bool {
+    pub(crate) fn reread(&mut self, path: &VaultPath, notes: &mut NoteBatch<'_>) -> bool {
         let mut changed = false;
         for note in self.names.within(path) {
             let Some(before) = self.notes.get(&note).cloned() else {
                 continue;
             };
-            let text = read(&note);
-            self.replace_links(&note, text.as_deref().map(scan_links).unwrap_or_default());
+            self.replace_links(&note, notes.scan(&note).links.clone());
             changed |= self.notes.get(&note) != Some(&before);
         }
         changed
     }
 
-    fn add_file(&mut self, path: &VaultPath, read: &mut impl FnMut(&VaultPath) -> Option<String>) {
+    fn add_file(&mut self, path: &VaultPath, notes: &mut NoteBatch<'_>) {
         self.remove_note(path);
         let mut keys: HashSet<String> = self.names.remove(path).into_iter().collect();
         keys.extend(self.names.insert(path));
         if EntryKind::of_file(path) == EntryKind::Note {
-            let links = read(path).as_deref().map(scan_links).unwrap_or_default();
-            self.add_note(path.clone(), links);
+            self.add_note(path.clone(), notes.scan(path).links.clone());
         }
         self.resolve_again(&keys);
     }
 
     /// Mueve `from`, y todo lo que contiene si es una carpeta, a `to`. Los
     /// links de una nota movida se vuelven a resolver desde su ruta nueva.
-    fn rename(
-        &mut self,
-        from: &VaultPath,
-        to: &VaultPath,
-        read: &mut impl FnMut(&VaultPath) -> Option<String>,
-    ) {
+    fn rename(&mut self, from: &VaultPath, to: &VaultPath, notes: &mut NoteBatch<'_>) {
         let mut keys = HashSet::new();
         let mut moved = Vec::new();
         for old in self.names.within(from) {
@@ -144,7 +129,7 @@ impl LinkIndex {
             if EntryKind::of_file(&new) == EntryKind::Note {
                 let links = match links {
                     Some(links) => Arc::unwrap_or_clone(links),
-                    None => read(&new).as_deref().map(scan_links).unwrap_or_default(),
+                    None => notes.scan(&new).links.clone(),
                 };
                 self.add_note(new, links);
             }

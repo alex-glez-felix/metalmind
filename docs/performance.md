@@ -57,8 +57,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Pintar las 22 fórmulas del spike, escala 1 / 2 (en el fondo) | segundo plano | 2.6 / 5.5 ms (0.12 / 0.25 ms cada una) | ✅ | `metalmind-ui` `pintar_las_22` |
 | Nota con 200 fórmulas: primer frame / hasta pintar las visibles (cachés frías) | ≤ 300 ms | p50 111 / 134 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
-| Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 38.7 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
-| Abrir el vault, 50 k notas | ≤ 2 s | 479 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
+| Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 30.6 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
+| Abrir el vault, 50 k notas | ≤ 2 s | 405 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
 | Abrir con la caché al día, 5 k / 50 k notas (servidor virtual de 2 hilos, no comparable con lo de arriba: ver "Caché de las notas") | ≤ 200 ms / ≤ 2 s | 168 ms / 1.55 s | ✅ | `metalmind-vault` `abrir_5k_notas_con_cache`, `abrir_50k_notas_con_cache` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 18 / 327 ms; 24 / 336 ms | ✅ | `metalmind-vault` `indexar_links`, `indexar_links_nombres_unicos` |
 | Índice de links, un cambio del watcher: modificar una nota / crear una cuyo nombre usan 300 links | ≤ 16 ms | 23 µs / 0.35 ms | ✅ | `metalmind-vault` `modificar_una_nota`, `crear_una_nota_que_empata` |
@@ -131,6 +131,17 @@ Abrir el vault con y sin la [caché en disco](research/03-core-architecture.md) 
 - **Ya no manda leer ni escanear, sino `LinkIndex`.** Por fases, con la caché al día y 50 k notas de 1.5 KB: walk 69 ms, cargar la caché 166 ms, mirar el sello de cada nota 295 ms, **resolver y registrar los links 813 ms**, tags 160 ms.
 - La caché guarda el contexto de cada link (hasta 80 bytes a cada lado), así que en notas que son casi puros links pesa más que ellas.
 - Reescribirla cuando algo cambió cuesta unos 250 ms con 50 k notas de puros links, en el hilo del vault: no demora la apertura.
+
+Un solo escaneo por nota ([#234](https://github.com/alex-glez-felix/metalmind/issues/234)), con `divan`, mismos benchmarks y misma máquina con GPU, mediana de una corrida con otros procesos corriendo. Abrir el vault con el disco caliente baja por lo de [#241](https://github.com/alex-glez-felix/metalmind/issues/241), no por los lotes:
+
+| | Cada índice lee por su cuenta | Una lectura al abrir | También una en cada lote |
+|---|---:|---:|---:|
+| `abrir_5k_notas` | 32.1 ms | 30.1 ms | 30.6 ms |
+| `abrir_50k_notas` | 422 ms | 403 ms | 405 ms |
+| `abrir_50k_notas_con_cache` | — | 397 ms | 395 ms |
+
+- **Lecturas de una nota editada fuera de la app, por lote:** de tres (links, tags e historial) a una, y dos escaneos a uno. Una página de tag sigue escaneándose dos veces: `TagPage` sale del texto y lo que guarda el escaneo no alcanza.
+- **Las páginas de tag al abrir sin caché:** de dos lecturas a una. En `abrir_con_tags` (2 000 páginas) no se distingue del ruido.
 
 ## Benchmark de la UI
 
