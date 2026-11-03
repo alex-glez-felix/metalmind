@@ -64,6 +64,7 @@ impl Fixture {
             snapshot: self.vault.snapshot(),
             links: self.vault.links(),
             tags: self.vault.tags(),
+            properties: self.vault.properties(),
             tag_changes: Vec::new(),
         }
     }

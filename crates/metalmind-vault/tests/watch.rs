@@ -9,7 +9,9 @@ mod support;
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
+use metalmind_syntax::{Property, PropertyValue};
 use metalmind_vault::{EntryKind, Vault, VaultChange, VaultPath, VaultUpdate, write_atomic};
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
@@ -22,6 +24,25 @@ fn path(path: &str) -> VaultPath {
 
 fn open(root: &Path) -> (Vault, Receiver<VaultUpdate>) {
     Vault::open(root).unwrap()
+}
+
+#[test]
+fn cada_lote_publica_las_propiedades_de_la_nota() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "---\ntítulo: Uno\n---\n").unwrap();
+    let (vault, updates) = open(dir.path());
+    let note = path("a.md");
+    let title = |text: &str| {
+        vec![Property {
+            key: "título".to_owned(),
+            value: PropertyValue::Text(text.to_owned()),
+        }]
+    };
+    assert_eq!(vault.properties().of(&note), title("Uno"));
+    fs::write(dir.path().join("a.md"), "---\ntítulo: Dos\n---\n").unwrap();
+    let update = updates.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(update.properties.of(&note), title("Dos"));
+    assert_eq!(vault.properties().of(&note), title("Dos"));
 }
 
 #[test]
