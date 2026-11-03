@@ -335,8 +335,8 @@ const SCENES: &[(&str, &[Step])] = &[
             "<C-u>entrevistas/2026/octubre/una entrevista con un nombre larguisimo para ver como se recorta la ruta en la fila del picker",
         )],
     ),
-    // El input se corre hasta el cursor (#147): al final de lo escrito y,
-    // con `ctrl-a`, de vuelta al principio.
+    // El campo recorta alrededor del cursor (#147, #236): al final de lo
+    // escrito y, con `ctrl-a`, de vuelta al principio.
     ("plantilla-nombre-largo-inicio", &[Step::Keys("<C-a>")]),
     ("plantilla-creada", &[Step::Keys("<CR>")]),
     ("nota-del-dia", &[Step::Keys("<Esc>:today<CR>")]),
@@ -523,6 +523,14 @@ const SCENES: &[(&str, &[Step])] = &[
     ("lista-tag", &[Step::Keys("#rust<CR>")]),
     ("lista-filtro", &[Step::Keys("<Space>f-#archivado idea")]),
     ("lista-filtro-vacio", &[Step::Keys("<C-u>zzqqxx")]),
+    // El filtro no cabe (#236): el cursor se ve y los avisos siguen marcados.
+    (
+        "lista-filtro-largo",
+        &[Step::Keys(
+            "<C-u>#no-existe una consulta larguisima que no cabe en la columna de la lista #tampoco-existe",
+        )],
+    ),
+    ("lista-filtro-largo-inicio", &[Step::Keys("<C-a>")]),
     ("lista-nota", &[Step::Keys("<Esc><Esc>jj<CR>")]),
     // Con `wrap`, el de fábrica: plegar cambia el ancho y las filas
     // partidas, pero la nota sigue en la misma línea y con el cursor.

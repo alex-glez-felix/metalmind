@@ -21,3 +21,4 @@ pub use self::preview::{Preview, PreviewLine, lines_that_fit, preview_width, vis
 pub(crate) use self::view::{
     Overflow, PickerDelegate, PickerEvent, PickerOptions, PickerRow, PickerView,
 };
+pub use crate::row_cursor::RowCursor;

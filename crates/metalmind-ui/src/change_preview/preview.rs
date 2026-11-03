@@ -6,13 +6,15 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use metalmind_vault::{Changes, FileEdits, TextEdit, VaultPath};
 
+use crate::row_cursor::RowCursor;
+
 pub struct ChangePreview {
     title: String,
     changes: Changes,
     notices: Vec<Notice>,
     rows: Vec<Change>,
     dropped: BTreeSet<usize>,
-    selected: usize,
+    cursor: RowCursor,
     /// Los archivos del plan con cambios sin guardar en un buffer.
     unsaved: BTreeSet<VaultPath>,
     /// Los renombres son lo que se pidió: no se pueden quitar.
@@ -94,13 +96,14 @@ impl ChangePreview {
             .chain((0..changes.creates.len()).map(Change::Create))
             .chain((0..changes.renames.len()).map(Change::Rename))
             .collect();
+        let cursor = RowCursor::wrapping(rows.len());
         let mut preview = Self {
             title,
             changes,
             notices,
             rows,
             dropped: BTreeSet::new(),
-            selected: 0,
+            cursor,
             unsaved: BTreeSet::new(),
             fixed_renames: false,
             edits_in_buffers: false,
@@ -118,7 +121,7 @@ impl ChangePreview {
         self.fixed_renames = true;
         self.rows
             .sort_by_key(|change| !matches!(change, Change::Rename(_)));
-        self.selected = 0;
+        self.cursor.select(0);
         self
     }
 
@@ -147,11 +150,12 @@ impl ChangePreview {
                 !self.is_fixed(row) && keys.get(row).is_some_and(|key| dropped.contains(key))
             })
             .collect();
-        let selected = old_keys.get(old.selected);
-        self.selected = keys
-            .iter()
-            .position(|key| Some(key) == selected)
-            .unwrap_or_else(|| old.selected.min(self.rows.len().saturating_sub(1)));
+        let selected = old_keys.get(old.selected());
+        self.cursor.select(
+            keys.iter()
+                .position(|key| Some(key) == selected)
+                .unwrap_or_else(|| old.selected().min(self.rows.len().saturating_sub(1))),
+        );
     }
 
     /// Lo que identifica a cada fila entre dos armados del mismo plan.
@@ -205,7 +209,7 @@ impl ChangePreview {
 
     #[must_use]
     pub fn selected(&self) -> usize {
-        self.selected
+        self.cursor.selected()
     }
 
     /// La fila `row`, si existe.
@@ -252,28 +256,22 @@ impl ChangePreview {
 
     /// La siguiente, y tras la última la primera.
     pub fn select_next(&mut self) {
-        if !self.rows.is_empty() {
-            self.selected = (self.selected + 1) % self.rows.len();
-        }
+        self.cursor.select(self.cursor.next());
     }
 
     /// La anterior, y antes de la primera la última.
     pub fn select_previous(&mut self) {
-        if !self.rows.is_empty() {
-            self.selected = self.selected.checked_sub(1).unwrap_or(self.rows.len() - 1);
-        }
+        self.cursor.select(self.cursor.previous());
     }
 
     pub fn select(&mut self, row: usize) {
-        if row < self.rows.len() {
-            self.selected = row;
-        }
+        self.cursor.select(row);
     }
 
     /// Quita la fila elegida de lo que se aplica, o la devuelve si ya estaba
     /// quitada. Un renombre fijo no se quita.
     pub fn toggle_selected(&mut self) {
-        let row = self.selected;
+        let row = self.cursor.selected();
         if row < self.rows.len() && !self.is_fixed(row) && !self.dropped.remove(&row) {
             self.dropped.insert(row);
         }

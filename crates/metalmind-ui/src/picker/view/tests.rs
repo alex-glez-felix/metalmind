@@ -22,19 +22,11 @@ impl PickerDelegate for Typing {
         &self.line
     }
 
-    fn len(&self) -> usize {
-        0
-    }
-
-    fn selected(&self) -> usize {
-        0
+    fn cursor(&self) -> RowCursor {
+        RowCursor::wrapping(0)
     }
 
     fn select(&mut self, _: usize) {}
-
-    fn select_next(&mut self) {}
-
-    fn select_previous(&mut self) {}
 
     fn edit(&mut self, edit: LineEdit<'_>, _: &mut Context<PickerView<Self>>) {
         self.line.apply(edit);
@@ -89,8 +81,8 @@ fn edit(view: &Entity<PickerView<Typing>>, cx: &mut VisualTestContext, edit: Lin
 
 /// El cursor y la caja del texto, del último frame.
 fn caret_in_box(cx: &mut VisualTestContext) -> (Bounds<Pixels>, Bounds<Pixels>) {
-    let caret = cx.debug_bounds("picker-caret").unwrap();
-    let text = cx.debug_bounds("picker-input-text").unwrap();
+    let caret = cx.debug_bounds("line-field-caret").unwrap();
+    let text = cx.debug_bounds("line-field").unwrap();
     (caret, text)
 }
 
@@ -179,19 +171,11 @@ impl PickerDelegate for Previewing {
         &self.line
     }
 
-    fn len(&self) -> usize {
-        1
-    }
-
-    fn selected(&self) -> usize {
-        0
+    fn cursor(&self) -> RowCursor {
+        RowCursor::wrapping(1)
     }
 
     fn select(&mut self, _: usize) {}
-
-    fn select_next(&mut self) {}
-
-    fn select_previous(&mut self) {}
 
     fn edit(&mut self, edit: LineEdit<'_>, _: &mut Context<PickerView<Self>>) {
         self.line.apply(edit);

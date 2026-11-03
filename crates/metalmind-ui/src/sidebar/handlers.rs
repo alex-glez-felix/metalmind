@@ -52,6 +52,7 @@ impl Sidebar {
             PanelAction::MenuNext => self.menu_next(window, cx),
             PanelAction::MenuPrevious => self.menu_previous(window, cx),
         }
+        self.drop_preedit_without_field(cx);
     }
 
     /// Una operación de la vista que se ve que mueve la selección.

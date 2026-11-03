@@ -261,6 +261,9 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
   backlinks y las listas de autocompletado. Un tag con `icon: tabler:<nombre>`
   en su página muestra ese ícono; el set entero viene en el binario.
 - Ícono de la app nuevo, con el mismo trazo que los de la UI.
+- Las preguntas del panel (crear, renombrar, mover, filtrar, los campos de un tag)
+  escriben por el IME, con preedit y teclas muertas, como el picker y la lista.
+  El filtro largo de la lista ya no pierde el cursor.
 
 #### Búsqueda de texto (M6)
 

@@ -19,6 +19,7 @@ use super::model::{NoteList, Prompt};
 use super::source::{FolderError, ListSource, folder_to_show};
 use super::views::load as load_views;
 use crate::finder::{Note, VaultChanged, VaultSession, ViewsChanged};
+use crate::line_field::LineField;
 use crate::picker::{LineEdit, Step};
 use crate::session::ListState;
 use crate::workspace::{Placement, Workspace, shown_path};
@@ -59,8 +60,7 @@ pub struct NoteListView {
     /// nueva de la misma nota; lo que llega mientras tanto espera aquí.
     reading: Option<Task<()>>,
     unread: Vec<VaultPath>,
-    /// El preedit del IME o de una tecla muerta en el campo que se escribe.
-    pub(super) marked: Option<String>,
+    pub(super) field: Entity<LineField<Self>>,
     /// Al llegar las primeras tarjetas se elige la nota activa.
     reveal_on_load: bool,
     /// Cuántas veces eligió el usuario una fuente: `:vaultundo` no deshace una
@@ -124,6 +124,8 @@ impl NoteListView {
         });
         // La nota activa se marca en la lista: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
+        let (host, focus_handle) = (cx.weak_entity(), cx.focus_handle());
+        let focus = focus_handle.clone();
         let mut view = Self {
             list,
             chosen: state.visible,
@@ -131,13 +133,13 @@ impl NoteListView {
             root: vault.root().to_owned(),
             session: session.clone(),
             workspace,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             scroll: UniformListScrollHandle::new(),
             matcher: Some(FuzzyMatcher::paths()),
             search: None,
             reading: None,
             unread: Vec::new(),
-            marked: None,
+            field: cx.new(|_| LineField::new(host, focus)),
             reveal_on_load: true,
             source_choices: 0,
             started: false,
@@ -219,7 +221,7 @@ impl NoteListView {
             self.reveal_active(cx);
         } else {
             self.list.close_prompt();
-            self.marked = None;
+            self.clear_preedit(cx);
         }
         cx.notify();
         visible
@@ -278,8 +280,8 @@ impl NoteListView {
     }
 
     /// El preedit del IME en el campo que se escribe.
-    pub(super) fn marked(&self) -> &str {
-        self.marked.as_deref().unwrap_or("")
+    pub(super) fn clear_preedit(&mut self, cx: &mut Context<Self>) {
+        self.field.update(cx, |field, _| field.clear_preedit());
     }
 
     #[must_use]

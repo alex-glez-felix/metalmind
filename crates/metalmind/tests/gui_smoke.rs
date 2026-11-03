@@ -1063,7 +1063,8 @@ fn renombrar_una_nota_actualiza_sus_links() {
     window.wait_still(EDITOR_TEXT);
     window.type_keys("<CR>");
     smoke.wait_contents("a.md", "ver [[d]] y [[d#Meta]]\n");
-    assert_eq!(smoke.read("d.md"), "# B\n");
+    // Los links se escriben antes de mover la nota: hay que esperarla también.
+    smoke.wait_contents("d.md", "# B\n");
 }
 
 /// `:vaultundo` deshace el renombre de `b.md` con sus links: la nota vuelve
@@ -1173,7 +1174,8 @@ fn guardar_con_el_renombre_abierto_rehace_su_vista_previa() {
     window.wait_still(EDITOR_TEXT);
     window.type_keys("<CR>");
     smoke.wait_contents("a.md", "nueva\nver [[d]]\n");
-    assert_eq!(smoke.read("d.md"), "# B\n");
+    // Los links se escriben antes de mover la nota: hay que esperarla también.
+    smoke.wait_contents("d.md", "# B\n");
 }
 
 /// El texto del editor, a la derecha del árbol; la ventana del smoke mide

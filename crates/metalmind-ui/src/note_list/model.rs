@@ -46,8 +46,9 @@ impl NoteList {
     /// porque sin fechas el orden cambiaría al llegar.
     #[must_use]
     pub fn new(source: ListSource, filter: &str, index: Arc<VaultIndex>, tags: Arc<Tags>) -> Self {
-        let mut state =
-            PickerState::loading().with_narrowing(Arc::new(TagFilter::new(Arc::clone(&tags))));
+        let mut state = PickerState::loading()
+            .stopping_at_edges()
+            .with_narrowing(Arc::new(TagFilter::new(Arc::clone(&tags))));
         // Sin ítems, editar no pide ninguna búsqueda.
         let _ = state.edit(LineEdit::Insert(filter));
         Self {
@@ -276,16 +277,15 @@ impl NoteList {
         self.selected = self.selected_note().cloned();
     }
 
-    /// Baja `count` filas, sin pasar de la última.
-    pub fn select_next(&mut self, count: usize) {
-        if let Some(row) = self.selected_row() {
-            self.select(row.saturating_add(count).min(self.len() - 1));
+    pub fn select_next(&mut self) {
+        if !self.is_empty() {
+            self.select(self.filter.cursor().next());
         }
     }
 
-    pub fn select_previous(&mut self, count: usize) {
-        if let Some(row) = self.selected_row() {
-            self.select(row.saturating_sub(count));
+    pub fn select_previous(&mut self) {
+        if !self.is_empty() {
+            self.select(self.filter.cursor().previous());
         }
     }
 
