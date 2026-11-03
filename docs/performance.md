@@ -57,8 +57,8 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Pintar las 22 fórmulas del spike, escala 1 / 2 (en el fondo) | segundo plano | 2.6 / 5.5 ms (0.12 / 0.25 ms cada una) | ✅ | `metalmind-ui` `pintar_las_22` |
 | Nota con 200 fórmulas: primer frame / hasta pintar las visibles (cachés frías) | ≤ 300 ms | p50 111 / 134 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
-| Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 27.6 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
-| Abrir el vault, 50 k notas | ≤ 2 s | 315 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
+| Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 28.5 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
+| Abrir el vault, 50 k notas | ≤ 2 s | 329 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
 | Abrir con la caché al día, 5 k / 50 k notas (servidor virtual de 2 hilos, no comparable con lo de arriba: ver "Caché de las notas") | ≤ 200 ms / ≤ 2 s | 168 ms / 1.55 s | ✅ | `metalmind-vault` `abrir_5k_notas_con_cache`, `abrir_50k_notas_con_cache` |
 | Índice de links de cero, 5 k / 50 k notas (30 k / 300 k links): nombres repetidos en las 100 carpetas; únicos | ≤ 200 ms / ≤ 2 s | 16 / 235 ms; 18 / 275 ms | ✅ | `metalmind-vault` `indexar_links`, `indexar_links_nombres_unicos` |
 | Índice de links, un cambio del watcher: modificar una nota / crear una cuyo nombre usan 300 links | ≤ 16 ms | 7.7 µs / 0.30 ms | ✅ | `metalmind-vault` `modificar_una_nota`, `crear_una_nota_que_empata` |
@@ -72,7 +72,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Adjuntos huérfanos: 1 000 en la carpeta, 5 k / 50 k notas (del índice de links, sin leer notas) | ≤ 16 ms | 0.17 / 0.17 ms | ✅ | `metalmind-vault` `huerfanos` |
 | Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 8.3 µs / 9.3 ms | ✅ | `metalmind-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
 | Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 24 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
-| Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 30 / 333 ms | ✅ | `metalmind-vault` `abrir_con_tags` |
+| Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 32 / 345 ms | ✅ | `metalmind-vault` `abrir_con_tags` |
 | Consulta de tags `#t1 -#t3`, un tag cuyos descendientes cubren el 99 % de las notas, 5 k / 50 k | ≤ 16 ms | 0.67 / 13 ms | ⚠️ | `metalmind-vault` `consulta_por_tag_con_descendientes` |
 | Panel de tags entero (conteos y orden), 5 k / 50 k | ≤ 16 / 160 ms | 1.15 / 28 ms | ✅ | `metalmind-vault` `panel_de_tags` |
 | Panel de tags en focus (`area-1/ #t1`), 5 k / 50 k | ≤ 16 / 160 ms | 1.35 / 30 ms | ✅ | `metalmind-vault` `panel_en_focus` |
