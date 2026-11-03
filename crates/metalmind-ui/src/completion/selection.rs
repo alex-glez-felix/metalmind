@@ -2,12 +2,13 @@
 
 use std::ops::Range;
 
+use crate::row_cursor::RowCursor;
+
 /// Sobre una lista de `len` filas, al menos una.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Selection {
-    len: usize,
-    selected: usize,
-    /// Si `selected` la eligió el usuario; si no, es la mejor coincidencia.
+    cursor: RowCursor,
+    /// Si la fila la eligió el usuario; si no, es la mejor coincidencia.
     chosen: bool,
     /// La primera fila que se ve.
     first: usize,
@@ -16,8 +17,7 @@ pub struct Selection {
 impl Selection {
     pub(super) fn new(len: usize) -> Self {
         Self {
-            len: len.max(1),
-            selected: 0,
+            cursor: RowCursor::wrapping(len.max(1)),
             chosen: false,
             first: 0,
         }
@@ -25,12 +25,12 @@ impl Selection {
 
     #[must_use]
     pub fn selected(&self) -> usize {
-        self.selected
+        self.cursor.selected()
     }
 
     /// La elegida, solo si la eligió el usuario.
     pub(super) fn chosen(&self) -> Option<usize> {
-        self.chosen.then_some(self.selected)
+        self.chosen.then_some(self.selected())
     }
 
     /// Elige `row` como lo hizo el usuario, con la ventana de `previous`:
@@ -43,30 +43,30 @@ impl Selection {
     /// Las filas que se ven, `rows` como mucho. Como en un picker, solo se
     /// corren cuando la elegida sale de ellas.
     pub fn visible(&mut self, rows: usize) -> Range<usize> {
-        let rows = rows.clamp(1, self.len);
-        if self.selected < self.first {
-            self.first = self.selected;
-        } else if self.selected >= self.first + rows {
-            self.first = self.selected + 1 - rows;
+        let len = self.cursor.len();
+        let rows = rows.clamp(1, len);
+        let selected = self.selected();
+        if selected < self.first {
+            self.first = selected;
+        } else if selected >= self.first + rows {
+            self.first = selected + 1 - rows;
         }
-        self.first = self.first.min(self.len - rows);
+        self.first = self.first.min(len - rows);
         self.first..self.first + rows
     }
 
     /// La siguiente, y tras la última la primera.
     pub fn select_next(&mut self) {
-        self.selected = (self.selected + 1) % self.len;
-        self.chosen = true;
+        self.select(self.cursor.next());
     }
 
     /// La anterior, y antes de la primera la última.
     pub fn select_previous(&mut self) {
-        self.selected = self.selected.checked_sub(1).unwrap_or(self.len - 1);
-        self.chosen = true;
+        self.select(self.cursor.previous());
     }
 
     pub fn select(&mut self, row: usize) {
-        self.selected = row.min(self.len - 1);
+        self.cursor.select(row.min(self.cursor.len() - 1));
         self.chosen = true;
     }
 }

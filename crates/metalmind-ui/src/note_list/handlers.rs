@@ -23,8 +23,8 @@ impl NoteListView {
         };
         window.focus(&self.focus_handle, cx);
         match action {
-            ListAction::SelectNext => self.list.select_next(1),
-            ListAction::SelectPrevious => self.list.select_previous(1),
+            ListAction::SelectNext => self.list.select_next(),
+            ListAction::SelectPrevious => self.list.select_previous(),
             ListAction::SelectFirst => self.list.select_first(),
             ListAction::SelectLast => self.list.select_last(),
             ListAction::Open => self.open_selected(Placement::Current, true, cx),
@@ -48,8 +48,7 @@ impl NoteListView {
     }
 
     fn confirm(&mut self, cx: &mut Context<Self>) {
-        // Un preedit sin confirmar no pasa a la pregunta siguiente.
-        self.marked = None;
+        self.clear_preedit(cx);
         match self.list.prompt() {
             Some(Prompt::Filter) | None => self.list.close_prompt(),
             Some(Prompt::Tag) => {
@@ -64,7 +63,7 @@ impl NoteListView {
     fn cancel(&mut self, cx: &mut Context<Self>) {
         if self.list.prompt().is_some() {
             self.list.close_prompt();
-            self.marked = None;
+            self.clear_preedit(cx);
             return;
         }
         self.scroll_on_show = true;

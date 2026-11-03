@@ -10,7 +10,7 @@ use metalmind_search::FuzzyMatcher;
 
 use super::highlight::match_ranges;
 use super::view::{Overflow, PickerDelegate, PickerRow, PickerView};
-use super::{Chosen, InputLine, LineEdit, Matches, Narrowing, Open, PickerState, Step};
+use super::{Chosen, InputLine, LineEdit, Matches, Narrowing, Open, PickerState, RowCursor, Step};
 
 /// Lo que se puede elegir en un picker difuso.
 pub trait PickerItem: AsRef<str> + Send + Sync + 'static {
@@ -137,24 +137,12 @@ impl<T: PickerItem> PickerDelegate for Fuzzy<T> {
         self.state.warnings()
     }
 
-    fn len(&self) -> usize {
-        self.state.len()
-    }
-
-    fn selected(&self) -> usize {
-        self.state.selected()
+    fn cursor(&self) -> RowCursor {
+        self.state.cursor()
     }
 
     fn select(&mut self, row: usize) {
         self.state.select(row);
-    }
-
-    fn select_next(&mut self) {
-        self.state.select_next();
-    }
-
-    fn select_previous(&mut self) {
-        self.state.select_previous();
     }
 
     fn edit(&mut self, edit: LineEdit<'_>, cx: &mut Context<PickerView<Self>>) {

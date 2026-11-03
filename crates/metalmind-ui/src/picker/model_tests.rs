@@ -64,12 +64,12 @@ fn mover_el_cursor_no_busca() {
 #[test]
 fn la_seleccion_da_la_vuelta() {
     let mut picker = picker();
-    picker.select_previous();
+    picker.select(picker.cursor().previous());
     assert_eq!(picker.selected(), 4);
-    picker.select_next();
+    picker.select(picker.cursor().next());
     assert_eq!(picker.selected(), 0);
-    picker.select_next();
-    picker.select_next();
+    picker.select(picker.cursor().next());
+    picker.select(picker.cursor().next());
     assert_eq!(picker.selected(), 2);
     picker.select(4);
     assert_eq!(picker.selected(), 4);
@@ -90,8 +90,8 @@ fn sin_resultados_no_hay_nada_que_elegir() {
     let mut picker = picker();
     type_and_run(&mut picker, "zzz");
     assert!(picker.is_empty());
-    picker.select_next();
-    picker.select_previous();
+    picker.select(picker.cursor().next());
+    picker.select(picker.cursor().previous());
     assert_eq!(picker.choose(Open::Here, &mut FuzzyMatcher::paths()), None);
 }
 
@@ -100,7 +100,7 @@ fn elige_por_la_posicion_en_los_items() {
     let mut picker = picker();
     type_and_run(&mut picker, "recetas");
     assert_eq!(rows(&picker), ["recetas/pan.md", "recetas/arroz.md"]);
-    picker.select_next();
+    picker.select(picker.cursor().next());
     let chosen = picker
         .choose(Open::SplitRight, &mut FuzzyMatcher::paths())
         .unwrap();

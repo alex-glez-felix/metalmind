@@ -14,6 +14,7 @@ use metalmind_search::{NoteMatches, Syntax, TextQuery};
 use metalmind_vault::VaultPath;
 
 use crate::picker::{Chosen, InputLine, LineEdit, Open};
+use crate::row_cursor::RowCursor;
 
 use super::Hit;
 
@@ -50,7 +51,7 @@ pub struct TextSearchState {
     hits: Vec<Hit>,
     /// Lo mostrado es de una búsqueda anterior a `version`.
     stale: bool,
-    selected: usize,
+    cursor: RowCursor,
     /// En qué va la búsqueda de `version`.
     progress: Status,
     /// Por qué no compila lo escrito, si no compila.
@@ -75,7 +76,7 @@ impl TextSearchState {
             version: 0,
             hits: Vec::new(),
             stale: false,
-            selected: 0,
+            cursor: RowCursor::wrapping(0),
             progress: Status::Idle,
             invalid: None,
             pending_choice: None,
@@ -112,7 +113,13 @@ impl TextSearchState {
 
     #[must_use]
     pub fn selected(&self) -> usize {
-        self.selected
+        self.cursor.selected()
+    }
+
+    /// Dónde está la fila elegida; moverse es elegir la fila que dice.
+    #[must_use]
+    pub fn cursor(&self) -> RowCursor {
+        self.cursor
     }
 
     /// Lo mostrado es de una búsqueda anterior a lo escrito: todavía no
@@ -191,7 +198,7 @@ impl TextSearchState {
     fn add(&mut self, notes: Vec<NoteMatches>) -> Option<Chosen> {
         if std::mem::take(&mut self.stale) {
             self.hits.clear();
-            self.selected = 0;
+            self.cursor.set_len(0);
         }
         for note in notes {
             let room = MAX_HITS - self.hits.len();
@@ -208,6 +215,7 @@ impl TextSearchState {
                 break;
             }
         }
+        self.cursor.set_len(self.hits.len());
         let open = self.pending_choice.take()?;
         self.chosen(open)
     }
@@ -240,28 +248,14 @@ impl TextSearchState {
 
     fn show_nothing(&mut self, status: Status) {
         self.hits.clear();
-        self.selected = 0;
+        self.cursor.set_len(0);
         self.stale = false;
         self.pending_choice = None;
         self.progress = status;
     }
 
     pub fn select(&mut self, row: usize) {
-        if row < self.len() {
-            self.selected = row;
-        }
-    }
-
-    pub fn select_next(&mut self) {
-        if !self.is_empty() {
-            self.selected = (self.selected + 1) % self.len();
-        }
-    }
-
-    pub fn select_previous(&mut self) {
-        if !self.is_empty() {
-            self.selected = self.selected.checked_sub(1).unwrap_or(self.len() - 1);
-        }
+        self.cursor.select(row);
     }
 
     /// Elige la fila marcada. Si lo mostrado es de una búsqueda anterior
@@ -279,8 +273,8 @@ impl TextSearchState {
     }
 
     fn chosen(&self, open: Open) -> Option<Chosen> {
-        (self.selected < self.len()).then_some(Chosen {
-            item: self.selected,
+        (self.cursor.selected() < self.len()).then_some(Chosen {
+            item: self.cursor.selected(),
             open,
         })
     }

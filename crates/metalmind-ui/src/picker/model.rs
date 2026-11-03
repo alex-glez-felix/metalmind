@@ -12,6 +12,7 @@ use metalmind_search::{FuzzyMatcher, Query, Ranked};
 
 use super::input_line::{InputLine, LineEdit};
 use super::narrowing::{Narrowing, Typed};
+use crate::row_cursor::RowCursor;
 
 /// Cómo se eligió una fila.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,7 +87,7 @@ pub struct PickerState<T> {
     /// Sube con cada cambio de lo escrito o de los ítems.
     version: u64,
     shown: Matches,
-    selected: usize,
+    cursor: RowCursor,
     /// Hay una búsqueda corriendo.
     running: bool,
     /// Se pidió elegir antes de que llegaran los ítems.
@@ -102,18 +103,26 @@ impl<T: AsRef<str>> PickerState<T> {
     #[must_use]
     pub fn new(items: Arc<[T]>) -> Self {
         let shown = everything(0, items.len());
+        let cursor = RowCursor::wrapping(shown.ranked.len());
         Self {
             items,
             narrowing: None,
             line: InputLine::default(),
             version: 0,
             shown,
-            selected: 0,
+            cursor,
             running: false,
             pending_choice: None,
             reset_selection: false,
             loaded: true,
         }
+    }
+
+    /// Moverse más allá de un borde no da la vuelta.
+    #[must_use]
+    pub fn stopping_at_edges(mut self) -> Self {
+        self.cursor = RowCursor::stopping(self.len());
+        self
     }
 
     /// Sin ítems todavía, como el finder mientras se indexa el vault: lo
@@ -178,7 +187,13 @@ impl<T: AsRef<str>> PickerState<T> {
 
     #[must_use]
     pub fn selected(&self) -> usize {
-        self.selected
+        self.cursor.selected()
+    }
+
+    /// Dónde está la fila elegida; moverse es elegir la fila que dice.
+    #[must_use]
+    pub fn cursor(&self) -> RowCursor {
+        self.cursor
     }
 
     /// El ítem de la fila `row`.
@@ -291,29 +306,15 @@ impl<T: AsRef<str>> PickerState<T> {
 
     fn show(&mut self, matches: Matches) {
         self.shown = matches;
+        self.cursor.set_len(self.len());
         if std::mem::take(&mut self.reset_selection) {
-            self.selected = 0;
-        }
-        self.selected = self.selected.min(self.len().saturating_sub(1));
-    }
-
-    pub fn select_next(&mut self) {
-        if !self.is_empty() {
-            self.selected = (self.selected + 1) % self.len();
-        }
-    }
-
-    pub fn select_previous(&mut self) {
-        if !self.is_empty() {
-            self.selected = self.selected.checked_sub(1).unwrap_or(self.len() - 1);
+            self.cursor.select(0);
         }
     }
 
     /// Elige la fila `row`, como un clic.
     pub fn select(&mut self, row: usize) {
-        if row < self.len() {
-            self.selected = row;
-        }
+        self.cursor.select(row);
     }
 
     /// Elige la fila marcada de lo escrito ahora. Si la búsqueda de lo
@@ -340,7 +341,7 @@ impl<T: AsRef<str>> PickerState<T> {
     }
 
     fn chosen(&self, open: Open) -> Option<Chosen> {
-        let ranked = self.shown.ranked.get(self.selected)?;
+        let ranked = self.shown.ranked.get(self.cursor.selected())?;
         Some(Chosen {
             item: ranked.index,
             open,

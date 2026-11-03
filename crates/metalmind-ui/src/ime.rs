@@ -1,6 +1,5 @@
 //! La línea que ve el IME: el texto donde se escribe con el preedit
-//! insertado, en unidades UTF-16. La usan el editor, el input del picker y
-//! los campos de la lista de notas.
+//! insertado, en unidades UTF-16. La usan el editor y los campos de una línea.
 
 use std::ops::Range;
 

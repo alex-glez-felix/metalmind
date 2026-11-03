@@ -83,7 +83,7 @@ fn lo_anterior_se_ve_hasta_que_llega_lo_nuevo() {
     let mut state = TextSearchState::new();
     let first = typed(&mut state, "idea").version;
     let _ = state.receive(first, vec![note("a.md", &[(0, "idea"), (1, "idea")])]);
-    state.select_next();
+    state.select(state.cursor().next());
     assert!(!state.is_stale());
     let second = typed(&mut state, "s").version;
     assert_eq!(rows(&state), ["a.md:1", "a.md:2"]);
@@ -191,9 +191,9 @@ fn elegir_y_moverse_por_la_lista() {
     let mut state = TextSearchState::new();
     let version = typed(&mut state, "idea").version;
     let _ = state.receive(version, vec![note("a.md", &[(0, "idea"), (1, "idea")])]);
-    state.select_previous();
+    state.select(state.cursor().previous());
     assert_eq!(state.selected(), 1);
-    state.select_next();
+    state.select(state.cursor().next());
     assert_eq!(state.selected(), 0);
     state.select(1);
     state.select(9);

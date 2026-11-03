@@ -17,7 +17,7 @@ use super::worker::{Event, SearchWorker};
 use super::{Hit, OpenNote};
 use crate::picker::{
     Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerEvent, PickerRow,
-    PickerView, Preview,
+    PickerView, Preview, RowCursor,
 };
 
 pub struct TextSearch {
@@ -114,24 +114,12 @@ impl PickerDelegate for TextSearch {
         self.state.line()
     }
 
-    fn len(&self) -> usize {
-        self.state.len()
-    }
-
-    fn selected(&self) -> usize {
-        self.state.selected()
+    fn cursor(&self) -> RowCursor {
+        self.state.cursor()
     }
 
     fn select(&mut self, row: usize) {
         self.state.select(row);
-    }
-
-    fn select_next(&mut self) {
-        self.state.select_next();
-    }
-
-    fn select_previous(&mut self) {
-        self.state.select_previous();
     }
 
     fn edit(&mut self, edit: LineEdit<'_>, _cx: &mut Context<PickerView<Self>>) {
