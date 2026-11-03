@@ -18,7 +18,7 @@ use gpui_kit::{
 
 use metalmind_keymap::{Action, PickerAction, context};
 
-use super::{Chosen, InputLine, LineEdit, Open, Preview};
+use super::{Chosen, InputLine, LineEdit, Open, Preview, RowCursor};
 use crate::actions::Dispatch;
 use crate::line_field::{LineField, LineHost};
 
@@ -34,19 +34,11 @@ pub trait PickerDelegate: Sized + 'static {
         Vec::new()
     }
 
-    /// Cuántas filas tiene la lista.
-    fn len(&self) -> usize;
-
-    fn selected(&self) -> usize;
+    /// Cuántas filas tiene la lista y cuál está marcada.
+    fn cursor(&self) -> RowCursor;
 
     /// Marca la fila `row`, si existe.
     fn select(&mut self, row: usize);
-
-    /// Baja una fila; de la última vuelve a la primera.
-    fn select_next(&mut self);
-
-    /// Sube una fila; de la primera va a la última.
-    fn select_previous(&mut self);
 
     /// Edita lo escrito y lanza la búsqueda que haga falta.
     fn edit(&mut self, edit: LineEdit<'_>, cx: &mut Context<PickerView<Self>>);
@@ -173,7 +165,7 @@ impl<D: PickerDelegate> PickerView<D> {
 
     fn changed(&mut self, cx: &mut Context<Self>) {
         self.scroll
-            .scroll_to_item(self.delegate.selected(), ScrollStrategy::Nearest);
+            .scroll_to_item(self.delegate.cursor().selected(), ScrollStrategy::Nearest);
         self.delegate.selection_changed(cx);
         cx.notify();
     }
@@ -196,11 +188,11 @@ impl<D: PickerDelegate> PickerView<D> {
         };
         match action {
             PickerAction::SelectNext => {
-                self.delegate.select_next();
+                self.delegate.select(self.delegate.cursor().next());
                 self.changed(cx);
             }
             PickerAction::SelectPrevious => {
-                self.delegate.select_previous();
+                self.delegate.select(self.delegate.cursor().previous());
                 self.changed(cx);
             }
             PickerAction::Confirm => self.choose(Open::Here, cx),

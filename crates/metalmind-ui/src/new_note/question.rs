@@ -13,7 +13,7 @@ use metalmind_vault::{VaultIndex, VaultPath};
 use super::Origin;
 use crate::focus::FocusedNote;
 use crate::picker::{
-    Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerRow, PickerView,
+    Chosen, InputLine, LineEdit, Open, Overflow, PickerDelegate, PickerRow, PickerView, RowCursor,
 };
 
 pub struct NameQuestion {
@@ -121,19 +121,11 @@ impl PickerDelegate for NameQuestion {
         }
     }
 
-    fn len(&self) -> usize {
-        usize::from(self.answer().is_ok())
-    }
-
-    fn selected(&self) -> usize {
-        0
+    fn cursor(&self) -> RowCursor {
+        RowCursor::wrapping(usize::from(self.answer().is_ok()))
     }
 
     fn select(&mut self, _: usize) {}
-
-    fn select_next(&mut self) {}
-
-    fn select_previous(&mut self) {}
 
     fn edit(&mut self, edit: LineEdit<'_>, _: &mut Context<PickerView<Self>>) {
         self.apply(edit);

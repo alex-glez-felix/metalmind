@@ -43,14 +43,14 @@ impl Render for Probe {
     }
 }
 
-fn probe<'a>(
-    cx: &'a mut TestAppContext,
+fn probe(
+    cx: &mut TestAppContext,
     line: InputLine,
     look: FieldLook,
 ) -> (
     Entity<Probe>,
     Entity<LineField<Probe>>,
-    &'a mut VisualTestContext,
+    &mut VisualTestContext,
 ) {
     let (host, cx) = cx.add_window_view(|_, cx| {
         let (weak, focus) = (cx.weak_entity(), cx.focus_handle());

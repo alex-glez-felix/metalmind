@@ -23,8 +23,8 @@ impl NoteListView {
         };
         window.focus(&self.focus_handle, cx);
         match action {
-            ListAction::SelectNext => self.list.select_next(1),
-            ListAction::SelectPrevious => self.list.select_previous(1),
+            ListAction::SelectNext => self.list.select_next(),
+            ListAction::SelectPrevious => self.list.select_previous(),
             ListAction::SelectFirst => self.list.select_first(),
             ListAction::SelectLast => self.list.select_last(),
             ListAction::Open => self.open_selected(Placement::Current, true, cx),

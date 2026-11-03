@@ -26,7 +26,7 @@ impl<D: PickerDelegate> Render for PickerView<D> {
         let rows = if preview.is_some() {
             usize::from(theme.layout.picker_rows)
         } else {
-            self.delegate.len()
+            self.delegate.cursor().len()
         };
         let list_height = fit::list_height(
             rows,
@@ -127,7 +127,7 @@ impl<D: PickerDelegate> PickerView<D> {
         row_height: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        if self.delegate.len() == 0 {
+        if self.delegate.cursor().is_empty() {
             return div()
                 .h(row_height)
                 .px(theme.layout.picker_padding_x)
@@ -140,7 +140,7 @@ impl<D: PickerDelegate> PickerView<D> {
         let theme = theme.clone();
         uniform_list(
             "picker-rows",
-            self.delegate.len(),
+            self.delegate.cursor().len(),
             cx.processor(move |this, rows: Range<usize>, _window, cx| {
                 rows.map(|row| {
                     this.render_row(row, &theme, row_height, cx)
@@ -161,7 +161,7 @@ impl<D: PickerDelegate> PickerView<D> {
         row_height: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = row == self.delegate.selected();
+        let selected = row == self.delegate.cursor().selected();
         let hover = theme.ui.picker_hover;
         let line = RowLine::new(self.delegate.row(row), theme);
         div()

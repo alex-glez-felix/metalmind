@@ -64,13 +64,7 @@ fn sidebar(
 }
 
 /// El árbol con la pregunta de una nota nueva abierta con su tecla.
-fn asking<'a>(
-    cx: &'a mut TestAppContext,
-) -> (
-    tempfile::TempDir,
-    Entity<Sidebar>,
-    &'a mut VisualTestContext,
-) {
+fn asking(cx: &mut TestAppContext) -> (tempfile::TempDir, Entity<Sidebar>, &mut VisualTestContext) {
     let (dir, sidebar, cx) = sidebar(cx);
     cx.simulate_keystrokes("a");
     cx.run_until_parked();

@@ -27,6 +27,7 @@ pub mod note_list;
 mod palette;
 mod panel;
 pub mod picker;
+mod row_cursor;
 mod session;
 mod sidebar;
 mod tag_change;

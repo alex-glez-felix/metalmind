@@ -74,7 +74,7 @@ fn la_vista_previa_sigue_a_la_fila_marcada() {
         view.update_delegate(cx, |search, cx| search.edit(LineEdit::Insert("idea"), cx));
     });
     let deadline = Instant::now() + Duration::from_secs(10);
-    while view.read_with(cx, |view, _| view.delegate().len()) < 2 {
+    while view.read_with(cx, |view, _| view.delegate().cursor().len()) < 2 {
         assert!(Instant::now() < deadline, "no llegaron los dos resultados");
         cx.run_until_parked();
         std::thread::sleep(Duration::from_millis(5));
@@ -88,7 +88,7 @@ fn la_vista_previa_sigue_a_la_fila_marcada() {
     let first = expected(0, cx);
     wait_for(&view, cx, &first);
     view.update(cx, |view, cx| {
-        view.update_delegate(cx, |search, _| search.select_next());
+        view.update_delegate(cx, |search, _| search.select(search.cursor().next()));
     });
     let second = expected(1, cx);
     assert_ne!(first, second);

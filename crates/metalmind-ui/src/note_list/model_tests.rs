@@ -160,12 +160,14 @@ fn la_fila_sigue_a_su_nota_cuando_la_lista_se_reordena() {
 fn moverse_no_pasa_de_los_bordes() {
     let fixture = Fixture::new();
     let mut list = fixture.list(ListSource::All, "");
-    list.select_previous(1);
+    list.select_previous();
     assert_eq!(list.selected_row(), Some(0));
-    list.select_next(10);
+    for _ in 0..10 {
+        list.select_next();
+    }
     assert_eq!(list.selected_row(), Some(3));
     list.select_first();
-    list.select_next(1);
+    list.select_next();
     assert_eq!(list.selected_row(), Some(1));
     list.select_last();
     assert_eq!(list.selected_row(), Some(3));
@@ -288,7 +290,7 @@ fn los_tags_van_a_la_nota_de_la_pregunta_aunque_la_fila_cambie() {
     let fixture = Fixture::new();
     let mut list = fixture.list(ListSource::All, "");
     assert!(list.start_tagging());
-    list.select_next(1);
+    list.select_next();
     list.edit_tag_line(LineEdit::Insert("idea"));
     let (note, _tags) = list.take_tags().unwrap();
     assert_eq!(note.as_str(), "nueva.md");

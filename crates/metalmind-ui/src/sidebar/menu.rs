@@ -12,6 +12,7 @@ use metalmind_keymap::{Keymap, PanelAction, View};
 
 use super::Sidebar;
 use crate::actions::{AppKeymap, Dispatch};
+use crate::row_cursor::RowCursor;
 use crate::theme::Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -114,17 +115,24 @@ pub struct ContextMenu {
     position: Point<Pixels>,
     target: MenuTarget,
     groups: Vec<&'static [MenuItem]>,
-    selected: usize,
+    cursor: RowCursor,
 }
 
 impl ContextMenu {
+    /// Con el cursor al largo de `groups`, que ya no cambia.
+    fn counted(mut self) -> Self {
+        self.cursor.set_len(self.items().count());
+        self
+    }
+
     pub fn new(position: Point<Pixels>, target: VaultPath, kind: EntryKind) -> Self {
         Self {
             position,
             target: MenuTarget::Entry(target),
             groups: MenuItem::groups(kind),
-            selected: 0,
+            cursor: RowCursor::stopping(0),
         }
+        .counted()
     }
 
     /// Sobre una nota de la vista de tags: solo abrirla en un split.
@@ -133,8 +141,9 @@ impl ContextMenu {
             position,
             target: MenuTarget::Entry(target),
             groups: vec![&[MenuItem::OpenSplitRight, MenuItem::OpenSplitDown]],
-            selected: 0,
+            cursor: RowCursor::stopping(0),
         }
+        .counted()
     }
 
     /// Sobre un tag de la vista de tags: una nota nueva con él, su página,
@@ -153,8 +162,9 @@ impl ContextMenu {
                 ],
                 &[MenuItem::Rename, MenuItem::MergeTag],
             ],
-            selected: 0,
+            cursor: RowCursor::stopping(0),
         }
+        .counted()
     }
 
     /// Sobre una vista guardada: mostrarla en la lista. Renombrarla y
@@ -164,8 +174,9 @@ impl ContextMenu {
             position,
             target: MenuTarget::View(view),
             groups: vec![&[MenuItem::ShowInList]],
-            selected: 0,
+            cursor: RowCursor::stopping(0),
         }
+        .counted()
     }
 
     /// Sobre una carpeta, un tag o una vista: enfocarlo, o salir si ya es el focus
@@ -182,7 +193,7 @@ impl ContextMenu {
             _ => self.groups.len(),
         };
         self.groups.insert(at, item);
-        self
+        self.counted()
     }
 
     /// Tras un lote del watcher: sigue a su entrada en los renombres y dice
@@ -222,15 +233,15 @@ impl ContextMenu {
     }
 
     pub fn selected_item(&self) -> Option<MenuItem> {
-        self.items().nth(self.selected)
+        self.items().nth(self.cursor.selected())
     }
 
     pub fn select_next(&mut self) {
-        self.selected = (self.selected + 1).min(self.items().count().saturating_sub(1));
+        self.cursor.select(self.cursor.next());
     }
 
     pub fn select_previous(&mut self) {
-        self.selected = self.selected.saturating_sub(1);
+        self.cursor.select(self.cursor.previous());
     }
 
     pub fn render(&self, theme: &Theme, window: &Window, cx: &mut Context<Sidebar>) -> AnyElement {
@@ -319,7 +330,9 @@ impl ContextMenu {
             .items_center()
             .rounded(theme.radius.md)
             .text_color(color)
-            .when(index == self.selected, |row| row.bg(theme.ui.menu_hover))
+            .when(index == self.cursor.selected(), |row| {
+                row.bg(theme.ui.menu_hover)
+            })
             .hover(|row| row.bg(theme.ui.menu_hover))
             .child(
                 div()
