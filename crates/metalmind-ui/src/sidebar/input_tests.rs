@@ -16,6 +16,7 @@ use super::*;
 use crate::actions::bind_keys;
 use crate::document::Document;
 use crate::finder::{Prepared, VaultSession};
+use crate::panel::PanelView;
 use crate::session::PanelState;
 use crate::theme::Theme;
 use crate::workspace::{LineNumbers, Options, PaneOptions, Workspace};
