@@ -1,5 +1,6 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
+use imbl::OrdSet;
 use metalmind_syntax::note_name;
 
 use crate::path::VaultPath;
@@ -34,12 +35,13 @@ pub struct Entry<'a> {
 
 /// Los archivos y carpetas visibles del vault, como árbol.
 ///
-/// Es un valor inmutable para quien lo lee: el watcher arma uno nuevo y lo
-/// publica entero (ver [`crate::Vault::snapshot`]).
+/// Es un valor inmutable para quien lo lee: un clon comparte todo con el
+/// original y cada cambio copia solo lo que toca, así que publicar un lote no
+/// cuesta lo que el vault (ver [`crate::Vault::snapshot`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultIndex {
-    entries: HashMap<VaultPath, EntryKind>,
-    children: HashMap<VaultPath, BTreeSet<ChildKey>>,
+    entries: imbl::HashMap<VaultPath, EntryKind>,
+    children: imbl::HashMap<VaultPath, OrdSet<ChildKey>>,
 }
 
 /// Orden de los hijos en el árbol, como el "A a Z" de Obsidian: carpetas
@@ -66,8 +68,8 @@ impl ChildKey {
 impl Default for VaultIndex {
     fn default() -> Self {
         Self {
-            entries: HashMap::new(),
-            children: HashMap::from([(VaultPath::root(), BTreeSet::new())]),
+            entries: imbl::HashMap::new(),
+            children: imbl::HashMap::unit(VaultPath::root(), OrdSet::new()),
         }
     }
 }
@@ -173,7 +175,7 @@ impl VaultIndex {
         };
         siblings.insert(ChildKey::new(&path, kind));
         if kind == EntryKind::Folder {
-            self.children.insert(path.clone(), BTreeSet::new());
+            self.children.insert(path.clone(), OrdSet::new());
         }
         self.entries.insert(path, kind);
     }

@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use metalmind_perf::{NoteNames, assert_linear, linked_vault};
+use metalmind_perf::{NoteNames, assert_flat, assert_linear, linked_vault};
 use metalmind_vault::{EntryKind, LinkIndex, NoteBatch, VaultChange, VaultPath};
 
 type Files = Vec<(VaultPath, String)>;
@@ -144,4 +144,28 @@ fn muchos_links_en_una_linea_es_lineal() {
         },
         |(path, text)| LinkIndex::build([(path.clone(), EntryKind::Note)], |_| Some(text.clone())),
     );
+}
+
+/// Un lote con una nota editada copia lo que toca, aunque lo publicado antes
+/// siga vivo: no cuesta lo que el vault (#60). La nota lleva 200 links para que
+/// escanearla pese más que lo fijo de la corrida.
+#[test]
+#[cfg_attr(not(valgrind_available), ignore = "valgrind no está en el PATH")]
+fn publicar_una_nota_cambiada_no_depende_del_vault() {
+    let path = VaultPath::new("area-3/tema-4/nota-7.md").unwrap();
+    let text = (0..200)
+        .map(|note| format!("[[nota-{note}]]"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let setup = |notes| {
+        let index = build(&sorted(files(notes, NoteNames::Repeated)));
+        (index.clone(), index)
+    };
+    assert_flat(2_000, setup, |(published, mut index)| {
+        let change = VaultChange::Modified { path: path.clone() };
+        let read = |_: &VaultPath| Some(text.clone());
+        index.apply(&change, &mut NoteBatch::new(&read));
+        // Soltar el vault viejo es lineal y no es parte de publicar.
+        (published, index.clone(), index)
+    });
 }
