@@ -39,15 +39,11 @@ impl<'r> NoteBatch<'r> {
         self.note(path).text.as_deref()
     }
 
-    /// El texto de cada una de `paths` que se pudo leer.
+    /// El texto de las `paths` ya leídas, una vez por nota: aquí no se lee nada.
     pub(crate) fn into_texts(mut self, paths: &[VaultPath]) -> Vec<(VaultPath, String)> {
         paths
             .iter()
-            .filter_map(|path| {
-                self.note(path);
-                let text = self.notes.remove(path)?.text?;
-                Some((path.clone(), text))
-            })
+            .filter_map(|path| Some((path.clone(), self.notes.remove(path)?.text?)))
             .collect()
     }
 
@@ -90,6 +86,24 @@ mod tests {
         assert_eq!(batch.text(&note), Some("[[b]] #rust"));
         let texts = batch.into_texts(std::slice::from_ref(&note));
         assert_eq!(texts, [(note, "[[b]] #rust".to_owned())]);
+        assert_eq!(reads.get(), 1);
+    }
+
+    #[test]
+    fn los_textos_no_leen_ni_repiten() {
+        let reads = Cell::new(0);
+        let read = |_: &VaultPath| {
+            reads.set(reads.get() + 1);
+            Some("texto".to_owned())
+        };
+        let mut batch = NoteBatch::new(&read);
+        let (a, b) = (
+            VaultPath::new("a.md").unwrap(),
+            VaultPath::new("b.md").unwrap(),
+        );
+        batch.text(&a);
+        let texts = batch.into_texts(&[a.clone(), b, a.clone()]);
+        assert_eq!(texts, [(a, "texto".to_owned())]);
         assert_eq!(reads.get(), 1);
     }
 

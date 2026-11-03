@@ -341,3 +341,30 @@ fn un_lote_lee_cada_nota_una_sola_vez() {
     );
     assert_eq!(*worker.links.load_full(), full.links);
 }
+
+/// Sin historial, nadie necesita el texto de una nota que solo se renombró.
+#[test]
+fn sin_historial_un_renombre_no_lee_la_nota() {
+    let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let root = root.path().canonicalize().unwrap();
+    let history = Arc::new(History::new(data.path(), TEST_RETENTION));
+    fs::write(root.join("a.md"), "[[b]] #uno").unwrap();
+    let mut indexes = full_indexes(&root);
+    let mut worker = worker(&root, &history);
+    worker.history = None;
+    worker.index.store(Arc::new(indexes.files.clone()));
+    fs::rename(root.join("a.md"), root.join("b.md")).unwrap();
+    let (a, b) = (
+        VaultPath::new("a.md").unwrap(),
+        VaultPath::new("b.md").unwrap(),
+    );
+    let touched = Touched {
+        paths: BTreeSet::from([a.clone(), b.clone()]),
+        renames: vec![(a, b)],
+        ..Touched::default()
+    };
+    let read = |path: &VaultPath| panic!("no tenía que leer {path}");
+    let (_messages, received) = mpsc::channel();
+    worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
+    assert_eq!(indexes.links, full_indexes(&root).links);
+}
