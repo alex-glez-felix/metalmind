@@ -89,8 +89,8 @@ fn edit(view: &Entity<PickerView<Typing>>, cx: &mut VisualTestContext, edit: Lin
 
 /// El cursor y la caja del texto, del último frame.
 fn caret_in_box(cx: &mut VisualTestContext) -> (Bounds<Pixels>, Bounds<Pixels>) {
-    let caret = cx.debug_bounds("picker-caret").unwrap();
-    let text = cx.debug_bounds("picker-input-text").unwrap();
+    let caret = cx.debug_bounds("line-field-caret").unwrap();
+    let text = cx.debug_bounds("line-field").unwrap();
     (caret, text)
 }
 

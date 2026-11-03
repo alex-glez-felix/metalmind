@@ -5,7 +5,6 @@
 //! se elige sale como [`PickerEvent`]; qué hacer con eso lo decide quien lo
 //! abrió.
 
-mod input;
 mod preview;
 mod render;
 mod row_line;
@@ -13,14 +12,15 @@ mod row_line;
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, EventEmitter, FocusHandle, Focusable, KeyContext, ScrollHandle, ScrollStrategy,
-    SharedString, UniformListScrollHandle, Window,
+    AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, KeyContext,
+    ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
 
 use metalmind_keymap::{Action, PickerAction, context};
 
 use super::{Chosen, InputLine, LineEdit, Open, Preview};
 use crate::actions::Dispatch;
+use crate::line_field::{LineField, LineHost};
 
 /// Lo que se lista y cómo se busca. Sus métodos que reciben el contexto de
 /// la vista pueden lanzar trabajo de fondo y avisar al volver con
@@ -130,11 +130,7 @@ pub struct PickerView<D> {
     options: PickerOptions,
     focus_handle: FocusHandle,
     scroll: UniformListScrollHandle,
-    /// El texto del input se corre a lo ancho para que el cursor siempre se
-    /// vea, como la línea de comandos de vim.
-    input_scroll: ScrollHandle,
-    /// Preedit del IME o de una tecla muerta.
-    marked: Option<String>,
+    field: Entity<LineField<Self>>,
 }
 
 impl<D: 'static> EventEmitter<PickerEvent> for PickerView<D> {}
@@ -147,13 +143,14 @@ impl<D: 'static> Focusable for PickerView<D> {
 
 impl<D: PickerDelegate> PickerView<D> {
     pub fn new(delegate: D, options: PickerOptions, cx: &mut Context<Self>) -> Self {
+        let (host, focus_handle) = (cx.weak_entity(), cx.focus_handle());
+        let focus = focus_handle.clone();
         Self {
             delegate,
             options,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             scroll: UniformListScrollHandle::new(),
-            input_scroll: ScrollHandle::new(),
-            marked: None,
+            field: cx.new(|_| LineField::new(host, focus)),
         }
     }
 
@@ -239,6 +236,16 @@ impl<D: PickerDelegate> PickerView<D> {
             key_context.add(context::SPLITS);
         }
         key_context
+    }
+}
+
+impl<D: PickerDelegate> LineHost for PickerView<D> {
+    fn field_line(&self) -> Option<&InputLine> {
+        Some(self.delegate.line())
+    }
+
+    fn edit_field(&mut self, edit: LineEdit<'_>, cx: &mut Context<Self>) {
+        self.edit(edit, cx);
     }
 }
 

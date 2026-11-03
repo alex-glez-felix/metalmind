@@ -9,8 +9,8 @@ use metalmind_vault::VaultPath;
 
 use super::Sidebar;
 use super::render::button;
+use crate::line_field::{FieldLook, LineField, field_box};
 use crate::panel::{NewEntry, Prompt};
-use crate::picker::InputLine;
 use crate::theme::Theme;
 use metalmind_keymap::PanelAction;
 
@@ -54,7 +54,17 @@ impl Sidebar {
         Some(
             frame
                 .child(div().text_color(theme.ui.panel_muted).child(label))
-                .child(input_field(input, theme)),
+                .child(
+                    field_box(theme)
+                        .debug_selector(|| "panel-input".to_owned())
+                        .child(LineField::element(
+                            &self.field,
+                            input,
+                            FieldLook::default(),
+                            theme,
+                            cx,
+                        )),
+                ),
         )
     }
 }
@@ -65,55 +75,6 @@ fn folder_name(path: &VaultPath) -> String {
     } else {
         format!("{path}/")
     }
-}
-
-/// El texto con el cursor de barra. Si no cabe, se recorta como en la
-/// línea de comandos: primero lo que sigue al cursor y luego el principio de
-/// lo que lo antecede, así el cursor siempre se ve.
-fn input_field(input: &InputLine, theme: &Theme) -> Div {
-    let (before, after) = input.text().split_at(input.cursor());
-    let up_to_caret = div()
-        .flex()
-        .items_center()
-        .min_w_0()
-        .child(
-            clipped()
-                .debug_selector(|| "panel-input-before".to_owned())
-                .text_ellipsis_start()
-                .child(before.to_owned()),
-        )
-        .child(
-            div()
-                .debug_selector(|| "panel-caret".to_owned())
-                .w(theme.stroke.caret)
-                .h(theme.ui_font_size)
-                .flex_none()
-                .bg(theme.cursor.insert),
-        );
-    div()
-        .debug_selector(|| "panel-input".to_owned())
-        .flex()
-        .items_center()
-        .h(theme.panel_row_height)
-        .px(theme.layout.panel_padding_x)
-        .bg(theme.ui.background)
-        .border(theme.stroke.border)
-        .border_color(theme.ui.panel_border)
-        .rounded(theme.radius.md)
-        .overflow_hidden()
-        .child(up_to_caret)
-        // Sin ancho propio: solo ocupa lo que deja lo anterior al cursor.
-        .child(
-            clipped()
-                .debug_selector(|| "panel-input-after".to_owned())
-                .flex_1()
-                .text_ellipsis()
-                .child(after.to_owned()),
-        )
-}
-
-fn clipped() -> Div {
-    div().min_w_0().overflow_hidden().whitespace_nowrap()
 }
 
 fn confirm_delete(
@@ -154,7 +115,3 @@ fn confirm_delete(
                 )),
         )
 }
-
-#[cfg(test)]
-#[path = "prompt_tests.rs"]
-mod tests;

@@ -85,6 +85,19 @@ impl Prompt {
     }
 
     /// El campo que se está editando, si la pregunta tiene uno.
+    pub(super) fn input(&self) -> Option<&InputLine> {
+        match self {
+            Self::Filter(input)
+            | Self::Create { input, .. }
+            | Self::Rename { input, .. }
+            | Self::Move { input, .. }
+            | Self::RenameTag { input, .. }
+            | Self::MergeTag { input, .. }
+            | Self::TagField { input, .. } => Some(input),
+            Self::ConfirmDelete { .. } => None,
+        }
+    }
+
     pub(super) fn input_mut(&mut self) -> Option<&mut InputLine> {
         match self {
             Self::Filter(input)
@@ -148,6 +161,11 @@ impl Prompt {
 
 impl Panel {
     /// El campo que se está editando, si hay uno.
+    #[must_use]
+    pub fn input(&self) -> Option<&InputLine> {
+        self.prompt.as_ref()?.input()
+    }
+
     pub fn input_mut(&mut self) -> Option<&mut InputLine> {
         self.prompt.as_mut()?.input_mut()
     }

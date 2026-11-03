@@ -19,6 +19,7 @@ mod frames;
 mod icons;
 mod ime;
 mod key_button;
+mod line_field;
 pub mod math;
 mod new_note;
 mod note_context;

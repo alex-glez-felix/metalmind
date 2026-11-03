@@ -17,7 +17,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
     UniformListScrollHandle, Window,
 };
 use metalmind_config::SavedView;
@@ -27,6 +27,7 @@ use self::menu::ContextMenu;
 pub use self::rail::rail;
 use crate::file_tree::FileTree;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession, ViewsChanged};
+use crate::line_field::LineField;
 use crate::panel::{Outline, Panel, PanelView};
 use crate::session::PanelState;
 use crate::tag_change::TagRequest;
@@ -73,6 +74,7 @@ pub struct Sidebar {
     /// Cada vista con su scroll: al volver a una, sigue donde se dejó.
     scroll: UniformListScrollHandle,
     tag_scroll: UniformListScrollHandle,
+    field: Entity<LineField<Self>>,
     menu: Option<ContextMenu>,
     _changes: Subscription,
     _focus: Subscription,
@@ -111,14 +113,17 @@ impl Sidebar {
         // La nota activa se marca en el árbol: cambia con el panel de edición.
         let workspace_changes = cx.observe(&workspace, |_, _, cx| cx.notify());
         let panel = Panel::new(tree, tags, state.visible, state.view());
+        let (host, focus_handle) = (cx.weak_entity(), cx.focus_handle());
+        let field_focus = focus_handle.clone();
         Self {
             panel,
             vault,
             session: session.clone(),
             workspace,
-            focus_handle: cx.focus_handle(),
+            focus_handle,
             scroll: UniformListScrollHandle::new(),
             tag_scroll: UniformListScrollHandle::new(),
+            field: cx.new(|_| LineField::new(host, field_focus)),
             menu: None,
             _changes: changes,
             _focus: focus,
@@ -213,6 +218,7 @@ impl Sidebar {
             .tree
             .apply(&update.changes, Arc::clone(&update.snapshot), in_scope);
         self.panel.follow(&update.changes);
+        self.drop_preedit_without_field(cx);
         self.panel.set_tags(Arc::clone(&update.tags));
         self.sync_focus(cx);
         let selected = self.panel.outline().selected_path();

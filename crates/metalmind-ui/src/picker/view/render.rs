@@ -5,13 +5,14 @@
 use std::ops::Range;
 
 use gpui_kit::{
-    Context, ElementInputHandler, HighlightStyle, Hsla, InteractiveElement as _, IntoElement,
-    ParentElement as _, Pixels, Render, SharedString, StatefulInteractiveElement as _, Styled as _,
-    StyledText, Window, canvas, div, prelude::FluentBuilder as _, px, relative, uniform_list,
+    Context, InteractiveElement as _, IntoElement, ParentElement as _, Pixels, Render,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    relative, uniform_list,
 };
 
 use super::row_line::RowLine;
 use super::{PickerDelegate, PickerEvent, PickerView};
+use crate::line_field::{FieldLook, LineField};
 use crate::picker::{fit, preview_width};
 use crate::theme::Theme;
 
@@ -66,12 +67,6 @@ impl<D: PickerDelegate> Render for PickerView<D> {
     }
 }
 
-/// Un tramo del texto del input: nunca se parte ni se encoge, así lo que no
-/// cabe se corre en vez de encimarse.
-fn piece() -> gpui_kit::Div {
-    div().flex_none().whitespace_nowrap()
-}
-
 impl<D: PickerDelegate> PickerView<D> {
     /// El ancho de la vista previa, si el delegado la tiene y cabe.
     fn preview_width(&self, theme: &Theme, window: &Window) -> Option<Pixels> {
@@ -89,51 +84,12 @@ impl<D: PickerDelegate> PickerView<D> {
     }
 
     fn render_input(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
-        let line = self.delegate.line();
-        let marked = self.marked.clone().unwrap_or_default();
-        let (before, after) = line.text().split_at(line.cursor());
-        let warnings = self.delegate.warnings();
-        let warned = |text: &str, offset: usize| {
-            with_warnings(text, offset, &warnings, theme.ui.picker_warning)
+        let look = FieldLook {
+            warnings: self.delegate.warnings(),
+            placeholder: Some(self.options.placeholder.clone()),
         };
-        let empty = line.text().is_empty() && marked.is_empty();
-        let entity = cx.entity();
-        let focus = self.focus_handle.clone();
-        let caret_height = theme.ui_line();
-        let caret = 1 + usize::from(!marked.is_empty());
-        self.input_scroll.scroll_to_item(caret);
-        let text = div()
-            .id("picker-input-text")
-            .debug_selector(|| "picker-input-text".to_owned())
-            .flex()
-            .flex_1()
-            .min_w_0()
-            .items_center()
-            .overflow_x_scroll()
-            .track_scroll(&self.input_scroll)
-            .child(piece().child(warned(before, 0)))
-            .when(!marked.is_empty(), |text| {
-                text.child(piece().underline().child(marked))
-            })
-            .child(
-                div()
-                    .debug_selector(|| "picker-caret".to_owned())
-                    .flex_none()
-                    .w(theme.stroke.caret)
-                    .h(caret_height)
-                    .bg(theme.cursor.insert),
-            )
-            .when(empty, |text| {
-                text.child(
-                    piece()
-                        .text_color(theme.ui.picker_muted)
-                        .child(self.options.placeholder.clone()),
-                )
-            })
-            .child(piece().child(warned(after, before.len())));
         div()
             .debug_selector(|| "picker-input".to_owned())
-            .relative()
             .flex()
             .items_center()
             .px(theme.layout.picker_padding_x)
@@ -148,7 +104,13 @@ impl<D: PickerDelegate> PickerView<D> {
                     .text_color(theme.ui.focus_indicator)
                     .child(focus)
             }))
-            .child(text)
+            .child(LineField::element(
+                &self.field,
+                self.delegate.line(),
+                look,
+                theme,
+                cx,
+            ))
             .children(self.delegate.status().map(|status| {
                 div()
                     .pl(theme.layout.picker_gap)
@@ -157,16 +119,6 @@ impl<D: PickerDelegate> PickerView<D> {
                     .text_color(theme.ui.picker_muted)
                     .child(status)
             }))
-            .child(
-                canvas(
-                    |_, _, _| (),
-                    move |bounds, (), window, cx| {
-                        window.handle_input(&focus, ElementInputHandler::new(bounds, entity), cx);
-                    },
-                )
-                .absolute()
-                .size_full(),
-            )
     }
 
     fn render_list(
@@ -224,21 +176,4 @@ impl<D: PickerDelegate> PickerView<D> {
             .on_click(cx.listener(move |this, _, _, cx| this.click(row, cx)))
             .child(line)
     }
-}
-
-/// `text`, que empieza en el byte `offset` de lo escrito, con los avisos que
-/// caen en él pintados de `color`.
-fn with_warnings(text: &str, offset: usize, warnings: &[Range<usize>], color: Hsla) -> StyledText {
-    let style = HighlightStyle {
-        color: Some(color),
-        ..HighlightStyle::default()
-    };
-    let end = offset + text.len();
-    let highlights = warnings
-        .iter()
-        .map(|warning| warning.start.max(offset)..warning.end.min(end))
-        .filter(|range| range.start < range.end)
-        .map(|range| (range.start - offset..range.end - offset, style))
-        .collect::<Vec<_>>();
-    StyledText::new(SharedString::from(text.to_owned())).with_highlights(highlights)
 }

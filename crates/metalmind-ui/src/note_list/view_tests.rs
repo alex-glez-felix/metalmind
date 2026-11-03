@@ -280,9 +280,10 @@ fn el_filtro_recibe_el_texto_del_ime() {
     fixture.list.update(cx, NoteListView::toggle);
     cx.run_until_parked();
     cx.simulate_keystrokes("space f");
-    fixture.list.update_in(cx, |view, window, cx| {
-        view.replace_and_mark_text_in_range(None, "´", None, window, cx);
-        view.replace_text_in_range(None, "é", window, cx);
+    let field = fixture.list.read_with(cx, |view, _| view.field.clone());
+    field.update_in(cx, |field, window, cx| {
+        field.replace_and_mark_text_in_range(None, "´", None, window, cx);
+        field.replace_text_in_range(None, "é", window, cx);
     });
     let text = fixture
         .list
@@ -297,20 +298,17 @@ fn cerrar_la_pregunta_suelta_el_preedit() {
     fixture.list.update(cx, NoteListView::toggle);
     cx.run_until_parked();
     cx.simulate_keystrokes("t");
-    fixture.list.update_in(cx, |view, window, cx| {
-        view.replace_and_mark_text_in_range(None, "´", None, window, cx);
+    let field = fixture.list.read_with(cx, |view, _| view.field.clone());
+    field.update_in(cx, |field, window, cx| {
+        field.replace_and_mark_text_in_range(None, "´", None, window, cx);
     });
     assert_eq!(
-        fixture
-            .list
-            .read_with(cx, |view, _| view.marked().to_owned()),
+        field.read_with(cx, |field, _| field.marked().to_owned()),
         "´"
     );
     cx.simulate_keystrokes("escape");
     assert_eq!(
-        fixture
-            .list
-            .read_with(cx, |view, _| view.marked().to_owned()),
+        field.read_with(cx, |field, _| field.marked().to_owned()),
         ""
     );
 }
