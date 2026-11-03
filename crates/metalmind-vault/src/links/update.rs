@@ -2,8 +2,10 @@
 //! resolución es función de los archivos del vault y de la nota de origen,
 //! así que aplicar cambios llega al mismo índice que armarlo de cero.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap as StdHashMap, HashSet};
 use std::sync::Arc;
+
+use imbl::{HashMap, OrdSet};
 
 use super::names::key_of;
 use super::note::scan_links;
@@ -54,9 +56,7 @@ impl LinkIndex {
             }
             (path, links)
         });
-        for (path, links) in resolved {
-            index.register(path, links);
-        }
+        index.register_all(resolved);
         index
     }
 
@@ -160,6 +160,36 @@ impl LinkIndex {
         self.notes.insert(path, Arc::new(links));
     }
 
+    /// Como [`LinkIndex::register`] con cada nota, pero toca cada entrada de los
+    /// mapas persistentes una sola vez: con un vault entero se nota al abrir.
+    fn register_all(&mut self, notes: Vec<(VaultPath, Vec<IndexedLink>)>) {
+        let mut by_key: StdHashMap<String, Vec<VaultPath>> = StdHashMap::new();
+        let mut incoming: StdHashMap<VaultPath, Vec<LinkId>> = StdHashMap::new();
+        for (path, links) in notes {
+            for (ordinal, link) in links.iter().enumerate() {
+                if let Some(key) = key_of(&path, &link.target_text) {
+                    by_key.entry(key).or_default().push(path.clone());
+                }
+                if let LinkTarget::Resolved(target) = &link.target {
+                    let id = LinkId {
+                        source: path.clone(),
+                        ordinal,
+                    };
+                    incoming.entry(target.clone()).or_default().push(id);
+                }
+            }
+            self.notes.insert(path, Arc::new(links));
+        }
+        self.by_key = by_key
+            .into_iter()
+            .map(|(key, paths)| (key, paths.into_iter().collect()))
+            .collect();
+        self.incoming = incoming
+            .into_iter()
+            .map(|(target, ids)| (target, ids.into_iter().collect()))
+            .collect();
+    }
+
     fn remove_note(&mut self, path: &VaultPath) -> Option<Arc<Vec<IndexedLink>>> {
         let links = self.notes.remove(path)?;
         for (ordinal, link) in links.iter().enumerate() {
@@ -199,7 +229,7 @@ impl LinkIndex {
 }
 
 fn add_incoming(
-    incoming: &mut HashMap<VaultPath, BTreeSet<LinkId>>,
+    incoming: &mut HashMap<VaultPath, OrdSet<LinkId>>,
     source: &VaultPath,
     ordinal: usize,
     target: &LinkTarget,
@@ -213,7 +243,7 @@ fn add_incoming(
 }
 
 fn remove_incoming(
-    incoming: &mut HashMap<VaultPath, BTreeSet<LinkId>>,
+    incoming: &mut HashMap<VaultPath, OrdSet<LinkId>>,
     source: &VaultPath,
     ordinal: usize,
     target: &LinkTarget,
@@ -232,10 +262,10 @@ fn remove_incoming(
 
 /// Quita `value` del conjunto de `key` y el conjunto si queda vacío, para
 /// que el índice incremental y el armado de cero sean iguales.
-fn remove_from<K, V>(map: &mut HashMap<K, BTreeSet<V>>, key: &K, value: &V)
+fn remove_from<K, V>(map: &mut HashMap<K, OrdSet<V>>, key: &K, value: &V)
 where
-    K: std::hash::Hash + Eq,
-    V: Ord,
+    K: std::hash::Hash + Eq + Clone,
+    V: Ord + Clone,
 {
     if let Some(set) = map.get_mut(key) {
         set.remove(value);

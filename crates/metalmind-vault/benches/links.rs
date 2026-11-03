@@ -7,11 +7,12 @@
     reason = "en un benchmark, un unwrap que falla es un benchmark roto"
 )]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use divan::Bencher;
 use metalmind_perf::{NoteNames, linked_vault};
-use metalmind_vault::{EntryKind, LinkIndex, NoteBatch, VaultChange, VaultPath};
+use metalmind_vault::{EntryKind, LinkIndex, NoteBatch, VaultChange, VaultIndex, VaultPath};
 
 fn main() {
     divan::main();
@@ -35,6 +36,20 @@ fn build(files: &Files) -> LinkIndex {
         files.iter().map(|(path, (kind, _))| (path.clone(), *kind)),
         |path| files.get(path).map(|(_, text)| text.clone()),
     )
+}
+
+/// El índice de archivos de `files`, con sus carpetas.
+fn file_index(files: &Files) -> VaultIndex {
+    let folders: HashSet<VaultPath> = files
+        .keys()
+        .flat_map(|file| std::iter::successors(file.parent(), VaultPath::parent))
+        .filter(|folder| !folder.is_root())
+        .collect();
+    let folders = folders
+        .into_iter()
+        .map(|folder| (folder, EntryKind::Folder));
+    let files = files.iter().map(|(path, (kind, _))| (path.clone(), *kind));
+    VaultIndex::from_entries(folders.chain(files))
 }
 
 #[divan::bench(args = [5_000, 50_000], sample_count = 10)]
@@ -87,6 +102,50 @@ fn crear_una_nota_que_empata(bencher: Bencher) {
 #[divan::bench(args = [5_000, 50_000], sample_count = 20)]
 fn clonar_el_indice(bencher: Bencher, notes: usize) {
     let index = build(&vault(notes, NoteNames::Repeated));
+    bencher.bench(|| index.clone());
+}
+
+/// Lo que un lote con una nota editada paga en los índices de links y de
+/// archivos: ponerse al día y publicarlos, sin el refresh del watcher, el disco
+/// ni los tags. Lo publicado sigue vivo mientras llega el siguiente lote, así
+/// que cada vuelta paga copiar lo que comparte (#60).
+#[divan::bench(args = [5_000, 50_000], sample_count = 50)]
+fn publicar_una_nota_cambiada(bencher: Bencher, notes: usize) {
+    let files = vault(notes, NoteNames::Repeated);
+    let mut links = build(&files);
+    let vault_index = file_index(&files);
+    let (path, text) = edited_note(&files);
+    let change = VaultChange::Modified { path };
+    let mut published = (Arc::new(vault_index.clone()), Arc::new(links.clone()));
+    bencher.bench_local(|| {
+        links.apply(
+            &change,
+            &mut NoteBatch::new(&|_: &VaultPath| Some(text.clone())),
+        );
+        published = (Arc::new(vault_index.clone()), Arc::new(links.clone()));
+    });
+    divan::black_box(published);
+}
+
+/// La referencia de `publicar_una_nota_cambiada`.
+#[divan::bench(args = [5_000, 50_000], sample_count = 50)]
+fn reescanear_una_nota(bencher: Bencher, notes: usize) {
+    let (_, text) = edited_note(&vault(notes, NoteNames::Repeated));
+    bencher.bench(|| metalmind_syntax::scan(&text));
+}
+
+/// Una nota del vault, con un link más al final.
+fn edited_note(files: &Files) -> (VaultPath, String) {
+    let path = VaultPath::new("area-3/tema-4/nota-7.md").unwrap();
+    let text = format!("{}\n[[nota-8]]\n", files[&path].1);
+    (path, text)
+}
+
+/// Lo que paga el watcher por lote para publicar el índice de archivos.
+#[divan::bench(args = [5_000, 50_000], sample_count = 20)]
+fn clonar_el_indice_de_archivos(bencher: Bencher, notes: usize) {
+    let files = vault(notes, NoteNames::Repeated);
+    let index = file_index(&files);
     bencher.bench(|| index.clone());
 }
 

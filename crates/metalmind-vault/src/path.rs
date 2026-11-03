@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 
 use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 
@@ -10,8 +11,10 @@ use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory as _};
 /// Nunca sale de la raíz ni apunta a algo oculto: no admite `..`, `.`,
 /// componentes vacíos ni nombres que empiecen con punto, salvo los archivos
 /// de Metalmind de [`VaultPath::internal`].
+///
+/// Clonarla no copia el texto: los índices repiten cada ruta muchas veces.
 #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub struct VaultPath(String);
+pub struct VaultPath(Arc<str>);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ruta inválida en el vault {path:?}: {reason}")]
@@ -39,7 +42,7 @@ pub enum InvalidReason {
 impl VaultPath {
     #[must_use]
     pub fn root() -> Self {
-        Self(String::new())
+        Self::default()
     }
 
     /// # Errors
@@ -58,7 +61,7 @@ impl VaultPath {
         for component in path.split('/') {
             check_component(component).map_err(invalid)?;
         }
-        Ok(Self(path.to_owned()))
+        Ok(Self(path.into()))
     }
 
     /// Un archivo de Metalmind en su carpeta del vault, `.metalmind/`, como
@@ -86,13 +89,13 @@ impl VaultPath {
         for component in rest.split('/') {
             check_component(component).map_err(invalid)?;
         }
-        Ok(Self(path.to_owned()))
+        Ok(Self(path.into()))
     }
 
     /// Un nombre fijo del programa, que ya se sabe válido.
     pub(crate) fn fixed(name: &'static str) -> Self {
         debug_assert!(check_component(name).is_ok(), "{name}");
-        Self(name.to_owned())
+        Self(name.into())
     }
 
     /// La ruta de `path` dentro de `root`, o `None` si está fuera, no es
@@ -108,7 +111,7 @@ impl VaultPath {
             check_component(name).ok()?;
             parts.push(name);
         }
-        Some(Self(parts.join("/")))
+        Some(Self(parts.join("/").into()))
     }
 
     #[must_use]
@@ -134,7 +137,7 @@ impl VaultPath {
             return None;
         }
         Some(match self.0.rfind('/') {
-            Some(slash) => Self(self.0[..slash].to_owned()),
+            Some(slash) => Self(self.0[..slash].into()),
             None => Self::root(),
         })
     }
@@ -155,9 +158,9 @@ impl VaultPath {
 
     fn join_unchecked(&self, name: &str) -> Self {
         if self.is_root() {
-            Self(name.to_owned())
+            Self(name.into())
         } else {
-            Self(format!("{}/{name}", self.0))
+            Self(format!("{}/{name}", self.0).into())
         }
     }
 
@@ -175,7 +178,7 @@ impl VaultPath {
     pub fn starts_with(&self, prefix: &Self) -> bool {
         prefix.is_root()
             || self.0 == prefix.0
-            || (self.0.starts_with(&prefix.0)
+            || (self.0.starts_with(&*prefix.0)
                 && self.0.as_bytes().get(prefix.0.len()) == Some(&b'/'))
     }
 
@@ -202,7 +205,7 @@ impl VaultPath {
         if self.is_root() {
             root.to_owned()
         } else {
-            root.join(&self.0)
+            root.join(&*self.0)
         }
     }
 }
@@ -303,7 +306,8 @@ mod tests {
         let path = VaultPath::new("a/b/c.md").unwrap();
         assert_eq!(path.name(), "c.md");
         assert_eq!(path.parent().unwrap().as_str(), "a/b");
-        let ancestors: Vec<_> = path.ancestors().map(|a| a.0).collect();
+        let ancestors: Vec<_> = path.ancestors().collect();
+        let ancestors: Vec<_> = ancestors.iter().map(VaultPath::as_str).collect();
         assert_eq!(ancestors, ["a/b", "a", ""]);
         assert_eq!(VaultPath::root().parent(), None);
     }

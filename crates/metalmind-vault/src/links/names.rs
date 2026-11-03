@@ -6,6 +6,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ops::Bound;
+use std::sync::Arc;
+
+use imbl::OrdSet;
 
 use metalmind_syntax::{
     Resolution, TargetKey, note_name, path_keys, path_parent_key, resolve_from, target_key,
@@ -16,8 +19,10 @@ use crate::path::VaultPath;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Names {
-    files: BTreeSet<VaultPath>,
-    by_key: HashMap<String, KeyFiles>,
+    files: OrdSet<VaultPath>,
+    /// En un `Arc` porque copiar un nodo del mapa clona sus valores, y aquí
+    /// casi nunca se tocan: una edición no cambia los nombres del vault.
+    by_key: imbl::HashMap<String, Arc<KeyFiles>>,
 }
 
 /// Los archivos con una clave de nombre.
@@ -52,7 +57,7 @@ impl Names {
         let inside = format!("{path}/");
         let mut found: Vec<VaultPath> = self
             .files
-            .range::<str, _>((Bound::Included(inside.as_str()), Bound::Unbounded))
+            .range::<_, str>((Bound::Included(inside.as_str()), Bound::Unbounded))
             .take_while(|file| file.as_str().starts_with(&inside))
             .cloned()
             .collect();
@@ -64,23 +69,25 @@ impl Names {
 
     /// Las claves de `path`, que son las de los links a revisar al agregarlo o quitarlo.
     pub fn insert(&mut self, path: &VaultPath) -> Vec<String> {
-        if !self.files.insert(path.clone()) {
+        if self.files.insert(path.clone()).is_some() {
             return path_keys(path.as_str()).collect();
         }
         let keys: Vec<String> = path_keys(path.as_str()).collect();
         for key in &keys {
-            self.by_key.entry(key.clone()).or_default().insert(path);
+            let files = self.by_key.entry(key.clone()).or_default();
+            Arc::make_mut(files).insert(path);
         }
         keys
     }
 
     pub fn remove(&mut self, path: &VaultPath) -> Vec<String> {
-        if !self.files.remove(path) {
+        if self.files.remove(path).is_none() {
             return Vec::new();
         }
         let keys: Vec<String> = path_keys(path.as_str()).collect();
         for key in &keys {
             if let Some(files) = self.by_key.get_mut(key) {
+                let files = Arc::make_mut(files);
                 files.remove(path);
                 if files.by_depth.is_empty() {
                     self.by_key.remove(key);
@@ -91,7 +98,7 @@ impl Names {
     }
 
     pub fn resolve(&self, source: &VaultPath, target: &str) -> LinkTarget {
-        resolve_with(|key| self.by_key.get(key), source, target)
+        resolve_with(|key| self.by_key.get(key).map(Arc::as_ref), source, target)
     }
 
     /// Los nombres como quedan tras mover `moved` (las rutas de antes) de
@@ -133,7 +140,7 @@ impl Names {
         let base = self.by_key.get(&key);
         changed
             .entry(key)
-            .or_insert_with(|| base.cloned().unwrap_or_default())
+            .or_insert_with(|| base.map_or_else(KeyFiles::default, |files| KeyFiles::clone(files)))
     }
 }
 
@@ -148,7 +155,7 @@ impl Overlay<'_> {
     pub fn resolve(&self, source: &VaultPath, target: &str) -> LinkTarget {
         let lookup = |key: &str| match self.changed.get(key) {
             Some(files) => (!files.by_depth.is_empty()).then_some(files),
-            None => self.base.by_key.get(key),
+            None => self.base.by_key.get(key).map(Arc::as_ref),
         };
         resolve_with(lookup, source, target)
     }

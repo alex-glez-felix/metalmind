@@ -11,10 +11,10 @@ pub(crate) mod note;
 mod rename;
 mod update;
 
-use std::collections::{BTreeSet, HashMap};
 use std::ops::Range;
 use std::sync::Arc;
 
+use imbl::{HashMap, OrdSet};
 use metalmind_syntax::LinkSyntax;
 
 pub use follow::Destination;
@@ -102,18 +102,18 @@ struct LinkId {
     ordinal: usize,
 }
 
-/// Los links del vault. Es un valor: el watcher arma uno nuevo por lote y lo
-/// publica entero, como el [`crate::VaultIndex`].
+/// Los links del vault. Es un valor, como el [`crate::VaultIndex`]: un clon
+/// comparte todo con el original y cada cambio copia solo lo que toca.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LinkIndex {
     names: Names,
-    /// Los links de cada nota; un `Arc` para que clonar el índice sea barato.
+    /// Los links de cada nota.
     notes: HashMap<VaultPath, Arc<Vec<IndexedLink>>>,
     /// Los links que resuelven a cada archivo.
-    incoming: HashMap<VaultPath, BTreeSet<LinkId>>,
+    incoming: HashMap<VaultPath, OrdSet<LinkId>>,
     /// Las notas con algún link cuyo destino tiene esa clave: las que hay que
     /// volver a resolver cuando aparece o desaparece un archivo con ella.
-    by_key: HashMap<String, BTreeSet<VaultPath>>,
+    by_key: HashMap<String, OrdSet<VaultPath>>,
 }
 
 impl LinkIndex {
