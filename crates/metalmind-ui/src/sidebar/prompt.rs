@@ -54,17 +54,13 @@ impl Sidebar {
         Some(
             frame
                 .child(div().text_color(theme.ui.panel_muted).child(label))
-                .child(
-                    field_box(theme)
-                        .debug_selector(|| "panel-input".to_owned())
-                        .child(LineField::element(
-                            &self.field,
-                            input,
-                            FieldLook::default(),
-                            theme,
-                            cx,
-                        )),
-                ),
+                .child(field_box(theme).child(LineField::element(
+                    &self.field,
+                    input,
+                    FieldLook::default(),
+                    theme,
+                    cx,
+                ))),
         )
     }
 }
