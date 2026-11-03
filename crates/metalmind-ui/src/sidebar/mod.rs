@@ -193,6 +193,7 @@ impl Sidebar {
         self.menu = None;
         let focused = self.focus_handle.contains_focused(window, cx);
         let shown = self.panel.toggle(view, focused);
+        self.drop_preedit_without_field(cx);
         self.reveal_tag_row(shown.moved);
         cx.notify();
         shown.visible

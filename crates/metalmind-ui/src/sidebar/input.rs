@@ -25,8 +25,9 @@ impl Sidebar {
         self.edit_field(edit, cx);
     }
 
-    /// Una pregunta se cierra por varios caminos, y el preedit que tenía no
-    /// pasa a la siguiente.
+    /// La pregunta se cerró: su preedit no pasa a la siguiente. De una pregunta
+    /// a otra no se llega sin pasar por un clic, y con él la plataforma ya
+    /// confirma o suelta el preedit.
     pub(super) fn drop_preedit_without_field(&mut self, cx: &mut Context<Self>) {
         if self.panel.input().is_none() {
             self.field.update(cx, |field, _| field.clear_preedit());

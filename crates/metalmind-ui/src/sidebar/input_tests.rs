@@ -177,3 +177,22 @@ fn cerrar_la_pregunta_suelta_el_preedit() {
         ""
     );
 }
+
+/// Cambiar de vista desde fuera del panel también cierra la pregunta.
+#[test]
+fn cambiar_de_vista_suelta_el_preedit() {
+    let mut cx = TestAppContext::single();
+    let (_dir, sidebar, cx) = asking(&mut cx);
+    let field = sidebar.read_with(cx, |sidebar, _| sidebar.field.clone());
+    field.update_in(cx, |field, window, cx| {
+        field.replace_and_mark_text_in_range(None, "´", None, window, cx);
+    });
+    sidebar.update_in(cx, |sidebar, window, cx| {
+        sidebar.toggle(PanelView::Tags, window, cx);
+        assert!(sidebar.panel.input().is_none());
+    });
+    assert_eq!(
+        field.read_with(cx, |field, _| field.marked().to_owned()),
+        ""
+    );
+}
