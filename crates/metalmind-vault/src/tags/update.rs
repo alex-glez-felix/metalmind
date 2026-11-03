@@ -4,12 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::index::{EntryKind, VaultIndex};
+use crate::note_batch::NoteBatch;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 use crate::tags::graph::TagGraph;
 use crate::tags::key::TagKey;
 use crate::tags::note::page_name;
-use crate::tags::{ReadNote, Tags, scan_one};
+use crate::tags::{Tags, scan_in_batch};
 
 /// Cuánto hay que mirar de nuevo una ruta al final del lote.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,7 +30,7 @@ impl Tags {
         &mut self,
         changes: &[VaultChange],
         vault: &VaultIndex,
-        read: &impl ReadNote,
+        notes: &mut NoteBatch<'_>,
     ) -> Vec<TagKey> {
         let mut pages_changed = false;
         let mut touched = BTreeSet::new();
@@ -63,7 +64,7 @@ impl Tags {
             }
         }
         for (path, how) in settle {
-            touched.extend(self.settle(&path, how, vault, read, &mut pages_changed));
+            touched.extend(self.settle(&path, how, vault, notes, &mut pages_changed));
         }
         if pages_changed {
             let graph = self.rebuild_graph();
@@ -121,7 +122,7 @@ impl Tags {
         path: &VaultPath,
         how: Settle,
         vault: &VaultIndex,
-        read: &impl ReadNote,
+        notes: &mut NoteBatch<'_>,
         pages_changed: &mut bool,
     ) -> BTreeSet<TagKey> {
         if vault.kind(path) != Some(EntryKind::Note) {
@@ -130,7 +131,7 @@ impl Tags {
         if how == Settle::IfMissing && self.index.note(path).is_some() {
             return BTreeSet::new();
         }
-        let (note, page) = scan_one(&self.folder, path, read);
+        let (note, page) = scan_in_batch(&self.folder, path, notes);
         let (touched, graph_stale) = self.store(path.clone(), note, page);
         *pages_changed |= graph_stale;
         touched
@@ -250,7 +251,7 @@ mod tests {
                 touched.merge(apply(&root, op));
             }
             let changes = refresh(&mut index, &root, &touched, None);
-            tags.apply(&changes, &index, &read);
+            tags.apply(&changes, &index, &mut NoteBatch::new(&read));
             let full = Tags::build(folder.clone(), &scan(&root, None), read);
             prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
         }
@@ -401,7 +402,7 @@ mod tests {
 
         let mut batch = |op: Op, tags: &mut Tags| {
             let changes = refresh(&mut index, &root, &apply(&root, &op), None);
-            tags.apply(&changes, &index, &read);
+            tags.apply(&changes, &index, &mut NoteBatch::new(&read));
         };
         batch(
             Op::Write("a.md".into(), "---\ntítulo: Dos\n---\n"),

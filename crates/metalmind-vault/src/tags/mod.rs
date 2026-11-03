@@ -23,7 +23,6 @@ mod update;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::sync::Arc;
-use std::thread;
 
 pub use complete::TagCompletion;
 pub use graph::{TagGraph, TagProblem};
@@ -31,8 +30,8 @@ pub use index::{TagEntry, TagIndex};
 pub use key::{TagKey, tag_name};
 pub use layout::{PageEntry, PageLayout};
 pub use metadata::{PageChange, yaml_scalar};
-pub(crate) use note::tags_of;
 pub use note::{FrontmatterSpot, NoteTags, Snippet, TagOccurrence, TagSource};
+pub(crate) use note::{page_name, tags_of};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage, parse_template};
 pub use query::{ParsedQuery, QueryWord, TagQuery};
 pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
@@ -42,9 +41,11 @@ pub use tree::{TagNode, TagTree};
 use metalmind_syntax::Property;
 
 use crate::index::{EntryKind, VaultIndex};
+use crate::note_batch::NoteBatch;
+use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use index::IndexedNote;
-use note::{PageFile, page_name, scan_note};
+use note::{PageFile, scan_note};
 
 /// La carpeta de las páginas de tag si el vault no dice otra.
 pub const DEFAULT_TAGS_FOLDER: &str = "tags";
@@ -80,7 +81,7 @@ impl Tags {
         // La forma de los árboles del índice depende del orden en que se llenan.
         notes.sort_unstable();
         let mut tags = Self::empty(folder);
-        let scanned = scan_all(&tags.folder, &notes, &read);
+        let scanned = scan_all(&tags.folder, notes, &read);
         for (path, note, page) in scanned {
             tags.store(path, note, page);
         }
@@ -103,7 +104,7 @@ impl Tags {
             .map(|(path, _, _)| path)
             .filter(|path| page_name(&tags.folder, path).is_some())
             .collect();
-        let mut pages = scan_all(&tags.folder, &pages, &read).into_iter();
+        let mut pages = scan_all(&tags.folder, pages, &read).into_iter();
         for (path, note, frontmatter) in scans {
             if page_name(&tags.folder, &path).is_none() {
                 let note = IndexedNote {
@@ -308,14 +309,23 @@ impl Tags {
     }
 }
 
-/// Escanea una nota y dice si es página de tag. Si no se pudo leer, cuenta
-/// como una nota sin tags.
-fn scan_one(
+/// Lo escaneado de una nota del lote y si es página de tag. El texto solo hace
+/// falta para una página: [`TagPage`] sale de él.
+fn scan_in_batch(
     folder: &VaultPath,
     path: &VaultPath,
-    read: &impl ReadNote,
+    notes: &mut NoteBatch<'_>,
 ) -> (IndexedNote, Option<PageFile>) {
-    scan_text(folder, path, &read(path).unwrap_or_default())
+    if page_name(folder, path).is_some() {
+        return scan_text(folder, path, notes.text(path).unwrap_or_default());
+    }
+    let scan = notes.scan(path);
+    let note = IndexedNote {
+        tags: scan.tags.clone(),
+        page: false,
+        frontmatter: scan.properties.clone(),
+    };
+    (note, None)
 }
 
 fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, Option<PageFile>) {
@@ -341,30 +351,9 @@ fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, 
 
 type Scanned = (VaultPath, IndexedNote, Option<PageFile>);
 
-fn scan_all(folder: &VaultPath, notes: &[&VaultPath], read: &impl ReadNote) -> Vec<Scanned> {
-    let workers = thread::available_parallelism().map_or(1, usize::from);
-    let chunk = notes.len().div_ceil(workers).max(1);
-    thread::scope(|scope| {
-        let handles: Vec<_> = notes
-            .chunks(chunk)
-            .map(|chunk| {
-                scope.spawn(move || {
-                    chunk
-                        .iter()
-                        .map(|path| {
-                            let (note, page) = scan_one(folder, path, read);
-                            ((*path).clone(), note, page)
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .flat_map(|handle| match handle.join() {
-                Ok(scanned) => scanned,
-                Err(panic) => std::panic::resume_unwind(panic),
-            })
-            .collect()
+fn scan_all(folder: &VaultPath, notes: Vec<&VaultPath>, read: &impl ReadNote) -> Vec<Scanned> {
+    in_parallel(notes, |path| {
+        let (note, page) = scan_text(folder, path, &read(path).unwrap_or_default());
+        (path.clone(), note, page)
     })
 }

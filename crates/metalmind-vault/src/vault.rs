@@ -266,8 +266,13 @@ impl Vault {
         let watch = FolderWatch::start(&root, debouncer, Arc::clone(&unwatched))?;
         let watch = Arc::new(Mutex::new(watch));
         let files = scan(&root, Some(before_reading(&watch)));
-        let (links, tags, cache_refresh) =
-            index_notes(&root, &files, options.tags_folder, options.cache.as_deref());
+        let (links, tags, cache_refresh) = index_notes(
+            &root,
+            &files,
+            &options.tags_folder,
+            options.cache.as_deref(),
+            &|path: &VaultPath| read_note(&root, path),
+        );
         let history = options
             .history
             .map(|options| Arc::new(History::new(options.dir, options.retention)));

@@ -14,8 +14,10 @@ mod edit;
 mod file;
 mod fingerprint;
 mod history;
+mod inbox;
 mod index;
 mod links;
+mod note_batch;
 mod note_cache;
 mod note_scan;
 mod ops;
@@ -52,6 +54,7 @@ pub use links::{
     Destination, IndexedLink, LinkContext, LinkIndex, LinkSubpath, LinkTarget, NoteLink,
     RenameConflict, RenamePlan, RenamePlanError,
 };
+pub use note_batch::NoteBatch;
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
 pub use refresh::VaultChange;

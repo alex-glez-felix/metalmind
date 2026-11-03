@@ -9,7 +9,7 @@
 use std::fmt::Write as _;
 
 use metalmind_perf::{NoteNames, assert_linear, linked_vault};
-use metalmind_vault::{EntryKind, LinkIndex, VaultChange, VaultPath};
+use metalmind_vault::{EntryKind, LinkIndex, NoteBatch, VaultChange, VaultPath};
 
 type Files = Vec<(VaultPath, String)>;
 
@@ -84,7 +84,7 @@ fn borrar_una_carpeta_es_lineal() {
         1_000,
         |notes| build(&sorted(files(notes, NoteNames::Repeated))),
         |mut index| {
-            index.apply(&change, |_| None);
+            index.apply(&change, &mut NoteBatch::new(&|_: &VaultPath| None));
             index
         },
     );
@@ -118,7 +118,10 @@ fn un_nombre_en_cada_carpeta_es_lineal() {
         1_000,
         |folders| build(&folder_notes(folders)),
         |mut index| {
-            index.apply(&change, |_| Some(String::new()));
+            index.apply(
+                &change,
+                &mut NoteBatch::new(&|_: &VaultPath| Some(String::new())),
+            );
             index
         },
     );

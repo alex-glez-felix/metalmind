@@ -6,7 +6,7 @@
 mod support;
 
 use metalmind_vault::{
-    Destination, EntryKind, LinkIndex, LinkSubpath, LinkTarget, VaultChange, VaultPath,
+    Destination, EntryKind, LinkIndex, LinkSubpath, LinkTarget, NoteBatch, VaultChange, VaultPath,
 };
 use pretty_assertions::assert_eq;
 use proptest::prelude::*;
@@ -218,7 +218,7 @@ proptest! {
         for op in &ops {
             let changes = apply(&mut model, op);
             for change in &changes {
-                index.apply(change, |file| model.get(file).cloned());
+                index.apply(change, &mut NoteBatch::new(&|file: &VaultPath| model.get(file).cloned()));
             }
             prop_assert_eq!(&index, &build(&model), "tras {:?}", op);
         }
