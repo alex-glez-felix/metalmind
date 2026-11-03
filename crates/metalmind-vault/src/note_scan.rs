@@ -9,6 +9,7 @@ use crate::links::note::links_of;
 use crate::links::{IndexedLink, LinkIndex};
 use crate::note_cache::{CacheRefresh, Stamp, open_notes};
 use crate::path::VaultPath;
+use crate::properties::PropertyIndex;
 use crate::tags::{NoteTags, ReadNote, Tags, page_name, tags_of};
 
 /// Lo que los índices sacan del texto de una nota, sin saber nada del resto
@@ -34,7 +35,15 @@ impl NoteScan {
     }
 }
 
-/// Los índices de links y tags de `files`, leyendo una vez las notas que la
+/// Lo que sale de abrir las notas de un vault.
+pub(crate) struct NoteIndexes {
+    pub links: LinkIndex,
+    pub tags: Tags,
+    pub properties: PropertyIndex,
+    pub refresh: Option<CacheRefresh>,
+}
+
+/// Los índices de links, tags y propiedades de `files`, leyendo una vez las notas que la
 /// caché no tenga al día y las páginas de tag. `read` da el contenido de una
 /// nota, o `None` si no se pudo leer.
 pub(crate) fn index_notes(
@@ -43,7 +52,7 @@ pub(crate) fn index_notes(
     tags_folder: &VaultPath,
     cache: Option<&Path>,
     read: &impl ReadNote,
-) -> (LinkIndex, Tags, Option<CacheRefresh>) {
+) -> NoteIndexes {
     let notes = files
         .files()
         .filter(|entry| entry.kind == EntryKind::Note)
@@ -60,24 +69,25 @@ pub(crate) fn index_notes(
         &|path: &VaultPath| Stamp::of_file(&path.to_fs(root)),
         &|path: &VaultPath| reads.note(path),
     );
-    let (links, tags) = opened
-        .scans
-        .into_iter()
-        .map(|(path, scan)| {
-            (
-                (path.clone(), scan.links),
-                (path, scan.tags, scan.properties),
-            )
-        })
-        .unzip();
-    let links = LinkIndex::from_scans(
-        files.files().map(|entry| (entry.path.clone(), entry.kind)),
-        links,
-    );
-    let tags = Tags::from_scans(tags_folder.clone(), tags, |page: &VaultPath| {
-        reads.page(page)
-    });
-    (links, tags, opened.refresh)
+    let mut links = Vec::with_capacity(opened.scans.len());
+    let mut tags = Vec::with_capacity(opened.scans.len());
+    let mut properties = Vec::with_capacity(opened.scans.len());
+    for (path, scan) in opened.scans {
+        links.push((path.clone(), scan.links));
+        tags.push((path.clone(), scan.tags));
+        properties.push((path, scan.properties));
+    }
+    NoteIndexes {
+        links: LinkIndex::from_scans(
+            files.files().map(|entry| (entry.path.clone(), entry.kind)),
+            links,
+        ),
+        tags: Tags::from_scans(tags_folder.clone(), tags, |page: &VaultPath| {
+            reads.page(page)
+        }),
+        properties: PropertyIndex::from_scans(properties),
+        refresh: opened.refresh,
+    }
 }
 
 /// Las lecturas de una apertura: lo que se lea de una página de tag se recuerda
@@ -131,17 +141,17 @@ mod tests {
             *reads.entry(path.to_string()).or_default() += 1;
             read_note(root, path)
         };
-        let (links, tags, refresh) = index_notes(
+        let indexes = index_notes(
             root,
             &scan(root, None),
             &VaultPath::fixed(DEFAULT_TAGS_FOLDER),
             Some(cache),
             &read,
         );
-        if let Some(refresh) = refresh {
-            refresh.write(&links, &tags);
+        if let Some(refresh) = &indexes.refresh {
+            refresh.write(&indexes.links, &indexes.tags, &indexes.properties);
         }
-        (reads.into_inner().unwrap(), tags)
+        (reads.into_inner().unwrap(), indexes.tags)
     }
 
     #[test]
@@ -195,7 +205,7 @@ mod tests {
             *reads.lock().unwrap() += 1;
             None
         };
-        let (_, tags, _) = index_notes(
+        let indexes = index_notes(
             &root,
             &scan(&root, None),
             &VaultPath::fixed(DEFAULT_TAGS_FOLDER),
@@ -203,6 +213,10 @@ mod tests {
             &read,
         );
         assert_eq!(reads.into_inner().unwrap(), 1);
-        assert!(tags.is_page(&VaultPath::new("tags/rust.md").unwrap()));
+        assert!(
+            indexes
+                .tags
+                .is_page(&VaultPath::new("tags/rust.md").unwrap())
+        );
     }
 }

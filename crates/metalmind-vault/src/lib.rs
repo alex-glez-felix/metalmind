@@ -1,5 +1,5 @@
-//! El vault en disco: abrir una carpeta, sus índices de archivos, links y
-//! tags al día con lo que pasa en disco, crear, capturar, mover y borrar, el
+//! El vault en disco: abrir una carpeta, sus índices de archivos, links, tags
+//! y propiedades al día con lo que pasa en disco, crear, capturar, mover y borrar, el
 //! guardado atómico de cada nota, aplicar y deshacer cambios en varios
 //! archivos, los adjuntos, el historial de versiones de cada nota y la
 //! jumplist y las marks `A`–`Z` guardadas entre sesiones.
@@ -19,12 +19,14 @@ mod index;
 mod links;
 mod note_batch;
 mod note_cache;
+mod note_changes;
 mod note_scan;
 mod ops;
 mod order;
 mod origin;
 mod parallel;
 mod path;
+mod properties;
 mod refresh;
 mod saved_jumps;
 mod scan;
@@ -57,6 +59,7 @@ pub use links::{
 pub use note_batch::NoteBatch;
 pub use ops::FileOpError;
 pub use path::{InvalidPath, InvalidReason, VaultPath};
+pub use properties::PropertyIndex;
 pub use refresh::VaultChange;
 pub use saved_jumps::{SaveJumpsError, SavedJump, SavedJumps};
 pub use scan::walk_notes;

@@ -1,25 +1,17 @@
 //! Llevar los tags al día con los cambios del watcher, sin reescanear lo que
 //! no cambió.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
-use crate::index::{EntryKind, VaultIndex};
+use crate::index::VaultIndex;
 use crate::note_batch::NoteBatch;
+use crate::note_changes::{PerNoteIndex, Settle, apply_changes};
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 use crate::tags::graph::TagGraph;
 use crate::tags::key::TagKey;
 use crate::tags::note::page_name;
 use crate::tags::{Tags, scan_in_batch};
-
-/// Cuánto hay que mirar de nuevo una ruta al final del lote.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Settle {
-    /// Llegó por un rename: solo se escanea si no estaba en el índice.
-    IfMissing,
-    /// Su contenido cambió, o pasó a ser o dejó de ser página.
-    Rescan,
-}
 
 impl Tags {
     /// Aplica los cambios de un lote, con `vault` ya actualizado, y devuelve
@@ -32,40 +24,17 @@ impl Tags {
         vault: &VaultIndex,
         notes: &mut NoteBatch<'_>,
     ) -> Vec<TagKey> {
-        let mut pages_changed = false;
-        let mut touched = BTreeSet::new();
-        let mut settle: BTreeMap<VaultPath, Settle> = BTreeMap::new();
-        let mark = |settle: &mut BTreeMap<VaultPath, Settle>, path: VaultPath, how: Settle| {
-            let entry = settle.entry(path).or_insert(how);
-            *entry = (*entry).max(how);
+        let mut batch = TagsBatch {
+            tags: self,
+            touched: BTreeSet::new(),
+            pages_changed: false,
         };
-        for change in changes {
-            match change {
-                VaultChange::Created { path, .. } | VaultChange::Modified { path } => {
-                    mark(&mut settle, path.clone(), Settle::Rescan);
-                }
-                VaultChange::Removed { path, kind } => {
-                    for note in self.indexed_under(path, *kind) {
-                        touched.extend(self.forget(&note, &mut pages_changed));
-                    }
-                }
-                VaultChange::Renamed { from, to, kind } => {
-                    for old in self.indexed_under(from, *kind) {
-                        let Some(new) = old.rebase(from, to) else {
-                            continue;
-                        };
-                        let how = self.moved(&old, &new, &mut touched, &mut pages_changed);
-                        mark(&mut settle, new, how);
-                    }
-                    for note in notes_under(vault, to) {
-                        mark(&mut settle, note, Settle::IfMissing);
-                    }
-                }
-            }
-        }
-        for (path, how) in settle {
-            touched.extend(self.settle(&path, how, vault, notes, &mut pages_changed));
-        }
+        apply_changes(&mut batch, changes, vault, notes);
+        let TagsBatch {
+            mut touched,
+            pages_changed,
+            ..
+        } = batch;
         if pages_changed {
             let graph = self.rebuild_graph();
             touched.extend(graph_keys(&self.graph));
@@ -74,77 +43,58 @@ impl Tags {
         }
         touched.into_iter().collect()
     }
+}
 
-    /// Las notas indexadas que son `path` o, si es carpeta, están dentro de él.
-    fn indexed_under(&self, path: &VaultPath, kind: EntryKind) -> Vec<VaultPath> {
-        match kind {
-            EntryKind::Note => return vec![path.clone()],
-            EntryKind::Attachment => return Vec::new(),
-            EntryKind::Folder => {}
-        }
-        self.index
+/// Los tags durante un lote, con lo que el lote va tocando.
+struct TagsBatch<'t> {
+    tags: &'t mut Tags,
+    touched: BTreeSet<TagKey>,
+    pages_changed: bool,
+}
+
+impl PerNoteIndex for TagsBatch<'_> {
+    fn holds(&self, note: &VaultPath) -> bool {
+        self.tags.index.note(note).is_some()
+    }
+
+    fn notes_within(&self, folder: &VaultPath) -> Vec<VaultPath> {
+        self.tags
+            .index
             .all()
             .map(|(note, _)| note)
-            .filter(|note| note.starts_with(path))
+            .filter(|note| note.starts_with(folder))
             .cloned()
             .collect()
     }
 
-    fn forget(&mut self, path: &VaultPath, pages_changed: &mut bool) -> BTreeSet<TagKey> {
-        *pages_changed |= self.drop_page(path);
-        self.index.remove(path)
+    fn forget(&mut self, note: &VaultPath) {
+        self.pages_changed |= self.tags.drop_page(note);
+        self.touched.extend(self.tags.index.remove(note));
     }
 
     /// Mueve las ocurrencias de `old` a `new`. Si cambia si es página, hay
     /// que releerla.
-    fn moved(
-        &mut self,
-        old: &VaultPath,
-        new: &VaultPath,
-        touched: &mut BTreeSet<TagKey>,
-        pages_changed: &mut bool,
-    ) -> Settle {
-        let was_page = self.drop_page(old);
-        *pages_changed |= was_page;
-        let Some((note, keys)) = self.index.take(old) else {
+    fn moved(&mut self, old: &VaultPath, new: &VaultPath) -> Settle {
+        let was_page = self.tags.drop_page(old);
+        self.pages_changed |= was_page;
+        let Some((note, keys)) = self.tags.index.take(old) else {
             return Settle::IfMissing;
         };
-        touched.extend(keys);
-        if was_page || page_name(&self.folder, new).is_some() {
+        self.touched.extend(keys);
+        if was_page || page_name(&self.tags.folder, new).is_some() {
             return Settle::Rescan;
         }
-        touched.extend(self.index.insert(new.clone(), note));
+        self.touched
+            .extend(self.tags.index.insert(new.clone(), note));
         Settle::IfMissing
     }
 
-    fn settle(
-        &mut self,
-        path: &VaultPath,
-        how: Settle,
-        vault: &VaultIndex,
-        notes: &mut NoteBatch<'_>,
-        pages_changed: &mut bool,
-    ) -> BTreeSet<TagKey> {
-        if vault.kind(path) != Some(EntryKind::Note) {
-            return self.forget(path, pages_changed);
-        }
-        if how == Settle::IfMissing && self.index.note(path).is_some() {
-            return BTreeSet::new();
-        }
-        let (note, page) = scan_in_batch(&self.folder, path, notes);
-        let (touched, graph_stale) = self.store(path.clone(), note, page);
-        *pages_changed |= graph_stale;
-        touched
+    fn rescan(&mut self, note: &VaultPath, notes: &mut NoteBatch<'_>) {
+        let (scanned, page) = scan_in_batch(&self.tags.folder, note, notes);
+        let (touched, graph_stale) = self.tags.store(note.clone(), scanned, page);
+        self.touched.extend(touched);
+        self.pages_changed |= graph_stale;
     }
-}
-
-fn notes_under(vault: &VaultIndex, path: &VaultPath) -> Vec<VaultPath> {
-    vault
-        .subtree(path)
-        .into_iter()
-        .filter(|(_, kind)| *kind == EntryKind::Note)
-        .map(|(note, _)| note)
-        .collect()
 }
 
 /// Lo que nombra el grafo: páginas, alias y padres.
@@ -167,6 +117,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::note_scan::index_notes;
     use crate::refresh::{Touched, refresh};
     use crate::scan::scan;
     use crate::tags::DEFAULT_TAGS_FOLDER;
@@ -237,7 +188,8 @@ mod tests {
         touched
     }
 
-    /// Aplica cada lote en disco y en los tags, y compara con armarlos de cero.
+    /// Aplica cada lote en disco, en los tags y en las propiedades, y compara con
+    /// armarlos de cero.
     fn check(batches: &[Vec<Op>]) -> Result<(), TestCaseError> {
         let dir = TempDir::new().unwrap();
         let root = dir.path().canonicalize().unwrap();
@@ -245,6 +197,7 @@ mod tests {
         let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
         let mut index = scan(&root, None);
         let mut tags = Tags::build(folder.clone(), &index, read);
+        let mut properties = index_notes(&root, &index, &folder, None, &read).properties;
         for batch in batches {
             let mut touched = Touched::default();
             for op in batch {
@@ -254,6 +207,9 @@ mod tests {
             tags.apply(&changes, &index, &mut NoteBatch::new(&read));
             let full = Tags::build(folder.clone(), &scan(&root, None), read);
             prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
+            properties.apply(&changes, &index, &mut NoteBatch::new(&read));
+            let full = index_notes(&root, &scan(&root, None), &folder, None, &read).properties;
+            prop_assert_eq!(&properties, &full, "tras {:?}: {:?}", batch, changes);
         }
         Ok(())
     }
@@ -378,43 +334,6 @@ mod tests {
             ],
         ])
         .unwrap();
-    }
-
-    /// El frontmatter entero sigue a la nota: cambia al editarla y se va con
-    /// ella al renombrarla, sin releerla.
-    #[test]
-    fn el_frontmatter_sigue_a_la_nota() {
-        use metalmind_syntax::{Property, PropertyValue};
-        let dir = TempDir::new().unwrap();
-        let root = dir.path().canonicalize().unwrap();
-        let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
-        let title = |text: &str| {
-            vec![Property {
-                key: "título".to_owned(),
-                value: PropertyValue::Text(text.to_owned()),
-            }]
-        };
-        fs::write(root.join("a.md"), "---\ntítulo: Uno\n---\n").unwrap();
-        let mut index = scan(&root, None);
-        let mut tags = Tags::build(VaultPath::fixed(DEFAULT_TAGS_FOLDER), &index, read);
-        let a = VaultPath::new("a.md").unwrap();
-        assert_eq!(tags.index().frontmatter(&a), title("Uno"));
-
-        let mut batch = |op: Op, tags: &mut Tags| {
-            let changes = refresh(&mut index, &root, &apply(&root, &op), None);
-            tags.apply(&changes, &index, &mut NoteBatch::new(&read));
-        };
-        batch(
-            Op::Write("a.md".into(), "---\ntítulo: Dos\n---\n"),
-            &mut tags,
-        );
-        assert_eq!(tags.index().frontmatter(&a), title("Dos"));
-        batch(Op::Rename("a.md".into(), "b.md".into()), &mut tags);
-        assert_eq!(tags.index().frontmatter(&a), []);
-        let b = VaultPath::new("b.md").unwrap();
-        assert_eq!(tags.index().frontmatter(&b), title("Dos"));
-        batch(Op::Write("b.md".into(), "sin frontmatter"), &mut tags);
-        assert_eq!(tags.index().frontmatter(&b), []);
     }
 
     proptest! {

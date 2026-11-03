@@ -38,8 +38,6 @@ pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
 pub use scope::{Scope, ScopeError, ScopeFilter, ScopeWord};
 pub use tree::{TagNode, TagTree};
 
-use metalmind_syntax::Property;
-
 use crate::index::{EntryKind, VaultIndex};
 use crate::note_batch::NoteBatch;
 use crate::parallel::in_parallel;
@@ -89,28 +87,27 @@ impl Tags {
         tags
     }
 
-    /// Con lo ya escaneado de cada nota (ruta, ocurrencias y frontmatter). Solo
+    /// Con lo ya escaneado de cada nota. Solo
     /// lee las páginas de tag, que son pocas y guardan más de lo escaneado:
     /// [`TagPage`] sale del texto.
     pub(crate) fn from_scans(
         folder: VaultPath,
-        mut scans: Vec<(VaultPath, NoteTags, Vec<Property>)>,
+        mut scans: Vec<(VaultPath, NoteTags)>,
         read: impl ReadNote,
     ) -> Self {
         scans.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         let mut tags = Self::empty(folder);
         let pages: Vec<&VaultPath> = scans
             .iter()
-            .map(|(path, _, _)| path)
+            .map(|(path, _)| path)
             .filter(|path| page_name(&tags.folder, path).is_some())
             .collect();
         let mut pages = scan_all(&tags.folder, pages, &read).into_iter();
-        for (path, note, frontmatter) in scans {
+        for (path, note) in scans {
             if page_name(&tags.folder, &path).is_none() {
                 let note = IndexedNote {
                     tags: note,
                     page: false,
-                    frontmatter,
                 };
                 tags.store(path, note, None);
             } else if let Some((path, note, page)) = pages.next() {
@@ -323,7 +320,6 @@ fn scan_in_batch(
     let note = IndexedNote {
         tags: scan.tags.clone(),
         page: false,
-        frontmatter: scan.properties.clone(),
     };
     (note, None)
 }
@@ -342,9 +338,6 @@ fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, 
     let note = IndexedNote {
         tags,
         page: matches!(page, Some(PageFile::Page(_))),
-        frontmatter: frontmatter
-            .map(|frontmatter| frontmatter.properties)
-            .unwrap_or_default(),
     };
     (note, page)
 }
