@@ -105,9 +105,10 @@ fn clonar_el_indice(bencher: Bencher, notes: usize) {
     bencher.bench(|| index.clone());
 }
 
-/// Un lote con una nota editada, de punta a punta en el hilo del vault: ponerse
-/// al día y publicar lo que cambió. Lo publicado sigue vivo mientras llega el
-/// siguiente lote, así que cada vuelta paga copiar lo que comparte (#60).
+/// Lo que un lote con una nota editada paga en los índices de links y de
+/// archivos: ponerse al día y publicarlos, sin el refresh del watcher, el disco
+/// ni los tags. Lo publicado sigue vivo mientras llega el siguiente lote, así
+/// que cada vuelta paga copiar lo que comparte (#60).
 #[divan::bench(args = [5_000, 50_000], sample_count = 50)]
 fn publicar_una_nota_cambiada(bencher: Bencher, notes: usize) {
     let files = vault(notes, NoteNames::Repeated);
