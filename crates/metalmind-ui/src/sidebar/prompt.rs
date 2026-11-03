@@ -1,10 +1,7 @@
 //! Lo que el panel le pregunta al usuario, arriba del árbol: un nombre,
 //! el filtro o confirmar un borrado.
 
-use gpui_kit::{
-    Context, Div, InteractiveElement as _, ParentElement as _, Styled as _, div,
-    prelude::FluentBuilder as _,
-};
+use gpui_kit::{Context, Div, ParentElement as _, Styled as _, div, prelude::FluentBuilder as _};
 use metalmind_vault::VaultPath;
 
 use super::Sidebar;
