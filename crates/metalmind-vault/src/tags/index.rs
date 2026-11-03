@@ -2,15 +2,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use imbl::{HashMap, OrdSet};
-use metalmind_syntax::Property;
 
 use crate::path::VaultPath;
 use crate::tags::key::TagKey;
 use crate::tags::note::NoteTags;
 
 /// Lo que las notas escriben: qué notas llevan cada tag, y con qué
-/// ocurrencias, para renombrar sin reescanear, y el frontmatter entero de
-/// cada una. Las páginas de tag guardan sus ocurrencias (se reescriben al
+/// ocurrencias, para renombrar sin reescanear. Las páginas de tag guardan sus ocurrencias (se reescriben al
 /// renombrar) pero no cuentan en `by_tag`. Un clon comparte todo con el
 /// original y cada cambio copia solo lo que toca.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -32,7 +30,6 @@ pub struct TagEntry {
 pub(crate) struct IndexedNote {
     pub tags: NoteTags,
     pub page: bool,
-    pub frontmatter: Vec<Property>,
 }
 
 impl TagIndex {
@@ -50,16 +47,6 @@ impl TagIndex {
     #[must_use]
     pub fn note(&self, path: &VaultPath) -> Option<&NoteTags> {
         self.by_note.get(path).map(|note| &note.tags)
-    }
-
-    /// Cada clave escalar de primer nivel del frontmatter de una nota o página
-    /// con su valor, en orden; vacío si no tiene, no se pudo leer o no es un mapa.
-    #[must_use]
-    pub fn frontmatter(&self, path: &VaultPath) -> &[Property] {
-        self.by_note
-            .get(path)
-            .map(|note| note.frontmatter.as_slice())
-            .unwrap_or_default()
     }
 
     /// Las notas indexadas que no son páginas de tag, sin orden.

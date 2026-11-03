@@ -19,6 +19,7 @@ use crate::links::LinkIndex;
 use crate::note_batch::NoteBatch;
 use crate::note_cache::CacheRefresh;
 use crate::path::VaultPath;
+use crate::properties::PropertyIndex;
 use crate::refresh::{Touched, VaultChange, refresh};
 use crate::tags::{TagKey, Tags};
 use crate::vault::{SaveKind, VaultUpdate};
@@ -47,6 +48,7 @@ pub(crate) struct Worker {
     pub index: Arc<ArcSwap<VaultIndex>>,
     pub links: Arc<ArcSwap<LinkIndex>>,
     pub tags: Arc<ArcSwap<Tags>>,
+    pub properties: Arc<ArcSwap<PropertyIndex>>,
     /// `None` si el vault no tiene historial.
     pub history: Option<Arc<History>>,
     /// Lo que hay que reescribir de la caché, si cambió algo desde la última vez.
@@ -66,9 +68,10 @@ impl Worker {
             files: VaultIndex::clone(&self.index.load()),
             links: LinkIndex::clone(&self.links.load()),
             tags: Tags::clone(&self.tags.load()),
+            properties: PropertyIndex::clone(&self.properties.load()),
         };
         if let Some(refresh) = &self.cache_refresh {
-            refresh.write(&indexes.links, &indexes.tags);
+            refresh.write(&indexes.links, &indexes.tags, &indexes.properties);
         }
         self.open_history(&indexes.files);
         let mut inbox = Inbox::new(messages);
@@ -131,15 +134,18 @@ impl Worker {
         let snapshot = Arc::new(indexes.files.clone());
         let published = Arc::new(indexes.links.clone());
         let published_tags = Arc::new(indexes.tags.clone());
+        let published_properties = Arc::new(indexes.properties.clone());
         self.index.store(Arc::clone(&snapshot));
         self.links.store(Arc::clone(&published));
         self.tags.store(Arc::clone(&published_tags));
+        self.properties.store(Arc::clone(&published_properties));
         // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
         let _ = self.updates.send(VaultUpdate {
             changes,
             snapshot,
             links: published,
             tags: published_tags,
+            properties: published_properties,
             tag_changes,
         });
     }
@@ -326,11 +332,13 @@ struct Indexes {
     files: VaultIndex,
     links: LinkIndex,
     tags: Tags,
+    properties: PropertyIndex,
 }
 
 impl Indexes {
-    /// Pone links y tags al día con `files`, ya actualizado. Devuelve si un
-    /// chmod cambió algún link y las claves de tag que cambiaron.
+    /// Pone links, tags y propiedades al día con `files`, ya actualizado.
+    /// Devuelve si un chmod cambió algún link o propiedad y las claves de tag
+    /// que cambiaron.
     fn apply(
         &mut self,
         changes: &[VaultChange],
@@ -343,8 +351,10 @@ impl Indexes {
         let mut reread = false;
         for path in &touched.reread {
             reread |= self.links.reread(path, notes);
+            reread |= self.properties.reread(path, &self.files, notes);
         }
         let mut tag_changes = self.tags.apply(changes, &self.files, notes);
+        self.properties.apply(changes, &self.files, notes);
         // Un chmod no cambia el índice de archivos, pero puede volver legible una nota.
         let rescans: Vec<VaultChange> = touched
             .reread

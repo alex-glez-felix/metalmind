@@ -24,6 +24,7 @@ fn worker(root: &Path, history: &Arc<History>) -> Worker {
             &VaultIndex::default(),
             |_: &VaultPath| None,
         ))),
+        properties: Arc::default(),
         history: Some(Arc::clone(history)),
         cache_refresh: None,
         saving: Arc::new(Mutex::new(())),
@@ -279,8 +280,13 @@ const TAGS_FOLDER: &str = crate::tags::DEFAULT_TAGS_FOLDER;
 fn full_indexes(root: &Path) -> Indexes {
     let read = |path: &VaultPath| read_note(root, path);
     let files = scan(root, None);
-    let (links, tags, _) = index_notes(root, &files, &VaultPath::fixed(TAGS_FOLDER), None, &read);
-    Indexes { files, links, tags }
+    let indexes = index_notes(root, &files, &VaultPath::fixed(TAGS_FOLDER), None, &read);
+    Indexes {
+        files,
+        links: indexes.links,
+        tags: indexes.tags,
+        properties: indexes.properties,
+    }
 }
 
 /// Cada nota que el lote mira se lee una vez: los links, los tags y el
@@ -294,7 +300,7 @@ fn un_lote_lee_cada_nota_una_sola_vez() {
     let write = |name: &str, text: &str| fs::write(root.join(name), text).unwrap();
     fs::create_dir(root.join("tags")).unwrap();
     write("editada.md", "[[nueva]] #uno");
-    write("movida.md", "[[editada]] #dos");
+    write("movida.md", "---\ntítulo: Sigue\n---\n[[editada]] #dos");
     write("quieta.md", "[[editada]] #tres");
     write("tags/uno.md", "");
     let mut indexes = full_indexes(&root);
@@ -335,6 +341,7 @@ fn un_lote_lee_cada_nota_una_sola_vez() {
     let full = full_indexes(&root);
     assert_eq!(indexes.links, full.links);
     assert_eq!(indexes.tags, full.tags);
+    assert_eq!(indexes.properties, full.properties);
     assert_eq!(
         contents(&history, &vault_path("editada.md")),
         ["[[nueva]] [[movida-2]] #otro"]
@@ -367,4 +374,28 @@ fn sin_historial_un_renombre_no_lee_la_nota() {
     let (_messages, received) = mpsc::channel();
     worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
     assert_eq!(indexes.links, full_indexes(&root).links);
+}
+
+/// Un chmod que solo cambia el frontmatter también se publica: sin eso nadie
+/// vería las propiedades hasta el próximo cambio de la nota.
+#[test]
+fn un_chmod_que_solo_cambia_propiedades_se_publica() {
+    let (root, data) = (TempDir::new().unwrap(), TempDir::new().unwrap());
+    let root = root.path().canonicalize().unwrap();
+    let history = Arc::new(History::new(data.path(), TEST_RETENTION));
+    fs::write(root.join("a.md"), "---\ntítulo: Uno\n---\n").unwrap();
+    let mut indexes = full_indexes(&root);
+    let worker = worker(&root, &history);
+    worker.index.store(Arc::new(indexes.files.clone()));
+    fs::write(root.join("a.md"), "---\ntítulo: Dos\n---\n").unwrap();
+    let note = VaultPath::new("a.md").unwrap();
+    let touched = Touched {
+        reread: BTreeSet::from([note]),
+        ..Touched::default()
+    };
+    let read = |path: &VaultPath| read_note(&root, path);
+    let (_messages, received) = mpsc::channel();
+    worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
+    assert_eq!(indexes.properties, full_indexes(&root).properties);
+    assert_eq!(*worker.properties.load_full(), indexes.properties);
 }

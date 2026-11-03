@@ -58,8 +58,8 @@ impl Disk {
     fn open_and_save(&self, file: &Path) -> OpenedNotes {
         let opened = self.open(Some(file));
         if let Some(refresh) = &opened.refresh {
-            let (links, tags) = indexes(&opened);
-            refresh.write(&links, &tags);
+            let (links, tags, properties) = indexes(&opened);
+            refresh.write(&links, &tags, &properties);
         }
         opened
     }
@@ -69,7 +69,7 @@ impl Disk {
     }
 }
 
-fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags) {
+fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags, PropertyIndex) {
     let links = LinkIndex::from_scans(
         opened
             .scans
@@ -86,11 +86,18 @@ fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags) {
         opened
             .scans
             .iter()
-            .map(|(path, scan)| (path.clone(), scan.tags.clone(), scan.properties.clone()))
+            .map(|(path, scan)| (path.clone(), scan.tags.clone()))
             .collect(),
         |_: &VaultPath| None,
     );
-    (links, tags)
+    let properties = PropertyIndex::from_scans(
+        opened
+            .scans
+            .iter()
+            .map(|(path, scan)| (path.clone(), scan.properties.clone()))
+            .collect(),
+    );
+    (links, tags, properties)
 }
 
 fn scan_of<'o>(opened: &'o OpenedNotes, name: &str) -> &'o NoteScan {

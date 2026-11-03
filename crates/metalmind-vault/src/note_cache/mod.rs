@@ -18,6 +18,7 @@ use crate::links::LinkIndex;
 use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
+use crate::properties::PropertyIndex;
 use crate::tags::{ReadNote, Tags};
 use format::NoteRecord;
 
@@ -194,7 +195,7 @@ fn now_seconds() -> i64 {
 impl CacheRefresh {
     /// Reescribe la caché con los índices recién armados. Si falla, la
     /// próxima apertura lee lo que haga falta: no es para molestar a nadie.
-    pub(crate) fn write(&self, links: &LinkIndex, tags: &Tags) {
+    pub(crate) fn write(&self, links: &LinkIndex, tags: &Tags, properties: &PropertyIndex) {
         let records = self.notes.iter().filter_map(|note| {
             Some(NoteRecord {
                 path: Cow::Borrowed(note.path.as_str()),
@@ -202,7 +203,7 @@ impl CacheRefresh {
                 hash: note.hash,
                 links: Cow::Borrowed(links.outgoing(&note.path)),
                 tags: Cow::Borrowed(tags.index().note(&note.path)?),
-                properties: Cow::Borrowed(tags.index().frontmatter(&note.path)),
+                properties: Cow::Borrowed(properties.of(&note.path)),
             })
         });
         let records: Vec<NoteRecord<'_>> = records.collect();

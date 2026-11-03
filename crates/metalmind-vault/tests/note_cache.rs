@@ -111,11 +111,13 @@ fn abrir_con_cache_da_los_mismos_indices_que_sin_ella() {
     let building = fixture.open();
     assert_eq!(*building.links(), *plain.links());
     assert_eq!(*building.tags(), *plain.tags());
+    assert_eq!(*building.properties(), *plain.properties());
     drop(building);
     assert!(fixture.cache_file().exists());
 
     let cached = fixture.open();
     assert_eq!(*cached.links(), *plain.links());
+    assert_eq!(*cached.properties(), *plain.properties());
     assert_eq!(*cached.tags(), *plain.tags());
     assert!(matches!(
         cached.links().outgoing(&path("a.md"))[0].target,
