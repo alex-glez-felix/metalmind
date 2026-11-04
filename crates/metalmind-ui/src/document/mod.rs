@@ -80,6 +80,14 @@ pub struct Revision {
     on_disk: Option<ContentHash>,
 }
 
+/// Un buffer vacío con su estado: las marks y los saltos del motor son de un
+/// buffer, y no se pueden mezclar con los del archivo.
+#[derive(Debug)]
+struct EngineScratch {
+    buffer: Buffer,
+    state: DocState,
+}
+
 #[derive(Debug)]
 pub struct Document {
     /// La ruta como se escribió, para mostrarla y guardar ahí; `None` en
@@ -89,7 +97,7 @@ pub struct Document {
     /// En una pizarra, lo que el motor edita en lugar del archivo: nada de lo
     /// que escriba `:` puede romper su JSON (09 §4.2). El archivo solo lo
     /// cambia lo que entiende de pizarras.
-    board_scratch: Option<Buffer>,
+    board_scratch: Option<EngineScratch>,
     /// Lo que el motor guarda del documento (sus marks, el estilo de cada
     /// línea y lo que mide), que le presta en cada tecla.
     state: DocState,
@@ -298,6 +306,10 @@ impl Document {
     /// # Errors
     /// Solo si una mark no cae en el buffer de `old`, lo que sería un bug.
     pub(crate) fn keep_marks_of(&mut self, old: &Self) -> Result<(), BufferError> {
+        if let (Some(new), Some(old)) = (&mut self.board_scratch, &old.board_scratch) {
+            new.state
+                .keep_marks_of(&old.state, &old.buffer, &mut new.buffer)?;
+        }
         self.state
             .keep_marks_of(&old.state, &old.buffer, &mut self.buffer)
     }
@@ -310,9 +322,24 @@ impl Document {
     /// El buffer para editarlo y lo que el motor guarda del documento, para
     /// prestárselo.
     pub(crate) fn editable(&mut self) -> Editable<'_> {
-        Editable {
-            buffer: self.board_scratch.as_mut().unwrap_or(&mut self.buffer),
-            state: &mut self.state,
+        match &mut self.board_scratch {
+            Some(scratch) => Editable {
+                buffer: &mut scratch.buffer,
+                state: &mut scratch.state,
+            },
+            None => Editable {
+                buffer: &mut self.buffer,
+                state: &mut self.state,
+            },
+        }
+    }
+
+    /// Lo que [`Document::editable`] le presta al motor, para leer: de ahí son
+    /// sus marks y sus saltos.
+    pub(crate) fn engine_view(&self) -> (&DocState, &Buffer) {
+        match &self.board_scratch {
+            Some(scratch) => (&scratch.state, &scratch.buffer),
+            None => (&self.state, &self.buffer),
         }
     }
 
@@ -324,9 +351,15 @@ impl Document {
     }
 }
 
-fn scratch_for(path: &Path) -> Option<Buffer> {
+fn scratch_for(path: &Path) -> Option<EngineScratch> {
     let name = path.file_name()?.to_str()?;
-    note_name::is_board(name).then(Buffer::default)
+    note_name::is_board(name).then(|| {
+        let buffer = Buffer::default();
+        EngineScratch {
+            state: DocState::painted(&buffer, Rows::uniform(1)),
+            buffer,
+        }
+    })
 }
 
 /// Absoluta y sin enlaces; de un archivo que todavía no existe se resuelve

@@ -3,6 +3,8 @@
 
 use std::path::Path;
 
+use metalmind_buffer::{ByteOffset, Selection, Selections};
+
 use super::{DocumentId, Pane, PaneId, PaneOptions, Workspace, WorkspaceError};
 use crate::document::Document;
 use crate::workspace::Message;
@@ -109,6 +111,21 @@ impl Workspace {
             pane.state.viewport = last.viewport;
         }
         Ok(pane)
+    }
+
+    /// Si `id` pasó a ser una pizarra, el motor edita ahora un buffer vacío:
+    /// los cursores y las ventanas de sus paneles vuelven al inicio.
+    pub(super) fn rewind_cursors_on_board(&mut self, id: DocumentId) {
+        if !self.documents.get(id).is_some_and(Document::is_board) {
+            return;
+        }
+        let start = Selections::single(Selection::cursor(ByteOffset::ZERO));
+        for pane in self.panes.values_mut().filter(|pane| pane.document == id) {
+            pane.selections = start.clone();
+            let height = pane.state.viewport.height();
+            pane.state.viewport.resize(height, 0);
+        }
+        self.hidden.remove(&id);
     }
 
     /// Un documento sin cambios pasa a tener lo que dice el disco, como con

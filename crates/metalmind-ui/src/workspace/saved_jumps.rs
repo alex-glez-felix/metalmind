@@ -33,7 +33,7 @@ impl Workspace {
             .collect();
         let open = |file: FileId| {
             let document = self.documents.get(self.documents.of_file(file)?)?;
-            Some((document.state(), document.buffer()))
+            Some(document.engine_view())
         };
         let marks = self
             .vim
@@ -76,15 +76,12 @@ impl Workspace {
     fn focused_jumps(&self) -> Result<Vec<Jump>, WorkspaceError> {
         let pane = self.pane(self.focused())?;
         let id = pane.document;
-        let document = self.document(id)?;
+        let (state, buffer) = self.document(id)?.engine_view();
         let file = self
             .documents
             .file(id)
             .ok_or(WorkspaceError::NoDocument(id))?;
-        Ok(pane
-            .state
-            .jumps
-            .followed(file, document.state(), document.buffer()))
+        Ok(pane.state.jumps.followed(file, state, buffer))
     }
 }
 

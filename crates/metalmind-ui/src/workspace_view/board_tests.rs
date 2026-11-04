@@ -451,3 +451,24 @@ fn un_clic_en_la_barra_no_le_llega_a_la_pizarra(cx: &mut TestAppContext) {
     let selected = board.read_with(window.cx, |board, _| board.selected().map(str::to_owned));
     assert_eq!(selected.as_deref(), Some("caja"));
 }
+
+/// El botón despacha desde el panel de la pizarra, aunque el foco esté en otro.
+#[gpui_kit::test]
+fn un_boton_de_la_barra_actua_sobre_su_pizarra_con_el_foco_en_otro_panel(cx: &mut TestAppContext) {
+    let mut window = open(cx, "idea.canvas");
+    window.keys("+");
+    let board = window.board();
+    let zoomed = window.zoom();
+    window.keys("ctrl-w v");
+    window.keys(":");
+    window.cx.simulate_input("e a.md");
+    window.keys("enter");
+    assert_eq!(window.file(), "a.md");
+    let at = board.read_with(window.cx, |board, cx| {
+        board.toolbar_position(Theme::get(cx)).unwrap()
+    });
+    press(&mut window, at, 1);
+    let camera = board.read_with(window.cx, |board, _| board.camera().unwrap());
+    assert!((camera.zoom - zoomed).abs() > 1e-3, "{}", camera.zoom);
+    assert_eq!(window.file(), "idea.canvas");
+}

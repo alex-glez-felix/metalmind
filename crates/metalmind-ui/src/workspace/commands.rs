@@ -211,6 +211,7 @@ impl Workspace {
         };
         let saved = matches!(message, Message::Info(_));
         self.messages.push(message);
+        self.rewind_cursors_on_board(id);
         // `:w otra-ruta` escribe una copia y la nota sigue con sus cambios: su
         // autoguardado sigue como estaba.
         if saved && !self.document(id)?.is_modified() {
