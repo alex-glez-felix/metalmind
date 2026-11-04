@@ -41,6 +41,7 @@ impl BoardView {
             BoardAction::ToolDiamond => self.set_tool(Tool::Shape(Shape::Diamond)),
             BoardAction::ToolText => self.set_tool(Tool::Text),
             BoardAction::ToolArrow => self.set_tool(Tool::Arrow),
+            BoardAction::ToolPencil => self.set_tool(Tool::Pencil),
             BoardAction::LinkToNode => self.show_hints(cx),
             BoardAction::Confirm => self.confirm(window, &theme, cx),
             BoardAction::EditText => self.edit_selected_text(&theme, cx),

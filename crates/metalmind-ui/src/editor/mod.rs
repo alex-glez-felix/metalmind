@@ -155,7 +155,6 @@ impl Editor {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn board(&self) -> Option<&Entity<BoardView>> {
         self.board.as_ref()
     }

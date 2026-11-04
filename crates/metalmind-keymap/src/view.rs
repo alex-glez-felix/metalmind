@@ -53,6 +53,8 @@ named_actions! {
         ToolDiamond = "board::tool_diamond",
         /// Como las formas, con un texto suelto que se abre para escribir.
         ToolText = "board::tool_text",
+        /// Arrastrar dibuja a mano, hasta cambiar de herramienta.
+        ToolPencil = "board::tool_pencil",
         /// Une nodos: `h j k l` crean una caja hacia ese lado, `f` une a uno
         /// que ya existe, y arrastrar va de un nodo a otro.
         ToolArrow = "board::tool_arrow",

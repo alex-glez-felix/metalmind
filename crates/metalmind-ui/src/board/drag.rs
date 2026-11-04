@@ -79,6 +79,10 @@ impl BoardView {
                 dragged: dragged || screen_distance(pressed, at) >= threshold(theme),
             },
             (Gesture::Marquee { from, .. }, Some(point)) => Gesture::Marquee { from, to: point },
+            (Gesture::Stroke { mut points }, Some(point)) => {
+                points.push(point);
+                Gesture::Stroke { points }
+            }
             (gesture, None) => gesture,
         }
     }
@@ -169,6 +173,7 @@ impl BoardView {
         };
         let theme = Theme::get(cx).clone();
         let point = self.board_point(at);
+        self.stale = true;
         match gesture {
             Gesture::Pan { .. } => {}
             Gesture::Move(moving) => self.finish_move(moving, cx),
@@ -196,6 +201,13 @@ impl BoardView {
                 if let Some(point) = point {
                     self.finish_link(&from, point, cx);
                 }
+            }
+            Gesture::Stroke { points } => {
+                let width = SceneStyle::of(&theme).line_width;
+                let added = self
+                    .edit(|board| board.add_stroke(&points, width), cx)
+                    .flatten();
+                self.selected = added.into_iter().collect();
             }
             Gesture::Marquee { from, .. } => {
                 if let (Some(point), Some(board)) = (point, self.board()) {
@@ -243,7 +255,7 @@ impl BoardView {
                 };
                 self.create_text(frame, theme, cx);
             }
-            Tool::Select | Tool::Arrow => {}
+            Tool::Select | Tool::Arrow | Tool::Pencil => {}
         }
     }
 

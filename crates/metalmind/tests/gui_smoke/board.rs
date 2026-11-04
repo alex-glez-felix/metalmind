@@ -94,5 +94,32 @@ fn se_dibuja_y_se_escribe_con_el_teclado_y_llega_al_disco() {
     assert!(saved.contains(r#""text":"una caja""#), "{saved}");
     assert!(saved.contains(r#""text":"la otra""#), "{saved}");
     assert!(saved.contains(r#""fromNode""#), "{saved}");
-    assert_eq!(saved.lines().count(), 8, "{saved}");
+    assert_eq!(saved.lines().count(), 9, "{saved}");
+}
+
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn lo_dibujado_con_el_raton_se_autoguarda() {
+    let smoke = Smoke::new();
+    smoke.write("idea.canvas", "{\n\t\"nodes\":[],\n\t\"edges\":[]\n}\n");
+    let mut metalmind = smoke.launch(&["idea.canvas"]);
+    let window = metalmind.window();
+    window.wait_title("de la pizarra", |title| title.starts_with("idea.canvas"));
+    window.type_keys("r");
+    let (width, height, _) = window.pixels();
+    let (x, y) = (
+        i16::try_from(width / 4 * 3).unwrap(),
+        i16::try_from(height / 2).unwrap(),
+    );
+    window.click(x, y);
+    wait::until("la caja en el archivo", TIMEOUT, || {
+        let saved = smoke.read("idea.canvas");
+        if saved.contains(r#""type":"text""#) {
+            Ok(())
+        } else {
+            Err(saved)
+        }
+    });
+    window.type_keys(":q<CR>");
+    assert!(metalmind.wait_exit().success());
 }

@@ -25,6 +25,10 @@ pub(super) enum Gesture {
         to: Point,
         dragged: bool,
     },
+    /// Dibuja a mano; lleva los puntos por donde pasó.
+    Stroke {
+        points: Vec<Point>,
+    },
     /// Saca una flecha de `from`; suelta en el vacío crea una caja.
     Link {
         from: String,

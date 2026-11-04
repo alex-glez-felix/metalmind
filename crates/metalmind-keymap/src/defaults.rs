@@ -208,6 +208,7 @@ const BOARD: &[(&[Keystroke], BoardAction)] = &[
     (&[k('d')], BoardAction::ToolDiamond),
     (&[k('t')], BoardAction::ToolText),
     (&[k('a')], BoardAction::ToolArrow),
+    (&[k('p')], BoardAction::ToolPencil),
     (&[k('f')], BoardAction::LinkToNode),
     (&[named(KeyName::Enter)], BoardAction::Confirm),
     (&[k('i')], BoardAction::EditText),
@@ -242,6 +243,11 @@ fn board() -> impl Iterator<Item = Binding> {
     });
     leader
         .chain(panes)
+        .chain([in_view(
+            View::Board,
+            &[k('n')],
+            WindowCommand::InsertNoteCard,
+        )])
         .chain(table(View::Board, BOARD))
         .chain(table(View::BoardHints, BOARD_HINTS))
         .chain(table(View::BoardTextIdle, BOARD_TEXT_IDLE))

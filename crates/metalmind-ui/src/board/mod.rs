@@ -71,6 +71,7 @@ pub enum Tool {
     Shape(Shape),
     Text,
     Arrow,
+    Pencil,
 }
 
 pub struct BoardView {
@@ -78,6 +79,8 @@ pub struct BoardView {
     session: Entity<VaultSession>,
     pane: PaneId,
     source: Option<Source>,
+    /// Lo que se ve dejó de ser lo que dice el archivo: un gesto lo cambió.
+    stale: bool,
     content: Content,
     /// `None` hasta que se sabe lo que mide el área: la primera vista es
     /// "ver todo".
@@ -117,6 +120,7 @@ impl BoardView {
             session,
             pane,
             source: None,
+            stale: false,
             content: Content::Invalid(String::new()),
             camera: None,
             cameras,
@@ -255,7 +259,7 @@ impl BoardView {
             style: SceneStyle::of(theme),
             open,
         };
-        if self.source.as_ref() == Some(&source) {
+        if self.source.as_ref() == Some(&source) && !self.stale {
             return;
         }
         let other_file = self
@@ -277,6 +281,7 @@ impl BoardView {
             self.hints = None;
             self.tool = Tool::Select;
         }
+        self.stale = false;
         let text = document.buffer().to_string();
         let was_open = self.source.as_ref().and_then(|old| old.open.clone());
         let same_style = self

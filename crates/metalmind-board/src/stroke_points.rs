@@ -21,6 +21,20 @@ pub struct StrokePoint {
 }
 
 impl StrokePoint {
+    /// El punto en `at`, relativo a la esquina del nodo.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "las coordenadas de una pizarra caben en i32"
+    )]
+    pub fn at(at: Point) -> Self {
+        Self {
+            x_tenths: (at.x * TENTHS_PER_PX).round() as i32,
+            y_tenths: (at.y * TENTHS_PER_PX).round() as i32,
+            pressure: None,
+        }
+    }
+
     /// Relativo a la esquina del nodo.
     #[must_use]
     #[expect(

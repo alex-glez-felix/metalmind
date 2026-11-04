@@ -110,6 +110,7 @@ impl WorkspaceView {
             }
             WindowCommand::OpenDailyNote => self.open_daily_note(window, cx),
             WindowCommand::NewBoard => self.new_board(argument, window, cx),
+            WindowCommand::InsertNoteCard => self.open_card_picker(window, cx),
             WindowCommand::Focus => self.run_focus(argument, window, cx),
             WindowCommand::ClearFocus => self.set_focus(None, window, cx),
             WindowCommand::ShowMessages => self.open_messages(window, cx),

@@ -335,6 +335,60 @@ fn escape_o_una_letra_de_nadie_dejan_las_letras_sin_unir(cx: &mut TestAppContext
     assert_eq!(window.selected(), ["c".to_owned()]);
 }
 
+// --- Lápiz y tarjetas
+
+#[gpui_kit::test]
+fn con_el_lapiz_arrastrar_deja_un_trazo_y_la_herramienta_sigue(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    let start = window.text();
+    window.keys("p");
+    assert_eq!(window.tool(), Tool::Pencil);
+    let (from, to) = (window.at_board(300.0, 200.0), window.at_board(420.0, 260.0));
+    window.drag(from, to);
+    let parsed = window.parsed();
+    let stroke = newest_node(&parsed);
+    assert!(matches!(&stroke.kind, NodeKind::Stroke { points, .. } if points.len() >= 2));
+    assert_eq!((stroke.x, stroke.y), (300, 200));
+    assert_eq!((stroke.width, stroke.height), (120, 60));
+    assert_eq!(window.tool(), Tool::Pencil);
+    window.keys("u");
+    assert_eq!(window.text(), start);
+}
+
+#[gpui_kit::test]
+fn n_abre_el_finder_y_la_nota_elegida_entra_como_tarjeta(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    let start = window.text();
+    window.keys("n");
+    let overlay = window
+        .view
+        .read_with(window.cx, |view, _| view.overlay.is_some());
+    assert!(overlay);
+    window.cx.simulate_input("la nota");
+    window.cx.run_until_parked();
+    window.keys("enter");
+    let parsed = window.parsed();
+    let card = newest_node(&parsed);
+    assert!(matches!(
+        &card.kind,
+        NodeKind::File { file, .. } if file == "carpeta con espacio/la nota.md"
+    ));
+    assert_eq!(window.selected(), std::slice::from_ref(&card.id));
+    assert_eq!(window.file(), "idea.canvas");
+    window.keys("u");
+    assert_eq!(window.text(), start);
+}
+
+#[gpui_kit::test]
+fn cancelar_el_finder_de_una_tarjeta_no_toca_la_pizarra(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    let start = window.text();
+    window.keys("n");
+    window.keys("escape");
+    assert_eq!(window.text(), start);
+    assert!(!window.modified());
+}
+
 // --- Texto
 
 #[gpui_kit::test]
@@ -579,6 +633,11 @@ fn arrastrar_alinea_con_un_vecino_cercano_antes_que_con_la_rejilla(cx: &mut Test
 fn escape_arrastrando_devuelve_el_nodo_sin_tocar_el_archivo(cx: &mut TestAppContext) {
     let mut window = on_board(cx);
     let start = window.text();
+    let before = {
+        let board = window.board();
+        let camera = board.read_with(window.cx, |board, _| board.camera().unwrap());
+        (camera.x, camera.y)
+    };
     let from = window.center("c");
     window.down(from, Modifiers::none(), 1);
     window.drag_to(from + point(px(200.), px(0.)));
@@ -591,6 +650,8 @@ fn escape_arrastrando_devuelve_el_nodo_sin_tocar_el_archivo(cx: &mut TestAppCont
         node_xy(board.board_for_tests().unwrap(), "c")
     });
     assert_eq!(seen, (0, 300));
+    let camera = board.read_with(window.cx, |board, _| board.camera().unwrap());
+    assert_eq!((camera.x, camera.y), before);
 }
 
 #[gpui_kit::test]

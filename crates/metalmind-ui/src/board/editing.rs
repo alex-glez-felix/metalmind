@@ -35,6 +35,7 @@ impl BoardView {
                 self.create_shape(shape, Frame::centered_at(center, DEFAULT_SHAPE), cx);
             }
             Tool::Text => self.create_text(Frame::centered_at(center, DEFAULT_TEXT), theme, cx),
+            Tool::Pencil => {}
             Tool::Select | Tool::Arrow => {
                 if self
                     .selected_node()
@@ -58,6 +59,20 @@ impl BoardView {
         if let Some(id) = added {
             self.selected = vec![id];
         }
+    }
+
+    /// Una tarjeta de `file` en el centro de la vista, ya elegida.
+    pub fn insert_card(&mut self, file: &str, theme: &Theme, cx: &mut Context<Self>) {
+        let Some(center) = self.view_center() else {
+            return;
+        };
+        let frame = Frame::centered_at(center, DEFAULT_SHAPE);
+        let added = self.edit(|board| board.add_card(board.unstacked(frame), file), cx);
+        if let Some(id) = added {
+            self.selected = vec![id];
+            self.reveal(frame.rect(), theme);
+        }
+        cx.notify();
     }
 
     /// Un texto suelto nuevo, abierto para escribir.
@@ -211,7 +226,7 @@ impl BoardView {
     /// `esc`: lo que esté a medias, de lo último a lo primero.
     pub(super) fn cancel(&mut self) {
         if self.gesture.take().is_some() {
-            self.source = None;
+            self.stale = true;
         } else if self.hints.take().is_some() {
         } else if self.tool != Tool::Select {
             self.tool = Tool::Select;

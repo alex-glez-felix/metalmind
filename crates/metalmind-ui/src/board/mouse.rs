@@ -73,6 +73,9 @@ impl BoardView {
                 to: point,
                 dragged: false,
             }),
+            Tool::Pencil => Some(Gesture::Stroke {
+                points: vec![point],
+            }),
             Tool::Arrow | Tool::Select => self.press_on(under, event, point, &theme, window, cx),
         };
         cx.notify();
@@ -263,6 +266,13 @@ impl BoardView {
     }
 
     fn cursor_at(&self, at: ScreenPoint<Pixels>, cx: &Context<Self>) -> CursorStyle {
+        if self
+            .text_area
+            .as_ref()
+            .is_some_and(|area| area.bounds.contains(&at))
+        {
+            return CursorStyle::IBeam;
+        }
         if !matches!(self.tool, Tool::Select) {
             return CursorStyle::Crosshair;
         }

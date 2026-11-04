@@ -47,6 +47,14 @@ pub fn paint_link_preview(from: Point, to: Point, frame: &Frame<'_>, window: &mu
     }
 }
 
+/// Un trazo a mano mientras se dibuja.
+pub fn paint_stroke_preview(points: &[Point], frame: &Frame<'_>, window: &mut Window) {
+    let width = f32::from(frame.theme.stroke.board_line);
+    if let Ok(mesh) = shapes::stroke(&shapes::smooth(points), width) {
+        paint_mesh(&mesh, frame.theme.ui.board_line, frame, window);
+    }
+}
+
 /// Una flecha elegida: su recorrido entero en el color de la selección.
 pub fn paint_edge_selection(element: &ElementScene, frame: &Frame<'_>, window: &mut Window) {
     for piece in &element.pieces {

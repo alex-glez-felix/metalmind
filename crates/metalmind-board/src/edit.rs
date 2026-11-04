@@ -11,6 +11,7 @@ use crate::board::Board;
 use crate::edge::{Edge, EdgeEnd, Route, Side, Tip};
 use crate::geometry::{Point, Rect};
 use crate::node::{Node, NodeKind, Shape};
+use crate::stroke_points::StrokePoint;
 
 /// La rejilla de la pizarra, en unidades: 09 §4.4.
 pub const GRID: i32 = 10;
@@ -188,6 +189,61 @@ impl Board {
             extra: Map::new(),
         });
         id
+    }
+
+    /// Una tarjeta de nota, con `file` la ruta en el vault. Da su id.
+    pub fn add_card(&mut self, frame: Frame, file: &str) -> String {
+        let id = self.fresh_id();
+        self.nodes.push(Node {
+            id: id.clone(),
+            x: frame.x,
+            y: frame.y,
+            width: frame.width,
+            height: frame.height,
+            color: None,
+            kind: NodeKind::File {
+                file: file.to_owned(),
+                subpath: None,
+            },
+            extra: Map::new(),
+        });
+        id
+    }
+
+    /// Un trazo por `points`, en coordenadas de la pizarra: su caja es justo la
+    /// de sus puntos (09 §2.3). Da su id, o `None` sin puntos.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "las coordenadas de una pizarra caben en i32 y en f32"
+    )]
+    pub fn add_stroke(&mut self, points: &[Point], stroke_width: f32) -> Option<String> {
+        let first = *points.first()?;
+        let (mut left, mut top, mut right, mut bottom) = (first.x, first.y, first.x, first.y);
+        for point in points {
+            left = left.min(point.x);
+            top = top.min(point.y);
+            right = right.max(point.x);
+            bottom = bottom.max(point.y);
+        }
+        let (x, y) = (left.floor() as i32, top.floor() as i32);
+        let relative =
+            |point: &Point| StrokePoint::at(Point::new(point.x - x as f32, point.y - y as f32));
+        let id = self.fresh_id();
+        self.nodes.push(Node {
+            id: id.clone(),
+            x,
+            y,
+            width: ((right.ceil() as i32) - x).max(1),
+            height: ((bottom.ceil() as i32) - y).max(1),
+            color: None,
+            kind: NodeKind::Stroke {
+                stroke_width,
+                points: points.iter().map(relative).collect(),
+            },
+            extra: Map::new(),
+        });
+        Some(id)
     }
 
     /// Una flecha de `from` a `to`. Da su id, o `None` si falta uno de los dos.

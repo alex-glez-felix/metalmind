@@ -7,7 +7,7 @@ use gpui_kit::{
     Window, anchored, deferred, div, prelude::FluentBuilder as _,
 };
 use metalmind_board::Shape;
-use metalmind_keymap::{BoardAction, View};
+use metalmind_keymap::{Action, BoardAction, View, WindowCommand};
 
 use super::{BoardView, Tool};
 use crate::actions::{AppKeymap, Dispatch};
@@ -17,7 +17,7 @@ use crate::theme::Theme;
 fn button(
     id: &'static str,
     label: &'static str,
-    action: BoardAction,
+    action: impl Into<Action>,
     theme: &Theme,
     cx: &App,
 ) -> impl IntoElement {
@@ -29,7 +29,7 @@ fn button(
 fn tool_button(
     id: &'static str,
     label: &'static str,
-    action: BoardAction,
+    action: impl Into<Action>,
     active: bool,
     theme: &Theme,
     cx: &App,
@@ -122,6 +122,22 @@ impl BoardView {
                         tool == Tool::Arrow,
                         theme,
                         cx,
+                    ))
+                    .child(tool_button(
+                        "board-pencil",
+                        "lápiz",
+                        BoardAction::ToolPencil,
+                        tool == Tool::Pencil,
+                        theme,
+                        cx,
+                    ))
+                    .child(tool_button(
+                        "board-card",
+                        "tarjeta",
+                        WindowCommand::InsertNoteCard,
+                        false,
+                        theme,
+                        cx,
                     )),
             )
     }
@@ -171,26 +187,32 @@ impl BoardView {
     }
 
     /// Lo que ofrece el menú según lo que haya elegido.
-    fn menu_groups(&self) -> Vec<&'static [(&'static str, BoardAction)]> {
-        const CREATE: &[(&str, BoardAction)] = &[
-            ("Caja", BoardAction::ToolRectangle),
-            ("Elipse", BoardAction::ToolEllipse),
-            ("Rombo", BoardAction::ToolDiamond),
-            ("Texto suelto", BoardAction::ToolText),
+    fn menu_groups(&self) -> Vec<&'static [(&'static str, Action)]> {
+        const CREATE: &[(&str, Action)] = &[
+            ("Caja", Action::Board(BoardAction::ToolRectangle)),
+            ("Elipse", Action::Board(BoardAction::ToolEllipse)),
+            ("Rombo", Action::Board(BoardAction::ToolDiamond)),
+            ("Texto suelto", Action::Board(BoardAction::ToolText)),
+            (
+                "Tarjeta de nota",
+                Action::Window(WindowCommand::InsertNoteCard),
+            ),
         ];
-        const ELEMENT: &[(&str, BoardAction)] = &[
-            ("Escribir", BoardAction::EditText),
-            ("Unir a un nodo", BoardAction::LinkToNode),
-            ("Crear caja unida", BoardAction::ToolArrow),
+        const ELEMENT: &[(&str, Action)] = &[
+            ("Escribir", Action::Board(BoardAction::EditText)),
+            ("Unir a un nodo", Action::Board(BoardAction::LinkToNode)),
+            ("Sacar una flecha", Action::Board(BoardAction::ToolArrow)),
         ];
-        const CLIPBOARD_SELECTED: &[(&str, BoardAction)] =
-            &[("Copiar", BoardAction::Copy), ("Pegar", BoardAction::Paste)];
-        const CLIPBOARD: &[(&str, BoardAction)] = &[("Pegar", BoardAction::Paste)];
-        const HISTORY: &[(&str, BoardAction)] = &[
-            ("Deshacer", BoardAction::Undo),
-            ("Rehacer", BoardAction::Redo),
+        const CLIPBOARD_SELECTED: &[(&str, Action)] = &[
+            ("Copiar", Action::Board(BoardAction::Copy)),
+            ("Pegar", Action::Board(BoardAction::Paste)),
         ];
-        const DELETE: &[(&str, BoardAction)] = &[("Borrar", BoardAction::Delete)];
+        const CLIPBOARD: &[(&str, Action)] = &[("Pegar", Action::Board(BoardAction::Paste))];
+        const HISTORY: &[(&str, Action)] = &[
+            ("Deshacer", Action::Board(BoardAction::Undo)),
+            ("Rehacer", Action::Board(BoardAction::Redo)),
+        ];
+        const DELETE: &[(&str, Action)] = &[("Borrar", Action::Board(BoardAction::Delete))];
         if self.selected.is_empty() {
             vec![CREATE, CLIPBOARD, HISTORY]
         } else {
@@ -243,12 +265,12 @@ impl BoardView {
 
 fn menu_row(
     label: &'static str,
-    action: BoardAction,
+    action: Action,
     theme: &Theme,
     cx: &mut Context<BoardView>,
 ) -> impl IntoElement {
-    let keys = AppKeymap::get(cx).keys_for(action.into(), |view| view == View::Board);
-    let color = if action == BoardAction::Delete {
+    let keys = AppKeymap::get(cx).keys_for(action, |view| view == View::Board);
+    let color = if action == Action::Board(BoardAction::Delete) {
         theme.ui.error
     } else {
         theme.ui.panel_foreground

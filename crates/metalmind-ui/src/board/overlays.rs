@@ -67,6 +67,9 @@ impl BoardView {
             Some(Gesture::Draw { from, to, dragged }) if *dragged => {
                 paint::paint_outline(NodeFrame::between(*from, *to).rect(), frame, window);
             }
+            Some(Gesture::Stroke { points }) => {
+                paint::paint_stroke_preview(points, frame, window);
+            }
             Some(Gesture::Marquee { from, to }) => {
                 paint::paint_outline(Rect::between(*from, *to), frame, window);
             }

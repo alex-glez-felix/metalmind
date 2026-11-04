@@ -210,3 +210,44 @@ fn crear_no_deja_una_forma_justo_sobre_otra() {
     };
     assert_eq!(board.unstacked(frame).x, 2 * GRID);
 }
+
+#[test]
+fn un_trazo_tiene_la_caja_de_sus_puntos_y_vuelve_a_leerse_igual() {
+    let mut board = Board::default();
+    let points = [
+        Point::new(10.5, 20.0),
+        Point::new(40.0, 5.25),
+        Point::new(-3.0, 60.0),
+    ];
+    let id = board.add_stroke(&points, 2.0).unwrap();
+    let node = board.node(&id).unwrap();
+    assert_eq!((node.x, node.y, node.width, node.height), (-3, 5, 43, 55));
+    let NodeKind::Stroke { points: stored, .. } = &node.kind else {
+        panic!("no es un trazo");
+    };
+    assert_eq!(stored[0].position(), Point::new(13.5, 15.0));
+    let reread = Board::parse(&board.write()).unwrap();
+    assert_eq!(reread, board);
+}
+
+#[test]
+fn sin_puntos_no_hay_trazo() {
+    assert_eq!(Board::default().add_stroke(&[], 2.0), None);
+}
+
+#[test]
+fn una_tarjeta_nueva_lleva_la_ruta_de_la_nota() {
+    let mut board = Board::default();
+    let frame = Frame {
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 80,
+    };
+    let id = board.add_card(frame, "carpeta/una nota.md");
+    let reread = Board::parse(&board.write()).unwrap();
+    assert!(matches!(
+        &reread.node(&id).unwrap().kind,
+        NodeKind::File { file, subpath: None } if file == "carpeta/una nota.md"
+    ));
+}
