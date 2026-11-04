@@ -51,7 +51,8 @@ fn construir_la_escena(bencher: Bencher, elements: usize) {
 fn arrastrar_una_caja(bencher: Bencher, elements: usize) {
     let mut board = Board::parse(&metalmind_perf::board(elements)).unwrap();
     let mut scene = Scene::build(&board, STYLE).unwrap();
-    let id = board.edges[0].from.node.clone();
+    // `n0` es un grupo, que no se arrastra: de `n1` sale una flecha y le llega otra.
+    let id = board.edges[1].from.node.clone();
     let mut x = 0;
     bencher.bench_local(|| {
         x = (x + 10) % 1000;

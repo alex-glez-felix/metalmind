@@ -43,7 +43,7 @@ Hecha la fase 3: la pizarra se dibuja con ratón y con teclado y se autoguarda. 
 - **Tarjetas sin arrastrar del árbol.** `n`, el botón y el menú abren el finder; arrastrar una nota del árbol queda fuera.
 - **Lo que falta**: los grupos siguen siendo fondo y no se eligen, ni se mueven ni se borran. El color no se cambia desde la UI. El panel de teclas no sale en una pizarra. Lo que cerró por foco, no por `esc`, no hace crecer la caja.
 
-Medido con 2 000 elementos, en release: un frame de arrastre reconstruye en **55 µs** (construir la escena entera, 11.7 ms), soltar cuesta 90 µs de escena y una edición, leer, escribir y sacar las líneas, 1.6 ms (`cargo bench -p metalmind-ui --bench board`). A 1920×1080, en una máquina de escritorio con GPU NVIDIA dentro de `gamescope --backend headless`, a 60 eventos por segundo (intervalo p50 / p99; CPU p50 / p99):
+Medido con 2 000 elementos, en release: un frame de arrastre reconstruye en **66 µs** (construir la escena entera, 11.6 ms), soltar cuesta 90 µs de escena y una edición, leer, escribir y sacar las líneas, 1.3 ms (`cargo bench -p metalmind-ui --bench board`). A 1920×1080, en una máquina de escritorio con GPU NVIDIA dentro de `gamescope --backend headless`, a 60 eventos por segundo (intervalo p50 / p99; CPU p50 / p99):
 
 | | Intervalo | CPU |
 |---|---|---|

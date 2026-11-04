@@ -59,7 +59,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Pizarra de 2 000 elementos: leerla / construir la escena / decidir qué se pinta | ≤ 16 ms al abrir; ≤ 1 ms por frame | 0.7 / 11.7 ms / 2.7–11 µs | ⚠️ | `metalmind-ui` `board` |
 | Pizarra de 2 000 elementos, pan al 100 % y de lejos: intervalo p99 (GPU, 60 Hz) y CPU por frame | a tiempo; ≤ 4 ms | 18.6 / 17.9 ms; p50 0.75 / 0.49 ms | ✅ | a mano, [09](research/09-pizarra.md) "Estado" |
-| Pizarra de 2 000 elementos: un frame de arrastre (reconstruir una caja con sus flechas) / soltar / una edición (leer, escribir y sacar las líneas) | ≤ 1 ms por frame; ≤ 4 ms al editar | 55 / 90 µs / 1.6 ms | ✅ | `metalmind-ui` `board` |
+| Pizarra de 2 000 elementos: un frame de arrastre (reconstruir una caja con sus flechas) / soltar / una edición (leer, escribir y sacar las líneas) | ≤ 1 ms por frame; ≤ 4 ms al editar | 66 / 90 µs / 1.3 ms | ✅ | `metalmind-ui` `board` |
 | Pizarra de 2 000 elementos, arrastrar una caja al 100 % y de lejos, `h l` sobre lo elegido, zoom continuo: intervalo p99 (GPU, 60 Hz) y CPU por frame | a tiempo; ≤ 4 ms | 33.5 / 17.7 / 19.1 / 34.0 ms; p50 1.20 / 3.26 / 2.01 / 3.32 ms | ✅ | a mano, [09](research/09-pizarra.md) |
 | Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 28.5 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 329 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
