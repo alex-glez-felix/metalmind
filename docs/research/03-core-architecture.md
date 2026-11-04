@@ -546,7 +546,7 @@ metalmind/
 │   ├── metalmind-search/    # hecho (M2): fuzzy de rutas con nucleo-matcher; texto completo con grep paralelo (M6, sin UI); tantivy solo si hace falta (§4)
 │   ├── metalmind-config/    # settings, rutas XDG, temas
 │   ├── metalmind-template/  # hecho: plantillas con variables, plantilla por tag y nota del día (06 §11)
-│   ├── metalmind-board/     # la pizarra sin GUI (09): el formato .canvas con escritura canónica, la geometría de las flechas y el acierto de clic
+│   ├── metalmind-board/     # la pizarra sin GUI (09): el formato .canvas con escritura canónica, la geometría de las flechas, el acierto de clic y las operaciones de edición
 │   ├── metalmind-perf/      # solo para benchmarks y tests: datos sintéticos, pruebas de complejidad y benchmarks por instrucciones
 │   ├── metalmind-ui/        # vistas sobre el framework elegido (editor, file tree, picker, paleta)
 │   └── metalmind/           # binario: main, wiring, CLI (`metalmind <vault>`; subcomandos sin GUI, ver 06 §7)

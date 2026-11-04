@@ -1,6 +1,6 @@
 # 09 — Pizarra para pensar
 
-> **Estado: decidido; en implementación.** Spike del 2026-10-26, decisiones del autor sobre la PR #171 (§6). Cambia la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
+> **Estado: decidido; en implementación (fases 1 y 3 hechas).** Spike del 2026-10-26, decisiones del autor sobre la PR #171 (§6). Cambia la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
 
 ## TL;DR
 
@@ -17,16 +17,43 @@
 
 ## Estado (fase 1, 2026-11-04)
 
-Hecha la fase 1: se ven los `.canvas`, también en split, y se crea una pizarra vacía. El índice y editar faltan. Lo que se decidió al implementar:
+Hecha la fase 1: se ven los `.canvas`, también en split, y se crea una pizarra vacía. Lo que se decidió al implementar:
 
 - **Una pizarra es un `Document`.** El buffer guarda el archivo tal cual, así que `:w`, `:e!`, releer al cambiar en disco, el autoguardado y los saltos son los de una nota. Lo que el motor recibe prestado es otro buffer, vacío, con su propio estado de marks y saltos (`Document::editable`): lo que corra en `:` (`:%d`, `:s`) no alcanza el JSON. La fase 3 edita el buffer del archivo con líneas enteras, que es justo lo que pide el §4.3.
 - **La vista vive en el panel.** `Editor` conserva el foco, la barra de estado, la línea de `:` y su input handler; su cuerpo es `BoardView` (`metalmind-ui/src/board/`) cuando el documento es una pizarra. Las teclas de `Board` son atajos de la vista, incluidos `space` y `ctrl-w`; al motor solo le llega `:` y lo que se escribe en esa línea.
 - **Tope de triángulos** además del nivel de detalle: `plan.rs` nunca manda más de 350 000 por frame, y lo que no cabe se ve como quad (o, si es una flecha, no se pinta). Así ni una pizarra enorme a un zoom justo sobre el nivel de detalle pierde el frame entero.
 - **`shift-1` y `shift-0`**: GPUI en Linux entrega el carácter, no el número. Están `!` y `)`, y `=` para `shift-0` en un teclado latino, además de los nombres de arriba. Por eso `=` no es un alias de `+`.
 - **Elegir un nodo** ya existe, porque hace falta para saber qué tarjeta abrir: clic, `H J K L` (`Board::neighbor`); sin elegido, `enter` y `gd` abren la tarjeta visible más cercana al centro.
-- **Lo que falta de lo que ve**: el texto de un nodo no compone markdown (se le quitan `# ` y `**`), `subpath` no salta a la sección al abrir la nota, y la cámara se pierde al cambiar de archivo en el panel. El panel de teclas no sale en una pizarra: sus prefijos no pasan por el motor. Sin rejilla de puntos: nada la pedía para ver.
+- **Lo que falta de lo que ve**: el texto de un nodo no compone markdown (se le quitan `# ` y `**`) y `subpath` no salta a la sección al abrir la nota. El panel de teclas no sale en una pizarra: sus prefijos no pasan por el motor. Sin rejilla de puntos: nada la pedía para ver.
 
 Medido con 2 000 elementos, en release, a 1920×1080, en una máquina de escritorio con GPU NVIDIA dentro de `gamescope --backend headless`, 300 pulsaciones a 60 por segundo: pan al 100 %, intervalo p50 16.9 / p99 18.6 ms y CPU p50 0.75 ms; pan con toda la pizarra a la vista (6 %), 16.9 / 17.9 ms y CPU 0.49 ms. Leer el archivo 0.7 ms, construir la escena 11.7 ms (`cargo bench -p metalmind-ui --bench board`). Abrir un vault de 5 000 notas: 28.2 ms sin `EntryKind::Board`, 28.4 ms con él.
+
+## Estado (fase 3, 2026-11-04)
+
+Hecha la fase 3: la pizarra se dibuja con ratón y con teclado y se autoguarda. Lo que se decidió al implementar, además de lo que corrige el §4:
+
+- **Editar es `Document::edit_board`.** Lee el archivo, aplica el cambio a la `Board` y pasa al buffer solo las líneas que cambiaron (`metalmind_board::line_edits`), como una transacción: deshacer, rehacer y autoguardar son los del buffer y devuelven los bytes exactos. Si el cambio no cambia nada, ni siquiera canoniza. Un archivo que no se lee no se toca. El primer cambio en un `.canvas` de otra herramienta deja el archivo entero en su forma canónica; de ahí en adelante, cada edición toca solo sus líneas. Crear al final de una lista también toca la línea anterior, por su coma: JSON no deja otra (§2.2).
+- **El texto de una caja es una transacción abierta.** `i` carga el texto en el buffer del motor (el `EngineScratch`, uno nuevo por cada caja: su historial, sus marks y sus saltos no sobreviven a salir) y abre una transacción en el del archivo. Cada tecla pasa el texto a su línea dentro de esa transacción, así que lo que se escribe está en el archivo desde la primera tecla: el autoguardado, `:w` y cerrar la ventana no pierden nada, como a mitad de un Insert en una nota, y al salir todo queda como un solo paso. `:` en una caja alcanza solo su texto. Un cambio en disco con la caja abierta se relee al cerrarla. Cambiar de panel o de archivo la cierra, como termina un Insert.
+- **El texto se pinta donde iría su etiqueta**, con el mismo reparto y la misma letra, para que abrir la caja no mueva nada: `open_text.rs` solo pinta lo que hay en el buffer, el cursor de cada modo, lo elegido en Visual y el preedit del IME. No es un segundo editor: las teclas y el texto son del motor, y al IME se le da la línea del buffer del motor por el mismo input handler del panel. Mientras se escribe, el texto no se recorta a su caja; al salir con `esc` o con un clic, la caja crece hacia abajo si no le cabe, en el mismo paso. La etiqueta de una flecha se escribe igual.
+- **Un arrastre no toca el archivo hasta soltar.** Mueve la `Board` leída y reconstruye solo el nodo y sus flechas (`Scene::update_nodes`). Al soltar, el archivo cambia una vez, y al releerlo `Scene::refresh` compara las dos pizarras y reconstruye solo lo distinto; si cambió qué elementos hay o su orden, todo.
+- **Los gestos.** Arrastrar lo elegido lo mueve, y arrastrar en el vacío mueve la vista. El **rectángulo de selección es `shift` y arrastrar en el vacío**, y `shift`+clic suma o quita. La franja de 6 px alrededor de la silueta saca una flecha; con `a`, también desde adentro del nodo. Una flecha se elige con un clic y se borra con `x`; una flecha sola no se mueve.
+- **Cambiar el tamaño, que el §4 no pedía**: sin él una caja de un clic se quedaba chica para siempre. Las esquinas de lo elegido, con el ratón, y `ctrl-h j k l` con el teclado (`board::resize_*`).
+- **Contextos de teclas.** No hay un `Board > TextEdit`: el contexto `Board` tiene que dejar de valer mientras se escribe, o `r` crearía una caja en vez de escribir una `r`. Son tres que se excluyen: `Board`, `BoardHints` (las letras de unir: cada tecla es una letra) y `BoardText` (el texto abierto; las teclas son del motor), más `BoardTextIdle` en Normal y sin nada a medias, donde `esc` vuelve a la pizarra.
+- **Guías solo al mover.** Al crear y al cambiar el tamaño se pega a la rejilla, sin guías.
+- **Tarjetas sin arrastrar del árbol.** `n`, el botón y el menú abren el finder; arrastrar una nota del árbol queda fuera.
+- **Lo que falta**: los grupos siguen siendo fondo y no se eligen, ni se mueven ni se borran. El color no se cambia desde la UI. El panel de teclas no sale en una pizarra. Lo que cerró por foco, no por `esc`, no hace crecer la caja.
+
+Medido con 2 000 elementos, en release: un frame de arrastre reconstruye en **55 µs** (construir la escena entera, 11.7 ms), soltar cuesta 90 µs de escena y una edición, leer, escribir y sacar las líneas, 1.6 ms (`cargo bench -p metalmind-ui --bench board`). A 1920×1080, en una máquina de escritorio con GPU NVIDIA dentro de `gamescope --backend headless`, a 60 eventos por segundo (intervalo p50 / p99; CPU p50 / p99):
+
+| | Intervalo | CPU |
+|---|---|---|
+| Arrastrar una caja con dos flechas, al 100 % | 16.7 / 33.5 ms | 1.20 / 1.60 ms |
+| Arrastrar en el vacío, solo mover la vista, al 100 % (referencia) | 16.7 / 34.1 ms | 1.15 / 1.59 ms |
+| `h` y `l` sobre lo elegido, cada tecla escribe el archivo, al 100 % | 16.8 / 19.1 ms | 2.01 / 2.17 ms |
+| Arrastrar la caja con toda la pizarra a la vista | 16.7 / 17.7 ms | 3.26 / 3.79 ms |
+| Zoom continuo con `ctrl` y la rueda, de ver todo a cerca y de vuelta | 16.7 / 34.0 ms | 3.32 / 15.99 ms |
+
+Arrastrar una caja cuesta lo mismo que mover la vista: el p99 de 33 ms de los dos es un frame perdido de vez en cuando con el ratón, no de la pizarra. El zoom continuo mantiene los 60 fps en la mediana y sus picos de CPU son los del §3.3, de componer los textos en cada tamaño.
 
 ## 1. Qué se pide y qué no
 
@@ -218,7 +245,7 @@ Lo que suma es el código del formato, la geometría, la escena y el pintado: ly
 
 ## 4. Edición mínima viable (diseño)
 
-El spike no edita más que lo necesario para medir: arrastrar una caja (con rejilla de 10), crear una caja o una elipse con `r` u `o` y un clic, y la barra de herramientas con la tecla de cada una. Lo que sigue es el diseño de la edición, la fase 3.
+El spike no edita más que lo necesario para medir: arrastrar una caja (con rejilla de 10), crear una caja o una elipse con `r` u `o` y un clic, y la barra de herramientas con la tecla de cada una. Lo que sigue es el diseño de la edición, la fase 3, ya hecha; lo que cambió al implementarla está en su estado, arriba.
 
 ### 4.1 Herramientas y teclas
 
@@ -229,15 +256,18 @@ La pizarra es un contexto del keymap (`Board`) con sus acciones `board::*`, como
 | `v` | `board::tool_select` | botón de la barra |
 | `r`, `o`, `d` | `board::tool_rectangle`, `tool_ellipse`, `tool_diamond`: el siguiente clic (o `enter`, en el centro de la vista) crea la forma y vuelve a `v` | botón; arrastrar dibuja con el tamaño |
 | `a` | `board::tool_arrow`: con un nodo seleccionado, `h j k l` crea una caja nueva hacia ese lado unida por una flecha (el gesto de un mapa mental); `f` y la letra que aparece sobre cada nodo visible (como el `f` de Vimium) la une a uno que ya existe | arrastrar desde el borde de un nodo; soltar en el vacío crea una caja |
-| `t` | `board::tool_text`: texto suelto (`shape: "none"`) | botón |
-| `p` | `board::tool_pencil` | arrastrar dibuja |
-| `n` | `board::insert_note_card`: abre el finder (`space f`) y la nota elegida entra como tarjeta | arrastrar una nota del árbol a la pizarra |
-| `i`, `enter` | `board::edit_text` en una caja; en una tarjeta, `enter` y `gd` abren la nota (`board::open_note`) | doble clic |
-| `h j k l` | mover la selección 10 unidades (`board::move_selection`); sin selección, la vista | arrastrar |
+| `t` | `board::tool_text`: texto suelto (`shape: "none"`), que se abre para escribir; vacío no se queda | botón |
+| `p` | `board::tool_pencil`: sigue activo hasta cambiar de herramienta | arrastrar dibuja |
+| `n` | `board::insert_note_card`: abre el finder (`space f`) y la nota elegida entra como tarjeta | botón y menú contextual |
+| `i` | `board::edit_text` en una caja o una flecha | doble clic |
+| `enter` | `board::confirm`: crea con la herramienta activa, escribe en la caja elegida o abre la nota (`board::open_note`, también `gd`) | doble clic |
+| `h j k l` | `board::move_left`, `_down`, `_up`, `_right`: mover lo elegido una celda de la rejilla; con `a`, crear la caja unida; sin selección, la vista | arrastrar |
+| `ctrl-h j k l` | `board::resize_narrower`, `_taller`, `_shorter`, `_wider` | las esquinas de lo elegido |
 | `H J K L` | seleccionar el vecino hacia ese lado (`board::select_neighbor_left`, `_down`, `_up`, `_right`) | clic |
 | `x`, `delete` | `board::delete` | menú contextual |
-| `y`, `p` en Visual, `P` | copiar y pegar elementos: el portapapeles lleva sus líneas de `.canvas` | menú contextual |
-| `u`, `ctrl-r` | `board::undo`, `board::redo` | menú Editar |
+| `y`, `P` | `board::copy`, `board::paste`: el portapapeles lleva sus líneas de `.canvas`; lo que no son líneas de pizarra entra como una caja con ese texto | menú contextual |
+| `esc` | `board::cancel`: deja las letras de unir, la herramienta o la selección, en ese orden | clic en el vacío |
+| `u`, `ctrl-r` | `board::undo`, `board::redo` | menú contextual |
 | `+`, `-`, `shift-1`, `shift-0` | `board::zoom_in`, `zoom_out`, `zoom_to_fit`, `zoom_to_actual_size` (los de Excalidraw) | `ctrl`+rueda y la barra de abajo a la derecha |
 
 `p` como lápiz choca con "pegar" de vim: en la pizarra `p` es el lápiz y pegar es `P`, porque se dibuja más de lo que se pega. Es la única tecla discutible.
@@ -245,21 +275,21 @@ La pizarra es un contexto del keymap (`Board`) con sus acciones `board::*`, como
 ### 4.2 Convivencia con vim
 
 - **En la pizarra no hay buffer**, así que el motor de vim no recibe teclas y las de una letra quedan libres. `space` (el líder), `:` y `ctrl-w` siguen siendo de la ventana: `space f` abre el finder, `:w` guarda, `:q` cierra, `ctrl-w v` parte la vista.
-- **Escribir dentro de una caja es vim**: `i` abre el texto de la caja en un buffer chico con `metalmind-vim` (Insert al final), con todos sus motions, operadores, registros y el IME. `Esc` en Normal vuelve a la pizarra. Así no hay un segundo editor de texto con sus propias reglas. El contexto es `Board > TextEdit`.
+- **Escribir dentro de una caja es vim**: `i` abre el texto de la caja en un buffer chico con `metalmind-vim` (Insert al final), con todos sus motions, operadores, registros y el IME. `Esc` en Normal vuelve a la pizarra (`board::end_text_edit`). Así no hay un segundo editor de texto con sus propias reglas. Mientras tanto el contexto es `BoardText` en lugar de `Board` (ver el estado de la fase 3).
 - **Una sola lista de acciones**: todo es `board::*` en `metalmind_keymap::Action`, así que aparece en la paleta con su atajo, y la barra y el menú contextual muestran la tecla de cada botón ([design.md](../design.md)).
 
 ### 4.3 Deshacer y guardar
 
-- **Deshacer por elemento**: como cada elemento es una línea, un paso del historial es una lista de `(id, línea antes, línea después)`. Mover tres cajas son tres pares; deshacer los invierte. Editar el texto de una caja usa el historial de vim mientras se edita y, al salir, entra como un solo paso.
+- **Deshacer por elemento**: como cada elemento es una línea, un paso del historial es una transacción del buffer con sus líneas enteras. Mover tres cajas son tres líneas; deshacer las invierte. Editar el texto de una caja usa el historial de vim mientras se edita y, al salir, entra como un solo paso.
 - **Guardar** como las notas: autoguardado con debounce y escritura atómica ([03](03-core-architecture.md) §5). El diff de un guardado es el de las líneas tocadas (§2.2), así que el historial de versiones de [06](06-decisiones-de-fondo.md) §3 sirve sin cambios.
 
 ### 4.4 Alinear
 
-Rejilla de 10 al mover y al crear (el spike la tiene) y guías de alineación con los vecinos: bordes y centros a menos de 6 px en pantalla se pegan y se dibuja la guía. Las flechas se re-enrutan solas; el texto de las cajas se parte al ancho de la caja.
+Rejilla de 10 al mover, al crear y al cambiar el tamaño, y guías de alineación con los vecinos visibles al mover: bordes y centros a menos de 6 px en pantalla se pegan y se dibuja la guía; un eje sin vecino cerca va a la rejilla. Las flechas se re-enrutan solas; el texto de las cajas se parte al ancho de la caja.
 
 ## 5. Integración con el vault
 
-- **Un crate de núcleo, `metalmind-board`** (sin GPUI): el formato, la geometría de las flechas, el acierto de clic y las operaciones de edición con su historial. Lo que hoy es `formato.rs`, `trazo.rs` y `geometria.rs`. El teselado y el pintado van en `metalmind-ui`: deciden cómo se ve. Agregar el crate actualiza la lista de [03](03-core-architecture.md) §6 y la de CLAUDE.md.
+- **Un crate de núcleo, `metalmind-board`** (sin GPUI): el formato, la geometría de las flechas, el acierto de clic y las operaciones de edición; el historial es el del buffer del documento (§4.3). Lo que hoy es `formato.rs`, `trazo.rs` y `geometria.rs`. El teselado y el pintado van en `metalmind-ui`: deciden cómo se ve. Agregar el crate actualiza la lista de [03](03-core-architecture.md) §6 y la de CLAUDE.md.
 - **El vault**: un `EntryKind::Board` para los `.canvas`, junto a `Note` y `Attachment`. El finder, el árbol y `:e idea.canvas` lo abren en la vista de pizarra. `board::new` (`:board [nombre]`, la paleta) y `file_tree::new_board` (`b` en el árbol y su menú) crean una vacía.
 - **Links y backlinks**: el índice de links (03 §4, "Estado (M3…)") lee de una pizarra los nodos `file` (ruta exacta, sin resolver nombres) y los `[[links]]` del texto de sus nodos, con el mismo scanner de `metalmind-syntax`. Los backlinks de una nota muestran la pizarra con el texto de los nodos unidos a la tarjeta como contexto.
 - **Tags**: un `#tag` en el texto de un nodo es un tag de la pizarra, como en una nota, y la pizarra aparece en el panel de tags.
