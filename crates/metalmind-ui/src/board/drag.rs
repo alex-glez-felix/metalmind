@@ -115,8 +115,8 @@ impl BoardView {
             reason = "los nodos ya vienen de coordenadas enteras"
         )]
         let (left, top) = (moving.bounds.x as i32, moving.bounds.y as i32);
-        moving.dx = placed.x - left;
-        moving.dy = placed.y - top;
+        moving.dx = placed.x.saturating_sub(left);
+        moving.dy = placed.y.saturating_sub(top);
         moving.guides = placed.guides;
         self.preview_move(&moving, theme);
         moving
@@ -130,8 +130,8 @@ impl BoardView {
         };
         for (id, x, y) in &moving.nodes {
             if let Some(node) = board.nodes.iter_mut().find(|node| node.id == *id) {
-                node.x = x + moving.dx;
-                node.y = y + moving.dy;
+                node.x = x.saturating_add(moving.dx);
+                node.y = y.saturating_add(moving.dy);
             }
         }
         let changed: HashSet<&str> = moving.nodes.iter().map(|(id, _, _)| id.as_str()).collect();

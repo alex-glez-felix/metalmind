@@ -251,3 +251,33 @@ fn una_tarjeta_nueva_lleva_la_ruta_de_la_nota() {
         NodeKind::File { file, subpath: None } if file == "carpeta/una nota.md"
     ));
 }
+
+/// El lector admite cualquier `i32`: editar en esos extremos no se desborda.
+#[test]
+fn las_coordenadas_en_el_borde_de_un_i32_no_se_desbordan() {
+    let extreme = format!(
+        r#"{{"nodes":[{{"id":"a","type":"text","x":{max},"y":{max},"width":{max},"height":{max},"text":""}},{{"id":"b","type":"text","x":{min},"y":{min},"width":10,"height":10,"text":""}}]}}"#,
+        max = i32::MAX,
+        min = i32::MIN,
+    );
+    let mut board = Board::parse(&extreme).unwrap();
+    board.move_nodes(&ids(&["a"]), 10, 10);
+    board.move_nodes(&ids(&["b"]), -10, -10);
+    assert_eq!(node_at(&board, "a"), (i32::MAX, i32::MAX));
+    assert_eq!(node_at(&board, "b"), (i32::MIN, i32::MIN));
+    let copied = board.copy(&ids(&["a", "b"]));
+    assert_eq!(board.paste(&copied, Point::new(0.0, 0.0)).len(), 2);
+    assert!(board.add_linked_box("a", Side::Right).is_some());
+    assert!(board.add_linked_box("b", Side::Left).is_some());
+    let frame = board.node("a").unwrap().frame();
+    let dragged = frame.dragged(Corner::TopLeft, Point::new(f32::MAX, f32::MIN));
+    assert!(dragged.width >= GRID);
+    assert_eq!(board.unstacked(frame).x, i32::MAX);
+    assert_eq!(snap(f32::MAX), i32::MAX);
+    Board::parse(&board.write()).unwrap();
+}
+
+fn node_at(board: &Board, id: &str) -> (i32, i32) {
+    let node = board.node(id).unwrap();
+    (node.x, node.y)
+}

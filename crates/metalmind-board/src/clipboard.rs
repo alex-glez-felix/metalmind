@@ -46,8 +46,8 @@ impl Board {
         for node in &mut nodes {
             let id = self.reserve_id(&mut renamed, &node.id);
             node.id.clone_from(&id);
-            node.x += shift;
-            node.y += shift;
+            node.x = node.x.saturating_add(shift);
+            node.y = node.y.saturating_add(shift);
             added.push(id);
         }
         self.nodes.append(&mut nodes);
@@ -75,13 +75,15 @@ impl Board {
         let Some(first) = nodes.first() else {
             return PASTE_OFFSET;
         };
+        let at = |shift: i32| (first.x.saturating_add(shift), first.y.saturating_add(shift));
         let mut shift = PASTE_OFFSET;
-        while self
-            .nodes
-            .iter()
-            .any(|node| (node.x, node.y) == (first.x + shift, first.y + shift))
-        {
-            shift += PASTE_OFFSET;
+        while self.nodes.iter().any(|node| (node.x, node.y) == at(shift)) {
+            let next = shift.saturating_add(PASTE_OFFSET);
+            // En el borde de lo que cabe en un `i32` ya no hay adónde correrse.
+            if at(next) == at(shift) {
+                break;
+            }
+            shift = next;
         }
         shift
     }

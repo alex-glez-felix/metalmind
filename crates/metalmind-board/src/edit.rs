@@ -47,7 +47,7 @@ pub enum Corner {
     reason = "las coordenadas de una pizarra caben en i32 y en f32"
 )]
 pub fn snap(value: f32) -> i32 {
-    (value / GRID as f32).round() as i32 * GRID
+    ((value / GRID as f32).round() as i32).saturating_mul(GRID)
 }
 
 impl Frame {
@@ -94,24 +94,39 @@ impl Frame {
         }
     }
 
+    /// Esta caja corrida, sin salirse de lo que cabe en un `i32`.
+    #[must_use]
+    pub fn shifted(self, dx: i32, dy: i32) -> Self {
+        Self {
+            x: self.x.saturating_add(dx),
+            y: self.y.saturating_add(dy),
+            ..self
+        }
+    }
+
     /// Esta caja con `corner` llevada a `to`: la esquina opuesta no se mueve.
     #[must_use]
     pub fn dragged(self, corner: Corner, to: Point) -> Self {
-        let (right, bottom) = (self.x + self.width, self.y + self.height);
+        let right = self.x.saturating_add(self.width);
+        let bottom = self.y.saturating_add(self.height);
         let (to_x, to_y) = (snap(to.x), snap(to.y));
         let (x, width) = match corner {
             Corner::TopLeft | Corner::BottomLeft => {
-                let x = to_x.min(right - GRID);
-                (x, right - x)
+                let x = to_x.min(right.saturating_sub(GRID));
+                (x, right.saturating_sub(x))
             }
-            Corner::TopRight | Corner::BottomRight => (self.x, (to_x - self.x).max(GRID)),
+            Corner::TopRight | Corner::BottomRight => {
+                (self.x, to_x.saturating_sub(self.x).max(GRID))
+            }
         };
         let (y, height) = match corner {
             Corner::TopLeft | Corner::TopRight => {
-                let y = to_y.min(bottom - GRID);
-                (y, bottom - y)
+                let y = to_y.min(bottom.saturating_sub(GRID));
+                (y, bottom.saturating_sub(y))
             }
-            Corner::BottomLeft | Corner::BottomRight => (self.y, (to_y - self.y).max(GRID)),
+            Corner::BottomLeft | Corner::BottomRight => {
+                (self.y, to_y.saturating_sub(self.y).max(GRID))
+            }
         };
         Self {
             x,
@@ -285,20 +300,22 @@ impl Board {
     }
 
     fn free_frame_toward(&self, source: Frame, side: Side) -> Frame {
+        let across = source.width.saturating_add(LINKED_GAP);
+        let down = source.height.saturating_add(LINKED_GAP);
         let (step_x, step_y) = match side {
-            Side::Left => (-(source.width + LINKED_GAP), 0),
-            Side::Right => (source.width + LINKED_GAP, 0),
-            Side::Top => (0, -(source.height + LINKED_GAP)),
-            Side::Bottom => (0, source.height + LINKED_GAP),
+            Side::Left => (across.saturating_neg(), 0),
+            Side::Right => (across, 0),
+            Side::Top => (0, down.saturating_neg()),
+            Side::Bottom => (0, down),
         };
-        let mut frame = Frame {
-            x: source.x + step_x,
-            y: source.y + step_y,
-            ..source
-        };
+        let mut frame = source.shifted(step_x, step_y);
         while self.is_taken(frame) {
-            frame.x += step_x;
-            frame.y += step_y;
+            let next = frame.shifted(step_x, step_y);
+            // En el borde de lo que cabe en un `i32` ya no hay adónde correrse.
+            if next == frame {
+                break;
+            }
+            frame = next;
         }
         frame
     }
@@ -319,8 +336,11 @@ impl Board {
             .iter()
             .any(|node| (node.x, node.y) == (frame.x, frame.y))
         {
-            frame.x += 2 * GRID;
-            frame.y += 2 * GRID;
+            let next = frame.shifted(2 * GRID, 2 * GRID);
+            if next == frame {
+                break;
+            }
+            frame = next;
         }
         frame
     }
@@ -328,8 +348,8 @@ impl Board {
     /// Mueve los nodos de `ids`; las flechas se calculan de ellos.
     pub fn move_nodes(&mut self, ids: &[String], dx: i32, dy: i32) {
         for node in self.nodes.iter_mut().filter(|node| ids.contains(&node.id)) {
-            node.x += dx;
-            node.y += dy;
+            node.x = node.x.saturating_add(dx);
+            node.y = node.y.saturating_add(dy);
         }
     }
 

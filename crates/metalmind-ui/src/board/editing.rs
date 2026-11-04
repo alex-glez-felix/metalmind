@@ -19,8 +19,11 @@ const MIN_TEXT_ZOOM: f32 = 0.5;
     reason = "las medidas de una pizarra caben en i32"
 )]
 fn grown(height: i32, lacking: f32) -> i32 {
-    let bottom = height + lacking.ceil() as i32;
-    (bottom + GRID - 1).div_euclid(GRID) * GRID
+    let needed = height.saturating_add(lacking.ceil() as i32);
+    match needed.rem_euclid(GRID) {
+        0 => needed,
+        past => needed.saturating_add(GRID - past),
+    }
 }
 
 impl BoardView {
@@ -243,8 +246,8 @@ impl BoardView {
         self.edit(
             |board| {
                 for node in board.nodes.iter_mut().filter(|node| ids.contains(&node.id)) {
-                    node.width = (node.width + width).max(GRID);
-                    node.height = (node.height + height).max(GRID);
+                    node.width = node.width.saturating_add(width).max(GRID);
+                    node.height = node.height.saturating_add(height).max(GRID);
                 }
             },
             cx,

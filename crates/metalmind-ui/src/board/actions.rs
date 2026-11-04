@@ -228,13 +228,11 @@ fn screen_step(side: Side, step: f32) -> (f32, f32) {
 /// Lo que lleva `frame` a la siguiente línea de la rejilla hacia `side`.
 fn grid_step(frame: Frame, side: Side) -> (i32, i32) {
     let toward = |at: i32, forward: bool| {
-        let below = at.div_euclid(GRID) * GRID;
-        if forward {
-            below + GRID - at
-        } else if below == at {
-            -GRID
-        } else {
-            below - at
+        let past = at.rem_euclid(GRID);
+        match (forward, past) {
+            (true, _) => GRID - past,
+            (false, 0) => -GRID,
+            (false, _) => -past,
         }
     };
     match side {
