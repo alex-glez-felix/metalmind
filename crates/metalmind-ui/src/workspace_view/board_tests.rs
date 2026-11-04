@@ -24,7 +24,7 @@ use crate::session::VaultState;
 use crate::theme::Theme;
 use crate::workspace::{LineNumbers, Options, PaneOptions, Workspace};
 
-const BOARD: &str = r#"{
+pub(super) const BOARD: &str = r#"{
 	"nodes":[
 		{"id":"caja","type":"text","x":0,"y":0,"width":200,"height":80,"text":"una caja"},
 		{"id":"tarjeta","type":"file","x":400,"y":0,"width":200,"height":80,"file":"carpeta con espacio/la nota.md"}
@@ -35,14 +35,14 @@ const BOARD: &str = r#"{
 }
 "#;
 
-struct Window<'a> {
+pub(super) struct Window<'a> {
     _dir: TempDir,
-    root: std::path::PathBuf,
-    view: Entity<WorkspaceView>,
-    cx: &'a mut VisualTestContext,
+    pub(super) root: std::path::PathBuf,
+    pub(super) view: Entity<WorkspaceView>,
+    pub(super) cx: &'a mut VisualTestContext,
 }
 
-fn open<'a>(cx: &'a mut TestAppContext, file: &str) -> Window<'a> {
+pub(super) fn open<'a>(cx: &'a mut TestAppContext, file: &str) -> Window<'a> {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir(dir.path().join("carpeta con espacio")).unwrap();
     fs::write(
@@ -107,12 +107,12 @@ fn open<'a>(cx: &'a mut TestAppContext, file: &str) -> Window<'a> {
 }
 
 impl Window<'_> {
-    fn keys(&mut self, keys: &str) {
+    pub(super) fn keys(&mut self, keys: &str) {
         self.cx.simulate_keystrokes(keys);
         self.cx.run_until_parked();
     }
 
-    fn board(&mut self) -> Entity<BoardView> {
+    pub(super) fn board(&mut self) -> Entity<BoardView> {
         self.view.read_with(self.cx, |view, cx| {
             let pane = view.workspace.read(cx).focused();
             let editor = view.editors[&pane].read(cx);
@@ -135,25 +135,25 @@ impl Window<'_> {
         })
     }
 
-    fn text(&mut self) -> String {
+    pub(super) fn text(&mut self) -> String {
         self.view.read_with(self.cx, |view, cx| {
             let workspace = view.workspace.read(cx);
             workspace.focused_document().unwrap().buffer().to_string()
         })
     }
 
-    fn modified(&mut self) -> bool {
+    pub(super) fn modified(&mut self) -> bool {
         self.view.read_with(self.cx, |view, cx| {
             let workspace = view.workspace.read(cx);
             workspace.focused_document().unwrap().is_modified()
         })
     }
 
-    fn on_disk(&self, file: &str) -> String {
+    pub(super) fn on_disk(&self, file: &str) -> String {
         fs::read_to_string(Path::new(&self.root).join(file)).unwrap()
     }
 
-    fn dispatch(&mut self, action: impl Into<metalmind_keymap::Invocation>) {
+    pub(super) fn dispatch(&mut self, action: impl Into<metalmind_keymap::Invocation>) {
         let action = Dispatch(action.into());
         self.cx.dispatch_action(action);
         self.cx.run_until_parked();
@@ -240,10 +240,10 @@ fn sobre_una_caja_elegida_enter_no_abre_nada(cx: &mut TestAppContext) {
 /// 09 §4.2: el motor no recibe teclas, y lo que se ejecuta en `:` no alcanza
 /// el JSON del archivo.
 #[gpui_kit::test]
-fn ni_las_teclas_ni_la_linea_de_comandos_tocan_el_archivo(cx: &mut TestAppContext) {
+fn ni_mirar_ni_la_linea_de_comandos_tocan_el_archivo(cx: &mut TestAppContext) {
     let mut window = open(cx, "idea.canvas");
     let before = window.text();
-    window.keys("x d d i a b c escape p");
+    window.keys("h j k l + - ! ) escape");
     assert_eq!(window.text(), before);
     window.keys(":");
     window.cx.simulate_input("%d");
@@ -414,11 +414,11 @@ fn la_rueda_mueve_y_con_ctrl_acerca_bajo_el_raton(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn arrastrar_mueve_la_vista(cx: &mut TestAppContext) {
+fn arrastrar_en_el_vacio_mueve_la_vista(cx: &mut TestAppContext) {
     let mut window = open(cx, "idea.canvas");
     window.keys("shift-0");
     let board = window.board();
-    let at = node_at(&mut window, "caja");
+    let at = node_at(&mut window, "caja") + point(px(0.), px(200.));
     let before = board.read_with(window.cx, |board, _| board.camera().unwrap());
     window.cx.simulate_event(MouseDownEvent {
         button: MouseButton::Left,

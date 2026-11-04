@@ -1,5 +1,5 @@
-//! La pizarra en la app real: se crea, se abre, sus teclas no tocan el archivo
-//! y una tarjeta abre su nota.
+//! La pizarra en la app real: se crea, se abre, mirarla no toca el archivo, una
+//! tarjeta abre su nota y lo dibujado con el teclado llega al disco.
 
 use crate::support::Smoke;
 use crate::support::wait::{self, TIMEOUT};
@@ -70,10 +70,29 @@ fn las_teclas_de_una_pizarra_no_tocan_el_archivo_y_enter_abre_la_nota() {
     let mut metalmind = smoke.launch(&["idea.canvas"]);
     let window = metalmind.window();
     window.wait_title("de la pizarra", |title| title.starts_with("idea.canvas"));
-    window.type_keys("xxddihjkl+-!):%d<CR>:w<CR>");
+    window.type_keys("hjkl+-!):%d<CR>:w<CR>");
     window.type_keys("<CR>");
     window.wait_title("de la nota", |title| title.starts_with("nota.md"));
     window.type_keys(":q!<CR>");
     assert!(metalmind.wait_exit().success());
     assert_eq!(smoke.read("idea.canvas"), BOARD);
+}
+
+#[test]
+#[ignore = "necesita Xvfb y Vulkan: ver docs/testing.md"]
+fn se_dibuja_y_se_escribe_con_el_teclado_y_llega_al_disco() {
+    let smoke = Smoke::new();
+    smoke.write("idea.canvas", "{\n\t\"nodes\":[],\n\t\"edges\":[]\n}\n");
+    let mut metalmind = smoke.launch(&["idea.canvas"]);
+    let window = metalmind.window();
+    window.wait_title("de la pizarra", |title| title.starts_with("idea.canvas"));
+    window.type_keys("r<CR><CR>una caja<Esc><Esc>");
+    window.type_keys("al<CR>la otra<Esc><Esc>");
+    window.type_keys(":w<CR>:q<CR>");
+    assert!(metalmind.wait_exit().success());
+    let saved = smoke.read("idea.canvas");
+    assert!(saved.contains(r#""text":"una caja""#), "{saved}");
+    assert!(saved.contains(r#""text":"la otra""#), "{saved}");
+    assert!(saved.contains(r#""fromNode""#), "{saved}");
+    assert_eq!(saved.lines().count(), 8, "{saved}");
 }

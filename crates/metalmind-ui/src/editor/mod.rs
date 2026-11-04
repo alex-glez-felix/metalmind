@@ -234,9 +234,14 @@ impl Editor {
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keystroke = &event.keystroke;
+        if self.feed_board_hint(keystroke, cx) {
+            cx.stop_propagation();
+            return;
+        }
         let mode = self.mode(cx);
         let route = keys::route(keystroke, mode);
-        if self.board.is_some() && !keys::reaches_engine_in_board(route, mode) {
+        let text_open = self.board_text_open(cx);
+        if self.board.is_some() && !keys::reaches_engine_in_board(route, mode, text_open) {
             // Sin esto, su carácter le llegaría al motor por el input handler.
             cx.stop_propagation();
             return;
@@ -266,7 +271,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         // Un IME puede escribir sin pasar por una tecla.
-        if self.board.is_some() && self.mode(cx) == Mode::Normal {
+        if self.board.is_some() && !self.board_text_open(cx) && self.mode(cx) == Mode::Normal {
             return;
         }
         let marked_range = self
@@ -326,9 +331,9 @@ impl Editor {
         if let Some(CommandLine { typed, .. }) = view.command_line {
             return Some(ImeLine::new(typed.to_owned(), typed.len(), marked));
         }
-        let buffer = view.buffer();
+        let (_, buffer) = view.document.engine_view();
         let line = buffer.line_of(view.cursor());
-        let text = view.document.line_text(line).ok()?;
+        let text = buffer.line_text(line).into_owned();
         let column = view.cursor().get() - buffer.line_start(line).get();
         Some(ImeLine::new(text, column, marked))
     }
@@ -350,7 +355,7 @@ impl Editor {
     /// resalta; `:` va en su pop-up.
     fn status(&self, cx: &App) -> Option<Status> {
         let view = self.view(cx)?;
-        let buffer = view.buffer();
+        let (_, buffer) = view.document.engine_view();
         let line = buffer.line_of(view.cursor());
         let command_line = self
             .command_line(cx)

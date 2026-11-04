@@ -237,5 +237,8 @@ impl WorkspaceView {
 }
 
 #[cfg(test)]
+#[path = "board_edit_tests.rs"]
+mod board_edit_tests;
+#[cfg(test)]
 #[path = "board_tests.rs"]
 mod board_tests;

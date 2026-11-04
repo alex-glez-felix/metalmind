@@ -49,9 +49,10 @@ pub fn route(keystroke: &Keystroke, mode: Mode) -> Route {
 }
 
 /// En una pizarra las teclas son de la vista (09 §4.2): al motor solo le llega
-/// `:`, que abre la línea de comandos, y lo que se teclea en ella.
-pub fn reaches_engine_in_board(route: Route, mode: Mode) -> bool {
-    mode != Mode::Normal || route == Route::Engine(Key::Char(':'))
+/// `:`, que abre la línea de comandos, y lo que se teclea en ella o en la caja
+/// abierta.
+pub fn reaches_engine_in_board(route: Route, mode: Mode, text_open: bool) -> bool {
+    text_open || mode != Mode::Normal || route == Route::Engine(Key::Char(':'))
 }
 
 /// `ctrl-shift-*` queda para los atajos de la aplicación.
@@ -158,20 +159,23 @@ mod tests {
     #[test]
     fn en_una_pizarra_el_motor_solo_recibe_la_linea_de_comandos() {
         let cases = [
-            (Route::Engine(Key::Char(':')), Mode::Normal, true),
-            (Route::Engine(Key::Char('x')), Mode::Normal, false),
-            (Route::Engine(Key::Char('i')), Mode::Normal, false),
-            (Route::Engine(Key::Ctrl('r')), Mode::Normal, false),
-            (Route::Engine(Key::Escape), Mode::Normal, false),
-            (Route::Engine(Key::Enter), Mode::CommandLine, true),
-            (Route::Engine(Key::Escape), Mode::CommandLine, true),
-            (Route::TextInput, Mode::CommandLine, true),
+            (Route::Engine(Key::Char(':')), Mode::Normal, false, true),
+            (Route::Engine(Key::Char('x')), Mode::Normal, false, false),
+            (Route::Engine(Key::Char('i')), Mode::Normal, false, false),
+            (Route::Engine(Key::Ctrl('r')), Mode::Normal, false, false),
+            (Route::Engine(Key::Escape), Mode::Normal, false, false),
+            (Route::Engine(Key::Enter), Mode::CommandLine, false, true),
+            (Route::Engine(Key::Escape), Mode::CommandLine, false, true),
+            (Route::TextInput, Mode::CommandLine, false, true),
+            (Route::Engine(Key::Char('x')), Mode::Normal, true, true),
+            (Route::Engine(Key::Escape), Mode::Normal, true, true),
+            (Route::TextInput, Mode::Insert, true, true),
         ];
-        for (route, mode, expected) in cases {
+        for (route, mode, text_open, expected) in cases {
             assert_eq!(
-                reaches_engine_in_board(route, mode),
+                reaches_engine_in_board(route, mode, text_open),
                 expected,
-                "{route:?} {mode:?}"
+                "{route:?} {mode:?} {text_open}"
             );
         }
     }

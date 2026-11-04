@@ -1,31 +1,31 @@
-//! Lo que le llega a la pizarra: sus acciones con nombre, el ratón y la rueda.
+//! Lo que hacen las acciones con nombre de la pizarra: cada una, por su atajo,
+//! su botón, su menú o la paleta.
 
-use gpui_kit::{
-    Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollWheelEvent, Window, px,
-};
-use metalmind_board::{Node, NodeKind, Point, Side};
+use gpui_kit::{Context, Window};
+use metalmind_board::{Frame, GRID, Node, NodeKind, Point, Rect, Shape, Side};
 use metalmind_keymap::{BoardAction, Command, Invocation};
 use metalmind_vault::VaultPath;
 use metalmind_vim::escape_argument;
 
-use super::{BoardView, Camera, ZOOM_STEP};
+use super::{BoardView, Camera, Tool, ZOOM_STEP};
 use crate::actions::Dispatch;
 use crate::theme::Theme;
-use crate::workspace::{Message, shown_path};
+use crate::workspace::{Message, Workspace, WorkspaceError, shown_path};
 
-/// Cuánto multiplica el zoom cada píxel de la rueda con `ctrl`, como exponente.
-const WHEEL_ZOOM_PER_PIXEL: f32 = 0.002;
 const HALF: f32 = 0.5;
 
 impl BoardView {
     pub fn run(&mut self, action: BoardAction, window: &mut Window, cx: &mut Context<Self>) {
         let theme = Theme::get(cx).clone();
-        let step = f32::from(theme.layout.board_pan_step);
+        if action != BoardAction::EndTextEdit {
+            self.close_text(cx);
+        }
+        self.menu = None;
         match action {
-            BoardAction::PanLeft => self.pan(-step, 0.0),
-            BoardAction::PanRight => self.pan(step, 0.0),
-            BoardAction::PanUp => self.pan(0.0, -step),
-            BoardAction::PanDown => self.pan(0.0, step),
+            BoardAction::MoveLeft => self.step(Side::Left, &theme, cx),
+            BoardAction::MoveRight => self.step(Side::Right, &theme, cx),
+            BoardAction::MoveUp => self.step(Side::Top, &theme, cx),
+            BoardAction::MoveDown => self.step(Side::Bottom, &theme, cx),
             BoardAction::ZoomIn => self.zoom_by(ZOOM_STEP),
             BoardAction::ZoomOut => self.zoom_by(ZOOM_STEP.recip()),
             BoardAction::ZoomToActualSize => self.zoom_to(Camera::ACTUAL_SIZE),
@@ -35,11 +35,36 @@ impl BoardView {
             BoardAction::SelectNeighborUp => self.select_toward(Side::Top, &theme),
             BoardAction::SelectNeighborRight => self.select_toward(Side::Right, &theme),
             BoardAction::OpenNote => self.open_note(window, cx),
+            BoardAction::ToolSelect => self.set_tool(Tool::Select),
+            BoardAction::ToolRectangle => self.set_tool(Tool::Shape(Shape::Rectangle)),
+            BoardAction::ToolEllipse => self.set_tool(Tool::Shape(Shape::Ellipse)),
+            BoardAction::ToolDiamond => self.set_tool(Tool::Shape(Shape::Diamond)),
+            BoardAction::ToolText => self.set_tool(Tool::Text),
+            BoardAction::ToolArrow => self.set_tool(Tool::Arrow),
+            BoardAction::LinkToNode => self.show_hints(cx),
+            BoardAction::Confirm => self.confirm(window, &theme, cx),
+            BoardAction::EditText => self.edit_selected_text(&theme, cx),
+            BoardAction::EndTextEdit => self.close_text(cx),
+            BoardAction::Delete => self.delete_selected(cx),
+            BoardAction::Copy => self.copy_selected(cx),
+            BoardAction::Paste => self.paste(&theme, cx),
+            BoardAction::Undo => self.history(Workspace::undo_board, cx),
+            BoardAction::Redo => self.history(Workspace::redo_board, cx),
+            BoardAction::Cancel => self.cancel(),
+            BoardAction::ResizeNarrower => self.resize_selected(-GRID, 0, cx),
+            BoardAction::ResizeWider => self.resize_selected(GRID, 0, cx),
+            BoardAction::ResizeShorter => self.resize_selected(0, -GRID, cx),
+            BoardAction::ResizeTaller => self.resize_selected(0, GRID, cx),
         }
         cx.notify();
     }
 
-    fn pan(&mut self, dx: f32, dy: f32) {
+    fn set_tool(&mut self, tool: Tool) {
+        self.tool = tool;
+        self.hints = None;
+    }
+
+    pub(super) fn pan(&mut self, dx: f32, dy: f32) {
         if let Some(camera) = &mut self.camera {
             camera.pan(dx, dy);
         }
@@ -51,7 +76,7 @@ impl BoardView {
         }
     }
 
-    fn zoom_to(&mut self, zoom: f32) {
+    pub(super) fn zoom_to(&mut self, zoom: f32) {
         let area = self.area();
         if let (Some(camera), Some(area)) = (&mut self.camera, area) {
             camera.zoom_center(zoom, area);
@@ -59,9 +84,68 @@ impl BoardView {
     }
 
     /// El centro de la vista, en la pizarra.
-    fn view_center(&self) -> Option<Point> {
+    pub(super) fn view_center(&self) -> Option<Point> {
         let (camera, area) = (self.camera?, self.area()?);
         Some(camera.to_board(Point::new(area.width * HALF, area.height * HALF)))
+    }
+
+    /// Corre `change` sobre el archivo como un paso del historial.
+    pub(super) fn edit<T>(
+        &self,
+        change: impl FnOnce(&mut metalmind_board::Board) -> T,
+        cx: &mut Context<Self>,
+    ) -> Option<T> {
+        let pane = self.pane;
+        let edited = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            workspace.edit_board(pane, change)
+        });
+        self.keep(edited, cx)
+    }
+
+    pub(super) fn keep<T>(
+        &self,
+        result: Result<T, WorkspaceError>,
+        cx: &mut Context<Self>,
+    ) -> Option<T> {
+        result
+            .inspect_err(|error| {
+                self.workspace
+                    .update(cx, |workspace, _| workspace.report(error));
+            })
+            .ok()
+    }
+
+    /// `h j k l`: crear hacia ese lado con la herramienta de flecha, mover lo
+    /// elegido o, sin nada elegido, mover la vista.
+    fn step(&mut self, side: Side, theme: &Theme, cx: &mut Context<Self>) {
+        if self.tool == Tool::Arrow
+            && let Some(from) = self.selected_node().map(|node| node.id.clone())
+        {
+            self.tool = Tool::Select;
+            let added = self
+                .edit(|board| board.add_linked_box(&from, side), cx)
+                .flatten();
+            if let Some(id) = added {
+                self.selected = vec![id];
+            }
+            return;
+        }
+        let Some(first) = self.selected_nodes().next().map(Node::frame) else {
+            let step = f32::from(theme.layout.board_pan_step);
+            let (dx, dy) = screen_step(side, step);
+            return self.pan(dx, dy);
+        };
+        let (dx, dy) = grid_step(first, side);
+        let ids = self.selected.clone();
+        self.edit(|board| board.move_nodes(&ids, dx, dy), cx);
+    }
+
+    pub(super) fn reveal(&mut self, rect: Rect, theme: &Theme) {
+        let area = self.area();
+        if let (Some(camera), Some(area)) = (&mut self.camera, area) {
+            camera.reveal(rect, area, f32::from(theme.layout.board_fit_margin));
+        }
     }
 
     fn select_toward(&mut self, side: Side, theme: &Theme) {
@@ -76,17 +160,14 @@ impl BoardView {
         let Some((id, rect)) = next.map(|node| (node.id.clone(), node.rect())) else {
             return;
         };
-        self.selected = Some(id);
-        let area = self.area();
-        if let (Some(camera), Some(area)) = (&mut self.camera, area) {
-            camera.reveal(rect, area, f32::from(theme.layout.board_fit_margin));
-        }
+        self.selected = vec![id];
+        self.reveal(rect, theme);
     }
 
     /// La tarjeta que abriría `board::open_note` ahora: la elegida, o la más
     /// cercana al centro de lo que se ve.
     fn target_card(&self) -> Option<&Node> {
-        if self.selected.is_some() {
+        if !self.selected.is_empty() {
             return self.selected_node();
         }
         let (camera, area) = (self.camera?, self.area()?);
@@ -97,7 +178,7 @@ impl BoardView {
     }
 
     /// Por el mismo camino que `:e`: deja el salto en la jumplist.
-    fn open_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(node) = self.target_card() else {
             return self.tell(
                 Message::Info("No hay una tarjeta de nota aquí".to_owned()),
@@ -122,81 +203,72 @@ impl BoardView {
         window.dispatch_action(Box::new(Dispatch(edit)), cx);
     }
 
-    fn tell(&self, message: Message, cx: &mut Context<Self>) {
+    pub(super) fn tell(&self, message: Message, cx: &mut Context<Self>) {
         self.workspace.update(cx, |workspace, cx| {
             workspace.show_message(message);
             cx.notify();
         });
     }
-
-    pub(super) fn on_left_down(
-        &mut self,
-        event: &MouseDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let hit = self
-            .board_point(event.position)
-            .zip(self.board())
-            .and_then(|(point, board)| board.hit(point))
-            .map(|node| node.id.clone());
-        let double_click = event.click_count > 1 && hit.is_some() && hit == self.selected;
-        self.selected = hit;
-        self.drag = Some(event.position);
-        if double_click {
-            self.open_note(window, cx);
-        }
-        cx.notify();
-    }
-
-    pub(super) fn on_mouse_move(
-        &mut self,
-        event: &MouseMoveEvent,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(last) = self.drag.filter(|_| event.dragging()) else {
-            return;
-        };
-        self.drag = Some(event.position);
-        self.pan(
-            f32::from(last.x - event.position.x),
-            f32::from(last.y - event.position.y),
-        );
-        cx.notify();
-    }
-
-    pub(super) fn on_left_up(&mut self, _: &MouseUpEvent, _: &mut Window, _: &mut Context<Self>) {
-        self.drag = None;
-    }
-
-    /// La rueda mueve la pizarra y, con `ctrl`, cambia el zoom bajo el ratón.
-    pub(super) fn on_scroll(
-        &mut self,
-        event: &ScrollWheelEvent,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let theme = Theme::get(cx);
-        let delta = event.delta.pixel_delta(theme.ui_line());
-        if event.modifiers.control {
-            let factor = (f32::from(delta.y) * WHEEL_ZOOM_PER_PIXEL).exp();
-            if let (Some(camera), Some(bounds)) = (&mut self.camera, self.bounds) {
-                let anchor = Point::new(
-                    f32::from(event.position.x - bounds.origin.x),
-                    f32::from(event.position.y - bounds.origin.y),
-                );
-                camera.set_zoom_at(camera.zoom * factor, anchor);
-            }
-        } else if event.modifiers.shift && delta.x == px(0.) {
-            self.pan(-f32::from(delta.y), 0.0);
-        } else {
-            self.pan(-f32::from(delta.x), -f32::from(delta.y));
-        }
-        cx.notify();
-    }
 }
 
 fn is_card(node: &Node) -> bool {
     matches!(node.kind, NodeKind::File { .. })
+}
+
+fn screen_step(side: Side, step: f32) -> (f32, f32) {
+    match side {
+        Side::Left => (-step, 0.0),
+        Side::Right => (step, 0.0),
+        Side::Top => (0.0, -step),
+        Side::Bottom => (0.0, step),
+    }
+}
+
+/// Lo que lleva `frame` a la siguiente línea de la rejilla hacia `side`.
+fn grid_step(frame: Frame, side: Side) -> (i32, i32) {
+    let toward = |at: i32, forward: bool| {
+        let below = at.div_euclid(GRID) * GRID;
+        if forward {
+            below + GRID - at
+        } else if below == at {
+            -GRID
+        } else {
+            below - at
+        }
+    };
+    match side {
+        Side::Left => (toward(frame.x, false), 0),
+        Side::Right => (toward(frame.x, true), 0),
+        Side::Top => (0, toward(frame.y, false)),
+        Side::Bottom => (0, toward(frame.y, true)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(100, Side::Right, (10, 0))]
+    #[case(100, Side::Left, (-10, 0))]
+    #[case(13, Side::Right, (7, 0))]
+    #[case(13, Side::Left, (-3, 0))]
+    #[case(-13, Side::Left, (-7, 0))]
+    #[case(-13, Side::Right, (3, 0))]
+    fn un_paso_va_a_la_siguiente_linea_de_la_rejilla(
+        #[case] x: i32,
+        #[case] side: Side,
+        #[case] expected: (i32, i32),
+    ) {
+        let frame = Frame {
+            x,
+            y: 0,
+            width: 10,
+            height: 10,
+        };
+        assert_eq!(grid_step(frame, side), expected);
+    }
 }

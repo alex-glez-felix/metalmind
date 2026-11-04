@@ -170,10 +170,7 @@ impl Editor {
     pub(super) fn key_context(&self, cx: &App) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add(EDITOR_CONTEXT);
-        // Con la línea de `:` abierta las letras y `enter` son de ella.
-        if self.board.is_some() && self.mode(cx) == Mode::Normal {
-            key_context.add(context::BOARD);
-        }
+        self.board_key_context(&mut key_context, cx);
         match self.completion.list.as_ref().map(List::view) {
             Some(View::CommandCompletion) => key_context.add(context::COMMAND_COMPLETION),
             Some(_) => key_context.add(context::COMPLETION),
@@ -219,6 +216,10 @@ impl Editor {
     }
 
     fn list_for(&mut self, typed: Option<Typed>, cx: &App) -> Option<List> {
+        // En una caja de la pizarra no hay línea de texto donde poner la lista.
+        if self.board.is_some() && matches!(typed, Some(Typed::Link(_) | Typed::Tag(_))) {
+            return None;
+        }
         match typed? {
             Typed::Link(link) => self.link_list(&link, cx),
             Typed::Tag(tag) => self.tag_list(&tag, cx),

@@ -1,12 +1,14 @@
 //! Lo que se pinta de cada elemento: mallas y textos en coordenadas de la
-//! pizarra (09 §3.1). Se construye al abrir y cuando cambia el archivo, no en
-//! cada frame: el pan y el zoom solo transforman.
+//! pizarra (09 §3.1). Se construye al abrir y, al cambiar el archivo o al
+//! arrastrar, solo lo que cambió: el pan y el zoom solo transforman.
+
+use std::collections::HashSet;
 
 use gpui_kit::SharedString;
 use lyon::tessellation::TessellationError;
-use metalmind_board::{Board, NodeKind, Rect};
+use metalmind_board::{Board, Edge, NodeKind, Rect};
 
-use super::elements::{edge_scene, node_scene};
+use super::elements::{edge_label_area, edge_scene, node_scene};
 use super::shapes::{self, Mesh};
 use super::tint::Role;
 use crate::theme::Theme;
@@ -151,15 +153,146 @@ impl Scene {
         for (edge, geometry) in board.edge_geometries() {
             scene.edges.push(edge_scene(edge, &geometry, style)?);
         }
-        scene.content = scene
-            .groups
-            .iter()
-            .chain(&scene.edges)
-            .chain(&scene.nodes)
-            .map(|element| element.bounds)
-            .reduce(|content, bounds| content.union(&bounds));
+        scene.measure();
         Ok(scene)
     }
+
+    fn measure(&mut self) {
+        self.content = self
+            .groups
+            .iter()
+            .chain(&self.edges)
+            .chain(&self.nodes)
+            .map(|element| element.bounds)
+            .reduce(|content, bounds| content.union(&bounds));
+    }
+
+    /// Reconstruye lo de `nodes` y sus flechas, y lo que dice cuánto ocupa. Es
+    /// lo que cuesta cada frame de un arrastre, con la pizarra que sea.
+    ///
+    /// # Errors
+    /// Si lyon no puede teselar un elemento.
+    pub fn update_nodes(
+        &mut self,
+        board: &Board,
+        nodes: &HashSet<&str>,
+        style: SceneStyle,
+    ) -> Result<(), TessellationError> {
+        let mut plain = 0;
+        let mut grouped = 0;
+        for node in &board.nodes {
+            let slot = if matches!(node.kind, NodeKind::Group { .. }) {
+                grouped += 1;
+                self.groups.get_mut(grouped - 1)
+            } else {
+                plain += 1;
+                self.nodes.get_mut(plain - 1)
+            };
+            if nodes.contains(node.id.as_str())
+                && let Some(slot) = slot
+            {
+                *slot = node_scene(node, style)?;
+            }
+        }
+        for (at, edge, geometry) in board.geometries_touching(nodes) {
+            if let Some(slot) = self.edges.get_mut(at) {
+                *slot = edge_scene(edge, &geometry, style)?;
+            }
+        }
+        self.measure();
+        Ok(())
+    }
+
+    /// El archivo pasó de `old` a `new`: reconstruye solo lo que cambió, si
+    /// siguen los mismos elementos en el mismo orden; si no, todo.
+    ///
+    /// # Errors
+    /// Si lyon no puede teselar un elemento.
+    pub fn refresh(
+        &mut self,
+        old: &Board,
+        new: &Board,
+        style: SceneStyle,
+    ) -> Result<(), TessellationError> {
+        if !same_elements(old, new) {
+            *self = Self::build(new, style)?;
+            return Ok(());
+        }
+        let mut touched: HashSet<&str> = old
+            .nodes
+            .iter()
+            .zip(&new.nodes)
+            .filter(|(before, after)| before != after)
+            .map(|(_, after)| after.id.as_str())
+            .collect();
+        // Una flecha cambiada se reconstruye con cualquiera de sus nodos.
+        for (before, after) in old.edges.iter().zip(&new.edges) {
+            if before != after {
+                touched.insert(&after.from.node);
+            }
+        }
+        if touched.is_empty() {
+            return Ok(());
+        }
+        self.update_nodes(new, &touched, style)
+    }
+
+    /// Lo que hay que saber para escribir sobre `element`, ya sin su texto: se
+    /// pinta el del buffer abierto.
+    pub(super) fn open_label(
+        &mut self,
+        board: &Board,
+        element: &str,
+        style: SceneStyle,
+    ) -> Option<OpenLabel> {
+        if let Some(at) = board.edges.iter().position(|edge| edge.id == element) {
+            if let Some(label) = self.edges.get_mut(at)?.labels.first_mut() {
+                label.text = SharedString::default();
+                return Some(OpenLabel {
+                    kind: label.kind,
+                    area: label.area,
+                });
+            }
+            let edge: &Edge = board.edges.get(at)?;
+            let touching = HashSet::from([edge.from.node.as_str()]);
+            let (_, _, geometry) = board
+                .geometries_touching(&touching)
+                .find(|(found, _, _)| *found == at)?;
+            return Some(OpenLabel {
+                kind: LabelKind::Edge,
+                area: edge_label_area(&geometry, style),
+            });
+        }
+        let at = board
+            .nodes
+            .iter()
+            .filter(|node| !matches!(node.kind, NodeKind::Group { .. }))
+            .position(|node| node.id == element)?;
+        let label = self.nodes.get_mut(at)?.labels.first_mut()?;
+        label.text = SharedString::default();
+        Some(OpenLabel {
+            kind: label.kind,
+            area: label.area,
+        })
+    }
+}
+
+/// Dónde va el texto que se está escribiendo.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OpenLabel {
+    pub kind: LabelKind,
+    pub area: Rect,
+}
+
+fn same_elements(old: &Board, new: &Board) -> bool {
+    let same_node = |(a, b): (&metalmind_board::Node, &metalmind_board::Node)| {
+        a.id == b.id
+            && matches!(a.kind, NodeKind::Group { .. }) == matches!(b.kind, NodeKind::Group { .. })
+    };
+    old.nodes.len() == new.nodes.len()
+        && old.edges.len() == new.edges.len()
+        && old.nodes.iter().zip(&new.nodes).all(same_node)
+        && old.edges.iter().zip(&new.edges).all(|(a, b)| a.id == b.id)
 }
 
 #[cfg(test)]

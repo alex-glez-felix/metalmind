@@ -82,6 +82,9 @@ impl EntityInputHandler for Editor {
         if view.command_line.is_some() {
             return None;
         }
+        if let Some(board) = &self.board {
+            return board.read(cx).caret();
+        }
         let layout = self.layout.as_ref()?;
         let (laid, column) = cursor_position(&view, layout)?;
         let (origin, height) = laid.place(column)?;
@@ -95,7 +98,7 @@ impl EntityInputHandler for Editor {
         cx: &mut Context<Self>,
     ) -> Option<usize> {
         let view = self.view(cx)?;
-        if view.command_line.is_some() {
+        if view.command_line.is_some() || self.board.is_some() {
             return None;
         }
         let (line, index) = self.layout.as_ref()?.hit(position)?;

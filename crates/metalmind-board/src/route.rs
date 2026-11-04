@@ -1,7 +1,7 @@
 //! Por dónde pasa una flecha. Se calcula siempre de los nodos que une, así
 //! que mover una caja re-enruta sus flechas sin tocarlas en el archivo.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::board::Board;
 use crate::edge::{Edge, Route, Side};
@@ -82,6 +82,22 @@ impl Board {
             let from = nodes.get(edge.from.node.as_str())?;
             let to = nodes.get(edge.to.node.as_str())?;
             Some((edge, edge.geometry(from, to)))
+        })
+    }
+
+    /// Las flechas que tocan alguno de `nodes`, con su posición en
+    /// [`Board::edges`] y su recorrido.
+    pub fn geometries_touching<'a>(
+        &'a self,
+        nodes: &'a HashSet<&str>,
+    ) -> impl Iterator<Item = (usize, &'a Edge, EdgeGeometry)> {
+        let by_id: HashMap<&str, &Node> = self.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+        self.edges.iter().enumerate().filter_map(move |(at, edge)| {
+            let (from, to) = (edge.from.node.as_str(), edge.to.node.as_str());
+            if !nodes.contains(from) && !nodes.contains(to) {
+                return None;
+            }
+            Some((at, edge, edge.geometry(by_id.get(from)?, by_id.get(to)?)))
         })
     }
 

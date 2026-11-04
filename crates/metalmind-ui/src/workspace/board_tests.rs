@@ -180,3 +180,40 @@ fn un_texto_suelto_nuevo_abre_escribiendo_y_vacio_no_se_queda() {
     assert_eq!(format!("{}\n", session.text()), BOARD);
     assert!(!session.is_modified());
 }
+
+#[test]
+fn el_autoguardado_escribe_lo_de_una_caja_abierta_y_lo_que_mueve_la_pizarra() {
+    use std::rc::Rc;
+    use std::time::Duration;
+
+    use crate::workspace::{Autosave, SystemClock};
+
+    let (dir, mut session) = on_board();
+    let pane = session.pane();
+    session
+        .workspace
+        .set_autosave(Some(Autosave::new(Duration::ZERO, Rc::new(SystemClock))));
+    let path = dir.path().join("idea.canvas");
+    session
+        .workspace
+        .edit_board(pane, |board| {
+            board.move_nodes(&["a".to_owned()], 10, 0);
+        })
+        .unwrap();
+    session.workspace.autosave_all();
+    let moved = fs::read_to_string(&path).unwrap();
+    assert!(
+        moved.contains(r#""id":"a","type":"text","x":10"#),
+        "{moved}"
+    );
+    assert!(moved.ends_with("}\n"));
+    session.open_text("b");
+    session.type_text(" a medias");
+    session.workspace.autosave_all();
+    assert!(fs::read_to_string(&path).unwrap().contains("tres a medias"));
+    session.workspace.close_board_text(pane).unwrap();
+    assert!(!session.is_modified());
+    session.workspace.undo_board(pane).unwrap();
+    assert!(session.is_modified());
+    assert!(session.text().contains(r#""text":"tres""#));
+}
