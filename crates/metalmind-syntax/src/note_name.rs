@@ -19,6 +19,9 @@ pub fn strip_extension(path: &str) -> Option<&str> {
     stem_before(path, EXTENSION)
 }
 
+// En línea: con la extensión constante se compara sin un bucle, y esto corre
+// por cada archivo del vault en los índices.
+#[inline]
 fn stem_before<'a>(path: &'a str, extension: &str) -> Option<&'a str> {
     let at = path.len().checked_sub(extension.len())?;
     let stem = path
