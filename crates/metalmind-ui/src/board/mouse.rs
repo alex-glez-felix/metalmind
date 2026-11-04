@@ -25,7 +25,21 @@ enum Under {
 }
 
 impl BoardView {
+    /// Con las flechas, que hay que recorrer todas: solo al apretar.
     fn under(&self, point: Point, theme: &Theme) -> Under {
+        let on_node = self.node_under(point, theme);
+        if on_node != Under::Nothing {
+            return on_node;
+        }
+        let (Some(board), Some(camera)) = (self.board(), self.camera) else {
+            return Under::Nothing;
+        };
+        board
+            .hit_edge(point, f32::from(theme.layout.board_edge_hit) / camera.zoom)
+            .map_or(Under::Nothing, |edge| Under::Edge(edge.id.clone()))
+    }
+
+    fn node_under(&self, point: Point, theme: &Theme) -> Under {
         let (Some(board), Some(camera)) = (self.board(), self.camera) else {
             return Under::Nothing;
         };
@@ -39,13 +53,10 @@ impl BoardView {
             return Under::Corner(id.clone(), corner);
         }
         match board.pick(point, f32::from(theme.layout.board_edge_grab) / zoom) {
-            Some(Pick::Border(node)) => return Under::Border(node.id.clone()),
-            Some(Pick::Inside(node)) => return Under::Inside(node.id.clone()),
-            None => {}
+            Some(Pick::Border(node)) => Under::Border(node.id.clone()),
+            Some(Pick::Inside(node)) => Under::Inside(node.id.clone()),
+            None => Under::Nothing,
         }
-        board
-            .hit_edge(point, f32::from(theme.layout.board_edge_hit) / zoom)
-            .map_or(Under::Nothing, |edge| Under::Edge(edge.id.clone()))
     }
 
     pub(super) fn on_left_down(
@@ -279,7 +290,7 @@ impl BoardView {
         let Some(point) = self.board_point(at) else {
             return CursorStyle::Arrow;
         };
-        match self.under(point, Theme::get(cx)) {
+        match self.node_under(point, Theme::get(cx)) {
             Under::Corner(_, Corner::TopLeft | Corner::BottomRight) => {
                 CursorStyle::ResizeUpLeftDownRight
             }
