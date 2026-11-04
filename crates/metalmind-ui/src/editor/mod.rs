@@ -1,6 +1,7 @@
 //! Vista de un panel: pinta solo lo visible de su documento y le pasa la
 //! entrada al [`Workspace`], que es quien edita.
 
+mod board_pane;
 mod command_popup;
 mod completion;
 mod completion_menu;
@@ -32,16 +33,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, Context, CursorStyle, Entity, FocusHandle, InteractiveElement as _, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement as _, Pixels, Point, Render, Styled as _,
-    Subscription, Window, div, prelude::FluentBuilder as _,
+    App, Context, Entity, FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent,
+    ParentElement as _, Pixels, Point, Render, Styled as _, Subscription, Window, div,
 };
 use metalmind_buffer::ByteOffset;
 use metalmind_keymap::{Action, EditorAction};
 use metalmind_vault::VaultPath;
 use metalmind_vim::{KeyOutcome, Mode, Prompt};
 
-use self::element::EditorElement;
 use self::keys::Route;
 use self::layout::FrameLayout;
 use self::links::Links;
@@ -51,6 +50,7 @@ use self::status_bar::{Status, status_bar};
 use self::text::Faces;
 use self::which_key::{WhichKey, which_key_panel};
 use crate::actions::{self, Dispatch};
+use crate::board::BoardView;
 use crate::clipboard::SystemClipboard;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -96,6 +96,8 @@ pub struct Editor {
     /// sea la misma.
     text_screen: Option<Arc<TextScreen>>,
     which_key: WhichKey,
+    /// Lo que pinta el panel si su documento es una pizarra.
+    board: Option<Entity<BoardView>>,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _focus_changed: Subscription,
@@ -141,11 +143,17 @@ impl Editor {
             completion: self::completion::Completion::default(),
             text_screen: None,
             which_key: WhichKey::default(),
+            board: None,
             _repaint: repaint,
             _vault_changed: vault_changed,
             _focus_changed: focus_changed,
             _formulas: formulas_ready,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn board(&self) -> Option<&Entity<BoardView>> {
+        self.board.as_ref()
     }
 
     /// Con qué saber si cada link del documento lleva a algo.
@@ -226,7 +234,14 @@ impl Editor {
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keystroke = &event.keystroke;
-        match keys::route(keystroke, self.mode(cx)) {
+        let mode = self.mode(cx);
+        let route = keys::route(keystroke, mode);
+        if self.board.is_some() && !keys::reaches_engine_in_board(route, mode) {
+            // Sin esto, su carácter le llegaría al motor por el input handler.
+            cx.stop_propagation();
+            return;
+        }
+        match route {
             Route::Engine(key) => {
                 FrameClock::input(cx);
                 cx.stop_propagation();
@@ -250,6 +265,10 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Un IME puede escribir sin pasar por una tecla.
+        if self.board.is_some() && self.mode(cx) == Mode::Normal {
+            return;
+        }
         let marked_range = self
             .ime_line(cx)
             .filter(|_| self.marked.is_some())
@@ -344,7 +363,7 @@ impl Editor {
             modified: view.document.is_modified(),
             save: view.save,
             command_line,
-            position: (line + 1, buffer.column_of(view.cursor()) + 1),
+            position: self.position(line + 1, buffer.column_of(view.cursor()) + 1, cx),
             focus: self
                 .session
                 .read(cx)
@@ -357,6 +376,7 @@ impl Editor {
 impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = Theme::get(cx).clone();
+        self.sync_board(cx);
         let popup = self
             .command_line(cx)
             .filter(|(prompt, _)| *prompt == Prompt::Command)
@@ -367,7 +387,7 @@ impl Render for Editor {
             .next_keys(window, cx)
             .map(|next_keys| which_key_panel(next_keys, &theme));
         div()
-            .key_context(self.key_context())
+            .key_context(self.key_context(cx))
             .track_focus(&self.focus_handle)
             .size_full()
             .flex()
@@ -387,28 +407,13 @@ impl Render for Editor {
                         Action::Editor(EditorAction::PreviousCompletion) => {
                             editor.select_previous_completion(cx);
                         }
+                        Action::Board(action) => editor.on_board_action(action, window, cx),
                         _ => cx.propagate(),
                     },
                 ),
             )
             .child(header)
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .map(|element| theme.editor_text(element))
-                    .cursor(CursorStyle::IBeam)
-                    .on_scroll_wheel(cx.listener(Self::on_scroll))
-                    .on_mouse_down(MouseButton::Left, cx.listener(Self::on_left_down))
-                    .on_mouse_move(cx.listener(Self::on_mouse_move))
-                    .on_mouse_up(MouseButton::Left, cx.listener(Self::on_left_up))
-                    .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_left_up))
-                    .on_mouse_down(MouseButton::Middle, cx.listener(Self::on_middle_down))
-                    .child(EditorElement::new(cx.entity(), theme.clone()))
-                    .children(which_key),
-            )
+            .child(self.body(&theme, cx).children(which_key))
             .children(status)
             .children(popup)
     }

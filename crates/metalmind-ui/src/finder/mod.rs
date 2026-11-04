@@ -31,20 +31,24 @@ impl AsRef<str> for Note {
 
 impl PickerItem for Note {}
 
+fn is_listed(kind: EntryKind) -> bool {
+    matches!(kind, EntryKind::Note | EntryKind::Board)
+}
+
 /// Lo que lista el finder: las recientes que siguen en el vault, de la
-/// última a la primera, y después las demás notas por ruta.
+/// última a la primera, y después las demás notas y pizarras por ruta.
 #[must_use]
 pub fn notes(index: &VaultIndex, recents: &Recents) -> Arc<[Note]> {
-    let is_note = |path: &VaultPath| index.kind(path) == Some(EntryKind::Note);
+    let is_listed_path = |path: &VaultPath| index.kind(path).is_some_and(is_listed);
     let recent: Vec<&VaultPath> = recents
         .paths()
         .iter()
-        .filter(|path| is_note(path))
+        .filter(|path| is_listed_path(path))
         .collect();
     let seen: HashSet<&VaultPath> = recent.iter().copied().collect();
     let mut rest: Vec<&VaultPath> = index
         .files()
-        .filter(|entry| entry.kind == EntryKind::Note && !seen.contains(entry.path))
+        .filter(|entry| is_listed(entry.kind) && !seen.contains(entry.path))
         .map(|entry| entry.path)
         .collect();
     rest.sort_unstable();
@@ -66,6 +70,20 @@ mod tests {
 
     fn names(notes: &[Note]) -> Vec<&str> {
         notes.iter().map(AsRef::as_ref).collect()
+    }
+
+    #[test]
+    fn las_pizarras_salen_con_las_notas_y_los_adjuntos_no() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["b.md", "idea.canvas", "img.png"] {
+            fs::write(dir.path().join(name), "").unwrap();
+        }
+        let (vault, _updates) = Vault::open(dir.path()).unwrap();
+        let index = vault.snapshot();
+        assert_eq!(
+            names(&notes(&index, &Recents::default())),
+            ["b.md", "idea.canvas"]
+        );
     }
 
     #[test]

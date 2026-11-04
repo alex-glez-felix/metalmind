@@ -79,6 +79,21 @@ Theme {
         which_key_border: #8a909a,
         which_key_key: #2e5cd6,
         which_key_prefix: #5f6670,
+        board_line: #5f6670,
+        board_fill: #2b2f36 α0.04,
+        board_card: #eceef2,
+        board_card_accent: #2e5cd6,
+        board_group: #2b2f36 α0.05,
+        board_text: #2b2f36,
+        board_text_muted: #5f6670,
+        board_label_background: #f5f6f8,
+        board_selection: #2e5cd6,
+        board_color_1: #c4304f,
+        board_color_2: #b35a00,
+        board_color_3: #8f6400,
+        board_color_4: #3f7a1e,
+        board_color_5: #0f7a99,
+        board_color_6: #8a3fc4,
     },
     cursor: CursorColors {
         normal: #2e5cd6 α0.4,
@@ -180,6 +195,12 @@ Theme {
                 1.0,
             ),
             tab: Px(
+                2.0,
+            ),
+            board_line: Px(
+                2.0,
+            ),
+            board_selection: Px(
                 2.0,
             ),
         },
@@ -361,6 +382,48 @@ Theme {
             ),
             which_key_gap: Length(
                 12.0,
+            ),
+            board_padding: Length(
+                12.0,
+            ),
+            board_arrow_size: Length(
+                12.0,
+            ),
+            board_card_accent: Length(
+                4.0,
+            ),
+            board_text: Length(
+                16.0,
+            ),
+            board_text_small: Length(
+                13.0,
+            ),
+            board_text_heading: Length(
+                28.0,
+            ),
+            board_edge_label_width: Length(
+                160.0,
+            ),
+            board_line_height: Factor(
+                1.3,
+            ),
+            board_min_text: Length(
+                3.0,
+            ),
+            board_pan_step: Length(
+                80.0,
+            ),
+            board_fit_margin: Length(
+                40.0,
+            ),
+            board_toolbar_margin: Length(
+                8.0,
+            ),
+            board_fill_alpha: Fraction(
+                0.14,
+            ),
+            board_group_alpha: Fraction(
+                0.06,
             ),
             gutter_mark_columns: MarkColumns(
                 3,

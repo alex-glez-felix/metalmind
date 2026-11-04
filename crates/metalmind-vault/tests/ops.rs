@@ -263,3 +263,24 @@ fn una_papelera_que_es_enlace_no_se_usa() {
     assert_eq!(read(dir.path(), "a.md"), "a.md");
     assert_eq!(entries(outside.path()), Vec::<String>::new());
 }
+
+#[test]
+fn crear_una_pizarra_no_crea_otra_cosa_ni_pisa_nada() {
+    let dir = tempfile::tempdir().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    vault
+        .create_board(&path("hondo/idea.canvas"), "{}\n")
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(vault.root().join("hondo/idea.canvas")).unwrap(),
+        "{}\n"
+    );
+    assert!(matches!(
+        vault.create_board(&path("hondo/idea.canvas"), "pisada"),
+        Err(FileOpError::AlreadyExists(_))
+    ));
+    assert!(matches!(
+        vault.create_board(&path("nota.md"), ""),
+        Err(FileOpError::NotABoard(_))
+    ));
+}

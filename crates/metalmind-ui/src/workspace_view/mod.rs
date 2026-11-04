@@ -8,6 +8,7 @@
 //! de los avisos, arriba a la derecha.
 
 mod autosave;
+mod board;
 mod buffer_edits;
 mod commands;
 mod context;
@@ -234,3 +235,7 @@ impl WorkspaceView {
         cx.notify();
     }
 }
+
+#[cfg(test)]
+#[path = "board_tests.rs"]
+mod board_tests;

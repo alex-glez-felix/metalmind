@@ -295,6 +295,29 @@ color_group! {
         which_key_border,
         which_key_key,
         which_key_prefix,
+        /// Las líneas de la pizarra sin color propio: bordes y flechas.
+        board_line,
+        /// El relleno de una forma sin color propio.
+        board_fill,
+        board_card,
+        /// La marca de una tarjeta de nota.
+        board_card_accent,
+        board_group,
+        board_text,
+        /// La ruta de una tarjeta y el nombre de un grupo.
+        board_text_muted,
+        /// Detrás de la etiqueta de una flecha.
+        board_label_background,
+        /// El borde del nodo elegido.
+        board_selection,
+        /// Los colores `"1"`…`"6"` de JSON Canvas: rojo, naranja, amarillo,
+        /// verde, cian y púrpura.
+        board_color_1,
+        board_color_2,
+        board_color_3,
+        board_color_4,
+        board_color_5,
+        board_color_6,
     }
 }
 

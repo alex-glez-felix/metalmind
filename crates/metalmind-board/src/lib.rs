@@ -6,6 +6,7 @@
 mod board;
 mod edge;
 mod geometry;
+mod navigation;
 mod node;
 mod route;
 mod stroke_points;

@@ -4,8 +4,9 @@
 
 use metalmind_vim::{Context as VimContext, Key};
 
-use crate::{Action, Binding, Command, EditorAction, KeyName, Keys, Keystroke, ListAction};
-use crate::{ChangePreviewAction, ContextAction, PanelAction, PickerAction, View, WindowCommand};
+use crate::{Action, Binding, BoardAction, Command, EditorAction, KeyName, Keys, Keystroke};
+use crate::{ChangePreviewAction, ContextAction, ListAction, PanelAction, PickerAction};
+use crate::{View, WindowCommand};
 
 pub(crate) fn bindings() -> Vec<Binding> {
     // `q` pliega la lista, como `space l`; va antes para que la lista muestre
@@ -30,6 +31,7 @@ pub(crate) fn bindings() -> Vec<Binding> {
     bindings.extend(table(View::NoteList, LIST));
     bindings.extend(table(View::NoteListInput, LIST_INPUT));
     bindings.extend(table(View::Context, CONTEXT));
+    bindings.extend(board());
     bindings
 }
 
@@ -39,6 +41,13 @@ const fn k(c: char) -> Keystroke {
 
 const fn named(key: KeyName) -> Keystroke {
     Keystroke::plain(key)
+}
+
+const fn shift(c: char) -> Keystroke {
+    Keystroke {
+        shift: true,
+        ..Keystroke::plain(KeyName::Char(c))
+    }
 }
 
 const fn ctrl(c: char) -> Keystroke {
@@ -174,6 +183,41 @@ const COMPLETION: &[(&[Keystroke], EditorAction)] = &[
     (&[named(KeyName::Up)], EditorAction::PreviousCompletion),
 ];
 
+const BOARD: &[(&[Keystroke], BoardAction)] = &[
+    (&[k('h')], BoardAction::PanLeft),
+    (&[k('j')], BoardAction::PanDown),
+    (&[k('k')], BoardAction::PanUp),
+    (&[k('l')], BoardAction::PanRight),
+    (&[k('H')], BoardAction::SelectNeighborLeft),
+    (&[k('J')], BoardAction::SelectNeighborDown),
+    (&[k('K')], BoardAction::SelectNeighborUp),
+    (&[k('L')], BoardAction::SelectNeighborRight),
+    (&[k('+')], BoardAction::ZoomIn),
+    (&[k('-')], BoardAction::ZoomOut),
+    // GPUI en Linux entrega el carácter de `shift` y un número, no el número:
+    // `!` y `)`, o `=` en un teclado latino. El último es el que se muestra.
+    (&[k('!')], BoardAction::ZoomToFit),
+    (&[shift('1')], BoardAction::ZoomToFit),
+    (&[k(')')], BoardAction::ZoomToActualSize),
+    (&[k('=')], BoardAction::ZoomToActualSize),
+    (&[shift('0')], BoardAction::ZoomToActualSize),
+    (&[k('g'), k('d')], BoardAction::OpenNote),
+    (&[named(KeyName::Enter)], BoardAction::OpenNote),
+];
+
+/// En una pizarra el motor no recibe teclas (09 §4.2), así que lo que en
+/// Normal es suyo aquí es de la vista: `space` y `ctrl-w`. Solo `:` lo sigue
+/// abriendo el motor.
+fn board() -> impl Iterator<Item = Binding> {
+    let leader = LEADER
+        .iter()
+        .map(|&(key, command, _)| in_view(View::Board, &[k(' '), k(key)], command));
+    let panes = PANES.iter().flat_map(|&(key, command)| {
+        [k(key), ctrl(key)].map(|next| in_view(View::Board, &[ctrl('w'), next], command))
+    });
+    leader.chain(panes).chain(table(View::Board, BOARD))
+}
+
 const TREE: &[(&[Keystroke], PanelAction)] = &[
     (&[k('j')], PanelAction::SelectNext),
     (&[named(KeyName::Down)], PanelAction::SelectNext),
@@ -192,6 +236,7 @@ const TREE: &[(&[Keystroke], PanelAction)] = &[
     (&[k('/')], PanelAction::Filter),
     (&[k('a')], PanelAction::NewNote),
     (&[k('A')], PanelAction::NewFolder),
+    (&[k('b')], PanelAction::NewBoard),
     (&[k('r')], PanelAction::Rename),
     (&[k('m')], PanelAction::Move),
     (&[k('e')], PanelAction::EditTagAliases),

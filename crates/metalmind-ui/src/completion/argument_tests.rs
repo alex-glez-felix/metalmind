@@ -26,6 +26,7 @@ fn index(paths: &[&str]) -> Arc<VaultIndex> {
         let path = VaultPath::new(path).unwrap();
         let kind = match EntryKind::of_file(&path) {
             EntryKind::Note => EntryKind::Note,
+            EntryKind::Board => EntryKind::Board,
             EntryKind::Attachment | EntryKind::Folder => EntryKind::Folder,
         };
         (path, kind)

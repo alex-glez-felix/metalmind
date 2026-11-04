@@ -53,7 +53,7 @@ fn collect_notes(index: &VaultIndex, dir: &VaultPath, notes: &mut Vec<VaultPath>
         match entry.kind {
             EntryKind::Folder => collect_notes(index, entry.path, notes),
             EntryKind::Note => notes.push(entry.path.clone()),
-            EntryKind::Attachment => {}
+            EntryKind::Board | EntryKind::Attachment => {}
         }
     }
 }

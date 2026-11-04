@@ -4,8 +4,8 @@
 use metalmind_vim::Action as VimAction;
 
 use crate::{
-    ChangePreviewAction, Command, ContextAction, EditorAction, ListAction, PanelAction,
-    PickerAction, WindowCommand,
+    BoardAction, ChangePreviewAction, Command, ContextAction, EditorAction, ListAction,
+    PanelAction, PickerAction, WindowCommand,
 };
 
 /// Una acción con nombre, de cualquier parte de la app.
@@ -18,6 +18,7 @@ pub enum Action {
     /// De las vistas de la ventana: el modelo solo corta la macro.
     Window(WindowCommand),
     Editor(EditorAction),
+    Board(BoardAction),
     Panel(PanelAction),
     List(ListAction),
     Context(ContextAction),
@@ -31,6 +32,7 @@ pub enum Owner {
     /// La raíz de la ventana, que siempre está: los comandos y el motor.
     Window,
     Editor,
+    Board,
     Panel,
     List,
     Context,
@@ -46,6 +48,7 @@ impl Action {
             Self::Command(command) => command.name(),
             Self::Window(command) => command.name(),
             Self::Editor(action) => action.name(),
+            Self::Board(action) => action.name(),
             Self::Panel(action) => action.name(),
             Self::List(action) => action.name(),
             Self::Context(action) => action.name(),
@@ -65,6 +68,7 @@ impl Action {
         let commands = Command::ALL.iter().copied().map(Self::Command);
         let window = WindowCommand::ALL.iter().copied().map(Self::Window);
         let editor = EditorAction::ALL.iter().copied().map(Self::Editor);
+        let board = BoardAction::ALL.iter().copied().map(Self::Board);
         let panel = PanelAction::ALL.iter().copied().map(Self::Panel);
         let list = ListAction::ALL.iter().copied().map(Self::List);
         let context = ContextAction::ALL.iter().copied().map(Self::Context);
@@ -76,6 +80,7 @@ impl Action {
         vim.chain(commands)
             .chain(window)
             .chain(editor)
+            .chain(board)
             .chain(panel)
             .chain(list)
             .chain(context)
@@ -88,6 +93,7 @@ impl Action {
         match self {
             Self::Vim(_) | Self::Command(_) | Self::Window(_) => Owner::Window,
             Self::Editor(_) => Owner::Editor,
+            Self::Board(_) => Owner::Board,
             Self::Panel(_) => Owner::Panel,
             Self::List(_) => Owner::List,
             Self::Context(_) => Owner::Context,
@@ -112,6 +118,12 @@ impl From<WindowCommand> for Action {
 impl From<EditorAction> for Action {
     fn from(action: EditorAction) -> Self {
         Self::Editor(action)
+    }
+}
+
+impl From<BoardAction> for Action {
+    fn from(action: BoardAction) -> Self {
+        Self::Board(action)
     }
 }
 
@@ -195,6 +207,7 @@ invocations!(
     Command,
     WindowCommand,
     EditorAction,
+    BoardAction,
     PanelAction,
     ContextAction,
     PickerAction

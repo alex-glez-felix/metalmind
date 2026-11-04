@@ -56,6 +56,9 @@ named_actions! {
         /// `space d`, `:today`: abre la nota del día, creándola con su
         /// plantilla si todavía no existe.
         OpenDailyNote = "notes::open_daily",
+        /// `:board [nombre]`: una pizarra nueva y vacía. Con nombre se crea
+        /// en la raíz del vault; sin él, el panel lateral lo pregunta.
+        NewBoard = "board::new",
         /// `:focus proyectos/ #rust -#archivado`: reduce el finder, la
         /// búsqueda y el panel a ese alcance (05 §3); sin alcance, dice el de
         /// ahora.
@@ -75,6 +78,7 @@ const EX: &[(&str, usize, WindowCommand)] = &[
     ("vaultundo", 9, WindowCommand::UndoVaultChange),
     ("template", 8, WindowCommand::NewNoteFromTemplate),
     ("today", 5, WindowCommand::OpenDailyNote),
+    ("board", 5, WindowCommand::NewBoard),
     ("focus", 5, WindowCommand::Focus),
     ("unfocus", 7, WindowCommand::ClearFocus),
     ("messages", 3, WindowCommand::ShowMessages),
@@ -85,7 +89,7 @@ impl WindowCommand {
     #[must_use]
     pub fn argument(self) -> ArgumentKind {
         match self {
-            Self::NewNoteFromTemplate | Self::Focus => ArgumentKind::Words,
+            Self::NewNoteFromTemplate | Self::NewBoard | Self::Focus => ArgumentKind::Words,
             _ => ArgumentKind::None,
         }
     }

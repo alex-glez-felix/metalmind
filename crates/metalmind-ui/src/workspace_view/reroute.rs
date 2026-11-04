@@ -35,13 +35,15 @@ pub(super) fn reroute(owner: Owner, visible: Visible, overlay_open: bool) -> Rer
         Owner::Panel if visible.sidebar => Reroute::Sidebar,
         Owner::List if visible.list => Reroute::List,
         Owner::Context if visible.context => Reroute::Context,
-        Owner::Editor if !overlay_open => Reroute::Editor,
+        // El panel enfocado dice qué hacer si no muestra una pizarra.
+        Owner::Editor | Owner::Board if !overlay_open => Reroute::Editor,
         // Un picker o la vista previa de un cambio abiertos ya tienen el foco; la
         // raíz atiende las de la ventana antes de llegar aquí.
         Owner::Panel
         | Owner::List
         | Owner::Context
         | Owner::Editor
+        | Owner::Board
         | Owner::Picker
         | Owner::ChangePreview
         | Owner::Window => Reroute::Nowhere,

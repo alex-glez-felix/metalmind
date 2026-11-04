@@ -129,6 +129,20 @@ fn escape_quita_la_seleccion_y_se_crea_en_la_raiz() {
 }
 
 #[test]
+fn una_pizarra_nueva_lleva_su_extension_una_sola_vez() {
+    for name in ["idea", "idea.canvas", "idea.CANVAS"] {
+        let mut panel = panel();
+        panel.start_create(NewEntry::Board);
+        type_text(&mut panel, name);
+        let Some(Request::CreateBoard(path)) = panel.confirm() else {
+            panic!("{name} crea una pizarra");
+        };
+        assert!(path.name().to_lowercase().ends_with(".canvas"), "{name}");
+        assert_eq!(path.name().to_lowercase().matches(".canvas").count(), 1);
+    }
+}
+
+#[test]
 fn una_extension_sin_nombre_no_es_una_nota() {
     for name in [".md", "x/.MD"] {
         let mut panel = panel();

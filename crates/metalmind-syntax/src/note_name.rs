@@ -1,7 +1,8 @@
 //! Qué archivo es una nota: el que se llama `<nombre>.md`, con la extensión
 //! en cualquier mezcla de mayúsculas y un nombre no vacío. `.md` a secas es
 //! un archivo oculto, no una nota sin nombre. Toda pregunta sobre si una ruta
-//! es una nota, o cómo se llama sin su extensión, se contesta aquí.
+//! es una nota o una pizarra (`<nombre>.canvas`), o cómo se llama sin su
+//! extensión, se contesta aquí.
 //!
 //! Las rutas van relativas al vault y separadas por `/`; solo cuenta el
 //! último componente.
@@ -9,13 +10,20 @@
 /// La extensión de una nota, con su punto, como se escribe al crear una.
 pub const EXTENSION: &str = ".md";
 
+/// La extensión de una pizarra, con su punto.
+pub const BOARD_EXTENSION: &str = ".canvas";
+
 /// `path` sin su `.md` si es una nota (`a/Casa.MD` da `a/Casa`).
 #[must_use]
 pub fn strip_extension(path: &str) -> Option<&str> {
-    let at = path.len().checked_sub(EXTENSION.len())?;
+    stem_before(path, EXTENSION)
+}
+
+fn stem_before<'a>(path: &'a str, extension: &str) -> Option<&'a str> {
+    let at = path.len().checked_sub(extension.len())?;
     let stem = path
         .get(at..)
-        .filter(|extension| extension.eq_ignore_ascii_case(EXTENSION))
+        .filter(|found| found.eq_ignore_ascii_case(extension))
         .map(|_| &path[..at])?;
     let named = !stem.is_empty() && !stem.ends_with('/');
     named.then_some(stem)
@@ -31,6 +39,18 @@ pub fn is_note(path: &str) -> bool {
 #[must_use]
 pub fn with_extension(name: &str) -> String {
     format!("{name}{EXTENSION}")
+}
+
+#[must_use]
+pub fn is_board(path: &str) -> bool {
+    stem_before(path, BOARD_EXTENSION).is_some()
+}
+
+/// El archivo de la pizarra que se llama `name`; como [`with_extension`],
+/// siempre le agrega la extensión.
+#[must_use]
+pub fn board_with_extension(name: &str) -> String {
+    format!("{name}{BOARD_EXTENSION}")
 }
 
 #[cfg(test)]
@@ -69,5 +89,16 @@ mod tests {
             let file = with_extension(name);
             assert_eq!(strip_extension(&file), Some(name));
         }
+    }
+
+    #[rstest]
+    #[case("idea.canvas", true)]
+    #[case("a/IDEA.Canvas", true)]
+    #[case(".canvas", false)]
+    #[case("a/.canvas", false)]
+    #[case("idea.canvas.md", false)]
+    #[case("canvas", false)]
+    fn una_pizarra_se_reconoce_como_una_nota(#[case] path: &str, #[case] board: bool) {
+        assert_eq!(is_board(path), board);
     }
 }

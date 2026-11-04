@@ -1,6 +1,7 @@
 //! Qué hace cada acción del panel.
 
 use gpui_kit::{Context, Window};
+use metalmind_board::Board;
 
 use metalmind_keymap::{Action, PanelAction};
 
@@ -38,6 +39,7 @@ impl Sidebar {
             PanelAction::Filter => self.filter(window, cx),
             PanelAction::NewNote => self.new_note(window, cx),
             PanelAction::NewFolder => self.new_folder(window, cx),
+            PanelAction::NewBoard => self.new_board(cx),
             PanelAction::Rename => self.rename(window, cx),
             PanelAction::Move => self.move_entry(window, cx),
             PanelAction::EditTagAliases => self.tag_field(TagField::Aliases, cx),
@@ -160,6 +162,12 @@ impl Sidebar {
         cx.notify();
     }
 
+    fn new_board(&mut self, cx: &mut Context<Self>) {
+        self.menu = None;
+        self.panel.start_create(NewEntry::Board);
+        cx.notify();
+    }
+
     fn rename(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         self.menu = None;
         self.panel.start_rename();
@@ -269,6 +277,13 @@ impl Sidebar {
                 self.panel.tree.reveal(path.clone());
                 cx.emit(SidebarEvent::CreateNote(path));
                 Ok(())
+            }
+            Request::CreateBoard(path) => {
+                let created = self.vault.create_board(&path, &Board::default().write());
+                created.map(|()| {
+                    self.panel.tree.reveal(path.clone());
+                    self.open(&path, Placement::Current, true, cx);
+                })
             }
             Request::CreateFolder(path) => self
                 .vault

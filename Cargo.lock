@@ -4153,6 +4153,8 @@ dependencies = [
  "image",
  "jiff",
  "log",
+ "lyon",
+ "metalmind-board",
  "metalmind-buffer",
  "metalmind-config",
  "metalmind-keymap",

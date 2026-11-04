@@ -747,6 +747,46 @@ const SCENES: &[(&str, &[Step])] = &[
             Step::Prefix("<Space>"),
         ],
     ),
+    // La pizarra (09): cada tipo de elemento; de lejos con 2 000 elementos,
+    // al 100 % y al abrir un nodo elegido; textos que no caben en su caja,
+    // rutas largas y emoji; vacía, rota y en un split junto a una nota.
+    (
+        "pizarra",
+        &[
+            Step::Keys("<Esc><C-w>o"),
+            Step::Files(vault::write_boards),
+            Step::Keys(":e Pizarras/arquitectura.canvas<CR>"),
+        ],
+    ),
+    ("pizarra-elegido", &[Step::Keys("L")]),
+    ("pizarra-acercada", &[Step::Keys("+++")]),
+    (
+        "pizarra-2000-de-lejos",
+        &[Step::Keys(":e Pizarras/dos-mil.canvas<CR>")],
+    ),
+    ("pizarra-2000-al-100", &[Step::Keys(")")]),
+    ("pizarra-2000-movida", &[Step::Keys("lllljj")]),
+    (
+        "pizarra-textos-largos",
+        &[Step::Keys(":e Pizarras/textos-largos.canvas<CR>")],
+    ),
+    (
+        "pizarra-vacia",
+        &[Step::Keys(":e Pizarras/vacia.canvas<CR>")],
+    ),
+    ("pizarra-rota", &[Step::Keys(":e Pizarras/rota.canvas<CR>")]),
+    (
+        "pizarra-split",
+        &[Step::Keys(
+            ":e Pizarras/arquitectura.canvas<CR><C-w>v:e otra.md<CR>",
+        )],
+    ),
+    (
+        "pizarra-linea-de-comandos",
+        &[Step::Keys("<C-w>h:e Pizarras/")],
+    ),
+    ("pizarra-nueva", &[Step::Keys("<Esc><C-w>o:board<CR>")]),
+    ("pizarra-paleta", &[Step::Keys("<Esc><C-w>l<Space>pboard")]),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

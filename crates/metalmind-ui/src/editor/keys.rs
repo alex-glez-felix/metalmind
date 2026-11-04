@@ -48,6 +48,12 @@ pub fn route(keystroke: &Keystroke, mode: Mode) -> Route {
     }
 }
 
+/// En una pizarra las teclas son de la vista (09 §4.2): al motor solo le llega
+/// `:`, que abre la línea de comandos, y lo que se teclea en ella.
+pub fn reaches_engine_in_board(route: Route, mode: Mode) -> bool {
+    mode != Mode::Normal || route == Route::Engine(Key::Char(':'))
+}
+
 /// `ctrl-shift-*` queda para los atajos de la aplicación.
 fn control_key(keystroke: &Keystroke) -> Option<Key> {
     if keystroke.modifiers.shift {
@@ -145,6 +151,27 @@ mod tests {
                 translate(&stroke(key, key_char, mods)),
                 expected,
                 "key={key:?} key_char={key_char:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn en_una_pizarra_el_motor_solo_recibe_la_linea_de_comandos() {
+        let cases = [
+            (Route::Engine(Key::Char(':')), Mode::Normal, true),
+            (Route::Engine(Key::Char('x')), Mode::Normal, false),
+            (Route::Engine(Key::Char('i')), Mode::Normal, false),
+            (Route::Engine(Key::Ctrl('r')), Mode::Normal, false),
+            (Route::Engine(Key::Escape), Mode::Normal, false),
+            (Route::Engine(Key::Enter), Mode::CommandLine, true),
+            (Route::Engine(Key::Escape), Mode::CommandLine, true),
+            (Route::TextInput, Mode::CommandLine, true),
+        ];
+        for (route, mode, expected) in cases {
+            assert_eq!(
+                reaches_engine_in_board(route, mode),
+                expected,
+                "{route:?} {mode:?}"
             );
         }
     }

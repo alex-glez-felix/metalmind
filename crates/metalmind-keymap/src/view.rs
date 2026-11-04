@@ -20,6 +20,32 @@ named_actions! {
 }
 
 named_actions! {
+    /// De la pizarra ([09](../../docs/research/09-pizarra.md) §4.1): mover la
+    /// vista, acercarla y elegir un nodo para abrir su nota.
+    pub enum BoardAction {
+        PanLeft = "board::pan_left",
+        PanDown = "board::pan_down",
+        PanUp = "board::pan_up",
+        PanRight = "board::pan_right",
+        ZoomIn = "board::zoom_in",
+        ZoomOut = "board::zoom_out",
+        /// Toda la pizarra a la vista.
+        ZoomToFit = "board::zoom_to_fit",
+        /// Una unidad de la pizarra, un píxel.
+        ZoomToActualSize = "board::zoom_to_actual_size",
+        /// Elige el nodo vecino hacia ese lado; sin ninguno elegido, el más
+        /// cercano al centro de la vista.
+        SelectNeighborLeft = "board::select_neighbor_left",
+        SelectNeighborDown = "board::select_neighbor_down",
+        SelectNeighborUp = "board::select_neighbor_up",
+        SelectNeighborRight = "board::select_neighbor_right",
+        /// Abre la nota de la tarjeta elegida o, sin ninguna elegida, la de
+        /// la tarjeta más cercana al centro de la vista.
+        OpenNote = "board::open_note",
+    }
+}
+
+named_actions! {
     /// Del panel lateral: el árbol, sus preguntas y su menú contextual.
     pub enum PanelAction {
         /// Cambia entre las vistas de carpetas y de tags.
@@ -43,6 +69,8 @@ named_actions! {
         Filter = "file_tree::filter",
         NewNote = "file_tree::new_note",
         NewFolder = "file_tree::new_folder",
+        /// Pregunta el nombre de una pizarra vacía, y la abre.
+        NewBoard = "file_tree::new_board",
         Rename = "file_tree::rename",
         Move = "file_tree::move",
         /// En la vista de tags, preguntan el campo de la página del tag
@@ -166,6 +194,9 @@ named_actions! {
 pub mod context {
     /// La vista de editor, en cualquier modo de vim.
     pub const EDITOR: &str = "Editor";
+    /// Lo que se agrega al del editor en un panel que muestra una pizarra:
+    /// sus teclas son de la vista, no del motor.
+    pub const BOARD: &str = "Board";
     /// El árbol del panel lateral con el foco.
     pub const FILE_TREE: &str = "FileTree";
     /// Escribiendo un nombre o el filtro en el panel lateral.
@@ -199,6 +230,8 @@ pub mod context {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum View {
     Editor,
+    /// Un panel que muestra una pizarra.
+    Board,
     /// El editor con una lista del autocompletado abierta.
     Completion,
     /// El editor con la lista del historial o del nombre de un comando de
@@ -223,6 +256,7 @@ impl View {
     pub const fn predicate(self) -> &'static str {
         match self {
             Self::Editor => context::EDITOR,
+            Self::Board => context::BOARD,
             Self::Completion => "Editor && Completion",
             Self::CommandCompletion => "Editor && CommandCompletion",
             Self::FileTree => context::FILE_TREE,

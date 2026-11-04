@@ -208,3 +208,35 @@ fn w_bang_con_ruta_pisa_un_archivo_que_existe() {
     document.save_to(&taken, &Files, true).unwrap();
     assert_eq!(fs::read_to_string(&taken).unwrap(), "nuevo\n");
 }
+
+#[test]
+fn una_pizarra_le_presta_al_motor_otro_buffer() {
+    let mut board = Document::new(Path::new("a/idea.CANVAS"), "{}");
+    assert!(board.is_board());
+    assert_eq!(board.editable().buffer.to_string(), "");
+    assert_eq!(board.buffer().to_string(), "{}");
+
+    let mut note = Document::new(Path::new("a/nota.md"), "uno");
+    assert!(!note.is_board());
+    assert_eq!(note.editable().buffer.to_string(), "uno");
+}
+
+#[test]
+fn renombrar_cambia_si_es_una_pizarra() {
+    let mut document = Document::new(Path::new("nota.md"), "{}");
+    document.set_path("nota.canvas".into());
+    assert!(document.is_board());
+    document.set_path("nota.md".into());
+    assert!(!document.is_board());
+}
+
+#[test]
+fn la_revision_cambia_con_el_archivo() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("a.canvas");
+    std::fs::write(&path, "uno\n").unwrap();
+    let first = Document::open(&path).unwrap().revision();
+    assert_eq!(Document::open(&path).unwrap().revision(), first);
+    std::fs::write(&path, "dos\n").unwrap();
+    assert_ne!(Document::open(&path).unwrap().revision(), first);
+}

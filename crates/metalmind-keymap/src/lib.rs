@@ -25,7 +25,7 @@ pub use keymap::{Binding, Keymap, Keys};
 pub use keystroke::{KeyName, Keystroke};
 pub use next_keys::NextKey;
 pub use view::{
-    ChangePreviewAction, ContextAction, EditorAction, ListAction, PanelAction, PickerAction, View,
-    context,
+    BoardAction, ChangePreviewAction, ContextAction, EditorAction, ListAction, PanelAction,
+    PickerAction, View, context,
 };
 pub use window_command::WindowCommand;

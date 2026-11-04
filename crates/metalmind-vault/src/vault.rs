@@ -466,6 +466,14 @@ impl Vault {
         ops::create_note(&self.root, path, text)
     }
 
+    /// Crea la pizarra `path` con `text`, como [`Vault::create_note`].
+    ///
+    /// # Errors
+    /// Si no termina en `.canvas`, ya existe o pasa por un enlace simbólico.
+    pub fn create_board(&self, path: &VaultPath, text: &str) -> Result<(), FileOpError> {
+        ops::create_board(&self.root, path, text)
+    }
+
     /// Crea una carpeta vacía, con las que le falten.
     ///
     /// # Errors

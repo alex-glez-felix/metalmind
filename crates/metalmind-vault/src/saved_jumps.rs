@@ -196,21 +196,22 @@ impl Parsed {
             .filter(|path| !exists(path))
             .filter_map(|path| Some((path.clone(), *fingerprints.get(path)?)))
             .collect();
-        let moved: HashMap<VaultPath, &VaultPath> = [EntryKind::Note, EntryKind::Attachment]
-            .into_iter()
-            .flat_map(|kind| {
-                let lost = lost
-                    .iter()
-                    .filter(|(path, _)| EntryKind::of_file(path) == kind)
-                    .cloned();
-                let candidates = index
-                    .files()
-                    .filter(|entry| entry.kind == kind)
-                    .map(|entry| entry.path)
-                    .filter(|path| !named.contains(*path));
-                pair_by_content(root, lost, candidates)
-            })
-            .collect();
+        let moved: HashMap<VaultPath, &VaultPath> =
+            [EntryKind::Note, EntryKind::Board, EntryKind::Attachment]
+                .into_iter()
+                .flat_map(|kind| {
+                    let lost = lost
+                        .iter()
+                        .filter(|(path, _)| EntryKind::of_file(path) == kind)
+                        .cloned();
+                    let candidates = index
+                        .files()
+                        .filter(|entry| entry.kind == kind)
+                        .map(|entry| entry.path)
+                        .filter(|path| !named.contains(*path));
+                    pair_by_content(root, lost, candidates)
+                })
+                .collect();
         let current = |jump: SavedJump| -> Option<SavedJump> {
             if exists(&jump.path) {
                 return Some(jump);

@@ -22,6 +22,7 @@ pub enum Icon {
     Folder,
     FolderOpen,
     Note,
+    Board,
     Attachment,
     Collapsed,
     Expanded,
@@ -36,10 +37,11 @@ pub enum Icon {
 
 impl Icon {
     #[cfg(test)]
-    const ALL: [Self; 12] = [
+    const ALL: [Self; 13] = [
         Self::Folder,
         Self::FolderOpen,
         Self::Note,
+        Self::Board,
         Self::Attachment,
         Self::Collapsed,
         Self::Expanded,
@@ -57,6 +59,7 @@ impl Icon {
             Self::Folder => "icons/tabler/folder.svg",
             Self::FolderOpen => "icons/tabler/folder-open.svg",
             Self::Note => "icons/tabler/file-text.svg",
+            Self::Board => "icons/tabler/chalkboard.svg",
             Self::Attachment => "icons/tabler/file.svg",
             Self::Collapsed => "icons/tabler/chevron-right.svg",
             Self::Expanded => "icons/tabler/chevron-down.svg",
@@ -101,6 +104,7 @@ pub fn entry(kind: EntryKind, expanded: bool, theme: &Theme) -> Div {
         EntryKind::Folder if expanded => icon(Icon::FolderOpen, theme.ui.panel_folder, theme),
         EntryKind::Folder => icon(Icon::Folder, theme.ui.panel_folder, theme),
         EntryKind::Note => icon(Icon::Note, theme.ui.panel_note, theme),
+        EntryKind::Board => icon(Icon::Board, theme.ui.panel_note, theme),
         EntryKind::Attachment => icon(Icon::Attachment, theme.ui.panel_muted, theme),
     }
 }

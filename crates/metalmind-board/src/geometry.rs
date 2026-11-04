@@ -21,7 +21,8 @@ impl Point {
         Self::new(self.x + direction.x * factor, self.y + direction.y * factor)
     }
 
-    pub(crate) fn distance(self, other: Self) -> f32 {
+    #[must_use]
+    pub fn distance(self, other: Self) -> f32 {
         (self.x - other.x).hypot(self.y - other.y)
     }
 

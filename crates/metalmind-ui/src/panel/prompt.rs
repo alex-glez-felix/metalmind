@@ -14,6 +14,7 @@ use crate::tag_change::{FieldError, TagField, TagRequest};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NewEntry {
     Note,
+    Board,
     Folder,
 }
 
@@ -295,6 +296,7 @@ impl Panel {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     CreateNote(VaultPath),
+    CreateBoard(VaultPath),
     CreateFolder(VaultPath),
     Rename {
         from: VaultPath,
@@ -345,6 +347,8 @@ fn new_entry(
         NewEntry::Folder => name.to_owned(),
         NewEntry::Note if note_name::is_note(name) => name.to_owned(),
         NewEntry::Note => note_name::with_extension(name),
+        NewEntry::Board if note_name::is_board(name) => name.to_owned(),
+        NewEntry::Board => note_name::board_with_extension(name),
     };
     let path = if parent.is_root() {
         VaultPath::new(&relative)?
@@ -353,6 +357,7 @@ fn new_entry(
     };
     Ok(Some(match kind {
         NewEntry::Note => Request::CreateNote(path),
+        NewEntry::Board => Request::CreateBoard(path),
         NewEntry::Folder => Request::CreateFolder(path),
     }))
 }

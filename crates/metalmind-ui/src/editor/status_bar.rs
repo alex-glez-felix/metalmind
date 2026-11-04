@@ -27,8 +27,9 @@ pub struct Status {
     pub save: Option<SaveState>,
     /// Lo que se busca tras `/` o `?`.
     pub command_line: Option<CommandLine>,
-    /// Línea y columna en caracteres, desde 1.
-    pub position: (usize, usize),
+    /// Dónde se está: `línea:columna` en caracteres, desde 1, o el zoom de
+    /// una pizarra.
+    pub position: SharedString,
     /// `focus: #rust`, si hay focus.
     pub focus: Option<SharedString>,
 }
@@ -58,7 +59,6 @@ impl Middle {
 }
 
 pub fn status_bar(status: Status, theme: &Theme) -> Div {
-    let (line, column) = status.position;
     let foreground = if status.mode.is_some() {
         theme.ui.status_foreground
     } else {
@@ -93,7 +93,7 @@ pub fn status_bar(status: Status, theme: &Theme) -> Div {
                 .flex_none()
                 .max_w(relative(theme.layout.status_focus_max_width))
         }))
-        .child(fixed().child(format!("{line}:{column}")))
+        .child(fixed().child(status.position))
 }
 
 /// Como `'showmode'` de vim al grabar una macro.
