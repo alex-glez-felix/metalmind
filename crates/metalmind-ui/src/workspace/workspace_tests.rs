@@ -503,3 +503,22 @@ fn una_pizarra_en_la_jumplist_se_guarda_y_se_vuelve_a_ella() {
         session.file()
     );
 }
+
+/// Renombrar una nota oculta a `.canvas` no la deja sin releer al volver a ella.
+#[test]
+fn una_pizarra_oculta_renombrada_se_relee_al_mostrarla() {
+    let dir = tempfile::tempdir().unwrap();
+    let (note, other) = (dir.path().join("a.md"), dir.path().join("otra.md"));
+    fs::write(&note, "uno\ndos\n").unwrap();
+    fs::write(&other, "otra\n").unwrap();
+    let mut session = Session::open(&note);
+    session.keys("G");
+    session.keys(&format!(":e {}⏎", other.display()));
+    let board = dir.path().join("a.canvas");
+    fs::rename(&note, &board).unwrap();
+    session.workspace.moved(&note, &board);
+    fs::write(&board, "{}\n").unwrap();
+    session.keys(&format!(":e {}⏎", board.display()));
+    assert_eq!(session.text(), "{}");
+    assert_eq!(session.cursor().get(), 0);
+}

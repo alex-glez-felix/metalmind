@@ -125,7 +125,12 @@ impl Workspace {
             let height = pane.state.viewport.height();
             pane.state.viewport.resize(height, 0);
         }
-        self.hidden.remove(&id);
+        // Oculto sigue: al volver a mostrarlo se relee del disco.
+        if let Some(last) = self.hidden.get_mut(&id) {
+            last.selections = start;
+            let height = last.viewport.height();
+            last.viewport.resize(height, 0);
+        }
     }
 
     /// Un documento sin cambios pasa a tener lo que dice el disco, como con
