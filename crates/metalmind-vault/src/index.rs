@@ -21,9 +21,10 @@ impl EntryKind {
     /// Por el nombre: ver [`note_name`].
     #[must_use]
     pub fn of_file(path: &VaultPath) -> Self {
-        if note_name::is_note(path.name()) {
+        let name = path.name();
+        if note_name::is_note(name) {
             Self::Note
-        } else if note_name::is_board(path.name()) {
+        } else if note_name::is_board(name) {
             Self::Board
         } else {
             Self::Attachment

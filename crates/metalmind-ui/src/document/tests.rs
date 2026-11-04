@@ -240,3 +240,15 @@ fn la_revision_cambia_con_el_archivo() {
     std::fs::write(&path, "dos\n").unwrap();
     assert_ne!(Document::open(&path).unwrap().revision(), first);
 }
+
+/// `:w idea.canvas` en un buffer sin archivo: desde ahí el motor ya no edita el JSON.
+#[test]
+fn guardar_un_buffer_sin_nombre_como_canvas_lo_vuelve_pizarra() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("idea.canvas");
+    let mut document = Document::unnamed();
+    assert!(!document.is_board());
+    document.save_to(&path, &crate::disk::Files, false).unwrap();
+    assert!(document.is_board());
+    assert_eq!(document.editable().buffer.to_string(), "");
+}

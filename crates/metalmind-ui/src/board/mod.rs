@@ -105,6 +105,13 @@ impl BoardView {
         Some(bounds.origin + gpui_kit::point(gpui_kit::px(at.x), gpui_kit::px(at.y)))
     }
 
+    /// Un punto sobre la barra de zoom, en su esquina.
+    #[cfg(test)]
+    pub(crate) fn toolbar_position(&self, theme: &Theme) -> Option<ScreenPoint<Pixels>> {
+        let inset = theme.layout.board_toolbar_margin + theme.layout.board_toolbar_margin;
+        Some(self.bounds?.bottom_right() - gpui_kit::point(inset, inset))
+    }
+
     #[cfg(test)]
     pub(crate) fn selected(&self) -> Option<&str> {
         self.selected.as_deref()
@@ -230,6 +237,7 @@ impl BoardView {
             .border_color(theme.ui.panel_border)
             .rounded(theme.radius.md)
             .map(|bar| theme.ui_small_text(bar))
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(button(
                 "board-zoom-out",
                 "alejar",

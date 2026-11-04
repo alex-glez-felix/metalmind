@@ -88,8 +88,9 @@ impl Editor {
         )
         .absolute()
         .size_full();
-        body.on_mouse_down(
-            MouseButton::Left,
+        // En la captura: la barra de zoom no deja que su clic llegue a la pizarra,
+        // y el panel tiene que tomar el foco antes de que el botón despache.
+        body.capture_any_mouse_down(
             cx.listener(|editor, _, window, cx| editor.take_focus(window, cx)),
         )
         .child(input)

@@ -437,3 +437,17 @@ fn arrastrar_mueve_la_vista(cx: &mut TestAppContext) {
     assert!((after.x - (before.x - 30.0)).abs() < 1e-3);
     assert!((after.y - (before.y - 10.0)).abs() < 1e-3);
 }
+
+#[gpui_kit::test]
+fn un_clic_en_la_barra_no_le_llega_a_la_pizarra(cx: &mut TestAppContext) {
+    let mut window = open(cx, "idea.canvas");
+    let board = window.board();
+    let caja = node_at(&mut window, "caja");
+    press(&mut window, caja, 1);
+    let at = board.read_with(window.cx, |board, cx| {
+        board.toolbar_position(Theme::get(cx)).unwrap()
+    });
+    press(&mut window, at, 1);
+    let selected = board.read_with(window.cx, |board, _| board.selected().map(str::to_owned));
+    assert_eq!(selected.as_deref(), Some("caja"));
+}
