@@ -6,7 +6,7 @@ Reglas para agentes que trabajen en este repo.
 - Antes de proponer arquitectura, leer `docs/GETTING-STARTED.md` y el documento de `docs/research/` relevante. Las decisiones viven ahí; si cambias una, actualiza el documento en el mismo commit.
 - Los documentos de `docs/research/` que digan "pendiente de revisión" no son decisiones: no implementes nada de ellos.
 - Antes de agregar un crate, verificar que existe y su última versión: `curl -s https://crates.io/api/v1/crates/<nombre> | jq .crate.max_version`. No inventar crates.
-- El núcleo (`metalmind-buffer`, `metalmind-syntax`, `metalmind-vim`, `metalmind-keymap`, `metalmind-vault`, `metalmind-search`, `metalmind-config`, `metalmind-template`; ver `docs/research/03-core-architecture.md` §6) **no depende de la GUI**. Solo `metalmind-ui` y el binario importan GPUI.
+- El núcleo (`metalmind-buffer`, `metalmind-syntax`, `metalmind-vim`, `metalmind-keymap`, `metalmind-vault`, `metalmind-search`, `metalmind-config`, `metalmind-template`, `metalmind-board`; ver `docs/research/03-core-architecture.md` §6) **no depende de la GUI**. Solo `metalmind-ui` y el binario importan GPUI.
 - Offsets de texto siempre en bytes; conversión a chars/columnas solo en el borde de la UI.
 - Comportamiento vim: cada motion/operator nuevo lleva test de tabla. En caso de duda, el oráculo es `nvim --headless`.
 - Nunca reescribir el YAML del frontmatter del usuario salvo el campo editado. Guardado siempre atómico.

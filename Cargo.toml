@@ -11,6 +11,7 @@ repository = "https://github.com/alex-glez-felix/metalmind"
 publish = false
 
 [workspace.dependencies]
+metalmind-board = { path = "crates/metalmind-board" }
 metalmind-buffer = { path = "crates/metalmind-buffer" }
 metalmind-config = { path = "crates/metalmind-config" }
 metalmind-keymap = { path = "crates/metalmind-keymap" }

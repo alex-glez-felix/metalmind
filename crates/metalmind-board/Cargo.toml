@@ -1,0 +1,24 @@
+[package]
+name = "metalmind-board"
+description = "La pizarra sin GUI: el formato .canvas con escritura canónica, la geometría de las flechas y el acierto de clic."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+# Las claves desconocidas se reescriben en el orden en que venían (`preserve_order`)
+# y sus números, sin perder un bit (`float_roundtrip`).
+serde_json = { workspace = true, features = ["float_roundtrip", "preserve_order"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+similar.workspace = true
+
+[lints]
+workspace = true

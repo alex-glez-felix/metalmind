@@ -1,0 +1,12 @@
+{
+	"nodes":[
+		{"id":"a1","type":"text","text":"Hola\ncon *markdown* y [[link]]","x":-340,"y":-200,"width":250,"height":60},
+		{"id":"b2","type":"file","file":"ideas/pizarra.md","subpath":"#Riesgos","x":0,"y":0,"width":400,"height":400,"color":"4"},
+		{"id":"c3","type":"group","x":-400,"y":-260,"width":900,"height":700,"label":"Todo","background":"fondo.png","backgroundStyle":"cover"},
+		{"id":"d4","type":"link","url":"https://jsoncanvas.org/spec/1.0/","x":600,"y":0,"width":300,"height":200,"color":"#ff8800"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"a1","fromSide":"right","toNode":"b2","toSide":"left"},
+		{"id":"e2","fromNode":"b2","fromSide":"right","fromEnd":"arrow","toNode":"d4","toSide":"left","toEnd":"none","color":"2","label":"lee"}
+	]
+}
