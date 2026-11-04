@@ -39,15 +39,15 @@ pub fn plan(scene: &Scene, camera: Camera, area: AreaSize) -> Plan<'_> {
     for group in visible(&scene.groups, shown) {
         plan.push_box(group, far);
     }
-    for edge in visible(&scene.edges, shown) {
-        plan.push_edge(edge);
-    }
+    let kept_edges: Vec<&ElementScene> = visible(&scene.edges, shown)
+        .filter(|edge| plan.push_edge(edge))
+        .collect();
     for node in visible(&scene.nodes, shown) {
         plan.push_box(node, far);
     }
     let labelled = visible(&scene.groups, shown)
         .chain(visible(&scene.nodes, shown))
-        .chain(visible(&scene.edges, shown));
+        .chain(kept_edges);
     plan.labels = labelled.flat_map(|element| &element.labels).collect();
     plan
 }
@@ -73,11 +73,14 @@ impl<'a> Plan<'a> {
         }
     }
 
-    fn push_edge(&mut self, element: &'a ElementScene) {
-        if self.fits(element) {
+    /// Si la flecha cabe: la que no cabe tampoco lleva etiqueta.
+    fn push_edge(&mut self, element: &'a ElementScene) -> bool {
+        let fits = self.fits(element);
+        if fits {
             self.triangles += element.triangles();
             self.elements.push((element, Look::Mesh));
         }
+        fits
     }
 }
 

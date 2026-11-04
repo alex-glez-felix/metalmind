@@ -2,7 +2,7 @@ use metalmind_board::Board;
 use pretty_assertions::assert_eq;
 
 use super::*;
-use crate::board::scene::SceneStyle;
+use crate::board::scene::{LabelKind, SceneStyle};
 
 const STYLE: SceneStyle = SceneStyle {
     line_width: 2.0,
@@ -91,6 +91,38 @@ fn nunca_pasa_del_tope_aunque_no_quepa_todo() {
         .count();
     assert_eq!(boxes, scene.nodes.len() + scene.groups.len());
     assert!(looks(&plan, Look::Quad) > 0);
+}
+
+#[test]
+fn una_flecha_que_no_cupo_no_deja_su_etiqueta() {
+    let mut board = Board::parse(&metalmind_perf::board(40_000)).unwrap();
+    for edge in &mut board.edges {
+        edge.label = Some("flecha".to_owned());
+    }
+    let scene = Scene::build(&board, STYLE).unwrap();
+    let content = scene.content.unwrap();
+    let camera = Camera {
+        x: content.x,
+        y: content.y,
+        zoom: DETAIL_ZOOM,
+    };
+    let huge = AreaSize {
+        width: content.w * DETAIL_ZOOM,
+        height: content.h * DETAIL_ZOOM,
+    };
+    let plan = plan(&scene, camera, huge);
+    let kept = plan
+        .elements
+        .iter()
+        .filter(|(element, _)| element.fill_role().is_none() && element.line_role().is_some())
+        .count();
+    let labels = plan
+        .labels
+        .iter()
+        .filter(|label| label.kind == LabelKind::Edge)
+        .count();
+    assert!(kept < scene.edges.len());
+    assert_eq!(labels, kept);
 }
 
 #[test]

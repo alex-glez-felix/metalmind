@@ -57,7 +57,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Pintar las 22 fórmulas del spike, escala 1 / 2 (en el fondo) | segundo plano | 2.6 / 5.5 ms (0.12 / 0.25 ms cada una) | ✅ | `metalmind-ui` `pintar_las_22` |
 | Nota con 200 fórmulas: primer frame / hasta pintar las visibles (cachés frías) | ≤ 300 ms | p50 111 / 134 ms (lavapipe) | ✅ | `metalmind` `ui` |
 | Nota con 200 fórmulas: `ctrl-d` con caché fría / caliente, tecla en Insert junto a fórmulas / dentro de un bloque, de la tecla al frame | < 16 ms | p50 0.94 / 0.73 / 0.82 / 0.73 ms; p95 ≤ 1.6 ms (lavapipe) | ✅ | `metalmind` `ui` |
-| Pizarra de 2 000 elementos: leerla / construir la escena / decidir qué se pinta | ≤ 16 ms al abrir; ≤ 1 ms por frame | 0.7 / 11.7 ms / 2.7–11 µs | ✅ | `metalmind-ui` `board` |
+| Pizarra de 2 000 elementos: leerla / construir la escena / decidir qué se pinta | ≤ 16 ms al abrir; ≤ 1 ms por frame | 0.7 / 11.7 ms / 2.7–11 µs | ⚠️ | `metalmind-ui` `board` |
 | Pizarra de 2 000 elementos, pan al 100 % y de lejos: intervalo p99 (GPU, 60 Hz) y CPU por frame | a tiempo; ≤ 4 ms | 18.6 / 17.9 ms; p50 0.75 / 0.49 ms | ✅ | a mano, [09](research/09-pizarra.md) "Estado" |
 | Abrir el vault, 5 k notas (walk, watcher, índices de links y de tags) | ≤ 200 ms | 28.5 ms | ✅ | `metalmind-vault` `abrir_5k_notas` |
 | Abrir el vault, 50 k notas | ≤ 2 s | 329 ms | ✅ | `metalmind-vault` `abrir_50k_notas` |
