@@ -3,6 +3,7 @@
 
 use crate::board::Board;
 use crate::edge::Side;
+use crate::edit::Corner;
 use crate::node::{Node, NodeKind, Shape};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -80,6 +81,56 @@ impl Rect {
         }
     }
 
+    #[must_use]
+    pub fn inflated(&self, by: f32) -> Self {
+        Self {
+            x: self.x - by,
+            y: self.y - by,
+            w: self.w + by + by,
+            h: self.h + by + by,
+        }
+    }
+
+    #[must_use]
+    pub fn deflated(&self, by: f32) -> Self {
+        self.inflated(-by)
+    }
+
+    /// Si `other` cabe entero aquí.
+    #[must_use]
+    pub fn encloses(&self, other: &Self) -> bool {
+        other.x >= self.x
+            && other.y >= self.y
+            && other.x + other.w <= self.x + self.w
+            && other.y + other.h <= self.y + self.h
+    }
+
+    /// El rectángulo entre dos puntos, en cualquier orden.
+    #[must_use]
+    pub fn between(a: Point, b: Point) -> Self {
+        Self {
+            x: a.x.min(b.x),
+            y: a.y.min(b.y),
+            w: (a.x - b.x).abs(),
+            h: (a.y - b.y).abs(),
+        }
+    }
+
+    /// La esquina a menos de `reach` de `p`.
+    #[must_use]
+    pub fn corner_at(&self, p: Point, reach: f32) -> Option<Corner> {
+        let (right, bottom) = (self.x + self.w, self.y + self.h);
+        [
+            (Corner::TopLeft, self.x, self.y),
+            (Corner::TopRight, right, self.y),
+            (Corner::BottomLeft, self.x, bottom),
+            (Corner::BottomRight, right, bottom),
+        ]
+        .into_iter()
+        .find(|&(_, x, y)| (p.x - x).abs() <= reach && (p.y - y).abs() <= reach)
+        .map(|(corner, _, _)| corner)
+    }
+
     pub(crate) fn side_point(&self, side: Side) -> Point {
         let c = self.center();
         match side {
@@ -149,7 +200,38 @@ impl Node {
     }
 }
 
+/// Lo que hay bajo un punto, de arriba hacia abajo.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Pick<'a> {
+    Inside(&'a Node),
+    /// A menos de `band` de su silueta: de ahí sale una flecha.
+    Border(&'a Node),
+}
+
 impl Board {
+    /// Como [`Board::hit`], distinguiendo la franja de ancho `2 × band`
+    /// alrededor de la silueta. La franja no se come una caja chica: a lo sumo
+    /// un cuarto de su lado menor hacia adentro.
+    #[must_use]
+    pub fn pick(&self, point: Point, band: f32) -> Option<Pick<'_>> {
+        self.nodes
+            .iter()
+            .rev()
+            .filter(|node| !matches!(node.kind, NodeKind::Group { .. }))
+            .find_map(|node| {
+                let rect = node.rect();
+                let inner_band = band.min(rect.w.min(rect.h) / 4.0);
+                let shape = node.outline();
+                if rect.deflated(inner_band).contains(shape, point) {
+                    Some(Pick::Inside(node))
+                } else if rect.inflated(band).contains(shape, point) {
+                    Some(Pick::Border(node))
+                } else {
+                    None
+                }
+            })
+    }
+
     /// El nodo de más arriba bajo `point`, por su silueta: la esquina vacía de
     /// una elipse no la toca. Los grupos son fondo y no cuentan.
     #[must_use]

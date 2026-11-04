@@ -28,6 +28,25 @@ pub struct EdgeGeometry {
 }
 
 impl EdgeGeometry {
+    /// Lo que separa a `point` del recorrido.
+    fn distance(&self, point: Point) -> f32 {
+        const CURVE_SEGMENTS: u8 = 32;
+        let sampled: Vec<Point>;
+        let points = match &self.path {
+            EdgePath::Polyline(points) => points.as_slice(),
+            EdgePath::Cubic(curve) => {
+                sampled = (0..=CURVE_SEGMENTS)
+                    .map(|step| cubic_at(*curve, f32::from(step) / f32::from(CURVE_SEGMENTS)))
+                    .collect();
+                &sampled
+            }
+        };
+        points
+            .windows(2)
+            .map(|pair| segment_distance(point, pair[0], pair[1]))
+            .fold(f32::INFINITY, f32::min)
+    }
+
     #[must_use]
     pub fn start(&self) -> Point {
         match &self.path {
@@ -45,6 +64,16 @@ impl EdgeGeometry {
     }
 }
 
+fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let squared = dx * dx + dy * dy;
+    if squared <= f32::EPSILON {
+        return p.distance(a);
+    }
+    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / squared).clamp(0.0, 1.0);
+    p.distance(Point::new(a.x + t * dx, a.y + t * dy))
+}
+
 impl Board {
     /// Cada flecha con su recorrido, sin buscar los dos nodos por cada una.
     pub fn edge_geometries(&self) -> impl Iterator<Item = (&Edge, EdgeGeometry)> {
@@ -54,6 +83,15 @@ impl Board {
             let to = nodes.get(edge.to.node.as_str())?;
             Some((edge, edge.geometry(from, to)))
         })
+    }
+
+    /// La flecha de más arriba a menos de `reach` de `point`.
+    #[must_use]
+    pub fn hit_edge(&self, point: Point, reach: f32) -> Option<&Edge> {
+        self.edge_geometries()
+            .filter(|(_, geometry)| geometry.distance(point) <= reach)
+            .last()
+            .map(|(edge, _)| edge)
     }
 }
 

@@ -9,7 +9,8 @@ use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::edge::{Edge, RawEdge};
-use crate::node::{Node, RawNode};
+use crate::geometry::Rect;
+use crate::node::{Node, NodeKind, RawNode};
 use crate::stroke_points::PointsError;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -118,6 +119,22 @@ impl Board {
     #[must_use]
     pub fn node(&self, id: &str) -> Option<&Node> {
         self.nodes.iter().find(|node| node.id == id)
+    }
+
+    #[must_use]
+    pub fn edge(&self, id: &str) -> Option<&Edge> {
+        self.edges.iter().find(|edge| edge.id == id)
+    }
+
+    /// Los nodos que caben enteros en `area`. Los grupos son fondo y no cuentan.
+    #[must_use]
+    pub fn nodes_within(&self, area: &Rect) -> Vec<String> {
+        self.nodes
+            .iter()
+            .filter(|node| !matches!(node.kind, NodeKind::Group { .. }))
+            .filter(|node| area.encloses(&node.rect()))
+            .map(|node| node.id.clone())
+            .collect()
     }
 }
 
