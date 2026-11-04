@@ -79,7 +79,7 @@ pub(crate) fn apply_changes(
 fn indexed_under(index: &impl PerNoteIndex, path: &VaultPath, kind: EntryKind) -> Vec<VaultPath> {
     match kind {
         EntryKind::Note => vec![path.clone()],
-        EntryKind::Attachment => Vec::new(),
+        EntryKind::Board | EntryKind::Attachment => Vec::new(),
         EntryKind::Folder => index.notes_within(path),
     }
 }

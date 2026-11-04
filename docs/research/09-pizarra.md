@@ -15,6 +15,19 @@
 
 ---
 
+## Estado (fase 1, 2026-11-04)
+
+Hecha la fase 1: se ven los `.canvas`, también en split, y se crea una pizarra vacía. El índice y editar faltan. Lo que se decidió al implementar:
+
+- **Una pizarra es un `Document`.** El buffer guarda el archivo tal cual, así que `:w`, `:e!`, releer al cambiar en disco, el autoguardado y los saltos son los de una nota. Lo que el motor recibe prestado es otro buffer, vacío, con su propio estado de marks y saltos (`Document::editable`): lo que corra en `:` (`:%d`, `:s`) no alcanza el JSON. La fase 3 edita el buffer del archivo con líneas enteras, que es justo lo que pide el §4.3.
+- **La vista vive en el panel.** `Editor` conserva el foco, la barra de estado, la línea de `:` y su input handler; su cuerpo es `BoardView` (`metalmind-ui/src/board/`) cuando el documento es una pizarra. Las teclas de `Board` son atajos de la vista, incluidos `space` y `ctrl-w`; al motor solo le llega `:` y lo que se escribe en esa línea.
+- **Tope de triángulos** además del nivel de detalle: `plan.rs` nunca manda más de 350 000 por frame, y lo que no cabe se ve como quad (o, si es una flecha, no se pinta). Así ni una pizarra enorme a un zoom justo sobre el nivel de detalle pierde el frame entero.
+- **`shift-1` y `shift-0`**: GPUI en Linux entrega el carácter, no el número. Están `!` y `)`, y `=` para `shift-0` en un teclado latino, además de los nombres de arriba. Por eso `=` no es un alias de `+`.
+- **Elegir un nodo** ya existe, porque hace falta para saber qué tarjeta abrir: clic, `H J K L` (`Board::neighbor`); sin elegido, `enter` y `gd` abren la tarjeta visible más cercana al centro.
+- **Lo que falta de lo que ve**: el texto de un nodo no compone markdown (se le quitan `# ` y `**`), `subpath` no salta a la sección al abrir la nota, y la cámara se pierde al cambiar de archivo en el panel. El panel de teclas no sale en una pizarra: sus prefijos no pasan por el motor. Sin rejilla de puntos: nada la pedía para ver.
+
+Medido con 2 000 elementos, en release, a 1920×1080, en una máquina de escritorio con GPU NVIDIA dentro de `gamescope --backend headless`, 300 pulsaciones a 60 por segundo: pan al 100 %, intervalo p50 16.9 / p99 18.6 ms y CPU p50 0.75 ms; pan con toda la pizarra a la vista (6 %), 16.9 / 17.9 ms y CPU 0.49 ms. Leer el archivo 0.7 ms, construir la escena 11.7 ms (`cargo bench -p metalmind-ui --bench board`). Abrir un vault de 5 000 notas: 28.2 ms sin `EntryKind::Board`, 28.4 ms con él.
+
 ## 1. Qué se pide y qué no
 
 El autor quiere pensar dibujando dentro de Metalmind, como en Excalidraw o draw.io: cajas, flechas, texto y algo de trazo a mano mientras ordena ideas, sin salir del vault y con las notas como piezas del dibujo.
@@ -221,11 +234,11 @@ La pizarra es un contexto del keymap (`Board`) con sus acciones `board::*`, como
 | `n` | `board::insert_note_card`: abre el finder (`space f`) y la nota elegida entra como tarjeta | arrastrar una nota del árbol a la pizarra |
 | `i`, `enter` | `board::edit_text` en una caja; en una tarjeta, `enter` y `gd` abren la nota (`board::open_note`) | doble clic |
 | `h j k l` | mover la selección 10 unidades (`board::move_selection`); sin selección, la vista | arrastrar |
-| `H J K L` | seleccionar el vecino hacia ese lado (`board::select_neighbor`) | clic |
+| `H J K L` | seleccionar el vecino hacia ese lado (`board::select_neighbor_left`, `_down`, `_up`, `_right`) | clic |
 | `x`, `delete` | `board::delete` | menú contextual |
 | `y`, `p` en Visual, `P` | copiar y pegar elementos: el portapapeles lleva sus líneas de `.canvas` | menú contextual |
 | `u`, `ctrl-r` | `board::undo`, `board::redo` | menú Editar |
-| `+`, `-`, `shift-1`, `shift-0` | zoom, ver todo, 100 % (los de Excalidraw) | `ctrl`+rueda |
+| `+`, `-`, `shift-1`, `shift-0` | `board::zoom_in`, `zoom_out`, `zoom_to_fit`, `zoom_to_actual_size` (los de Excalidraw) | `ctrl`+rueda y la barra de abajo a la derecha |
 
 `p` como lápiz choca con "pegar" de vim: en la pizarra `p` es el lápiz y pegar es `P`, porque se dibuja más de lo que se pega. Es la única tecla discutible.
 
@@ -247,7 +260,7 @@ Rejilla de 10 al mover y al crear (el spike la tiene) y guías de alineación co
 ## 5. Integración con el vault
 
 - **Un crate de núcleo, `metalmind-board`** (sin GPUI): el formato, la geometría de las flechas, el acierto de clic y las operaciones de edición con su historial. Lo que hoy es `formato.rs`, `trazo.rs` y `geometria.rs`. El teselado y el pintado van en `metalmind-ui`: deciden cómo se ve. Agregar el crate actualiza la lista de [03](03-core-architecture.md) §6 y la de CLAUDE.md.
-- **El vault**: un `EntryKind::Board` para los `.canvas`, junto a `Note` y `Attachment`. El finder, el árbol y `:e idea.canvas` lo abren en la vista de pizarra.
+- **El vault**: un `EntryKind::Board` para los `.canvas`, junto a `Note` y `Attachment`. El finder, el árbol y `:e idea.canvas` lo abren en la vista de pizarra. `board::new` (`:board [nombre]`, la paleta) y `file_tree::new_board` (`b` en el árbol y su menú) crean una vacía.
 - **Links y backlinks**: el índice de links (03 §4, "Estado (M3…)") lee de una pizarra los nodos `file` (ruta exacta, sin resolver nombres) y los `[[links]]` del texto de sus nodos, con el mismo scanner de `metalmind-syntax`. Los backlinks de una nota muestran la pizarra con el texto de los nodos unidos a la tarjeta como contexto.
 - **Tags**: un `#tag` en el texto de un nodo es un tag de la pizarra, como en una nota, y la pizarra aparece en el panel de tags.
 - **Renombrar una nota** reescribe el `file` de cada tarjeta que la apunta: una línea por tarjeta, con la vista previa de renombrar.

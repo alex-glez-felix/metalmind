@@ -9,6 +9,8 @@
 //! `cargo nextest run -p metalmind --test gui_smoke --run-ignored only`
 //! (ver `docs/testing.md`).
 
+#[path = "gui_smoke/board.rs"]
+mod board;
 #[path = "gui_smoke/command_line.rs"]
 mod command_line;
 #[path = "gui_smoke/focus.rs"]

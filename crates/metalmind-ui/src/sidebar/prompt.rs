@@ -32,6 +32,7 @@ impl Sidebar {
             } => {
                 let what = match kind {
                     NewEntry::Note => "Nueva nota",
+                    NewEntry::Board => "Nueva pizarra",
                     NewEntry::Folder => "Nueva carpeta",
                 };
                 (format!("{what} en {}", folder_name(parent)), input)

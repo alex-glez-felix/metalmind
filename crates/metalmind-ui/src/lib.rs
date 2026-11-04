@@ -3,6 +3,7 @@
 //! no importa GPUI, y aquí solo se pinta y se traduce la entrada.
 
 mod actions;
+pub mod board;
 mod change_preview;
 mod clipboard;
 mod completion;

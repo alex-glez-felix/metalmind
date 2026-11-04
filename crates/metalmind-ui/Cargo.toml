@@ -14,6 +14,9 @@ gpui-kit.workspace = true
 image.workspace = true
 jiff.workspace = true
 log.workspace = true
+# El de GPUI: teselar no suma un crate (09 §3.1).
+lyon.workspace = true
+metalmind-board.workspace = true
 metalmind-buffer.workspace = true
 metalmind-config.workspace = true
 metalmind-keymap.workspace = true
@@ -61,6 +64,10 @@ harness = false
 
 [[bench]]
 name = "formulas"
+harness = false
+
+[[bench]]
+name = "board"
 harness = false
 
 [[bench]]

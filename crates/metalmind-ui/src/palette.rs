@@ -64,6 +64,7 @@ fn owns_focus(owner: Owner, active: impl Fn(View) -> bool) -> bool {
     match owner {
         Owner::Window => true,
         Owner::Editor => active(View::Editor),
+        Owner::Board => active(View::Board),
         Owner::Panel => [
             View::FileTree,
             View::FileTreeInput,

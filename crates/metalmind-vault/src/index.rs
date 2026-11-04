@@ -11,6 +11,8 @@ pub enum EntryKind {
     Folder,
     /// Un `.md`.
     Note,
+    /// Un `.canvas`: una pizarra ([09](../../docs/research/09-pizarra.md)).
+    Board,
     /// Cualquier otro archivo: imágenes, PDFs, …
     Attachment,
 }
@@ -19,8 +21,11 @@ impl EntryKind {
     /// Por el nombre: ver [`note_name`].
     #[must_use]
     pub fn of_file(path: &VaultPath) -> Self {
-        if note_name::is_note(path.name()) {
+        let name = path.name();
+        if note_name::is_note(name) {
             Self::Note
+        } else if note_name::is_board(name) {
+            Self::Board
         } else {
             Self::Attachment
         }
@@ -269,6 +274,7 @@ mod tests {
     fn el_tipo_sale_de_la_extension() {
         assert_eq!(EntryKind::of_file(&path("a/nota.md")), EntryKind::Note);
         assert_eq!(EntryKind::of_file(&path("NOTA.MD")), EntryKind::Note);
+        assert_eq!(EntryKind::of_file(&path("a/idea.canvas")), EntryKind::Board);
         assert_eq!(EntryKind::of_file(&path("img.png")), EntryKind::Attachment);
         assert_eq!(EntryKind::of_file(&path("md")), EntryKind::Attachment);
         assert_eq!(

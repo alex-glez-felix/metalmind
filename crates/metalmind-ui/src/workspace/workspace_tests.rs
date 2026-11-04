@@ -444,3 +444,81 @@ fn esc_en_normal_cierra_los_toasts_y_en_insert_no() {
     session.keys("j");
     assert_eq!(session.mode(), Mode::Normal, "y el 3 se soltó");
 }
+
+/// `:w idea.canvas` con el cursor lejos del inicio: el motor pasa a editar un
+/// buffer vacío, y un salto desde ahí no puede caer fuera de él.
+#[test]
+fn guardar_como_pizarra_lleva_el_cursor_al_inicio() {
+    let dir = tempfile::tempdir().unwrap();
+    let other = dir.path().join("otra.md");
+    std::fs::write(&other, "otra\n").unwrap();
+    let mut session = Session::unnamed();
+    session.paste("uno\ndos\ntres\ncuatro\n");
+    session.keys("G");
+    session.keys(&format!(":w {}⏎", dir.path().join("idea.canvas").display()));
+    assert!(session.workspace.focused_document().unwrap().is_board());
+    assert_eq!(session.cursor().get(), 0);
+    session.keys(&format!(":e {}⏎", other.display()));
+    assert!(session.file().ends_with("otra.md"), "{}", session.file());
+    assert!(
+        session
+            .workspace
+            .messages()
+            .toasts()
+            .iter()
+            .all(|(_, m)| !matches!(m, Message::Error(_)))
+    );
+}
+
+#[test]
+fn renombrar_a_canvas_lleva_el_cursor_al_inicio() {
+    let dir = tempfile::tempdir().unwrap();
+    let note = dir.path().join("a.md");
+    std::fs::write(&note, "uno\ndos\n").unwrap();
+    let mut session = Session::open(&note);
+    session.keys("G");
+    session.workspace.moved(&note, &dir.path().join("a.canvas"));
+    assert!(session.workspace.focused_document().unwrap().is_board());
+    assert_eq!(session.cursor().get(), 0);
+}
+
+/// Los saltos de una pizarra son del buffer del motor, no del archivo: se
+/// guardan al cerrar, sobreviven a releerla y se puede volver a ella.
+#[test]
+fn una_pizarra_en_la_jumplist_se_guarda_y_se_vuelve_a_ella() {
+    let dir = tempfile::tempdir().unwrap();
+    let board = dir.path().join("idea.canvas");
+    let other = dir.path().join("otra.md");
+    fs::write(&board, "{}\n").unwrap();
+    fs::write(&other, "otra\n").unwrap();
+    let mut session = Session::open(&board);
+    session.keys(":e!⏎");
+    session.keys(&format!(":e {}⏎", other.display()));
+    assert!(session.file().ends_with("otra.md"), "{}", session.file());
+    assert!(session.workspace.saved_jumps(dir.path()).is_ok());
+    session.keys("⌃o");
+    assert!(
+        session.file().ends_with("idea.canvas"),
+        "{}",
+        session.file()
+    );
+}
+
+/// Renombrar una nota oculta a `.canvas` no la deja sin releer al volver a ella.
+#[test]
+fn una_pizarra_oculta_renombrada_se_relee_al_mostrarla() {
+    let dir = tempfile::tempdir().unwrap();
+    let (note, other) = (dir.path().join("a.md"), dir.path().join("otra.md"));
+    fs::write(&note, "uno\ndos\n").unwrap();
+    fs::write(&other, "otra\n").unwrap();
+    let mut session = Session::open(&note);
+    session.keys("G");
+    session.keys(&format!(":e {}⏎", other.display()));
+    let board = dir.path().join("a.canvas");
+    fs::rename(&note, &board).unwrap();
+    session.workspace.moved(&note, &board);
+    fs::write(&board, "{}\n").unwrap();
+    session.keys(&format!(":e {}⏎", board.display()));
+    assert_eq!(session.text(), "{}");
+    assert_eq!(session.cursor().get(), 0);
+}

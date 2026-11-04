@@ -8,7 +8,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use metalmind_buffer::{Buffer, BufferError, HistorySeq};
-use metalmind_syntax::Rows;
+use metalmind_syntax::{Rows, note_name};
 use metalmind_vault::{ContentHash, FileError};
 use metalmind_vim::DocState;
 
@@ -72,12 +72,32 @@ pub(crate) struct Editable<'a> {
     pub state: &'a mut DocState,
 }
 
+/// Qué versión del texto tiene un documento: basta con compararla para saber
+/// si cambió, editándolo o releyéndolo del disco.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Revision {
+    version: u64,
+    on_disk: Option<ContentHash>,
+}
+
+/// Un buffer vacío con su estado: las marks y los saltos del motor son de un
+/// buffer, y no se pueden mezclar con los del archivo.
+#[derive(Debug)]
+struct EngineScratch {
+    buffer: Buffer,
+    state: DocState,
+}
+
 #[derive(Debug)]
 pub struct Document {
     /// La ruta como se escribió, para mostrarla y guardar ahí; `None` en
     /// un buffer sin archivo, como el de abrir un vault sin nota.
     path: Option<PathBuf>,
     buffer: Buffer,
+    /// En una pizarra, lo que el motor edita en lugar del archivo: nada de lo
+    /// que escriba `:` puede romper su JSON (09 §4.2). El archivo solo lo
+    /// cambia lo que entiende de pizarras.
+    board_scratch: Option<EngineScratch>,
     /// Lo que el motor guarda del documento (sus marks, el estilo de cada
     /// línea y lo que mide), que le presta en cada tecla.
     state: DocState,
@@ -130,6 +150,7 @@ impl Document {
     fn with_path(path: Option<PathBuf>, text: &str) -> Self {
         let buffer = Buffer::from(text);
         Self {
+            board_scratch: path.as_deref().and_then(scratch_for),
             path,
             saved: Some(buffer.history_seq()),
             written: buffer.version(),
@@ -179,7 +200,22 @@ impl Document {
 
     /// Su archivo pasó a llamarse `path`: se renombró desde nota.
     pub(crate) fn set_path(&mut self, path: PathBuf) {
+        self.board_scratch = scratch_for(&path);
         self.path = Some(path);
+    }
+
+    /// Si se muestra como pizarra y no como texto.
+    #[must_use]
+    pub fn is_board(&self) -> bool {
+        self.board_scratch.is_some()
+    }
+
+    #[must_use]
+    pub fn revision(&self) -> Revision {
+        Revision {
+            version: self.buffer.version(),
+            on_disk: self.on_disk,
+        }
     }
 
     #[must_use]
@@ -270,6 +306,10 @@ impl Document {
     /// # Errors
     /// Solo si una mark no cae en el buffer de `old`, lo que sería un bug.
     pub(crate) fn keep_marks_of(&mut self, old: &Self) -> Result<(), BufferError> {
+        if let (Some(new), Some(old)) = (&mut self.board_scratch, &old.board_scratch) {
+            new.state
+                .keep_marks_of(&old.state, &old.buffer, &mut new.buffer)?;
+        }
         self.state
             .keep_marks_of(&old.state, &old.buffer, &mut self.buffer)
     }
@@ -282,9 +322,24 @@ impl Document {
     /// El buffer para editarlo y lo que el motor guarda del documento, para
     /// prestárselo.
     pub(crate) fn editable(&mut self) -> Editable<'_> {
-        Editable {
-            buffer: &mut self.buffer,
-            state: &mut self.state,
+        match &mut self.board_scratch {
+            Some(scratch) => Editable {
+                buffer: &mut scratch.buffer,
+                state: &mut scratch.state,
+            },
+            None => Editable {
+                buffer: &mut self.buffer,
+                state: &mut self.state,
+            },
+        }
+    }
+
+    /// Lo que [`Document::editable`] le presta al motor, para leer: de ahí son
+    /// sus marks y sus saltos.
+    pub(crate) fn engine_view(&self) -> (&DocState, &Buffer) {
+        match &self.board_scratch {
+            Some(scratch) => (&scratch.state, &scratch.buffer),
+            None => (&self.state, &self.buffer),
         }
     }
 
@@ -294,6 +349,17 @@ impl Document {
         let range = self.buffer.line_start(line)..self.buffer.line_end(line);
         self.buffer.text_in(range)
     }
+}
+
+fn scratch_for(path: &Path) -> Option<EngineScratch> {
+    let name = path.file_name()?.to_str()?;
+    note_name::is_board(name).then(|| {
+        let buffer = Buffer::default();
+        EngineScratch {
+            state: DocState::painted(&buffer, Rows::uniform(1)),
+            buffer,
+        }
+    })
 }
 
 /// Absoluta y sin enlaces; de un archivo que todavía no existe se resuelve

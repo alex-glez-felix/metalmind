@@ -44,6 +44,7 @@ fn walk(index: &VaultIndex, dir: &VaultPath, lines: &mut Vec<String>) {
         lines.push(match entry.kind {
             EntryKind::Folder => format!("{}/", entry.path),
             EntryKind::Note => format!("{} (nota)", entry.path),
+            EntryKind::Board => format!("{} (pizarra)", entry.path),
             EntryKind::Attachment => format!("{} (adjunto)", entry.path),
         });
         walk(index, entry.path, lines);

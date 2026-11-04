@@ -30,6 +30,10 @@ impl FileOpError {
                 "no es una nota: tiene que terminar en {}",
                 note_name::EXTENSION
             ),
+            Self::NotABoard(_) => format!(
+                "no es una pizarra: tiene que terminar en {}",
+                note_name::BOARD_EXTENSION
+            ),
             Self::Symlink(_) => "pasa por un enlace simbólico".to_owned(),
             Self::NotAFolder(dir) => format!("{dir} es un archivo, no una carpeta"),
             Self::AlreadyExists(_) => "ya existe".to_owned(),

@@ -167,9 +167,13 @@ impl Completion {
 
 impl Editor {
     /// El del editor y, con una lista abierta, el de sus atajos.
-    pub(super) fn key_context(&self) -> KeyContext {
+    pub(super) fn key_context(&self, cx: &App) -> KeyContext {
         let mut key_context = KeyContext::new_with_defaults();
         key_context.add(EDITOR_CONTEXT);
+        // Con la línea de `:` abierta las letras y `enter` son de ella.
+        if self.board.is_some() && self.mode(cx) == Mode::Normal {
+            key_context.add(context::BOARD);
+        }
         match self.completion.list.as_ref().map(List::view) {
             Some(View::CommandCompletion) => key_context.add(context::COMMAND_COMPLETION),
             Some(_) => key_context.add(context::COMPLETION),

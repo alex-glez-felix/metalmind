@@ -19,6 +19,8 @@ const TRASH: &str = ".trash";
 pub enum FileOpError {
     #[error("{0} no es una nota: tiene que terminar en {ext}", ext = note_name::EXTENSION)]
     NotANote(VaultPath),
+    #[error("{0} no es una pizarra: tiene que terminar en {ext}", ext = note_name::BOARD_EXTENSION)]
+    NotABoard(VaultPath),
     #[error("la raíz del vault no se puede mover ni borrar")]
     Root,
     #[error("{0} pasa por un enlace simbólico; podría salir del vault")]
@@ -45,6 +47,17 @@ pub(crate) fn create_note(root: &Path, path: &VaultPath, text: &str) -> Result<(
     if EntryKind::of_file(path) != EntryKind::Note {
         return Err(FileOpError::NotANote(path.clone()));
     }
+    create_file(root, path, text)
+}
+
+pub(crate) fn create_board(root: &Path, path: &VaultPath, text: &str) -> Result<(), FileOpError> {
+    if EntryKind::of_file(path) != EntryKind::Board {
+        return Err(FileOpError::NotABoard(path.clone()));
+    }
+    create_file(root, path, text)
+}
+
+fn create_file(root: &Path, path: &VaultPath, text: &str) -> Result<(), FileOpError> {
     // Si ya existe no se escribe nada, ni el temporal: abrir lo que ya está
     // no pide permiso de escritura en su carpeta.
     check_free(root, path)?;

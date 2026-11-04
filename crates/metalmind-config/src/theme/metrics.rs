@@ -184,6 +184,10 @@ metric_group! {
         text_line: Px,
         /// Bajo la pestaña que se ve, como en el panel de contexto.
         tab: Px,
+        /// Bordes y flechas de la pizarra, en unidades de la pizarra.
+        board_line: Px,
+        /// El borde del nodo elegido de la pizarra, en pantalla.
+        board_selection: Px,
     }
 }
 
@@ -316,6 +320,33 @@ metric_group! {
         which_key_padding_y: Length,
         /// Entre una tecla y su acción, y entre las columnas.
         which_key_gap: Length,
+        /// De aquí a `board_edge_label_width`, en unidades de la pizarra: se
+        /// agrandan con el zoom. Dentro de cada caja, alrededor del texto.
+        board_padding: Length,
+        board_arrow_size: Length,
+        /// El ancho de la marca de una tarjeta de nota.
+        board_card_accent: Length,
+        board_text: Length,
+        /// La ruta de una tarjeta y la etiqueta de una flecha.
+        board_text_small: Length,
+        /// Un `# título` en el texto de un nodo.
+        board_text_heading: Length,
+        /// Lo que puede medir a lo ancho la etiqueta de una flecha.
+        board_edge_label_width: Length,
+        /// El interlineado del texto de la pizarra.
+        board_line_height: Factor,
+        /// Por debajo de esto, en pantalla, el texto es una mancha y no se
+        /// compone.
+        board_min_text: Length,
+        /// Lo que `h j k l` mueven la pizarra, en pantalla.
+        board_pan_step: Length,
+        /// Lo que deja libre alrededor "ver todo", en pantalla.
+        board_fit_margin: Length,
+        /// De la barra de zoom a los bordes de la pizarra, en pantalla.
+        board_toolbar_margin: Length,
+        /// La opacidad del relleno de una forma con color, y la de un grupo.
+        board_fill_alpha: Fraction,
+        board_group_alpha: Fraction,
         /// Las columnas de las marks en el margen: la letra, el `+` de las
         /// demás y un espacio antes de los números.
         gutter_mark_columns: MarkColumns,

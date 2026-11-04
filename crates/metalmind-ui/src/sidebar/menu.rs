@@ -18,6 +18,7 @@ use crate::theme::Theme;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MenuItem {
     NewNote,
+    NewBoard,
     NewFolder,
     OpenSplitRight,
     OpenSplitDown,
@@ -45,6 +46,7 @@ impl MenuItem {
     fn label(self) -> &'static str {
         match self {
             Self::NewNote => "Nueva nota",
+            Self::NewBoard => "Nueva pizarra",
             Self::NewFolder => "Nueva carpeta",
             Self::OpenSplitRight => "Abrir a la derecha",
             Self::OpenSplitDown => "Abrir abajo",
@@ -72,6 +74,7 @@ impl MenuItem {
     pub fn action(self) -> PanelAction {
         match self {
             Self::NewNote | Self::NewTaggedNote => PanelAction::NewNote,
+            Self::NewBoard => PanelAction::NewBoard,
             Self::NewFolder => PanelAction::NewFolder,
             Self::OpenSplitRight => PanelAction::OpenSplitRight,
             Self::OpenSplitDown => PanelAction::OpenSplitDown,
@@ -91,7 +94,8 @@ impl MenuItem {
     /// Las entradas en grupos, separados por una línea. Una carpeta no se
     /// abre en un split.
     fn groups(kind: EntryKind) -> Vec<&'static [Self]> {
-        let mut groups: Vec<&'static [Self]> = vec![&[Self::NewNote, Self::NewFolder]];
+        let mut groups: Vec<&'static [Self]> =
+            vec![&[Self::NewNote, Self::NewBoard, Self::NewFolder]];
         if kind != EntryKind::Folder {
             groups.push(&[Self::OpenSplitRight, Self::OpenSplitDown]);
         }

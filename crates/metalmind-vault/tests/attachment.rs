@@ -228,13 +228,26 @@ fn un_tipo_desconocido() {
 }
 
 #[test]
+fn un_canvas_arrastrado_no_es_un_adjunto() {
+    let dir = TempDir::new().unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let note = path("nota.md");
+    let result = vault.save_attachment(&dropped(b"\xff\xfe no es UTF-8", "Idea.canvas", &note));
+    assert!(
+        matches!(&result, Err(AttachmentError::NotAttachment(_))),
+        "{result:?}"
+    );
+    assert!(!dir.path().join("adjuntos").exists());
+}
+
+#[test]
 fn un_md_arrastrado_no_es_un_adjunto() {
     let dir = TempDir::new().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let note = path("nota.md");
     let result = vault.save_attachment(&dropped(b"\xff\xfe no es UTF-8", "Otra.MD", &note));
     assert!(
-        matches!(&result, Err(AttachmentError::Note(name)) if name == "Otra-2026-10-18-090507.md"),
+        matches!(&result, Err(AttachmentError::NotAttachment(name)) if name == "Otra-2026-10-18-090507.md"),
         "{result:?}"
     );
     assert!(!dir.path().join("adjuntos").exists());

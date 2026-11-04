@@ -72,8 +72,8 @@ pub struct SavedAttachment {
 pub enum AttachmentError {
     /// Un `.md` arrastrado es una nota: en la carpeta de adjuntos sería una
     /// nota más, no un adjunto.
-    #[error("{0} sería una nota, no un adjunto")]
-    Note(String),
+    #[error("{0} sería una nota o una pizarra, no un adjunto")]
+    NotAttachment(String),
     /// Los `.gitignore` o `.ignore` del vault lo esconden: el índice no lo
     /// vería y su embed no resolvería. Como en todos los errores, no queda
     /// nada en disco.
@@ -105,8 +105,8 @@ pub(crate) fn save(
 ) -> Result<SavedAttachment, AttachmentError> {
     let (base, extension) = base_and_extension(attachment);
     let first = folder.join(&name::file_name(&base, attachment.at, &extension, 0))?;
-    if EntryKind::of_file(&first) == EntryKind::Note {
-        return Err(AttachmentError::Note(first.name().to_owned()));
+    if EntryKind::of_file(&first) != EntryKind::Attachment {
+        return Err(AttachmentError::NotAttachment(first.name().to_owned()));
     }
     let created = ops::create_parents(root, &first)?;
     let saved = create_unique(root, links, folder, &base, &extension, attachment)

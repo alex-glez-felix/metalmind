@@ -141,6 +141,7 @@ impl Workspace {
                 };
                 document.set_path(shown_path(&path));
             }
+            self.rewind_cursors_on_board(id);
         }
         self.files.rename(old, new);
         for file in self.files.within(new) {

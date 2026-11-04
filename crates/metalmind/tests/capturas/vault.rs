@@ -193,6 +193,49 @@ fn collect_notes(dir: &Path, notes: &mut Vec<std::path::PathBuf>) {
 
 /// Las plantillas: la de entrevista de `docs/plantillas.md`, otra que pide
 /// `#rust`, una de nombre largo en subcarpetas y muchas para llenar el picker.
+pub fn write_boards(root: &Path) {
+    let folder = root.join("Pizarras");
+    fs::create_dir_all(&folder).expect("crear la carpeta");
+    let file = |name: &str, text: &str| {
+        fs::write(folder.join(name), text).expect("escribir la pizarra");
+    };
+    file(
+        "arquitectura.canvas",
+        include_str!("../../../metalmind-board/tests/fixtures/arquitectura.canvas"),
+    );
+    file("dos-mil.canvas", &metalmind_perf::board(2_000));
+    file("textos-largos.canvas", LONG_TEXTS_BOARD);
+    file("vacia.canvas", "");
+    file(
+        "rota.canvas",
+        "{\"nodes\":[{\"id\":\"a\",\"type\":\"video\",\"x\":0,\"y\":0,\"width\":1,\"height\":1}]}\n",
+    );
+}
+
+/// Lo que no cabe en su caja: una línea sin espacios, muchas líneas, multibyte
+/// y emoji, una ruta honda en una tarjeta chica y etiquetas largas.
+const LONG_TEXTS_BOARD: &str = r##"{
+	"nodes":[
+		{"id":"sin","type":"text","x":0,"y":0,"width":220,"height":90,"text":"una_linea_sin_espacios_que_no_tiene_por_donde_partirse_y_tiene_que_quedarse_dentro_de_su_caja"},
+		{"id":"muchas","type":"text","x":300,"y":0,"width":220,"height":90,"text":"uno\ndos\ntres\ncuatro\ncinco\nseis\nsiete\nocho\nnueve"},
+		{"id":"emoji","type":"text","x":600,"y":0,"width":220,"height":90,"shape":"ellipse","color":"5","text":"日本語のテキストと絵文字 🦀🧠 acentuados ñandú"},
+		{"id":"rombo","type":"text","x":0,"y":180,"width":220,"height":120,"shape":"diamond","color":"#ff8800","text":"¿Un rombo con una pregunta larga que casi no cabe?"},
+		{"id":"tarjeta","type":"file","x":300,"y":180,"width":220,"height":70,"file":"Una carpeta con un nombre bastante largo/otra carpeta más honda todavía/una nota con un nombre larguísimo 🦀.md","subpath":"#Una sección con nombre largo"},
+		{"id":"chica","type":"file","x":600,"y":180,"width":60,"height":30,"file":"a/b.md"},
+		{"id":"link","type":"link","x":700,"y":180,"width":200,"height":70,"url":"https://jsoncanvas.org/spec/1.0/con/una/ruta/que/sigue/y/sigue/sin/espacios"},
+		{"id":"titulo","type":"text","x":0,"y":-100,"width":700,"height":60,"shape":"none","text":"# Un título suelto que pasa del ancho de su caja y sigue"},
+		{"id":"grupo","type":"group","x":-40,"y":360,"width":500,"height":160,"color":"2","label":"Un grupo con un nombre más largo que su propia caja, que sigue y sigue y sigue y sigue y sigue y sigue y sigue"},
+		{"id":"dentro","type":"text","x":0,"y":400,"width":220,"height":90,"color":"1","text":"Dentro del grupo"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"sin","toNode":"muchas","label":"una etiqueta larguísima que se parte en varias filas y tiene su fondo"},
+		{"id":"e2","fromNode":"muchas","toNode":"emoji","route":"elbow","fromEnd":"arrow","color":"3"},
+		{"id":"e3","fromNode":"rombo","toNode":"dentro","route":"straight"},
+		{"id":"e4","fromNode":"tarjeta","toNode":"tarjeta"}
+	]
+}
+"##;
+
 pub fn write_templates(root: &Path) {
     let file = |path: &str, contents: &str| {
         let path = root.join(path);

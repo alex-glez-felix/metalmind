@@ -99,6 +99,21 @@ ui:
   which_key_border: border_strong
   which_key_key: accent
   which_key_prefix: text_muted
+  board_line: text_muted
+  board_fill: { color: text, alpha: 0.04 }
+  board_card: raised
+  board_card_accent: accent
+  board_group: { color: text, alpha: 0.05 }
+  board_text: text
+  board_text_muted: text_muted
+  board_label_background: background
+  board_selection: accent
+  board_color_1: red
+  board_color_2: orange
+  board_color_3: yellow
+  board_color_4: green
+  board_color_5: cyan
+  board_color_6: magenta
 
 cursor:
   # El bloque deja ver el carácter que tapa.
@@ -168,6 +183,8 @@ stroke:
   caret: 2
   text_line: 1
   tab: 2  # bajo la pestaña que se ve
+  board_line: 2
+  board_selection: 2
 
 # Tamaño (veces `font.size` de config.yaml) e interlineado (veces el tamaño).
 text:
@@ -232,6 +249,20 @@ layout:
   which_key_padding_x: md
   which_key_padding_y: sm
   which_key_gap: md      # entre la tecla y su acción, y entre columnas
+  board_padding: md
+  board_arrow_size: md
+  board_card_accent: xs
+  board_text: 16
+  board_text_small: 13
+  board_text_heading: 28
+  board_edge_label_width: 160
+  board_line_height: 1.3
+  board_min_text: 3
+  board_pan_step: 80
+  board_fit_margin: 40
+  board_toolbar_margin: sm
+  board_fill_alpha: 0.14
+  board_group_alpha: 0.06
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio
   note_max_width: 80      # columnas de texto; en un panel más ancho la nota se centra
   math_padding: 1

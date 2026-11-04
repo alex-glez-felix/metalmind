@@ -119,7 +119,7 @@ impl Document {
                 })?;
         }
         if self.path.is_none() {
-            self.path = Some(path.to_owned());
+            self.set_path(path.to_owned());
             return Ok(self.mark_saved(&text));
         }
         Ok(self.stats())

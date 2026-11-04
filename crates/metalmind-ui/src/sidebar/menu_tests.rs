@@ -122,7 +122,8 @@ fn cada_entrada_muestra_la_tecla_de_su_accion() {
             .items()
             .map(|item| item.keys(&keymap))
             .collect();
-    let expected = ["a", "A", "ctrl-v", "ctrl-s", "r", "m", "d"].map(|key| Some(key.to_owned()));
+    let expected =
+        ["a", "b", "A", "ctrl-v", "ctrl-s", "r", "m", "d"].map(|key| Some(key.to_owned()));
     assert_eq!(keys, expected);
 }
 

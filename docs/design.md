@@ -63,6 +63,10 @@ Decidido el 2026-10-27 ([#193](https://github.com/alex-glez-felix/metalmind/issu
 
 Propuesto el 2026-11-01 en [#86](https://github.com/alex-glez-felix/metalmind/issues/86), hasta que se decida su estilo: tras el inicio de un atajo en el editor y `which_key.delay_ms` sin teclear, un recuadro abajo a la derecha del panel con el foco, sobre el texto y sin tapar la barra de estado: arriba lo tecleado, tenue; debajo, en columnas de `which_key_rows` filas, cada tecla en el color de acento contra la derecha de su columna y su acción como en la paleta (`workspace: open finder`), sin el espacio de nombres solo si todas las filas lo comparten (tras `d i`, `inner word` y no `vim: inner word` en cada fila). Las teclas de una misma acción van juntas (`v / ctrl-v`). Sin animación: aparece entero y se va con la siguiente tecla. Es para aprender el teclado, así que no tiene clics: lo que muestra ya está en la paleta con su tecla.
 
+### Pizarra
+
+Propuesto el 2026-11-04 con la vista de solo lectura ([09](research/09-pizarra.md)), hasta que se decida su estilo: ocupa el cuerpo del panel, sobre el fondo del editor y sin rejilla; ruta arriba y barra de estado abajo, con el zoom donde una nota lleva la posición. Abajo a la derecha, los cuatro botones del zoom con su tecla, que se parten en filas en un panel angosto. El nodo elegido lleva un borde de acento con el mismo grosor a cualquier zoom. Lo que no se lee se dice en el centro, sin tocar el archivo.
+
 ### Menú contextual
 
 *Por decidir.*
