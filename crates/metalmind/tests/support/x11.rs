@@ -125,6 +125,19 @@ impl Display {
         self.conn.sync().expect("esperar al servidor");
     }
 
+    /// Aprieta (`true`) o suelta el botón izquierdo donde esté el puntero.
+    pub fn left_button(&self, down: bool) {
+        let kind = if down {
+            xproto::BUTTON_PRESS_EVENT
+        } else {
+            xproto::BUTTON_RELEASE_EVENT
+        };
+        self.conn
+            .xtest_fake_input(kind, 1, x11rb::CURRENT_TIME, self.root, 0, 0, 0)
+            .expect("mandar el botón");
+        self.conn.sync().expect("esperar al servidor");
+    }
+
     /// Lleva el puntero a `(x, y)` de `window`, con `XTest`.
     pub fn move_pointer(&self, window: xproto::Window, x: i16, y: i16) {
         let at = self

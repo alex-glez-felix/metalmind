@@ -309,6 +309,15 @@ pub(super) struct TextRows {
 }
 
 impl TextRows {
+    /// Lo que ocupa todo el texto.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "las filas de un texto caben en f32"
+    )]
+    pub(super) fn height(&self) -> Pixels {
+        self.line_height * self.rows.len() as f32
+    }
+
     /// Arriba a la izquierda del byte `index`. Al final de una fila partida el
     /// byte es el inicio de la siguiente.
     pub(super) fn place(&self, index: usize) -> Option<(Pixels, Pixels)> {

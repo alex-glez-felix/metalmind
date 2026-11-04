@@ -13,6 +13,16 @@ const HALF: f32 = 0.5;
 /// Por debajo de este zoom un texto no se lee: abrirlo para escribir acerca la vista.
 const MIN_TEXT_ZOOM: f32 = 0.5;
 
+/// `height` más `lacking`, en la rejilla y nunca menos.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "las medidas de una pizarra caben en i32"
+)]
+fn grown(height: i32, lacking: f32) -> i32 {
+    let bottom = height + lacking.ceil() as i32;
+    (bottom + GRID - 1).div_euclid(GRID) * GRID
+}
+
 impl BoardView {
     /// `enter`: crea con la herramienta activa, escribe en la caja elegida o
     /// abre la nota de la tarjeta.
@@ -111,13 +121,38 @@ impl BoardView {
         }
     }
 
+    /// Vuelve a la pizarra. Si el texto ya no cabe, la caja crece hacia abajo en
+    /// el mismo paso: lo que se escribió no se queda recortado.
     pub(super) fn close_text(&mut self, cx: &mut Context<Self>) {
+        self.grow_to_fit_text(cx);
         let pane = self.pane;
         let closed = self.workspace.update(cx, |workspace, cx| {
             cx.notify();
             workspace.close_board_text(pane)
         });
         self.keep(closed, cx);
+    }
+
+    fn grow_to_fit_text(&mut self, cx: &mut Context<Self>) {
+        let (Some(label), Some(area), Some(camera)) = (self.open, &self.text_area, self.camera)
+        else {
+            return;
+        };
+        let lacking = f32::from(area.rows.height()) / camera.zoom - label.area.h;
+        if lacking <= 0.0 {
+            return;
+        }
+        let Some(element) = self.selected_node().map(|node| node.id.clone()) else {
+            return;
+        };
+        self.edit(
+            |board| {
+                if let Some(node) = board.nodes.iter_mut().find(|node| node.id == element) {
+                    node.height = grown(node.height, lacking);
+                }
+            },
+            cx,
+        );
     }
 
     pub(super) fn delete_selected(&mut self, cx: &mut Context<Self>) {

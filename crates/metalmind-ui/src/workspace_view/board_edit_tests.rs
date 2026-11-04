@@ -10,7 +10,7 @@ use metalmind_keymap::BoardAction;
 use metalmind_vim::Mode;
 use pretty_assertions::assert_eq;
 
-use super::board_tests::{BOARD, Window, open};
+use super::board_tests::{BOARD, Window, open, open_with};
 use crate::board::Tool;
 use crate::document::Document;
 
@@ -27,11 +27,7 @@ const NODES: &str = r#"{
 "#;
 
 fn on_board(cx: &mut TestAppContext) -> Window<'_> {
-    let mut window = open(cx, "idea.canvas");
-    std::fs::write(window.root.join("idea.canvas"), NODES).unwrap();
-    window.keys(":");
-    window.cx.simulate_input("e");
-    window.keys("enter");
+    let mut window = open_with(cx, "idea.canvas", NODES);
     window.keys("shift-0");
     window
 }
@@ -185,26 +181,34 @@ fn escape_suelta_lo_elegido(cx: &mut TestAppContext) {
 
 // --- Crear
 
+fn creates_with_enter(cx: &mut TestAppContext, key: &str, shape: Shape) {
+    let mut window = on_board(cx);
+    let nodes = window.parsed().nodes.len();
+    window.keys(key);
+    assert_eq!(window.tool(), Tool::Shape(shape));
+    window.keys("enter");
+    assert_eq!(window.tool(), Tool::Select);
+    let parsed = window.parsed();
+    assert_eq!(parsed.nodes.len(), nodes + 1);
+    let node = newest_node(&parsed);
+    assert!(matches!(node.kind, NodeKind::Text { shape: found, .. } if found == shape));
+    assert_eq!(node.x % 10, 0);
+    assert_eq!(window.selected(), std::slice::from_ref(&node.id));
+}
+
 #[gpui_kit::test]
-fn cada_forma_se_crea_con_enter_en_el_centro_y_vuelve_a_elegir(cx: &mut TestAppContext) {
-    for (key, shape) in [
-        ("r", Shape::Rectangle),
-        ("o", Shape::Ellipse),
-        ("d", Shape::Diamond),
-    ] {
-        let mut window = on_board(cx);
-        let nodes = window.parsed().nodes.len();
-        window.keys(key);
-        assert_eq!(window.tool(), Tool::Shape(shape));
-        window.keys("enter");
-        assert_eq!(window.tool(), Tool::Select);
-        let parsed = window.parsed();
-        assert_eq!(parsed.nodes.len(), nodes + 1);
-        let node = newest_node(&parsed);
-        assert!(matches!(node.kind, NodeKind::Text { shape: found, .. } if found == shape));
-        assert_eq!(node.x % 10, 0);
-        assert_eq!(window.selected(), std::slice::from_ref(&node.id));
-    }
+fn r_y_enter_crean_una_caja_en_el_centro_y_vuelven_a_elegir(cx: &mut TestAppContext) {
+    creates_with_enter(cx, "r", Shape::Rectangle);
+}
+
+#[gpui_kit::test]
+fn o_y_enter_crean_una_elipse(cx: &mut TestAppContext) {
+    creates_with_enter(cx, "o", Shape::Ellipse);
+}
+
+#[gpui_kit::test]
+fn d_y_enter_crean_un_rombo(cx: &mut TestAppContext) {
+    creates_with_enter(cx, "d", Shape::Diamond);
 }
 
 #[gpui_kit::test]
@@ -356,6 +360,37 @@ fn i_abre_la_caja_en_insert_y_esc_en_normal_vuelve_con_un_solo_paso(cx: &mut Tes
     assert_eq!(window.text(), start);
     window.keys("ctrl-r");
     assert_eq!(window.parsed().node("a").unwrap().text(), Some("uno más"));
+}
+
+#[gpui_kit::test]
+fn una_caja_crece_al_salir_si_su_texto_no_cabe_y_es_el_mismo_paso(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    let at = window.center("a");
+    window.click(at);
+    let start = window.text();
+    window.keys("i");
+    for _ in 0..9 {
+        window.keys("enter");
+    }
+    window.cx.simulate_input("fin");
+    window.keys("escape escape");
+    let parsed = window.parsed();
+    let node = parsed.node("a").unwrap();
+    assert!(node.height > 80, "{}", node.height);
+    assert_eq!(node.height % 10, 0);
+    window.keys("u");
+    assert_eq!(window.text(), start);
+}
+
+#[gpui_kit::test]
+fn una_caja_a_la_que_le_cabe_el_texto_no_cambia_de_tamano(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    let at = window.center("a");
+    window.click(at);
+    window.keys("i");
+    window.cx.simulate_input("!");
+    window.keys("escape escape");
+    assert_eq!(window.parsed().node("a").unwrap().height, 80);
 }
 
 #[gpui_kit::test]
@@ -696,6 +731,30 @@ fn ctrl_h_j_k_l_cambian_el_tamano_de_lo_elegido(cx: &mut TestAppContext) {
     let parsed = window.parsed();
     let node = parsed.node("c").unwrap();
     assert_eq!((node.width, node.height), (200, 80));
+}
+
+#[gpui_kit::test]
+fn la_camara_sigue_donde_estaba_al_volver_a_la_pizarra(cx: &mut TestAppContext) {
+    let mut window = on_board(cx);
+    window.keys("+ l j");
+    let board = window.board();
+    let before = board.read_with(window.cx, |board, _| board.camera().unwrap());
+    window.keys(":");
+    window.cx.simulate_input("e a.md");
+    window.keys("enter");
+    assert_eq!(window.file(), "a.md");
+    window.keys(":");
+    let board_file = window.root.join("idea.canvas");
+    window
+        .cx
+        .simulate_input(&format!("e {}", board_file.display()));
+    window.keys("enter");
+    let board = window.board();
+    let after = board.read_with(window.cx, |board, _| board.camera().unwrap());
+    assert_eq!(
+        (before.x, before.y, before.zoom),
+        (after.x, after.y, after.zoom)
+    );
 }
 
 // --- Menú y barra

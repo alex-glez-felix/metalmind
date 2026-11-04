@@ -91,11 +91,14 @@ impl Editor {
     pub(super) fn sync_board(&mut self, cx: &mut Context<Self>) {
         let shows_board = self.view(cx).is_some_and(|view| view.document.is_board());
         if !shows_board {
-            self.board = None;
+            if let Some(board) = self.board.take() {
+                self.board_cameras.extend(board.read(cx).camera_by_file());
+            }
         } else if self.board.is_none() {
             let (workspace, session, pane) =
                 (self.workspace.clone(), self.session.clone(), self.pane);
-            self.board = Some(cx.new(|_| BoardView::new(workspace, session, pane)));
+            let cameras = self.board_cameras.clone();
+            self.board = Some(cx.new(|_| BoardView::new(workspace, session, pane, cameras)));
         }
     }
 

@@ -28,6 +28,7 @@ mod status_bar;
 mod text;
 mod which_key;
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,7 +51,7 @@ use self::status_bar::{Status, status_bar};
 use self::text::Faces;
 use self::which_key::{WhichKey, which_key_panel};
 use crate::actions::{self, Dispatch};
-use crate::board::BoardView;
+use crate::board::{BoardView, Camera};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -98,6 +99,8 @@ pub struct Editor {
     which_key: WhichKey,
     /// Lo que pinta el panel si su documento es una pizarra.
     board: Option<Entity<BoardView>>,
+    /// Dónde estaba la vista de cada pizarra que este panel dejó de mostrar.
+    board_cameras: HashMap<PathBuf, Camera>,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _focus_changed: Subscription,
@@ -144,6 +147,7 @@ impl Editor {
             text_screen: None,
             which_key: WhichKey::default(),
             board: None,
+            board_cameras: HashMap::new(),
             _repaint: repaint,
             _vault_changed: vault_changed,
             _focus_changed: focus_changed,

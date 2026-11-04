@@ -9,6 +9,7 @@ use metalmind_board::{DEFAULT_SHAPE, DEFAULT_TEXT, Frame, Point, Rect, Shape, pl
 
 use super::gesture::{Gesture, MoveNodes};
 use super::{BoardView, Content, SceneStyle, Tool};
+use crate::frames::FrameClock;
 use crate::theme::Theme;
 
 impl BoardView {
@@ -27,6 +28,7 @@ impl BoardView {
         let Some(gesture) = self.gesture.take() else {
             return;
         };
+        FrameClock::input(cx);
         let theme = Theme::get(cx).clone();
         self.gesture = Some(self.drag(gesture, event.position, &theme));
         cx.notify();

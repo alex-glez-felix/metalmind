@@ -20,7 +20,7 @@ mod shapes;
 mod tint;
 mod toolbar;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use gpui_kit::{
@@ -82,6 +82,8 @@ pub struct BoardView {
     /// `None` hasta que se sabe lo que mide el área: la primera vista es
     /// "ver todo".
     camera: Option<Camera>,
+    /// Dónde estaba la vista de las pizarras que ya no se ven en este panel.
+    cameras: HashMap<PathBuf, Camera>,
     bounds: Option<Bounds<Pixels>>,
     /// Lo elegido, por su id: sobrevive a que el archivo se relea. Nodos y
     /// flechas; el primer nodo es de donde parten `H J K L`.
@@ -104,7 +106,12 @@ pub struct BoardView {
 
 impl BoardView {
     #[must_use]
-    pub fn new(workspace: Entity<Workspace>, session: Entity<VaultSession>, pane: PaneId) -> Self {
+    pub fn new(
+        workspace: Entity<Workspace>,
+        session: Entity<VaultSession>,
+        pane: PaneId,
+        cameras: HashMap<PathBuf, Camera>,
+    ) -> Self {
         Self {
             workspace,
             session,
@@ -112,6 +119,7 @@ impl BoardView {
             source: None,
             content: Content::Invalid(String::new()),
             camera: None,
+            cameras,
             bounds: None,
             selected: Vec::new(),
             tool: Tool::Select,
@@ -124,6 +132,25 @@ impl BoardView {
             text_area: None,
             caret: None,
         }
+    }
+
+    fn keep_camera(&mut self) {
+        let path = self.source.as_ref().and_then(|source| source.path.clone());
+        if let (Some(path), Some(camera)) = (path, self.camera) {
+            self.cameras.insert(path, camera);
+        }
+    }
+
+    /// Lo que hay que recordar de esta vista al dejar de mostrarla.
+    #[must_use]
+    pub fn camera_by_file(&self) -> HashMap<PathBuf, Camera> {
+        let mut cameras = self.cameras.clone();
+        if let (Some(source), Some(camera)) = (&self.source, self.camera)
+            && let Some(path) = &source.path
+        {
+            cameras.insert(path.clone(), camera);
+        }
+        cameras
     }
 
     /// Con las letras de unir a la vista, cada tecla es una letra.
@@ -239,7 +266,12 @@ impl BoardView {
             return;
         }
         if other_file {
-            self.camera = None;
+            self.keep_camera();
+            self.camera = source
+                .path
+                .as_ref()
+                .and_then(|path| self.cameras.get(path))
+                .copied();
             self.selected.clear();
             self.gesture = None;
             self.hints = None;

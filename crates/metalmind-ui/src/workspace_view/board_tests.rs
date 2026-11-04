@@ -43,6 +43,12 @@ pub(super) struct Window<'a> {
 }
 
 pub(super) fn open<'a>(cx: &'a mut TestAppContext, file: &str) -> Window<'a> {
+    open_with(cx, file, BOARD)
+}
+
+/// Escribe la pizarra antes de abrir el vault: cambiar un archivo después haría
+/// que su watcher despierte la prueba desde otro hilo, y GPUI lo rechaza.
+pub(super) fn open_with<'a>(cx: &'a mut TestAppContext, file: &str, board: &str) -> Window<'a> {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir(dir.path().join("carpeta con espacio")).unwrap();
     fs::write(
@@ -50,7 +56,7 @@ pub(super) fn open<'a>(cx: &'a mut TestAppContext, file: &str) -> Window<'a> {
         "la nota\n",
     )
     .unwrap();
-    fs::write(dir.path().join("idea.canvas"), BOARD).unwrap();
+    fs::write(dir.path().join("idea.canvas"), board).unwrap();
     fs::write(dir.path().join("a.md"), "uno\n").unwrap();
     let (vault, updates) = Vault::open(dir.path()).unwrap();
     let root = vault.root().to_owned();
@@ -125,7 +131,7 @@ impl Window<'_> {
         board.read_with(self.cx, |board, _| board.camera().unwrap().zoom)
     }
 
-    fn file(&mut self) -> String {
+    pub(super) fn file(&mut self) -> String {
         let root = self.root.clone();
         self.view.read_with(self.cx, |view, cx| {
             let workspace = view.workspace.read(cx);
