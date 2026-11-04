@@ -5,13 +5,9 @@ use metalmind_board::{Board, Frame};
 use metalmind_buffer::{Selection, Selections};
 use metalmind_vim::{Action, InsertAt};
 
-use super::{DocumentId, Message, PaneId, Workspace, WorkspaceError};
+use super::{Message, PaneId, Workspace, WorkspaceError};
 
 impl Workspace {
-    fn board_document(&self, pane: PaneId) -> Result<DocumentId, WorkspaceError> {
-        Ok(self.pane(pane)?.document)
-    }
-
     /// Cambia la pizarra de `pane` como un paso del historial.
     ///
     /// # Errors
@@ -21,7 +17,7 @@ impl Workspace {
         pane: PaneId,
         change: impl FnOnce(&mut Board) -> T,
     ) -> Result<T, WorkspaceError> {
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         let result = self.document_mut(id)?.edit_board(change)?;
         self.edited(id);
         Ok(result)
@@ -33,7 +29,7 @@ impl Workspace {
     /// Solo si el estado está inconsistente, lo que sería un bug.
     pub fn undo_board(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
         self.close_board_text(pane)?;
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         if self
             .document_mut(id)?
             .undo_board()
@@ -52,7 +48,7 @@ impl Workspace {
     /// Solo si el estado está inconsistente, lo que sería un bug.
     pub fn redo_board(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
         self.close_board_text(pane)?;
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         if self
             .document_mut(id)?
             .redo_board()
@@ -72,7 +68,7 @@ impl Workspace {
     /// Si el archivo no se lee como pizarra.
     pub fn open_board_text(&mut self, pane: PaneId, element: &str) -> Result<bool, WorkspaceError> {
         self.close_board_text(pane)?;
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         if !self.document_mut(id)?.begin_board_text(element)? {
             return Ok(false);
         }
@@ -90,7 +86,7 @@ impl Workspace {
         frame: Frame,
     ) -> Result<String, WorkspaceError> {
         self.close_board_text(pane)?;
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         let element = self.document_mut(id)?.begin_new_board_text(frame)?;
         self.edited(id);
         self.start_typing(pane)?;
@@ -114,7 +110,7 @@ impl Workspace {
     /// # Errors
     /// Solo si el estado está inconsistente, lo que sería un bug.
     pub fn close_board_text(&mut self, pane: PaneId) -> Result<(), WorkspaceError> {
-        let id = self.board_document(pane)?;
+        let id = self.pane(pane)?.document;
         if self.document(id)?.open_board_text().is_none() {
             return Ok(());
         }

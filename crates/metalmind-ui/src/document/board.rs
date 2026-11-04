@@ -3,7 +3,7 @@
 //! escribe en otro buffer con el motor de vim; lo que cambia ahí pasa al
 //! archivo dentro de una sola transacción, que se cierra al salir de la caja.
 
-use metalmind_board::{Board, FormatError, Frame, Shape, line_edits};
+use metalmind_board::{Board, FormatError, Frame, Node, Shape, line_edits};
 use metalmind_buffer::{Buffer, BufferError, ByteOffset, Edit, Selection, Selections};
 use metalmind_syntax::Rows;
 use metalmind_vim::DocState;
@@ -211,19 +211,9 @@ impl Document {
         else {
             return Ok(());
         };
-        let vanishes = |board: &Board| {
-            board.node(&open.element).is_some_and(|node| {
-                node.text() == Some("")
-                    && matches!(
-                        node.kind,
-                        metalmind_board::NodeKind::Text {
-                            shape: Shape::None,
-                            ..
-                        }
-                    )
-            })
-        };
-        let empty = vanishes(&Board::parse(&self.buffer.to_string())?);
+        let empty = Board::parse(&self.buffer.to_string())?
+            .node(&open.element)
+            .is_some_and(Node::is_blank_free_text);
         if empty && !open.created {
             self.edit_board(|board| board.remove(std::slice::from_ref(&open.element)))?;
         }

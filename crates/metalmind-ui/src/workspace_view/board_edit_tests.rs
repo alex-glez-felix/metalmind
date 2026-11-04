@@ -485,8 +485,21 @@ fn un_clic_dentro_de_la_caja_abierta_la_deja_abierta(cx: &mut TestAppContext) {
     let at = window.center("a");
     window.click(at);
     window.keys("i");
+    let head = |window: &mut Window<'_>| {
+        window.view.read_with(window.cx, |view, cx| {
+            let workspace = view.workspace.read(cx);
+            workspace
+                .view(workspace.focused())
+                .unwrap()
+                .selection
+                .head
+                .get()
+        })
+    };
+    assert_eq!(head(&mut window), "uno".len());
     window.click(at);
     assert!(window.with_document(|d| d.open_board_text().is_some()));
+    assert!(head(&mut window) < "uno".len());
 }
 
 #[gpui_kit::test]

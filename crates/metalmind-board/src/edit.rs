@@ -140,6 +140,12 @@ impl Node {
         self.height = frame.height;
     }
 
+    /// Es un texto suelto sin nada escrito: no se ve ni se puede elegir.
+    #[must_use]
+    pub fn is_blank_free_text(&self) -> bool {
+        matches!(&self.kind, NodeKind::Text { text, shape: Shape::None } if text.is_empty())
+    }
+
     /// El texto que se escribe en él: solo una caja o un texto suelto lo tienen.
     #[must_use]
     pub fn text(&self) -> Option<&str> {

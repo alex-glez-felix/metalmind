@@ -87,12 +87,13 @@ impl OpenTextSnapshot {
                 .next()
                 .map_or(head, |c| head + c.len_utf8());
             let after = rows.place(next).filter(|(_, next_y)| *next_y == y);
-            after.map_or(
-                laid.em(),
-                |(next_x, _)| {
-                    if next_x > x { next_x - x } else { laid.em() }
-                },
-            )
+            after.map_or(laid.blank_width(), |(next_x, _)| {
+                if next_x > x {
+                    next_x - x
+                } else {
+                    laid.blank_width()
+                }
+            })
         };
         Some(Bounds::new(point(x, y), size(width, laid.line_height())))
     }
@@ -110,11 +111,8 @@ impl OpenTextSnapshot {
         }
         let (anchor, head) = (self.selection.anchor.get(), self.selection.head.get());
         let chosen = anchor.min(head)..anchor.max(head) + 1;
-        for quad in rows.spans(chosen) {
-            let bounds = Bounds::new(
-                point(quad.0, quad.2),
-                size(quad.1 - quad.0, laid.line_height()),
-            );
+        for (left, right, top) in rows.spans(chosen) {
+            let bounds = Bounds::new(point(left, top), size(right - left, laid.line_height()));
             window.paint_quad(fill(bounds, frame.theme.ui.selection));
         }
     }
@@ -150,4 +148,51 @@ impl BoardView {
 pub(super) struct TextArea {
     pub bounds: Bounds<Pixels>,
     pub rows: TextRows,
+}
+
+#[cfg(test)]
+mod tests {
+    use metalmind_board::Rect;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::board::scene::LabelKind;
+
+    fn snapshot(text: &str, head: usize, preedit: Option<&str>) -> OpenTextSnapshot {
+        OpenTextSnapshot {
+            label: OpenLabel {
+                kind: LabelKind::Body,
+                area: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 50.0,
+                },
+            },
+            text: text.to_owned(),
+            selection: Selection::cursor(ByteOffset::new(head)),
+            mode: Mode::Insert,
+            preedit: preedit.map(ToOwned::to_owned),
+        }
+    }
+
+    #[test]
+    fn sin_preedit_se_ve_el_texto_tal_cual() {
+        let shown = snapshot("niño", 3, None).displayed();
+        assert_eq!(shown, ("niño".to_owned(), None));
+        let empty = snapshot("niño", 3, Some("")).displayed();
+        assert_eq!(empty, ("niño".to_owned(), None));
+    }
+
+    #[test]
+    fn el_preedit_entra_en_el_cursor_y_se_sabe_donde_quedo() {
+        let shown = snapshot("niño", 4, Some("にほ")).displayed();
+        assert_eq!(shown, ("niñにほo".to_owned(), Some(4..10)));
+    }
+
+    #[test]
+    fn un_cursor_mas_alla_del_texto_no_rompe_el_preedit() {
+        let shown = snapshot("a", 9, Some("x")).displayed();
+        assert_eq!(shown, ("ax".to_owned(), Some(1..2)));
+    }
 }

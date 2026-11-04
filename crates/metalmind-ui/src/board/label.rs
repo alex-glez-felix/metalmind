@@ -206,8 +206,8 @@ impl Laid {
         self.line_height
     }
 
-    /// Lo que mide una `M`: el cursor de bloque sobre el fin de línea.
-    pub(super) fn em(&self) -> Pixels {
+    /// El ancho del cursor de bloque donde no hay letra bajo él.
+    pub(super) fn blank_width(&self) -> Pixels {
         self.text_size * HALF
     }
 
