@@ -4025,6 +4025,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "metalmind-board"
+version = "0.0.0"
+dependencies = [
+ "pretty_assertions",
+ "proptest",
+ "rstest",
+ "serde",
+ "serde_json",
+ "similar 3.2.0",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "metalmind-buffer"
 version = "0.0.0"
 dependencies = [

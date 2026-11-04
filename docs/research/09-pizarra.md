@@ -1,17 +1,17 @@
 # 09 — Pizarra para pensar
 
-> **Estado: propuesta.** Spike del 2026-10-26; la decisión es del autor en la PR. Revisa la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
+> **Estado: decidido; en implementación.** Spike del 2026-10-26, decisiones del autor sobre la PR #171 (§6). Cambia la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
 
 ## TL;DR
 
 - **Qué es**: una pizarra infinita dentro de Metalmind para organizar ideas mientras se dibuja: cajas con texto, flechas que se pegan a las cajas, tarjetas que son notas del vault y trazo libre. Con prioridad en cajas y flechas (arquitectura, flujos, mapas de ideas) sobre el boceto. Fuera: diagramas como código (Mermaid, D2: no sirven para pensar mientras se dibuja) y embeber Excalidraw con JavaScript o un webview.
-- **Formato (propuesta)**: **`.canvas`, JSON Canvas 1.0** (el de Obsidian, spec abierta, MIT) **con cuatro extensiones aditivas**: `shape` en los nodos de texto (elipse, rombo o texto suelto), `route` en las flechas (recta o en codo), un nodo `stroke` para el lápiz y sus puntos en texto compacto. Un elemento por línea, claves en orden fijo, y las claves que no conoce se conservan. Mover una caja con dos flechas cambia **una línea** del archivo; en el `.excalidraw` equivalente, el diff tiene **68 líneas**. El archivo pesa **14× menos** (303 KB frente a 4.1 MB con 2 000 elementos). Las tarjetas de notas son `type: "file"`, de primera clase en JSON Canvas.
-- **`.excalidraw`**: no es el formato nativo (unos 30 campos por elemento, y `version`, `versionNonce` y `updated` cambian en cada edición), pero el spike lo lee y lo reescribe byte a byte como Excalidraw, y un convertidor **fuera de la app** pasa de uno al otro (§2.5).
+- **Formato**: **`.canvas`, JSON Canvas 1.0** (el de Obsidian, spec abierta, MIT) **con cuatro extensiones aditivas**: `shape` en los nodos de texto (elipse, rombo o texto suelto), `route` en las flechas (recta o en codo), un nodo `stroke` para el lápiz y sus puntos en texto compacto. Un elemento por línea, claves en orden fijo, y las claves que no conoce se conservan. Mover una caja con dos flechas cambia **una línea** del archivo; en el `.excalidraw` equivalente, el diff tiene **68 líneas**. El archivo pesa **14× menos** (303 KB frente a 4.1 MB con 2 000 elementos). Las tarjetas de notas son `type: "file"`, de primera clase en JSON Canvas.
+- **`.excalidraw`**: la app no lo abre (unos 30 campos por elemento, y `version`, `versionNonce` y `updated` cambian en cada edición). El spike lo lee y lo reescribe byte a byte como Excalidraw, y un convertidor **fuera de la app** pasa de uno al otro (§2.5).
 - **Render**: nativo en GPUI, sin webview. Cada elemento se tesela una vez con lyon (que GPUI ya trae) en coordenadas de la pizarra; en cada frame solo se transforman los vértices. Con GPU, a 1920×1080: **60 fps** al 100 % con 500 y con 2 000 elementos, y al arrastrar una caja con sus flechas (re-enrutar cuesta 12 µs). Con toda la pizarra a la vista hace falta **nivel de detalle** (cada caja como un quad de GPUI): sin él, 2 000 elementos van a 20 fps y, en estilo a mano, **GPUI rechaza el frame** porque pasa del tope de 128 MB de su búfer de instancias.
 - **Binario**: el visor suma **0.61 MB** a una ventana GPUI vacía; roughr, 0.11 MB más.
-- **roughr** (port de rough.js): funciona y es determinista con la semilla sacada del id (no hay que guardar nada), pero duplica los triángulos (2.4×) y el tiempo de construir, y sin una letra a mano no se ve como Excalidraw. **Opcional, no por defecto.**
+- **roughr** (port de rough.js): funciona y es determinista con la semilla sacada del id (no hay que guardar nada), pero duplica los triángulos (2.4×) y el tiempo de construir, y sin una letra a mano no se ve como Excalidraw. **Opcional y al final.**
 - **Edición** (diseño, §4): teclado primero con herramientas de una tecla (`v r o d a t p n`), texto de las cajas editado con el motor de vim, deshacer por elemento, todo como acciones `board::*` con su botón y su menú.
-- **Recomendación** (§6): **sí, por fases**. Ver los `.canvas` (y que sean ciudadanos del vault: finder, backlinks, tags) junto a M5, porque los vaults de Obsidian ya los tienen; editar, como hito propio después del primer release.
+- **Decisión** (§6): **sí, por fases, sin esperar al primer release**. Primero ver los `.canvas`, enseguida editarlos y después que sean ciudadanos del vault (backlinks, tags).
 
 ---
 
@@ -24,7 +24,7 @@ Descartado de entrada:
 - **Diagramas como código** (Mermaid, D2, PlantUML): describen un diagrama que ya se tiene en la cabeza; no sirven para descubrirlo moviendo cajas.
 - **Embeber Excalidraw** (su paquete de React en un webview, o JavaScript en un motor embebido): rompe la regla de una GUI nativa ([02](02-gui-stack.md)) y la de que todo sea una acción con nombre que el teclado y la paleta pueden invocar.
 
-[07](07-features-otras-apps.md) §2.5 lo dejó como "No encaja por ahora" con la razón "es otra app dentro de la app". Este documento mide cuánto cuesta esa otra app y propone acotarla.
+[07](07-features-otras-apps.md) §2.5 lo había dejado como "No encaja por ahora" con la razón "es otra app dentro de la app". Este documento mide cuánto cuesta esa otra app y la acota.
 
 ## 2. Formato en disco
 
@@ -62,7 +62,7 @@ Y lo que dice un diff de `.canvas` al mover una caja:
 
 Las flechas no cambian porque no guardan coordenadas: se recalculan de los nodos que unen (§3). Es la misma razón por la que mover una caja en Obsidian no toca sus flechas.
 
-### 2.3 Propuesta: JSON Canvas con cuatro extensiones
+### 2.3 Decisión: JSON Canvas con cuatro extensiones
 
 Un `.canvas` de Obsidian se abre tal cual. Lo que JSON Canvas no tiene va como claves nuevas, siempre opcionales, que se escriben solo cuando difieren de lo que diría JSON Canvas:
 
@@ -76,11 +76,11 @@ Un `.canvas` de Obsidian se abre tal cual. Lo que JSON Canvas no tiene va como c
 Lo que el formato decide para que la edición no tenga casos raros:
 
 - **Una flecha siempre une dos nodos.** `fromSide` y `toSide` son opcionales: sin ellos el lado sale de la geometría y cambia al mover las cajas. Soltar una flecha en el vacío crea una caja ahí, como Obsidian. No hay flechas colgando que mantener. Una flecha de un nodo a sí mismo es un lazo en su esquina de arriba a la derecha; su `route` no cuenta y no se guarda.
-- **El trazo es un nodo**, y su caja (`x`, `y`, `width`, `height`) es justo la de sus puntos, que van relativos a la esquina (entre 0 y el ancho o el alto; `Node::stroke` lo garantiza al crearlo o importarlo): se mueve, se selecciona y se agrupa como cualquier otro, y una flecha puede llegar a él. Los puntos van en la misma línea del nodo: medido, ponerlos en una sección aparte al final no hace el diff más chico (1 856 frente a 1 838 bytes al agregar un trazo) y parte un elemento en dos lugares del archivo. Con presión de lápiz caben los de una tableta, por si un día una app de tableta edita el mismo archivo.
+- **El trazo es un nodo**, y su caja (`x`, `y`, `width`, `height`) es justo la de sus puntos, que van relativos a la esquina (entre 0 y el ancho o el alto; `Node::stroke` del spike lo garantiza al crearlo o importarlo, y el lápiz de Metalmind hará lo mismo): se mueve, se selecciona y se agrupa como cualquier otro, y una flecha puede llegar a él. Los puntos van en la misma línea del nodo: medido, ponerlos en una sección aparte al final no hace el diff más chico (1 856 frente a 1 838 bytes al agregar un trazo) y parte un elemento en dos lugares del archivo. Con presión de lápiz caben los de una tableta, por si un día una app de tableta edita el mismo archivo.
 - **Escritura canónica**: un elemento por línea, las claves en un orden fijo y las desconocidas (de Obsidian o de un plugin, como el `background` de un grupo) al final de su línea, sin tocar. Escribir dos veces da los mismos bytes. La semilla del trazo a mano sale del id: no se guarda.
 - **Coordenadas enteras**, como pide JSON Canvas. Con una rejilla de 10 al mover, no se pierde nada.
 
-Lo que **no está verificado**: qué hace Obsidian con un `.canvas` que trae `shape`, `route` o un nodo `stroke`. La spec no dice nada de claves o tipos extra. Lo esperable es que muestre una elipse como caja y no muestre los trazos; lo que importa es si al guardar **conserva** lo que no conoce. Hay que probarlo con Obsidian antes de decidir (riesgo 3 del §6). Si no los conserva, las extensiones siguen sirviendo para Metalmind, pero editar la misma pizarra en Obsidian perdería formas y trazos.
+Lo que **no está verificado**: qué hace Obsidian con un `.canvas` que trae `shape`, `route` o un nodo `stroke`. La spec no dice nada de claves o tipos extra. Lo esperable es que muestre una elipse como caja y no muestre los trazos; lo que importa es si al guardar **conserva** lo que no conoce. La prueba con Obsidian sigue pendiente y no bloquea nada (riesgo 3 del §6). Si no los conserva, las extensiones siguen sirviendo para Metalmind, pero editar la misma pizarra en Obsidian perdería formas y trazos.
 
 ### 2.4 Tarjetas de notas
 
@@ -88,7 +88,7 @@ Una tarjeta es un nodo `file` con la ruta de la nota en el vault (`"file":"docs/
 
 ### 2.5 `.excalidraw`: un convertidor aparte
 
-La pizarra solo lee y escribe `.canvas`. Para traer o llevar dibujos de Excalidraw, un convertidor de línea de comandos fuera de la app (`spikes/pizarra/src/bin/convertir.rs` es el esbozo). Lo que pasa y lo que no:
+La app no abre `.excalidraw`: la pizarra solo lee y escribe `.canvas`. Para traer o llevar dibujos de Excalidraw, un convertidor de línea de comandos fuera de la app, que está por hacer (`spikes/pizarra/src/bin/convertir.rs` es el esbozo). Lo que pasa y lo que no:
 
 | Excalidraw | Pizarra | Notas |
 |---|---|---|
@@ -190,7 +190,7 @@ Lo que suma es el código del formato, la geometría, la escena y el pintado: ly
 - **En contra**: 2.4× triángulos y 2× tiempo de construir; con el texto en la letra de la interfaz se ve a medio camino. Excalidraw se ve como se ve por la letra (Excalifont y Virgil, OFL) tanto como por el trazo: habría que embeber una (unos cientos de KB).
 - `perfect_freehand` 0.1.1 (el port de perfect-freehand, que Excalidraw usa para el lápiz) se probó en una primera versión del spike: funciona, pero es muy joven (2 k descargas). El lápiz del spike es una curva suavizada de ancho fijo, que basta para subrayar y encerrar.
 
-**Propuesta**: estilo limpio por defecto y el estilo a mano como opción por pizarra o global, en una fase tardía. No condiciona nada del formato: la semilla sale del id.
+**Decisión**: estilo limpio por defecto; el estilo a mano es opcional y va al final. No condiciona nada del formato: la semilla sale del id.
 
 ### 3.6 Crates verificados (crates.io, 2026-10-26)
 
@@ -205,7 +205,7 @@ Lo que suma es el código del formato, la geometría, la escena y el pintado: ly
 
 ## 4. Edición mínima viable (diseño)
 
-El spike no edita más que lo necesario para medir: arrastrar una caja (con rejilla de 10), crear una caja o una elipse con `r` u `o` y un clic, y la barra de herramientas con la tecla de cada una. Lo que sigue es el diseño de la edición, para estimar la fase 3.
+El spike no edita más que lo necesario para medir: arrastrar una caja (con rejilla de 10), crear una caja o una elipse con `r` u `o` y un clic, y la barra de herramientas con la tecla de cada una. Lo que sigue es el diseño de la edición, la fase 3.
 
 ### 4.1 Herramientas y teclas
 
@@ -258,11 +258,13 @@ Rejilla de 10 al mover y al crear (el spike la tiene) y guías de alineación co
 
 ### Fases
 
+En el orden en que se hacen. Los números son los de la PR #171, que ya usan otros documentos: el índice (fase 2) va después de editar.
+
 | Fase | Qué | Tamaño |
 |---|---|---|
-| 1. Ver | `metalmind-board` (formato y geometría, con los tests del spike), la vista de solo lectura a pantalla completa con pan, zoom y nivel de detalle, `EntryKind::Board` en el finder y el árbol | M: 3–4 PRs |
-| 2. Índice | Backlinks desde las tarjetas, links y tags en el texto de los nodos, renombrar actualiza las tarjetas | S: 2 PRs |
+| 1. Ver | `metalmind-board` (formato y geometría, con los tests del spike), la vista de solo lectura a pantalla completa con pan, zoom y nivel de detalle, `EntryKind::Board` en el finder y el árbol, y crear una pizarra vacía | M: 2 PRs |
 | 3. Editar | Selección, mover, crear formas, flechas con ratón y teclado, texto con el motor de vim, borrar, copiar y pegar, deshacer, autoguardado, rejilla y guías, barra y menú contextual, acciones `board::*` | L: 5–7 PRs |
+| 2. Índice | Backlinks desde las tarjetas, links y tags en el texto de los nodos, renombrar actualiza las tarjetas | S: 2 PRs |
 | 4. Embeber | `![[x.canvas]]` en las notas, sobre los embeds de M5 | S: 1–2 PRs |
 | 5. Extras | Lápiz con presión, grupos editables, colores, estilo a mano con su letra, el convertidor de `.excalidraw` como script | Según se pidan |
 
@@ -270,17 +272,19 @@ Rejilla de 10 al mover y al crear (el spike la tiene) y guías de alineación co
 
 1. **Paths de GPUI**: el tope de 128 MB por frame y el costo de miles de paths obligan al nivel de detalle desde la fase 1 (medido en §3.3). `Path` y `push_triangle` son API pública pero de bajo nivel, y `gpui-pre` cambia cada semana; se mitiga como el resto, con la versión fijada (04, riesgo 9). Si un día el costo de los paths molesta, el siguiente paso es pintar la pizarra lejana como imagen (tiny-skia, que GPUI ya trae) en el executor de fondo.
 2. **Texto dentro de las cajas**: el motor de vim con un buffer por caja es un anfitrión nuevo para `metalmind-vim` (alto variable, partir al ancho de la caja, IME). Es la parte más cara de la fase 3.
-3. **Obsidian y las extensiones** (§2.3, sin verificar): si Obsidian borra lo que no conoce al guardar, editar la misma pizarra en los dos lados pierde formas y trazos. Se prueba antes de la fase 1; si falla, las extensiones se quedan igual y se documenta que Obsidian solo las ve.
+3. **Obsidian y las extensiones** (§2.3, sin verificar): si Obsidian borra lo que no conoce al guardar, editar la misma pizarra en los dos lados pierde formas y trazos. La prueba sigue pendiente y no bloquea ninguna fase; si falla, las extensiones se quedan igual y se documenta que Obsidian solo las ve.
 4. **Que crezca**: [07](07-features-otras-apps.md) la descartó por ser "otra app dentro de la app". Las fases acotan: sin imágenes, sin colaboración, sin capas ni estilos por elemento más allá del color, y el boceto (lápiz, trazo a mano) al final.
 5. **Letra a mano**: si se quiere el aspecto de Excalidraw, hay que embeber una fuente OFL y elegir cuál.
 
-### Recomendación
+### Decisión
 
-**Sí, por fases:**
+El autor decidió sobre la PR #171 (con un cambio posterior en el punto de editar):
 
-- **Fases 1 y 2 junto a M5** ("el vault se ve como en Obsidian"): los vaults de Obsidian ya tienen `.canvas`, y hoy Metalmind los muestra como adjuntos. Verlos y que sus tarjetas cuenten como backlinks cuesta poco (5–6 PRs, nada de edición) y no depende de decidir la edición.
-- **Fase 3 como hito propio después del primer release** (03 §8, después de M6): es lo caro y no bloquea nada del MVP. La fase 4 entra cuando estén las fases 1 y 3, porque reutiliza la vista de solo lectura.
-- **El formato se decide ya** (en esta PR, si el autor está de acuerdo): JSON Canvas con las cuatro extensiones del §2.3, sujeto a probar Obsidian (riesgo 3).
+- **Formato**: `.canvas`, JSON Canvas 1.0 con las cuatro extensiones del §2.3. La prueba con Obsidian (riesgo 3) sigue pendiente y no bloquea.
+- **Ver los `.canvas`**: sí, ya (fase 1). Hoy Metalmind los muestra como adjuntos.
+- **Editar**: sí, inmediatamente después de ver. Ya no espera al primer release: el autor necesita la pizarra para trabajar. Por eso el índice (fase 2) va después de editar, y la fase 4 reutiliza la vista de solo lectura cuando estén las fases 1 y 3.
+- **Trazo a mano** (roughr y su letra): opcional y al final (fase 5).
+- **`.excalidraw`**: la app no lo abre; un convertidor aparte (§2.5, fase 5).
 
 ## 7. Cómo reproducirlo
 

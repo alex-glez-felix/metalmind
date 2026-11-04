@@ -45,7 +45,7 @@ jobs:
       # 03 §6: solo metalmind-ui y el binario dependen de la GUI.
       - name: El núcleo no depende de GPUI
         run: |
-          for crate in metalmind-buffer metalmind-config metalmind-syntax metalmind-vim metalmind-vault metalmind-search metalmind-template; do
+          for crate in metalmind-board metalmind-buffer metalmind-config metalmind-syntax metalmind-vim metalmind-vault metalmind-search metalmind-template; do
             if cargo tree -p "$crate" -e normal,build | grep -q gpui; then
               echo "$crate depende de GPUI" >&2
               exit 1
