@@ -35,6 +35,22 @@ impl StrokePoint {
         }
     }
 
+    /// Este punto al cambiar la caja de su trazo: a lo ancho `x_scale` y a lo
+    /// alto `y_scale`.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        reason = "las coordenadas de una pizarra caben en i32 y en f32"
+    )]
+    pub(crate) fn scaled(self, x_scale: f32, y_scale: f32) -> Self {
+        Self {
+            x_tenths: (self.x_tenths as f32 * x_scale).round() as i32,
+            y_tenths: (self.y_tenths as f32 * y_scale).round() as i32,
+            ..self
+        }
+    }
+
     /// Relativo a la esquina del nodo.
     #[must_use]
     #[expect(

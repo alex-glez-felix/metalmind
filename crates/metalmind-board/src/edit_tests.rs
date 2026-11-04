@@ -281,3 +281,53 @@ fn node_at(board: &Board, id: &str) -> (i32, i32) {
     let node = board.node(id).unwrap();
     (node.x, node.y)
 }
+
+#[test]
+fn cambiar_el_tamano_de_un_trazo_escala_sus_puntos_con_su_caja() {
+    let mut board = Board::default();
+    let points = [Point::new(0.0, 0.0), Point::new(100.0, 50.0)];
+    let id = board.add_stroke(&points, 2.0).unwrap();
+    let node = board.nodes.iter_mut().find(|node| node.id == id).unwrap();
+    node.set_frame(Frame {
+        x: 10,
+        y: 20,
+        width: 50,
+        height: 100,
+    });
+    let NodeKind::Stroke { points, .. } = &node.kind else {
+        panic!("no es un trazo");
+    };
+    assert_eq!(points[1].position(), Point::new(50.0, 100.0));
+    assert_eq!(Board::parse(&board.write()).unwrap(), board);
+}
+
+#[test]
+fn un_trazo_sin_ancho_no_divide_por_cero() {
+    let mut board = Board::parse(
+        r#"{"nodes":[{"id":"s","type":"stroke","x":0,"y":0,"width":0,"height":10,"strokeWidth":2,"points":"0,0 0,100"}]}"#,
+    )
+    .unwrap();
+    board.nodes[0].resize_by(GRID, 0);
+    let NodeKind::Stroke { points, .. } = &board.nodes[0].kind else {
+        panic!("no es un trazo");
+    };
+    assert_eq!(points[1].position(), Point::new(0.0, 10.0));
+}
+
+#[rstest]
+#[case(10, 0, (110, 5))]
+#[case(0, 10, (100, 15))]
+#[case(-500, 0, (GRID, 5))]
+#[case(0, -500, (100, GRID))]
+fn cambiar_el_tamano_no_toca_el_lado_que_no_cambia(
+    #[case] width: i32,
+    #[case] height: i32,
+    #[case] expected: (i32, i32),
+) {
+    let mut board = Board::parse(
+        r#"{"nodes":[{"id":"a","type":"text","x":0,"y":0,"width":100,"height":5,"text":""}]}"#,
+    )
+    .unwrap();
+    board.nodes[0].resize_by(width, height);
+    assert_eq!((board.nodes[0].width, board.nodes[0].height), expected);
+}

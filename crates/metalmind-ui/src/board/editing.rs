@@ -246,8 +246,7 @@ impl BoardView {
         self.edit(
             |board| {
                 for node in board.nodes.iter_mut().filter(|node| ids.contains(&node.id)) {
-                    node.width = node.width.saturating_add(width).max(GRID);
-                    node.height = node.height.saturating_add(height).max(GRID);
+                    node.resize_by(width, height);
                 }
             },
             cx,

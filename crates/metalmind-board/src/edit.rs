@@ -148,11 +148,50 @@ impl Node {
         }
     }
 
+    /// Lleva el nodo a `frame`. Un trazo escala sus puntos: su caja es justo la
+    /// de ellos (09 §2.3).
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "las medidas de una pizarra caben en f32"
+    )]
     pub fn set_frame(&mut self, frame: Frame) {
+        if let NodeKind::Stroke { points, .. } = &mut self.kind {
+            let scale = |new: i32, old: i32| {
+                if old > 0 {
+                    new as f32 / old as f32
+                } else {
+                    1.0
+                }
+            };
+            let (x_scale, y_scale) = (
+                scale(frame.width, self.width),
+                scale(frame.height, self.height),
+            );
+            for point in points {
+                *point = point.scaled(x_scale, y_scale);
+            }
+        }
         self.x = frame.x;
         self.y = frame.y;
         self.width = frame.width;
         self.height = frame.height;
+    }
+
+    /// Cambia el tamaño una cantidad, sin bajar de una celda en el lado que
+    /// cambia: el otro se queda como está, aunque mida menos.
+    pub fn resize_by(&mut self, width: i32, height: i32) {
+        let grown = |size: i32, by: i32| {
+            if by == 0 {
+                size
+            } else {
+                size.saturating_add(by).max(GRID)
+            }
+        };
+        self.set_frame(Frame {
+            width: grown(self.width, width),
+            height: grown(self.height, height),
+            ..self.frame()
+        });
     }
 
     /// Es un texto suelto sin nada escrito: no se ve ni se puede elegir.
