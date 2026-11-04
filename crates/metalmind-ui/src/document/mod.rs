@@ -2,6 +2,7 @@
 //! archivo donde se guarda. Los cursores son de cada panel y el estado de
 //! vim es uno solo para todos (ver [`Workspace`](crate::workspace::Workspace)).
 
+mod board;
 mod save;
 
 use std::fmt;
@@ -11,6 +12,9 @@ use metalmind_buffer::{Buffer, BufferError, HistorySeq};
 use metalmind_syntax::{Rows, note_name};
 use metalmind_vault::{ContentHash, FileError};
 use metalmind_vim::DocState;
+
+pub use self::board::BoardEditError;
+use self::board::EngineScratch;
 
 /// Como el `fixeol` de vim: en disco cada línea termina en `\n`, y en el buffer
 /// la última no lo lleva.
@@ -80,23 +84,13 @@ pub struct Revision {
     on_disk: Option<ContentHash>,
 }
 
-/// Un buffer vacío con su estado: las marks y los saltos del motor son de un
-/// buffer, y no se pueden mezclar con los del archivo.
-#[derive(Debug)]
-struct EngineScratch {
-    buffer: Buffer,
-    state: DocState,
-}
-
 #[derive(Debug)]
 pub struct Document {
     /// La ruta como se escribió, para mostrarla y guardar ahí; `None` en
     /// un buffer sin archivo, como el de abrir un vault sin nota.
     path: Option<PathBuf>,
     buffer: Buffer,
-    /// En una pizarra, lo que el motor edita en lugar del archivo: nada de lo
-    /// que escriba `:` puede romper su JSON (09 §4.2). El archivo solo lo
-    /// cambia lo que entiende de pizarras.
+    /// En una pizarra, lo que el motor edita en lugar del archivo.
     board_scratch: Option<EngineScratch>,
     /// Lo que el motor guarda del documento (sus marks, el estilo de cada
     /// línea y lo que mide), que le presta en cada tecla.
@@ -353,13 +347,7 @@ impl Document {
 
 fn scratch_for(path: &Path) -> Option<EngineScratch> {
     let name = path.file_name()?.to_str()?;
-    note_name::is_board(name).then(|| {
-        let buffer = Buffer::default();
-        EngineScratch {
-            state: DocState::painted(&buffer, Rows::uniform(1)),
-            buffer,
-        }
-    })
+    note_name::is_board(name).then(|| EngineScratch::holding(""))
 }
 
 /// Absoluta y sin enlaces; de un archivo que todavía no existe se resuelve

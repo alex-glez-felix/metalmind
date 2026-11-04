@@ -13,6 +13,7 @@
 //! muestra queda oculto, con sus cambios, su historial y su cursor.
 
 mod autosave;
+mod board;
 mod buffers;
 mod command_typing;
 mod commands;
@@ -70,7 +71,7 @@ pub use self::source_lines::SourceLines;
 pub use self::tag_typing::TypedTag;
 pub use self::which_key::NextKeys;
 use crate::disk::{Disk, Files};
-use crate::document::{Document, Editable};
+use crate::document::{BoardEditError, Document, Editable};
 use crate::tag_change::RequestError;
 
 #[derive(Debug, thiserror::Error)]
@@ -87,6 +88,8 @@ pub enum WorkspaceError {
     UnknownAction(#[from] UnknownAction),
     #[error(transparent)]
     TagRequest(#[from] RequestError),
+    #[error(transparent)]
+    Board(#[from] BoardEditError),
 }
 
 /// Lo que muestra un panel.
@@ -379,7 +382,8 @@ impl Workspace {
         self.edit_pane(pane, None, |vim, target| {
             vim.execute(Action::Interrupt, target)?;
             Ok(())
-        })
+        })?;
+        self.close_board_text(pane)
     }
 
     fn command_line(&self) -> Option<CommandLine<'_>> {
@@ -449,6 +453,9 @@ impl Workspace {
             .state
             .reveal(buffer, &state.selections, doc, self.scrolloff);
         let splices = buffer.take_splices();
+        if !splices.is_empty() {
+            document.sync_board_text()?;
+        }
         document.settle();
         // Lo que cambió fuera durante un Insert se relee al cerrarlo, si no
         // quedó nada sin guardar.
