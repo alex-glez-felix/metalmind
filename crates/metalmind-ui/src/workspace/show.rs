@@ -142,7 +142,11 @@ impl Workspace {
     /// la única copia.
     pub(super) fn refresh(&mut self, id: DocumentId) -> Result<(), WorkspaceError> {
         let document = self.document(id)?;
-        let Some(path) = document.path().filter(|_| !document.is_modified()) else {
+        // Con una caja abierta se relee al cerrarla.
+        let Some(path) = document
+            .path()
+            .filter(|_| !document.is_modified() && document.open_board_text().is_none())
+        else {
             return Ok(());
         };
         let fresh = match Document::open(path) {

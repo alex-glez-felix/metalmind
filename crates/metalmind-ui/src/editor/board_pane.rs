@@ -3,10 +3,11 @@
 
 use gpui_kit::{
     App, AppContext as _, Context, CursorStyle, Div, ElementInputHandler, Entity,
-    InteractiveElement as _, MouseButton, ParentElement as _, SharedString, Styled as _, Window,
-    canvas, div, prelude::FluentBuilder as _,
+    InteractiveElement as _, KeyContext, Keystroke, MouseButton, ParentElement as _, SharedString,
+    Styled as _, Window, canvas, div, prelude::FluentBuilder as _,
 };
-use metalmind_keymap::BoardAction;
+use metalmind_keymap::{BoardAction, context};
+use metalmind_vim::Mode;
 
 use super::Editor;
 use super::element::EditorElement;
@@ -38,15 +39,66 @@ impl Editor {
         self.board_body(body, board, cx)
     }
 
+    /// El texto de una caja está abierto en el motor, desde este panel.
+    pub(super) fn board_text_open(&self, cx: &App) -> bool {
+        self.board.is_some()
+            && self
+                .view(cx)
+                .is_some_and(|view| view.focused && view.document.open_board_text().is_some())
+    }
+
+    /// Los contextos de teclas de la pizarra, según lo que esté abierto.
+    pub(super) fn board_key_context(&self, key_context: &mut KeyContext, cx: &App) {
+        let Some(board) = &self.board else {
+            return;
+        };
+        let normal = self.mode(cx) == Mode::Normal;
+        if self.board_text_open(cx) {
+            key_context.add(context::BOARD_TEXT);
+            if normal && self.workspace.read(cx).engine_is_idle() {
+                key_context.add(context::BOARD_TEXT_IDLE);
+            }
+        } else if normal {
+            // Con la línea de `:` abierta las letras y `enter` son de ella.
+            key_context.add(if board.read(cx).hints_open() {
+                context::BOARD_HINTS
+            } else {
+                context::BOARD
+            });
+        }
+    }
+
+    /// Una letra con las pistas de unir a la vista. `true` si era para ellas.
+    pub(super) fn feed_board_hint(&self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
+        let Some(board) = self
+            .board
+            .clone()
+            .filter(|board| board.read(cx).hints_open())
+        else {
+            return false;
+        };
+        let key = keystroke
+            .key_char
+            .as_deref()
+            .and_then(|text| text.chars().next());
+        if let Some(key) = key {
+            board.update(cx, |board, cx| board.hint_key(key, cx));
+        }
+        true
+    }
+
     /// Una pizarra por panel que la muestra, ni una más.
     pub(super) fn sync_board(&mut self, cx: &mut Context<Self>) {
         let shows_board = self.view(cx).is_some_and(|view| view.document.is_board());
         if !shows_board {
-            self.board = None;
+            if let Some(board) = self.board.take() {
+                self.board_cameras.extend(board.read(cx).camera_by_file());
+            }
         } else if self.board.is_none() {
             let (workspace, session, pane) =
                 (self.workspace.clone(), self.session.clone(), self.pane);
-            self.board = Some(cx.new(|_| BoardView::new(workspace, session, pane)));
+            let cameras = self.board_cameras.clone();
+            self.board = Some(cx.new(|_| BoardView::new(workspace, session, pane, cameras)));
         }
     }
 
@@ -77,6 +129,8 @@ impl Editor {
     }
 
     fn board_body(&self, body: Div, board: Entity<BoardView>, cx: &mut Context<Self>) -> Div {
+        let preedit = self.marked.clone();
+        board.update(cx, |board, _| board.set_preedit(preedit));
         // Lo que se teclea tras `:` llega por el input handler, y no hay
         // `EditorElement` que lo registre.
         let (focus, editor) = (self.focus_handle.clone(), cx.entity());

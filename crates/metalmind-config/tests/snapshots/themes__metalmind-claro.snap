@@ -88,6 +88,9 @@ Theme {
         board_text_muted: #5f6670,
         board_label_background: #f5f6f8,
         board_selection: #2e5cd6,
+        board_guide: #2e5cd6,
+        board_hint_background: #2e5cd6,
+        board_hint_text: #f5f6f8,
         board_color_1: #c4304f,
         board_color_2: #b35a00,
         board_color_3: #8f6400,
@@ -202,6 +205,9 @@ Theme {
             ),
             board_selection: Px(
                 2.0,
+            ),
+            board_guide: Px(
+                1.0,
             ),
         },
         text: Text {
@@ -418,6 +424,27 @@ Theme {
             ),
             board_toolbar_margin: Length(
                 8.0,
+            ),
+            board_edge_grab: Length(
+                6.0,
+            ),
+            board_corner_grab: Length(
+                7.0,
+            ),
+            board_edge_hit: Length(
+                5.0,
+            ),
+            board_handle_size: Length(
+                8.0,
+            ),
+            board_drag_threshold: Length(
+                3.0,
+            ),
+            board_snap_distance: Length(
+                6.0,
+            ),
+            board_hint_padding: Length(
+                4.0,
             ),
             board_fill_alpha: Fraction(
                 0.14,

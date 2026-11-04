@@ -20,13 +20,15 @@ named_actions! {
 }
 
 named_actions! {
-    /// De la pizarra ([09](../../docs/research/09-pizarra.md) §4.1): mover la
-    /// vista, acercarla y elegir un nodo para abrir su nota.
+    /// De la pizarra ([09](../../docs/research/09-pizarra.md) §4.1).
     pub enum BoardAction {
-        PanLeft = "board::pan_left",
-        PanDown = "board::pan_down",
-        PanUp = "board::pan_up",
-        PanRight = "board::pan_right",
+        /// Con la herramienta de flecha y un nodo elegido, crea una caja unida
+        /// hacia ese lado; si hay algo elegido, lo mueve una celda de la
+        /// rejilla; si no, mueve la vista.
+        MoveLeft = "board::move_left",
+        MoveDown = "board::move_down",
+        MoveUp = "board::move_up",
+        MoveRight = "board::move_right",
         ZoomIn = "board::zoom_in",
         ZoomOut = "board::zoom_out",
         /// Toda la pizarra a la vista.
@@ -42,6 +44,46 @@ named_actions! {
         /// Abre la nota de la tarjeta elegida o, sin ninguna elegida, la de
         /// la tarjeta más cercana al centro de la vista.
         OpenNote = "board::open_note",
+        /// Elegir, mover y seleccionar: la herramienta de siempre.
+        ToolSelect = "board::tool_select",
+        /// El siguiente clic, o `enter` en el centro de la vista, crea la
+        /// forma y vuelve a `tool_select`; arrastrar la dibuja con su tamaño.
+        ToolRectangle = "board::tool_rectangle",
+        ToolEllipse = "board::tool_ellipse",
+        ToolDiamond = "board::tool_diamond",
+        /// Como las formas, con un texto suelto que se abre para escribir.
+        ToolText = "board::tool_text",
+        /// Arrastrar dibuja a mano, hasta cambiar de herramienta.
+        ToolPencil = "board::tool_pencil",
+        /// Une nodos: `h j k l` crean una caja hacia ese lado, `f` une a uno
+        /// que ya existe, y arrastrar va de un nodo a otro.
+        ToolArrow = "board::tool_arrow",
+        /// Pone una letra sobre cada nodo visible; teclearla une el nodo
+        /// elegido a ese.
+        LinkToNode = "board::link_to_node",
+        /// `enter`: crea con la herramienta activa, escribe en la caja elegida
+        /// o abre la nota de la tarjeta.
+        Confirm = "board::confirm",
+        /// Abre el texto de lo elegido en el motor de vim.
+        EditText = "board::edit_text",
+        /// Vuelve a la pizarra desde el texto de una caja: es un solo paso.
+        EndTextEdit = "board::end_text_edit",
+        /// Borra lo elegido, y con cada nodo sus flechas.
+        Delete = "board::delete",
+        /// Copia lo elegido, como líneas de `.canvas`.
+        Copy = "board::copy",
+        /// Pega con ids nuevos y corrido.
+        Paste = "board::paste",
+        Undo = "board::undo",
+        Redo = "board::redo",
+        /// Deja lo que esté a medias: las letras de unir, la herramienta, la
+        /// selección, en ese orden.
+        Cancel = "board::cancel",
+        /// Cambia el tamaño de lo elegido una celda de la rejilla.
+        ResizeNarrower = "board::resize_narrower",
+        ResizeShorter = "board::resize_shorter",
+        ResizeTaller = "board::resize_taller",
+        ResizeWider = "board::resize_wider",
     }
 }
 
@@ -197,6 +239,14 @@ pub mod context {
     /// Lo que se agrega al del editor en un panel que muestra una pizarra:
     /// sus teclas son de la vista, no del motor.
     pub const BOARD: &str = "Board";
+    /// En lugar de `Board`, con las letras de unir un nodo a la vista: cada
+    /// tecla es una letra.
+    pub const BOARD_HINTS: &str = "BoardHints";
+    /// En lugar de `Board`, con el texto de una caja abierto en el motor.
+    pub const BOARD_TEXT: &str = "BoardText";
+    /// Además de `BoardText`, en Normal y sin nada tecleado a medias: `esc`
+    /// ya no tiene nada que cancelar y vuelve a la pizarra.
+    pub const BOARD_TEXT_IDLE: &str = "BoardTextIdle";
     /// El árbol del panel lateral con el foco.
     pub const FILE_TREE: &str = "FileTree";
     /// Escribiendo un nombre o el filtro en el panel lateral.
@@ -232,6 +282,12 @@ pub enum View {
     Editor,
     /// Un panel que muestra una pizarra.
     Board,
+    /// Una pizarra con las letras de unir a la vista.
+    BoardHints,
+    /// El texto de una caja, abierto en el motor.
+    BoardText,
+    /// El texto de una caja en Normal, sin nada a medias.
+    BoardTextIdle,
     /// El editor con una lista del autocompletado abierta.
     Completion,
     /// El editor con la lista del historial o del nombre de un comando de
@@ -257,6 +313,9 @@ impl View {
         match self {
             Self::Editor => context::EDITOR,
             Self::Board => context::BOARD,
+            Self::BoardHints => context::BOARD_HINTS,
+            Self::BoardText => context::BOARD_TEXT,
+            Self::BoardTextIdle => context::BOARD_TEXT_IDLE,
             Self::Completion => "Editor && Completion",
             Self::CommandCompletion => "Editor && CommandCompletion",
             Self::FileTree => context::FILE_TREE,

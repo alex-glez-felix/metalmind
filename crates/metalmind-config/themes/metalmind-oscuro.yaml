@@ -108,6 +108,9 @@ ui:
   board_text_muted: text_muted
   board_label_background: background
   board_selection: accent
+  board_guide: accent
+  board_hint_background: accent
+  board_hint_text: background
   board_color_1: red
   board_color_2: orange
   board_color_3: yellow
@@ -185,6 +188,7 @@ stroke:
   tab: 2  # bajo la pestaña que se ve
   board_line: 2
   board_selection: 2
+  board_guide: 1
 
 # Tamaño (veces `font.size` de config.yaml) e interlineado (veces el tamaño).
 text:
@@ -261,6 +265,13 @@ layout:
   board_pan_step: 80
   board_fit_margin: 40
   board_toolbar_margin: sm
+  board_edge_grab: 6       # lo que el ratón agarra alrededor del borde de un nodo, para una flecha
+  board_corner_grab: 7     # lo que agarra alrededor de la esquina de lo elegido, para el tamaño
+  board_edge_hit: 5        # lo que agarra alrededor de una flecha
+  board_handle_size: 8
+  board_drag_threshold: 3  # lo que se mueve el ratón antes de que un clic sea un arrastre
+  board_snap_distance: 6   # a cuánto se alinea con un vecino
+  board_hint_padding: xs
   board_fill_alpha: 0.14
   board_group_alpha: 0.06
   gutter_mark_columns: 3  # la letra, el + de las demás y un espacio

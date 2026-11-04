@@ -47,7 +47,7 @@ fn node(index: usize, columns: usize) -> String {
             r#"{{"id":"{id}","type":"text",{place},"shape":"diamond","text":"¿Rombo {index}?"}}"#
         ),
         3 => format!(
-            r#"{{"id":"{id}","type":"text",{place},"color":"4","text":"Caja con color {index}"}}"#
+            r#"{{"id":"{id}","type":"text",{place},"text":"Caja con color {index}","color":"4"}}"#
         ),
         _ => format!(
             r#"{{"id":"{id}","type":"text",{place},"text":"Una caja con más de una palabra adentro, la {index}"}}"#

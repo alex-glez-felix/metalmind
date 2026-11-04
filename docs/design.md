@@ -67,6 +67,8 @@ Propuesto el 2026-11-01 en [#86](https://github.com/alex-glez-felix/metalmind/is
 
 Propuesto el 2026-11-04 con la vista de solo lectura ([09](research/09-pizarra.md)), hasta que se decida su estilo: ocupa el cuerpo del panel, sobre el fondo del editor y sin rejilla; ruta arriba y barra de estado abajo, con el zoom donde una nota lleva la posición. Abajo a la derecha, los cuatro botones del zoom con su tecla, que se parten en filas en un panel angosto. El nodo elegido lleva un borde de acento con el mismo grosor a cualquier zoom. Lo que no se lee se dice en el centro, sin tocar el archivo.
 
+Propuesto el 2026-11-04 con la edición: arriba a la izquierda, la barra de herramientas con la tecla de cada una, con el mismo botón siempre y solo el borde de acento en la activa, para que elegirla no mueva nada. Lo elegido lleva su borde de acento y, si es un solo nodo, cuatro cuadritos en las esquinas para cambiar su tamaño; una flecha elegida, su recorrido entero en ese color. Las guías son líneas de 1 px, de lado a lado de lo que alinean, y lo que se dibuja o el rectángulo de selección, solo un contorno. Sobre cada nodo, al unir con el teclado, su letra en un recuadro de acento en la esquina. El texto de una caja se escribe donde se ve, con el cursor de cada modo de vim, y puede salirse de su caja mientras se escribe: al salir, la caja crece. El cursor del ratón dice qué hace apretar ahí: cruz en el borde de un nodo (sacar una flecha), de cambiar el tamaño en una esquina y de texto en una caja abierta. El menú contextual es el del árbol, con la tecla de cada entrada.
+
 ### Menú contextual
 
 *Por decidir.*

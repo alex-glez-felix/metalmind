@@ -184,10 +184,10 @@ const COMPLETION: &[(&[Keystroke], EditorAction)] = &[
 ];
 
 const BOARD: &[(&[Keystroke], BoardAction)] = &[
-    (&[k('h')], BoardAction::PanLeft),
-    (&[k('j')], BoardAction::PanDown),
-    (&[k('k')], BoardAction::PanUp),
-    (&[k('l')], BoardAction::PanRight),
+    (&[k('h')], BoardAction::MoveLeft),
+    (&[k('j')], BoardAction::MoveDown),
+    (&[k('k')], BoardAction::MoveUp),
+    (&[k('l')], BoardAction::MoveRight),
     (&[k('H')], BoardAction::SelectNeighborLeft),
     (&[k('J')], BoardAction::SelectNeighborDown),
     (&[k('K')], BoardAction::SelectNeighborUp),
@@ -202,8 +202,34 @@ const BOARD: &[(&[Keystroke], BoardAction)] = &[
     (&[k('=')], BoardAction::ZoomToActualSize),
     (&[shift('0')], BoardAction::ZoomToActualSize),
     (&[k('g'), k('d')], BoardAction::OpenNote),
-    (&[named(KeyName::Enter)], BoardAction::OpenNote),
+    (&[k('v')], BoardAction::ToolSelect),
+    (&[k('r')], BoardAction::ToolRectangle),
+    (&[k('o')], BoardAction::ToolEllipse),
+    (&[k('d')], BoardAction::ToolDiamond),
+    (&[k('t')], BoardAction::ToolText),
+    (&[k('a')], BoardAction::ToolArrow),
+    (&[k('p')], BoardAction::ToolPencil),
+    (&[k('f')], BoardAction::LinkToNode),
+    (&[named(KeyName::Enter)], BoardAction::Confirm),
+    (&[k('i')], BoardAction::EditText),
+    (&[named(KeyName::Delete)], BoardAction::Delete),
+    (&[k('x')], BoardAction::Delete),
+    (&[k('y')], BoardAction::Copy),
+    (&[k('P')], BoardAction::Paste),
+    (&[k('u')], BoardAction::Undo),
+    (&[ctrl('r')], BoardAction::Redo),
+    (&[named(KeyName::Escape)], BoardAction::Cancel),
+    (&[ctrl('h')], BoardAction::ResizeNarrower),
+    (&[ctrl('j')], BoardAction::ResizeTaller),
+    (&[ctrl('k')], BoardAction::ResizeShorter),
+    (&[ctrl('l')], BoardAction::ResizeWider),
 ];
+
+const BOARD_HINTS: &[(&[Keystroke], BoardAction)] =
+    &[(&[named(KeyName::Escape)], BoardAction::Cancel)];
+
+const BOARD_TEXT_IDLE: &[(&[Keystroke], BoardAction)] =
+    &[(&[named(KeyName::Escape)], BoardAction::EndTextEdit)];
 
 /// En una pizarra el motor no recibe teclas (09 §4.2), así que lo que en
 /// Normal es suyo aquí es de la vista: `space` y `ctrl-w`. Solo `:` lo sigue
@@ -215,7 +241,16 @@ fn board() -> impl Iterator<Item = Binding> {
     let panes = PANES.iter().flat_map(|&(key, command)| {
         [k(key), ctrl(key)].map(|next| in_view(View::Board, &[ctrl('w'), next], command))
     });
-    leader.chain(panes).chain(table(View::Board, BOARD))
+    leader
+        .chain(panes)
+        .chain([in_view(
+            View::Board,
+            &[k('n')],
+            WindowCommand::InsertNoteCard,
+        )])
+        .chain(table(View::Board, BOARD))
+        .chain(table(View::BoardHints, BOARD_HINTS))
+        .chain(table(View::BoardTextIdle, BOARD_TEXT_IDLE))
 }
 
 const TREE: &[(&[Keystroke], PanelAction)] = &[

@@ -59,6 +59,9 @@ named_actions! {
         /// `:board [nombre]`: una pizarra nueva y vacía. Con nombre se crea
         /// en la raíz del vault; sin él, el panel lateral lo pregunta.
         NewBoard = "board::new",
+        /// Abre el finder y la nota elegida entra como una tarjeta en el centro
+        /// de la pizarra del panel.
+        InsertNoteCard = "board::insert_note_card",
         /// `:focus proyectos/ #rust -#archivado`: reduce el finder, la
         /// búsqueda y el panel a ese alcance (05 §3); sin alcance, dice el de
         /// ahora.

@@ -9,6 +9,15 @@ Los cambios que importan a quien usa Metalmind. El formato sigue
 
 ### Agregado
 
+#### Pizarra
+
+- Las pizarras (`.canvas`) ya se dibujan, con ratón y con teclado: cajas, elipses, rombos y
+  texto suelto (`r o d t`), flechas (`a` y una dirección, `f` y la letra de un nodo, o
+  arrastrar desde el borde de un nodo), lápiz (`p`), tarjetas de nota (`n`), mover, cambiar de
+  tamaño, borrar, copiar y pegar, y deshacer por paso. El texto de una caja se escribe con
+  vim (`i`, `enter` o doble clic; `esc` en Normal vuelve). Rejilla de 10, guías de alineación
+  y autoguardado, y cada guardado cambia solo las líneas de lo editado.
+
 #### CLI
 
 - `metalmind add`: crea una nota en el vault con el texto del argumento o de stdin,

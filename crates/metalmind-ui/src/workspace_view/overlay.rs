@@ -11,6 +11,7 @@ use gpui_kit::{
 };
 use metalmind_vault::LinkIndex;
 
+use super::board::CardPicker;
 use super::finder::Finder;
 use super::link_choice::LinkChoicePicker;
 use super::list_views::ViewNamePicker;
@@ -27,6 +28,11 @@ use crate::theme::Theme;
 pub enum Overlay {
     Finder {
         picker: Entity<Finder>,
+        _events: Subscription,
+    },
+    /// La nota de una tarjeta nueva de la pizarra.
+    NoteCard {
+        picker: Entity<CardPicker>,
         _events: Subscription,
     },
     TextSearch {
@@ -88,9 +94,9 @@ pub enum Overlay {
 impl Overlay {
     pub fn focus_handle(&self, cx: &App) -> FocusHandle {
         match self {
-            Self::Finder { picker, .. } | Self::LinkChoice { picker, .. } => {
-                picker.focus_handle(cx)
-            }
+            Self::Finder { picker, .. }
+            | Self::LinkChoice { picker, .. }
+            | Self::NoteCard { picker, .. } => picker.focus_handle(cx),
             Self::TextSearch { picker, .. } => picker.focus_handle(cx),
             Self::Unresolved { picker, .. } => picker.focus_handle(cx),
             Self::Palette { picker, .. } => picker.focus_handle(cx),
@@ -106,9 +112,9 @@ impl Overlay {
     /// Tapa los paneles para que el ratón no les llegue mientras está abierto.
     pub fn render(&self, theme: &Theme) -> AnyElement {
         let picker = match self {
-            Self::Finder { picker, .. } | Self::LinkChoice { picker, .. } => {
-                picker.clone().into_any_element()
-            }
+            Self::Finder { picker, .. }
+            | Self::LinkChoice { picker, .. }
+            | Self::NoteCard { picker, .. } => picker.clone().into_any_element(),
             Self::TextSearch { picker, .. } => picker.clone().into_any_element(),
             Self::Unresolved { picker, .. } => picker.clone().into_any_element(),
             Self::Palette { picker, .. } => picker.clone().into_any_element(),

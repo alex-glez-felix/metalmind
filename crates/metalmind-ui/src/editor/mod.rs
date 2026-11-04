@@ -28,6 +28,7 @@ mod status_bar;
 mod text;
 mod which_key;
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,7 +51,7 @@ use self::status_bar::{Status, status_bar};
 use self::text::Faces;
 use self::which_key::{WhichKey, which_key_panel};
 use crate::actions::{self, Dispatch};
-use crate::board::BoardView;
+use crate::board::{BoardView, Camera};
 use crate::clipboard::SystemClipboard;
 use crate::finder::{FocusChanged, VaultChanged, VaultSession};
 use crate::frames::FrameClock;
@@ -98,6 +99,8 @@ pub struct Editor {
     which_key: WhichKey,
     /// Lo que pinta el panel si su documento es una pizarra.
     board: Option<Entity<BoardView>>,
+    /// Dónde estaba la vista de cada pizarra que este panel dejó de mostrar.
+    board_cameras: HashMap<PathBuf, Camera>,
     _repaint: Subscription,
     _vault_changed: Subscription,
     _focus_changed: Subscription,
@@ -144,6 +147,7 @@ impl Editor {
             text_screen: None,
             which_key: WhichKey::default(),
             board: None,
+            board_cameras: HashMap::new(),
             _repaint: repaint,
             _vault_changed: vault_changed,
             _focus_changed: focus_changed,
@@ -151,7 +155,6 @@ impl Editor {
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn board(&self) -> Option<&Entity<BoardView>> {
         self.board.as_ref()
     }
@@ -234,9 +237,14 @@ impl Editor {
 
     fn on_key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let keystroke = &event.keystroke;
+        if self.feed_board_hint(keystroke, cx) {
+            cx.stop_propagation();
+            return;
+        }
         let mode = self.mode(cx);
         let route = keys::route(keystroke, mode);
-        if self.board.is_some() && !keys::reaches_engine_in_board(route, mode) {
+        let text_open = self.board_text_open(cx);
+        if self.board.is_some() && !keys::reaches_engine_in_board(route, mode, text_open) {
             // Sin esto, su carácter le llegaría al motor por el input handler.
             cx.stop_propagation();
             return;
@@ -266,7 +274,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         // Un IME puede escribir sin pasar por una tecla.
-        if self.board.is_some() && self.mode(cx) == Mode::Normal {
+        if self.board.is_some() && !self.board_text_open(cx) && self.mode(cx) == Mode::Normal {
             return;
         }
         let marked_range = self
@@ -326,9 +334,9 @@ impl Editor {
         if let Some(CommandLine { typed, .. }) = view.command_line {
             return Some(ImeLine::new(typed.to_owned(), typed.len(), marked));
         }
-        let buffer = view.buffer();
+        let (_, buffer) = view.document.engine_view();
         let line = buffer.line_of(view.cursor());
-        let text = view.document.line_text(line).ok()?;
+        let text = buffer.line_text(line).into_owned();
         let column = view.cursor().get() - buffer.line_start(line).get();
         Some(ImeLine::new(text, column, marked))
     }
@@ -350,7 +358,7 @@ impl Editor {
     /// resalta; `:` va en su pop-up.
     fn status(&self, cx: &App) -> Option<Status> {
         let view = self.view(cx)?;
-        let buffer = view.buffer();
+        let (_, buffer) = view.document.engine_view();
         let line = buffer.line_of(view.cursor());
         let command_line = self
             .command_line(cx)

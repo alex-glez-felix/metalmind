@@ -206,6 +206,7 @@ pub fn write_boards(root: &Path) {
     file("dos-mil.canvas", &metalmind_perf::board(2_000));
     file("textos-largos.canvas", LONG_TEXTS_BOARD);
     file("vacia.canvas", "");
+    file("guias.canvas", GUIDES_BOARD);
     file(
         "rota.canvas",
         "{\"nodes\":[{\"id\":\"a\",\"type\":\"video\",\"x\":0,\"y\":0,\"width\":1,\"height\":1}]}\n",
@@ -214,6 +215,20 @@ pub fn write_boards(root: &Path) {
 
 /// Lo que no cabe en su caja: una línea sin espacios, muchas líneas, multibyte
 /// y emoji, una ruta honda en una tarjeta chica y etiquetas largas.
+/// La caja grande queda bajo el punto de arrastre al 100 %, y correrla 103
+/// píxeles deja su borde izquierdo a 3 de los de las otras dos.
+const GUIDES_BOARD: &str = r#"{
+	"nodes":[
+		{"id":"grande","type":"text","x":200,"y":200,"width":600,"height":200,"text":"Arrástrame: 日本語のテキストと絵文字 🦀🧠 ñandú, con un texto largo que se parte a lo ancho de la caja y que sigue, sigue, sigue, sigue y llega a más de una fila"},
+		{"id":"arriba","type":"text","x":300,"y":0,"width":200,"height":100,"text":"arriba"},
+		{"id":"abajo","type":"text","x":300,"y":600,"width":200,"height":100,"text":"abajo"}
+	],
+	"edges":[
+		{"id":"f","fromNode":"grande","toNode":"arriba"}
+	]
+}
+"#;
+
 const LONG_TEXTS_BOARD: &str = r##"{
 	"nodes":[
 		{"id":"sin","type":"text","x":0,"y":0,"width":220,"height":90,"text":"una_linea_sin_espacios_que_no_tiene_por_donde_partirse_y_tiene_que_quedarse_dentro_de_su_caja"},

@@ -214,12 +214,23 @@ fn group(
     Ok((vec![piece], labels))
 }
 
+/// Donde va la etiqueta de una flecha.
+pub(super) fn edge_label_area(geometry: &EdgeGeometry, style: SceneStyle) -> Rect {
+    const HALF: f32 = 0.5;
+    let (w, h) = (style.edge_label_width, style.small_line());
+    Rect {
+        x: geometry.label_at.x - w * HALF,
+        y: geometry.label_at.y - h * HALF,
+        w,
+        h,
+    }
+}
+
 pub(super) fn edge_scene(
     edge: &Edge,
     geometry: &EdgeGeometry,
     style: SceneStyle,
 ) -> Result<ElementScene, TessellationError> {
-    const HALF: f32 = 0.5;
     let tint = Tint::parse(edge.color.as_deref());
     let path = match &geometry.path {
         EdgePath::Polyline(points) => shapes::polyline(points, false),
@@ -254,16 +265,10 @@ pub(super) fn edge_scene(
         .as_ref()
         .map(|label| {
             let (text, _) = visible_text(label);
-            let (w, h) = (style.edge_label_width, style.small_line());
             Label {
                 text: text.into(),
                 kind: LabelKind::Edge,
-                area: Rect {
-                    x: geometry.label_at.x - w * HALF,
-                    y: geometry.label_at.y - h * HALF,
-                    w,
-                    h,
-                },
+                area: edge_label_area(geometry, style),
             }
         })
         .into_iter()

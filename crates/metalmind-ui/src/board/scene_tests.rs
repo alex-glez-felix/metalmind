@@ -137,3 +137,86 @@ fn una_flecha_tiene_una_malla_por_punta(#[case] ends: &str, #[case] tips: usize)
     assert_eq!(edge.pieces.len(), 1 + tips);
     assert_eq!(edge.labels[0].kind, LabelKind::Edge);
 }
+
+/// Lo que se ve de cada elemento, para comparar dos escenas.
+fn fingerprint(scene: &Scene) -> Vec<String> {
+    let of = |element: &ElementScene| {
+        format!(
+            "{:?} {:?} {} {:?}",
+            element.outline,
+            element.bounds,
+            element.triangles(),
+            element
+                .labels
+                .iter()
+                .map(|l| (l.text.clone(), l.area))
+                .collect::<Vec<_>>()
+        )
+    };
+    scene
+        .groups
+        .iter()
+        .chain(&scene.nodes)
+        .chain(&scene.edges)
+        .map(of)
+        .collect()
+}
+
+#[test]
+fn reconstruir_lo_movido_da_lo_mismo_que_construir_todo() {
+    let mut board = Board::parse(EXAMPLE).unwrap();
+    let mut scene = Scene::build(&board, STYLE).unwrap();
+    let id = board
+        .nodes
+        .iter()
+        .find(|node| !board.edges.iter().all(|e| e.from.node != node.id))
+        .unwrap()
+        .id
+        .clone();
+    let node = board.nodes.iter_mut().find(|node| node.id == id).unwrap();
+    node.x += 130;
+    node.y -= 50;
+    scene
+        .update_nodes(&board, &HashSet::from([id.as_str()]), STYLE)
+        .unwrap();
+    let whole = Scene::build(&board, STYLE).unwrap();
+    assert_eq!(fingerprint(&scene), fingerprint(&whole));
+    assert_eq!(scene.content, whole.content);
+}
+
+#[rstest]
+#[case("mover", |board: &mut Board| board.nodes[1].x += 10)]
+#[case("escribir", |board: &mut Board| { let id = board.nodes[2].id.clone(); board.set_text(&id, "otro"); })]
+#[case("etiqueta", |board: &mut Board| { let id = board.edges[0].id.clone(); board.set_text(&id, "lleva a"); })]
+#[case("borrar", |board: &mut Board| { let id = board.nodes[1].id.clone(); board.remove(&[id]); })]
+#[case("crear", |board: &mut Board| { board.add_text(metalmind_board::Frame { x: 0, y: 0, width: 10, height: 10 }, metalmind_board::Shape::None, "x"); })]
+fn refrescar_da_lo_mismo_que_construir_todo(#[case] name: &str, #[case] change: fn(&mut Board)) {
+    let old = Board::parse(EXAMPLE).unwrap();
+    let mut new = old.clone();
+    change(&mut new);
+    let mut scene = Scene::build(&old, STYLE).unwrap();
+    scene.refresh(&old, &new, STYLE).unwrap();
+    let whole = Scene::build(&new, STYLE).unwrap();
+    assert_eq!(fingerprint(&scene), fingerprint(&whole), "{name}");
+}
+
+#[test]
+fn abrir_una_etiqueta_la_deja_sin_texto_y_dice_donde_va() {
+    let board = Board::parse(EXAMPLE).unwrap();
+    let mut scene = Scene::build(&board, STYLE).unwrap();
+    let text_node = board
+        .nodes
+        .iter()
+        .find(|node| node.text().is_some())
+        .unwrap();
+    let open = scene.open_label(&board, &text_node.id, STYLE).unwrap();
+    assert!(open.area.w > 0.0);
+    let unlabelled = board
+        .edges
+        .iter()
+        .find(|edge| edge.label.is_none())
+        .unwrap();
+    let open_edge = scene.open_label(&board, &unlabelled.id, STYLE).unwrap();
+    assert_eq!(open_edge.kind, LabelKind::Edge);
+    assert!(scene.open_label(&board, "no-existe", STYLE).is_none());
+}

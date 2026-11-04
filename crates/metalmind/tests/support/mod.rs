@@ -361,6 +361,17 @@ impl Window<'_> {
         self.display.click(self.id, 3, x, y);
     }
 
+    /// Aprieta el botón izquierdo en `(x, y)` y lo deja abajo.
+    pub fn press(&self, x: i16, y: i16) {
+        self.display.move_pointer(self.id, x, y);
+        self.display.left_button(true);
+    }
+
+    /// Suelta el botón izquierdo donde esté el puntero.
+    pub fn release(&self) {
+        self.display.left_button(false);
+    }
+
     /// Deja el puntero en `(x, y)`, por ejemplo donde no resalte nada.
     pub fn move_pointer(&self, x: i16, y: i16) {
         self.display.move_pointer(self.id, x, y);

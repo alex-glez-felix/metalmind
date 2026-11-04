@@ -56,6 +56,13 @@ enum Step {
     Search,
     /// Cambia algo en el disco del vault, como otro programa.
     Files(fn(&Path)),
+    /// Clic derecho a esa fracción de la ventana, de 0 a 100 en cada eje.
+    RightClickAt(i16, i16),
+    /// Aprieta sobre la pizarra, a la derecha de la lista de notas, arrastra eso
+    /// (en píxeles) y deja el botón abajo.
+    DragOnBoard(i16, i16),
+    /// Suelta lo arrastrado.
+    Release,
     /// Espera a que la ventana pinte lo último que cambió y se calme, como
     /// las filas que agrega el watcher, antes de hacer clic donde estaban.
     Settle,
@@ -787,6 +794,69 @@ const SCENES: &[(&str, &[Step])] = &[
     ),
     ("pizarra-nueva", &[Step::Keys("<Esc><C-w>o:board<CR>")]),
     ("pizarra-paleta", &[Step::Keys("<Esc><C-w>l<Space>pboard")]),
+    // Editarla: la herramienta activa, una forma nueva, el texto de la caja en
+    // cada modo y partido a su ancho, una caja unida, las letras de unir (de
+    // dos cuando hay muchos nodos), el menú en medio y junto al borde, y lo que
+    // se ve con el botón abajo: guías, una forma a medio dibujar y una flecha.
+    (
+        "pizarra-herramienta",
+        &[
+            Step::Keys("<Esc>:e Pizarras/arquitectura.canvas<CR>"),
+            Step::Keys("r"),
+        ],
+    ),
+    ("pizarra-forma-nueva", &[Step::Keys("<CR>")]),
+    (
+        "pizarra-escribiendo",
+        &[Step::Keys(
+            "<CR>una caja con un texto largo que se parte al ancho de la caja y sigue y sigue",
+        )],
+    ),
+    ("pizarra-escribiendo-normal", &[Step::Keys("<Esc>")]),
+    ("pizarra-escribiendo-visual", &[Step::Keys("vbbb")]),
+    ("pizarra-caja-unida", &[Step::Keys("<Esc><Esc>al")]),
+    ("pizarra-letras", &[Step::Keys("f")]),
+    ("pizarra-unida", &[Step::Keys("a")]),
+    (
+        "pizarra-2000-letras",
+        &[
+            Step::Keys(":e Pizarras/dos-mil.canvas<CR>"),
+            Step::Keys(")L"),
+            Step::Keys("f"),
+        ],
+    ),
+    (
+        "pizarra-menu",
+        &[Step::Keys("<Esc>"), Step::RightClickAt(75, 50)],
+    ),
+    (
+        "pizarra-menu-borde",
+        &[Step::Keys("<Esc>"), Step::RightClickAt(98, 85)],
+    ),
+    (
+        "pizarra-escribiendo-multibyte",
+        &[Step::Keys("<Esc><Esc>:e Pizarras/guias.canvas<CR>)Li")],
+    ),
+    (
+        "pizarra-guias",
+        &[Step::Keys("<Esc><Esc><Esc>"), Step::DragOnBoard(103, 0)],
+    ),
+    (
+        "pizarra-dibujando",
+        &[
+            Step::Release,
+            Step::Keys("uo"),
+            Step::DragOnBoard(-200, -150),
+        ],
+    ),
+    (
+        "pizarra-flecha-arrastrada",
+        &[Step::Release, Step::Keys("ua"), Step::DragOnBoard(250, 150)],
+    ),
+    (
+        "pizarra-flecha-suelta",
+        &[Step::Release, Step::Keys("<Esc>")],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.
@@ -855,6 +925,23 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
                 Step::RightClickRow(row) => {
                     window.right_click(TREE_LEFT + 80, TREE_ROW * (row + 1) + TREE_ROW / 2);
                 }
+                Step::RightClickAt(x, y) => {
+                    let scale = |size: u16, percent: i16| {
+                        i16::try_from(i32::from(size) * i32::from(percent) / 100)
+                            .expect("cabe en la pantalla")
+                    };
+                    window.right_click(scale(width, *x), scale(height, *y));
+                }
+                Step::DragOnBoard(dx, dy) => {
+                    let at = |size: u16, percent: u32| {
+                        i16::try_from(u32::from(size) * percent / 100).expect("cabe en la pantalla")
+                    };
+                    let (x, y) = (at(width, 72), at(height, 50));
+                    window.press(x, y);
+                    window.move_pointer(x + dx / 2, y + dy / 2);
+                    window.move_pointer(x + dx, y + dy);
+                }
+                Step::Release => window.release(),
                 Step::RightClickBottomRow => {
                     window.right_click(TREE_LEFT + TREE_WIDTH - 8, rest.1 - TREE_ROW / 2);
                 }
@@ -915,6 +1002,8 @@ fn capturas(#[case] theme: &str, #[case] width: u16, #[case] height: u16) {
             Some(
                 Step::RightClickRow(_)
                     | Step::RightClickBottomRow
+                    | Step::RightClickAt(..)
+                    | Step::DragOnBoard(..)
                     | Step::HoverMark(_)
                     | Step::HoverBrokenFormula
             )

@@ -104,3 +104,81 @@ fn union_contains_both_rectangles() {
         rect(-5.0, 0.0, 15.0, 25.0)
     );
 }
+
+#[test]
+fn la_franja_del_borde_se_distingue_del_interior() {
+    let board = Board::parse(
+        r#"{"nodes":[{"id":"a","type":"text","x":0,"y":0,"width":100,"height":100,"text":""}]}"#,
+    )
+    .unwrap();
+    let pick = |x, y| board.pick(Point::new(x, y), 8.0);
+    assert!(matches!(pick(50.0, 50.0), Some(Pick::Inside(_))));
+    assert!(matches!(pick(95.0, 50.0), Some(Pick::Border(_))));
+    assert!(matches!(pick(105.0, 50.0), Some(Pick::Border(_))));
+    assert_eq!(pick(120.0, 50.0), None);
+}
+
+#[test]
+fn la_franja_sigue_la_silueta_y_no_se_come_una_caja_chica() {
+    let board = Board::parse(
+        r#"{"nodes":[
+        {"id":"e","type":"text","shape":"ellipse","x":0,"y":0,"width":100,"height":100,"text":""},
+        {"id":"chica","type":"text","x":500,"y":0,"width":12,"height":12,"text":""}
+    ]}"#,
+    )
+    .unwrap();
+    assert_eq!(board.pick(Point::new(2.0, 2.0), 8.0), None);
+    let center = board.pick(Point::new(506.0, 6.0), 8.0);
+    assert!(matches!(center, Some(Pick::Inside(node)) if node.id == "chica"));
+}
+
+#[test]
+fn una_esquina_se_alcanza_desde_afuera_y_desde_adentro() {
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        w: 100.0,
+        h: 50.0,
+    };
+    assert_eq!(
+        rect.corner_at(Point::new(103.0, 47.0), 5.0),
+        Some(Corner::BottomRight)
+    );
+    assert_eq!(
+        rect.corner_at(Point::new(-3.0, -3.0), 5.0),
+        Some(Corner::TopLeft)
+    );
+    assert_eq!(rect.corner_at(Point::new(50.0, 0.0), 5.0), None);
+}
+
+#[test]
+fn el_rectangulo_de_seleccion_toma_lo_que_cabe_entero_y_no_los_grupos() {
+    let board = Board::parse(
+        r#"{"nodes":[
+        {"id":"g","type":"group","x":0,"y":0,"width":50,"height":50},
+        {"id":"dentro","type":"text","x":10,"y":10,"width":20,"height":20,"text":""},
+        {"id":"a_medias","type":"text","x":90,"y":10,"width":20,"height":20,"text":""}
+    ]}"#,
+    )
+    .unwrap();
+    let area = Rect::between(Point::new(100.0, 100.0), Point::new(0.0, 0.0));
+    assert_eq!(board.nodes_within(&area), ["dentro"]);
+}
+
+#[test]
+fn una_flecha_se_acierta_a_lo_largo_de_su_recorrido() {
+    let board = Board::parse(
+        r#"{"nodes":[
+        {"id":"a","type":"text","x":0,"y":0,"width":100,"height":100,"text":""},
+        {"id":"b","type":"text","x":300,"y":0,"width":100,"height":100,"text":""}
+    ],"edges":[{"id":"e","fromNode":"a","toNode":"b","route":"straight"}]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        board
+            .hit_edge(Point::new(200.0, 53.0), 5.0)
+            .map(|e| e.id.as_str()),
+        Some("e")
+    );
+    assert!(board.hit_edge(Point::new(200.0, 70.0), 5.0).is_none());
+}
