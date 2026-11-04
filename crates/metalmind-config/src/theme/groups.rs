@@ -310,6 +310,11 @@ color_group! {
         board_label_background,
         /// El borde del nodo elegido.
         board_selection,
+        /// Las guías de alineación al arrastrar.
+        board_guide,
+        /// La letra sobre cada nodo al unir con el teclado.
+        board_hint_background,
+        board_hint_text,
         /// Los colores `"1"`…`"6"` de JSON Canvas: rojo, naranja, amarillo,
         /// verde, cian y púrpura.
         board_color_1,

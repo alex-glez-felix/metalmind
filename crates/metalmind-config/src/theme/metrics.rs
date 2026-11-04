@@ -188,6 +188,8 @@ metric_group! {
         board_line: Px,
         /// El borde del nodo elegido de la pizarra, en pantalla.
         board_selection: Px,
+        /// Las guías de alineación, en pantalla.
+        board_guide: Px,
     }
 }
 
@@ -344,6 +346,22 @@ metric_group! {
         board_fit_margin: Length,
         /// De la barra de zoom a los bordes de la pizarra, en pantalla.
         board_toolbar_margin: Length,
+        /// En pantalla: lo que el ratón agarra alrededor del borde de un nodo,
+        /// para sacar una flecha.
+        board_edge_grab: Length,
+        /// En pantalla: lo que agarra alrededor de la esquina de lo elegido.
+        board_corner_grab: Length,
+        /// En pantalla: lo que agarra alrededor de una flecha.
+        board_edge_hit: Length,
+        /// El cuadrito en las esquinas de lo elegido.
+        board_handle_size: Length,
+        /// Lo que se mueve el ratón antes de que un clic sea un arrastre.
+        board_drag_threshold: Length,
+        /// En pantalla: a qué distancia un borde o un centro se alinea con un
+        /// vecino al arrastrar.
+        board_snap_distance: Length,
+        /// El aire de la letra sobre un nodo al unir con el teclado.
+        board_hint_padding: Length,
         /// La opacidad del relleno de una forma con color, y la de un grupo.
         board_fill_alpha: Fraction,
         board_group_alpha: Fraction,
