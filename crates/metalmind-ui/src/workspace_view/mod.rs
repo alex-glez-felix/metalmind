@@ -9,7 +9,6 @@
 
 mod autosave;
 mod board;
-mod buffer_edits;
 mod commands;
 mod context;
 mod finder;
@@ -21,21 +20,19 @@ mod new_note;
 mod note_list;
 mod overlay;
 mod palette;
-mod rename;
 mod render;
 mod reroute;
 mod settings;
 mod sidebar;
-mod tag_change;
 mod text_search;
 mod toasts;
 mod unresolved;
-mod vault_undo;
+mod vault_changes;
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use gpui_kit::{AppContext as _, Context, Entity, Subscription, Task, Window};
+use gpui_kit::{AppContext as _, Context, Entity, Subscription, Window};
 use metalmind_config::Paths;
 
 use crate::context_panel::ContextPanel;
@@ -46,14 +43,13 @@ use crate::new_note::NoteSettings;
 use crate::note_list::NoteListView;
 use crate::session::{self, VaultState};
 use crate::sidebar::Sidebar;
+use crate::vault_changes::VaultChanges;
 use crate::workspace::{PaneId, Workspace};
 
 use self::autosave::AutosaveTimer;
 use self::finder::FinderVault;
 use self::overlay::Overlay;
-use self::tag_change::ParkedTagChange;
 use self::toasts::ToastTimers;
-use self::vault_undo::VaultUndo;
 
 pub struct WorkspaceView {
     workspace: Entity<Workspace>,
@@ -71,13 +67,9 @@ pub struct WorkspaceView {
     overlay: Option<Overlay>,
     autosave: Option<AutosaveTimer>,
     toast_timers: ToastTimers,
-    vault_undo: VaultUndo,
-    /// La vista previa de tags que se dejó para abrir una línea.
-    parked_tag_change: Option<ParkedTagChange>,
-    /// El plan de un renombre que se está armando, antes de su vista previa.
-    renaming: Option<Task<()>>,
+    vault_changes: Entity<VaultChanges>,
     notes: NoteSettings,
-    _subscriptions: [Subscription; 5],
+    _subscriptions: [Subscription; 6],
 }
 
 impl WorkspaceView {
@@ -96,7 +88,6 @@ impl WorkspaceView {
         let context = cx.new(|cx| ContextPanel::new(&session, workspace.clone(), window, cx));
         let repaint = cx.observe(&workspace, |view, _, cx| {
             view.schedule_autosave(cx);
-            view.refresh_change_preview(cx);
             cx.notify();
         });
         let activation = cx.observe_window_activation(window, Self::on_activation);
@@ -109,6 +100,12 @@ impl WorkspaceView {
         let context_events = cx.subscribe_in(&context, window, |view, _, event, window, cx| {
             view.on_context_event(event, window, cx);
         });
+        let vault_changes =
+            cx.new(|cx| VaultChanges::new(workspace.clone(), session.clone(), list.clone(), cx));
+        let vault_change_events =
+            cx.subscribe_in(&vault_changes, window, |view, _, event, window, cx| {
+                view.on_vault_changes_event(event, window, cx);
+            });
         let pane = workspace.read(cx).focused();
         let formulas = cx.new(|_| Formulas::default());
         let first = cx.new(|cx| {
@@ -135,11 +132,16 @@ impl WorkspaceView {
             overlay: None,
             autosave: None,
             toast_timers: ToastTimers::default(),
-            vault_undo: VaultUndo::default(),
-            parked_tag_change: None,
-            renaming: None,
+            vault_changes,
             notes,
-            _subscriptions: [repaint, events, list_events, context_events, activation],
+            _subscriptions: [
+                repaint,
+                events,
+                list_events,
+                context_events,
+                vault_change_events,
+                activation,
+            ],
         }
     }
 
@@ -147,7 +149,7 @@ impl WorkspaceView {
     /// la paleta si hay uno abierto.
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(overlay) = &self.overlay {
-            window.focus(&overlay.focus_handle(cx), cx);
+            window.focus(&overlay.focus_handle(), cx);
             return;
         }
         let focused = self.workspace.read(cx).focused();
@@ -242,3 +244,9 @@ mod board_edit_tests;
 #[cfg(test)]
 #[path = "board_tests.rs"]
 mod board_tests;
+#[cfg(test)]
+#[path = "overlay_tests.rs"]
+mod overlay_tests;
+#[cfg(test)]
+#[path = "vault_changes_tests.rs"]
+mod vault_changes_tests;

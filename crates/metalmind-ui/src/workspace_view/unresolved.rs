@@ -20,6 +20,14 @@ const REFRESH_DELAY: Duration = Duration::from_millis(150);
 /// El picker de `space u`.
 pub type UnresolvedPicker = PickerView<Fuzzy<UnresolvedLink>>;
 
+/// El picker abierto con el índice del que salió su lista. `refresh` la rehace
+/// para uno más nuevo; soltarlo la cancela.
+pub struct UnresolvedLinks {
+    picker: Entity<UnresolvedPicker>,
+    index: Arc<LinkIndex>,
+    refresh: Option<Task<()>>,
+}
+
 fn options() -> PickerOptions {
     PickerOptions {
         placeholder: "Links sin destino…".into(),
@@ -43,16 +51,17 @@ impl WorkspaceView {
         let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_unresolved_event);
         let refresh = Some(Self::build_unresolved_links(&index, None, cx));
-        self.show(
-            Overlay::Unresolved {
-                picker,
-                index,
-                refresh,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        let mut overlay = Overlay::new(picker.clone(), vec![events], cx);
+        overlay.unresolved = Some(UnresolvedLinks {
+            picker,
+            index,
+            refresh,
+        });
+        self.show(overlay, window, cx);
+    }
+
+    fn open_unresolved(&self) -> Option<&UnresolvedLinks> {
+        self.overlay.as_ref()?.unresolved.as_ref()
     }
 
     fn on_unresolved_event(
@@ -75,8 +84,8 @@ impl WorkspaceView {
         // puede ya tener destino o no estar: entonces no se abre nada y el
         // picker sigue abierto hasta que llegue la lista nueva.
         if let Some((link, _)) = &chosen
-            && let Some(Overlay::Unresolved { index, .. }) = &self.overlay
-            && !link.is_unresolved_in(index)
+            && let Some(open) = self.open_unresolved()
+            && !link.is_unresolved_in(&open.index)
         {
             return;
         }
@@ -96,15 +105,15 @@ impl WorkspaceView {
         latest: &Arc<LinkIndex>,
         cx: &mut Context<Self>,
     ) {
-        let Some(Overlay::Unresolved { index, refresh, .. }) = &mut self.overlay else {
+        let Some(open) = self.overlay.as_mut().and_then(|o| o.unresolved.as_mut()) else {
             return;
         };
-        if Arc::ptr_eq(index, latest) {
+        if Arc::ptr_eq(&open.index, latest) {
             return;
         }
-        *index = Arc::clone(latest);
+        open.index = Arc::clone(latest);
         // Reemplazar la tarea cancela la del lote anterior, si no terminó.
-        *refresh = Some(Self::build_unresolved_links(
+        open.refresh = Some(Self::build_unresolved_links(
             latest,
             Some(REFRESH_DELAY),
             cx,
@@ -143,13 +152,13 @@ impl WorkspaceView {
         links: Arc<[UnresolvedLink]>,
         cx: &mut Context<Self>,
     ) {
-        let Some(Overlay::Unresolved { picker, index, .. }) = &self.overlay else {
+        let Some(open) = self.open_unresolved() else {
             return;
         };
-        if !Arc::ptr_eq(index, built) {
+        if !Arc::ptr_eq(&open.index, built) {
             return;
         }
-        picker.update(cx, |picker, cx| {
+        open.picker.update(cx, |picker, cx| {
             picker.update_delegate(cx, |fuzzy, cx| fuzzy.set_items(links, cx));
         });
     }

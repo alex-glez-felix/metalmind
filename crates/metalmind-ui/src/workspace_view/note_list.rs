@@ -1,16 +1,13 @@
-//! La lista de notas en la ventana: plegarla, elegir su fuente (también una
-//! vista guardada) en un picker
-//! y etiquetar la nota elegida, que se aplica y se deshace (`:vaultundo`) como
-//! un cambio de tags (05 §5).
+//! La lista de notas en la ventana: plegarla y elegir su fuente (también una
+//! vista guardada) en un picker.
 
 use std::sync::Arc;
 
 use gpui_kit::{AppContext as _, Context, Entity, Window};
-use metalmind_vault::{Changes, VaultPath};
 
 use super::WorkspaceView;
 use super::overlay::Overlay;
-use crate::note_list::{ListSource, NoteListEvent, NoteListView, tag_edit};
+use crate::note_list::{ListSource, NoteListEvent, NoteListView};
 use crate::picker::{
     Fuzzy, Haystack, PickerEvent, PickerItem, PickerOptions, PickerState, PickerView,
 };
@@ -86,14 +83,7 @@ impl WorkspaceView {
         let events = cx.subscribe_in(&picker, window, move |this, picker, event, window, cx| {
             this.on_source_event(picker, event, from_list, window, cx);
         });
-        self.show(
-            Overlay::ListSource {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        self.show(Overlay::new(picker, vec![events], cx), window, cx);
     }
 
     /// `list::show_folder`: la lista muestra la carpeta y toma el foco.
@@ -158,43 +148,11 @@ impl WorkspaceView {
                 self.focus_sidebar(window, cx);
             }
             NoteListEvent::FocusSidebar => {}
-            NoteListEvent::TagNote { note, tags } => self.tag_note(&note, &tags, cx),
+            NoteListEvent::TagNote { note, tags } => {
+                self.vault_changes
+                    .update(cx, |changes, cx| changes.tag_note(&note, &tags, cx));
+            }
         }
         cx.notify();
-    }
-
-    /// Agrega `tags` al frontmatter de `note`. Como un cambio de tags, si
-    /// tiene cambios sin guardar va a su buffer, y `:vaultundo` lo deshace.
-    fn tag_note(&mut self, note: &VaultPath, tags: &[String], cx: &mut Context<Self>) {
-        let root = self.session.read(cx).root().to_owned();
-        let file = root.join(note.as_str());
-        let buffer = self
-            .unsaved_paths(cx)
-            .contains(note)
-            .then(|| self.workspace.read(cx).file_text(&file))
-            .flatten();
-        let text = match buffer.map_or_else(|| metalmind_vault::read(&file), |text| Ok(Some(text)))
-        {
-            Ok(Some(text)) => text,
-            Ok(None) => String::new(),
-            Err(error) => return self.tell(Message::Error(error.to_string()), cx),
-        };
-        let edits = match tag_edit(note, &text, tags) {
-            Ok(Some(edits)) => edits,
-            Ok(None) => {
-                let text = format!("{note} ya tiene {}", tags.join(" "));
-                return self.tell(Message::Info(text), cx);
-            }
-            Err(error) => {
-                let text = format!("no se etiquetó {note}: {error}");
-                return self.tell(Message::Error(text), cx);
-            }
-        };
-        let changes = Changes {
-            edits: vec![edits],
-            ..Changes::default()
-        };
-        let summary = format!("{note}: {}", tags.join(" "));
-        self.apply_tag_changes(format!("etiquetar {note}"), &summary, &changes, cx);
     }
 }

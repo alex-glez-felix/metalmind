@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use gpui_kit::Context;
 use metalmind_vault::{Changes, FileEdits, Vault, VaultPath};
 
-use super::WorkspaceView;
+use super::VaultChanges;
 use crate::tag_change::VaultConfigText;
 use crate::workspace::FileEditError;
 
@@ -54,7 +54,7 @@ impl UnsavedTexts {
     }
 }
 
-impl WorkspaceView {
+impl VaultChanges {
     pub(super) fn unsaved_texts(&self, cx: &Context<Self>) -> UnsavedTexts {
         let session = self.session.read(cx);
         let root = session.root();

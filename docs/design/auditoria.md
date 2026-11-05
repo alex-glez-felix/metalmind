@@ -103,7 +103,7 @@ Lo que hoy no cumple los [principios](../design.md#principios). Solo los hechos;
 
 1. **El contenido manda, la interfaz se calla.**
    - El picker es una tarjeta con esquinas de 8 px (`picker/view/render.rs:47`); menú, botones y campos tienen 4 px (`sidebar/menu.rs:140`, `:189`, `sidebar/render.rs:293`, `sidebar/rail.rs:58`, `sidebar/prompt.rs:71`).
-   - El picker queda a 64 px del borde de arriba (`workspace_view/overlay.rs:63`) y separa el texto de su detalle con 16 px (`picker/view/render.rs:163`).
+   - El picker queda a 64 px del borde de arriba (`workspace_view/overlay.rs:55`) y separa el texto de su detalle con 16 px (`picker/view/render.rs:163`).
    - Sin sombras ni degradados: se cumple.
 2. **Nativa, no web: nada brinca.**
    - El picker cambia de alto con cada tecla que cambia la cantidad de resultados (arriba).

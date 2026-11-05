@@ -35,14 +35,7 @@ impl WorkspaceView {
         );
         let picker = cx.new(|cx| PickerView::new(fuzzy, options(), cx));
         let events = cx.subscribe_in(&picker, window, Self::on_link_choice_event);
-        self.show(
-            Overlay::LinkChoice {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        self.show(Overlay::new(picker, vec![events], cx), window, cx);
     }
 
     fn on_link_choice_event(

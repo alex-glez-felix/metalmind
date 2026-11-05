@@ -11,6 +11,7 @@ use crate::actions::Dispatch;
 use crate::clipboard::SystemClipboard;
 use crate::new_note::NoteRequest;
 use crate::panel::PanelView;
+use crate::vault_changes::VaultChanges;
 use crate::workspace::{Direction, Effect};
 
 impl WorkspaceView {
@@ -64,7 +65,10 @@ impl WorkspaceView {
             Effect::Dispatch(action) => {
                 window.dispatch_action(Box::new(Dispatch(action.into())), cx);
             }
-            Effect::ChangeTags(request) => self.change_tags(&request, window, cx),
+            Effect::ChangeTags(request) => {
+                self.vault_changes
+                    .update(cx, |changes, cx| changes.change_tags(&request, cx));
+            }
             Effect::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
             Effect::SaveToggle { toggle, on } => {
                 self.save_toggle(toggle, on, cx);
@@ -101,10 +105,15 @@ impl WorkspaceView {
                 self.change_list_view(ListViewChange::Delete, window, cx);
             }
             WindowCommand::UndoVaultChange => {
-                self.undo_vault_change(cx);
+                self.vault_changes.update(cx, VaultChanges::undo);
                 self.focus(window, cx);
             }
-            WindowCommand::ResumeTagChange => self.resume_tag_change(window, cx),
+            WindowCommand::ResumeTagChange => {
+                // Una macro pudo cambiar los paneles antes.
+                self.sync_editors(cx);
+                self.vault_changes
+                    .update(cx, VaultChanges::resume_tag_change);
+            }
             WindowCommand::NewNoteFromTemplate => {
                 self.new_note(NoteRequest::parse(argument), window, cx);
             }

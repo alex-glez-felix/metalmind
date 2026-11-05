@@ -38,6 +38,7 @@ mod theme;
 mod tooltip;
 mod unresolved;
 mod utf16;
+mod vault_changes;
 mod window;
 mod workspace;
 mod workspace_view;
