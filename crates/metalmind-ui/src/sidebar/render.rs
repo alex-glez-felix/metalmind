@@ -352,7 +352,7 @@ fn name(row: &Row, theme: &Theme) -> StyledText {
 }
 
 /// Un botón de texto que invoca `action` en el panel.
-pub(super) fn button(
+fn button(
     id: &'static str,
     label: &'static str,
     action: impl Into<Action>,
