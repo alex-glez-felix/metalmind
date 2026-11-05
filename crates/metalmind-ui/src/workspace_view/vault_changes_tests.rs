@@ -9,6 +9,7 @@ use metalmind_vault::{Vault, VaultPath, VaultUpdate};
 use pretty_assertions::assert_eq;
 
 use super::board_tests::{Window, open_prepared};
+use super::palette::Palette;
 use crate::finder::Prepared;
 use crate::sidebar::SidebarEvent;
 
@@ -126,11 +127,8 @@ fn un_renombre_no_le_pasa_por_encima_a_lo_abierto(cx: &mut TestAppContext) {
     window.cx.run_until_parked();
     assert!(window.overlay_open());
     assert!(window.root.join("dos.md").exists());
-    let palette = window.view.read_with(window.cx, |view, _| {
-        !matches!(
-            view.overlay,
-            Some(super::overlay::Overlay::ChangePreview { .. })
-        )
-    });
-    assert!(palette, "sigue la paleta, no la vista previa");
+    let open = window
+        .view
+        .read_with(window.cx, |view, _| view.overlay.as_ref().unwrap().view());
+    assert!(open.downcast::<Palette>().is_ok(), "sigue la paleta");
 }

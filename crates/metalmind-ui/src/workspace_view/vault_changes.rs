@@ -17,8 +17,8 @@ impl WorkspaceView {
     ) {
         match event {
             VaultChangesEvent::ShowPreview(view) => {
-                let view = view.clone();
-                self.show(Overlay::ChangePreview { view }, window, cx);
+                // Sus eventos los escucha `VaultChanges`.
+                self.show(Overlay::new(view.clone(), Vec::new(), cx), window, cx);
             }
             VaultChangesEvent::ClosePreview { focus_sidebar } => {
                 self.close_overlay(window, cx);

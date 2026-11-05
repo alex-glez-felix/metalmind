@@ -70,14 +70,7 @@ impl WorkspaceView {
         };
         let picker = cx.new(|cx| PickerView::new(fuzzy, options, cx));
         let events = cx.subscribe_in(&picker, window, Self::on_messages_event);
-        self.show(
-            Overlay::Messages {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        self.show(Overlay::new(picker, vec![events], cx), window, cx);
     }
 
     fn on_messages_event(

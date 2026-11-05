@@ -22,7 +22,6 @@ pub struct FinderVault {
     pub(super) session: Entity<VaultSession>,
     /// La última nota que se marcó como reciente.
     touched: Option<PathBuf>,
-    _changes: Subscription,
     _files: Subscription,
     _lost: Subscription,
 }
@@ -33,7 +32,6 @@ impl FinderVault {
         workspace: &Entity<Workspace>,
         cx: &mut Context<WorkspaceView>,
     ) -> Self {
-        let changes = cx.observe(&session, |view, _, cx| view.refresh_finder(cx));
         let files = cx.subscribe(&session, |view, session, VaultChanged(update), cx| {
             let root = session.read(cx).root().to_owned();
             view.workspace.update(cx, |workspace, _| {
@@ -66,7 +64,6 @@ impl FinderVault {
         Self {
             session,
             touched: None,
-            _changes: changes,
             _files: files,
             _lost: lost,
         }
@@ -97,14 +94,18 @@ impl WorkspaceView {
         let options = options(session.focus());
         let picker = cx.new(|cx| PickerView::new(fuzzy, options, cx));
         let events = cx.subscribe_in(&picker, window, Self::on_finder_event);
-        self.show(
-            Overlay::Finder {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        // Lo que traiga otro lote del watcher o cambie el focus.
+        let open = picker.clone();
+        let refresh = cx.observe(&self.vault.session, move |_, session, cx| {
+            let session = session.read(cx);
+            let (notes, tags) = (session.notes(), session.tags());
+            open.update(cx, |picker, cx| {
+                picker.update_delegate(cx, |fuzzy, cx| {
+                    fuzzy.set_source(notes, Arc::new(TagFilter::new(tags)), cx);
+                });
+            });
+        });
+        self.show(Overlay::new(picker, vec![events, refresh], cx), window, cx);
     }
 
     fn on_finder_event(
@@ -194,25 +195,6 @@ impl WorkspaceView {
             argument: Some(argument),
         };
         self.run(&edit, window, cx);
-    }
-
-    /// El finder o la búsqueda abiertos, con lo que trajo otro lote del
-    /// watcher o cambió el focus.
-    fn refresh_finder(&mut self, cx: &mut Context<Self>) {
-        let session = self.vault.session.read(cx);
-        let (notes, tags) = (session.notes(), session.tags());
-        let scope = session.in_scope().map(|in_scope| in_scope.files());
-        match &self.overlay {
-            Some(Overlay::Finder { picker, .. }) => picker.update(cx, |picker, cx| {
-                picker.update_delegate(cx, |fuzzy, cx| {
-                    fuzzy.set_source(notes, Arc::new(TagFilter::new(tags)), cx);
-                });
-            }),
-            Some(Overlay::TextSearch { picker, .. }) => picker.update(cx, |picker, cx| {
-                picker.update_delegate(cx, |search, _| search.set_scope(scope));
-            }),
-            _ => {}
-        }
     }
 
     /// La nota enfocada pasa a ser la más reciente del vault, si está en él.

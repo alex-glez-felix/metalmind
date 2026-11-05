@@ -83,14 +83,7 @@ impl WorkspaceView {
         let events = cx.subscribe_in(&picker, window, move |this, picker, event, window, cx| {
             this.on_source_event(picker, event, from_list, window, cx);
         });
-        self.show(
-            Overlay::ListSource {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        self.show(Overlay::new(picker, vec![events], cx), window, cx);
     }
 
     /// `list::show_folder`: la lista muestra la carpeta y toma el foco.

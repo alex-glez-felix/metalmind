@@ -149,7 +149,7 @@ impl WorkspaceView {
     /// la paleta si hay uno abierto.
     pub fn focus(&self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(overlay) = &self.overlay {
-            window.focus(&overlay.focus_handle(cx), cx);
+            window.focus(&overlay.focus_handle(), cx);
             return;
         }
         let focused = self.workspace.read(cx).focused();
@@ -244,6 +244,9 @@ mod board_edit_tests;
 #[cfg(test)]
 #[path = "board_tests.rs"]
 mod board_tests;
+#[cfg(test)]
+#[path = "overlay_tests.rs"]
+mod overlay_tests;
 #[cfg(test)]
 #[path = "vault_changes_tests.rs"]
 mod vault_changes_tests;
