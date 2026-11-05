@@ -104,7 +104,7 @@ fn las_entradas_siguen_a_su_linea() {
         )])
         .unwrap();
     buffer.commit_transaction(selections).unwrap();
-    list.adjust(FileId::new(0), &buffer.take_splices());
+    list.adjust(FileId::new(0), buffer.splices_since(0));
     assert_eq!(lines(&list), [(0, 1), (1, 2), (0, 1)]);
 }
 

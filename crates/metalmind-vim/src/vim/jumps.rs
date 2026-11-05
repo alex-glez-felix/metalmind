@@ -21,6 +21,7 @@ impl Vim {
     #[must_use]
     pub fn settle(&mut self, t: &mut Target<'_>) -> Vec<Splice> {
         self.catch_up(t);
+        #[allow(clippy::disallowed_methods, reason = "este es su único consumidor")]
         t.buffer.take_splices()
     }
 

@@ -2,6 +2,10 @@
     clippy::unwrap_used,
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "aquí no hay motor: se prueba take_splices mismo"
+)]
 
 use metalmind_buffer::{
     Bias, Buffer, BufferError, ByteOffset, Edit, HistorySeq, LineAnchor, Point, Selection,

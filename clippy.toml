@@ -2,3 +2,6 @@ allow-unwrap-in-tests = true
 allow-expect-in-tests = true
 # Nombres propios que no son código.
 doc-valid-idents = ["RaTeX", "KaTeX", ".."]
+disallowed-methods = [
+    { path = "metalmind_buffer::Buffer::take_splices", reason = "los saca Vim::settle, que antes los sigue: sacados por fuera, las marks y la jumplist los pierden (#118)" },
+]

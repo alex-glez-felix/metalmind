@@ -2,6 +2,10 @@
     clippy::unwrap_used,
     reason = "en tests, un unwrap que falla es un test que falla"
 )]
+#![allow(
+    clippy::disallowed_methods,
+    reason = "aquí no hay motor: se prueba take_splices mismo"
+)]
 
 //! `Buffer::move_lines`: el texto cambia de lugar y lo que sigue a las
 //! líneas va con él, como `:m` de vim.

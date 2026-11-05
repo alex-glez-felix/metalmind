@@ -57,7 +57,7 @@ impl Buffer {
     /// los de undo y redo; hay que sacarlos tras cada cambio para que la
     /// lista no crezca. Sacados, ya no los ve quien los sigue con
     /// [`Buffer::splices_since`]: si ese es el motor de vim, se sacan con su
-    /// `Vim::settle`.
+    /// `Vim::settle`, y `clippy.toml` no deja llamar a este método sin más.
     pub fn take_splices(&mut self) -> Vec<Splice> {
         let splices = std::mem::take(&mut self.changes.splices);
         self.changes.taken += splices.len();
