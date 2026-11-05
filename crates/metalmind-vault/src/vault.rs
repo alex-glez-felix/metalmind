@@ -28,6 +28,7 @@ use crate::path::VaultPath;
 use crate::properties::PropertyIndex;
 use crate::refresh::VaultChange;
 use crate::scan::{scan, scan_within};
+use crate::summary_index::SummaryIndex;
 use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
 use crate::watcher::{FolderWatch, Unwatched, before_reading};
 use crate::worker::{Message, Save, Worker, read_note};
@@ -91,8 +92,8 @@ impl PendingVersion {
 }
 
 /// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
-/// puede venir vacío si solo cambiaron los links, los tags o las propiedades (un
-/// chmod que vuelve legible una nota) o si se dejó de vigilar el vault
+/// puede venir vacío si solo cambiaron los links, los tags, las propiedades o
+/// los resúmenes (un chmod que vuelve legible una nota) o si se dejó de vigilar el vault
 /// ([`Vault::unwatched`]).
 #[derive(Debug, Clone)]
 pub struct VaultUpdate {
@@ -101,6 +102,7 @@ pub struct VaultUpdate {
     pub links: Arc<LinkIndex>,
     pub tags: Arc<Tags>,
     pub properties: Arc<PropertyIndex>,
+    pub summaries: Arc<SummaryIndex>,
     /// Los tags cuyas notas, formas escritas o página pueden haber cambiado.
     pub tag_changes: Vec<TagKey>,
 }
@@ -214,6 +216,7 @@ pub struct Vault {
     links: Arc<ArcSwap<LinkIndex>>,
     tags: Arc<ArcSwap<Tags>>,
     properties: Arc<ArcSwap<PropertyIndex>>,
+    summaries: Arc<ArcSwap<SummaryIndex>>,
     history: Option<Arc<History>>,
     messages: mpsc::Sender<Message>,
     saving: Arc<Mutex<()>>,
@@ -273,6 +276,7 @@ impl Vault {
             links,
             tags,
             properties,
+            summaries,
             refresh: cache_refresh,
         } = index_notes(
             &root,
@@ -288,6 +292,7 @@ impl Vault {
         let links = Arc::new(ArcSwap::from_pointee(links));
         let tags = Arc::new(ArcSwap::from_pointee(tags));
         let properties = Arc::new(ArcSwap::from_pointee(properties));
+        let summaries = Arc::new(ArcSwap::from_pointee(summaries));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let saving = Arc::new(Mutex::new(()));
@@ -297,6 +302,7 @@ impl Vault {
             links: Arc::clone(&links),
             tags: Arc::clone(&tags),
             properties: Arc::clone(&properties),
+            summaries: Arc::clone(&summaries),
             history: history.as_ref().map(Arc::clone),
             cache_refresh,
             saving: Arc::clone(&saving),
@@ -315,6 +321,7 @@ impl Vault {
             links,
             tags,
             properties,
+            summaries,
             history,
             messages,
             saving,
@@ -356,6 +363,13 @@ impl Vault {
     #[must_use]
     pub fn properties(&self) -> Arc<PropertyIndex> {
         self.properties.load_full()
+    }
+
+    /// El título y el extracto de cada nota en este momento, sin bloquear; van
+    /// al día como [`Vault::tags`].
+    #[must_use]
+    pub fn summaries(&self) -> Arc<SummaryIndex> {
+        self.summaries.load_full()
     }
 
     /// Por qué el vault dejó de ver los cambios que se hacen fuera de

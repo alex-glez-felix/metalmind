@@ -30,7 +30,7 @@ impl NoteListView {
             let title = self
                 .list
                 .tag_target_card()
-                .map_or_else(String::new, |card| card.title.clone());
+                .map_or_else(String::new, |card| card.title.to_owned());
             return frame
                 .child(
                     div()

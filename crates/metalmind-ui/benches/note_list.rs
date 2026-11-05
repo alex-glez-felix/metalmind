@@ -1,5 +1,5 @@
 //! La lista de notas (#164) con el vault sintético de 5 k notas y 200 páginas
-//! de tag de `metalmind-perf`: leer las tarjetas del disco (en el fondo, antes
+//! de tag de `metalmind-perf`: mirar las fechas del disco (en el fondo, antes
 //! de que la lista se vea), armar la lista de una fuente en su orden (en el
 //! hilo de la UI: un frame, 16 ms) y una tecla en su filtro (8 ms, como un
 //! prompt). Presupuesto en `docs/performance.md`.
@@ -10,10 +10,11 @@
 )]
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use divan::Bencher;
 use metalmind_search::FuzzyMatcher;
-use metalmind_ui::note_list::{Card, ListSource, NoteList, read_all};
+use metalmind_ui::note_list::{ListSource, NoteList, read_modified};
 use metalmind_ui::picker::LineEdit;
 use metalmind_vault::{EntryKind, Vault, VaultPath};
 
@@ -28,7 +29,7 @@ struct Fixture {
     _dir: tempfile::TempDir,
     vault: Vault,
     notes: Vec<VaultPath>,
-    cards: Vec<(VaultPath, Card)>,
+    dates: Vec<(VaultPath, Option<SystemTime>)>,
 }
 
 fn fixture() -> Fixture {
@@ -42,19 +43,19 @@ fn fixture() -> Fixture {
         .filter(|entry| entry.kind == EntryKind::Note)
         .map(|entry| entry.path.clone())
         .collect();
-    let cards = read_all(vault.root(), &notes);
+    let dates = read_modified(vault.root(), &notes);
     Fixture {
         _dir: dir,
         vault,
         notes,
-        cards,
+        dates,
     }
 }
 
 #[divan::bench]
-fn leer_las_tarjetas_de_5k(bencher: Bencher) {
+fn mirar_las_fechas_de_5k(bencher: Bencher) {
     let fixture = fixture();
-    bencher.bench_local(|| read_all(fixture.vault.root(), &fixture.notes).len());
+    bencher.bench_local(|| read_modified(fixture.vault.root(), &fixture.notes).len());
 }
 
 #[divan::bench(args = [ListSource::All, ListSource::Inbox, ListSource::Tag("t1".to_owned())])]
@@ -66,8 +67,9 @@ fn armar_la_lista_de_5k(bencher: Bencher, source: &ListSource) {
             "",
             fixture.vault.snapshot(),
             fixture.vault.tags(),
+            fixture.vault.summaries(),
         );
-        let _ = list.set_cards(fixture.cards.clone());
+        let _ = list.set_dates(fixture.dates.clone());
         list.len()
     });
 }
@@ -80,8 +82,9 @@ fn tecla_en_el_filtro_de_5k(bencher: Bencher, query: &str) {
         "",
         fixture.vault.snapshot(),
         fixture.vault.tags(),
+        fixture.vault.summaries(),
     );
-    let _ = list.set_cards(fixture.cards.clone());
+    let _ = list.set_dates(fixture.dates.clone());
     let mut matcher = FuzzyMatcher::paths();
     let query = Arc::<str>::from(query);
     bencher.bench_local(|| {

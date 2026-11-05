@@ -2,7 +2,6 @@
 //! eventos que recibiría la ventana.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -239,13 +238,10 @@ impl Fixture<'_> {
 
 /// Otro índice con el mismo contenido que `notes`, como el de un lote nuevo.
 fn another_index(notes: &[(&str, &str)]) -> Arc<LinkIndex> {
-    let texts: HashMap<VaultPath, &str> = notes
-        .iter()
-        .map(|&(name, text)| (path(name), text))
-        .collect();
-    Arc::new(LinkIndex::build(
-        texts.keys().map(|name| (name.clone(), EntryKind::Note)),
-        |name| texts.get(name).map(|text| (*text).to_owned()),
+    Arc::new(LinkIndex::from_texts(
+        notes
+            .iter()
+            .map(|&(name, text)| (path(name), EntryKind::Note, text)),
     ))
 }
 

@@ -1,4 +1,4 @@
-//! La columna de la lista en la ventana: lee las tarjetas en el fondo, corre
+//! La columna de la lista en la ventana: mira las fechas en el fondo, corre
 //! las búsquedas del filtro fuera del hilo de la UI, como el finder, y abre
 //! la nota elegida en el panel de edición.
 
@@ -14,7 +14,7 @@ use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
 use metalmind_vault::{EntryKind, VaultPath};
 
-use super::cards::read_all;
+use super::cards::read_modified;
 use super::model::{NoteList, Prompt};
 use super::source::{FolderError, ListSource, folder_to_show};
 use super::views::load as load_views;
@@ -56,17 +56,17 @@ pub struct NoteListView {
     /// Se presta a la búsqueda en curso y vuelve con sus resultados.
     matcher: Option<FuzzyMatcher>,
     search: Option<Task<()>>,
-    /// Una lectura de tarjetas a la vez, para que una vieja no pise a una
+    /// Una lectura de fechas a la vez, para que una vieja no pise a una
     /// nueva de la misma nota; lo que llega mientras tanto espera aquí.
     reading: Option<Task<()>>,
     unread: Vec<VaultPath>,
     pub(super) field: Entity<LineField<Self>>,
-    /// Al llegar las primeras tarjetas se elige la nota activa.
+    /// Al llegar las primeras fechas se elige la nota activa.
     reveal_on_load: bool,
     /// Cuántas veces eligió el usuario una fuente: `:vaultundo` no deshace una
     /// fuente que se eligió después del cambio.
     source_choices: u64,
-    /// Las tarjetas se leen la primera vez que la lista se ve: plegada no
+    /// Las fechas se miran la primera vez que la lista se ve: plegada no
     /// le cuesta nada a la ventana.
     started: bool,
     /// Lo mostrado cambió porque el usuario lo pidió (escribió en el
@@ -105,13 +105,14 @@ impl NoteListView {
             &state.filter,
             Arc::clone(&index),
             session.read(cx).tags(),
+            vault.summaries(),
         );
         let changes = cx.subscribe(session, |view, _, VaultChanged(update), cx| {
             let (step, unread) = view.list.apply(update);
             view.step(step, cx);
             // Antes de la primera lectura no hay nada que releer: esa lee todo.
             if view.started {
-                view.read_cards(unread, cx);
+                view.read_dates(unread, cx);
             }
         });
         let views_changes = cx.subscribe(session, |view, session, changed: &ViewsChanged, cx| {
@@ -154,7 +155,7 @@ impl NoteListView {
         view
     }
 
-    /// La primera lectura de las tarjetas, de todas las notas del vault.
+    /// La primera lectura de las fechas, de todas las notas del vault.
     fn start(&mut self, cx: &mut Context<Self>) {
         if std::mem::replace(&mut self.started, true) {
             return;
@@ -171,10 +172,10 @@ impl NoteListView {
         if notes.is_empty() {
             // Un vault sin notas no tiene nada que leer: la lista ya está.
             self.reveal_on_load = false;
-            let step = self.list.set_cards(Vec::new());
+            let step = self.list.set_dates(Vec::new());
             self.step(step, cx);
         }
-        self.read_cards(notes, cx);
+        self.read_dates(notes, cx);
     }
 
     #[must_use]
@@ -313,27 +314,27 @@ impl NoteListView {
         self.session.read(cx).vault_path(document.path()?)
     }
 
-    /// Lee en el fondo las tarjetas de `paths`, después de las que ya se
-    /// están leyendo.
-    fn read_cards(&mut self, paths: Vec<VaultPath>, cx: &mut Context<Self>) {
+    /// Mira en el fondo las fechas de `paths`, después de las que ya se
+    /// están mirando.
+    fn read_dates(&mut self, paths: Vec<VaultPath>, cx: &mut Context<Self>) {
         self.unread.extend(paths);
         if self.reading.is_some() || self.unread.is_empty() {
             return;
         }
         let paths = std::mem::take(&mut self.unread);
         let root = self.root.clone();
-        let read = cx.background_spawn(async move { read_all(&root, &paths) });
+        let read = cx.background_spawn(async move { read_modified(&root, &paths) });
         self.reading = Some(cx.spawn(async move |this, cx| {
-            let cards = read.await;
+            let dates = read.await;
             // Si la lista ya no existe, no hay a quién dárselas.
             let _ = this.update(cx, |view, cx| {
                 view.reading = None;
-                let step = view.list.set_cards(cards);
+                let step = view.list.set_dates(dates);
                 view.step(step, cx);
                 if std::mem::take(&mut view.reveal_on_load) {
                     view.reveal_active(cx);
                 }
-                view.read_cards(Vec::new(), cx);
+                view.read_dates(Vec::new(), cx);
             });
         }));
     }

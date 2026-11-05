@@ -112,12 +112,14 @@ fn abrir_con_cache_da_los_mismos_indices_que_sin_ella() {
     assert_eq!(*building.links(), *plain.links());
     assert_eq!(*building.tags(), *plain.tags());
     assert_eq!(*building.properties(), *plain.properties());
+    assert_eq!(*building.summaries(), *plain.summaries());
     drop(building);
     assert!(fixture.cache_file().exists());
 
     let cached = fixture.open();
     assert_eq!(*cached.links(), *plain.links());
     assert_eq!(*cached.properties(), *plain.properties());
+    assert_eq!(*cached.summaries(), *plain.summaries());
     assert_eq!(*cached.tags(), *plain.tags());
     assert!(matches!(
         cached.links().outgoing(&path("a.md"))[0].target,
@@ -147,6 +149,8 @@ fn una_nota_igual_por_fuera_no_se_relee() {
     let vault = fixture.open();
     assert_eq!(targets(&vault.links(), "a.md"), ["uno"]);
     assert!(vault.tags().index().tag(&TagKey::new("x")).is_some());
+    let summaries = vault.summaries();
+    assert_eq!(summaries.of(&path("a.md")).unwrap().excerpt, "[[uno]] #x");
 }
 
 #[test]
@@ -162,6 +166,11 @@ fn lo_que_cambio_con_el_vault_cerrado_se_ve() {
     assert_eq!(targets(&vault.links(), "a.md"), ["dos", "tres"]);
     assert_eq!(targets(&vault.links(), "b.md"), Vec::<String>::new());
     assert_eq!(targets(&vault.links(), "nueva.md"), ["c"]);
+    assert_eq!(
+        vault.summaries().of(&path("a.md")).unwrap().excerpt,
+        "[[dos]] [[tres]]"
+    );
+    assert_eq!(vault.summaries().of(&path("b.md")), None);
     let tags = vault.tags();
     assert!(tags.index().tag(&TagKey::new("x")).is_none());
     assert!(tags.index().tag(&TagKey::new("y")).is_some());

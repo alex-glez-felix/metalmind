@@ -55,19 +55,11 @@ mod tests {
     }
 
     fn index(files: &[(&str, &str)]) -> LinkIndex {
-        LinkIndex::build(
-            files.iter().map(|(file, _)| {
-                let file = path(file);
-                let kind = EntryKind::of_file(&file);
-                (file, kind)
-            }),
-            |note| {
-                files
-                    .iter()
-                    .find(|(file, _)| *file == note.as_str())
-                    .map(|(_, text)| (*text).to_owned())
-            },
-        )
+        LinkIndex::from_texts(files.iter().map(|&(file, text)| {
+            let file = path(file);
+            let kind = EntryKind::of_file(&file);
+            (file, kind, text)
+        }))
     }
 
     fn embed(index: &LinkIndex, source: &str, file: &str) -> Option<String> {

@@ -1,6 +1,6 @@
 //! El índice de links: los links de cada nota ya resueltos, quién enlaza a
 //! cada archivo y los links sin resolver o ambiguos. Se arma con
-//! [`LinkIndex::build`] y se mantiene al día aplicando cada
+//! lo escaneado de cada nota al abrir el vault y se mantiene al día aplicando cada
 //! [`crate::VaultChange`].
 
 mod attachments;

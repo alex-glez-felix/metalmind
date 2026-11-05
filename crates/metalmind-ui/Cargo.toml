@@ -44,6 +44,7 @@ gpui-pre = { workspace = true, features = ["test-support"] }
 gpui-pre-wgpu.workspace = true
 gungraun.workspace = true
 metalmind-perf.workspace = true
+notify.workspace = true
 pretty_assertions.workspace = true
 proptest.workspace = true
 regex.workspace = true

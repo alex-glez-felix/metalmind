@@ -62,14 +62,11 @@ mod tests {
     }
 
     fn index(files: &[&str]) -> LinkIndex {
-        LinkIndex::build(
-            files.iter().map(|file| {
-                let file = path(file);
-                let kind = EntryKind::of_file(&file);
-                (file, kind)
-            }),
-            |_| Some(String::new()),
-        )
+        LinkIndex::from_texts(files.iter().map(|file| {
+            let file = path(file);
+            let kind = EntryKind::of_file(&file);
+            (file, kind, "")
+        }))
     }
 
     #[test]
