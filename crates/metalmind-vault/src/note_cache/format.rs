@@ -22,12 +22,13 @@ use crate::history::ContentHash;
 use crate::links::IndexedLink;
 use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
+use crate::summary::Summary;
 use crate::tags::NoteTags;
 
 const MAGIC: &[u8; 8] = b"MMNOTES\n";
 /// Sube cuando cambia lo de arriba o [`NoteRecord`]. Lo que cambie el scanner
 /// sin cambiar los tipos lo atrapa [`version`] con [`SAMPLE`].
-const FORMAT: u32 = 1;
+const FORMAT: u32 = 2;
 /// Lee y verifica por bloques, en paralelo, sin que un bloque pese demasiado.
 const NOTES_PER_BLOCK: usize = 1024;
 const HASH_LEN: usize = 32;
@@ -43,7 +44,10 @@ fecha: {año: 2026, listas: [a, b]}\n\
 # Título #cuatro\n\
 [[nota]] ![[imagen.png|200]] [[nota#Sección]] [[nota#^bloque]] [[#Aquí]]\n\
 [md](<mi nota.md#Sec%201>) ![img](a%20b.png) `[[código]]`\n\
-- [ ] #cinco/seis $$x$$\n";
+- [ ] #cinco/seis $$x$$\n\
+```\n\
+fuera del extracto\n\
+```\n";
 
 /// Una nota en el archivo. `Cow` para escribir sin copiar lo de los índices
 /// y leer con los mismos tipos: el orden de los campos es parte del formato.
@@ -55,6 +59,7 @@ pub(super) struct NoteRecord<'a> {
     pub links: Cow<'a, [IndexedLink]>,
     pub tags: Cow<'a, NoteTags>,
     pub properties: Cow<'a, [Property]>,
+    pub summary: Cow<'a, Summary>,
 }
 
 impl NoteRecord<'_> {
@@ -66,6 +71,7 @@ impl NoteRecord<'_> {
                 links: self.links.into_owned(),
                 tags: self.tags.into_owned(),
                 properties: self.properties.into_owned(),
+                summary: self.summary.into_owned(),
             },
         };
         (self.path.into_owned(), note)
@@ -192,12 +198,17 @@ pub(super) fn version() -> [u8; HASH_LEN] {
         links: Cow::Owned(scan.links),
         tags: Cow::Owned(scan.tags),
         properties: Cow::Owned(scan.properties),
+        summary: Cow::Owned(scan.summary),
     };
+    version_of(FORMAT, &sample)
+}
+
+pub(super) fn version_of(format: u32, sample: &impl serde::Serialize) -> [u8; HASH_LEN] {
     let mut hasher = blake3::Hasher::new();
-    hasher.update(&FORMAT.to_le_bytes());
+    hasher.update(&format.to_le_bytes());
     hasher.update(env!("CARGO_PKG_VERSION").as_bytes());
     // Serializar a memoria solo falla por un tipo inválido, y `save` también lo notaría.
-    if let Ok(encoded) = postcard::to_allocvec(&sample) {
+    if let Ok(encoded) = postcard::to_allocvec(sample) {
         hasher.update(&encoded);
     }
     *hasher.finalize().as_bytes()

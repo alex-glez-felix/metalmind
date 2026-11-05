@@ -4165,6 +4165,7 @@ dependencies = [
  "metalmind-vault",
  "metalmind-vim",
  "miniz_oxide 0.9.1",
+ "notify",
  "png 0.18.1",
  "pretty_assertions",
  "proptest",

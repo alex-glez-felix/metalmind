@@ -22,14 +22,10 @@ fn files(notes: usize, names: NoteNames) -> Files {
 }
 
 fn build(files: &Files) -> LinkIndex {
-    LinkIndex::build(
-        files.iter().map(|(path, _)| (path.clone(), kind(path))),
-        |path| {
-            files
-                .binary_search_by(|(file, _)| file.cmp(path))
-                .ok()
-                .map(|at| files[at].1.clone())
-        },
+    LinkIndex::from_texts(
+        files
+            .iter()
+            .map(|(path, text)| (path.clone(), kind(path), text.as_str())),
     )
 }
 
@@ -143,7 +139,7 @@ fn muchos_links_en_una_linea_es_lineal() {
             }
             (path.clone(), text)
         },
-        |(path, text)| LinkIndex::build([(path.clone(), EntryKind::Note)], |_| Some(text.clone())),
+        |(path, text)| LinkIndex::from_texts([(path.clone(), EntryKind::Note, text.as_str())]),
     );
 }
 

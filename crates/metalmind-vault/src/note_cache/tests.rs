@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use metalmind_syntax::Property;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
 use super::format::{self, Unusable};
 use super::*;
 use crate::index::EntryKind;
+use crate::links::IndexedLink;
+use crate::summary::Summary;
 use crate::tags::NoteTags;
 
 const OLD: Stamp = Stamp {
@@ -58,8 +61,8 @@ impl Disk {
     fn open_and_save(&self, file: &Path) -> OpenedNotes {
         let opened = self.open(Some(file));
         if let Some(refresh) = &opened.refresh {
-            let (links, tags, properties) = indexes(&opened);
-            refresh.write(&links, &tags, &properties);
+            let (links, tags, properties, summaries) = indexes(&opened);
+            refresh.write(&links, &tags, &properties, &summaries);
         }
         opened
     }
@@ -69,7 +72,7 @@ impl Disk {
     }
 }
 
-fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags, PropertyIndex) {
+fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags, PropertyIndex, SummaryIndex) {
     let links = LinkIndex::from_scans(
         opened
             .scans
@@ -97,7 +100,14 @@ fn indexes(opened: &OpenedNotes) -> (LinkIndex, Tags, PropertyIndex) {
             .map(|(path, scan)| (path.clone(), scan.properties.clone()))
             .collect(),
     );
-    (links, tags, properties)
+    let summaries = SummaryIndex::from_scans(
+        opened
+            .scans
+            .iter()
+            .map(|(path, scan)| (path.clone(), scan.summary.clone()))
+            .collect(),
+    );
+    (links, tags, properties, summaries)
 }
 
 fn scan_of<'o>(opened: &'o OpenedNotes, name: &str) -> &'o NoteScan {
@@ -182,6 +192,7 @@ fn un_touch_no_vuelve_a_escanear() {
 /// Una caché con `name` sin links, sea lo que sea que diga su texto.
 fn save_without_links(file: &Path, name: &str, stamp: Stamp, hash: ContentHash) {
     let tags = NoteTags::default();
+    let summary = Summary::default();
     let record = NoteRecord {
         path: Cow::Borrowed(name),
         stamp: Some(stamp),
@@ -189,6 +200,7 @@ fn save_without_links(file: &Path, name: &str, stamp: Stamp, hash: ContentHash) 
         links: Cow::Borrowed(&[]),
         tags: Cow::Borrowed(&tags),
         properties: Cow::Borrowed(&[]),
+        summary: Cow::Borrowed(&summary),
     };
     format::save(file, &[record]).unwrap();
 }
@@ -344,6 +356,56 @@ fn una_cache_de_otra_version_se_descarta() {
     rebuilds(&file, &disk);
 }
 
+/// Una nota como la guardaba el formato 1, sin resumen.
+#[derive(serde::Serialize)]
+struct RecordV1<'a> {
+    path: &'a str,
+    stamp: Option<Stamp>,
+    hash: ContentHash,
+    links: &'a [IndexedLink],
+    tags: &'a NoteTags,
+    properties: &'a [Property],
+}
+
+/// Una caché con la forma del formato anterior se descarta y se rehace, y al
+/// leer sus notas otra vez ya trae los resúmenes que le faltaban.
+#[test]
+fn una_cache_del_formato_anterior_se_descarta() {
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("cache");
+    let tags = NoteTags::default();
+    let record = RecordV1 {
+        path: "a.md",
+        stamp: Some(OLD),
+        hash: ContentHash::of("# Título\nTexto."),
+        links: &[],
+        tags: &tags,
+        properties: &[],
+    };
+    let payload = postcard::to_allocvec(&[&record]).unwrap();
+    let mut old = b"MMNOTES\n".to_vec();
+    old.extend(format::version_of(1, &record));
+    old.extend(1_u32.to_le_bytes());
+    old.extend(blake3::hash(&payload).as_bytes());
+    old.extend(u32::try_from(payload.len()).unwrap().to_le_bytes());
+    old.extend(&payload);
+    assert_eq!(format::parse(&old).err(), Some(Unusable::OtherVersion));
+    fs::write(&file, old).unwrap();
+
+    let disk = Disk::new(&[("a.md", Some(OLD), "# Título\nTexto.")]);
+    let opened = disk.open_and_save(&file);
+    assert_eq!(disk.read_count(), 1);
+    assert_eq!(
+        scan_of(&opened, "a.md").summary.title.as_deref(),
+        Some("Título")
+    );
+
+    let disk = Disk::new(&[("a.md", Some(OLD), "otro")]);
+    let opened = disk.open(Some(&file));
+    assert_eq!(disk.read_count(), 0, "ya quedó en el formato de hoy");
+    assert_eq!(scan_of(&opened, "a.md").summary.excerpt, "Texto.");
+}
+
 #[test]
 fn un_archivo_que_no_se_puede_escribir_no_molesta() {
     let dir = TempDir::new().unwrap();
@@ -359,6 +421,7 @@ fn lo_que_vuelve_de_la_cache_es_igual_a_escanear() {
     let dir = TempDir::new().unwrap();
     let file = dir.path().join("cache");
     let text = "---\ntags: [uno, \"tr\\u0065s\"]\nfecha: {a: [1, 2]}\n---\n\
+                # El título\n\
                 [[b#Sec|x]] ![[c.png]] [d](<mi nota.md#^id>) #cuatro\n";
     Disk::new(&[("a.md", Some(OLD), text)]).open_and_save(&file);
     let disk = Disk::new(&[("a.md", Some(OLD), "otro")]);

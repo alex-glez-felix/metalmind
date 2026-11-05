@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use metalmind_vault::EntryKind;
 use pretty_assertions::assert_eq;
 
@@ -10,13 +8,10 @@ fn path(path: &str) -> VaultPath {
 }
 
 fn index(notes: &[(&str, &str)]) -> Arc<LinkIndex> {
-    let texts: HashMap<VaultPath, String> = notes
-        .iter()
-        .map(|&(name, text)| (path(name), text.to_owned()))
-        .collect();
-    Arc::new(LinkIndex::build(
-        texts.keys().map(|name| (name.clone(), EntryKind::Note)),
-        |name| texts.get(name).cloned(),
+    Arc::new(LinkIndex::from_texts(
+        notes
+            .iter()
+            .map(|&(name, text)| (path(name), EntryKind::Note, text)),
     ))
 }
 

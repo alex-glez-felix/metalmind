@@ -71,8 +71,6 @@ pub fn unresolved_links(index: &LinkIndex) -> Arc<[UnresolvedLink]> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use metalmind_vault::EntryKind;
     use pretty_assertions::assert_eq;
 
@@ -84,20 +82,16 @@ mod tests {
 
     #[test]
     fn cada_link_sin_destino_con_donde_esta() {
-        let notes: HashMap<VaultPath, &str> = [
-            (
-                "a.md",
-                "ver [[b]] y [[falta]]\n\n![[foto.png]] y [x](otra/falta.md)\n",
-            ),
-            ("b.md", "nada que falte: [[a]]\n"),
-            ("c/d.md", "uno\n[[falta#Meta|el alias]]\n"),
-        ]
-        .into_iter()
-        .map(|(name, text)| (path(name), text))
-        .collect();
-        let index = LinkIndex::build(
-            notes.keys().map(|name| (name.clone(), EntryKind::Note)),
-            |name| notes.get(name).map(|text| (*text).to_owned()),
+        let index = LinkIndex::from_texts(
+            [
+                (
+                    "a.md",
+                    "ver [[b]] y [[falta]]\n\n![[foto.png]] y [x](otra/falta.md)\n",
+                ),
+                ("b.md", "nada que falte: [[a]]\n"),
+                ("c/d.md", "uno\n[[falta#Meta|el alias]]\n"),
+            ]
+            .map(|(name, text)| (path(name), EntryKind::Note, text)),
         );
         let links = unresolved_links(&index);
         let shown: Vec<(&str, &str, Option<&str>, usize)> = links
@@ -127,13 +121,10 @@ mod tests {
     #[test]
     fn un_link_de_la_lista_sigue_sin_destino_solo_si_el_indice_lo_dice() {
         let build = |notes: &[(&str, &str)]| {
-            let notes: HashMap<VaultPath, String> = notes
-                .iter()
-                .map(|&(name, text)| (path(name), text.to_owned()))
-                .collect();
-            LinkIndex::build(
-                notes.keys().map(|name| (name.clone(), EntryKind::Note)),
-                |name| notes.get(name).cloned(),
+            LinkIndex::from_texts(
+                notes
+                    .iter()
+                    .map(|&(name, text)| (path(name), EntryKind::Note, text)),
             )
         };
         let before = build(&[("a.md", "ver [[falta]]\n")]);

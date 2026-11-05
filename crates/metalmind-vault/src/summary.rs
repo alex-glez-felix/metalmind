@@ -1,11 +1,13 @@
 //! Lo que la lista de notas muestra de cada una sin abrirla: su título y el
 //! principio de su texto.
 
+use metalmind_syntax::Scan;
+
 /// Hasta cuántos caracteres del cuerpo guarda el extracto: más de lo que
 /// cabe en las líneas de una fila, que lo recortan.
 const EXCERPT_CHARS: usize = 280;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Summary {
     /// El texto del primer `# ` de la nota; sin uno, la nota se nombra por su
     /// archivo.
@@ -16,9 +18,8 @@ pub struct Summary {
 }
 
 impl Summary {
-    #[must_use]
-    pub fn of(text: &str) -> Self {
-        let scan = metalmind_syntax::scan(text);
+    /// El de `text`, con su `scan` ya hecho.
+    pub(crate) fn of(text: &str, scan: &Scan) -> Self {
         let title = scan
             .headings
             .iter()
@@ -82,6 +83,10 @@ mod tests {
 
     use super::*;
 
+    fn summary_of(text: &str) -> Summary {
+        Summary::of(text, &metalmind_syntax::scan(text))
+    }
+
     #[rstest]
     #[case::con_titulo(
         "# El render loop\n\nCada frame pinta.\n",
@@ -115,7 +120,7 @@ mod tests {
     #[case::vacia("", None, "")]
     #[case::con_bom("\u{feff}# Título\nTexto.\n", Some("Título"), "Texto.")]
     fn titulo_y_extracto(#[case] text: &str, #[case] title: Option<&str>, #[case] excerpt: &str) {
-        let summary = Summary::of(text);
+        let summary = summary_of(text);
         assert_eq!(summary.title.as_deref(), title);
         assert_eq!(summary.excerpt, excerpt);
     }
@@ -123,7 +128,7 @@ mod tests {
     #[test]
     fn una_linea_enorme_no_se_copia_entera() {
         let text = format!("Antes\n{}\n", "x".repeat(1_000_000));
-        let excerpt = Summary::of(&text).excerpt;
+        let excerpt = summary_of(&text).excerpt;
         assert_eq!(excerpt.chars().count(), EXCERPT_CHARS);
         assert!(excerpt.starts_with("Antes xxx"));
     }
@@ -131,13 +136,13 @@ mod tests {
     #[test]
     fn muchos_headings_antes_de_la_prosa() {
         let text = format!("{}Al fin.\n", "## h\n".repeat(20_000));
-        assert_eq!(Summary::of(&text).excerpt, "Al fin.");
+        assert_eq!(summary_of(&text).excerpt, "Al fin.");
     }
 
     #[test]
     fn el_extracto_se_corta_en_un_caracter_entero() {
         let text = "ñandú ".repeat(200);
-        let excerpt = Summary::of(&text).excerpt;
+        let excerpt = summary_of(&text).excerpt;
         assert_eq!(excerpt.chars().count(), EXCERPT_CHARS);
         assert!(text.starts_with(&excerpt));
     }

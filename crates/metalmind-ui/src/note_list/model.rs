@@ -4,12 +4,13 @@
 //! aunque la lista cambie.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use metalmind_config::SavedView;
 use metalmind_vault::tags::Tags;
-use metalmind_vault::{EntryKind, VaultChange, VaultIndex, VaultPath, VaultUpdate};
+use metalmind_vault::{EntryKind, SummaryIndex, VaultChange, VaultIndex, VaultPath, VaultUpdate};
 
-use super::cards::{Card, Cards};
+use super::cards::{Card, ModifiedTimes};
 use super::source::ListSource;
 use crate::finder::{Note, TagFilter};
 use crate::picker::{InputLine, LineEdit, Matches, PickerState, Step};
@@ -27,9 +28,10 @@ pub struct NoteList {
     source: ListSource,
     index: Arc<VaultIndex>,
     tags: Arc<Tags>,
-    cards: Cards,
-    /// Ya llegaron las primeras tarjetas: antes no se muestra nada.
-    cards_ready: bool,
+    summaries: Arc<SummaryIndex>,
+    dates: ModifiedTimes,
+    /// Ya llegaron las primeras fechas: antes no se muestra nada.
+    dates_ready: bool,
     /// Las notas de la fuente en orden y lo que deja el filtro.
     filter: PickerState<Note>,
     /// La nota de la fila elegida: la fila la sigue cuando la lista cambia.
@@ -42,10 +44,16 @@ pub struct NoteList {
 }
 
 impl NoteList {
-    /// Sin tarjetas todavía: no muestra nada hasta [`NoteList::set_cards`],
-    /// porque sin fechas el orden cambiaría al llegar.
+    /// Sin fechas todavía: no muestra nada hasta [`NoteList::set_dates`],
+    /// porque el orden cambiaría al llegar.
     #[must_use]
-    pub fn new(source: ListSource, filter: &str, index: Arc<VaultIndex>, tags: Arc<Tags>) -> Self {
+    pub fn new(
+        source: ListSource,
+        filter: &str,
+        index: Arc<VaultIndex>,
+        tags: Arc<Tags>,
+        summaries: Arc<SummaryIndex>,
+    ) -> Self {
         let mut state = PickerState::loading()
             .stopping_at_edges()
             .with_narrowing(Arc::new(TagFilter::new(Arc::clone(&tags))));
@@ -55,8 +63,9 @@ impl NoteList {
             source,
             index,
             tags,
-            cards: Cards::default(),
-            cards_ready: false,
+            summaries,
+            dates: ModifiedTimes::default(),
+            dates_ready: false,
             filter: state,
             selected: None,
             prompt: None,
@@ -135,28 +144,33 @@ impl NoteList {
     }
 
     #[must_use]
-    pub fn card(&self, row: usize) -> Option<&Card> {
-        self.cards.get(self.note(row)?)
+    pub fn card(&self, row: usize) -> Option<Card<'_>> {
+        Some(self.card_of(self.note(row)?))
     }
 
-    /// Llegaron tarjetas leídas del disco. Las de una nota que ya no está
-    /// (se leyó antes de un renombre) no se guardan.
-    pub fn set_cards(&mut self, cards: Vec<(VaultPath, Card)>) -> Step<Note> {
+    fn card_of<'a>(&'a self, note: &'a VaultPath) -> Card<'a> {
+        Card::new(note, self.summaries.of(note), self.dates.get(note))
+    }
+
+    /// Llegaron fechas del disco. Las de una nota que ya no está (se miró
+    /// antes de un renombre) no se guardan.
+    pub fn set_dates(&mut self, dates: Vec<(VaultPath, Option<SystemTime>)>) -> Step<Note> {
         let index = Arc::clone(&self.index);
-        self.cards.insert_all(
-            cards
+        self.dates.insert_all(
+            dates
                 .into_iter()
                 .filter(|(path, _)| index.kind(path) == Some(EntryKind::Note)),
         );
-        self.cards_ready = true;
+        self.dates_ready = true;
         self.refill()
     }
 
-    /// Un lote del watcher: devuelve lo que muestra y las notas cuya tarjeta
-    /// hay que releer.
+    /// Un lote del watcher: devuelve lo que muestra y las notas cuya fecha hay
+    /// que volver a mirar.
     pub fn apply(&mut self, update: &VaultUpdate) -> (Step<Note>, Vec<VaultPath>) {
         self.index = Arc::clone(&update.snapshot);
         self.tags = Arc::clone(&update.tags);
+        self.summaries = Arc::clone(&update.summaries);
         self.source.follow(&update.changes);
         self.selected = self
             .selected
@@ -166,7 +180,7 @@ impl NoteList {
             .tag_target
             .take()
             .map(|target| renamed(target, &update.changes));
-        let stale = self.cards.apply(&update.changes, &self.index);
+        let stale = self.dates.apply(&update.changes, &self.index);
         (self.refill(), stale)
     }
 
@@ -224,8 +238,8 @@ impl NoteList {
     }
 
     fn refill(&mut self) -> Step<Note> {
-        if !self.cards_ready {
-            // Sin fechas no hay orden: se muestra al llegar las tarjetas.
+        if !self.dates_ready {
+            // Sin fechas no hay orden: se muestra al llegar.
             return Step::default();
         }
         let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
@@ -237,10 +251,7 @@ impl NoteList {
     /// que tienen la misma fecha, por ruta.
     fn ordered(&self) -> Arc<[Note]> {
         let mut notes = self.source.notes(&self.index, &self.tags);
-        notes.sort_by_cached_key(|path| {
-            let modified = self.cards.get(path).and_then(|card| card.modified);
-            (std::cmp::Reverse(modified), path.clone())
-        });
+        notes.sort_by_cached_key(|path| (std::cmp::Reverse(self.dates.get(path)), path.clone()));
         notes.into_iter().map(Note).collect()
     }
 
@@ -321,8 +332,8 @@ impl NoteList {
 
     /// La tarjeta de la nota a la que van los tags.
     #[must_use]
-    pub fn tag_target_card(&self) -> Option<&Card> {
-        self.cards.get(self.tag_target.as_ref()?)
+    pub fn tag_target_card(&self) -> Option<Card<'_>> {
+        Some(self.card_of(self.tag_target.as_ref()?))
     }
 
     pub fn edit_tag_line(&mut self, edit: LineEdit<'_>) {

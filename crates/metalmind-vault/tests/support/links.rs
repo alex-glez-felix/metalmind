@@ -32,9 +32,10 @@ pub fn model(files: &[(&str, &str)]) -> Model {
 }
 
 pub fn build(model: &Model) -> LinkIndex {
-    LinkIndex::build(
-        model.keys().map(|file| (file.clone(), kind(file))),
-        |file| model.get(file).cloned(),
+    LinkIndex::from_texts(
+        model
+            .iter()
+            .map(|(file, text)| (file.clone(), kind(file), text.as_str())),
     )
 }
 

@@ -17,24 +17,19 @@ use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
 impl LinkIndex {
-    /// Indexa `files`; `read` da el contenido de cada nota, o `None` si no se
-    /// pudo leer y entonces queda sin links. Lee, escanea y resuelve las
-    /// notas en varios hilos.
-    pub fn build(
-        files: impl IntoIterator<Item = (VaultPath, EntryKind)>,
-        read: impl Fn(&VaultPath) -> Option<String> + Sync,
+    /// Indexa cada archivo con su texto, que solo cuenta en las notas, sin un
+    /// vault abierto: para quien arma un índice a mano (tests, benchmarks).
+    pub fn from_texts<'t>(
+        files: impl IntoIterator<Item = (VaultPath, EntryKind, &'t str)>,
     ) -> Self {
-        let files: Vec<(VaultPath, EntryKind)> = files.into_iter().collect();
-        let notes: Vec<VaultPath> = files
+        let files: Vec<(VaultPath, EntryKind, &str)> = files.into_iter().collect();
+        let notes: Vec<(VaultPath, &str)> = files
             .iter()
-            .filter(|(_, kind)| *kind == EntryKind::Note)
-            .map(|(path, _)| path.clone())
+            .filter(|(_, kind, _)| *kind == EntryKind::Note)
+            .map(|(path, _, text)| (path.clone(), *text))
             .collect();
-        let scans = in_parallel(notes, |path| {
-            let links = read(&path).as_deref().map(scan_links).unwrap_or_default();
-            (path, links)
-        });
-        Self::from_scans(files, scans)
+        let scans = in_parallel(notes, |(path, text)| (path, scan_links(text)));
+        Self::from_scans(files.into_iter().map(|(path, kind, _)| (path, kind)), scans)
     }
 
     /// Indexa `files` con los links ya escaneados de cada nota: los resuelve
