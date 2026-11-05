@@ -865,6 +865,41 @@ const SCENES: &[(&str, &[Step])] = &[
         "pizarra-flecha-suelta",
         &[Step::Release, Step::Keys("<Esc>")],
     ),
+    // Fórmulas largas con wrap (#219): la matriz con el cursor muestra su
+    // fuente en las mismas filas donde se ve su imagen. Van al final para no
+    // cambiar las pantallas de antes: la última nota entra en el árbol.
+    (
+        "formulas-partidas-imagen",
+        &[Step::Keys(
+            "<Esc><Esc><C-w>o:e formulas.md<CR>:set wrap<CR>gg/matriz m<CR>",
+        )],
+    ),
+    ("formulas-partidas-fuente", &[Step::Keys("j")]),
+    (
+        "formulas-partidas-bordes",
+        &[Step::Keys(concat!(
+            "<Esc>:e formulas-bordes.md<CR>i",
+            r"Sola en su renglon:<CR>$A = \begin{bmatrix} a_{11} & \cdots & a_{1n} \\ \vdots & \ddots & \vdots \\ a_{m1} & \cdots & a_{mn} \end{bmatrix} \qquad \text{con } m, n \in \mathbb{N}$<CR>",
+            r"Entre texto se ve la fuente: $B = \begin{bmatrix} b_{11} & \cdots & b_{1n} \\ \vdots & \ddots & \vdots \\ b_{m1} & \cdots & b_{mn} \end{bmatrix} \qquad \text{con } m, n \in \mathbb{N}$ y sigue el texto.<CR>",
+            r"Mas ancha que la fila, se ve la fuente:<CR>$$a_1 + a_2 + a_3 + a_4 + a_5 + a_6 + a_7 + a_8 + a_9 + a_{10} + a_{11} + a_{12} + a_{13} + a_{14} + a_{15} + a_{16} + a_{17} + a_{18} + a_{19} + a_{20} + a_{21} + a_{22} + a_{23} + a_{24} + a_{25} + a_{26} + a_{27} + a_{28} + a_{29} + a_{30} + a_{31} + a_{32} + a_{33} + a_{34} + a_{35} + a_{36}$$<CR>",
+            r"Alta y partida, sus filas crecen:<CR>$$\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6} \qquad \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi} \qquad \prod_{k=1}^{n} \frac{k+1}{k} = n + 1$$<CR>",
+            "Fin.<Esc>",
+        ))],
+    ),
+    ("formulas-partidas-panel-angosto", &[Step::Keys("<C-w>v")]),
+    (
+        "formulas-partidas-sin-wrap",
+        &[Step::Keys("<C-w>o:set nowrap<CR>gg")],
+    ),
+    // Al final de una nota de más de 1000 líneas, sobre la última línea.
+    (
+        "formulas-partidas-nota-larga",
+        &[Step::Keys(concat!(
+            "<Esc>:e formulas-larga.md<CR>:set wrap<CR>Go",
+            r"$$A = \begin{bmatrix} a_{11} & \cdots & a_{1n} \\ \vdots & \ddots & \vdots \\ a_{m1} & \cdots & a_{mn} \end{bmatrix}$$",
+            "<Esc>k",
+        ))],
+    ),
 ];
 
 /// Sin permiso de escribir en su carpeta, el autoguardado de la nota falla.

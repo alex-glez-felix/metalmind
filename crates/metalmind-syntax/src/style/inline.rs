@@ -428,10 +428,10 @@ impl Painter<'_> {
                 range: math.span.start - line.start..math.span.end - line.start,
                 latex: latex.to_owned(),
                 display,
-                place: if display && alone {
-                    MathPlace::Alone
-                } else {
-                    MathPlace::Inline
+                place: match (display, alone) {
+                    (true, true) => MathPlace::Alone,
+                    (false, true) => MathPlace::InlineAlone,
+                    (_, false) => MathPlace::Inline,
                 },
             });
         }

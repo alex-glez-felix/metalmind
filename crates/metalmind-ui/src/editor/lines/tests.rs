@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use gpui_kit::{SharedString, TestAppContext, TextRun, Window, font, point, px};
+use gpui_kit::{Bounds, SharedString, TestAppContext, TextRun, Window, font, point, px, size};
 use metalmind_config::Config;
 use metalmind_syntax::{ScreenLines as _, Styles, TextLines};
 use pretty_assertions::assert_eq;
@@ -100,6 +100,118 @@ fn una_linea_partida_que_asoma_se_ve_como_sus_filas(#[case] show_source: bool) {
                 "la fila pinta sus bytes: {pieces:?}"
             );
         }
+    });
+}
+
+/// Una matriz: unas 110 columnas de fuente y una imagen angosta.
+const MATRIX: &str = r"A = \begin{bmatrix} a_{11} & \cdots & a_{1n} \\ \vdots & \ddots & \vdots \\ a_{m1} & \cdots & a_{mn} \end{bmatrix}";
+
+/// Si lo que se ve de una línea es una sola imagen y ningún texto.
+fn is_image(laid: &LaidLine) -> bool {
+    let no_text = laid
+        .rows
+        .iter()
+        .flat_map(|row| &row.pieces)
+        .all(|piece| piece.text.is_none());
+    laid.formulas.len() == 1 && no_text
+}
+
+/// Sola en su línea, partida en filas y más angosta que ellas: la imagen,
+/// centrada sobre las filas que tiene; con el cursor, la fuente en las mismas.
+#[rstest::rstest]
+#[case::bloque(format!("$${MATRIX}$$"))]
+#[case::en_linea(format!("${MATRIX}$"))]
+fn una_formula_sola_partida_se_pinta_sobre_sus_filas(#[case] text: String) {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let image = lay(&text, false, 400., window);
+        let source = lay(&text, true, 400., window);
+        assert!(image.rows.len() > 1, "la fuente se parte");
+        assert!(is_image(&image));
+        assert!(source.formulas.is_empty(), "con el cursor, la fuente");
+        let rows = |laid: &LaidLine| -> Vec<_> {
+            let rows = laid.rows.iter();
+            rows.map(|row| (row.source.clone(), row.top, row.height))
+                .collect()
+        };
+        assert_eq!(rows(&image), rows(&source), "las mismas filas");
+
+        let bounds = image.formulas[0].bounds;
+        let above = bounds.top() - image.origin.y;
+        let below = image.origin.y + image.height - bounds.bottom();
+        assert!((f32::from(above) - f32::from(below)).abs() < 1.0);
+    });
+}
+
+/// Con sangría, la sangría es parte de la fórmula: la imagen va desde el
+/// borde, dentro de la línea, y un clic en cualquiera de sus filas va al
+/// principio de la línea, también con la sangría sola en la primera fila.
+#[test]
+fn una_formula_sola_con_sangria_es_la_linea_entera() {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        for indent in [4, 12, 60] {
+            let text = format!("{}${MATRIX}$", " ".repeat(indent));
+            let laid = lay(&text, false, 250., window);
+            assert!(laid.rows.len() > 1, "la línea se parte");
+            assert!(is_image(&laid), "sangría {indent}");
+            let bounds = laid.formulas[0].bounds;
+            let line = Bounds::new(laid.origin, size(px(250.), laid.height));
+            assert!(
+                line.dilate(px(1.)).contains(&bounds.origin)
+                    && line.dilate(px(1.)).contains(&bounds.bottom_right()),
+                "sangría {indent}: {bounds:?} fuera de {line:?}"
+            );
+            for (index, row) in laid.rows.iter().enumerate() {
+                let last = index + 1 == laid.rows.len();
+                let x = bounds.left() - laid.origin.x + px(1.);
+                assert_eq!(row.closest_index_for_x(x, last), 0, "fila {index}");
+            }
+        }
+    });
+}
+
+/// Un clic en cualquier fila de la imagen va al principio de la fórmula, y
+/// un tramo de cualquier fila la cubre a lo ancho.
+#[test]
+fn toda_la_imagen_partida_es_la_misma_formula() {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let text = format!("$${MATRIX}$$");
+        let laid = lay(&text, false, 400., window);
+        let piece = laid.rows[0].pieces[0].clone();
+        for (index, row) in laid.rows.iter().enumerate() {
+            let last = index + 1 == laid.rows.len();
+            assert_eq!(row.closest_index_for_x(piece.x, last), 0, "fila {index}");
+            assert_eq!(row.x_for_index(row.source.start), piece.x, "fila {index}");
+            assert_eq!(
+                row.x_for_end(row.source.end),
+                piece.x + piece.width,
+                "fila {index}"
+            );
+        }
+    });
+}
+
+/// Más ancha que la fila, o partida entre texto, se ve su fuente.
+#[rstest::rstest]
+#[case::mas_ancha_que_la_fila(format!("$${MATRIX}$$"), 60.)]
+#[case::entre_texto(format!("Antes ${MATRIX}$ y después."), 400.)]
+fn una_formula_partida_que_no_cabe_o_va_entre_texto_se_ve_como_fuente(
+    #[case] text: String,
+    #[case] wrap: f32,
+) {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let laid = lay(&text, false, wrap, window);
+        assert!(laid.rows.len() > 1, "la fuente se parte");
+        assert!(laid.formulas.is_empty());
+        let covered = laid.rows.iter().flat_map(|row| &row.pieces);
+        assert!(covered.clone().all(|piece| piece.text.is_some()));
     });
 }
 

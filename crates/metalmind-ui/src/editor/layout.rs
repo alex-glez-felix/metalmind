@@ -61,8 +61,9 @@ pub struct LaidRow {
     pub top: Pixels,
     /// Lo que mide la fila del texto: más si tiene una fórmula alta.
     pub height: Pixels,
-    /// De izquierda a derecha: texto y fórmulas que reemplazan su fuente.
-    /// Con el cursor en la línea, solo texto.
+    /// De izquierda a derecha: texto y fórmulas que reemplazan su fuente; una
+    /// partida en filas está en cada una. Con el cursor en la línea, solo
+    /// texto.
     pub pieces: Vec<Piece>,
 }
 

@@ -51,6 +51,7 @@ fn render(text: &str) -> String {
             write!(out, " {kind}{:?}@{:?}", math.latex, math.range).unwrap();
             match math.place {
                 MathPlace::Inline => {}
+                MathPlace::InlineAlone => out.push_str(" sola"),
                 MathPlace::Alone => out.push_str(" solo"),
                 MathPlace::Below { above } => write!(out, "^{above}").unwrap(),
             }

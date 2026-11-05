@@ -264,8 +264,11 @@ pub struct MathSpot {
 pub enum MathPlace {
     /// Reemplaza su tramo, alineada con el texto de la línea.
     Inline,
+    /// Una `$…$` que es lo único de su línea: como `Inline`, pero partida en
+    /// filas se compone igual, sobre todas ellas.
+    InlineAlone,
     /// Un bloque `$$…$$` que es lo único de su línea: la reemplaza entera,
-    /// centrado.
+    /// centrado, también si su fuente se parte en filas.
     Alone,
     /// Un bloque de varias líneas que abrió `above` líneas arriba: va
     /// debajo de la línea que lo cierra, centrado, y su fuente se sigue
@@ -278,6 +281,13 @@ impl MathSpot {
     #[must_use]
     pub fn below(&self) -> bool {
         matches!(self.place, MathPlace::Below { .. })
+    }
+
+    /// Si es lo único de su línea: partida en filas se compone sobre ellas,
+    /// porque no deja huecos entre texto.
+    #[must_use]
+    pub fn fills_line(&self) -> bool {
+        matches!(self.place, MathPlace::Alone | MathPlace::InlineAlone)
     }
 }
 
