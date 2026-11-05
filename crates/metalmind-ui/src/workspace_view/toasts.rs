@@ -27,6 +27,13 @@ pub(super) type ToastTimers = HashMap<ToastId, Task<()>>;
 const WITH_ACTION: Duration = Duration::from_secs(10);
 
 impl WorkspaceView {
+    pub(super) fn tell(&mut self, message: Message, cx: &mut Context<Self>) {
+        self.workspace.update(cx, |workspace, cx| {
+            workspace.show_message(message);
+            cx.notify();
+        });
+    }
+
     /// Un temporizador por toast que se ve y se cierra solo, ni uno más. Lo
     /// llama cada frame.
     pub(super) fn schedule_toasts(&mut self, cx: &mut Context<Self>) {

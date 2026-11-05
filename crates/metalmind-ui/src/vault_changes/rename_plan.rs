@@ -1,22 +1,14 @@
-//! Renombrar o mover desde el panel sin romper links (03 §4): si el
-//! renombre cambia links, la vista previa de esos cambios, con el renombre
-//! fijo, antes de aplicarlos juntos con [`Vault::apply`]; si no cambia
-//! ninguno, se renombra enseguida.
+//! El plan de un renombre y su vista previa, sin GPUI: cómo se arma, qué hacer
+//! con él cuando llega y cuándo una vista previa quedó atrás del índice.
 
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use gpui_kit::{AppContext as _, Context, Entity, Task, Window};
-use metalmind_vault::{
-    ApplyError, Changes, LinkIndex, RenameConflict, RenamePlan, Vault, VaultPath,
-};
+use gpui_kit::Task;
+use metalmind_vault::{Changes, LinkIndex, RenameConflict, RenamePlan, VaultPath};
 
-use super::WorkspaceView;
-use super::overlay::Overlay;
-use super::vault_undo::{is_clean, leftovers};
-use crate::change_preview::{ChangePreview, ChangePreviewEvent, ChangePreviewView, Notice};
-use crate::workspace::Message;
+use crate::change_preview::{ChangePreview, Notice};
 
 /// Un renombre con su vista previa abierta: qué se renombra, el último
 /// índice de links y lo que rehace la vista previa cuando llega otro.
@@ -31,7 +23,7 @@ pub(super) struct RenamePreview {
 }
 
 impl RenamePreview {
-    fn new(from: VaultPath, to: VaultPath, index: Arc<LinkIndex>) -> Self {
+    pub(super) fn new(from: VaultPath, to: VaultPath, index: Arc<LinkIndex>) -> Self {
         Self {
             from,
             to,
@@ -42,7 +34,7 @@ impl RenamePreview {
     }
 
     /// Anota que llegó `latest`; `true` si la vista previa quedó atrás.
-    fn fall_behind(&mut self, latest: &Arc<LinkIndex>) -> bool {
+    pub(super) fn fall_behind(&mut self, latest: &Arc<LinkIndex>) -> bool {
         if Arc::ptr_eq(&self.index, latest) {
             return false;
         }
@@ -53,288 +45,34 @@ impl RenamePreview {
 
     /// Anota que se puso la vista previa armada con `built_for`; `false`
     /// si ya llegó otro índice y no hay que ponerla.
-    fn catch_up(&mut self, built_for: &Arc<LinkIndex>) -> bool {
+    pub(super) fn catch_up(&mut self, built_for: &Arc<LinkIndex>) -> bool {
         let current = Arc::ptr_eq(&self.index, built_for);
         self.behind &= !current;
         current
     }
 
-    fn is_current(&self) -> bool {
+    pub(super) fn is_current(&self) -> bool {
         !self.behind
+    }
+
+    pub(super) fn paths(&self) -> (&VaultPath, &VaultPath) {
+        (&self.from, &self.to)
+    }
+
+    pub(super) fn set_rebuild(&mut self, rebuild: Task<()>) {
+        self.rebuild = Some(rebuild);
     }
 }
 
 /// El plan de un renombre y sus ediciones en líneas enteras.
 pub(super) struct RenameBuild {
-    plan: RenamePlan,
-    changes: Changes,
-}
-
-impl WorkspaceView {
-    /// Arma el plan fuera del hilo de la interfaz (lee cada archivo que se
-    /// edita) y después renombra o muestra la vista previa.
-    pub(super) fn rename_entry(
-        &mut self,
-        from: &VaultPath,
-        to: &VaultPath,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let vault = self.session.read(cx).vault();
-        let (index, root) = (vault.links(), vault.root().to_owned());
-        let (from, to) = (from.clone(), to.clone());
-        self.renaming = Some(cx.spawn_in(window, async move |view, cx| {
-            let building = (Arc::clone(&index), root, from.clone(), to.clone());
-            let built = cx
-                .background_executor()
-                .spawn(async move { build(&building.0, &building.1, &building.2, &building.3) })
-                .await;
-            // Si la ventana se cerró, no hay nada que mostrar.
-            let _ = view.update_in(cx, |view, window, cx| {
-                view.renaming = None;
-                view.show_rename(index, &from, &to, built, window, cx);
-            });
-        }));
-    }
-
-    fn show_rename(
-        &mut self,
-        index: Arc<LinkIndex>,
-        from: &VaultPath,
-        to: &VaultPath,
-        built: Result<RenameBuild, String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let vault = self.session.read(cx).vault();
-        match arrival(&index, &vault.links(), self.overlay.is_some()) {
-            Arrival::Show => {}
-            Arrival::Rebuild => return self.rename_entry(from, to, window, cx),
-            Arrival::Busy => {
-                let text = format!(
-                    "no se renombró {from}: se abrió otra ventana antes de su vista previa"
-                );
-                return self.tell(Message::Info(text), cx);
-            }
-        }
-        let built = match built {
-            Ok(built) => built,
-            Err(error) => return self.rename_failed(error, cx),
-        };
-        if built.plan.files.is_empty() && built.plan.conflicts.is_empty() {
-            return self.rename_now(&vault, from, to, cx);
-        }
-        let unsaved = self.unsaved_paths(cx);
-        let Some(preview) = preview(&built.plan, built.changes, |path| unsaved.contains(path))
-        else {
-            return self.rename_now(&vault, from, to, cx);
-        };
-        let view = cx.new(|cx| ChangePreviewView::new(preview, cx));
-        let renamed = to.clone();
-        let events = cx.subscribe_in(&view, window, move |this, view, event, window, cx| {
-            this.on_rename_event(view, *event, &renamed, window, cx);
-        });
-        let rename = RenamePreview::new(from.clone(), to.clone(), index);
-        self.show(
-            Overlay::ChangePreview {
-                view,
-                rename: Some(rename),
-                _events: events,
-            },
-            window,
-            cx,
-        );
-    }
-
-    /// Con la vista previa de un renombre abierta, un lote del vault que
-    /// trae otro índice de links (como el autoguardado de un archivo que la
-    /// bloqueaba) la rehace con los textos de ahora: si no, aplicar
-    /// encontraría los archivos cambiados o dejaría fuera un link nuevo.
-    /// Mientras tanto no se aplica. Lo quitado sigue quitado.
-    pub(super) fn refresh_rename_preview(
-        &mut self,
-        latest: &Arc<LinkIndex>,
-        cx: &mut Context<Self>,
-    ) {
-        let root = self.session.read(cx).root().to_owned();
-        let Some(Overlay::ChangePreview {
-            rename: Some(rename),
-            ..
-        }) = &mut self.overlay
-        else {
-            return;
-        };
-        if !rename.fall_behind(latest) {
-            return;
-        }
-        let building = (
-            Arc::clone(latest),
-            root,
-            rename.from.clone(),
-            rename.to.clone(),
-        );
-        let latest = Arc::clone(latest);
-        // Reemplazar la tarea cancela la del índice anterior, si no terminó.
-        rename.rebuild = Some(cx.spawn(async move |view, cx| {
-            let built = cx
-                .background_executor()
-                .spawn(async move { build(&building.0, &building.1, &building.2, &building.3) })
-                .await;
-            let _ = view.update(cx, |view, cx| view.show_rebuilt(&latest, built, cx));
-        }));
-    }
-
-    /// Pone la vista previa rehecha para `built_for`, si sigue abierta para
-    /// ese índice; si no se pudo rehacer, deja la que había, sin aplicarse
-    /// hasta que el próximo lote la rehaga.
-    fn show_rebuilt(
-        &mut self,
-        built_for: &Arc<LinkIndex>,
-        built: Result<RenameBuild, String>,
-        cx: &mut Context<Self>,
-    ) {
-        let unsaved = self.unsaved_paths(cx);
-        let Some(Overlay::ChangePreview {
-            view,
-            rename: Some(rename),
-            ..
-        }) = &mut self.overlay
-        else {
-            return;
-        };
-        let view = view.clone();
-        let rebuilt = built.and_then(|built| {
-            preview(&built.plan, built.changes, |path| unsaved.contains(path))
-                .ok_or_else(|| "ya no hay nada que renombrar".to_owned())
-        });
-        match rebuilt {
-            Ok(mut fresh) => {
-                if !rename.catch_up(built_for) {
-                    return;
-                }
-                view.update(cx, |view, cx| {
-                    fresh.carry_over(view.preview());
-                    *view.preview_mut() = fresh;
-                    cx.notify();
-                });
-            }
-            // Un archivo que cambió entre el índice y la lectura: el próximo
-            // lote trae otro índice y la rehace.
-            Err(error) => log::warn!("no se rehízo la vista previa del renombre: {error}"),
-        }
-    }
-
-    /// Sin links que cambien: los documentos abiertos siguen al archivo, y
-    /// `:vaultundo` lo deshace como a cualquier renombre.
-    fn rename_now(
-        &mut self,
-        vault: &Vault,
-        from: &VaultPath,
-        to: &VaultPath,
-        cx: &mut Context<Self>,
-    ) {
-        let renamed = self.workspace.update(cx, |workspace, cx| {
-            cx.notify();
-            workspace.rename_file(vault, from, to)
-        });
-        match renamed {
-            Ok(applied) => {
-                self.remember_change(title(from, to), applied, Vec::new(), cx);
-                self.reveal_renamed(to, cx);
-            }
-            // Solo hay un renombre: si se paró, no se hizo nada y basta su causa.
-            Err(ApplyError::Interrupted { cause, .. }) => {
-                self.rename_failed(cause.to_string(), cx);
-            }
-            Err(error) => self.rename_failed(error.to_string(), cx),
-        }
-    }
-
-    fn on_rename_event(
-        &mut self,
-        view: &Entity<ChangePreviewView>,
-        event: ChangePreviewEvent,
-        to: &VaultPath,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if event == ChangePreviewEvent::Apply && !self.rename_is_current() {
-            let text = "la vista previa se está rehaciendo con los cambios de ahora; aplica cuando \
-                        termine";
-            return self.tell(Message::Info(text.to_owned()), cx);
-        }
-        let apply = (event == ChangePreviewEvent::Apply).then(|| {
-            let preview = view.read(cx).preview();
-            (
-                preview.title().to_owned(),
-                preview.summary(),
-                preview.changes(),
-            )
-        });
-        self.close_overlay(window, cx);
-        self.focus_sidebar(window, cx);
-        let Some((title, summary, changes)) = apply else {
-            return;
-        };
-        let vault = self.session.read(cx).vault();
-        match vault.apply(&changes) {
-            Ok(applied) => {
-                self.follow_renames(&vault, applied.renamed(), cx);
-                self.reread(&vault, applied.touched(), cx);
-                self.remember_change(title, applied, Vec::new(), cx);
-                self.reveal_renamed(to, cx);
-                self.tell_undoable(summary, cx);
-            }
-            Err(ApplyError::Interrupted { applied, cause }) if applied.is_empty() => {
-                self.rename_failed(format!("{title}: no se cambió nada: {cause}"), cx);
-            }
-            // Los links ya apuntan a la ruta nueva y el renombre no se hizo:
-            // se devuelven a como estaban.
-            Err(ApplyError::Interrupted { applied, cause }) => {
-                let back = vault.undo(&applied);
-                self.reread(&vault, applied.touched(), cx);
-                let text = match back {
-                    Ok(report) if is_clean(&report) => {
-                        format!("{title}: no se pudo ({cause}); los links quedaron como estaban")
-                    }
-                    Ok(report) => format!(
-                        "{title}: no se pudo ({cause}) y no se pudo devolver: {}",
-                        leftovers(&report)
-                    ),
-                    Err(error) => format!("{title}: no se pudo ({cause}) ni deshacer: {error}"),
-                };
-                self.rename_failed(text, cx);
-            }
-            Err(error) => self.rename_failed(format!("{title}: no se cambió nada: {error}"), cx),
-        }
-    }
-
-    fn rename_is_current(&self) -> bool {
-        match &self.overlay {
-            Some(Overlay::ChangePreview {
-                rename: Some(rename),
-                ..
-            }) => rename.is_current(),
-            _ => true,
-        }
-    }
-
-    /// Al log y a un toast.
-    fn rename_failed(&mut self, text: String, cx: &mut Context<Self>) {
-        log::error!("{text}");
-        self.tell(Message::Error(text), cx);
-    }
-
-    fn reveal_renamed(&mut self, to: &VaultPath, cx: &mut Context<Self>) {
-        self.sidebar
-            .update(cx, |sidebar, cx| sidebar.reveal_entry(to.clone(), cx));
-        self.sync_editors(cx);
-    }
+    pub(super) plan: RenamePlan,
+    pub(super) changes: Changes,
 }
 
 /// Qué hacer con un plan que se terminó de armar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Arrival {
+pub(super) enum Arrival {
     Show,
     /// Llegó otro índice mientras se armaba: un link nuevo no estaría en el
     /// plan, así que se arma otra vez con el de ahora.
@@ -344,7 +82,11 @@ enum Arrival {
     Busy,
 }
 
-fn arrival(built_for: &Arc<LinkIndex>, current: &Arc<LinkIndex>, overlay_open: bool) -> Arrival {
+pub(super) fn arrival(
+    built_for: &Arc<LinkIndex>,
+    current: &Arc<LinkIndex>,
+    overlay_open: bool,
+) -> Arrival {
     if overlay_open {
         Arrival::Busy
     } else if Arc::ptr_eq(built_for, current) {
@@ -357,7 +99,7 @@ fn arrival(built_for: &Arc<LinkIndex>, current: &Arc<LinkIndex>, overlay_open: b
 /// El plan para renombrar `from` a `to` con `index`, con sus ediciones en
 /// líneas enteras: lee cada archivo que se edita, así que va fuera del hilo
 /// de la interfaz.
-fn build(
+pub(super) fn build(
     index: &LinkIndex,
     root: &Path,
     from: &VaultPath,
@@ -383,7 +125,7 @@ fn on_whole_lines(mut changes: Changes, root: &Path) -> Result<Changes, String> 
 
 /// La vista previa de `changes`, los de `plan`: los links que cambian, y el
 /// renombre, fijo.
-fn preview(
+pub(super) fn preview(
     plan: &RenamePlan,
     changes: Changes,
     unsaved: impl Fn(&VaultPath) -> bool,
@@ -396,7 +138,7 @@ fn preview(
 }
 
 /// Cómo se llama el renombre en la vista previa y en los avisos.
-fn title(from: &VaultPath, to: &VaultPath) -> String {
+pub(super) fn title(from: &VaultPath, to: &VaultPath) -> String {
     format!("Renombrar {from} a {to}")
 }
 

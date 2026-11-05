@@ -100,6 +100,21 @@ impl Prepared {
     }
 }
 
+#[cfg(test)]
+impl Prepared {
+    /// Sin el hilo que trae los lotes del watcher: en un test, que despierte
+    /// la prueba desde otro hilo lo rechaza GPUI.
+    pub fn without_updates(vault: Vault) -> Self {
+        let (_, updates) = async_channel::unbounded();
+        Self {
+            vault,
+            updates,
+            recents: Recents::default(),
+            writer: None,
+        }
+    }
+}
+
 impl VaultSession {
     pub fn new(prepared: Prepared, cx: &mut Context<Self>) -> Self {
         let Prepared {

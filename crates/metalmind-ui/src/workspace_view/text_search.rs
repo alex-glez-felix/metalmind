@@ -40,14 +40,15 @@ impl WorkspaceView {
             PickerView::new(search, options, cx)
         });
         let events = cx.subscribe_in(&picker, window, Self::on_text_search_event);
-        self.show(
-            Overlay::TextSearch {
-                picker,
-                _events: events,
-            },
-            window,
-            cx,
-        );
+        // Lo que traiga otro lote del watcher o cambie el focus.
+        let open = picker.clone();
+        let refresh = cx.observe(&self.vault.session, move |_, session, cx| {
+            let scope = session.read(cx).in_scope().map(|in_scope| in_scope.files());
+            open.update(cx, |picker, cx| {
+                picker.update_delegate(cx, |search, _| search.set_scope(scope));
+            });
+        });
+        self.show(Overlay::new(picker, vec![events, refresh], cx), window, cx);
     }
 
     fn on_text_search_event(
