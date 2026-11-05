@@ -32,9 +32,10 @@ fn vault(notes: usize, names: NoteNames) -> Files {
 }
 
 fn build(files: &Files) -> LinkIndex {
-    LinkIndex::build(
-        files.iter().map(|(path, (kind, _))| (path.clone(), *kind)),
-        |path| files.get(path).map(|(_, text)| text.clone()),
+    LinkIndex::from_texts(
+        files
+            .iter()
+            .map(|(path, (kind, text))| (path.clone(), *kind, text.as_str())),
     )
 }
 

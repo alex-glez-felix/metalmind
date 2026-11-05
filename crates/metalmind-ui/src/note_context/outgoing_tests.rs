@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use metalmind_vault::EntryKind;
 use pretty_assertions::assert_eq;
 
@@ -11,16 +9,11 @@ fn path(path: &str) -> VaultPath {
 
 /// Las notas con su texto; lo que no termina en `.md` es un adjunto.
 fn index(notes: &[(&str, &str)]) -> Arc<LinkIndex> {
-    let texts: HashMap<VaultPath, String> = notes
-        .iter()
-        .map(|&(name, text)| (path(name), text.to_owned()))
-        .collect();
-    Arc::new(LinkIndex::build(
-        texts
-            .keys()
-            .map(|name| (name.clone(), EntryKind::of_file(name))),
-        |name| texts.get(name).cloned(),
-    ))
+    Arc::new(LinkIndex::from_texts(notes.iter().map(|&(name, text)| {
+        let name = path(name);
+        let kind = EntryKind::of_file(&name);
+        (name, kind, text)
+    })))
 }
 
 /// `diario.md` enlaza dos veces a `plan.md`, una a `ideas/b.md`, a un

@@ -432,8 +432,6 @@ const SHOWN_CONFLICTS: usize = 3;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use metalmind_vault::{EntryKind, LinkIndex};
     use pretty_assertions::assert_eq;
 
@@ -460,13 +458,10 @@ mod tests {
     }
 
     fn index(notes: &[(&str, &str)]) -> LinkIndex {
-        let texts: HashMap<VaultPath, &str> = notes
-            .iter()
-            .map(|&(name, text)| (path(name), text))
-            .collect();
-        LinkIndex::build(
-            texts.keys().map(|name| (name.clone(), EntryKind::Note)),
-            |name| texts.get(name).map(|text| (*text).to_owned()),
+        LinkIndex::from_texts(
+            notes
+                .iter()
+                .map(|&(name, text)| (path(name), EntryKind::Note, text)),
         )
     }
 
