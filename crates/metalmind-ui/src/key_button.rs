@@ -23,6 +23,7 @@ pub fn key_button(
     let action: Action = action.into();
     div()
         .id(id)
+        .debug_selector(|| id.to_owned())
         .flex()
         .flex_none()
         .items_center()
@@ -47,6 +48,7 @@ pub fn key_hint(action: impl Into<Action>, view: View, theme: &Theme, cx: &App) 
     let keys = AppKeymap::get(cx).keys_for(action.into(), |shown| shown == view)?;
     Some(
         div()
+            .debug_selector(|| format!("key-{keys}"))
             .flex_none()
             .px(theme.layout.panel_button_padding_x)
             .border(theme.stroke.border)

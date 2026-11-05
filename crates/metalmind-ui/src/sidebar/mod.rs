@@ -11,6 +11,8 @@ mod prompt;
 mod rail;
 mod render;
 mod tag_rows;
+#[cfg(test)]
+mod test_support;
 
 use std::path::Path;
 use std::rc::Rc;

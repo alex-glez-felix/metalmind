@@ -115,7 +115,7 @@ Lo que hoy no cumple los [principios](../design.md#principios). Solo los hechos;
    - Los dos botones de la barra del panel no muestran `space e` ni `space t`, ni tienen tooltip (`sidebar/rail.rs:29-42`).
    - No hay tooltips en ninguna parte de la UI.
    - El picker no muestra que `ctrl-v` y `ctrl-s` abren en un split, ni qué tecla elige o cierra.
-   - El menú contextual, la paleta y la confirmación de borrado (`Borrar (y)`, `Cancelar (n)`) sí muestran su tecla.
+   - El menú contextual, la paleta y la confirmación de borrado (`key_button`) sí muestran su tecla.
 4. **Todo se puede configurar.** Antes de esta PR, las medidas de la tabla de `theme.rs` y de las vistas, los pesos y la tipografía de la interfaz no salían del tema. Con esta PR salen todas; quedan fijas solo las [excepciones justificadas](../../crates/metalmind-ui/tests/tokens.rs).
 5. **Lo rápido es parte del diseño.** Nada que señalar desde la UI; los números están en [`performance.md`](../performance.md).
 
