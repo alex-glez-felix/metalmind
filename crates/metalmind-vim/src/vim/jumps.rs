@@ -2,7 +2,7 @@
 //! jumplist es de cada panel ([`crate::PaneState`]) y el archivo, de cada
 //! documento: llegan en el [`Target`].
 
-use metalmind_buffer::{Selection, Selections};
+use metalmind_buffer::{Selection, Selections, Splice};
 
 use super::Vim;
 use crate::Target;
@@ -12,10 +12,21 @@ use crate::mark::BufferMark;
 use crate::{KeyOutcome, Mode, VimError};
 
 impl Vim {
+    /// Tras cada préstamo del buffer: la jumplist del panel y las marks `A`–`Z`
+    /// siguen todo lo editado, también lo hecho por fuera del motor, y se
+    /// devuelven los reemplazos para lo que el motor no guarda (los cursores y
+    /// las jumplists de los otros paneles, [`crate::JumpList::adjust`]). Sacarlos
+    /// aquí, y no con [`metalmind_buffer::Buffer::take_splices`], es lo que
+    /// impide que el motor los pierda.
+    #[must_use]
+    pub fn settle(&mut self, t: &mut Target<'_>) -> Vec<Splice> {
+        self.catch_up(t);
+        #[allow(clippy::disallowed_methods, reason = "este es su único consumidor")]
+        t.buffer.take_splices()
+    }
+
     /// Lleva la jumplist del panel y las marks `A`–`Z` del archivo a lo que
-    /// se editó en el buffer y todavía no siguieron. La jumplist de los
-    /// otros paneles la mueve quien saca los reemplazos con
-    /// [`metalmind_buffer::Buffer::take_splices`] ([`crate::JumpList::adjust`]).
+    /// se editó en el buffer y todavía no siguieron.
     pub(super) fn catch_up(&mut self, t: &mut Target<'_>) {
         let splices = t.doc.unfollowed(t.buffer);
         if !splices.is_empty() {

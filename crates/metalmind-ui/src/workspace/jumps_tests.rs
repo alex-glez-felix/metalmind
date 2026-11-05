@@ -1,6 +1,6 @@
 use std::fs;
 
-use metalmind_buffer::ByteOffset;
+use metalmind_buffer::{ByteOffset, Edit};
 use metalmind_vault::{EntryKind, VaultChange, VaultPath};
 use pretty_assertions::assert_eq;
 
@@ -36,6 +36,31 @@ fn ctrl_o_vuelve_al_link_y_ctrl_i_a_la_nota() {
     assert_eq!(at(&session), ("b.md".into(), 2));
     session.keys("⌃o⇥");
     assert_eq!(at(&session), ("b.md".into(), 2));
+}
+
+/// Lo que `edit_pane` deja editado sin que el motor lo vea no se pierde para
+/// la jumplist ni para las marks `A`–`Z` (#118).
+#[test]
+fn lo_editado_por_fuera_del_motor_lo_siguen_jumplist_y_marks() {
+    let (_dir, _vault, mut session) = vault_session(&[("a.md", A)], "a.md");
+    session.keys("jjmAgg");
+    let pane = session.pane();
+    session
+        .workspace
+        .edit_pane(pane, None, |_, target| {
+            let selections = target.selections.clone();
+            target.buffer.begin_transaction(selections.clone())?;
+            target
+                .buffer
+                .apply(vec![Edit::insert(ByteOffset::ZERO, "pegado\n")])?;
+            target.buffer.commit_transaction(selections)?;
+            Ok(())
+        })
+        .unwrap();
+    session.keys("⌃o");
+    assert_eq!(at(&session), ("a.md".into(), 4), "la entrada del gg");
+    session.keys("gg`A");
+    assert_eq!(at(&session), ("a.md".into(), 4), "la mark A");
 }
 
 #[test]

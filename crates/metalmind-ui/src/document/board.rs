@@ -113,6 +113,10 @@ impl Document {
 
     /// El motor no pinta este buffer ni tiene cursores en él: nadie va a leer
     /// lo que el buffer anota para ellos.
+    #[allow(
+        clippy::disallowed_methods,
+        reason = "el motor nunca recibe este buffer: no hay nada que seguir antes de tirarlos"
+    )]
     fn forget_buffer_changes(&mut self) {
         self.buffer.take_splices();
         self.buffer.take_line_edits();

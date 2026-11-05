@@ -14,7 +14,8 @@
 )]
 mod support;
 
-use metalmind_buffer::{ByteOffset, Edit};
+use metalmind_buffer::{ByteOffset, Edit, Point};
+use metalmind_vim::Vim;
 use pretty_assertions::assert_eq;
 use support::Editor;
 
@@ -113,4 +114,38 @@ fn un_visual_sigue_con_su_seleccion() {
     );
     editor.keys("d");
     assert_eq!(editor.text(), "#abc o dos\n");
+}
+
+/// Quien aloja el motor saca los reemplazos solo con `Vim::settle`, que antes
+/// los sigue: una edición que no pasó por el motor no se pierde para la
+/// jumplist ni para las marks `A`–`Z`, ni se sigue dos veces.
+#[test]
+fn settle_sigue_lo_editado_por_fuera_antes_de_devolverlo() {
+    let mut editor = Editor::new("uno\ndos\n|tres");
+    editor.keys("mAgg");
+    let tres = Point::new(2, 0);
+    assert_eq!(editor.pane.jumps.entries()[0].point, tres, "el gg");
+
+    let selections = editor.selections.clone();
+    editor.buffer.begin_transaction(selections.clone()).unwrap();
+    editor
+        .buffer
+        .apply(vec![replace(0, 0, "pegado\n")])
+        .unwrap();
+    editor.buffer.commit_transaction(selections).unwrap();
+
+    let splices = editor.run(Vim::settle);
+    assert_eq!(splices.len(), 1);
+    let again = editor.run(Vim::settle);
+    assert_eq!(again, [], "ya los sacó");
+
+    let moved = Point::new(3, 0);
+    assert_eq!(editor.pane.jumps.entries()[0].point, moved);
+    let (doc, buffer) = (&editor.doc, &editor.buffer);
+    let marks: Vec<_> = editor
+        .vim
+        .file_marks(|_| Some((doc, buffer)))
+        .map(|(name, jump)| (name, jump.point))
+        .collect();
+    assert_eq!(marks, [('A', moved)]);
 }

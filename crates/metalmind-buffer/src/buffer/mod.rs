@@ -54,9 +54,10 @@ impl Buffer {
     }
 
     /// Los reemplazos hechos desde la última llamada, en orden, incluidos
-    /// los de undo y redo. Quien guarde posiciones fuera del motor (el
-    /// cursor de otro panel) las mueve con [`Splice::map_all`] y lo llama
-    /// tras cada cambio para que la lista no crezca.
+    /// los de undo y redo; hay que sacarlos tras cada cambio para que la
+    /// lista no crezca. Sacados, ya no los ve quien los sigue con
+    /// [`Buffer::splices_since`]: si ese es el motor de vim, se sacan con su
+    /// `Vim::settle`, y `clippy.toml` no deja llamar a este método sin más.
     pub fn take_splices(&mut self) -> Vec<Splice> {
         let splices = std::mem::take(&mut self.changes.splices);
         self.changes.taken += splices.len();
