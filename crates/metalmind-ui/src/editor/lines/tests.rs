@@ -144,6 +144,37 @@ fn una_formula_sola_partida_se_pinta_sobre_sus_filas(#[case] text: String) {
     });
 }
 
+/// Con sangría, la imagen de una `$…$` sola y partida no se sale de la línea:
+/// ni hacia abajo, si la sangría se queda en la primera fila, ni a la derecha.
+#[test]
+fn una_formula_sola_con_sangria_queda_dentro_de_su_linea() {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let mut images = 0;
+        for indent in [4, 12, 60] {
+            let text = format!("{}${MATRIX}$", " ".repeat(indent));
+            let laid = lay(&text, false, 250., window);
+            assert!(laid.rows.len() > 1, "la fuente se parte");
+            let Some(formula) = laid.formulas.first() else {
+                continue;
+            };
+            images += 1;
+            let bounds = formula.bounds;
+            assert!(bounds.top() >= laid.origin.y, "sangría {indent}");
+            assert!(
+                bounds.bottom() <= laid.origin.y + laid.height,
+                "sangría {indent}"
+            );
+            assert!(
+                bounds.right() <= laid.origin.x + px(250.) + px(1.),
+                "sangría {indent}"
+            );
+        }
+        assert_eq!(images, 3, "las tres caben a lo ancho");
+    });
+}
+
 /// Un clic en cualquier fila de la imagen va al principio de la fórmula, y
 /// un tramo de cualquier fila la cubre a lo ancho.
 #[test]

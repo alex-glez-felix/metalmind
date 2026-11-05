@@ -93,13 +93,17 @@ impl Builder<'_, '_> {
         let width = px(formula.width);
         let alone = spot.place == MathPlace::Alone;
         let split = self.line.splits(spot);
-        let height = f32::from(if split {
-            self.line.rows_height()
+        // Partida, ocupa la línea entera aunque empiece en otra fila.
+        let (area_top, area) = if split {
+            (px(0.), self.line.rows_height())
         } else {
-            row.height
-        });
+            (row.top, row.height)
+        };
+        let height = f32::from(area);
         let left = if alone {
             centered(self.line.width, width)
+        } else if split {
+            x.min(self.line.width - width)
         } else {
             x
         };
@@ -114,7 +118,7 @@ impl Builder<'_, '_> {
             width,
             text: None,
         });
-        self.place(spot, formula, left, row.top + px(top));
+        self.place(spot, formula, left, area_top + px(top));
         left + width
     }
 
