@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 
-use metalmind_syntax::{MathPlace, MathSpot};
+use metalmind_syntax::MathSpot;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Part {
@@ -25,7 +25,7 @@ pub fn parts(len: usize, spots: &[MathSpot], composes: impl Fn(usize) -> bool) -
         if spot.below() || !composes(index) {
             continue;
         }
-        if spot.place == MathPlace::Alone {
+        if spot.fills_line() {
             // Lo de alrededor es solo espacio: la fórmula es la línea.
             return vec![Part::Formula {
                 spot: index,
@@ -81,8 +81,9 @@ mod tests {
     }
 
     #[test]
-    fn un_bloque_solo_en_su_linea_es_la_linea() {
+    fn una_formula_sola_en_su_linea_es_la_linea() {
         assert_eq!(render("  $$x$$ ", 0), "⟦  $$x$$ ⟧");
+        assert_eq!(render("  $x$ ", 0), "⟦  $x$ ⟧");
     }
 
     #[test]

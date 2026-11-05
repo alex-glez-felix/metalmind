@@ -279,8 +279,12 @@ impl Line<'_> {
         !self.splits(spot) || (spot.fills_line() && px(formula.width) <= self.width)
     }
 
-    /// Si la fuente de `spot` quedó partida en varias filas.
+    /// Si `spot` ocupa varias filas: su fuente quedó partida o, si es la
+    /// línea entera, la línea tiene más de una.
     fn splits(&self, spot: &MathSpot) -> bool {
+        if spot.fills_line() {
+            return self.rows.len() > 1;
+        }
         let row_of = |byte: usize| self.rows.iter().position(|row| row.source.contains(&byte));
         row_of(spot.range.start) != row_of(spot.range.end.saturating_sub(1))
     }

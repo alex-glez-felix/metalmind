@@ -55,10 +55,10 @@ impl Rows {
     /// Lo que mide cada una de las `rows` filas de una línea partida, con
     /// cada byte en la fila que dice `row_of` (en la app, la de su
     /// [`ScreenLine`](crate::ScreenLine)): la fila de una fórmula alta crece
-    /// con ella, y la de un bloque suma debajo de la última. Partida en filas,
-    /// la que es lo único de su línea reparte lo que mide entre ellas, y la
-    /// que va entre texto se ve como fuente y no cuenta. Sin estilo calculado,
-    /// cada fila mide como texto.
+    /// con ella, y la de un bloque suma debajo de la última. La que es lo
+    /// único de su línea reparte lo que mide entre todas sus filas, y la que
+    /// va entre texto, partida, se ve como fuente y no cuenta. Sin estilo
+    /// calculado, cada fila mide como texto.
     #[must_use]
     pub fn line_rows(
         &self,
@@ -76,12 +76,10 @@ impl Rows {
             let whole = row == row_of(formula.range.end.saturating_sub(1));
             if formula.below() {
                 rows.below = rows.below.saturating_add(height);
-            } else if whole {
-                if let Some(row) = rows.rows.get_mut(row) {
-                    *row = (*row).max(height);
-                }
             } else if formula.fills_line() {
                 rows.spread(height);
+            } else if whole && let Some(row) = rows.rows.get_mut(row) {
+                *row = (*row).max(height);
             }
         }
         rows
@@ -250,6 +248,18 @@ mod tests {
             ..Rows::uniform(2)
         };
         assert_eq!(rows_of_split(text, count, &rows), expected);
+    }
+
+    /// Con la sangría en su propia fila, la fórmula entera en la siguiente
+    /// también es la línea: reparte su alto entre las dos.
+    #[test]
+    fn una_formula_sola_tras_una_fila_de_sangria_reparte_su_alto() {
+        let rows = Rows {
+            formulas: Some(Arc::new(ByFirstWord)),
+            ..Rows::uniform(2)
+        };
+        let text = format!("{}$9$", " ".repeat(10));
+        assert_eq!(rows_of_split(&text, 2, &rows), [5, 5]);
     }
 
     #[test]

@@ -80,8 +80,8 @@ impl Builder<'_, '_> {
     }
 
     /// Una fórmula en lugar de su fuente: alineada con el texto de su fila
-    /// o, si es lo único de la línea, centrada; partida, sobre todas las
-    /// filas de la línea.
+    /// o, si es un bloque solo en su línea, centrada. La que es la línea
+    /// entera empieza en la primera fila y, si hay más, va sobre todas.
     fn formula(
         &mut self,
         row: &mut LaidRow,
@@ -93,17 +93,13 @@ impl Builder<'_, '_> {
         let width = px(formula.width);
         let alone = spot.place == MathPlace::Alone;
         let split = self.line.splits(spot);
-        // Partida, ocupa la línea entera aunque empiece en otra fila.
-        let (area_top, area) = if split {
-            (px(0.), self.line.rows_height())
+        let height = f32::from(if split {
+            self.line.rows_height()
         } else {
-            (row.top, row.height)
-        };
-        let height = f32::from(area);
+            row.height
+        });
         let left = if alone {
             centered(self.line.width, width)
-        } else if split {
-            x.min(self.line.width - width)
         } else {
             x
         };
@@ -118,7 +114,7 @@ impl Builder<'_, '_> {
             width,
             text: None,
         });
-        self.place(spot, formula, left, area_top + px(top));
+        self.place(spot, formula, left, row.top + px(top));
         left + width
     }
 

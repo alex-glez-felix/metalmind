@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use gpui_kit::{SharedString, TestAppContext, TextRun, Window, font, point, px};
+use gpui_kit::{Bounds, SharedString, TestAppContext, TextRun, Window, font, point, px, size};
 use metalmind_config::Config;
 use metalmind_syntax::{ScreenLines as _, Styles, TextLines};
 use pretty_assertions::assert_eq;
@@ -144,34 +144,32 @@ fn una_formula_sola_partida_se_pinta_sobre_sus_filas(#[case] text: String) {
     });
 }
 
-/// Con sangría, la imagen de una `$…$` sola y partida no se sale de la línea:
-/// ni hacia abajo, si la sangría se queda en la primera fila, ni a la derecha.
+/// Con sangría, la sangría es parte de la fórmula: la imagen va desde el
+/// borde, dentro de la línea, y un clic en cualquiera de sus filas va al
+/// principio de la línea, también con la sangría sola en la primera fila.
 #[test]
-fn una_formula_sola_con_sangria_queda_dentro_de_su_linea() {
+fn una_formula_sola_con_sangria_es_la_linea_entera() {
     let mut cx = TestAppContext::single();
     let window = cx.add_empty_window();
     window.update(|window, _| {
-        let mut images = 0;
         for indent in [4, 12, 60] {
             let text = format!("{}${MATRIX}$", " ".repeat(indent));
             let laid = lay(&text, false, 250., window);
-            assert!(laid.rows.len() > 1, "la fuente se parte");
-            let Some(formula) = laid.formulas.first() else {
-                continue;
-            };
-            images += 1;
-            let bounds = formula.bounds;
-            assert!(bounds.top() >= laid.origin.y, "sangría {indent}");
+            assert!(laid.rows.len() > 1, "la línea se parte");
+            assert!(is_image(&laid), "sangría {indent}");
+            let bounds = laid.formulas[0].bounds;
+            let line = Bounds::new(laid.origin, size(px(250.), laid.height));
             assert!(
-                bounds.bottom() <= laid.origin.y + laid.height,
-                "sangría {indent}"
+                line.dilate(px(1.)).contains(&bounds.origin)
+                    && line.dilate(px(1.)).contains(&bounds.bottom_right()),
+                "sangría {indent}: {bounds:?} fuera de {line:?}"
             );
-            assert!(
-                bounds.right() <= laid.origin.x + px(250.) + px(1.),
-                "sangría {indent}"
-            );
+            for (index, row) in laid.rows.iter().enumerate() {
+                let last = index + 1 == laid.rows.len();
+                let x = bounds.left() - laid.origin.x + px(1.);
+                assert_eq!(row.closest_index_for_x(x, last), 0, "fila {index}");
+            }
         }
-        assert_eq!(images, 3, "las tres caben a lo ancho");
     });
 }
 
