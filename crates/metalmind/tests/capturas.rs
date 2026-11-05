@@ -887,7 +887,10 @@ const SCENES: &[(&str, &[Step])] = &[
         ))],
     ),
     ("formulas-partidas-panel-angosto", &[Step::Keys("<C-w>v")]),
-    ("formulas-partidas-sin-wrap", &[Step::Keys("<C-w>o:set nowrap<CR>gg")]),
+    (
+        "formulas-partidas-sin-wrap",
+        &[Step::Keys("<C-w>o:set nowrap<CR>gg")],
+    ),
     // Al final de una nota de más de 1000 líneas, sobre la última línea.
     (
         "formulas-partidas-nota-larga",
