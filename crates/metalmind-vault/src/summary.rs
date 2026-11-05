@@ -19,8 +19,7 @@ pub struct Summary {
 
 impl Summary {
     /// El de `text`, con su `scan` ya hecho.
-    #[must_use]
-    pub fn of(text: &str, scan: &Scan) -> Self {
+    pub(crate) fn of(text: &str, scan: &Scan) -> Self {
         let title = scan
             .headings
             .iter()

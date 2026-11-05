@@ -16,7 +16,7 @@ use metalmind_keymap::{Action, ListAction, View, WindowCommand};
 use metalmind_vault::VaultPath;
 use metalmind_vault::tags::TagKey;
 
-use super::cards::{Card, stem};
+use super::cards::Card;
 use super::date::when;
 use super::source::ListSource;
 use super::view::NoteListView;
@@ -148,7 +148,7 @@ impl NoteListView {
 
     fn body(&self, theme: &Theme, focused: bool, cx: &mut Context<Self>) -> AnyElement {
         if self.list.is_empty() {
-            // Mientras llegan las tarjetas, nada: sin spinners (design.md).
+            // Mientras llegan las fechas, nada: sin spinners (design.md).
             let text = if !self.list.is_current() {
                 ""
             } else if self.list.total() == 0 {
@@ -197,7 +197,7 @@ impl NoteListView {
                 Some(row_view(
                     row,
                     note,
-                    self.list.card(row),
+                    self.list.card(row)?,
                     &tags,
                     marks,
                     now,
@@ -238,19 +238,19 @@ impl NoteListView {
 fn row_view(
     row: usize,
     note: &VaultPath,
-    card: Option<&Card>,
+    card: Card<'_>,
     tags: &[String],
     marks: RowMarks,
     now: &Zoned,
     theme: &Theme,
     cx: &mut Context<NoteListView>,
 ) -> AnyElement {
-    let title = card.map_or_else(|| stem(note).to_owned(), |card| card.title.clone());
+    let title = card.title.to_owned();
     let date = card
-        .and_then(|card| card.modified)
+        .modified
         .map(|modified| when(modified, now))
         .unwrap_or_default();
-    let excerpt = card.map(|card| card.excerpt.clone()).unwrap_or_default();
+    let excerpt = card.excerpt.to_owned();
     let folder = note
         .parent()
         .filter(|parent| !parent.is_root())

@@ -87,7 +87,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Árbol del panel, todo abierto: armarlo, 5 k / 50 k notas | ≤ 16 ms | 0.11 / 1.3 ms | ✅ | `metalmind-ui` `construir_todo_abierto` |
 | Lista de notas, 5 k notas y 200 páginas de tag: armarla en su orden (todas / el buzón / un tag con descendientes) en el hilo de la UI | ≤ 16 ms | 1.7 / 2.5 / 3.2 ms (máquina cargada con otros builds) | ✅ | `metalmind-ui` `armar_la_lista_de_5k` |
 | Lista de notas, 5 k: una tecla en su filtro (`n` / `#t1 -#t3 nota` / `zzz`) | ≤ 8 ms | 0.16 / 0.27 / 0.07 ms | ✅ | `metalmind-ui` `tecla_en_el_filtro_de_5k` |
-| Lista de notas, 5 k: leer título, extracto y fecha de cada nota (en el fondo, al abrir la ventana) | segundo plano, antes de que la lista se vea | 9.5 ms | ✅ | `metalmind-ui` `leer_las_tarjetas_de_5k` |
+| Lista de notas, 5 k: mirar la fecha de cada nota, sin abrirla (en el fondo, al abrir la ventana) | segundo plano, antes de que la lista se vea | 0.7 ms (leer título y extracto además de la fecha costaba 9.5 ms) | ✅ | `metalmind-ui` `mirar_las_fechas_de_5k` |
 | Árbol: abrir o cerrar una carpeta, 5 k / 50 k | ≤ 1 ms | 0.13 / 1.6 ms | ❌ | `metalmind-ui` `expandir_y_colapsar` ([#59](https://github.com/alex-glez-felix/metalmind/issues/59)) |
 | Árbol: bajar una fila | ≤ 1 ms | 20 ns | ✅ | `metalmind-ui` `bajar_una_fila` |
 | Árbol: filtrar con `/`, peor consulta (`tema nota`), 5 k / 50 k | ≤ 8 ms | 2.6 / 35 ms | ❌ | `metalmind-ui` `filtrar` ([#59](https://github.com/alex-glez-felix/metalmind/issues/59)) |
@@ -148,6 +148,23 @@ Un solo escaneo por nota ([#234](https://github.com/alex-glez-felix/metalmind/is
 
 - **Lecturas de una nota editada fuera de la app, por lote:** de tres (links, tags e historial) a una, y dos escaneos a uno. Una página de tag sigue escaneándose dos veces: `TagPage` sale del texto y lo que guarda el escaneo no alcanza.
 - **Las páginas de tag al abrir sin caché:** de dos lecturas a una. En `abrir_con_tags` (2 000 páginas) no se distingue del ruido.
+
+Título y extracto en la caché ([#248](https://github.com/alex-glez-felix/metalmind/issues/248)): la lista de notas deja de leer las notas y solo mira su `mtime`. En una máquina de escritorio x86_64 con disco local y otros builds corriendo: otra máquina y otro vault de 1.5 KB que la primera tabla (`metalmind_perf::write_vault`, ~2 KB por nota con su frontmatter, y una caché más pesada), así que solo se comparan entre sí. Antes y después de esta rama, con el mismo medidor, que no vive en el repo; mediana de 7 corridas en caliente y de 3 en frío, con dos pasadas alternadas por binario. "La lista" es lo que hace `read_all` antes (leer, escanear y guardar) y `read_modified` después; no incluye armarla, que no cambió.
+
+| Antes / después | 5 k, puros links | 50 k, puros links | 50 k, `write_vault` |
+|---|---:|---:|---:|
+| Lo que pesa la caché | 2.4 / 3.1 MB | 24.8 / 31.9 MB | 100.6 / 115.9 MB |
+| Cargar la caché | 4.4 / 5.2 ms | 33 / 36 ms | 97 / 109 ms |
+| Abrir el vault con la caché al día | 32 / 34 ms | 365 / 379 ms | 683 / 709 ms |
+| La lista, después de abrir | 5.1 / 1.3 ms | 51 / 14 ms | 142 / 15 ms |
+| **Abrir y la lista** | **37 / 35 ms** | **416 / 393 ms** | **825 / 724 ms** |
+| **Abrir y la lista, frío** | **41 / 36 ms** | **452 / 404 ms** | **902 / 749 ms** |
+| Memoria con la lista plegada | 29 / 31 MB | 250 / 276 MB | 521 / 555 MB |
+| Memoria con la lista abierta | 31 / 31 MB | 262 / 278 MB | 544 / 557 MB |
+
+- **En frío, las notas ya no se leen**: la lista pasa de 185 a 15 ms en el vault de `write_vault`, sin importar cuánto pesen las notas. Con este disco y los inodos en memoria, frío y caliente casi no se distinguen en lo nuevo.
+- **Abrir el vault sube 3.5–6 %.** Cargar más caché es entre una cuarta parte y la mitad de eso; el resto, sin medir por separado, es armar el índice nuevo. El total hasta ver la lista baja en los tres.
+- **La memoria costó más de lo estimado.** El issue esperaba ~400 B por nota y que compartirlo no sumara. Con la lista plegada son 25–34 MB con 50 k notas (530–720 B por nota) que antes no se pagaban, entre 6.5 y 10 % de la memoria del proceso; con ella abierta, todavía 13–16 MB, no cero (2.5–6 %). No separé cuánto es del mapa y del `Arc` y cuánto del reparto del allocator.
 
 ## Benchmark de la UI
 

@@ -7,7 +7,7 @@ use metalmind_vault::{EntryKind, Vault, VaultChange, VaultIndex};
 use pretty_assertions::assert_eq;
 
 use super::*;
-use crate::note_list::cards::read_all;
+use crate::note_list::cards::read_modified;
 
 /// Cada nota con su texto y hace cuántos minutos cambió.
 const FILES: &[(&str, &str, u64)] = &[
@@ -46,11 +46,17 @@ impl Fixture {
     }
 
     fn list(&self, source: ListSource, filter: &str) -> NoteList {
-        let mut list = NoteList::new(source, filter, self.vault.snapshot(), self.vault.tags());
+        let mut list = NoteList::new(
+            source,
+            filter,
+            self.vault.snapshot(),
+            self.vault.tags(),
+            self.vault.summaries(),
+        );
         let paths = list
             .source()
             .notes(&self.vault.snapshot(), &self.vault.tags());
-        let step = list.set_cards(read_all(self.dir.path(), &paths));
+        let step = list.set_dates(read_modified(self.dir.path(), &paths));
         run(&mut list, step);
         list
     }
@@ -86,16 +92,35 @@ fn rows(list: &NoteList) -> Vec<&str> {
 }
 
 #[test]
-fn sin_tarjetas_no_muestra_nada_para_no_reordenar_al_llegar() {
+fn sin_fechas_no_muestra_nada_para_no_reordenar_al_llegar() {
     let fixture = Fixture::new();
     let list = NoteList::new(
         ListSource::All,
         "",
         fixture.vault.snapshot(),
         fixture.vault.tags(),
+        fixture.vault.summaries(),
     );
     assert!(list.is_empty());
     assert!(!list.is_current());
+}
+
+/// El título nuevo llega en el lote, sin esperar a que se mire la fecha.
+#[test]
+fn un_lote_trae_el_resumen_nuevo() {
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "a.md", "# Uno\nTexto.", 60);
+    let (vault, updates) = Vault::open(dir.path()).unwrap();
+    let fixture = Fixture { dir, vault };
+    let mut list = fixture.list(ListSource::All, "");
+    assert_eq!(list.card(0).unwrap().title, "Uno");
+    fs::write(fixture.dir.path().join("a.md"), "# Dos\nOtro.").unwrap();
+    let update = updates.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (step, stale) = list.apply(&update);
+    run(&mut list, step);
+    let card = list.card(0).unwrap();
+    assert_eq!((card.title, card.excerpt), ("Dos", "Otro."));
+    assert_eq!(stale, [VaultPath::new("a.md").unwrap()]);
 }
 
 #[test]
@@ -148,7 +173,7 @@ fn la_fila_sigue_a_su_nota_cuando_la_lista_se_reordena() {
     write(fixture.dir.path(), "vieja.md", "# Una vieja\n#rust", 0);
     let (step, stale) = list.apply(&fixture.update("vieja.md"));
     run(&mut list, step);
-    let step = list.set_cards(read_all(fixture.dir.path(), &stale));
+    let step = list.set_dates(read_modified(fixture.dir.path(), &stale));
     run(&mut list, step);
     assert_eq!(
         rows(&list),
@@ -248,13 +273,14 @@ fn la_fila_y_la_carpeta_de_la_fuente_siguen_a_un_renombre() {
 }
 
 #[test]
-fn un_lote_antes_de_las_tarjetas_no_muestra_la_lista_sin_orden() {
+fn un_lote_antes_de_las_fechas_no_muestra_la_lista_sin_orden() {
     let fixture = Fixture::new();
     let mut list = NoteList::new(
         ListSource::All,
         "",
         fixture.vault.snapshot(),
         fixture.vault.tags(),
+        fixture.vault.summaries(),
     );
     let (step, _unread) = list.apply(&fixture.update("nueva.md"));
     run(&mut list, step);
@@ -263,7 +289,7 @@ fn un_lote_antes_de_las_tarjetas_no_muestra_la_lista_sin_orden() {
     let paths = list
         .source()
         .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
-    let step = list.set_cards(read_all(fixture.dir.path(), &paths));
+    let step = list.set_dates(read_modified(fixture.dir.path(), &paths));
     run(&mut list, step);
     assert_eq!(
         rows(&list),
@@ -299,13 +325,14 @@ fn los_tags_van_a_la_nota_de_la_pregunta_aunque_la_fila_cambie() {
 }
 
 #[test]
-fn otra_fuente_antes_de_las_tarjetas_tampoco_muestra_la_lista_sin_orden() {
+fn otra_fuente_antes_de_las_fechas_tampoco_muestra_la_lista_sin_orden() {
     let fixture = Fixture::new();
     let mut list = NoteList::new(
         ListSource::Inbox,
         "",
         fixture.vault.snapshot(),
         fixture.vault.tags(),
+        fixture.vault.summaries(),
     );
     let step = list.set_source(ListSource::All, None);
     run(&mut list, step);
@@ -313,7 +340,7 @@ fn otra_fuente_antes_de_las_tarjetas_tampoco_muestra_la_lista_sin_orden() {
     let paths = list
         .source()
         .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
-    let step = list.set_cards(read_all(fixture.dir.path(), &paths));
+    let step = list.set_dates(read_modified(fixture.dir.path(), &paths));
     run(&mut list, step);
     assert_eq!(
         rows(&list),

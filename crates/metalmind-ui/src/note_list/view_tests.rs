@@ -1,13 +1,17 @@
 use std::cell::RefCell;
 use std::fs::{self, File};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::{Entity, TestAppContext, VisualTestContext};
 use metalmind_config::{Config, SavedView};
 use metalmind_keymap::Keymap;
-use metalmind_vault::Vault;
+use metalmind_vault::{Vault, VaultOptions};
 use metalmind_vim::Markdown;
+use notify::Watcher as _;
+use notify::event::{AccessKind, EventKind};
 use pretty_assertions::assert_eq;
 
 use gpui_kit::EntityInputHandler as _;
@@ -52,22 +56,38 @@ fn fixture_state<'c>(
     state: &ListState,
 ) -> (Fixture, &'c mut VisualTestContext) {
     let dir = tempfile::tempdir().unwrap();
+    write_notes(dir.path(), files, 0);
+    let (vault, updates) = Vault::open(dir.path()).unwrap();
+    let document =
+        Document::open(&vault.root().join("b.md")).unwrap_or_else(|_| Document::unnamed());
+    open_list(cx, dir, (vault, updates), document, state)
+}
+
+/// Cada nota, de la más reciente a la más vieja, desde hace `minutes_ago`.
+fn write_notes(root: &Path, files: &[(&str, &str)], minutes_ago: u64) {
     let now = SystemTime::now();
     // Sin fechas explícitas, escrituras seguidas pueden caer en el mismo tick
     // del reloj del sistema de archivos o no, y el orden cambiaría.
-    for ((name, text), minutes_ago) in files.iter().zip(0..) {
-        let path = dir.path().join(name);
+    for ((name, text), minutes) in files.iter().zip(minutes_ago..) {
+        let path = root.join(name);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, text).unwrap();
         File::options()
             .write(true)
             .open(&path)
             .unwrap()
-            .set_modified(now - Duration::from_secs(minutes_ago * 60))
+            .set_modified(now - Duration::from_secs(minutes * 60))
             .unwrap();
     }
-    let (vault, updates) = Vault::open(dir.path()).unwrap();
-    let root = vault.root().to_owned();
+}
+
+fn open_list<'c>(
+    cx: &'c mut TestAppContext,
+    dir: tempfile::TempDir,
+    (vault, updates): (Vault, mpsc::Receiver<metalmind_vault::VaultUpdate>),
+    document: Document,
+    state: &ListState,
+) -> (Fixture, &'c mut VisualTestContext) {
     cx.update(|cx| {
         cx.set_global(Theme::with_font(
             &Config::defaults().unwrap(),
@@ -77,7 +97,6 @@ fn fixture_state<'c>(
     });
     let prepared = Prepared::new(vault, updates, None).unwrap();
     let session = cx.update(|cx| cx.new(|cx| VaultSession::new(prepared, cx)));
-    let document = Document::open(&root.join("b.md")).unwrap_or_else(|_| Document::unnamed());
     let options = Options {
         scrolloff: 0,
         tabstop: 8,
@@ -123,8 +142,94 @@ fn selected(list: &Entity<NoteListView>, cx: &mut VisualTestContext) -> Option<S
     })
 }
 
+/// Las veces que algo abre una nota, vistas desde el sistema de archivos: así
+/// cuenta también las lecturas que un test no puede interceptar.
+struct NoteOpens {
+    _watcher: notify::RecommendedWatcher,
+    events: mpsc::Receiver<notify::Result<notify::Event>>,
+    marker: PathBuf,
+}
+
+impl NoteOpens {
+    fn watch(root: &Path) -> Self {
+        let marker = root.join("marca");
+        fs::write(&marker, "").unwrap();
+        let (sender, events) = mpsc::channel();
+        let mut watcher = notify::recommended_watcher(sender).unwrap();
+        watcher
+            .watch(root, notify::RecursiveMode::Recursive)
+            .unwrap();
+        Self {
+            _watcher: watcher,
+            events,
+            marker,
+        }
+    }
+
+    /// Las aperturas desde la última vez. inotify entrega en orden: al llegar
+    /// la de la marca, ya llegó todo lo anterior.
+    fn take(&self) -> usize {
+        File::open(&self.marker).unwrap();
+        let mut opens = 0;
+        loop {
+            let event = self
+                .events
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap();
+            if !matches!(event.kind, EventKind::Access(AccessKind::Open(_))) {
+                continue;
+            }
+            if event.paths.contains(&self.marker) {
+                return opens;
+            }
+            opens += event
+                .paths
+                .iter()
+                .filter(|path| path.extension().is_some_and(|ext| ext == "md"))
+                .count();
+        }
+    }
+}
+
 #[test]
-fn plegada_no_lee_ninguna_tarjeta() {
+fn abrir_la_lista_con_la_cache_al_dia_no_lee_ninguna_nota() {
+    let (dir, data) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    // Un mtime reciente no es de fiar y la caché leería la nota.
+    write_notes(dir.path(), FILES, 60);
+    let options = VaultOptions {
+        cache: Some(data.path().join("notas")),
+        ..VaultOptions::default()
+    };
+    let opens = NoteOpens::watch(dir.path());
+    drop(Vault::open_with(dir.path(), options.clone()).unwrap());
+    assert_eq!(opens.take(), FILES.len(), "sin caché se lee cada nota");
+
+    let vault = Vault::open_with(dir.path(), options).unwrap();
+    let mut cx = TestAppContext::single();
+    let state = ListState {
+        visible: Some(true),
+        source: ListSource::All,
+        ..ListState::default()
+    };
+    let (fixture, cx) = open_list(&mut cx, dir, vault, Document::unnamed(), &state);
+    cx.run_until_parked();
+
+    let titles = fixture.list.read_with(cx, |view, _| {
+        (0..view.list.len())
+            .map(|row| view.list.card(row).unwrap().title.to_owned())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(titles, ["a", "Be", "c"]);
+    let dated = fixture.list.read_with(cx, |view, _| {
+        (0..view.list.len()).all(|row| view.list.card(row).unwrap().modified.is_some())
+    });
+    assert!(dated, "las fechas sí se miran");
+    assert_eq!(opens.take(), 0);
+}
+
+#[test]
+fn plegada_no_mira_ninguna_fecha() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture(&mut cx);
     let (started, current) = fixture
@@ -241,7 +346,7 @@ fn sin_estado_guardado_arranca_abierta_solo_en_una_ventana_ancha() {
 }
 
 #[test]
-fn abierta_al_arrancar_elige_la_nota_activa_cuando_llegan_las_tarjetas() {
+fn abierta_al_arrancar_elige_la_nota_activa_cuando_llegan_las_fechas() {
     let mut cx = TestAppContext::single();
     let (fixture, cx) = fixture_with(&mut cx, FILES, Some(true));
     assert_eq!(selected(&fixture.list, cx).as_deref(), Some("b.md"));
