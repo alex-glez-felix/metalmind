@@ -115,19 +115,17 @@ impl Workspace {
         // guarda como la del documento oculto.
         let mut pane = PaneState::default();
         pane.viewport = last.viewport;
-        self.vim.apply_edits(
-            edits,
-            &mut Target {
-                buffer: &mut *editable.buffer,
-                selections: &mut last.selections,
-                doc: &mut *editable.state,
-                pane: &mut pane,
-                file,
-                clipboard: None,
-            },
-        )?;
+        let mut target = Target {
+            buffer: &mut *editable.buffer,
+            selections: &mut last.selections,
+            doc: &mut *editable.state,
+            pane: &mut pane,
+            file,
+            clipboard: None,
+        };
+        self.vim.apply_edits(edits, &mut target)?;
+        let splices = self.vim.settle(&mut target);
         last.viewport = pane.viewport;
-        let splices = editable.buffer.take_splices();
         document.settle();
         for pane in self.panes.values_mut() {
             pane.state.jumps.adjust(file, &splices);

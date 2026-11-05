@@ -437,22 +437,20 @@ impl Workspace {
             .ok_or(WorkspaceError::NoDocument(id))?;
         let Editable { buffer, state: doc } = document.editable();
         let was_editing = buffer.has_open_transaction();
-        let result = edit(
-            &mut self.vim,
-            &mut Target {
-                buffer: &mut *buffer,
-                selections: &mut state.selections,
-                doc: &mut *doc,
-                pane: &mut state.state,
-                file,
-                // Al portapapeles le basta vivir lo que dura el préstamo.
-                clipboard: clipboard.map(|clipboard| clipboard as &mut dyn Clipboard),
-            },
-        );
+        let mut target = Target {
+            buffer: &mut *buffer,
+            selections: &mut state.selections,
+            doc: &mut *doc,
+            pane: &mut state.state,
+            file,
+            // Al portapapeles le basta vivir lo que dura el préstamo.
+            clipboard: clipboard.map(|clipboard| clipboard as &mut dyn Clipboard),
+        };
+        let result = edit(&mut self.vim, &mut target);
+        let splices = self.vim.settle(&mut target);
         state
             .state
             .reveal(buffer, &state.selections, doc, self.scrolloff);
-        let splices = buffer.take_splices();
         if !splices.is_empty() {
             document.sync_board_text()?;
         }
