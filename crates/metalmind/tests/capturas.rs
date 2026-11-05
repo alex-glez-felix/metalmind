@@ -101,7 +101,9 @@ const SCENES: &[(&str, &[Step])] = &[
     ("editor", &[]),
     ("editor-final", &[Step::Keys("G")]),
     ("arbol", &[Step::Keys("gg<Space>ejjj")]),
-    ("menu", &[Step::RightClickRow(2)]),
+    // La pregunta de borrado, con cada botón y su tecla (#104).
+    ("arbol-borrar", &[Step::Keys("d")]),
+    ("menu", &[Step::Keys("n"), Step::RightClickRow(2)]),
     (
         "menu-borde",
         &[Step::Keys("<Esc>"), Step::RightClickBottomRow],
@@ -734,13 +736,19 @@ const SCENES: &[(&str, &[Step])] = &[
     ("tags-buffer-volver", &[Step::Keys("<Space>r")]),
     ("tags-buffer-aplicado", &[Step::Keys("<CR>")]),
     ("tags-buffer-deshecho", &[Step::Keys("<Space>z")]),
+    // La misma pregunta sobre esa nota: su ruta larga se parte en filas y
+    // avisa de lo que no se ha guardado.
+    (
+        "arbol-borrar-sin-guardar",
+        &[Step::Keys("<Esc><Esc><C-w>o<Space>ejjjjjjjjjjd")],
+    ),
     // El panel de las teclas que siguen a un prefijo (#86), que sale tras
     // medio segundo sin teclear: `space`, `g` con sus tres columnas,
     // `ctrl-w` con las dos teclas de cada acción juntas y `space` en el
     // más angosto de cuatro paneles.
     (
         "which-key-space",
-        &[Step::Keys("<Esc><Esc><C-w>o"), Step::Prefix("<Space>")],
+        &[Step::Keys("n<C-w>l<Esc><C-w>o"), Step::Prefix("<Space>")],
     ),
     ("which-key-g", &[Step::Keys("<Esc>"), Step::Prefix("g")]),
     (

@@ -291,11 +291,12 @@ const TREE_INPUT: &[(&[Keystroke], PanelAction)] = &[
     (&[named(KeyName::Escape)], PanelAction::Cancel),
 ];
 
+/// El último atajo de cada acción es el que muestra su botón (`y`, `n`).
 const TREE_CONFIRM: &[(&[Keystroke], PanelAction)] = &[
-    (&[k('y')], PanelAction::Confirm),
     (&[named(KeyName::Enter)], PanelAction::Confirm),
-    (&[k('n')], PanelAction::Cancel),
+    (&[k('y')], PanelAction::Confirm),
     (&[named(KeyName::Escape)], PanelAction::Cancel),
+    (&[k('n')], PanelAction::Cancel),
 ];
 
 const TREE_MENU: &[(&[Keystroke], PanelAction)] = &[

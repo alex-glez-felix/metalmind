@@ -303,6 +303,31 @@ mod tests {
         assert_eq!(keymap.keys_for(Command::Save.into(), |_| true), None);
     }
 
+    /// La pregunta de borrado enseña `y` y `n`; `enter` y `escape` también
+    /// responden.
+    #[test]
+    fn la_pregunta_de_borrado_muestra_y_y_n() {
+        let keymap = Keymap::default();
+        let confirm = |view| view == View::FileTreeConfirm;
+        let keys = |action: PanelAction| keymap.keys_for(action.into(), confirm);
+        assert_eq!(keys(PanelAction::Confirm).as_deref(), Some("y"));
+        assert_eq!(keys(PanelAction::Cancel).as_deref(), Some("n"));
+        let bound: Vec<_> = keymap
+            .bindings
+            .iter()
+            .filter(|binding| matches!(binding.keys, Keys::View(View::FileTreeConfirm, _)))
+            .map(|binding| (binding.label(), binding.action))
+            .collect();
+        for (key, action) in [
+            ("enter", PanelAction::Confirm),
+            ("y", PanelAction::Confirm),
+            ("escape", PanelAction::Cancel),
+            ("n", PanelAction::Cancel),
+        ] {
+            assert!(bound.contains(&(key.to_owned(), action.into())), "{key}");
+        }
+    }
+
     /// Cada acción de la ventana que se teclea en el editor tiene su
     /// nombre en el registro.
     #[test]
