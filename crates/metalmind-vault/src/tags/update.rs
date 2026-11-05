@@ -197,7 +197,8 @@ mod tests {
         let read = |path: &VaultPath| fs::read_to_string(path.to_fs(&root)).ok();
         let mut index = scan(&root, None);
         let mut tags = Tags::build(folder.clone(), &index, read);
-        let mut properties = index_notes(&root, &index, &folder, None, &read).properties;
+        let opened = index_notes(&root, &index, &folder, None, &read);
+        let (mut properties, mut summaries) = (opened.properties, opened.summaries);
         for batch in batches {
             let mut touched = Touched::default();
             for op in batch {
@@ -208,8 +209,22 @@ mod tests {
             let full = Tags::build(folder.clone(), &scan(&root, None), read);
             prop_assert_eq!(&tags, &full, "tras {:?}: {:?}", batch, changes);
             properties.apply(&changes, &index, &mut NoteBatch::new(&read));
-            let full = index_notes(&root, &scan(&root, None), &folder, None, &read).properties;
-            prop_assert_eq!(&properties, &full, "tras {:?}: {:?}", batch, changes);
+            summaries.apply(&changes, &index, &mut NoteBatch::new(&read));
+            let full = index_notes(&root, &scan(&root, None), &folder, None, &read);
+            prop_assert_eq!(
+                &properties,
+                &full.properties,
+                "tras {:?}: {:?}",
+                batch,
+                changes
+            );
+            prop_assert_eq!(
+                &summaries,
+                &full.summaries,
+                "tras {:?}: {:?}",
+                batch,
+                changes
+            );
         }
         Ok(())
     }

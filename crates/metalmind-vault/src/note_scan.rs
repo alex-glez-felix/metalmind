@@ -10,15 +10,18 @@ use crate::links::{IndexedLink, LinkIndex};
 use crate::note_cache::{CacheRefresh, Stamp, open_notes};
 use crate::path::VaultPath;
 use crate::properties::PropertyIndex;
+use crate::summary::Summary;
+use crate::summary_index::SummaryIndex;
 use crate::tags::{NoteTags, ReadNote, Tags, page_name, tags_of};
 
 /// Lo que los índices sacan del texto de una nota, sin saber nada del resto
-/// del vault: sus links sin resolver, sus tags y su frontmatter.
+/// del vault: sus links sin resolver, sus tags, su frontmatter y su resumen.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct NoteScan {
     pub links: Vec<IndexedLink>,
     pub tags: NoteTags,
     pub properties: Vec<Property>,
+    pub summary: Summary,
 }
 
 impl NoteScan {
@@ -27,6 +30,7 @@ impl NoteScan {
         Self {
             links: links_of(text, &scan.links),
             tags: tags_of(text, &scan),
+            summary: Summary::of(text, &scan),
             properties: scan
                 .frontmatter
                 .map(|frontmatter| frontmatter.properties)
@@ -40,10 +44,11 @@ pub(crate) struct NoteIndexes {
     pub links: LinkIndex,
     pub tags: Tags,
     pub properties: PropertyIndex,
+    pub summaries: SummaryIndex,
     pub refresh: Option<CacheRefresh>,
 }
 
-/// Los índices de links, tags y propiedades de `files`, leyendo una vez las notas que la
+/// Los índices de links, tags, propiedades y resúmenes de `files`, leyendo una vez las notas que la
 /// caché no tenga al día y las páginas de tag. `read` da el contenido de una
 /// nota, o `None` si no se pudo leer.
 pub(crate) fn index_notes(
@@ -72,10 +77,12 @@ pub(crate) fn index_notes(
     let mut links = Vec::with_capacity(opened.scans.len());
     let mut tags = Vec::with_capacity(opened.scans.len());
     let mut properties = Vec::with_capacity(opened.scans.len());
+    let mut summaries = Vec::with_capacity(opened.scans.len());
     for (path, scan) in opened.scans {
         links.push((path.clone(), scan.links));
         tags.push((path.clone(), scan.tags));
-        properties.push((path, scan.properties));
+        properties.push((path.clone(), scan.properties));
+        summaries.push((path, scan.summary));
     }
     NoteIndexes {
         links: LinkIndex::from_scans(
@@ -86,6 +93,7 @@ pub(crate) fn index_notes(
             reads.page(page)
         }),
         properties: PropertyIndex::from_scans(properties),
+        summaries: SummaryIndex::from_scans(summaries),
         refresh: opened.refresh,
     }
 }
@@ -149,7 +157,12 @@ mod tests {
             &read,
         );
         if let Some(refresh) = &indexes.refresh {
-            refresh.write(&indexes.links, &indexes.tags, &indexes.properties);
+            refresh.write(
+                &indexes.links,
+                &indexes.tags,
+                &indexes.properties,
+                &indexes.summaries,
+            );
         }
         (reads.into_inner().unwrap(), indexes.tags)
     }

@@ -26,7 +26,7 @@ impl Card {
         let file = root.join(path.as_str());
         let modified = file.metadata().and_then(|meta| meta.modified()).ok();
         let summary = match metalmind_vault::read(&file) {
-            Ok(Some(text)) => Summary::of(&text),
+            Ok(Some(text)) => Summary::of(&text, &metalmind_syntax::scan(&text)),
             Ok(None) | Err(_) => Summary::default(),
         };
         Self {

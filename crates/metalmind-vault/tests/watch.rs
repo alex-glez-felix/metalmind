@@ -46,6 +46,24 @@ fn cada_lote_publica_las_propiedades_de_la_nota() {
 }
 
 #[test]
+fn cada_lote_publica_el_resumen_de_la_nota() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "# Uno\nTexto.").unwrap();
+    let (vault, updates) = open(dir.path());
+    let note = path("a.md");
+    assert_eq!(
+        vault.summaries().of(&note).unwrap().title.as_deref(),
+        Some("Uno")
+    );
+    fs::write(dir.path().join("a.md"), "# Dos\nOtro.").unwrap();
+    let update = updates.recv_timeout(Duration::from_secs(5)).unwrap();
+    let summary = update.summaries.of(&note).unwrap();
+    assert_eq!(summary.title.as_deref(), Some("Dos"));
+    assert_eq!(summary.excerpt, "Otro.");
+    assert_eq!(vault.summaries().of(&note), Some(summary));
+}
+
+#[test]
 fn crear_y_borrar_un_archivo() {
     let dir = TempDir::new().unwrap();
     let (vault, updates) = open(dir.path());
