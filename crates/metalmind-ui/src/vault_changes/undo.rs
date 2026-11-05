@@ -6,10 +6,17 @@
 use std::collections::BTreeSet;
 
 use gpui_kit::Context;
+use metalmind_keymap::WindowCommand;
 use metalmind_vault::{Applied, FileEdits, Rename, UndoReport, Vault, VaultPath};
 
-use super::WorkspaceView;
-use crate::workspace::{Message, MessageId};
+use super::VaultChanges;
+use crate::workspace::{Message, MessageId, ToastAction};
+
+/// El botón del aviso tras aplicar un cambio al vault.
+const UNDO: ToastAction = ToastAction {
+    label: "Deshacer",
+    command: WindowCommand::UndoVaultChange,
+};
 
 /// El último cambio aplicado al vault, para deshacerlo.
 #[derive(Default)]
@@ -193,8 +200,9 @@ pub(super) fn leftovers(report: &UndoReport) -> String {
     left.join(", ")
 }
 
-impl WorkspaceView {
-    pub(super) fn undo_vault_change(&mut self, cx: &mut Context<Self>) {
+impl VaultChanges {
+    /// `:vaultundo`: deshace el último cambio y dice qué deshizo.
+    pub fn undo(&mut self, cx: &mut Context<Self>) {
         if let Some(typing) = self.typing_in_buffers(self.vault_undo.buffers(), cx) {
             let text =
                 format!("no se deshizo: {typing} se está editando en Insert; sal de Insert antes");
@@ -214,7 +222,7 @@ impl WorkspaceView {
         // Donde haya quedado cada archivo, aunque un renombre no se haya
         // podido deshacer.
         self.reread(&vault, undone.applied.touched(), cx);
-        self.follow_saved_views(&undone.applied, cx);
+        Self::follow_saved_views(&undone.applied, cx);
         if let Some(back) = undone.list_back()
             && self.list.read(cx).source_choices() == back.choices
         {
@@ -222,6 +230,38 @@ impl WorkspaceView {
                 .update(cx, |list, cx| list.rename_tag(&back.to, &back.from, cx));
         }
         self.tell(undone.message(), cx);
+    }
+
+    /// `applied`, y `buffers`, lo que devuelve los buffers que recibieron
+    /// el cambio, pasan a ser lo que deshace `:vaultundo`. El "Deshacer"
+    /// del aviso de un cambio anterior ya no vale.
+    pub(super) fn remember_change(
+        &mut self,
+        title: String,
+        applied: Applied,
+        buffers: Vec<FileEdits>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(toast) = self.vault_undo.take_toast() {
+            self.retire_toast(toast, cx);
+        }
+        self.vault_undo.remember(title, applied, buffers);
+    }
+
+    /// El aviso de lo que se acaba de aplicar, con "Deshacer".
+    pub(super) fn tell_undoable(&mut self, text: String, cx: &mut Context<Self>) {
+        let toast = self.workspace.update(cx, |workspace, cx| {
+            cx.notify();
+            workspace.show_message_with(Message::Info(text), UNDO)
+        });
+        self.vault_undo.set_toast(toast);
+    }
+
+    pub(super) fn retire_toast(&mut self, toast: MessageId, cx: &mut Context<Self>) {
+        self.workspace.update(cx, |workspace, cx| {
+            workspace.retire_message(toast);
+            cx.notify();
+        });
     }
 }
 

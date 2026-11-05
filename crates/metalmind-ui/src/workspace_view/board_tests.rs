@@ -59,8 +59,17 @@ pub(super) fn open_with<'a>(cx: &'a mut TestAppContext, file: &str, board: &str)
     fs::write(dir.path().join("idea.canvas"), board).unwrap();
     fs::write(dir.path().join("a.md"), "uno\n").unwrap();
     let (vault, updates) = Vault::open(dir.path()).unwrap();
-    let root = vault.root().to_owned();
-    let path = root.join(file);
+    let prepared = Prepared::new(vault, updates, None).unwrap();
+    open_prepared(cx, dir, prepared, file)
+}
+
+/// La ventana de `vault`, con `file` abierto.
+pub(super) fn open_prepared<'a>(
+    cx: &'a mut TestAppContext,
+    dir: TempDir,
+    prepared: Prepared,
+    file: &str,
+) -> Window<'a> {
     cx.update(|cx| {
         cx.set_global(Theme::with_font(
             &Config::defaults().unwrap(),
@@ -68,8 +77,9 @@ pub(super) fn open_with<'a>(cx: &'a mut TestAppContext, file: &str, board: &str)
         ));
         bind_keys(Keymap::default(), cx);
     });
-    let prepared = Prepared::new(vault, updates, None).unwrap();
     let session = cx.update(|cx| cx.new(|cx| VaultSession::new(prepared, cx)));
+    let root = session.read_with(cx, |session, _| session.root().to_owned());
+    let path = root.join(file);
     let options = Options {
         scrolloff: 0,
         tabstop: 8,

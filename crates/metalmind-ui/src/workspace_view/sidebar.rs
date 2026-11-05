@@ -63,8 +63,14 @@ impl WorkspaceView {
                 self.focus_list(window, cx);
             }
             SidebarEvent::FocusEditor => self.focus(window, cx),
-            SidebarEvent::ChangeTags(request) => self.change_tags(&request, window, cx),
-            SidebarEvent::Rename { from, to } => self.rename_entry(&from, &to, window, cx),
+            SidebarEvent::ChangeTags(request) => {
+                self.vault_changes
+                    .update(cx, |changes, cx| changes.change_tags(&request, cx));
+            }
+            SidebarEvent::Rename { from, to } => {
+                self.vault_changes
+                    .update(cx, |changes, cx| changes.rename(&from, &to, cx));
+            }
             SidebarEvent::NewTaggedNote(tag) => self.new_tagged_note(tag, window, cx),
             SidebarEvent::OpenTagPage(tag) => self.open_tag_page(&tag, window, cx),
             SidebarEvent::CreateNote(path) => self.create_panel_note(&path, window, cx),

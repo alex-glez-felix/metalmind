@@ -1,4 +1,4 @@
-//! `:template`, `space n`, una nota nueva desde un tag y `:today` en la
+//! `:template`, `space n`, una nota nueva desde un tag, `:tagpage` y `:today` en la
 //! ventana: lee las plantillas del vault, muestra el picker de plantillas y
 //! la pregunta del nombre, crea la nota y la abre con el cursor donde
 //! empieza a escribirse.
@@ -51,6 +51,26 @@ impl WorkspaceView {
         question.apply(LineEdit::Insert(&name));
         if let Err(problem) = self.create(&question, Open::Here, window, cx) {
             self.tell(Message::Error(problem.to_string()), cx);
+        }
+    }
+
+    /// `:tagpage`: la página de `tag`, o la de su tag si es un alias. Si no
+    /// existe se crea vacía, con su carpeta, como "Agregar descripción"
+    /// (05 §7).
+    pub(super) fn open_tag_page(&mut self, tag: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let session = self.session.read(cx);
+        let (vault, root) = (session.vault(), session.root().to_owned());
+        let created = session
+            .tags()
+            .page_path(tag)
+            .map_err(|error| error.to_string())
+            .and_then(|page| match vault.create_note(&page, "") {
+                Ok(()) | Err(FileOpError::AlreadyExists(_)) => Ok(page),
+                Err(error) => Err(error.to_string()),
+            });
+        match created {
+            Ok(page) => self.edit_note(&shown_path(&root.join(page.as_str())), window, cx),
+            Err(error) => self.tell(Message::Error(error), cx),
         }
     }
 

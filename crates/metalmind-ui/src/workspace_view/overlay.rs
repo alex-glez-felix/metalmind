@@ -19,7 +19,6 @@ use super::messages::MessagesPicker;
 use super::new_note::{NamePicker, TemplatePicker};
 use super::note_list::SourcePicker;
 use super::palette::Palette;
-use super::rename::RenamePreview;
 use super::text_search::TextSearchPicker;
 use super::unresolved::UnresolvedPicker;
 use crate::change_preview::ChangePreviewView;
@@ -83,12 +82,7 @@ pub enum Overlay {
     },
     /// La vista previa de un cambio en el vault: renombrar o fusionar
     /// tags, o renombrar una nota con sus links.
-    ChangePreview {
-        view: Entity<ChangePreviewView>,
-        /// Si es la de un renombre, lo que hace falta para rehacerla.
-        rename: Option<RenamePreview>,
-        _events: Subscription,
-    },
+    ChangePreview { view: Entity<ChangePreviewView> },
 }
 
 impl Overlay {
@@ -105,7 +99,7 @@ impl Overlay {
             Self::NoteName { picker, .. } => picker.focus_handle(cx),
             Self::ListSource { picker, .. } => picker.focus_handle(cx),
             Self::ViewName { picker, .. } => picker.focus_handle(cx),
-            Self::ChangePreview { view, .. } => view.focus_handle(cx),
+            Self::ChangePreview { view } => view.focus_handle(cx),
         }
     }
 
@@ -123,7 +117,7 @@ impl Overlay {
             Self::NoteName { picker, .. } => picker.clone().into_any_element(),
             Self::ListSource { picker, .. } => picker.clone().into_any_element(),
             Self::ViewName { picker, .. } => picker.clone().into_any_element(),
-            Self::ChangePreview { view, .. } => view.clone().into_any_element(),
+            Self::ChangePreview { view } => view.clone().into_any_element(),
         };
         div()
             .absolute()
