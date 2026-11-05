@@ -94,6 +94,7 @@ fn formulas(text: &str) -> String {
             out.push('⟧');
             match math.place {
                 MathPlace::Inline => {}
+                MathPlace::InlineAlone => out.push_str("sola"),
                 MathPlace::Alone => out.push_str("solo"),
                 MathPlace::Below { above } => write!(out, "^{above}").unwrap(),
             }

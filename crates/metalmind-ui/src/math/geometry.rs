@@ -78,7 +78,7 @@ impl Geometry {
     pub fn rows(&self, formula: FormulaBox, place: MathPlace) -> usize {
         let leading = self.leading();
         let needed = match place {
-            MathPlace::Inline => {
+            MathPlace::Inline | MathPlace::InlineAlone => {
                 // Con la línea base centrada como la del texto, lo que pide
                 // la parte de arriba y lo que pide la de abajo.
                 let above = both_sides(formula.height + leading) - self.ascent + self.descent;
@@ -106,7 +106,7 @@ impl Geometry {
     #[must_use]
     pub fn top(&self, formula: FormulaBox, place: MathPlace, height: f32) -> f32 {
         match place {
-            MathPlace::Inline => self.baseline(height) - formula.height,
+            MathPlace::Inline | MathPlace::InlineAlone => self.baseline(height) - formula.height,
             MathPlace::Alone | MathPlace::Below { .. } => half(height - formula.total()),
         }
     }

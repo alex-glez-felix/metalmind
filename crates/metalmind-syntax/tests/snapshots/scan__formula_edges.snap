@@ -8,7 +8,7 @@ precios: cuesta $5 y $10
   índice: []
 precio con cierre: de ⟦$5 a $10$⟧ no
   índice: []
-dígito tras el cierre: ⟦$a$1 y $b$⟧
+dígito tras el cierre: ⟦$a$1 y $b$⟧sola
   índice: []
 espacio tras abrir: $ x$ y $x $
   índice: []
@@ -16,13 +16,13 @@ pegada a palabras: a⟦$x$⟧b
   índice: []
 escapado: \$x\$ y ⟦$\$$⟧
   índice: []
-dólar escapado dentro: ⟦$a \$ b$⟧
+dólar escapado dentro: ⟦$a \$ b$⟧sola
   índice: []
 en código inline: `$x$` y ⟦$y$⟧
   índice: []
 código dentro: ⟦$a `b$⟧` c`
   índice: []
-en una cerca: ```⏎$x$⏎```⏎⟦$y$⟧
+en una cerca: ```⏎$x$⏎```⏎⟦$y$⟧sola
   índice: []
 cerca dentro de un bloque: $$⏎```⏎⟦$$⟧^2⏎```
   índice: []

@@ -55,9 +55,10 @@ impl Rows {
     /// Lo que mide cada una de las `rows` filas de una línea partida, con
     /// cada byte en la fila que dice `row_of` (en la app, la de su
     /// [`ScreenLine`](crate::ScreenLine)): la fila de una fórmula alta crece
-    /// con ella (si no quedó partida en filas: entonces se ve su fuente), y
-    /// la de un bloque suma debajo de la última. Sin estilo calculado, cada
-    /// fila mide como texto.
+    /// con ella, y la de un bloque suma debajo de la última. Partida en filas,
+    /// la que es lo único de su línea reparte lo que mide entre ellas, y la
+    /// que va entre texto se ve como fuente y no cuenta. Sin estilo calculado,
+    /// cada fila mide como texto.
     #[must_use]
     pub fn line_rows(
         &self,
@@ -72,12 +73,15 @@ impl Rows {
         };
         for (formula, height) in style.into_iter().flat_map(|style| self.formulas(style)) {
             let row = row_of(formula.range.start);
-            // Partida en filas, se ve su fuente, que mide como texto.
             let whole = row == row_of(formula.range.end.saturating_sub(1));
             if formula.below() {
                 rows.below = rows.below.saturating_add(height);
-            } else if let Some(row) = rows.rows.get_mut(row).filter(|_| whole) {
-                *row = (*row).max(height);
+            } else if whole {
+                if let Some(row) = rows.rows.get_mut(row) {
+                    *row = (*row).max(height);
+                }
+            } else if formula.fills_line() {
+                rows.spread(height);
             }
         }
         rows
@@ -113,6 +117,15 @@ pub struct LineRows {
 }
 
 impl LineRows {
+    /// Que las filas juntas midan al menos `height`, cada una lo mismo: así
+    /// el alto no depende de si se ve la imagen o su fuente.
+    fn spread(&mut self, height: usize) {
+        let share = height.div_ceil(self.rows.len());
+        for row in &mut self.rows {
+            *row = (*row).max(share);
+        }
+    }
+
     /// Lo que mide la línea entera.
     #[must_use]
     pub fn height(&self) -> usize {
@@ -154,6 +167,16 @@ mod tests {
     impl FormulaRows for ByLatex {
         fn rows(&self, formula: &MathSpot) -> Option<usize> {
             formula.latex.trim().parse().ok()
+        }
+    }
+
+    /// Cada fórmula mide lo que dice la primera palabra de su LaTeX.
+    #[derive(Debug)]
+    struct ByFirstWord;
+
+    impl FormulaRows for ByFirstWord {
+        fn rows(&self, formula: &MathSpot) -> Option<usize> {
+            formula.latex.split_whitespace().next()?.parse().ok()
         }
     }
 
@@ -200,6 +223,45 @@ mod tests {
         assert_eq!(rows.line_rows(None, 3, |_| 0).rows, [2, 2, 2]);
         let split = rows.line_rows(style, 3, |byte| usize::from(byte >= 9));
         assert_eq!(split.rows, [2, 2, 2], "partida, se ve su fuente");
+    }
+
+    /// Las filas de una línea de `count` filas, cada una con diez bytes.
+    fn rows_of_split(text: &str, count: usize, rows: &Rows) -> Vec<usize> {
+        let lines = TextLines::new(text);
+        let mut styles = Styles::new(1);
+        styles.ensure(0, &lines);
+        rows.line_rows(styles.line(0), count, |byte| byte / 10).rows
+    }
+
+    /// La línea que es solo una fórmula mide lo mismo se vea la imagen o la
+    /// fuente, y el número de filas sigue saliendo de la fuente.
+    #[rstest::rstest]
+    #[case::bloque_alta("$$ 9       \\quad \\quad$$", 2, &[5, 5])]
+    #[case::en_linea_alta("$9       \\quad \\quad$", 2, &[5, 5])]
+    #[case::reparte_hacia_arriba("$$ 9       \\quad \\quad \\quad \\quad$$", 4, &[3, 3, 3, 3])]
+    #[case::cabe_en_sus_filas("$$ 3       \\quad \\quad$$", 2, &[2, 2])]
+    fn una_formula_sola_partida_reparte_su_alto(
+        #[case] text: &str,
+        #[case] count: usize,
+        #[case] expected: &[usize],
+    ) {
+        let rows = Rows {
+            formulas: Some(Arc::new(ByFirstWord)),
+            ..Rows::uniform(2)
+        };
+        assert_eq!(rows_of_split(text, count, &rows), expected);
+    }
+
+    #[test]
+    fn una_formula_partida_entre_texto_mide_como_texto() {
+        let rows = Rows {
+            formulas: Some(Arc::new(ByFirstWord)),
+            ..Rows::uniform(2)
+        };
+        assert_eq!(
+            rows_of_split("hola $9       \\quad$ y", 3, &rows),
+            [2, 2, 2]
+        );
     }
 
     #[test]
