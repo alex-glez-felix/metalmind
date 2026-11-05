@@ -208,9 +208,11 @@ impl Line<'_> {
             vec![Part::Text(0..self.text.len())]
         } else {
             parts(self.text.len(), spots, |index| {
-                measured
-                    .get(index)
-                    .is_some_and(|(spot, formula)| formula.is_ok() && !self.splits(spot))
+                measured.get(index).is_some_and(|(spot, formula)| {
+                    formula
+                        .as_ref()
+                        .is_ok_and(|formula| self.shows_image(spot, *formula))
+                })
             })
         };
         let mut builder = Builder {
@@ -270,9 +272,14 @@ impl Line<'_> {
             .collect()
     }
 
-    /// Si la fuente de `spot` quedó partida en varias filas: no cabía en
-    /// una, así que se ve como texto en vez de una fórmula en la primera
-    /// fila y huecos en las demás.
+    /// Si `formula` se pinta como imagen. Con su fuente partida en filas,
+    /// solo si es lo único de la línea y cabe a lo ancho: entre texto
+    /// quedarían huecos.
+    fn shows_image(&self, spot: &MathSpot, formula: FormulaBox) -> bool {
+        !self.splits(spot) || (spot.fills_line() && px(formula.width) <= self.width)
+    }
+
+    /// Si la fuente de `spot` quedó partida en varias filas.
     fn splits(&self, spot: &MathSpot) -> bool {
         let row_of = |byte: usize| self.rows.iter().position(|row| row.source.contains(&byte));
         row_of(spot.range.start) != row_of(spot.range.end.saturating_sub(1))
