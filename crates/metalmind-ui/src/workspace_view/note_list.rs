@@ -53,16 +53,16 @@ impl WorkspaceView {
 
     pub(super) fn choose_list_source(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let views = self.vault_views(cx).unwrap_or_default();
-        let vault = self.session.read(cx).vault();
-        let tags = self.session.read(cx).tags();
-        let choices: Arc<[SourceChoice]> = ListSource::choices(&vault.snapshot(), &tags, &views)
-            .into_iter()
-            .map(|source| SourceChoice {
-                label: source.label(),
-                detail: source.view_name().and(source.query()),
-                source,
-            })
-            .collect();
+        let snapshot = self.session.read(cx).snapshot();
+        let choices: Arc<[SourceChoice]> =
+            ListSource::choices(&snapshot.files, &snapshot.tags, &views)
+                .into_iter()
+                .map(|source| SourceChoice {
+                    label: source.label(),
+                    detail: source.view_name().and(source.query()),
+                    source,
+                })
+                .collect();
         let options = PickerOptions {
             placeholder: "Mostrar en la lista…".into(),
             splits: false,

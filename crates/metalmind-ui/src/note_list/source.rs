@@ -291,7 +291,8 @@ mod tests {
     )]
     fn cada_fuente_trae_sus_notas(#[case] source: ListSource, #[case] expected: &[&str]) {
         let (_dir, vault) = vault();
-        let notes = source.notes(&vault.snapshot(), &vault.tags());
+        let snapshot = vault.snapshot();
+        let notes = source.notes(&snapshot.files, &snapshot.tags);
         assert_eq!(sorted(&notes), expected);
     }
 
@@ -302,7 +303,8 @@ mod tests {
             name: "Para hoy".into(),
             query: "#gpui".into(),
         }];
-        let labels: Vec<String> = ListSource::choices(&vault.snapshot(), &vault.tags(), &views)
+        let snapshot = vault.snapshot();
+        let labels: Vec<String> = ListSource::choices(&snapshot.files, &snapshot.tags, &views)
             .iter()
             .map(ListSource::label)
             .collect();
@@ -344,7 +346,7 @@ mod tests {
     ) {
         let (_dir, vault) = vault();
         let note = note.map(|note| VaultPath::new(note).unwrap());
-        let shown = folder_to_show(named, note.as_ref(), &vault.snapshot());
+        let shown = folder_to_show(named, note.as_ref(), &vault.snapshot().files);
         let shown = shown
             .map(|folder| folder.as_str().to_owned())
             .map_err(|error| error.to_string());
@@ -361,12 +363,12 @@ mod tests {
             fs::write(dir.path().join(folder).join("a.md"), "").unwrap();
         }
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let index = vault.snapshot();
+        let index = &vault.snapshot().files;
         for named in ["notas ", " ideas", "notas"] {
-            let shown = folder_to_show(Some(named), None, &index).unwrap();
+            let shown = folder_to_show(Some(named), None, index).unwrap();
             assert_eq!(shown.as_str(), named);
         }
-        let shown = folder_to_show(Some("notas /"), None, &index).unwrap();
+        let shown = folder_to_show(Some("notas /"), None, index).unwrap();
         assert_eq!(shown.as_str(), "notas ");
     }
 
@@ -406,11 +408,13 @@ mod tests {
         )
         .unwrap();
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let choices = ListSource::choices(&vault.snapshot(), &vault.tags(), &[]);
+        let snapshot = vault.snapshot();
+        let choices = ListSource::choices(&snapshot.files, &snapshot.tags, &[]);
         let padre = ListSource::Tag("padre".into());
         assert!(choices.contains(&padre), "{choices:?}");
+        let snapshot = vault.snapshot();
         assert_eq!(
-            sorted(&padre.notes(&vault.snapshot(), &vault.tags())),
+            sorted(&padre.notes(&snapshot.files, &snapshot.tags)),
             ["a.md"]
         );
     }

@@ -17,15 +17,17 @@ fn worker(root: &Path, history: &Arc<History>) -> Worker {
     let (updates, _published) = mpsc::channel();
     Worker {
         root: root.to_owned(),
-        index: Arc::new(ArcSwap::from_pointee(VaultIndex::default())),
-        links: Arc::new(ArcSwap::from_pointee(LinkIndex::default())),
-        tags: Arc::new(ArcSwap::from_pointee(Tags::build(
-            VaultPath::fixed(crate::tags::DEFAULT_TAGS_FOLDER),
-            &VaultIndex::default(),
-            |_: &VaultPath| None,
-        ))),
-        properties: Arc::default(),
-        summaries: Arc::default(),
+        snapshot: Arc::new(ArcSwap::from_pointee(VaultSnapshot {
+            files: Arc::default(),
+            links: Arc::default(),
+            tags: Arc::new(Tags::build(
+                VaultPath::fixed(crate::tags::DEFAULT_TAGS_FOLDER),
+                &VaultIndex::default(),
+                |_: &VaultPath| None,
+            )),
+            properties: Arc::default(),
+            summaries: Arc::default(),
+        })),
         history: Some(Arc::clone(history)),
         cache_refresh: None,
         saving: Arc::new(Mutex::new(())),
@@ -215,7 +217,10 @@ fn guardados_en_cola_detras_de_un_renombre_quedan_en_la_ruta_nueva() {
     fs::write(root.path().join("a.md"), "uno").unwrap();
     history.record(&a, "uno", SystemTime::now()).unwrap();
     let worker = worker(root.path(), &history);
-    worker.index.store(Arc::new(scan(root.path(), None)));
+    worker.snapshot.store(Arc::new(VaultSnapshot {
+        files: Arc::new(scan(root.path(), None)),
+        ..VaultSnapshot::clone(&worker.snapshot.load())
+    }));
     // "dos" se guardó en `a.md`, después se renombró a `b.md` y ahí se
     // guardó "tres": los mensajes llegan en ese orden.
     fs::write(root.path().join("a.md"), "dos").unwrap();
@@ -307,7 +312,7 @@ fn un_lote_lee_cada_nota_una_sola_vez() {
     write("tags/uno.md", "");
     let mut indexes = full_indexes(&root);
     let worker = worker(&root, &history);
-    worker.index.store(Arc::new(indexes.files.clone()));
+    worker.snapshot.store(Arc::new(indexes.snapshot()));
 
     write("editada.md", "[[nueva]] [[movida-2]] #otro");
     write("nueva.md", "#cuatro");
@@ -349,7 +354,7 @@ fn un_lote_lee_cada_nota_una_sola_vez() {
         contents(&history, &vault_path("editada.md")),
         ["[[nueva]] [[movida-2]] #otro"]
     );
-    assert_eq!(*worker.links.load_full(), full.links);
+    assert_eq!(*worker.snapshot.load().links, full.links);
 }
 
 /// Sin historial, nadie necesita el texto de una nota que solo se renombró.
@@ -362,7 +367,7 @@ fn sin_historial_un_renombre_no_lee_la_nota() {
     let mut indexes = full_indexes(&root);
     let mut worker = worker(&root, &history);
     worker.history = None;
-    worker.index.store(Arc::new(indexes.files.clone()));
+    worker.snapshot.store(Arc::new(indexes.snapshot()));
     fs::rename(root.join("a.md"), root.join("b.md")).unwrap();
     let (a, b) = (
         VaultPath::new("a.md").unwrap(),
@@ -389,7 +394,7 @@ fn un_chmod_que_solo_cambia_propiedades_se_publica() {
     fs::write(root.join("a.md"), "---\ntítulo: Uno\n---\n").unwrap();
     let mut indexes = full_indexes(&root);
     let worker = worker(&root, &history);
-    worker.index.store(Arc::new(indexes.files.clone()));
+    worker.snapshot.store(Arc::new(indexes.snapshot()));
     fs::write(root.join("a.md"), "---\ntítulo: Dos\n---\n").unwrap();
     let note = VaultPath::new("a.md").unwrap();
     let touched = Touched {
@@ -400,7 +405,7 @@ fn un_chmod_que_solo_cambia_propiedades_se_publica() {
     let (_messages, received) = mpsc::channel();
     worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
     assert_eq!(indexes.properties, full_indexes(&root).properties);
-    assert_eq!(*worker.properties.load_full(), indexes.properties);
+    assert_eq!(*worker.snapshot.load().properties, indexes.properties);
 }
 
 #[test]
@@ -411,7 +416,7 @@ fn un_chmod_que_solo_cambia_el_resumen_se_publica() {
     fs::write(root.join("a.md"), "Uno.").unwrap();
     let mut indexes = full_indexes(&root);
     let worker = worker(&root, &history);
-    worker.index.store(Arc::new(indexes.files.clone()));
+    worker.snapshot.store(Arc::new(indexes.snapshot()));
     fs::write(root.join("a.md"), "Dos.").unwrap();
     let note = VaultPath::new("a.md").unwrap();
     let touched = Touched {
@@ -422,5 +427,5 @@ fn un_chmod_que_solo_cambia_el_resumen_se_publica() {
     let (_messages, received) = mpsc::channel();
     worker.on_touched(&mut indexes, &touched, &read, &mut Inbox::new(&received));
     assert_eq!(indexes.summaries.of(&note).unwrap().excerpt, "Dos.");
-    assert_eq!(*worker.summaries.load_full(), indexes.summaries);
+    assert_eq!(*worker.snapshot.load().summaries, indexes.summaries);
 }

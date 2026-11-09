@@ -70,7 +70,7 @@ impl VaultChanges {
             .iter()
             .filter(|(path, _)| EntryKind::of_file(path) == EntryKind::Note)
             .map(|(path, text)| (path, text.as_str()));
-        let tags = session.tags().with_unsaved(notes);
+        let tags = session.snapshot().tags.with_unsaved(notes);
         let config = texts.config(session.root());
         let mut preview = match request.preview(&tags, &config, |path| unsaved.contains(path)) {
             Ok(Some(preview)) => preview,

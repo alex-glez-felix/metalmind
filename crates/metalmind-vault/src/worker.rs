@@ -21,9 +21,10 @@ use crate::note_cache::CacheRefresh;
 use crate::path::VaultPath;
 use crate::properties::PropertyIndex;
 use crate::refresh::{Touched, VaultChange, refresh};
+use crate::snapshot::{VaultSnapshot, VaultUpdate};
 use crate::summary_index::SummaryIndex;
 use crate::tags::{TagKey, Tags};
-use crate::vault::{SaveKind, VaultUpdate};
+use crate::vault::SaveKind;
 use crate::watch::{touched, touched_by_errors};
 use crate::watcher::{Watch, before_reading};
 
@@ -46,11 +47,7 @@ pub(crate) struct Save {
 
 pub(crate) struct Worker {
     pub root: PathBuf,
-    pub index: Arc<ArcSwap<VaultIndex>>,
-    pub links: Arc<ArcSwap<LinkIndex>>,
-    pub tags: Arc<ArcSwap<Tags>>,
-    pub properties: Arc<ArcSwap<PropertyIndex>>,
-    pub summaries: Arc<ArcSwap<SummaryIndex>>,
+    pub snapshot: Arc<ArcSwap<VaultSnapshot>>,
     /// `None` si el vault no tiene historial.
     pub history: Option<Arc<History>>,
     /// Lo que hay que reescribir de la caché, si cambió algo desde la última vez.
@@ -66,13 +63,7 @@ pub(crate) struct Worker {
 
 impl Worker {
     pub(crate) fn run(self, messages: &mpsc::Receiver<Message>) {
-        let mut indexes = Indexes {
-            files: VaultIndex::clone(&self.index.load()),
-            links: LinkIndex::clone(&self.links.load()),
-            tags: Tags::clone(&self.tags.load()),
-            properties: PropertyIndex::clone(&self.properties.load()),
-            summaries: SummaryIndex::clone(&self.summaries.load()),
-        };
+        let mut indexes = Indexes::from(self.snapshot.load().as_ref());
         if let Some(refresh) = &self.cache_refresh {
             refresh.write(
                 &indexes.links,
@@ -139,24 +130,12 @@ impl Worker {
     }
 
     fn publish(&self, indexes: &Indexes, changes: Vec<VaultChange>, tag_changes: Vec<TagKey>) {
-        let snapshot = Arc::new(indexes.files.clone());
-        let published = Arc::new(indexes.links.clone());
-        let published_tags = Arc::new(indexes.tags.clone());
-        let published_properties = Arc::new(indexes.properties.clone());
-        let published_summaries = Arc::new(indexes.summaries.clone());
-        self.index.store(Arc::clone(&snapshot));
-        self.links.store(Arc::clone(&published));
-        self.tags.store(Arc::clone(&published_tags));
-        self.properties.store(Arc::clone(&published_properties));
-        self.summaries.store(Arc::clone(&published_summaries));
+        let snapshot = Arc::new(indexes.snapshot());
+        self.snapshot.store(Arc::clone(&snapshot));
         // Si el receptor ya no existe, quien abrió el vault solo usa los snapshots.
         let _ = self.updates.send(VaultUpdate {
             changes,
             snapshot,
-            links: published,
-            tags: published_tags,
-            properties: published_properties,
-            summaries: published_summaries,
             tag_changes,
         });
     }
@@ -347,7 +326,30 @@ struct Indexes {
     summaries: SummaryIndex,
 }
 
+impl From<&VaultSnapshot> for Indexes {
+    fn from(snapshot: &VaultSnapshot) -> Self {
+        Self {
+            files: VaultIndex::clone(&snapshot.files),
+            links: LinkIndex::clone(&snapshot.links),
+            tags: Tags::clone(&snapshot.tags),
+            properties: PropertyIndex::clone(&snapshot.properties),
+            summaries: SummaryIndex::clone(&snapshot.summaries),
+        }
+    }
+}
+
 impl Indexes {
+    /// Lo que se publica de este lote.
+    fn snapshot(&self) -> VaultSnapshot {
+        VaultSnapshot {
+            files: Arc::new(self.files.clone()),
+            links: Arc::new(self.links.clone()),
+            tags: Arc::new(self.tags.clone()),
+            properties: Arc::new(self.properties.clone()),
+            summaries: Arc::new(self.summaries.clone()),
+        }
+    }
+
     /// Pone links, tags, propiedades y resúmenes al día con `files`, ya
     /// actualizado. Devuelve si un chmod cambió algún link, propiedad o resumen
     /// y las claves de tag que cambiaron.

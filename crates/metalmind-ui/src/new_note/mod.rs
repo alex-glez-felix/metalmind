@@ -233,7 +233,7 @@ pub fn create_in_panel(
     let templates = if focus.tags.is_empty() {
         Templates::default()
     } else {
-        load_templates(vault, &vault.snapshot(), &settings.templates_folder)?
+        load_templates(vault, &vault.snapshot().files, &settings.templates_folder)?
     };
     let draft = Origin::Blank.draft(&note.title, focus, &templates, graph, now);
     Ok(create(vault, &note, &draft)?)
@@ -266,9 +266,9 @@ pub fn open_daily(
     if !daily.enabled {
         return Err(DailyOpenError::Disabled);
     }
-    let index = vault.snapshot();
+    let snapshot = vault.snapshot();
     let templates = match daily.template {
-        Some(_) => load_templates(vault, &index, &settings.templates_folder)?,
+        Some(_) => load_templates(vault, &snapshot.files, &settings.templates_folder)?,
         None => Templates::default(),
     };
     let note = daily_note(daily, now, &templates)?.ok_or(DailyOpenError::Disabled)?;

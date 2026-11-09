@@ -32,7 +32,7 @@ fn tags_of(files: &[(&str, &str)]) -> Arc<Tags> {
         fs::write(path, text).unwrap();
     }
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    vault.tags()
+    Arc::clone(&vault.snapshot().tags)
 }
 
 /// Cada fila como se ve: sangría, triángulo, nombre y conteo; `>` marca la

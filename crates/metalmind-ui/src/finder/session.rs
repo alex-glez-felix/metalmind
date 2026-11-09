@@ -12,8 +12,7 @@ use std::{fs, thread};
 
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use metalmind_config::{Paths, SavedView};
-use metalmind_vault::tags::Tags;
-use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultUpdate};
+use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultSnapshot, VaultUpdate};
 
 use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
@@ -49,9 +48,10 @@ pub struct VaultSession {
     recents: Recents,
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
+    /// Los índices del último lote aplicado: todo lo de la sesión sale de aquí.
+    snapshot: Arc<VaultSnapshot>,
     /// Las notas del finder, solo las del focus si hay uno.
     notes: Arc<[Note]>,
-    tags: Arc<Tags>,
     /// El focus de la sesión (05 §3): al reabrir, la app empieza sin él.
     focus: Option<(Focus, Arc<InScope>)>,
     /// Las vistas guardadas (06 §10), como se leyeron la última vez.
@@ -138,8 +138,8 @@ impl VaultSession {
             this.vault.shut_down();
             async {}
         });
-        let notes = notes(&vault.snapshot(), &recents);
-        let tags = vault.tags();
+        let snapshot = vault.snapshot();
+        let notes = notes(&snapshot.files, &recents);
         let unwatched = vault.unwatched();
         // Con la config rota, ninguna: quien la lee al abrir lo dice.
         let (views, _) = crate::note_list::load_views(vault.root());
@@ -147,8 +147,8 @@ impl VaultSession {
             vault: Rc::new(vault),
             recents,
             writer,
+            snapshot,
             notes,
-            tags,
             focus: None,
             views: views.into(),
             unwatched,
@@ -175,6 +175,13 @@ impl VaultSession {
         self.unwatched
     }
 
+    /// Los índices del último lote que llegó a la ventana. Quien combine dos
+    /// los toma de aquí, del mismo lote que las notas y el focus.
+    #[must_use]
+    pub fn snapshot(&self) -> Arc<VaultSnapshot> {
+        Arc::clone(&self.snapshot)
+    }
+
     /// Lo que lista el finder ahora: con focus, solo lo de su alcance.
     #[must_use]
     pub fn notes(&self) -> Arc<[Note]> {
@@ -196,12 +203,12 @@ impl VaultSession {
 
     /// Pone o quita el focus; el finder, el panel y la búsqueda lo siguen.
     pub fn set_focus(&mut self, focus: Option<Focus>, cx: &mut Context<Self>) {
-        let index = self.vault.snapshot();
+        let snapshot = Arc::clone(&self.snapshot);
         self.focus = focus.map(|focus| {
-            let in_scope = Arc::new(focus.resolve(&index, &self.tags));
+            let in_scope = Arc::new(focus.resolve(&snapshot.files, &snapshot.tags));
             (focus, in_scope)
         });
-        self.notes = self.list(&index);
+        self.notes = self.list(&snapshot.files);
         cx.emit(FocusChanged);
         cx.notify();
     }
@@ -258,12 +265,6 @@ impl VaultSession {
         }
     }
 
-    /// Los tags del último lote del watcher.
-    #[must_use]
-    pub fn tags(&self) -> Arc<Tags> {
-        Arc::clone(&self.tags)
-    }
-
     /// La ruta del vault de `path`, si está dentro.
     #[must_use]
     pub fn vault_path(&self, path: &Path) -> Option<VaultPath> {
@@ -285,13 +286,14 @@ impl VaultSession {
         if moved {
             self.save();
         }
-        self.tags = Arc::clone(&update.tags);
+        self.snapshot = Arc::clone(&update.snapshot);
+        let files = &self.snapshot.files;
         let mut moved = false;
         if let Some((focus, in_scope)) = &mut self.focus {
             moved = focus.follow(&update.changes);
-            *in_scope = Arc::new(focus.resolve(&update.snapshot, &self.tags));
+            *in_scope = Arc::new(focus.resolve(files, &self.snapshot.tags));
         }
-        self.notes = self.list(&update.snapshot);
+        self.notes = self.list(files);
         cx.emit(VaultChanged(update));
         if moved {
             cx.emit(FocusChanged);
@@ -305,7 +307,7 @@ impl VaultSession {
     }
 
     fn recents_changed(&mut self, cx: &mut Context<Self>) {
-        self.notes = self.list(&self.vault.snapshot());
+        self.notes = self.list(&self.snapshot.files);
         self.save();
         cx.notify();
     }

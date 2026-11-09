@@ -32,7 +32,7 @@ fn notes(tags: &Tags, query: &str) -> Vec<String> {
 /// Espera a que los tags publicados cumplan `done`.
 fn wait_for_tags(vault: &Vault, updates: &Receiver<VaultUpdate>, done: impl Fn(&Tags) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !done(&vault.tags()) {
+    while !done(&vault.snapshot().tags) {
         let left = deadline.saturating_duration_since(Instant::now());
         assert!(
             updates.recv_timeout(left).is_ok(),
@@ -48,8 +48,8 @@ fn los_tags_se_indexan_al_abrir() {
     fs::write(dir.path().join("tags/rust.md"), "---\naliases: [rs]\n---\n").unwrap();
     fs::write(dir.path().join("x.md"), "#rs y #nota").unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(notes(&vault.tags(), "#rust"), ["x.md"]);
-    assert_eq!(notes(&vault.tags(), "-#"), ["y.md"]);
+    assert_eq!(notes(&vault.snapshot().tags, "#rust"), ["x.md"]);
+    assert_eq!(notes(&vault.snapshot().tags, "-#"), ["y.md"]);
 }
 
 #[test]
@@ -83,7 +83,10 @@ fn cada_update_dice_que_tags_cambiaron() {
     fs::write(dir.path().join("a.md"), "#Rust").unwrap();
     let update = updates.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(update.tag_changes, [TagKey::new("rust")]);
-    assert_eq!(update.tags.display_name(&TagKey::new("rust")), Some("Rust"));
+    assert_eq!(
+        update.snapshot.tags.display_name(&TagKey::new("rust")),
+        Some("Rust")
+    );
 }
 
 #[test]
@@ -95,10 +98,10 @@ fn la_carpeta_de_tags_se_configura() {
         ..VaultOptions::default()
     };
     let (vault, _updates) = Vault::open_with(dir.path(), options).unwrap();
-    let tags = vault.tags();
+    let tags = &vault.snapshot().tags;
     assert!(tags.graph().page(&TagKey::new("rust")).is_some());
     assert!(tags.graph().page(&TagKey::new("gpui")).is_none());
-    assert_eq!(notes(&tags, "-#"), ["tags/gpui.md"]);
+    assert_eq!(notes(tags, "-#"), ["tags/gpui.md"]);
 }
 
 #[test]
@@ -113,7 +116,7 @@ fn un_chmod_que_vuelve_legible_una_nota_trae_sus_tags() {
         return;
     }
     let (vault, updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(notes(&vault.tags(), "-#"), ["a.md"]);
+    assert_eq!(notes(&vault.snapshot().tags, "-#"), ["a.md"]);
 
     fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
     wait_for_tags(&vault, &updates, |tags| notes(tags, "#rust") == ["a.md"]);

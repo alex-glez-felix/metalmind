@@ -22,7 +22,9 @@ pub(in crate::workspace) fn vault_session(
     }
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let mut session = Session::open(&vault.root().join(open));
-    session.workspace.set_links(vault.root(), vault.links());
+    session
+        .workspace
+        .set_links(vault.root(), Arc::clone(&vault.snapshot().links));
     (dir, vault, session)
 }
 
@@ -211,7 +213,9 @@ fn un_buffer_fuera_del_vault_no_sigue_links() {
         Some("no hay un vault abierto: los links no llevan a ningún lado")
     );
     let (_dir, vault, _) = vault_session(&[("a.md", "")], "a.md");
-    session.workspace.set_links(vault.root(), vault.links());
+    session
+        .workspace
+        .set_links(vault.root(), Arc::clone(&vault.snapshot().links));
     session.keys("gd");
     assert!(
         error(&session)

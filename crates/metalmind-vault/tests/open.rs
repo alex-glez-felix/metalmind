@@ -24,7 +24,7 @@ fn indexa_notas_adjuntos_y_carpetas() {
     );
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(
-        listing(&vault.snapshot()),
+        listing(&vault.snapshot().files),
         [
             "sub/",
             "sub/hondo/",
@@ -54,7 +54,7 @@ fn ignora_siempre_obsidian_git_trash_y_ocultos() {
     // Ni volviéndolas a incluir desde .gitignore.
     fs::write(dir.path().join(".gitignore"), "!.obsidian/\n!.oculta.md\n").unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(listing(&vault.snapshot()), ["sub/", "a.md (nota)"]);
+    assert_eq!(listing(&vault.snapshot().files), ["sub/", "a.md (nota)"]);
 }
 
 /// #97: ni `node_modules` ni lo que se marca como caché (el `target` de
@@ -79,7 +79,7 @@ fn ignora_node_modules_y_las_carpetas_de_cache() {
     fs::write(dir.path().join("cache/CACHEDIR.TAG"), signature).unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(
-        listing(&vault.snapshot()),
+        listing(&vault.snapshot().files),
         [
             "app/",
             "otro/",
@@ -111,7 +111,7 @@ fn respeta_gitignore_e_ignore_aunque_no_sea_un_repo() {
     fs::write(dir.path().join(".ignore"), "privado/\n").unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(
-        listing(&vault.snapshot()),
+        listing(&vault.snapshot().files),
         ["sub/", "sub/b.md (nota)", "a.md (nota)"]
     );
 }
@@ -122,7 +122,7 @@ fn no_lee_ignores_de_fuera_del_vault() {
     fs::write(outer.path().join(".gitignore"), "*.md\n").unwrap();
     make_tree(outer.path(), &["vault/a.md"]);
     let (vault, _updates) = Vault::open(outer.path().join("vault")).unwrap();
-    assert_eq!(listing(&vault.snapshot()), ["a.md (nota)"]);
+    assert_eq!(listing(&vault.snapshot().files), ["a.md (nota)"]);
 }
 
 #[test]
@@ -138,7 +138,7 @@ fn no_sigue_ni_lista_enlaces_simbolicos() {
     .unwrap();
     symlink(outside.path().join("carpeta"), dir.path().join("enlace")).unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(listing(&vault.snapshot()), ["a.md (nota)"]);
+    assert_eq!(listing(&vault.snapshot().files), ["a.md (nota)"]);
 }
 
 #[test]
@@ -151,7 +151,7 @@ fn la_raiz_puede_ser_un_enlace() {
         vault.root(),
         dir.path().join("real").canonicalize().unwrap()
     );
-    assert_eq!(listing(&vault.snapshot()), ["a.md (nota)"]);
+    assert_eq!(listing(&vault.snapshot().files), ["a.md (nota)"]);
 }
 
 #[test]
@@ -172,7 +172,7 @@ fn abrir_algo_que_no_es_carpeta_falla() {
 fn el_arbol_se_recorre_desde_la_raiz() {
     let dir = TempDir::new().unwrap();
     make_tree(dir.path(), &["b/x.md", "a.md"]);
-    let index = Vault::open(dir.path()).unwrap().0.snapshot();
+    let index = &Vault::open(dir.path()).unwrap().0.snapshot().files;
     let root: Vec<_> = index
         .children(&VaultPath::root())
         .map(|entry| (entry.path.as_str(), entry.kind))
@@ -194,7 +194,7 @@ fn la_raiz_sola_lista_lo_mismo_que_open() {
     let root = VaultRoot::new(dir.path()).unwrap();
     let (opened, _updates) = Vault::open(dir.path()).unwrap();
     assert_eq!(root.path(), opened.root());
-    assert_eq!(listing(&root.files()), listing(&opened.snapshot()));
+    assert_eq!(listing(&root.files()), listing(&opened.snapshot().files));
 }
 
 /// Solo esas carpetas, con las reglas de todo el vault (el `.gitignore` de la

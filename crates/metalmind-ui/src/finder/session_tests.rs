@@ -4,6 +4,47 @@ use gpui_kit::{AppContext as _, TestAppContext};
 
 use super::*;
 
+/// Quien recibe un lote lee de la sesión los índices de ese mismo lote,
+/// y las notas del finder salen de él, no de lo último que publicó el vault.
+#[test]
+fn la_sesion_da_el_snapshot_del_ultimo_lote() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("a.md"), "#uno").unwrap();
+    let (vault, _updates) = Vault::open(dir.path()).unwrap();
+    let opened = vault.snapshot();
+    let mut cx = TestAppContext::single();
+    let session =
+        cx.update(|cx| cx.new(|cx| VaultSession::new(Prepared::without_updates(vault), cx)));
+    let snapshot = |cx: &TestAppContext| session.read_with(cx, |session, _| session.snapshot());
+    assert!(Arc::ptr_eq(&snapshot(&cx), &opened));
+    let batch = Arc::new(VaultSnapshot {
+        files: Arc::new(VaultIndex::default()),
+        ..VaultSnapshot::clone(&opened)
+    });
+    let seen = Rc::new(Cell::new(false));
+    let on_change = Rc::clone(&seen);
+    cx.update(|cx| {
+        cx.subscribe(&session, move |session, VaultChanged(update), cx| {
+            on_change.set(Arc::ptr_eq(&session.read(cx).snapshot(), &update.snapshot));
+        })
+        .detach();
+    });
+    let update = VaultUpdate {
+        changes: Vec::new(),
+        snapshot: Arc::clone(&batch),
+        tag_changes: Vec::new(),
+    };
+    session.update(&mut cx, |session, cx| session.apply(update, cx));
+    cx.run_until_parked();
+    assert!(seen.get());
+    assert!(Arc::ptr_eq(&snapshot(&cx), &batch));
+    assert!(
+        session
+            .read_with(&cx, |session, _| session.notes())
+            .is_empty()
+    );
+}
+
 /// Las vistas se leen del vault al abrir; cuando cambian, el focus de
 /// una sigue a su nombre y su consulta nuevos, y se avisa de las dos
 /// cosas.

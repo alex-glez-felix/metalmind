@@ -38,11 +38,11 @@ fn cada_lote_publica_las_propiedades_de_la_nota() {
             value: PropertyValue::Text(text.to_owned()),
         }]
     };
-    assert_eq!(vault.properties().of(&note), title("Uno"));
+    assert_eq!(vault.snapshot().properties.of(&note), title("Uno"));
     fs::write(dir.path().join("a.md"), "---\ntítulo: Dos\n---\n").unwrap();
     let update = updates.recv_timeout(Duration::from_secs(5)).unwrap();
-    assert_eq!(update.properties.of(&note), title("Dos"));
-    assert_eq!(vault.properties().of(&note), title("Dos"));
+    assert_eq!(update.snapshot.properties.of(&note), title("Dos"));
+    assert_eq!(vault.snapshot().properties.of(&note), title("Dos"));
 }
 
 #[test]
@@ -52,15 +52,21 @@ fn cada_lote_publica_el_resumen_de_la_nota() {
     let (vault, updates) = open(dir.path());
     let note = path("a.md");
     assert_eq!(
-        vault.summaries().of(&note).unwrap().title.as_deref(),
+        vault
+            .snapshot()
+            .summaries
+            .of(&note)
+            .unwrap()
+            .title
+            .as_deref(),
         Some("Uno")
     );
     fs::write(dir.path().join("a.md"), "# Dos\nOtro.").unwrap();
     let update = updates.recv_timeout(Duration::from_secs(5)).unwrap();
-    let summary = update.summaries.of(&note).unwrap();
+    let summary = update.snapshot.summaries.of(&note).unwrap();
     assert_eq!(summary.title.as_deref(), Some("Dos"));
     assert_eq!(summary.excerpt, "Otro.");
-    assert_eq!(vault.summaries().of(&note), Some(summary));
+    assert_eq!(vault.snapshot().summaries.of(&note), Some(summary));
 }
 
 #[test]
@@ -85,7 +91,7 @@ fn crear_y_borrar_un_archivo() {
             kind: EntryKind::Note
         }]
     );
-    assert!(vault.snapshot().is_empty());
+    assert!(vault.snapshot().files.is_empty());
 }
 
 #[test]
@@ -103,7 +109,10 @@ fn renombrar_y_mover_un_archivo_es_un_solo_cambio() {
             kind: EntryKind::Note
         }]
     );
-    assert_eq!(listing(&vault.snapshot()), ["sub/", "sub/b.md (nota)"]);
+    assert_eq!(
+        listing(&vault.snapshot().files),
+        ["sub/", "sub/b.md (nota)"]
+    );
 }
 
 #[test]
@@ -122,7 +131,7 @@ fn renombrar_una_carpeta_mueve_su_contenido() {
         }]
     );
     assert_eq!(
-        listing(&vault.snapshot()),
+        listing(&vault.snapshot().files),
         [
             "otra/",
             "otra/nueva/",
@@ -279,7 +288,7 @@ fn lo_oculto_no_genera_cambios() {
             kind: EntryKind::Note
         }]
     );
-    assert_eq!(listing(&vault.snapshot()), ["visible.md (nota)"]);
+    assert_eq!(listing(&vault.snapshot().files), ["visible.md (nota)"]);
 }
 
 /// Los watches de inotify de este proceso. nextest corre cada test en su
@@ -320,7 +329,7 @@ fn solo_vigila_las_carpetas_del_vault() {
     fs::write(dir.path().join(".gitignore"), "build/\n").unwrap();
     let (vault, updates) = open(dir.path());
     let expected = ["notas/", "notas/sub/", "notas/sub/a.md (nota)", "web/"];
-    assert_eq!(listing(&vault.snapshot()), expected);
+    assert_eq!(listing(&vault.snapshot().files), expected);
     assert_eq!(inotify_watches(), 4, "la raíz, notas, notas/sub y web");
 
     fs::remove_dir_all(dir.path().join("notas/sub")).unwrap();

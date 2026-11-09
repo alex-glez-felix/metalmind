@@ -191,7 +191,7 @@ fn tagged(notes: usize) -> (TempDir, Tags) {
             metalmind_perf::write_files(root, &metalmind_perf::tagged_vault(notes, notes / 25))
                 .unwrap();
         });
-        let tags = Tags::clone(&vault.tags());
+        let tags = Tags::clone(&vault.snapshot().tags);
         (dir, tags)
     })
     .join()

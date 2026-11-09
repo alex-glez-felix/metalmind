@@ -19,17 +19,14 @@ use crate::debounce::Debouncer;
 use crate::file::{FileError, create_atomic, write_atomic};
 use crate::history::{History, HistoryError, Retention, VersionId};
 use crate::index::VaultIndex;
-use crate::links::LinkIndex;
 #[cfg(doc)]
 use crate::links::RenamePlan;
 use crate::note_scan::{NoteIndexes, index_notes};
 use crate::ops::{self, FileOpError};
 use crate::path::VaultPath;
-use crate::properties::PropertyIndex;
-use crate::refresh::VaultChange;
 use crate::scan::{scan, scan_within};
-use crate::summary_index::SummaryIndex;
-use crate::tags::{DEFAULT_TAGS_FOLDER, TagKey, Tags};
+use crate::snapshot::{VaultSnapshot, VaultUpdate};
+use crate::tags::{DEFAULT_TAGS_FOLDER, Tags};
 use crate::watcher::{FolderWatch, Unwatched, before_reading};
 use crate::worker::{Message, Save, Worker, read_note};
 
@@ -89,22 +86,6 @@ impl PendingVersion {
     pub fn wait(self) -> Result<Option<VersionId>, VersionError> {
         Ok(self.0.recv().map_err(|_| VersionError::Stopped)??)
     }
-}
-
-/// Lo que cambió en el vault, con los índices que ya lo incluyen. `changes`
-/// puede venir vacío si solo cambiaron los links, los tags, las propiedades o
-/// los resúmenes (un chmod que vuelve legible una nota) o si se dejó de vigilar el vault
-/// ([`Vault::unwatched`]).
-#[derive(Debug, Clone)]
-pub struct VaultUpdate {
-    pub changes: Vec<VaultChange>,
-    pub snapshot: Arc<VaultIndex>,
-    pub links: Arc<LinkIndex>,
-    pub tags: Arc<Tags>,
-    pub properties: Arc<PropertyIndex>,
-    pub summaries: Arc<SummaryIndex>,
-    /// Los tags cuyas notas, formas escritas o página pueden haber cambiado.
-    pub tag_changes: Vec<TagKey>,
 }
 
 /// Lo que el vault puede ajustar al abrirse (03 §5, config del vault).
@@ -212,11 +193,7 @@ impl VaultRoot {
 pub struct Vault {
     root: PathBuf,
     attachments_folder: VaultPath,
-    index: Arc<ArcSwap<VaultIndex>>,
-    links: Arc<ArcSwap<LinkIndex>>,
-    tags: Arc<ArcSwap<Tags>>,
-    properties: Arc<ArcSwap<PropertyIndex>>,
-    summaries: Arc<ArcSwap<SummaryIndex>>,
+    snapshot: Arc<ArcSwap<VaultSnapshot>>,
     history: Option<Arc<History>>,
     messages: mpsc::Sender<Message>,
     saving: Arc<Mutex<()>>,
@@ -241,8 +218,8 @@ impl Vault {
     /// Abre la carpeta `root`, indexa sus archivos y sus tags y empieza a
     /// vigilarla. Cada cambio en disco llega por el receptor como un
     /// [`VaultUpdate`]. Quien no quiera los cambios suelta el receptor y usa
-    /// [`Vault::snapshot`] y [`Vault::tags`], que siguen al día igual;
-    /// guardarlo sin leerlo acumula un snapshot por lote.
+    /// [`Vault::snapshot`], que sigue al día igual; guardarlo sin leerlo
+    /// acumula un snapshot por lote.
     ///
     /// Con `options.history`, el historial sigue por su cuenta los renombres
     /// y borrados que ve el watcher, y guarda como versión lo que cambie una
@@ -288,21 +265,19 @@ impl Vault {
         let history = options
             .history
             .map(|options| Arc::new(History::new(options.dir, options.retention)));
-        let index = Arc::new(ArcSwap::from_pointee(files));
-        let links = Arc::new(ArcSwap::from_pointee(links));
-        let tags = Arc::new(ArcSwap::from_pointee(tags));
-        let properties = Arc::new(ArcSwap::from_pointee(properties));
-        let summaries = Arc::new(ArcSwap::from_pointee(summaries));
+        let snapshot = Arc::new(ArcSwap::from_pointee(VaultSnapshot {
+            files: Arc::new(files),
+            links: Arc::new(links),
+            tags: Arc::new(tags),
+            properties: Arc::new(properties),
+            summaries: Arc::new(summaries),
+        }));
         let (updates, receiver) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
         let saving = Arc::new(Mutex::new(()));
         let worker = Worker {
             root: root.clone(),
-            index: Arc::clone(&index),
-            links: Arc::clone(&links),
-            tags: Arc::clone(&tags),
-            properties: Arc::clone(&properties),
-            summaries: Arc::clone(&summaries),
+            snapshot: Arc::clone(&snapshot),
             history: history.as_ref().map(Arc::clone),
             cache_refresh,
             saving: Arc::clone(&saving),
@@ -317,11 +292,7 @@ impl Vault {
         let vault = Self {
             root,
             attachments_folder: options.attachments_folder,
-            index,
-            links,
-            tags,
-            properties,
-            summaries,
+            snapshot,
             history,
             messages,
             saving,
@@ -337,39 +308,11 @@ impl Vault {
         &self.root
     }
 
-    /// El índice de este momento. No bloquea ni se modifica después.
+    /// Los índices de este momento, todos del mismo lote. No bloquea ni se
+    /// modifica después.
     #[must_use]
-    pub fn snapshot(&self) -> Arc<VaultIndex> {
-        self.index.load_full()
-    }
-
-    /// Los links del vault en este momento, al día con [`Vault::snapshot`]
-    /// salvo entre la publicación de uno y otro.
-    #[must_use]
-    pub fn links(&self) -> Arc<LinkIndex> {
-        self.links.load_full()
-    }
-
-    /// Los tags de este momento, sin bloquear. Como [`Vault::links`], van al
-    /// día con [`Vault::snapshot`] salvo entre la publicación de uno y otro;
-    /// cada [`VaultUpdate`] trae todos los del mismo lote.
-    #[must_use]
-    pub fn tags(&self) -> Arc<Tags> {
-        self.tags.load_full()
-    }
-
-    /// El frontmatter de cada nota en este momento, sin bloquear; va al día
-    /// como [`Vault::tags`].
-    #[must_use]
-    pub fn properties(&self) -> Arc<PropertyIndex> {
-        self.properties.load_full()
-    }
-
-    /// El título y el extracto de cada nota en este momento, sin bloquear; van
-    /// al día como [`Vault::tags`].
-    #[must_use]
-    pub fn summaries(&self) -> Arc<SummaryIndex> {
-        self.summaries.load_full()
+    pub fn snapshot(&self) -> Arc<VaultSnapshot> {
+        self.snapshot.load_full()
     }
 
     /// Por qué el vault dejó de ver los cambios que se hacen fuera de
@@ -555,7 +498,7 @@ impl Vault {
     ) -> Result<SavedAttachment, AttachmentError> {
         attachment::save(
             &self.root,
-            &self.links(),
+            &self.snapshot().links,
             &self.attachments_folder,
             attachment,
         )

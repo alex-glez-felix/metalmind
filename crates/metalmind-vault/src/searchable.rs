@@ -15,7 +15,7 @@ impl Vault {
     /// una nota, no.
     #[must_use]
     pub fn is_searchable(&self, path: &VaultPath) -> bool {
-        match self.snapshot().kind(path) {
+        match self.snapshot().files.kind(path) {
             Some(kind) => kind == EntryKind::Note,
             None => {
                 EntryKind::of_file(path) == EntryKind::Note

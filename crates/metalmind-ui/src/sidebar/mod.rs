@@ -95,8 +95,9 @@ impl Sidebar {
         cx: &mut Context<Self>,
     ) -> Self {
         let vault = session.read(cx).vault();
-        let tree = FileTree::with_expanded(vault.snapshot(), state.expanded());
-        let tags = TagOutline::new(session.read(cx).tags(), session.read(cx).views());
+        let (snapshot, views) = (session.read(cx).snapshot(), session.read(cx).views());
+        let tree = FileTree::with_expanded(Arc::clone(&snapshot.files), state.expanded());
+        let tags = TagOutline::new(Arc::clone(&snapshot.tags), views);
         let changes = cx.subscribe(session, |sidebar, _, VaultChanged(update), cx| {
             sidebar.apply(update, cx);
         });
@@ -217,12 +218,14 @@ impl Sidebar {
 
     fn apply(&mut self, update: &VaultUpdate, cx: &mut Context<Self>) {
         let in_scope = self.session.read(cx).in_scope();
-        self.panel
-            .tree
-            .apply(&update.changes, Arc::clone(&update.snapshot), in_scope);
+        self.panel.tree.apply(
+            &update.changes,
+            Arc::clone(&update.snapshot.files),
+            in_scope,
+        );
         self.panel.follow(&update.changes);
         self.drop_preedit_without_field(cx);
-        self.panel.set_tags(Arc::clone(&update.tags));
+        self.panel.set_tags(Arc::clone(&update.snapshot.tags));
         self.sync_focus(cx);
         let selected = self.panel.outline().selected_path();
         let selected_tag = self.panel.selected_tag();

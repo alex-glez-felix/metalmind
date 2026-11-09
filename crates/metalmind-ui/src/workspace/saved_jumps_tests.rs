@@ -35,7 +35,7 @@ fn la_jumplist_y_las_marks_vuelven_en_otra_sesion() {
     drop(session);
 
     let mut session = Session::open(&vault.root().join("b.md"));
-    let loaded = SavedJumps::load(vault.root(), &file, &vault.snapshot());
+    let loaded = SavedJumps::load(vault.root(), &file, &vault.snapshot().files);
     session
         .workspace
         .restore_jumps(vault.root(), &loaded)

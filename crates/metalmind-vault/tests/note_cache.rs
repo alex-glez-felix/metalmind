@@ -109,20 +109,23 @@ fn abrir_con_cache_da_los_mismos_indices_que_sin_ella() {
     let (plain, _updates) = Vault::open(fixture.vault.path()).unwrap();
 
     let building = fixture.open();
-    assert_eq!(*building.links(), *plain.links());
-    assert_eq!(*building.tags(), *plain.tags());
-    assert_eq!(*building.properties(), *plain.properties());
-    assert_eq!(*building.summaries(), *plain.summaries());
+    assert_eq!(*building.snapshot().links, *plain.snapshot().links);
+    assert_eq!(*building.snapshot().tags, *plain.snapshot().tags);
+    assert_eq!(
+        *building.snapshot().properties,
+        *plain.snapshot().properties
+    );
+    assert_eq!(*building.snapshot().summaries, *plain.snapshot().summaries);
     drop(building);
     assert!(fixture.cache_file().exists());
 
     let cached = fixture.open();
-    assert_eq!(*cached.links(), *plain.links());
-    assert_eq!(*cached.properties(), *plain.properties());
-    assert_eq!(*cached.summaries(), *plain.summaries());
-    assert_eq!(*cached.tags(), *plain.tags());
+    assert_eq!(*cached.snapshot().links, *plain.snapshot().links);
+    assert_eq!(*cached.snapshot().properties, *plain.snapshot().properties);
+    assert_eq!(*cached.snapshot().summaries, *plain.snapshot().summaries);
+    assert_eq!(*cached.snapshot().tags, *plain.snapshot().tags);
     assert!(matches!(
-        cached.links().outgoing(&path("a.md"))[0].target,
+        cached.snapshot().links.outgoing(&path("a.md"))[0].target,
         LinkTarget::Resolved(_)
     ));
 }
@@ -147,9 +150,16 @@ fn una_nota_igual_por_fuera_no_se_relee() {
         .unwrap();
 
     let vault = fixture.open();
-    assert_eq!(targets(&vault.links(), "a.md"), ["uno"]);
-    assert!(vault.tags().index().tag(&TagKey::new("x")).is_some());
-    let summaries = vault.summaries();
+    assert_eq!(targets(&vault.snapshot().links, "a.md"), ["uno"]);
+    assert!(
+        vault
+            .snapshot()
+            .tags
+            .index()
+            .tag(&TagKey::new("x"))
+            .is_some()
+    );
+    let summaries = &vault.snapshot().summaries;
     assert_eq!(summaries.of(&path("a.md")).unwrap().excerpt, "[[uno]] #x");
 }
 
@@ -163,23 +173,31 @@ fn lo_que_cambio_con_el_vault_cerrado_se_ve() {
     fixture.write("nueva.md", "[[c]] #y");
 
     let vault = fixture.open();
-    assert_eq!(targets(&vault.links(), "a.md"), ["dos", "tres"]);
-    assert_eq!(targets(&vault.links(), "b.md"), Vec::<String>::new());
-    assert_eq!(targets(&vault.links(), "nueva.md"), ["c"]);
+    assert_eq!(targets(&vault.snapshot().links, "a.md"), ["dos", "tres"]);
     assert_eq!(
-        vault.summaries().of(&path("a.md")).unwrap().excerpt,
+        targets(&vault.snapshot().links, "b.md"),
+        Vec::<String>::new()
+    );
+    assert_eq!(targets(&vault.snapshot().links, "nueva.md"), ["c"]);
+    assert_eq!(
+        vault
+            .snapshot()
+            .summaries
+            .of(&path("a.md"))
+            .unwrap()
+            .excerpt,
         "[[dos]] [[tres]]"
     );
-    assert_eq!(vault.summaries().of(&path("b.md")), None);
-    let tags = vault.tags();
+    assert_eq!(vault.snapshot().summaries.of(&path("b.md")), None);
+    let tags = &vault.snapshot().tags;
     assert!(tags.index().tag(&TagKey::new("x")).is_none());
     assert!(tags.index().tag(&TagKey::new("y")).is_some());
     drop(vault);
 
     let (plain, _updates) = Vault::open(fixture.vault.path()).unwrap();
     let again = fixture.open();
-    assert_eq!(*again.links(), *plain.links());
-    assert_eq!(*again.tags(), *plain.tags());
+    assert_eq!(*again.snapshot().links, *plain.snapshot().links);
+    assert_eq!(*again.snapshot().tags, *plain.snapshot().tags);
 }
 
 /// Un link nuevo a una nota que no se tocó: la resolución no se guarda.
@@ -188,14 +206,14 @@ fn los_links_de_una_nota_sin_cambios_se_resuelven_otra_vez() {
     let fixture = Fixture::new(&[("a.md", "[[b]]")]);
     fixture.open_and_close();
     assert_eq!(
-        fixture.open().links().outgoing(&path("a.md"))[0].target,
+        fixture.open().snapshot().links.outgoing(&path("a.md"))[0].target,
         LinkTarget::Unresolved
     );
 
     fixture.write("b.md", "");
     let vault = fixture.open();
     assert_eq!(
-        vault.links().outgoing(&path("a.md"))[0].target,
+        vault.snapshot().links.outgoing(&path("a.md"))[0].target,
         LinkTarget::Resolved(path("b.md"))
     );
 }
@@ -219,7 +237,7 @@ fn una_pagina_de_tag_siempre_se_lee() {
         .unwrap();
 
     let vault = fixture.open();
-    let tags = vault.tags();
+    let tags = &vault.snapshot().tags;
     let page = tags.graph().page(&TagKey::new("dos")).unwrap();
     assert_eq!(page.color, None);
 }
@@ -233,7 +251,7 @@ fn una_carpeta_de_tags_distinta_no_estorba() {
         ..fixture.options()
     };
     let (vault, _updates) = Vault::open_with(fixture.vault.path(), other).unwrap();
-    let tags = vault.tags();
+    let tags = &vault.snapshot().tags;
     assert!(tags.graph().page(&TagKey::new("dos")).is_some());
     assert!(tags.index().tag(&TagKey::new("z")).is_none());
 }
@@ -252,8 +270,8 @@ fn una_cache_danada_no_cambia_nada_y_se_rehace() {
     for bytes in damaged {
         fs::write(fixture.cache_file(), bytes).unwrap();
         let vault = fixture.open();
-        assert_eq!(*vault.links(), *plain.links());
-        assert_eq!(*vault.tags(), *plain.tags());
+        assert_eq!(*vault.snapshot().links, *plain.snapshot().links);
+        assert_eq!(*vault.snapshot().tags, *plain.snapshot().tags);
         drop(vault);
         assert_eq!(fs::read(fixture.cache_file()).unwrap(), good, "se rehízo");
     }
@@ -263,7 +281,7 @@ fn una_cache_danada_no_cambia_nada_y_se_rehace() {
 fn sin_cache_configurada_no_se_escribe_nada() {
     let fixture = Fixture::new(NOTES);
     let (vault, _updates) = Vault::open(fixture.vault.path()).unwrap();
-    assert_eq!(targets(&vault.links(), "sub/c.md"), ["a", "d"]);
+    assert_eq!(targets(&vault.snapshot().links, "sub/c.md"), ["a", "d"]);
     drop(vault);
     assert!(!fixture.cache_file().exists());
 }
@@ -278,5 +296,5 @@ fn abrir_sin_poder_escribir_la_cache_funciona_igual() {
         ..VaultOptions::default()
     };
     let (vault, _updates) = Vault::open_with(fixture.vault.path(), options).unwrap();
-    assert_eq!(targets(&vault.links(), "sub/c.md"), ["a", "d"]);
+    assert_eq!(targets(&vault.snapshot().links, "sub/c.md"), ["a", "d"]);
 }
