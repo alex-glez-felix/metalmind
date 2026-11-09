@@ -75,3 +75,7 @@ crashes en `fuzz/artifacts/<target>/`; los dos están en el `.gitignore`.
 caché de Actions entre corridas, también cuando hay un crash, y se minimiza
 con `cmin` cuando no lo hay. Si un target falla, el crash se sube como artifact
 `crash-<target>`: se descarga y se sigue el paso 1 con ese archivo.
+
+El workflow pasa `--target x86_64-unknown-linux-gnu` a `cargo fuzz`: sin él,
+compila para el triple del binario de cargo-fuzz, que en CI es musl, y ASan no
+corre con la libc estática.

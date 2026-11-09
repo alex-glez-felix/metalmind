@@ -16,6 +16,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # cargo-fuzz compila para el triple con que se construyó él mismo, y el
+  # binario que instala install-action es musl, donde ASan no corre.
+  FUZZ_TRIPLE: x86_64-unknown-linux-gnu
 
 jobs:
   fuzz:
@@ -46,14 +49,14 @@ jobs:
           TARGET: ${{ matrix.target }}
           SECONDS_PER_TARGET: ${{ inputs.seconds || 300 }}
         run: >
-          cargo +nightly fuzz run "$TARGET" --
+          cargo +nightly fuzz run --target "$FUZZ_TRIPLE" "$TARGET" --
           -max_total_time="$SECONDS_PER_TARGET"
           -timeout=10 -rss_limit_mb=2048
       - name: Minimizar el corpus
         if: success()
         env:
           TARGET: ${{ matrix.target }}
-        run: cargo +nightly fuzz cmin "$TARGET"
+        run: cargo +nightly fuzz cmin --target "$FUZZ_TRIPLE" "$TARGET"
       - uses: actions/cache/save@v6
         if: always()
         with:
