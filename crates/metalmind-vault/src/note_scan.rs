@@ -4,7 +4,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use metalmind_syntax::Property;
 
-use crate::index::{EntryKind, VaultIndex};
+use crate::index::VaultIndex;
 use crate::links::note::links_of;
 use crate::links::{IndexedLink, LinkIndex};
 use crate::note_cache::{CacheRefresh, Stamp, open_notes};
@@ -60,7 +60,7 @@ pub(crate) fn index_notes(
 ) -> NoteIndexes {
     let notes = files
         .files()
-        .filter(|entry| entry.kind == EntryKind::Note)
+        .filter(|entry| entry.kind.is_indexed())
         .map(|entry| entry.path.clone())
         .collect();
     let reads = PageReads {

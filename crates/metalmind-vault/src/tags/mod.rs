@@ -38,7 +38,7 @@ pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
 pub use scope::{Scope, ScopeError, ScopeFilter, ScopeWord};
 pub use tree::{TagNode, TagTree};
 
-use crate::index::{EntryKind, VaultIndex};
+use crate::index::VaultIndex;
 use crate::note_batch::NoteBatch;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
@@ -73,7 +73,7 @@ impl Tags {
     pub fn build(folder: VaultPath, vault: &VaultIndex, read: impl ReadNote) -> Self {
         let mut notes: Vec<&VaultPath> = vault
             .files()
-            .filter(|entry| entry.kind == EntryKind::Note)
+            .filter(|entry| entry.kind.is_indexed())
             .map(|entry| entry.path)
             .collect();
         // La forma de los árboles del índice depende del orden en que se llenan.
