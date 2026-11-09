@@ -42,7 +42,7 @@ impl Rows {
     #[must_use]
     pub fn height(&self, style: &LineStyle) -> usize {
         let (mut line, mut below) = (self.base(style), 0_usize);
-        for (formula, rows) in self.formulas(style) {
+        for (_, formula, rows) in self.formulas(style) {
             if formula.below() {
                 below = below.saturating_add(rows);
             } else {
@@ -54,11 +54,12 @@ impl Rows {
 
     /// Lo que mide cada una de las `rows` filas de una línea partida, con
     /// cada byte en la fila que dice `row_of` (en la app, la de su
-    /// [`ScreenLine`](crate::ScreenLine)): la fila de una fórmula alta crece
-    /// con ella, y la de un bloque suma debajo de la última. La que es lo
-    /// único de su línea reparte lo que mide entre todas sus filas, y la que
-    /// va entre texto, partida, se ve como fuente y no cuenta. Sin estilo
-    /// calculado, cada fila mide como texto.
+    /// [`ScreenLine`](crate::ScreenLine)), y qué fórmulas quedaron partidas:
+    /// la fila de una fórmula alta crece con ella, y la de un bloque suma
+    /// debajo de la última. La que es lo único de su línea reparte lo que
+    /// mide entre todas sus filas, y la que va entre texto, partida, se ve
+    /// como fuente y no cuenta. Sin estilo calculado, cada fila mide como
+    /// texto.
     #[must_use]
     pub fn line_rows(
         &self,
@@ -67,18 +68,27 @@ impl Rows {
         row_of: impl Fn(usize) -> usize,
     ) -> LineRows {
         let base = style.map_or(self.text, |style| self.base(style));
+        let count = rows.max(1);
+        let math = style.map_or(&[][..], |style| &style.math);
+        let split = math
+            .iter()
+            .enumerate()
+            .filter(|(_, spot)| splits(spot, count, &row_of))
+            .map(|(index, _)| index)
+            .collect();
         let mut rows = LineRows {
-            rows: vec![base; rows.max(1)],
+            rows: vec![base; count],
             below: 0,
+            split,
         };
-        for (formula, height) in style.into_iter().flat_map(|style| self.formulas(style)) {
-            let row = row_of(formula.range.start);
-            let whole = row == row_of(formula.range.end.saturating_sub(1));
+        for (index, formula, height) in style.into_iter().flat_map(|style| self.formulas(style)) {
             if formula.below() {
                 rows.below = rows.below.saturating_add(height);
             } else if formula.fills_line() {
                 rows.spread(height);
-            } else if whole && let Some(row) = rows.rows.get_mut(row) {
+            } else if !rows.splits(index)
+                && let Some(row) = rows.rows.get_mut(row_of(formula.range.start))
+            {
                 *row = (*row).max(height);
             }
         }
@@ -96,25 +106,52 @@ impl Rows {
         }
     }
 
-    /// Las fórmulas de `style` que componen, con lo que miden.
-    fn formulas<'s>(&'s self, style: &'s LineStyle) -> impl Iterator<Item = (&'s MathSpot, usize)> {
+    /// Las fórmulas de `style` que componen, con su índice en `style.math`
+    /// y lo que miden.
+    fn formulas<'s>(
+        &'s self,
+        style: &'s LineStyle,
+    ) -> impl Iterator<Item = (usize, &'s MathSpot, usize)> {
         let formulas = self.formulas.as_deref();
-        style.math.iter().filter_map(move |formula| {
-            let rows = formulas?.rows(formula)?;
-            Some((formula, rows))
-        })
+        style
+            .math
+            .iter()
+            .enumerate()
+            .filter_map(move |(index, formula)| {
+                let rows = formulas?.rows(formula)?;
+                Some((index, formula, rows))
+            })
     }
 }
 
+/// Si `spot` ocupa varias de las `rows` filas de su línea: la que es la
+/// línea entera, si hay más de una; las demás, si su fuente quedó partida.
+fn splits(spot: &MathSpot, rows: usize, row_of: impl Fn(usize) -> usize) -> bool {
+    if spot.fills_line() {
+        return rows > 1;
+    }
+    row_of(spot.range.start) != row_of(spot.range.end.saturating_sub(1))
+}
+
 /// Lo que mide cada fila de una línea y lo que suma debajo la fórmula de un
-/// bloque, en las unidades de [`Rows`].
+/// bloque, en las unidades de [`Rows`], con las fórmulas que ocupan varias
+/// filas.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LineRows {
     pub rows: Vec<usize>,
     pub below: usize,
+    /// Los índices en `LineStyle::math` de las fórmulas partidas, en orden.
+    pub split: Vec<usize>,
 }
 
 impl LineRows {
+    /// Si la fórmula `formula` (su índice en `LineStyle::math`) ocupa varias
+    /// filas: entre texto se ve su fuente, y sola se pinta sobre todas.
+    #[must_use]
+    pub fn splits(&self, formula: usize) -> bool {
+        self.split.binary_search(&formula).is_ok()
+    }
+
     /// Que las filas juntas midan al menos `height`, cada una lo mismo: así
     /// el alto no depende de si se ve la imagen o su fuente.
     fn spread(&mut self, height: usize) {
@@ -260,6 +297,39 @@ mod tests {
         };
         let text = format!("{}$9$", " ".repeat(10));
         assert_eq!(rows_of_split(&text, 2, &rows), [5, 5]);
+    }
+
+    /// Qué fórmulas quedaron partidas, con cualquier medidor o sin él: la
+    /// vista lo lee de aquí. Una fila vacía no parte lo que la rodea.
+    #[rstest::rstest]
+    #[case::enteras("a $1$ b $2$", &[], &[])]
+    #[case::la_segunda_partida("a $1$ b $2$", &[9], &[1])]
+    #[case::fila_vacia_antes("a $1$ b $2$", &[2, 2], &[])]
+    #[case::fila_vacia_dentro("a $1$ b $2$", &[3, 3], &[0])]
+    #[case::fila_vacia_al_final("a $1$ b $2$", &[11], &[])]
+    #[case::sola_en_una_fila("$$1$$", &[], &[])]
+    #[case::sola_en_dos_filas("$$1$$", &[5], &[0])]
+    fn la_formula_que_ocupa_varias_filas_esta_partida(
+        #[case] text: &str,
+        #[case] breaks: &[usize],
+        #[case] split: &[usize],
+    ) {
+        let lines = TextLines::new(text);
+        let mut styles = Styles::new(1);
+        styles.ensure(0, &lines);
+        let style = styles.line(0);
+        let screen =
+            ScreenLine::with_breaks(Advances::monospace(text, 1.0), breaks.iter().copied());
+        for rows in [
+            Rows::uniform(2),
+            Rows {
+                formulas: Some(Arc::new(ByLatex)),
+                ..Rows::uniform(2)
+            },
+        ] {
+            let measured = rows.line_rows(style, screen.rows(), |byte| screen.row_of(byte));
+            assert_eq!(measured.split, split);
+        }
     }
 
     #[test]

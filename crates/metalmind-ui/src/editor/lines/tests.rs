@@ -1,11 +1,14 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use gpui_kit::{Bounds, SharedString, TestAppContext, TextRun, Window, font, point, px, size};
 use metalmind_config::Config;
-use metalmind_syntax::{ScreenLines as _, Styles, TextLines};
+use metalmind_syntax::{
+    FormulaRows, LineRows, MathSpot, Rows, ScreenLine, ScreenLines as _, Styles, TextLines,
+};
 use pretty_assertions::assert_eq;
 
-use super::{Line, MathFrame, RowBox, Typeface};
+use super::{Line, MathFrame, Typeface, row_boxes, units};
 use crate::editor::layout::LaidLine;
 use crate::editor::links::Links;
 use crate::editor::markdown::runs;
@@ -215,6 +218,44 @@ fn una_formula_partida_que_no_cabe_o_va_entre_texto_se_ve_como_fuente(
     });
 }
 
+/// Cada fórmula mide más que una fila de texto.
+#[derive(Debug)]
+struct Tall;
+
+impl FormulaRows for Tall {
+    fn rows(&self, _: &MathSpot) -> Option<usize> {
+        Some(50)
+    }
+}
+
+/// La vista pinta una fórmula entre texto como imagen justo cuando el motor
+/// le dio alto a su fila, también con filas vacías en medio: las dos capas
+/// leen la misma decisión de si quedó partida.
+#[rstest::rstest]
+#[case::entera(&[])]
+#[case::fila_vacia_antes(&[6, 6])]
+#[case::partida(&[8])]
+#[case::partida_con_fila_vacia(&[8, 8])]
+#[case::fila_vacia_al_final(&[22])]
+fn la_vista_y_el_motor_ven_partida_la_misma_formula(#[case] breaks: &[usize]) {
+    let mut cx = TestAppContext::single();
+    let window = cx.add_empty_window();
+    window.update(|window, _| {
+        let text = "Antes $x^2$ y después";
+        assert_eq!(text.len(), 22);
+        let advances = text_screen(window).line(text, styled(text).line(0), None);
+        let shown = ScreenLine::with_breaks(advances.advances().clone(), breaks.iter().copied());
+        let rows = Rows {
+            formulas: Some(Arc::new(Tall)),
+            ..Rows::uniform(20)
+        };
+        let (laid, measured) = lay_rows(text, false, &shown, &rows, 2000., window);
+        let tall = measured.rows.iter().any(|&height| height > 20);
+        assert_eq!(laid.formulas.len() == 1, tall, "{measured:?}");
+        assert_eq!(measured.splits(0), !tall);
+    });
+}
+
 fn theme() -> Theme {
     Theme::with_font(&Config::defaults().unwrap(), "Mono".into())
 }
@@ -222,39 +263,49 @@ fn theme() -> Theme {
 /// `text` partida por el motor en filas de `wrap` px y armada como la pinta
 /// la vista, con su primera fila arriba de la ventana.
 fn lay(text: &str, show_source: bool, wrap: f32, window: &Window) -> LaidLine {
+    let shown = text_screen(window).line(text, styled(text).line(0), Some(wrap));
+    lay_rows(text, show_source, &shown, &Rows::uniform(20), wrap, window).0
+}
+
+fn styled(text: &str) -> Styles {
+    let mut styles = Styles::new(1);
+    styles.ensure(usize::MAX, &TextLines::new(text));
+    styles
+}
+
+fn text_screen(window: &Window) -> TextScreen {
+    let faces = Faces::new(font("Mono"), px(15.), &theme());
+    TextScreen::new(window.text_system().clone(), faces)
+}
+
+/// `text` partida como `shown`, medida por el motor con `rows` y armada
+/// como la pinta la vista en `width` px, con lo que midió el motor.
+fn lay_rows(
+    text: &str,
+    show_source: bool,
+    shown: &ScreenLine,
+    rows: &Rows,
+    width: f32,
+    window: &Window,
+) -> (LaidLine, LineRows) {
     let theme = theme();
     let typeface = Typeface {
         font: font("Mono"),
         size: px(15.),
     };
-    let faces = Faces::new(typeface.font.clone(), typeface.size, &theme);
-    let mut styles = Styles::new(1);
-    styles.ensure(usize::MAX, &TextLines::new(text));
+    let styles = styled(text);
     let style = styles.line(0);
-    let screen = TextScreen::new(window.text_system().clone(), faces.clone());
-    let shown = screen.line(text, style, Some(wrap));
-    let mut top = px(0.);
-    let rows = (0..shown.rows())
-        .map(|row| {
-            let row = RowBox {
-                source: shown.row(row),
-                top,
-                height: px(20.),
-            };
-            top += px(20.);
-            row
-        })
-        .collect::<Vec<_>>();
-    let height = top;
+    let measured = rows.line_rows(style, shown.rows(), |byte| shown.row_of(byte));
     let line = Line {
         number: 0,
         text,
         style,
         show_source,
         origin: point(px(0.), px(-20.)),
-        height,
-        rows,
-        width: px(wrap),
+        height: px(units(measured.height())),
+        rows: row_boxes(&measured, Some(shown), text.len()),
+        measured: measured.clone(),
+        width: px(width),
     };
     let geometry = Geometry {
         size: 15.,
@@ -274,8 +325,10 @@ fn lay(text: &str, show_source: bool, wrap: f32, window: &Window) -> LaidLine {
         },
         source: SourceLines::only(0),
     };
-    line.lay(&typeface, &theme, &Links::default(), &math, window)
-        .0
+    let laid = line
+        .lay(&typeface, &theme, &Links::default(), &math, window)
+        .0;
+    (laid, measured)
 }
 
 /// Lo que mide en la vista cada carácter de `text`, sin partir: dónde
