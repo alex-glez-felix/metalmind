@@ -70,7 +70,8 @@ pub struct IndexedLink {
     pub span: Range<usize>,
     /// El destino como está escrito.
     pub target_span: Range<usize>,
-    /// El destino sin escapes ni `%20`; vacío en `[[#Heading]]`.
+    /// El destino sin escapes ni `%20`; vacío en `[[#Heading]]`. El de una
+    /// tarjeta de pizarra es su ruta con `/` delante: desde la raíz.
     pub target_text: String,
     pub subpath: Option<LinkSubpath>,
     /// Desde cero.
