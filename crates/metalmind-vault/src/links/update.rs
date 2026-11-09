@@ -8,27 +8,30 @@ use std::sync::Arc;
 use imbl::{HashMap, OrdSet};
 
 use super::names::key_of;
-use super::note::scan_links;
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::index::EntryKind;
 use crate::note_batch::NoteBatch;
+use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
 impl LinkIndex {
-    /// Indexa cada archivo con su texto, que solo cuenta en las notas, sin un
-    /// vault abierto: para quien arma un índice a mano (tests, benchmarks).
+    /// Indexa cada archivo con su texto, que solo cuenta en las notas y las
+    /// pizarras, sin un vault abierto: para quien arma un índice a mano (tests, benchmarks).
     pub fn from_texts<'t>(
         files: impl IntoIterator<Item = (VaultPath, EntryKind, &'t str)>,
     ) -> Self {
         let files: Vec<(VaultPath, EntryKind, &str)> = files.into_iter().collect();
         let notes: Vec<(VaultPath, &str)> = files
             .iter()
-            .filter(|(_, kind, _)| *kind == EntryKind::Note)
+            .filter(|(_, kind, _)| kind.is_indexed())
             .map(|(path, _, text)| (path.clone(), *text))
             .collect();
-        let scans = in_parallel(notes, |(path, text)| (path, scan_links(text)));
+        let scans = in_parallel(notes, |(path, text)| {
+            let links = NoteScan::links_in(&path, text);
+            (path, links)
+        });
         Self::from_scans(files.into_iter().map(|(path, kind, _)| (path, kind)), scans)
     }
 
@@ -100,7 +103,7 @@ impl LinkIndex {
         self.remove_note(path);
         let mut keys: HashSet<String> = self.names.remove(path).into_iter().collect();
         keys.extend(self.names.insert(path));
-        if EntryKind::of_file(path) == EntryKind::Note {
+        if EntryKind::of_file(path).is_indexed() {
             self.add_note(path.clone(), notes.scan(path).links.clone());
         }
         self.resolve_again(&keys);
@@ -121,7 +124,7 @@ impl LinkIndex {
         }
         for (new, links) in moved {
             keys.extend(self.names.insert(&new));
-            if EntryKind::of_file(&new) == EntryKind::Note {
+            if EntryKind::of_file(&new).is_indexed() {
                 let links = match links {
                     Some(links) => Arc::unwrap_or_clone(links),
                     None => notes.scan(&new).links.clone(),

@@ -128,6 +128,27 @@ pub struct NoteTags {
     pub occurrences: Vec<TagOccurrence>,
 }
 
+impl NoteTags {
+    /// Los `#tag` del cuerpo si su texto es parte de otro, donde empieza en
+    /// el byte `start` de la línea `line`. Los de un frontmatter no pasan:
+    /// solo una nota lo tiene.
+    pub(crate) fn inline_shifted(
+        self,
+        start: usize,
+        line: usize,
+    ) -> impl Iterator<Item = TagOccurrence> {
+        let inline = self
+            .occurrences
+            .into_iter()
+            .filter(|tag| tag.source == TagSource::Inline);
+        inline.map(move |mut tag| {
+            tag.range = tag.range.start + start..tag.range.end + start;
+            tag.line += line;
+            tag
+        })
+    }
+}
+
 /// Las ocurrencias de una nota y su frontmatter, del que una página de tag
 /// saca su metadata.
 pub(crate) fn scan_note(text: &str) -> (NoteTags, Option<Frontmatter>) {

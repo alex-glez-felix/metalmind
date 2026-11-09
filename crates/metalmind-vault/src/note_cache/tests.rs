@@ -427,7 +427,7 @@ fn lo_que_vuelve_de_la_cache_es_igual_a_escanear() {
     let disk = Disk::new(&[("a.md", Some(OLD), "otro")]);
     let opened = disk.open(Some(&file));
     assert_eq!(disk.read_count(), 0);
-    assert_eq!(scan_of(&opened, "a.md"), &NoteScan::of(text));
+    assert_eq!(scan_of(&opened, "a.md"), &NoteScan::of(&path("a.md"), text));
 }
 
 #[test]

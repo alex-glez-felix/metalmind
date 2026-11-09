@@ -73,7 +73,7 @@ where
                 }
             };
             match classify(root, &entry) {
-                Some((path, EntryKind::Note)) => match visit(path, entry.path()) {
+                Some((path, kind)) if kind.is_text_searched() => match visit(path, entry.path()) {
                     ControlFlow::Continue(()) => WalkState::Continue,
                     ControlFlow::Break(()) => WalkState::Quit,
                 },

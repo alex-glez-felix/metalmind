@@ -16,9 +16,9 @@ impl Vault {
     #[must_use]
     pub fn is_searchable(&self, path: &VaultPath) -> bool {
         match self.snapshot().files.kind(path) {
-            Some(kind) => kind == EntryKind::Note,
+            Some(kind) => kind.is_text_searched(),
             None => {
-                EntryKind::of_file(path) == EntryKind::Note
+                EntryKind::of_file(path).is_text_searched()
                     && fs::symlink_metadata(path.to_fs(self.root())).is_err()
             }
         }

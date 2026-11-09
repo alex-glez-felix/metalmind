@@ -30,6 +30,20 @@ impl EntryKind {
             Self::Attachment
         }
     }
+
+    /// Si los índices de links, tags, propiedades y resúmenes leen su
+    /// contenido: lo decide solo esto. De una pizarra salen links y tags
+    /// (09 §5), y queda sin propiedades y con el resumen vacío.
+    #[must_use]
+    pub fn is_indexed(self) -> bool {
+        matches!(self, Self::Note | Self::Board)
+    }
+
+    /// Si la búsqueda de texto lo recorre.
+    #[must_use]
+    pub fn is_text_searched(self) -> bool {
+        self == Self::Note
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,6 +295,20 @@ mod tests {
             EntryKind::of_file(&path("nota.md.tmp")),
             EntryKind::Attachment
         );
+    }
+
+    #[rstest::rstest]
+    #[case(EntryKind::Folder, false, false)]
+    #[case(EntryKind::Note, true, true)]
+    #[case(EntryKind::Board, true, false)]
+    #[case(EntryKind::Attachment, false, false)]
+    fn lo_que_se_indexa_y_lo_que_se_busca(
+        #[case] kind: EntryKind,
+        #[case] indexed: bool,
+        #[case] searched: bool,
+    ) {
+        assert_eq!(kind.is_indexed(), indexed);
+        assert_eq!(kind.is_text_searched(), searched);
     }
 
     #[test]

@@ -4,13 +4,13 @@ use std::ops::Range;
 
 use metalmind_syntax::{Link, LinkSyntax, Subpath};
 
-use super::{IndexedLink, LinkContext, LinkSubpath, LinkTarget};
+use super::{IndexedLink, LinkContext, LinkSubpath, LinkTarget, Written};
 
 /// Cuánto texto de la línea se guarda a cada lado del link, en bytes.
 const CONTEXT_BYTES: usize = 80;
 
 /// Los links de `text`, en orden de aparición y con `LinkTarget::Unresolved`.
-pub(super) fn scan_links(text: &str) -> Vec<IndexedLink> {
+pub(crate) fn scan_links(text: &str) -> Vec<IndexedLink> {
     links_of(text, &metalmind_syntax::scan(text).links)
 }
 
@@ -67,7 +67,6 @@ impl<'t> Lines<'t> {
 
 fn indexed(text: &str, link: &Link, number: usize, bounds: &Range<usize>) -> IndexedLink {
     IndexedLink {
-        syntax: link.syntax,
         embed: link.embed,
         span: link.span.clone(),
         target_span: link.target.clone(),
@@ -76,11 +75,81 @@ fn indexed(text: &str, link: &Link, number: usize, bounds: &Range<usize>) -> Ind
         line: number,
         column: link.span.start - bounds.start,
         context: context(text, &link.span, bounds),
-        bracketed: link.syntax == LinkSyntax::Markdown
-            && text[link.span.start..link.target.start]
-                .trim_end()
-                .ends_with('<'),
+        written: written(text, link),
         target: LinkTarget::Unresolved,
+    }
+}
+
+fn written(text: &str, link: &Link) -> Written {
+    let before_target = text[link.span.start..link.target.start].trim_end();
+    match link.syntax {
+        LinkSyntax::Wiki => Written::Wiki,
+        LinkSyntax::Markdown if before_target.ends_with('<') => Written::BracketedMarkdown,
+        LinkSyntax::Markdown => Written::Markdown,
+    }
+}
+
+impl IndexedLink {
+    /// El mismo link si su texto es parte de otro, donde empieza en el byte
+    /// `start` de la línea `line`.
+    pub(crate) fn shifted(mut self, start: usize, line: usize) -> Self {
+        self.span = self.span.start + start..self.span.end + start;
+        self.target_span = self.target_span.start + start..self.target_span.end + start;
+        self.line += line;
+        self
+    }
+
+    /// El link de una tarjeta de pizarra a `file`, que ocupa su línea, la
+    /// `line`, desde el byte `start`. Su contexto es la ruta y el texto de
+    /// los nodos `joined` a la tarjeta (09 §5).
+    pub(crate) fn card<'j>(
+        file: &str,
+        subpath: Option<&str>,
+        start: usize,
+        line: usize,
+        joined: impl Iterator<Item = &'j str>,
+    ) -> Self {
+        let span = start..start + file.len();
+        Self {
+            embed: false,
+            span: span.clone(),
+            target_span: span,
+            target_text: format!("/{file}"),
+            subpath: subpath.and_then(card_subpath),
+            line,
+            column: 0,
+            context: card_context(file, joined),
+            written: Written::Card,
+            target: LinkTarget::Unresolved,
+        }
+    }
+}
+
+/// El `subpath` de una tarjeta: `#Sección` o `#^bloque`, como en JSON Canvas.
+fn card_subpath(subpath: &str) -> Option<LinkSubpath> {
+    let name = subpath.strip_prefix('#').unwrap_or(subpath);
+    match name.strip_prefix('^') {
+        _ if name.is_empty() => None,
+        Some(block) => Some(LinkSubpath::Block(block.to_owned())),
+        None => Some(LinkSubpath::Heading(name.to_owned())),
+    }
+}
+
+fn card_context<'j>(file: &str, joined: impl Iterator<Item = &'j str>) -> LinkContext {
+    let mut text = file.to_owned();
+    let first_lines =
+        joined.filter_map(|words| words.lines().map(str::trim).find(|l| !l.is_empty()));
+    for (at, line) in first_lines.enumerate() {
+        text.push_str(if at == 0 { " — " } else { " · " });
+        text.push_str(line);
+    }
+    text.truncate(ceil_boundary(
+        &text,
+        (file.len() + CONTEXT_BYTES).min(text.len()),
+    ));
+    LinkContext {
+        text,
+        link: 0..file.len(),
     }
 }
 
@@ -172,9 +241,9 @@ mod tests {
     fn markdown_targets_are_decoded_and_brackets_remembered() {
         let links = scan_links("[a](<Mi Nota.md>) [b](Mi%20Nota.md#Sec%201) [[c#^id]]");
         assert_eq!(links[0].target_text, "Mi Nota.md");
-        assert!(links[0].bracketed);
+        assert_eq!(links[0].written, Written::BracketedMarkdown);
         assert_eq!(links[1].target_text, "Mi Nota.md");
-        assert!(!links[1].bracketed);
+        assert_eq!(links[1].written, Written::Markdown);
         assert_eq!(
             links[1].subpath,
             Some(LinkSubpath::Heading("Sec 1".to_owned()))

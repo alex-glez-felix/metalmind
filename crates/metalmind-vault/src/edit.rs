@@ -1,8 +1,10 @@
 //! Ediciones por rangos exactos sobre el texto de un archivo, que se
 //! comprueban antes de aplicar y se pueden deshacer.
 
+use std::borrow::Cow;
 use std::ops::Range;
 
+use crate::board_file;
 use crate::path::VaultPath;
 
 /// Cambiar `old`, en `range` del texto, por `new`.
@@ -15,7 +17,9 @@ pub struct TextEdit {
     pub line: usize,
 }
 
-/// Las ediciones de un archivo, ordenadas y sin solaparse.
+/// Las ediciones de un archivo, ordenadas y sin solaparse. Sus rangos van
+/// sobre el texto que los índices leen de él: el archivo, o en una pizarra
+/// el texto de sus nodos, uno por línea (`metalmind_board::BoardText`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileEdits {
     pub path: VaultPath,
@@ -43,16 +47,29 @@ pub enum Mismatch {
     },
     #[error("ya no mide {0} bytes")]
     Len(usize),
+    #[error("no se lee como pizarra: {0}")]
+    NotABoard(String),
+    #[error("{0:?} no está dentro del texto de un nodo de la pizarra")]
+    AcrossNodes(Range<usize>),
 }
 
 impl FileEdits {
-    /// Aplica las ediciones a `text` y devuelve el texto nuevo y las
-    /// ediciones que lo vuelven al de antes.
+    /// Aplica las ediciones al archivo `file` y devuelve el archivo nuevo y
+    /// las ediciones que lo vuelven al de antes. Una pizarra queda en su
+    /// forma canónica.
     ///
     /// # Errors
-    /// Si algún rango de `text` no dice lo que la edición espera; entonces
-    /// no se aplica ninguna.
-    pub fn apply(&self, text: &str) -> Result<(String, Self), StaleEdit> {
+    /// Si algún rango no dice lo que la edición espera o una pizarra no se
+    /// lee; entonces no se aplica ninguna.
+    pub fn apply(&self, file: &str) -> Result<(String, Self), StaleEdit> {
+        match board_file::apply(self, file)? {
+            Some(applied) => Ok(applied),
+            None => self.apply_to(file),
+        }
+    }
+
+    /// Como [`FileEdits::apply`], con `text` el texto de los rangos.
+    pub(crate) fn apply_to(&self, text: &str) -> Result<(String, Self), StaleEdit> {
         if let Some(len) = self.base_len.filter(|&len| len != text.len()) {
             return Err(self.stale(Mismatch::Len(len)));
         }
@@ -87,20 +104,27 @@ impl FileEdits {
         Ok((out, undo))
     }
 
-    fn stale(&self, mismatch: Mismatch) -> StaleEdit {
+    pub(crate) fn stale(&self, mismatch: Mismatch) -> StaleEdit {
         StaleEdit {
             path: self.path.clone(),
             mismatch,
         }
     }
 
-    /// Las mismas ediciones sobre `text`, cada una con sus líneas enteras
-    /// (sin el salto final), y las de una misma línea juntas: aplicarlas da
-    /// lo mismo, y una vista previa puede mostrar la línea antes y después.
+    /// Las mismas ediciones sobre el archivo `file`, cada una con sus líneas
+    /// enteras (sin el salto final), y las de una misma línea juntas:
+    /// aplicarlas da lo mismo, y una vista previa puede mostrar la línea
+    /// antes y después. En una pizarra, la línea es la del texto del nodo.
     ///
     /// # Errors
-    /// Si algún rango de `text` no dice lo que la edición espera.
-    pub fn whole_lines(&self, text: &str) -> Result<Self, StaleEdit> {
+    /// Si algún rango no dice lo que la edición espera o una pizarra no se
+    /// lee.
+    pub fn whole_lines(&self, file: &str) -> Result<Self, StaleEdit> {
+        let text = match board_file::text(self, file)? {
+            Some(text) => Cow::Owned(text),
+            None => Cow::Borrowed(file),
+        };
+        let text: &str = &text;
         let mut lines: Vec<TextEdit> = Vec::with_capacity(self.edits.len());
         let mut copied = 0;
         for edit in &self.edits {
@@ -239,6 +263,50 @@ mod tests {
         let (new, undo) = plan.apply("").unwrap();
         assert_eq!(undo.base_len, Some(new.len()));
         assert_eq!(undo.apply(&new).unwrap(), (String::new(), plan));
+    }
+
+    const BOARD: &str = "{\n\t\"nodes\":[\n\t\t{\"id\":\"a\",\"type\":\"text\",\"x\":0,\"y\":0,\"width\":9,\"height\":9,\"text\":\"ver [[a]]\\notra\"},\n\t\t{\"id\":\"b\",\"type\":\"file\",\"x\":0,\"y\":0,\"width\":9,\"height\":9,\"file\":\"a.md\"}\n\t],\n\t\"edges\":[]\n}\n";
+
+    fn board_edits(edits: Vec<TextEdit>) -> FileEdits {
+        FileEdits {
+            path: VaultPath::new("idea.canvas").unwrap(),
+            ..self::edits(edits)
+        }
+    }
+
+    /// En una pizarra los rangos van sobre el texto de sus nodos
+    /// (`ver [[a]]\notra\na.md`), también los de deshacer.
+    #[test]
+    fn a_board_is_edited_through_the_text_of_its_nodes() {
+        let plan = board_edits(vec![edit(6..7, "a", "bb"), edit(15..19, "a.md", "bb.md")]);
+        let (new, undo) = plan.apply(BOARD).unwrap();
+        assert_eq!(
+            new,
+            BOARD.replace("[[a]]", "[[bb]]").replace("a.md", "bb.md")
+        );
+        let (back, redo) = undo.apply(&new).unwrap();
+        assert_eq!(back, BOARD);
+        assert_eq!(redo, plan);
+        let lines = plan.whole_lines(BOARD).unwrap();
+        let shown: Vec<(&str, &str)> = lines
+            .edits
+            .iter()
+            .map(|edit| (edit.old.as_str(), edit.new.as_str()))
+            .collect();
+        assert_eq!(shown, [("ver [[a]]", "ver [[bb]]"), ("a.md", "bb.md")]);
+        assert_eq!(lines.apply(BOARD).unwrap().0, new);
+    }
+
+    #[test]
+    fn a_board_that_changed_or_cannot_be_read_is_not_touched() {
+        let stale = board_edits(vec![edit(6..7, "x", "bb")]);
+        let mismatch = |plan: &FileEdits, file: &str| plan.apply(file).unwrap_err().mismatch;
+        assert!(matches!(mismatch(&stale, BOARD), Mismatch::Text { .. }));
+        let across = board_edits(vec![edit(13..16, "a\na", "x")]);
+        assert_eq!(mismatch(&across, BOARD), Mismatch::AcrossNodes(13..16));
+        let plan = board_edits(vec![edit(6..7, "a", "bb")]);
+        assert!(matches!(mismatch(&plan, "{"), Mismatch::NotABoard(_)));
+        assert!(plan.whole_lines("{").is_err());
     }
 
     proptest::proptest! {

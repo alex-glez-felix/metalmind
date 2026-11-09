@@ -51,7 +51,10 @@ impl<'r> NoteBatch<'r> {
         let read = self.read;
         self.notes.entry(path.clone()).or_insert_with(|| {
             let text = read(path);
-            let scan = text.as_deref().map(NoteScan::of).unwrap_or_default();
+            let scan = text
+                .as_deref()
+                .map(|text| NoteScan::of(path, text))
+                .unwrap_or_default();
             BatchNote { text, scan }
         })
     }
