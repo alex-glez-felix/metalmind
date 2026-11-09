@@ -1,6 +1,5 @@
 //! Adjuntos (06 §6): guardar lo que se pega o se arrastra en la carpeta de
-//! adjuntos del vault. Qué adjuntos no usa ninguna nota lo dice el índice de
-//! links ([`crate::LinkIndex::orphan_attachments`]).
+//! adjuntos del vault.
 
 mod kind;
 mod name;

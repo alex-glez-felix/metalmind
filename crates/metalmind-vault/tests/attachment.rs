@@ -10,7 +10,6 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, Instant};
 
 use jiff::civil::{DateTime, date};
 use metalmind_vault::{
@@ -71,18 +70,6 @@ fn names(dir: &Path) -> Vec<String> {
         .collect();
     names.sort();
     names
-}
-
-/// Espera a que el watcher deje los huérfanos en `expected`.
-fn orphans_settle(vault: &Vault, updates: &Receiver<VaultUpdate>, expected: &[&str]) {
-    let expected: Vec<VaultPath> = expected.iter().map(|p| path(p)).collect();
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while vault.orphan_attachments() != expected {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if updates.recv_timeout(left).is_err() {
-            assert_eq!(vault.orphan_attachments(), expected, "el watcher no llegó");
-        }
-    }
 }
 
 #[test]
@@ -351,31 +338,4 @@ fn una_carpeta_que_un_wikilink_no_nombra() {
         "{result:?}"
     );
     assert_eq!(names(&dir.path().join("a#b")), Vec::<String>::new());
-}
-
-#[test]
-fn huerfanos_con_el_watcher() {
-    let dir = TempDir::new().unwrap();
-    make_tree(dir.path(), &["adjuntos/viejo.png", "fuera.png"]);
-    fs::write(dir.path().join("a.md"), "![[viejo.png]]\n").unwrap();
-    let (vault, updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(vault.orphan_attachments(), Vec::<VaultPath>::new());
-
-    let note = path("a.md");
-    let new = vault.save_attachment(&pasted(PNG, &note)).unwrap();
-    orphans_settle(&vault, &updates, &[new.path.as_str()]);
-
-    fs::write(
-        dir.path().join("a.md"),
-        format!("![[viejo.png]] {}\n", new.embed),
-    )
-    .unwrap();
-    orphans_settle(&vault, &updates, &[]);
-
-    fs::write(dir.path().join("a.md"), "nada\n").unwrap();
-    orphans_settle(
-        &vault,
-        &updates,
-        &["adjuntos/a-2026-10-18-090507.png", "adjuntos/viejo.png"],
-    );
 }

@@ -1,6 +1,6 @@
 //! Adjuntos en un vault sintético de 5 000 y 50 000 notas con links, más
 //! 1 000 adjuntos en `adjuntos/` de los que la mitad usa alguna nota:
-//! guardar uno pegado y listar los huérfanos. Objetivos en
+//! guardar uno pegado. Objetivos en
 //! `docs/performance.md`. Correr con `cargo bench -p metalmind-vault --bench attachments`.
 
 #![allow(
@@ -40,15 +40,6 @@ fn synthetic_vault(root: &Path, notes: usize) {
         fs::create_dir_all(full.parent().unwrap()).unwrap();
         fs::write(full, text).unwrap();
     }
-}
-
-#[divan::bench(args = [5_000, 50_000], sample_count = 20)]
-fn huerfanos(bencher: Bencher, notes: usize) {
-    let dir = TempDir::new().unwrap();
-    synthetic_vault(dir.path(), notes);
-    let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    assert_eq!(vault.orphan_attachments().len(), ATTACHMENTS / 2);
-    bencher.bench(|| vault.orphan_attachments());
 }
 
 /// Una captura de 200 KB pegada en una nota: escribirla, bajarla a disco,

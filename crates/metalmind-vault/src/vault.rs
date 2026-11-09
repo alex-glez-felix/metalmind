@@ -560,13 +560,6 @@ impl Vault {
             attachment,
         )
     }
-
-    /// Los adjuntos de la carpeta de adjuntos que ninguna nota usa, según
-    /// los links de este momento: ver [`LinkIndex::orphan_attachments`].
-    #[must_use]
-    pub fn orphan_attachments(&self) -> Vec<VaultPath> {
-        self.links().orphan_attachments(&self.attachments_folder)
-    }
 }
 
 impl Drop for Vault {
