@@ -149,7 +149,7 @@ impl NoteList {
         self.dates.insert_all(
             dates
                 .into_iter()
-                .filter(|(path, _)| index.kind(path) == Some(EntryKind::Note)),
+                .filter(|(path, _)| index.kind(path).is_some_and(EntryKind::is_indexed)),
         );
         self.dates_ready = true;
         self.refill()

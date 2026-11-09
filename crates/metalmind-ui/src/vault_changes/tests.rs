@@ -236,6 +236,9 @@ impl Fixture<'_> {
     }
 }
 
+#[path = "board_tests.rs"]
+mod board_tests;
+
 /// Otro índice con el mismo contenido que `notes`, como el de un lote nuevo.
 fn another_index(notes: &[(&str, &str)]) -> Arc<LinkIndex> {
     Arc::new(LinkIndex::from_texts(

@@ -84,14 +84,23 @@ impl Document {
         let before = board.clone();
         let result = change(&mut board);
         if board != before {
-            self.write_board(&old, &board)?;
+            self.write_board(&old, &board.write())?;
         }
         Ok(result)
     }
 
-    fn write_board(&mut self, old: &str, board: &Board) -> Result<(), BufferError> {
-        let written = board.write();
-        let new = written.strip_suffix(EOL).unwrap_or(&written);
+    /// Deja la pizarra como `written`, el archivo entero, pasando al buffer
+    /// solo las líneas que cambian, como un paso del historial: lo que
+    /// llega de fuera de su vista, como renombrar un tag.
+    ///
+    /// # Errors
+    /// Si hay una caja abierta.
+    pub(crate) fn rewrite_board(&mut self, written: &str) -> Result<(), BufferError> {
+        self.write_board(&self.buffer.to_string(), written)
+    }
+
+    fn write_board(&mut self, old: &str, written: &str) -> Result<(), BufferError> {
+        let new = written.strip_suffix(EOL).unwrap_or(written);
         let edits = line_edits(old, new)
             .into_iter()
             .map(|edit| {

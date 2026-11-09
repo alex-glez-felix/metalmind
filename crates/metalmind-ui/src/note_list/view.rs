@@ -11,7 +11,7 @@ use gpui_kit::{
 use metalmind_config::{SavedView, Severity};
 use metalmind_keymap::context;
 use metalmind_search::FuzzyMatcher;
-use metalmind_vault::{EntryKind, VaultPath};
+use metalmind_vault::VaultPath;
 
 use super::cards::read_modified;
 use super::model::{NoteList, Prompt};
@@ -158,7 +158,7 @@ impl NoteListView {
             .snapshot()
             .files
             .files()
-            .filter(|entry| entry.kind == EntryKind::Note)
+            .filter(|entry| entry.kind.is_indexed())
             .map(|entry| entry.path.clone())
             .collect();
         if notes.is_empty() {
