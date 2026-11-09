@@ -353,12 +353,31 @@ pub fn write_backlinks(root: &Path) {
         );
     }
     file(
+        "Pizarras/mapa del plan, con un nombre largo para ver cómo se recorta en el panel.canvas",
+        PLAN_BOARD,
+    );
+    file(
         "Proyectos/Metalmind/plan.md",
         "# Plan\n\nLo que sigue: [[reunión 03 — 🦀 rust y emoji 🎉✨]], [[reunión 12 — arquitectura del núcleo]] y otra vez \
          [[reunión 03 — 🦀 rust y emoji 🎉✨]].\n\nPendiente: [[Una nota que todavía no existe y tiene un nombre \
          larguísimo para ver cómo se recorta en el panel]] y [[日本語のノート/未作成のメモ]].\n",
     );
 }
+
+/// Una pizarra que enlaza a `Metalmind/plan` con una tarjeta y desde el texto
+/// de una caja, largo, con multibyte y un tag (09 §5).
+const PLAN_BOARD: &str = r##"{
+	"nodes":[
+		{"id":"idea","type":"text","x":0,"y":0,"width":260,"height":140,"text":"# Mapa del plan\nver [[Metalmind/plan#Meta|el plan del proyecto]] con todo lo que quedó pendiente de la semana pasada 🦀 日本語のメモ #rust"},
+		{"id":"plan","type":"file","x":340,"y":0,"width":260,"height":80,"file":"Proyectos/Metalmind/plan.md","subpath":"#Meta"},
+		{"id":"riesgos","type":"text","x":340,"y":160,"width":260,"height":100,"text":"Riesgos: una línea larga que no cabe en el panel de contexto y se tiene que recortar sin encimarse con nada"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"idea","toNode":"plan"},
+		{"id":"e2","fromNode":"riesgos","toNode":"plan"}
+	]
+}
+"##;
 
 /// Una nota con muchos links que no llevan a nada: un nombre larguísimo,
 /// japonés, emoji, un embed y un link markdown.
