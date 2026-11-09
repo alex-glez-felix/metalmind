@@ -8,17 +8,17 @@ use std::sync::Arc;
 use imbl::{HashMap, OrdSet};
 
 use super::names::key_of;
-use super::note::scan_links;
 use super::{IndexedLink, LinkId, LinkIndex, LinkTarget};
 use crate::index::EntryKind;
 use crate::note_batch::NoteBatch;
+use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use crate::refresh::VaultChange;
 
 impl LinkIndex {
-    /// Indexa cada archivo con su texto, que solo cuenta en las notas, sin un
-    /// vault abierto: para quien arma un índice a mano (tests, benchmarks).
+    /// Indexa cada archivo con su texto, que solo cuenta en las notas y las
+    /// pizarras, sin un vault abierto: para quien arma un índice a mano (tests, benchmarks).
     pub fn from_texts<'t>(
         files: impl IntoIterator<Item = (VaultPath, EntryKind, &'t str)>,
     ) -> Self {
@@ -28,7 +28,10 @@ impl LinkIndex {
             .filter(|(_, kind, _)| kind.is_indexed())
             .map(|(path, _, text)| (path.clone(), *text))
             .collect();
-        let scans = in_parallel(notes, |(path, text)| (path, scan_links(text)));
+        let scans = in_parallel(notes, |(path, text)| {
+            let links = NoteScan::links_in(&path, text);
+            (path, links)
+        });
         Self::from_scans(files.into_iter().map(|(path, kind, _)| (path, kind)), scans)
     }
 

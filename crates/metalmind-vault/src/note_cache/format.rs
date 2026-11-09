@@ -22,21 +22,27 @@ use crate::history::ContentHash;
 use crate::links::IndexedLink;
 use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
+use crate::path::VaultPath;
 use crate::summary::Summary;
 use crate::tags::NoteTags;
 
 const MAGIC: &[u8; 8] = b"MMNOTES\n";
 /// Sube cuando cambia lo de arriba o [`NoteRecord`]. Lo que cambie el scanner
-/// sin cambiar los tipos lo atrapa [`version`] con [`SAMPLE`].
-const FORMAT: u32 = 2;
+/// sin cambiar los tipos lo atrapa [`version`] con [`SAMPLES`].
+const FORMAT: u32 = 3;
 /// Lee y verifica por bloques, en paralelo, sin que un bloque pese demasiado.
 const NOTES_PER_BLOCK: usize = 1024;
 const HASH_LEN: usize = 32;
 const LEN_BYTES: usize = 4;
 
-/// Una nota con todo lo que el scanner sabe sacar: si cambia lo que saca de
-/// aquí, lo guardado por otra versión ya no sirve.
-const SAMPLE: &str = "---\n\
+/// Una nota y una pizarra con todo lo que el scanner sabe sacar: si cambia lo
+/// que saca de aquí, lo guardado por otra versión ya no sirve.
+const SAMPLES: [(&str, &str); 2] = [
+    ("muestra.md", NOTE_SAMPLE),
+    ("muestra.canvas", BOARD_SAMPLE),
+];
+
+const NOTE_SAMPLE: &str = "---\n\
 tags: [uno, \"#dos\", \"tr\\u0065s\"]\n\
 aliases: [otro]\n\
 fecha: {año: 2026, listas: [a, b]}\n\
@@ -48,6 +54,11 @@ fecha: {año: 2026, listas: [a, b]}\n\
 ```\n\
 fuera del extracto\n\
 ```\n";
+
+const BOARD_SAMPLE: &str = r##"{"nodes":[
+{"id":"a","type":"text","x":0,"y":0,"width":9,"height":9,"text":"[[nota#Sección]] #uno\n[md](<mi nota.md>)"},
+{"id":"b","type":"file","x":0,"y":0,"width":9,"height":9,"file":"carpeta/nota.md","subpath":"#^bloque"}],
+"edges":[{"id":"e","fromNode":"a","toNode":"b"}]}"##;
 
 /// Una nota en el archivo. `Cow` para escribir sin copiar lo de los índices
 /// y leer con los mismos tipos: el orden de los campos es parte del formato.
@@ -187,20 +198,22 @@ fn write_len(out: &mut dyn Write, len: usize) -> io::Result<()> {
 }
 
 /// Identifica a quién puede leer un archivo: el formato, el release y lo que
-/// el scanner de este binario saca de [`SAMPLE`]. Cambiar el scanner sin
+/// el scanner de este binario saca de [`SAMPLES`]. Cambiar el scanner sin
 /// acordarse de nada igual descarta lo guardado.
 pub(super) fn version() -> [u8; HASH_LEN] {
-    let scan = NoteScan::of(SAMPLE);
-    let sample = NoteRecord {
-        path: Cow::Borrowed(""),
-        stamp: None,
-        hash: ContentHash::of(SAMPLE),
-        links: Cow::Owned(scan.links),
-        tags: Cow::Owned(scan.tags),
-        properties: Cow::Owned(scan.properties),
-        summary: Cow::Owned(scan.summary),
-    };
-    version_of(FORMAT, &sample)
+    let samples = SAMPLES.map(|(path, text)| {
+        let scan = NoteScan::of(&VaultPath::fixed(path), text);
+        NoteRecord {
+            path: Cow::Borrowed(path),
+            stamp: None,
+            hash: ContentHash::of(text),
+            links: Cow::Owned(scan.links),
+            tags: Cow::Owned(scan.tags),
+            properties: Cow::Owned(scan.properties),
+            summary: Cow::Owned(scan.summary),
+        }
+    });
+    version_of(FORMAT, &samples)
 }
 
 pub(super) fn version_of(format: u32, sample: &impl serde::Serialize) -> [u8; HASH_LEN] {

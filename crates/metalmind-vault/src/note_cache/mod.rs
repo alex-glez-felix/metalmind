@@ -171,7 +171,7 @@ fn read_note(
     let scan = match cached {
         // Un `touch`, o un mtime que todavía no era de fiar.
         Some(note) if note.hash == hash => note.scan,
-        _ => NoteScan::of(&text),
+        _ => NoteScan::of(&path, &text),
     };
     OpenedNote {
         version: Some(NoteVersion {

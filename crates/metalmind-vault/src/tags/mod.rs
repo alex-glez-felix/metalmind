@@ -31,7 +31,7 @@ pub use key::{TagKey, tag_name};
 pub use layout::{PageEntry, PageLayout};
 pub use metadata::{PageChange, yaml_scalar};
 pub use note::{FrontmatterSpot, NoteTags, Snippet, TagOccurrence, TagSource};
-pub(crate) use note::{page_name, tags_of};
+pub(crate) use note::{page_name, scan_note, tags_of};
 pub use page::{InvalidValue, PageField, TagColor, TagIcon, TagPage, parse_template};
 pub use query::{ParsedQuery, QueryWord, TagQuery};
 pub use refactor::{PlanError, PlanNotice, TagPlan, TagRewrite};
@@ -40,10 +40,11 @@ pub use tree::{TagNode, TagTree};
 
 use crate::index::VaultIndex;
 use crate::note_batch::NoteBatch;
+use crate::note_scan::NoteScan;
 use crate::parallel::in_parallel;
 use crate::path::VaultPath;
 use index::IndexedNote;
-use note::{PageFile, scan_note};
+use note::PageFile;
 
 /// La carpeta de las páginas de tag si el vault no dice otra.
 pub const DEFAULT_TAGS_FOLDER: &str = "tags";
@@ -325,7 +326,7 @@ fn scan_in_batch(
 }
 
 fn scan_text(folder: &VaultPath, path: &VaultPath, text: &str) -> (IndexedNote, Option<PageFile>) {
-    let (tags, frontmatter) = scan_note(text);
+    let (tags, frontmatter) = NoteScan::tags_in(path, text);
     let page = page_name(folder, path).map(|name| match name {
         Ok(name) => PageFile::Page(Arc::new(TagPage::new(
             path.clone(),

@@ -32,10 +32,11 @@ impl EntryKind {
     }
 
     /// Si los índices de links, tags, propiedades y resúmenes leen su
-    /// contenido: lo decide solo esto.
+    /// contenido: lo decide solo esto. De una pizarra salen links y tags
+    /// (09 §5), y queda sin propiedades y con el resumen vacío.
     #[must_use]
     pub fn is_indexed(self) -> bool {
-        self == Self::Note
+        matches!(self, Self::Note | Self::Board)
     }
 
     /// Si la búsqueda de texto lo recorre.
@@ -299,7 +300,7 @@ mod tests {
     #[rstest::rstest]
     #[case(EntryKind::Folder, false, false)]
     #[case(EntryKind::Note, true, true)]
-    #[case(EntryKind::Board, false, false)]
+    #[case(EntryKind::Board, true, false)]
     #[case(EntryKind::Attachment, false, false)]
     fn lo_que_se_indexa_y_lo_que_se_busca(
         #[case] kind: EntryKind,

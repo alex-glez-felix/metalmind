@@ -2,20 +2,22 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use metalmind_syntax::Property;
+use metalmind_syntax::{Frontmatter, Property};
 
+use crate::board_file;
 use crate::index::VaultIndex;
-use crate::links::note::links_of;
+use crate::links::note::{links_of, scan_links};
 use crate::links::{IndexedLink, LinkIndex};
 use crate::note_cache::{CacheRefresh, Stamp, open_notes};
 use crate::path::VaultPath;
 use crate::properties::PropertyIndex;
 use crate::summary::Summary;
 use crate::summary_index::SummaryIndex;
-use crate::tags::{NoteTags, ReadNote, Tags, page_name, tags_of};
+use crate::tags::{NoteTags, ReadNote, Tags, page_name, scan_note, tags_of};
 
-/// Lo que los índices sacan del texto de una nota, sin saber nada del resto
-/// del vault: sus links sin resolver, sus tags, su frontmatter y su resumen.
+/// Lo que los índices sacan del texto de una nota o de una pizarra, sin saber
+/// nada del resto del vault: sus links sin resolver, sus tags y, de una nota,
+/// su frontmatter y su resumen.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct NoteScan {
     pub links: Vec<IndexedLink>,
@@ -25,7 +27,28 @@ pub(crate) struct NoteScan {
 }
 
 impl NoteScan {
-    pub(crate) fn of(text: &str) -> Self {
+    /// Lo escaneado de `text`, el contenido de `path`.
+    pub(crate) fn of(path: &VaultPath, text: &str) -> Self {
+        board_file::scan(path, text).unwrap_or_else(|| Self::of_note(text))
+    }
+
+    /// Solo los links: lo que necesita quien arma un [`LinkIndex`] a mano.
+    pub(crate) fn links_in(path: &VaultPath, text: &str) -> Vec<IndexedLink> {
+        match board_file::scan(path, text) {
+            Some(board) => board.links,
+            None => scan_links(text),
+        }
+    }
+
+    /// Solo los tags, y el frontmatter del que sale una página de tag.
+    pub(crate) fn tags_in(path: &VaultPath, text: &str) -> (NoteTags, Option<Frontmatter>) {
+        match board_file::scan(path, text) {
+            Some(board) => (board.tags, None),
+            None => scan_note(text),
+        }
+    }
+
+    fn of_note(text: &str) -> Self {
         let scan = metalmind_syntax::scan(text);
         Self {
             links: links_of(text, &scan.links),
