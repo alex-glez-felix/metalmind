@@ -83,7 +83,7 @@ Por eso el resultado es el de vim sobre la fuente, por construcción:
 Que el motor no reciba nada del ocultamiento hace que los tests de hoy sigan valiendo, pero no prueba nada nuevo. Las pruebas nuevas van en el `Workspace` (modelo sin GPUI), que es donde se juntan el motor, `SourceLines` y el `Screen` de cada panel:
 
 - **Tabla contra nvim** (`workspace/live_preview_oracle.rs`, como `panes_oracle.rs`): cada caso es una nota con marcado y unas teclas. Corre en el `Workspace` con el live preview prendido y un `Screen` que parte las filas, y en `nvim --clean` 0.12.6 sobre la misma fuente. Se comparan texto, cursor y modo. Los casos se eligen para que el cursor cruce o caiga en lo oculto: `l` sobre `**`, `w` y `e` sobre `[[nota|alias]]`, `f]` y `t)`, `$` en una línea que acaba en `**`, `7|`, `j` con columna deseada desde una línea larga a una con un link, `/\[\[` y `n`, `*` sobre el texto de un link, `gj` en una línea partida, `dw` y `ci[` sobre un link, `V` más `j` y un operador.
-- **Proptest**: con teclas al azar sobre notas con marcado, el `Workspace` con `live_preview` prendido y apagado da el mismo texto, cursor, registros, primera línea visible (`Viewport::top`) y filas saltadas (`Viewport::skip`). Que la ventana coincida es la mitad vertical del §3.
+- **Proptest**: con teclas al azar sobre notas con marcado, el `Workspace` con `live_preview` prendido y apagado da el mismo texto, cursor y registros. En las notas sin fórmulas da además la misma ventana: primera línea visible (`Viewport::top`) y filas saltadas (`Viewport::skip`), que es la mitad vertical del §3. Con fórmulas la ventana no se compara, porque apagar el live preview cambia sus altos a propósito (§6); ahí lo vertical lo cubre el proptest de altos del §3, que no apaga nada.
 - **Guarda**: un test de `metalmind-vim` falla si su código nombra `DisplayLine`, como `tests/tokens.rs` vigila los colores en `metalmind-ui`. `metalmind-vim` depende de `metalmind-syntax`, así que el compilador no lo impide solo.
 
 ### El ratón
@@ -109,8 +109,9 @@ Lo prueban el proptest del §2 y uno más chico: mover el cursor a cualquier lí
 **A lo ancho, el tope es este:**
 
 - Solo cambian las líneas que entran o salen de `SourceLines`: dos con `j` o `k`, las de la selección al entrar o salir de Visual.
-- En cada una, solo se mueve el texto a la derecha del primer marcador `Hide` o `Link` de cada fila, y solo dentro de esa fila. Se corre lo que miden los marcadores ocultos a su izquierda: 3 columnas en `## Título`, 2 tras cada `**`, el destino entero en `[[destino|alias]]`.
-- **Los reemplazos ocupan exactamente el ancho de su fuente.** La viñeta va en la celda del `-`, la casilla en las tres de `[ ]`, la barra en la del `>` y la regla sobre sus guiones. Una línea que solo tiene reemplazos no se mueve nada al entrar el cursor: cambia el glifo y el texto se queda donde estaba.
+- En cada una, solo se mueve el texto a la derecha del primer marcador `Hide` o `Link`, o de la primera fórmula, de cada fila, y solo dentro de esa fila. Se corre lo que miden los marcadores ocultos a su izquierda: 3 columnas en `## Título`, 2 tras cada `**`, el destino entero en `[[destino|alias]]`.
+- Las fórmulas ya mueven así el texto hoy y no cambian: en `a $x^2$ b`, la `b` se corre la diferencia entre lo que mide la imagen y lo que mide su LaTeX, casi siempre hacia la derecha al entrar. La que es lo único de su línea cambia entre su imagen (un bloque, centrada) y su fuente.
+- **Los reemplazos nuevos ocupan exactamente el ancho de su fuente.** La viñeta va en la celda del `-`, la casilla en las tres de `[ ]`, la barra en la del `>` y la regla sobre sus guiones. Una línea que solo tiene reemplazos no se mueve nada al entrar el cursor: cambia el glifo y el texto se queda donde estaba.
 - La rueda lleva el cursor consigo (es un `ctrl-e`/`ctrl-y`), así que al rodar la línea del borde entra y sale de la fuente. Es el mismo movimiento a lo ancho, en una línea.
 - Sin `wrap`, cada línea es una fila y lo corrido a lo ancho (`Viewport::left`) se mide sobre la fuente de la línea del cursor, como hoy.
 
@@ -124,7 +125,7 @@ uno dos tres [liga]
 
 No pasa con cualquier link: `ScreenLine` parte después de un espacio, y `texto](url)` no tiene espacios, así que una URL que cabe en una fila baja entera a la siguiente y solo deja corta la de arriba. Pasa cuando la palabra que la contiene mide más que una fila, y con el destino de un wikilink con alias que tiene espacios (`[[Nota de nombre largo|alias]]`).
 
-Qué se hace con ese tramo es la **pregunta 1**. Recomiendo seguir a las fórmulas (#219: "una fórmula larga entre texto se sigue viendo como fuente, porque ahí quedarían huecos"): un tramo ocultable que quedó partido entre filas, o que dejaría su fila sin nada visible, **se ve**, atenuado como hoy. El resto del documento supone esa respuesta y dice dónde cambia si es otra.
+Qué se hace con ese tramo es la **pregunta 1**. Recomiendo seguir a las fórmulas (#219: "una fórmula larga entre texto se sigue viendo como fuente, porque ahí quedarían huecos"): un tramo ocultable que quedó partido entre filas **se ve**, atenuado como hoy. Lo mismo el que, en una línea partida en varias filas, dejaría una fila sin nada visible (los `##` de cierre de un heading solos en la última fila). La regla es para los huecos dentro de una línea partida: una línea de una sola fila que es toda marcador, como la cerca de cierre o un `#` sin título, sí queda vacía, con su alto. El resto del documento supone esa respuesta y dice dónde cambia si es otra.
 
 **Descartado:**
 
@@ -230,12 +231,12 @@ Cada una cumple `CLAUDE.md` (clippy, nextest, red flags en la descripción) y, s
 
 ### PR 2 — énfasis y headings
 
-- `Hide` se oculta: `**` y `__`, `*` y `_`, `~~`, `==`, los `#` de un heading y los de cierre. También los backticks del código inline, el `\` de un escape y las cercas: el issue no los nombra, pero son el mismo `Hide` y dejarlos fuera pediría una excepción. Una cerca compuesta deja ver su lenguaje (` ```rust ` se ve `rust`) y la de cierre queda vacía, con el fondo del bloque.
+- `Hide` se oculta: `**` y `__`, `*` y `_`, `~~`, `==`, los `#` de un heading y los de cierre. También los backticks del código inline, el `\` de un escape y las cercas: el issue no los nombra, pero son el mismo `Hide` y dejarlos fuera pediría una excepción. Una cerca compuesta deja ver su lenguaje (` ```rust ` se ve `rust`) y la de cierre queda vacía, con el fondo del bloque: es una línea de una sola fila, así que la regla de la fila vacía de la pregunta 1 no la alcanza (§3).
 - `SourceLines` suma el bloque cercado.
 - La regla del ratón (§2).
 - El resaltado de la búsqueda y la selección sobre líneas compuestas.
 - `editor.live_preview` y `editor::toggle_live_preview` (§6), con [`config.md`](../config.md).
-- La regla de la pregunta 1 para un `Hide` partido (casi nunca pasa: hace falta una palabra más larga que la fila).
+- La regla de la pregunta 1 para un `Hide` partido o que deja una fila vacía en una línea partida (casi nunca pasa: hace falta una palabra más larga que la fila, o los `#` de cierre solos en la última).
 
 **Hecho cuando:** con el cursor fuera de una línea no se ven sus marcadores de énfasis ni de heading; al entrar se ve la fuente; ninguna línea cambia de alto ni de filas; el oráculo y los proptests del §2 pasan; los benchmarks cumplen el §6.
 
@@ -323,7 +324,7 @@ Ninguna está escrita en otro documento. Con cada respuesta se actualiza este do
 
 1. **Un tramo ocultable que quedó partido entre dos filas** (una URL más larga que la fila, el destino con espacios de un wikilink con alias). Ver §3.
    - A: Se oculta igual, como vim. Puede quedar una fila en blanco, o varias, en medio de un párrafo.
-   - B: Ese tramo se ve, atenuado como hoy, y el link va entero: o se oculta todo o se ve todo. Tampoco se oculta lo que dejaría su fila sin nada visible. Es la regla de las fórmulas partidas (#219).
+   - B: Ese tramo se ve, atenuado como hoy, y el link va entero: o se oculta todo o se ve todo. En una línea partida en varias filas, tampoco se oculta lo que dejaría una fila sin nada visible. Es la regla de las fórmulas partidas (#219).
    - C: Volver a partir la línea compuesta, como Obsidian. La nota salta al entrar y salir de esas líneas, y el motor tiene que saber qué línea está en fuente.
    - **Recomiendo B.** Una URL larga se ve como hoy, que no es peor que ahora, y no aparecen huecos que parecen cortes de párrafo. C rompe "nada brinca" y lo que confirmó #219. El costo de B: que un link se oculte depende del ancho del panel.
 
