@@ -55,9 +55,14 @@ impl Builder<'_, '_> {
                     }
                 }
                 Part::Formula { spot, source } => {
-                    let starts_here = row.source.contains(&source.start);
-                    if let Some((spot, Ok(formula))) = measured.get(*spot).filter(|_| starts_here) {
+                    if let Some((spot, Ok(formula))) = measured
+                        .get(*spot)
+                        .filter(|_| row.source.contains(&source.start))
+                    {
                         x = self.formula(&mut laid, spot, *formula, source.clone(), x);
+                    } else if let Some(piece) = self.continued(source, start) {
+                        x = piece.x + piece.width;
+                        laid.pieces.push(piece);
                     }
                 }
             }
@@ -65,8 +70,18 @@ impl Builder<'_, '_> {
         self.laid.rows.push(laid);
     }
 
+    /// El trozo de una fila que empieza en el byte `start` dentro de una
+    /// fórmula partida, igual al de la fila de arriba: toda la imagen es la
+    /// misma fórmula para el ratón y los resaltados.
+    fn continued(&self, source: &Range<usize>, start: usize) -> Option<Piece> {
+        let above = self.laid.rows.last()?;
+        let piece = above.pieces.iter().find(|piece| piece.source == *source);
+        piece.filter(|_| source.contains(&start)).cloned()
+    }
+
     /// Una fórmula en lugar de su fuente: alineada con el texto de su fila
-    /// o, si es lo único de la línea, centrada.
+    /// o, si es un bloque solo en su línea, centrada. La que es la línea
+    /// entera empieza en la primera fila y, si hay más, va sobre todas.
     fn formula(
         &mut self,
         row: &mut LaidRow,
@@ -76,12 +91,22 @@ impl Builder<'_, '_> {
         x: Pixels,
     ) -> Pixels {
         let width = px(formula.width);
-        let height = f32::from(row.height);
-        let (left, top) = if spot.place == MathPlace::Alone {
-            let top = self.math.geometry.top(formula, spot.place, height);
-            (centered(self.line.width, width), top)
+        let alone = spot.place == MathPlace::Alone;
+        let split = self.line.splits(spot);
+        let height = f32::from(if split {
+            self.line.rows_height()
         } else {
-            (x, self.baseline.baseline(height) - formula.height)
+            row.height
+        });
+        let left = if alone {
+            centered(self.line.width, width)
+        } else {
+            x
+        };
+        let top = if alone || split {
+            self.math.geometry.top(formula, MathPlace::Alone, height)
+        } else {
+            self.baseline.baseline(height) - formula.height
         };
         row.pieces.push(Piece {
             source,

@@ -3,7 +3,7 @@
 
 use gpui_kit::{Bounds, Hsla, PaintQuad, Pixels, fill, point, size};
 
-use super::layout::{FrameLayout, LaidLine, LaidRow};
+use super::layout::{FrameLayout, LaidLine, LaidRow, Piece};
 use super::spans::{Match, Span, SpanEnd, search_spans, selection_spans};
 use crate::theme::Theme;
 use crate::workspace::PaneView;
@@ -49,7 +49,7 @@ fn quads(
 
 /// Las filas de `laid` que toca `span`, con su final en la última; las de
 /// antes llegan al final de su texto o, si el tramo llega al borde, al
-/// borde.
+/// borde. Lo que toca una fórmula partida en filas la cubre en todas.
 fn rows_of<'a>(
     laid: &'a LaidLine,
     span: &Span,
@@ -60,6 +60,7 @@ fn rows_of<'a>(
         SpanEnd::At(_) => first,
         SpanEnd::PastText | SpanEnd::Edge => laid.rows.len().saturating_sub(1),
     };
+    let (first, last) = with_formula_rows(laid, span, first, last);
     let end = span.end;
     laid.rows
         .iter()
@@ -70,6 +71,22 @@ fn rows_of<'a>(
             let edge = matches!(end, SpanEnd::Edge).then_some(SpanEnd::Edge);
             (row, if index == last { Some(end) } else { edge })
         })
+}
+
+/// `first..=last` ampliadas a las filas de las fórmulas que toca `span`: la
+/// imagen de una fórmula partida va sobre todas sus filas.
+fn with_formula_rows(laid: &LaidLine, span: &Span, first: usize, last: usize) -> (usize, usize) {
+    let end = match span.end {
+        SpanEnd::At(end) => end,
+        SpanEnd::PastText | SpanEnd::Edge => laid.len(),
+    };
+    let touches = |piece: &Piece| {
+        piece.text.is_none() && piece.source.start < end && span.start < piece.source.end
+    };
+    let holds = |row: &LaidRow| row.pieces.iter().any(touches);
+    let from = laid.rows.iter().position(holds).unwrap_or(first);
+    let to = laid.rows.iter().rposition(holds).unwrap_or(last);
+    (first.min(from), last.max(to))
 }
 
 pub fn search_quads(
@@ -114,4 +131,103 @@ pub fn selection_quads(
         visible,
     );
     quads(spans, layout, cells, theme.ui.selection)
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui_kit::{point, px};
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    fn row(source: std::ops::Range<usize>, top: f32, pieces: Vec<Piece>) -> LaidRow {
+        LaidRow {
+            source,
+            top: px(top),
+            height: px(20.),
+            pieces,
+        }
+    }
+
+    fn formula(source: std::ops::Range<usize>) -> Piece {
+        Piece {
+            source,
+            x: px(10.),
+            width: px(50.),
+            text: None,
+        }
+    }
+
+    fn line(rows: Vec<LaidRow>) -> LaidLine {
+        LaidLine {
+            line: 0,
+            origin: point(px(0.), px(0.)),
+            height: rows.last().map_or(px(0.), |row| row.top + row.height),
+            font_size: px(15.),
+            rows,
+            formulas: Vec::new(),
+            errors: Vec::new(),
+            code_block: false,
+        }
+    }
+
+    fn rows(laid: &LaidLine, start: usize, end: usize) -> Vec<f32> {
+        rows_until(laid, start, SpanEnd::At(end))
+    }
+
+    fn rows_until(laid: &LaidLine, start: usize, end: SpanEnd) -> Vec<f32> {
+        let span = Span {
+            line: 0,
+            start,
+            end,
+        };
+        rows_of(laid, &span)
+            .map(|(row, _)| f32::from(row.top))
+            .collect()
+    }
+
+    /// Una coincidencia en la última fila de una fórmula partida la cubre en
+    /// todas sus filas, porque su imagen va sobre todas.
+    #[test]
+    fn lo_que_toca_una_formula_partida_la_cubre_en_todas_sus_filas() {
+        let laid = line(vec![
+            row(0..10, 0., vec![formula(0..30)]),
+            row(10..20, 20., vec![formula(0..30)]),
+            row(20..30, 40., vec![formula(0..30)]),
+        ]);
+        assert_eq!(rows(&laid, 22, 25), [0., 20., 40.]);
+    }
+
+    #[test]
+    fn una_formula_de_una_fila_no_amplia_el_tramo() {
+        let laid = line(vec![
+            row(0..10, 0., vec![formula(2..8)]),
+            row(10..20, 20., Vec::new()),
+        ]);
+        assert_eq!(rows(&laid, 12, 15), [20.]);
+        assert_eq!(rows(&laid, 3, 5), [0.]);
+    }
+
+    /// `v` desde el fin de una línea que es una fórmula partida selecciona
+    /// solo el salto: la fórmula no se toca y queda sin resaltar, como en vim.
+    #[test]
+    fn el_salto_tras_una_formula_partida_no_la_cubre() {
+        let laid = line(vec![
+            row(0..10, 0., vec![formula(0..30)]),
+            row(10..20, 20., vec![formula(0..30)]),
+            row(20..30, 40., vec![formula(0..30)]),
+        ]);
+        assert_eq!(rows_until(&laid, 30, SpanEnd::PastText), [40.]);
+        assert_eq!(rows_until(&laid, 29, SpanEnd::PastText), [0., 20., 40.]);
+    }
+
+    #[test]
+    fn otra_formula_en_la_fila_de_una_partida_no_la_cubre() {
+        let laid = line(vec![
+            row(0..10, 0., vec![formula(0..15)]),
+            row(10..20, 20., vec![formula(0..15), formula(15..20)]),
+        ]);
+        assert_eq!(rows(&laid, 15, 18), [20.]);
+        assert_eq!(rows(&laid, 12, 13), [0., 20.]);
+    }
 }
