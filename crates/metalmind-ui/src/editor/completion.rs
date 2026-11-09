@@ -259,7 +259,7 @@ impl Editor {
     /// La lista de `#`. `aliases` y `parents` solo nombran tags en una
     /// página de tag.
     fn tag_list(&mut self, typed: &TypedTag, cx: &App) -> Option<List> {
-        let tags = self.session.read(cx).tags();
+        let tags = Arc::clone(&self.session.read(cx).snapshot().tags);
         let note = self.note_path(cx);
         if matches!(typed.place, TagPlace::Aliases | TagPlace::Parents)
             && !note.as_ref().is_some_and(|path| tags.is_page(path))
@@ -343,7 +343,7 @@ impl Editor {
     /// Con qué nombre llega a `target` un wikilink escrito en esta nota.
     fn wikilink_target(&mut self, target: &VaultPath, cx: &App) -> Option<String> {
         let source = self.note_path(cx)?;
-        let links = self.session.read(cx).vault().links();
+        let links = Arc::clone(&self.session.read(cx).snapshot().links);
         links.wikilink_target(&source, target)
     }
 

@@ -168,7 +168,7 @@ impl Editor {
             return Links::default();
         }
         let source = self.note_path(cx);
-        Links::new(self.session.read(cx).vault().links(), source)
+        Links::new(Arc::clone(&self.session.read(cx).snapshot().links), source)
     }
 
     /// La ruta en el vault del documento del panel, guardada mientras sea

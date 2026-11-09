@@ -50,7 +50,7 @@ fn open(bencher: Bencher, notes: usize) {
     synthetic_vault(dir.path(), notes);
     bencher.bench(|| {
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        assert_eq!(vault.snapshot().files().count(), notes + 100);
+        assert_eq!(vault.snapshot().files.files().count(), notes + 100);
         vault
     });
 }
@@ -76,7 +76,7 @@ fn open_cached(bencher: Bencher, notes: usize) {
     drop(Vault::open_with(dir.path(), options.clone()).unwrap());
     bencher.bench(|| {
         let (vault, _updates) = Vault::open_with(dir.path(), options.clone()).unwrap();
-        assert_eq!(vault.snapshot().files().count(), notes + 100);
+        assert_eq!(vault.snapshot().files.files().count(), notes + 100);
         vault
     });
 }

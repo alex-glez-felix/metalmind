@@ -30,7 +30,7 @@ fn write(root: &Path, file: &str, text: &str) {
 
 /// El índice de links de un vault recién abierto: el armado de cero.
 fn rebuilt(root: &Path) -> LinkIndex {
-    LinkIndex::clone(&Vault::open(root).unwrap().0.links())
+    LinkIndex::clone(&Vault::open(root).unwrap().0.snapshot().links)
 }
 
 /// Espera a que el índice del vault abierto sea el de abrirlo de nuevo.
@@ -38,13 +38,13 @@ fn settle(vault: &Vault, updates: &Receiver<VaultUpdate>) {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let expected = rebuilt(vault.root());
-        if *vault.links() == expected {
+        if *vault.snapshot().links == expected {
             return;
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if updates.recv_timeout(left).is_err() {
             assert_eq!(
-                *vault.links(),
+                *vault.snapshot().links,
                 expected,
                 "el índice de links no alcanzó al disco"
             );
@@ -66,29 +66,32 @@ fn el_watcher_mantiene_los_links_al_dia() {
     write(&root, "a.md", "[[b]] [[c]]");
     write(&root, "b.md", "");
     let (vault, updates) = Vault::open(&root).unwrap();
-    assert_eq!(backlinks(&vault.links(), "b.md"), ["a.md:0"]);
+    assert_eq!(backlinks(&vault.snapshot().links, "b.md"), ["a.md:0"]);
 
     write(&root, "carpeta/c.md", "[[a]]");
     settle(&vault, &updates);
-    assert_eq!(backlinks(&vault.links(), "carpeta/c.md"), ["a.md:0"]);
+    assert_eq!(
+        backlinks(&vault.snapshot().links, "carpeta/c.md"),
+        ["a.md:0"]
+    );
 
     write_atomic(&root.join("a.md"), |out| out.write_all(b"\n[[b]]")).unwrap();
     settle(&vault, &updates);
-    assert_eq!(backlinks(&vault.links(), "b.md"), ["a.md:1"]);
+    assert_eq!(backlinks(&vault.snapshot().links, "b.md"), ["a.md:1"]);
     assert_eq!(
-        backlinks(&vault.links(), "carpeta/c.md"),
+        backlinks(&vault.snapshot().links, "carpeta/c.md"),
         Vec::<String>::new()
     );
 
     fs::rename(root.join("carpeta"), root.join("otra")).unwrap();
     fs::remove_file(root.join("b.md")).unwrap();
     settle(&vault, &updates);
-    let links = vault.links();
+    let links = &vault.snapshot().links;
     assert_eq!(
         links.outgoing(&path("a.md"))[0].target,
         LinkTarget::Unresolved
     );
-    assert_eq!(backlinks(&links, "a.md"), ["otra/c.md:0"]);
+    assert_eq!(backlinks(links, "a.md"), ["otra/c.md:0"]);
 }
 
 #[test]
@@ -100,9 +103,10 @@ fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
     write(&root, "viejo/plan.md", "[[./hermana]]");
     write(&root, "viejo/hermana.md", "");
     let (vault, updates) = Vault::open(&root).unwrap();
-    let before = LinkIndex::clone(&vault.links());
+    let before = LinkIndex::clone(&vault.snapshot().links);
     let plan = vault
-        .links()
+        .snapshot()
+        .links
         .rename_plan(&path("viejo/plan.md"), &path("nuevo/Plan del año.md"))
         .unwrap();
     let applied = vault.apply(&plan.changes()).unwrap();
@@ -116,10 +120,10 @@ fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
         "[[../viejo/hermana]]"
     );
     assert_eq!(
-        backlinks(&vault.links(), "nuevo/Plan del año.md"),
+        backlinks(&vault.snapshot().links, "nuevo/Plan del año.md"),
         ["inicio.md:0", "inicio.md:0"]
     );
-    assert_eq!(vault.links().unresolved(), []);
+    assert_eq!(vault.snapshot().links.unresolved(), []);
 
     let report = vault.undo(&applied).unwrap();
     assert_eq!(report.restored, [path("inicio.md"), path("viejo/plan.md")]);
@@ -130,7 +134,7 @@ fn renombrar_con_el_plan_no_rompe_ningun_link_y_se_deshace() {
         fs::read_to_string(root.join("viejo/plan.md")).unwrap(),
         "[[./hermana]]"
     );
-    assert_eq!(*vault.links(), before);
+    assert_eq!(*vault.snapshot().links, before);
 }
 
 #[test]
@@ -142,7 +146,8 @@ fn deshacer_no_pisa_lo_que_cambio_despues() {
     write(&root, "plan.md", "");
     let (vault, _updates) = Vault::open(&root).unwrap();
     let plan = vault
-        .links()
+        .snapshot()
+        .links
         .rename_plan(&path("plan.md"), &path("meta.md"))
         .unwrap();
     let applied = vault.apply(&plan.changes()).unwrap();
@@ -167,7 +172,8 @@ fn un_archivo_que_cambio_no_deja_escribir_nada() {
     write(&root, "plan.md", "");
     let (vault, _updates) = Vault::open(&root).unwrap();
     let plan = vault
-        .links()
+        .snapshot()
+        .links
         .rename_plan(&path("plan.md"), &path("meta.md"))
         .unwrap();
     write(&root, "b.md", "otro texto");
@@ -203,14 +209,20 @@ fn un_chmod_que_vuelve_legible_una_nota_trae_sus_links() {
         return;
     }
     let (vault, updates) = Vault::open(&root).unwrap();
-    assert_eq!(backlinks(&vault.links(), "b.md"), Vec::<String>::new());
+    assert_eq!(
+        backlinks(&vault.snapshot().links, "b.md"),
+        Vec::<String>::new()
+    );
 
     fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
     settle(&vault, &updates);
-    assert_eq!(backlinks(&vault.links(), "b.md"), ["a.md:0"]);
+    assert_eq!(backlinks(&vault.snapshot().links, "b.md"), ["a.md:0"]);
 
     fs::set_permissions(&a, Permissions::from_mode(0o000)).unwrap();
     settle(&vault, &updates);
-    assert_eq!(backlinks(&vault.links(), "b.md"), Vec::<String>::new());
+    assert_eq!(
+        backlinks(&vault.snapshot().links, "b.md"),
+        Vec::<String>::new()
+    );
     fs::set_permissions(&a, Permissions::from_mode(0o644)).unwrap();
 }

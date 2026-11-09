@@ -61,7 +61,8 @@ impl WorkspaceView {
         let session = self.session.read(cx);
         let (vault, root) = (session.vault(), session.root().to_owned());
         let created = session
-            .tags()
+            .snapshot()
+            .tags
             .page_path(tag)
             .map_err(|error| error.to_string())
             .and_then(|page| match vault.create_note(&page, "") {
@@ -101,7 +102,7 @@ impl WorkspaceView {
         let session = self.session.read(cx);
         let vault = session.vault();
         let folder = &self.notes.templates_folder;
-        match new_note::load_templates(&vault, &vault.snapshot(), folder) {
+        match new_note::load_templates(&vault, &session.snapshot().files, folder) {
             Ok(templates) => Some(templates),
             Err(error) => {
                 self.tell(Message::Error(error.to_string()), cx);
@@ -111,7 +112,7 @@ impl WorkspaceView {
     }
 
     fn question(&self, origin: Origin, templates: Templates, cx: &Context<Self>) -> NameQuestion {
-        let index = self.session.read(cx).vault().snapshot();
+        let index = Arc::clone(&self.session.read(cx).snapshot().files);
         NameQuestion::new(origin, templates, index).in_focus(self.focused_note(cx))
     }
 
@@ -120,7 +121,7 @@ impl WorkspaceView {
         let session = self.session.read(cx);
         session
             .focus()
-            .map(|focus| focus.new_note(&session.tags()))
+            .map(|focus| focus.new_note(&session.snapshot().tags))
             .unwrap_or_default()
     }
 
@@ -138,7 +139,7 @@ impl WorkspaceView {
             &self.notes,
             path,
             &self.focused_note(cx),
-            session.tags().graph(),
+            session.snapshot().tags.graph(),
             &Zoned::now(),
         );
         match created {
@@ -155,7 +156,7 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let tags = self.session.read(cx).tags();
+        let tags = Arc::clone(&self.session.read(cx).snapshot().tags);
         let items: Arc<[TemplateItem]> = template_items(&templates, tags.graph()).into();
         let folder = &self.notes.templates_folder;
         let empty = format!("No hay plantillas en {folder}/");
@@ -222,7 +223,7 @@ impl WorkspaceView {
             return self.close_overlay(window, cx);
         };
         let question = picker.read(cx).delegate();
-        let tags = self.session.read(cx).tags();
+        let tags = Arc::clone(&self.session.read(cx).snapshot().tags);
         let prepared = question.draft(tags.graph(), &Zoned::now());
         let created = prepared
             .and_then(|(note, draft)| self.create_note(&note, &draft, chosen.open, window, cx));
@@ -245,7 +246,7 @@ impl WorkspaceView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<(), NameProblem> {
-        let tags = self.session.read(cx).tags();
+        let tags = Arc::clone(&self.session.read(cx).snapshot().tags);
         let (note, draft) = question.draft(tags.graph(), &Zoned::now())?;
         self.create_note(&note, &draft, open, window, cx)
     }

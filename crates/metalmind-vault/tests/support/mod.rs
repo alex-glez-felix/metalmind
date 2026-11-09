@@ -116,11 +116,11 @@ pub fn settle(
     let expected: Vec<&str> = expected.iter().map(AsRef::as_ref).collect();
     let deadline = Instant::now() + TIMEOUT;
     let mut batches = 0;
-    while listing(&vault.snapshot()) != expected {
+    while listing(&vault.snapshot().files) != expected {
         let left = deadline.saturating_duration_since(Instant::now());
         if updates.recv_timeout(left).is_err() {
             assert_eq!(
-                listing(&vault.snapshot()),
+                listing(&vault.snapshot().files),
                 expected,
                 "el índice no alcanzó al disco"
             );

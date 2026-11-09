@@ -47,7 +47,8 @@ impl Editor {
     /// completan su argumento.
     pub(super) fn argument_list(&mut self, typed: &TypedArgument, cx: &App) -> Option<List> {
         let session = self.session.read(cx);
-        let (tags, index, views) = (session.tags(), session.vault().snapshot(), session.views());
+        let (snapshot, views) = (session.snapshot(), session.views());
+        let (tags, index) = (Arc::clone(&snapshot.tags), Arc::clone(&snapshot.files));
         let completion = &mut self.completion;
         let previous = match completion.list.take() {
             Some(List::Argument(list)) => Some(list),

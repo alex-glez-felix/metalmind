@@ -114,8 +114,9 @@ mod tests {
             fs::write(path, text).unwrap();
         }
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let notes = crate::finder::notes(&vault.snapshot(), &crate::finder::Recents::default());
-        PickerState::new(notes).with_narrowing(Arc::new(TagFilter::new(vault.tags())))
+        let snapshot = vault.snapshot();
+        let notes = crate::finder::notes(&snapshot.files, &crate::finder::Recents::default());
+        PickerState::new(notes).with_narrowing(Arc::new(TagFilter::new(Arc::clone(&snapshot.tags))))
     }
 
     /// Aplica `edit` y corre las búsquedas que pida, como el executor de fondo.
@@ -180,7 +181,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("a.md"), "#rust").unwrap();
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let filter = TagFilter::new(vault.tags());
+        let filter = TagFilter::new(Arc::clone(&vault.snapshot().tags));
         let query = TagQuery::parse("#rust").query;
         let first = filter.notes(&query);
         assert!(Arc::ptr_eq(&first, &filter.notes(&query)));

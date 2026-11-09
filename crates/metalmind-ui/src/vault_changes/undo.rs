@@ -296,7 +296,11 @@ mod tests {
     /// Renombra `from` a `to` con sus links, como la vista previa al
     /// aplicarse entera, y lo guarda para deshacer.
     fn rename(undo: &mut VaultUndo, vault: &Vault, from: &str, to: &str) {
-        let plan = vault.links().rename_plan(&path(from), &path(to)).unwrap();
+        let plan = vault
+            .snapshot()
+            .links
+            .rename_plan(&path(from), &path(to))
+            .unwrap();
         let applied = vault.apply(&plan.changes()).unwrap();
         undo.remember(format!("Renombrar {from} a {to}"), applied, Vec::new());
     }
@@ -413,7 +417,11 @@ mod tests {
             to: "estudio".to_owned(),
         };
         let preview = request
-            .preview(&vault.tags(), &VaultConfigText::read(dir.path()), |_| false)
+            .preview(
+                &vault.snapshot().tags,
+                &VaultConfigText::read(dir.path()),
+                |_| false,
+            )
             .unwrap()
             .unwrap();
         let mut undo = VaultUndo::default();

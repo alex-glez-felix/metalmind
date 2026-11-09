@@ -14,5 +14,5 @@ pub(crate) fn graph(files: &[(&str, &str)]) -> TagGraph {
         fs::write(full, text).unwrap();
     }
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    vault.tags().graph().clone()
+    vault.snapshot().tags.graph().clone()
 }

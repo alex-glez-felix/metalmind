@@ -2,6 +2,7 @@
 //! tags, y con la plantilla que pidan, para no desaparecer del focus.
 
 use std::fs;
+use std::sync::Arc;
 
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
@@ -39,13 +40,19 @@ fn focused(vault: &Vault, focus: &str) -> FocusedNote {
     Focus::parse(focus, &[])
         .unwrap()
         .unwrap()
-        .new_note(&vault.tags())
+        .new_note(&vault.snapshot().tags)
 }
 
 fn blank(vault: &Vault, focus: &FocusedNote) -> String {
-    let templates = load_templates(vault, &vault.snapshot(), "plantillas").unwrap();
+    let templates = load_templates(vault, &vault.snapshot().files, "plantillas").unwrap();
     Origin::Blank
-        .draft("Plan", focus, &templates, vault.tags().graph(), &now())
+        .draft(
+            "Plan",
+            focus,
+            &templates,
+            vault.snapshot().tags.graph(),
+            &now(),
+        )
         .text
 }
 
@@ -71,14 +78,14 @@ fn en_focus_de_tags_nace_con_ellos_y_su_plantilla() {
 #[test]
 fn un_tag_del_focus_que_ya_trae_la_nota_no_se_repite() {
     let (_dir, vault) = vault();
-    let templates = load_templates(&vault, &vault.snapshot(), "plantillas").unwrap();
+    let templates = load_templates(&vault, &vault.snapshot().files, "plantillas").unwrap();
     let focus = focused(&vault, "#rust #ui");
     assert_eq!(focus.tags, ["Rust", "ui"]);
     let draft = Origin::Tag("rust".to_owned()).draft(
         "Plan",
         &focus,
         &templates,
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     assert_eq!(draft.text, "---\ntags: [rust, ui]\n---\n");
@@ -87,9 +94,13 @@ fn un_tag_del_focus_que_ya_trae_la_nota_no_se_repite() {
 #[test]
 fn en_focus_de_carpeta_el_nombre_va_dentro_de_ella() {
     let (_dir, vault) = vault();
-    let templates = load_templates(&vault, &vault.snapshot(), "plantillas").unwrap();
-    let mut question = NameQuestion::new(Origin::Blank, templates, vault.snapshot())
-        .in_focus(focused(&vault, "proyectos/"));
+    let templates = load_templates(&vault, &vault.snapshot().files, "plantillas").unwrap();
+    let mut question = NameQuestion::new(
+        Origin::Blank,
+        templates,
+        Arc::clone(&vault.snapshot().files),
+    )
+    .in_focus(focused(&vault, "proyectos/"));
     let answer =
         |question: &NameQuestion| question.answer().map(|note| note.path.as_str().to_owned());
     assert_eq!(answer(&question), Err(NameProblem::Name(NameError::Empty)));
@@ -124,7 +135,7 @@ fn in_panel(
         &settings(folder),
         &path,
         focus,
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     )
 }
@@ -164,12 +175,12 @@ fn las_plantillas_se_leen_solo_si_hay_tags_del_focus() {
 #[case::no_lo_excluye("#rust", "---\ntags: [reunion, Rust]\n---\n# Semana del 2026-10-26\n")]
 fn una_plantilla_no_trae_un_tag_que_el_focus_excluye(#[case] focus: &str, #[case] expected: &str) {
     let (_dir, vault) = vault();
-    let templates = load_templates(&vault, &vault.snapshot(), "plantillas").unwrap();
+    let templates = load_templates(&vault, &vault.snapshot().files, "plantillas").unwrap();
     let draft = Origin::Template("semanal".to_owned()).draft(
         "Plan",
         &focused(&vault, focus),
         &templates,
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     assert_eq!(draft.text, expected);

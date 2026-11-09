@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use metalmind_config::SavedView;
 use metalmind_vault::tags::Tags;
-use metalmind_vault::{EntryKind, SummaryIndex, VaultChange, VaultIndex, VaultPath, VaultUpdate};
+use metalmind_vault::{EntryKind, VaultChange, VaultPath, VaultSnapshot, VaultUpdate};
 
 use super::cards::{Card, ModifiedTimes};
 use super::source::ListSource;
@@ -26,9 +26,7 @@ pub enum Prompt {
 
 pub struct NoteList {
     source: ListSource,
-    index: Arc<VaultIndex>,
-    tags: Arc<Tags>,
-    summaries: Arc<SummaryIndex>,
+    snapshot: Arc<VaultSnapshot>,
     dates: ModifiedTimes,
     /// Ya llegaron las primeras fechas: antes no se muestra nada.
     dates_ready: bool,
@@ -47,23 +45,15 @@ impl NoteList {
     /// Sin fechas todavía: no muestra nada hasta [`NoteList::set_dates`],
     /// porque el orden cambiaría al llegar.
     #[must_use]
-    pub fn new(
-        source: ListSource,
-        filter: &str,
-        index: Arc<VaultIndex>,
-        tags: Arc<Tags>,
-        summaries: Arc<SummaryIndex>,
-    ) -> Self {
+    pub fn new(source: ListSource, filter: &str, snapshot: Arc<VaultSnapshot>) -> Self {
         let mut state = PickerState::loading()
             .stopping_at_edges()
-            .with_narrowing(Arc::new(TagFilter::new(Arc::clone(&tags))));
+            .with_narrowing(Arc::new(TagFilter::new(Arc::clone(&snapshot.tags))));
         // Sin ítems, editar no pide ninguna búsqueda.
         let _ = state.edit(LineEdit::Insert(filter));
         Self {
             source,
-            index,
-            tags,
-            summaries,
+            snapshot,
             dates: ModifiedTimes::default(),
             dates_ready: false,
             filter: state,
@@ -81,7 +71,7 @@ impl NoteList {
 
     #[must_use]
     pub fn tags(&self) -> &Tags {
-        &self.tags
+        &self.snapshot.tags
     }
 
     /// Lo escrito en el filtro.
@@ -149,13 +139,13 @@ impl NoteList {
     }
 
     fn card_of<'a>(&'a self, note: &'a VaultPath) -> Card<'a> {
-        Card::new(note, self.summaries.of(note), self.dates.get(note))
+        Card::new(note, self.snapshot.summaries.of(note), self.dates.get(note))
     }
 
     /// Llegaron fechas del disco. Las de una nota que ya no está (se miró
     /// antes de un renombre) no se guardan.
     pub fn set_dates(&mut self, dates: Vec<(VaultPath, Option<SystemTime>)>) -> Step<Note> {
-        let index = Arc::clone(&self.index);
+        let index = Arc::clone(&self.snapshot.files);
         self.dates.insert_all(
             dates
                 .into_iter()
@@ -168,9 +158,7 @@ impl NoteList {
     /// Un lote del watcher: devuelve lo que muestra y las notas cuya fecha hay
     /// que volver a mirar.
     pub fn apply(&mut self, update: &VaultUpdate) -> (Step<Note>, Vec<VaultPath>) {
-        self.index = Arc::clone(&update.snapshot);
-        self.tags = Arc::clone(&update.tags);
-        self.summaries = Arc::clone(&update.summaries);
+        self.snapshot = Arc::clone(&update.snapshot);
         self.source.follow(&update.changes);
         self.selected = self
             .selected
@@ -180,7 +168,7 @@ impl NoteList {
             .tag_target
             .take()
             .map(|target| renamed(target, &update.changes));
-        let stale = self.dates.apply(&update.changes, &self.index);
+        let stale = self.dates.apply(&update.changes, &self.snapshot.files);
         (self.refill(), stale)
     }
 
@@ -242,7 +230,7 @@ impl NoteList {
             // Sin fechas no hay orden: se muestra al llegar.
             return Step::default();
         }
-        let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.tags)));
+        let narrowing = Arc::new(TagFilter::new(Arc::clone(&self.snapshot.tags)));
         let step = self.filter.set_source(self.ordered(), narrowing);
         self.follow(step)
     }
@@ -250,7 +238,7 @@ impl NoteList {
     /// Las notas de la fuente, de la que cambió último a la primera; las
     /// que tienen la misma fecha, por ruta.
     fn ordered(&self) -> Arc<[Note]> {
-        let mut notes = self.source.notes(&self.index, &self.tags);
+        let mut notes = self.source.notes(&self.snapshot.files, &self.snapshot.tags);
         notes.sort_by_cached_key(|path| (std::cmp::Reverse(self.dates.get(path)), path.clone()));
         notes.into_iter().map(Note).collect()
     }

@@ -48,9 +48,9 @@ fn a_tag_page_of_the_vault_picks_its_template() {
         ],
     );
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let index = vault.snapshot();
+    let index = &vault.snapshot().files;
 
-    let templates = Templates::load(vault.root(), &index, &folder("plantillas"));
+    let templates = Templates::load(vault.root(), index, &folder("plantillas"));
     assert!(templates.errors.is_empty(), "{:?}", templates.errors);
     let names: Vec<_> = templates.value.names().collect();
     assert_eq!(names, ["reunion", "trabajo/semanal"]);
@@ -66,7 +66,7 @@ fn a_tag_page_of_the_vault_picks_its_template() {
         pick: Pick::ByTags,
         now: &now,
     };
-    let draft = draft(&note, &templates.value, vault.tags().graph());
+    let draft = draft(&note, &templates.value, vault.snapshot().tags.graph());
     assert_eq!(draft.problems, []);
     assert_eq!(draft.text, "---\ntags: [semanal]\n---\nsemana 2026-10-18\n");
 }
@@ -75,8 +75,8 @@ fn a_tag_page_of_the_vault_picks_its_template() {
 fn missing_folders_give_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let index = vault.snapshot();
-    let templates = Templates::load(vault.root(), &index, &folder("plantillas"));
+    let index = &vault.snapshot().files;
+    let templates = Templates::load(vault.root(), index, &folder("plantillas"));
     assert_eq!(templates.value, Templates::default());
 }
 
@@ -87,7 +87,7 @@ fn an_unreadable_template_is_reported_and_the_rest_load() {
     let bad = dir.path().join("plantillas/mala.md");
     fs::write(&bad, [0xff, 0xfe, 0x00]).unwrap();
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let templates = Templates::load(vault.root(), &vault.snapshot(), &folder("plantillas"));
+    let templates = Templates::load(vault.root(), &vault.snapshot().files, &folder("plantillas"));
     let names: Vec<_> = templates.value.names().collect();
     assert_eq!(names, ["buena"]);
     assert_eq!(templates.errors.len(), 1, "{:?}", templates.errors);

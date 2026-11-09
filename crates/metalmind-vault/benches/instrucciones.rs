@@ -19,7 +19,6 @@
 )]
 
 use std::collections::HashMap;
-use std::fmt::Write as _;
 use std::hash::{BuildHasherDefault, DefaultHasher};
 use std::hint::black_box;
 use std::path::Path;
@@ -34,7 +33,6 @@ use metalmind_vault::{
 use tempfile::TempDir;
 
 const NOTES: usize = 5_000;
-const ATTACHMENTS: usize = 1_000;
 
 /// Sin orden, como los archivos que el vault le pasa al índice de links,
 /// pero con claves fijas: con la semilla de cada proceso el orden cambiaba
@@ -184,26 +182,6 @@ fn opened(write: impl FnOnce(&Path)) -> (TempDir, Vault) {
     (dir, vault)
 }
 
-/// `linked_vault` con 1 000 adjuntos, de los que la mitad usa alguna nota.
-fn with_attachments(notes: usize) -> (TempDir, Vault) {
-    opened(|root| {
-        let mut files = linked_vault(notes, NoteNames::Repeated);
-        let notes = files.iter_mut().filter(|(_, text)| !text.is_empty());
-        for (number, (_, text)) in notes.take(ATTACHMENTS / 2).enumerate() {
-            let _ = writeln!(text, "![[captura-{}.png]]", number * 2);
-        }
-        files
-            .extend((0..ATTACHMENTS).map(|n| (format!("adjuntos/captura-{n}.png"), String::new())));
-        metalmind_perf::write_files(root, &files).unwrap();
-    })
-}
-
-#[library_benchmark]
-#[bench::notas_5k(args = (NOTES), setup = with_attachments)]
-fn adjuntos_huerfanos((dir, vault): (TempDir, Vault)) -> (Vec<VaultPath>, TempDir, Vault) {
-    black_box((vault.orphan_attachments(), dir, vault))
-}
-
 /// Una página de tag cada 25 notas, como `benches/tags.rs`. El vault se abre
 /// y se cierra en otro hilo: lo que suelta no queda en la arena de malloc del
 /// hilo medido, donde según cómo se turnaran los hilos costaba hasta 19 % más.
@@ -213,7 +191,7 @@ fn tagged(notes: usize) -> (TempDir, Tags) {
             metalmind_perf::write_files(root, &metalmind_perf::tagged_vault(notes, notes / 25))
                 .unwrap();
         });
-        let tags = Tags::clone(&vault.tags());
+        let tags = Tags::clone(&vault.snapshot().tags);
         (dir, tags)
     })
     .join()
@@ -274,8 +252,7 @@ library_benchmark_group!(
         links_clonar_el_indice,
         links_plan_de_renombre,
         links_seguir_un_link,
-        links_nombrar_para_completar,
-        adjuntos_huerfanos
+        links_nombrar_para_completar
     ]
 );
 

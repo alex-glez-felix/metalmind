@@ -106,7 +106,11 @@ pub fn open_window(
     let state = remember(paths.as_ref(), &vault);
     let root = vault.root().to_owned();
     let jumps = paths.as_ref().map_or_else(SavedJumps::default, |paths| {
-        SavedJumps::load(&root, &session::jumps_file(paths, &root), &vault.snapshot())
+        SavedJumps::load(
+            &root,
+            &session::jumps_file(paths, &root),
+            &vault.snapshot().files,
+        )
     });
     let prepared = Prepared::new(vault, updates, paths.as_ref())?;
     let options = window_options(&document);

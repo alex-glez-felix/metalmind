@@ -3,7 +3,6 @@
 //! la nota elegida en el panel de edición.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use gpui_kit::{
     App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Pixels, ScrollStrategy,
@@ -88,7 +87,6 @@ impl NoteListView {
         cx: &mut Context<Self>,
     ) -> Self {
         let vault = session.read(cx).vault();
-        let index = vault.snapshot();
         // Una vista guardada vuelve con la consulta que tiene hoy; con la
         // config rota se queda como estaba, para no perderla.
         let (views, diagnostics) = load_views(vault.root());
@@ -100,13 +98,7 @@ impl NoteListView {
         } else {
             state.source.clone().resolve(&views)
         };
-        let list = NoteList::new(
-            source,
-            &state.filter,
-            Arc::clone(&index),
-            session.read(cx).tags(),
-            vault.summaries(),
-        );
+        let list = NoteList::new(source, &state.filter, session.read(cx).snapshot());
         let changes = cx.subscribe(session, |view, _, VaultChanged(update), cx| {
             let (step, unread) = view.list.apply(update);
             view.step(step, cx);
@@ -163,8 +155,8 @@ impl NoteListView {
         let notes: Vec<VaultPath> = self
             .session
             .read(cx)
-            .vault()
             .snapshot()
+            .files
             .files()
             .filter(|entry| entry.kind == EntryKind::Note)
             .map(|entry| entry.path.clone())
@@ -243,8 +235,8 @@ impl NoteListView {
         cx: &mut Context<Self>,
     ) -> Result<(), FolderError> {
         let active = self.active(cx);
-        let index = self.session.read(cx).vault().snapshot();
-        let folder = folder_to_show(named, active.as_ref(), &index)?;
+        let index = &self.session.read(cx).snapshot().files;
+        let folder = folder_to_show(named, active.as_ref(), index)?;
         self.show(ListSource::folder(&folder), active, cx);
         Ok(())
     }

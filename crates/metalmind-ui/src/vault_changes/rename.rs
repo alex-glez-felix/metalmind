@@ -27,7 +27,7 @@ impl VaultChanges {
     /// edita) y avisa con [`VaultChangesEvent::RenamePlanned`].
     pub fn rename(&mut self, from: &VaultPath, to: &VaultPath, cx: &mut Context<Self>) {
         let vault = self.session.read(cx).vault();
-        let (index, root) = (vault.links(), vault.root().to_owned());
+        let (index, root) = (Arc::clone(&vault.snapshot().links), vault.root().to_owned());
         let (from, to) = (from.clone(), to.clone());
         self.planned_rename = None;
         self.renaming = Some(cx.spawn(async move |changes, cx| {
@@ -64,7 +64,7 @@ impl VaultChanges {
             return;
         };
         let vault = self.session.read(cx).vault();
-        match arrival(&index, &vault.links(), overlay_open) {
+        match arrival(&index, &vault.snapshot().links, overlay_open) {
             Arrival::Show => {}
             Arrival::Rebuild => return self.rename(&from, &to, cx),
             Arrival::Busy => {

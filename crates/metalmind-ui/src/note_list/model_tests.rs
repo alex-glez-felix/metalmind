@@ -3,7 +3,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use metalmind_search::FuzzyMatcher;
-use metalmind_vault::{EntryKind, Vault, VaultChange, VaultIndex};
+use metalmind_vault::{EntryKind, Vault, VaultChange, VaultIndex, VaultSnapshot};
 use pretty_assertions::assert_eq;
 
 use super::*;
@@ -46,16 +46,9 @@ impl Fixture {
     }
 
     fn list(&self, source: ListSource, filter: &str) -> NoteList {
-        let mut list = NoteList::new(
-            source,
-            filter,
-            self.vault.snapshot(),
-            self.vault.tags(),
-            self.vault.summaries(),
-        );
-        let paths = list
-            .source()
-            .notes(&self.vault.snapshot(), &self.vault.tags());
+        let snapshot = self.vault.snapshot();
+        let mut list = NoteList::new(source, filter, Arc::clone(&snapshot));
+        let paths = list.source().notes(&snapshot.files, &snapshot.tags);
         let step = list.set_dates(read_modified(self.dir.path(), &paths));
         run(&mut list, step);
         list
@@ -68,10 +61,6 @@ impl Fixture {
                 path: VaultPath::new(name).unwrap(),
             }],
             snapshot: self.vault.snapshot(),
-            links: self.vault.links(),
-            tags: self.vault.tags(),
-            properties: self.vault.properties(),
-            summaries: self.vault.summaries(),
             tag_changes: Vec::new(),
         }
     }
@@ -94,13 +83,7 @@ fn rows(list: &NoteList) -> Vec<&str> {
 #[test]
 fn sin_fechas_no_muestra_nada_para_no_reordenar_al_llegar() {
     let fixture = Fixture::new();
-    let list = NoteList::new(
-        ListSource::All,
-        "",
-        fixture.vault.snapshot(),
-        fixture.vault.tags(),
-        fixture.vault.summaries(),
-    );
+    let list = NoteList::new(ListSource::All, "", fixture.vault.snapshot());
     assert!(list.is_empty());
     assert!(!list.is_current());
 }
@@ -251,7 +234,10 @@ fn la_fila_y_la_carpeta_de_la_fuente_siguen_a_un_renombre() {
             to: VaultPath::new("e").unwrap(),
             kind: EntryKind::Folder,
         }],
-        snapshot: Arc::new(renamed_index),
+        snapshot: Arc::new(VaultSnapshot {
+            files: Arc::new(renamed_index),
+            ..VaultSnapshot::clone(&fixture.vault.snapshot())
+        }),
         ..fixture.update("nueva.md")
     };
     for source in [ListSource::All, ListSource::Folder("d".into())] {
@@ -275,20 +261,13 @@ fn la_fila_y_la_carpeta_de_la_fuente_siguen_a_un_renombre() {
 #[test]
 fn un_lote_antes_de_las_fechas_no_muestra_la_lista_sin_orden() {
     let fixture = Fixture::new();
-    let mut list = NoteList::new(
-        ListSource::All,
-        "",
-        fixture.vault.snapshot(),
-        fixture.vault.tags(),
-        fixture.vault.summaries(),
-    );
+    let snapshot = fixture.vault.snapshot();
+    let mut list = NoteList::new(ListSource::All, "", Arc::clone(&snapshot));
     let (step, _unread) = list.apply(&fixture.update("nueva.md"));
     run(&mut list, step);
     assert!(list.is_empty());
     assert!(!list.is_current());
-    let paths = list
-        .source()
-        .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
+    let paths = list.source().notes(&snapshot.files, &snapshot.tags);
     let step = list.set_dates(read_modified(fixture.dir.path(), &paths));
     run(&mut list, step);
     assert_eq!(
@@ -327,19 +306,12 @@ fn los_tags_van_a_la_nota_de_la_pregunta_aunque_la_fila_cambie() {
 #[test]
 fn otra_fuente_antes_de_las_fechas_tampoco_muestra_la_lista_sin_orden() {
     let fixture = Fixture::new();
-    let mut list = NoteList::new(
-        ListSource::Inbox,
-        "",
-        fixture.vault.snapshot(),
-        fixture.vault.tags(),
-        fixture.vault.summaries(),
-    );
+    let snapshot = fixture.vault.snapshot();
+    let mut list = NoteList::new(ListSource::Inbox, "", Arc::clone(&snapshot));
     let step = list.set_source(ListSource::All, None);
     run(&mut list, step);
     assert!(list.is_empty() && !list.is_current());
-    let paths = list
-        .source()
-        .notes(&fixture.vault.snapshot(), &fixture.vault.tags());
+    let paths = list.source().notes(&snapshot.files, &snapshot.tags);
     let step = list.set_dates(read_modified(fixture.dir.path(), &paths));
     run(&mut list, step);
     assert_eq!(

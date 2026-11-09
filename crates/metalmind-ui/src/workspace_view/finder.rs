@@ -36,9 +36,9 @@ impl FinderVault {
             let root = session.read(cx).root().to_owned();
             view.workspace.update(cx, |workspace, _| {
                 workspace.files_changed(&root, &update.changes);
-                workspace.set_links(&root, Arc::clone(&update.links));
+                workspace.set_links(&root, Arc::clone(&update.snapshot.links));
             });
-            view.refresh_unresolved_links(&update.links, cx);
+            view.refresh_unresolved_links(&update.snapshot.links, cx);
         });
         let lost = cx.subscribe(&session, |view, _, WatchLost(reason), cx| {
             view.workspace.update(cx, |workspace, _| {
@@ -51,7 +51,7 @@ impl FinderVault {
             let unwatched = session.unwatched();
             (
                 session.root().to_owned(),
-                session.vault().links(),
+                Arc::clone(&session.snapshot().links),
                 unwatched,
             )
         };
@@ -84,8 +84,9 @@ fn options(focus: Option<&Focus>) -> PickerOptions {
 impl WorkspaceView {
     pub(super) fn open_finder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let session = self.vault.session.read(cx);
-        let state = PickerState::new(session.notes())
-            .with_narrowing(Arc::new(TagFilter::new(session.tags())));
+        let state = PickerState::new(session.notes()).with_narrowing(Arc::new(TagFilter::new(
+            Arc::clone(&session.snapshot().tags),
+        )));
         let empty = match session.focus() {
             Some(_) => "No hay notas en el focus",
             None => "No hay notas",
@@ -98,7 +99,7 @@ impl WorkspaceView {
         let open = picker.clone();
         let refresh = cx.observe(&self.vault.session, move |_, session, cx| {
             let session = session.read(cx);
-            let (notes, tags) = (session.notes(), session.tags());
+            let (notes, tags) = (session.notes(), Arc::clone(&session.snapshot().tags));
             open.update(cx, |picker, cx| {
                 picker.update_delegate(cx, |fuzzy, cx| {
                     fuzzy.set_source(notes, Arc::new(TagFilter::new(tags)), cx);

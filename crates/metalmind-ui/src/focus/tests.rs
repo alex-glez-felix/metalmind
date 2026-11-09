@@ -29,9 +29,11 @@ fn vault() -> (tempfile::TempDir, Vault) {
 
 fn shown(focus: &Focus) -> Vec<String> {
     let (_dir, vault) = vault();
-    let in_scope = focus.resolve(&vault.snapshot(), &vault.tags());
+    let snapshot = vault.snapshot();
+    let in_scope = focus.resolve(&snapshot.files, &snapshot.tags);
     let mut shown: Vec<String> = vault
         .snapshot()
+        .files
         .iter()
         .filter(|entry| in_scope.shows(entry.path))
         .map(|entry| entry.path.to_string())

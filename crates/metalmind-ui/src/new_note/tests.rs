@@ -1,6 +1,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
+use std::sync::Arc;
 
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
@@ -49,7 +50,7 @@ fn standard() -> (tempfile::TempDir, Vault) {
 }
 
 fn templates(vault: &Vault) -> Templates {
-    load_templates(vault, &vault.snapshot(), "plantillas").unwrap()
+    load_templates(vault, &vault.snapshot().files, "plantillas").unwrap()
 }
 
 fn read(root: &Path, path: &str) -> String {
@@ -87,7 +88,7 @@ fn pedidos(
 #[test]
 fn las_plantillas_listan_los_tags_que_las_piden() {
     let (_dir, vault) = standard();
-    let items = template_items(&templates(&vault), vault.tags().graph());
+    let items = template_items(&templates(&vault), vault.snapshot().tags.graph());
     let rows: Vec<(&str, Option<&str>)> = items
         .iter()
         .map(|item| (item.name.as_str(), item.detail()))
@@ -109,7 +110,7 @@ fn las_plantillas_listan_los_tags_que_las_piden() {
 #[case::absoluta("/plantillas/")]
 fn una_carpeta_de_plantillas_invalida_es_error(#[case] folder: &str) {
     let (_dir, vault) = standard();
-    assert!(load_templates(&vault, &vault.snapshot(), folder).is_err());
+    assert!(load_templates(&vault, &vault.snapshot().files, folder).is_err());
 }
 
 #[rstest]
@@ -118,7 +119,7 @@ fn una_carpeta_de_plantillas_invalida_es_error(#[case] folder: &str) {
 #[case::no_existe("no-existe", 0)]
 fn carpetas_de_plantillas(#[case] folder: &str, #[case] count: usize) {
     let (_dir, vault) = standard();
-    let templates = load_templates(&vault, &vault.snapshot(), folder).unwrap();
+    let templates = load_templates(&vault, &vault.snapshot().files, folder).unwrap();
     assert_eq!(templates.names().count(), count);
 }
 
@@ -132,7 +133,7 @@ fn la_plantilla_conserva_sus_tags_y_el_cursor_va_a_la_primera_seccion() {
         &note.title,
         &FocusedNote::default(),
         &templates,
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     let landing = create(&vault, &note, &draft).unwrap();
@@ -159,7 +160,7 @@ fn el_unico_tag_que_pide_la_plantilla_queda_puesto() {
         "Semana",
         &FocusedNote::default(),
         &templates(&vault),
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     assert_eq!(
@@ -176,7 +177,7 @@ fn dos_tags_que_piden_la_misma_plantilla_no_ponen_ninguno() {
         "hoy",
         &FocusedNote::default(),
         &templates(&vault),
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     assert_eq!(draft.text, "# lunes 26 de octubre\n\n");
@@ -185,7 +186,7 @@ fn dos_tags_que_piden_la_misma_plantilla_no_ponen_ninguno() {
 #[test]
 fn una_nota_desde_un_tag_usa_la_plantilla_del_tag() {
     let (_dir, vault) = standard();
-    let graph = vault.tags().graph().clone();
+    let graph = vault.snapshot().tags.graph().clone();
     let templates = templates(&vault);
     let from_tag = |tag: &str| {
         Origin::Tag(tag.to_owned()).draft(
@@ -213,7 +214,7 @@ fn crear_nunca_pisa() {
         "ya",
         &FocusedNote::default(),
         &templates(&vault),
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     assert!(matches!(
@@ -230,7 +231,7 @@ fn los_problemas_de_la_plantilla_llegan_con_la_nota() {
         "x",
         &FocusedNote::default(),
         &templates(&vault),
-        vault.tags().graph(),
+        vault.snapshot().tags.graph(),
         &now(),
     );
     let landing = create(&vault, &NotePath::parse("x").unwrap(), &draft).unwrap();
@@ -342,7 +343,7 @@ fn question(vault: &Vault) -> NameQuestion {
     NameQuestion::new(
         Origin::Template("entrevista".to_owned()),
         templates(vault),
-        vault.snapshot(),
+        Arc::clone(&vault.snapshot().files),
     )
 }
 

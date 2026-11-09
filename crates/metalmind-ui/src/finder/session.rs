@@ -12,8 +12,7 @@ use std::{fs, thread};
 
 use gpui_kit::{Context, EventEmitter, Subscription, Task};
 use metalmind_config::{Paths, SavedView};
-use metalmind_vault::tags::Tags;
-use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultUpdate};
+use metalmind_vault::{Unwatched, Vault, VaultIndex, VaultPath, VaultSnapshot, VaultUpdate};
 
 use super::writer::RecentsWriter;
 use super::{Note, Recents, notes};
@@ -49,9 +48,10 @@ pub struct VaultSession {
     recents: Recents,
     /// `None` si no hay directorio de estado: se recuerdan solo en memoria.
     writer: Option<RecentsWriter>,
+    /// Los índices del último lote aplicado: todo lo de la sesión sale de aquí.
+    snapshot: Arc<VaultSnapshot>,
     /// Las notas del finder, solo las del focus si hay uno.
     notes: Arc<[Note]>,
-    tags: Arc<Tags>,
     /// El focus de la sesión (05 §3): al reabrir, la app empieza sin él.
     focus: Option<(Focus, Arc<InScope>)>,
     /// Las vistas guardadas (06 §10), como se leyeron la última vez.
@@ -138,8 +138,8 @@ impl VaultSession {
             this.vault.shut_down();
             async {}
         });
-        let notes = notes(&vault.snapshot(), &recents);
-        let tags = vault.tags();
+        let snapshot = vault.snapshot();
+        let notes = notes(&snapshot.files, &recents);
         let unwatched = vault.unwatched();
         // Con la config rota, ninguna: quien la lee al abrir lo dice.
         let (views, _) = crate::note_list::load_views(vault.root());
@@ -147,8 +147,8 @@ impl VaultSession {
             vault: Rc::new(vault),
             recents,
             writer,
+            snapshot,
             notes,
-            tags,
             focus: None,
             views: views.into(),
             unwatched,
@@ -175,6 +175,13 @@ impl VaultSession {
         self.unwatched
     }
 
+    /// Los índices del último lote que llegó a la ventana. Quien combine dos
+    /// los toma de aquí, del mismo lote que las notas y el focus.
+    #[must_use]
+    pub fn snapshot(&self) -> Arc<VaultSnapshot> {
+        Arc::clone(&self.snapshot)
+    }
+
     /// Lo que lista el finder ahora: con focus, solo lo de su alcance.
     #[must_use]
     pub fn notes(&self) -> Arc<[Note]> {
@@ -196,12 +203,12 @@ impl VaultSession {
 
     /// Pone o quita el focus; el finder, el panel y la búsqueda lo siguen.
     pub fn set_focus(&mut self, focus: Option<Focus>, cx: &mut Context<Self>) {
-        let index = self.vault.snapshot();
+        let snapshot = Arc::clone(&self.snapshot);
         self.focus = focus.map(|focus| {
-            let in_scope = Arc::new(focus.resolve(&index, &self.tags));
+            let in_scope = Arc::new(focus.resolve(&snapshot.files, &snapshot.tags));
             (focus, in_scope)
         });
-        self.notes = self.list(&index);
+        self.notes = self.list(&snapshot.files);
         cx.emit(FocusChanged);
         cx.notify();
     }
@@ -258,12 +265,6 @@ impl VaultSession {
         }
     }
 
-    /// Los tags del último lote del watcher.
-    #[must_use]
-    pub fn tags(&self) -> Arc<Tags> {
-        Arc::clone(&self.tags)
-    }
-
     /// La ruta del vault de `path`, si está dentro.
     #[must_use]
     pub fn vault_path(&self, path: &Path) -> Option<VaultPath> {
@@ -285,13 +286,14 @@ impl VaultSession {
         if moved {
             self.save();
         }
-        self.tags = Arc::clone(&update.tags);
+        self.snapshot = Arc::clone(&update.snapshot);
+        let files = &self.snapshot.files;
         let mut moved = false;
         if let Some((focus, in_scope)) = &mut self.focus {
             moved = focus.follow(&update.changes);
-            *in_scope = Arc::new(focus.resolve(&update.snapshot, &self.tags));
+            *in_scope = Arc::new(focus.resolve(files, &self.snapshot.tags));
         }
-        self.notes = self.list(&update.snapshot);
+        self.notes = self.list(files);
         cx.emit(VaultChanged(update));
         if moved {
             cx.emit(FocusChanged);
@@ -305,7 +307,7 @@ impl VaultSession {
     }
 
     fn recents_changed(&mut self, cx: &mut Context<Self>) {
-        self.notes = self.list(&self.vault.snapshot());
+        self.notes = self.list(&self.snapshot.files);
         self.save();
         cx.notify();
     }
@@ -388,110 +390,5 @@ fn read_recents(file: &Path) -> Recents {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::cell::Cell;
-
-    use gpui_kit::{AppContext as _, TestAppContext};
-
-    use super::*;
-
-    /// Las vistas se leen del vault al abrir; cuando cambian, el focus de
-    /// una sigue a su nombre y su consulta nuevos, y se avisa de las dos
-    /// cosas.
-    #[test]
-    fn el_focus_sigue_a_su_vista() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("a.md"), "#rust").unwrap();
-        fs::write(dir.path().join("b.md"), "#gs").unwrap();
-        fs::create_dir(dir.path().join(".metalmind")).unwrap();
-        fs::write(
-            dir.path().join(".metalmind/config.yaml"),
-            "views:\n  gs: \"#gs\"\n",
-        )
-        .unwrap();
-        let (vault, updates) = Vault::open(dir.path()).unwrap();
-        let prepared = Prepared::new(vault, updates, None).unwrap();
-        let mut cx = TestAppContext::single();
-        let session = cx.update(|cx| cx.new(|cx| VaultSession::new(prepared, cx)));
-        let views = session.read_with(&cx, |session, _| session.views());
-        assert_eq!(views.len(), 1);
-        let focus = Focus::parse("@gs", &views).unwrap();
-        session.update(&mut cx, |session, cx| session.set_focus(focus, cx));
-        let events = Rc::new(Cell::new((0, 0)));
-        let (on_focus, on_views) = (Rc::clone(&events), Rc::clone(&events));
-        cx.update(|cx| {
-            cx.subscribe(&session, move |_, _: &FocusChanged, _| {
-                let (focus, views) = on_focus.get();
-                on_focus.set((focus + 1, views));
-            })
-            .detach();
-            cx.subscribe(&session, move |_, _: &ViewsChanged, _| {
-                let (focus, views) = on_views.get();
-                on_views.set((focus, views + 1));
-            })
-            .detach();
-        });
-        let estudio = SavedView {
-            name: "estudio".to_owned(),
-            query: "#rust".to_owned(),
-        };
-        session.update(&mut cx, |session, cx| {
-            session.set_views(vec![estudio], Some(("gs", "estudio")), cx);
-        });
-        cx.run_until_parked();
-        assert_eq!(events.get(), (1, 1));
-        session.read_with(&cx, |session, _| {
-            assert_eq!(session.focus().unwrap().label(), "focus: @estudio");
-            let in_scope = session.in_scope().unwrap();
-            assert!(in_scope.contains_file(&VaultPath::new("a.md").unwrap()));
-            assert!(!in_scope.contains_file(&VaultPath::new("b.md").unwrap()));
-        });
-        let same = session.read_with(&cx, |session, _| session.views().to_vec());
-        session.update(&mut cx, |session, cx| session.set_views(same, None, cx));
-        cx.run_until_parked();
-        assert_eq!(events.get(), (1, 1), "las mismas vistas no avisan");
-        let gone = Vec::new();
-        session.update(&mut cx, |session, cx| session.set_views(gone, None, cx));
-        cx.run_until_parked();
-        assert_eq!(events.get(), (2, 2));
-        session.read_with(&cx, |session, _| {
-            assert_eq!(session.focus().unwrap().label(), "focus: #rust");
-        });
-    }
-
-    #[test]
-    fn los_recientes_se_leen_de_lo_guardado() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("state/vaults/x/recientes");
-        assert_eq!(read_recents(&file), Recents::default());
-        let recents = Recents::parse("b.md\na.md\n");
-        super::super::writer::write_recents(&file, &recents.to_text()).unwrap();
-        assert_eq!(read_recents(&file), recents);
-    }
-
-    #[test]
-    fn solo_lo_de_dentro_del_vault_tiene_ruta_del_vault() {
-        let root = Path::new("/v");
-        let path = |text: &str| relative_to(root, Path::new(text));
-        assert_eq!(path("/v/d/a.md"), Some(VaultPath::new("d/a.md").unwrap()));
-        assert_eq!(path("/otra/a.md"), None);
-        assert_eq!(path("/v"), None);
-        assert_eq!(path("/v/.oculta/a.md"), None);
-    }
-
-    #[test]
-    fn una_nota_sin_guardar_se_ubica_por_lo_que_existe() {
-        let dir = tempfile::tempdir().unwrap();
-        let root = fs::canonicalize(dir.path()).unwrap();
-        assert_eq!(
-            canonical(&root.join("nueva.md")),
-            Some(root.join("nueva.md"))
-        );
-        assert_eq!(
-            canonical(&root.join("no/existe.md")),
-            Some(root.join("no/existe.md")),
-            "su carpeta se borró desde fuera"
-        );
-        assert_eq!(canonical(&root.join("no/../existe.md")), None);
-    }
-}
+#[path = "session_tests.rs"]
+mod tests;

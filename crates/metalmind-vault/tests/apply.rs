@@ -70,7 +70,7 @@ fn renaming_a_tag_with_page_and_undoing_it() {
     write(dir.path(), RENAME);
     let before = contents(dir.path());
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let plan = vault.snapshot().tags.plan_rename("#a", "#b").unwrap();
     assert!(!plan.is_blocked());
 
     let applied = vault.apply(&plan.changes).unwrap();
@@ -138,7 +138,11 @@ fn a_color_on_a_tag_without_page_creates_it_and_undo_removes_it() {
     let before = contents(dir.path());
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let color = PageChange::Color(Some(TagColor::Named("naranja".into())));
-    let plan = vault.tags().plan_page_change("rust", &color).unwrap();
+    let plan = vault
+        .snapshot()
+        .tags
+        .plan_page_change("rust", &color)
+        .unwrap();
 
     let applied = vault.apply(&plan.changes).unwrap();
     assert_eq!(
@@ -159,7 +163,7 @@ fn a_file_that_changed_after_planning_stops_everything() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), RENAME);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let plan = vault.snapshot().tags.plan_rename("#a", "#b").unwrap();
     let moved = "---\ntitle: nuevo\nparents: [a, otro]\n---\n";
     fs::write(dir.path().join("tags/hijo.md"), moved).unwrap();
     let before = contents(dir.path());
@@ -175,7 +179,7 @@ fn an_occupied_target_stops_everything() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), RENAME);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let plan = vault.snapshot().tags.plan_rename("#a", "#b").unwrap();
     fs::write(dir.path().join("tags/b.md"), "de otro programa").unwrap();
     let before = contents(dir.path());
     let result = vault.apply(&plan.changes);
@@ -195,7 +199,7 @@ fn undo_leaves_what_changed_after_applying() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), RENAME);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let plan = vault.snapshot().tags.plan_rename("#a", "#b").unwrap();
     let applied = vault.apply(&plan.changes).unwrap();
     let edited = "---\ntitle: x\ntags: [b, z]\n---\nOtra cosa.\n";
     fs::write(dir.path().join("nota.md"), edited).unwrap();
@@ -217,7 +221,7 @@ fn undo_leaves_a_moved_page_that_changed_where_it_is() {
     let dir = TempDir::new().unwrap();
     write(dir.path(), RENAME);
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
-    let plan = vault.tags().plan_rename("#a", "#b").unwrap();
+    let plan = vault.snapshot().tags.plan_rename("#a", "#b").unwrap();
     let applied = vault.apply(&plan.changes).unwrap();
     let edited = "---\ncolor: verde\n---\nOtra descripción.\n";
     fs::write(dir.path().join("tags/b.md"), edited).unwrap();
@@ -243,7 +247,8 @@ fn undoing_a_move_into_new_folders_removes_them() {
     let before = contents(dir.path());
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let plan = vault
-        .links()
+        .snapshot()
+        .links
         .rename_plan(&path("plan.md"), &path("nuevo/sub/plan.md"))
         .unwrap();
     let applied = vault.apply(&plan.changes()).unwrap();

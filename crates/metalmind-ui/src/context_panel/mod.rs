@@ -9,6 +9,7 @@ mod render;
 mod rows;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use gpui_kit::{
     App, Context, Entity, EventEmitter, FocusHandle, ScrollStrategy, Subscription,
@@ -61,7 +62,7 @@ impl ContextPanel {
     ) -> Self {
         let vault = session.read(cx).vault();
         let changes = cx.subscribe(session, |panel, _, VaultChanged(update), cx| {
-            panel.context.apply(&update.changes, &update.links);
+            panel.context.apply(&update.changes, &update.snapshot.links);
             panel.scroll_to_selection();
             cx.notify();
         });
@@ -77,7 +78,7 @@ impl ContextPanel {
             }
         });
         Self {
-            context: NoteContext::new(vault.links()),
+            context: NoteContext::new(Arc::clone(&vault.snapshot().links)),
             visible: false,
             root: vault.root().to_owned(),
             session: session.clone(),

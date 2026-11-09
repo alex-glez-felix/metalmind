@@ -79,7 +79,7 @@ mod tests {
             fs::write(dir.path().join(name), "").unwrap();
         }
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let index = vault.snapshot();
+        let index = Arc::clone(&vault.snapshot().files);
         assert_eq!(
             names(&notes(&index, &Recents::default())),
             ["b.md", "idea.canvas"]
@@ -95,7 +95,7 @@ mod tests {
             fs::write(path, "").unwrap();
         }
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        let index = vault.snapshot();
+        let index = Arc::clone(&vault.snapshot().files);
         assert_eq!(
             names(&notes(&index, &Recents::default())),
             ["a.md", "b.md", "d/c.md"]

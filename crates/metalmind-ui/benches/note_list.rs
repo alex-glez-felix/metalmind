@@ -39,6 +39,7 @@ fn fixture() -> Fixture {
     let (vault, _updates) = Vault::open(dir.path()).unwrap();
     let notes: Vec<VaultPath> = vault
         .snapshot()
+        .files
         .files()
         .filter(|entry| entry.kind == EntryKind::Note)
         .map(|entry| entry.path.clone())
@@ -62,13 +63,7 @@ fn mirar_las_fechas_de_5k(bencher: Bencher) {
 fn armar_la_lista_de_5k(bencher: Bencher, source: &ListSource) {
     let fixture = fixture();
     bencher.bench_local(|| {
-        let mut list = NoteList::new(
-            source.clone(),
-            "",
-            fixture.vault.snapshot(),
-            fixture.vault.tags(),
-            fixture.vault.summaries(),
-        );
+        let mut list = NoteList::new(source.clone(), "", fixture.vault.snapshot());
         let _ = list.set_dates(fixture.dates.clone());
         list.len()
     });
@@ -77,13 +72,7 @@ fn armar_la_lista_de_5k(bencher: Bencher, source: &ListSource) {
 #[divan::bench(args = ["n", "#t1 -#t3 nota", "zzz"])]
 fn tecla_en_el_filtro_de_5k(bencher: Bencher, query: &str) {
     let fixture = fixture();
-    let mut list = NoteList::new(
-        ListSource::All,
-        "",
-        fixture.vault.snapshot(),
-        fixture.vault.tags(),
-        fixture.vault.summaries(),
-    );
+    let mut list = NoteList::new(ListSource::All, "", fixture.vault.snapshot());
     let _ = list.set_dates(fixture.dates.clone());
     let mut matcher = FuzzyMatcher::paths();
     let query = Arc::<str>::from(query);

@@ -42,7 +42,7 @@ impl WorkspaceView {
     /// ventana. Mientras, el picker espera: lo que se escriba y se elija
     /// sale al llegar la lista.
     pub(super) fn open_unresolved_links(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let index = self.vault.session.read(cx).vault().links();
+        let index = Arc::clone(&self.vault.session.read(cx).snapshot().links);
         let fuzzy = Fuzzy::new(
             PickerState::loading(),
             Haystack::Text,

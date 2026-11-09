@@ -39,15 +39,15 @@ fn abrir_con_tags(bencher: Bencher, notes: usize) {
     let (dir, _vault) = vault(notes);
     bencher.bench(|| {
         let (vault, _updates) = Vault::open(dir.path()).unwrap();
-        assert_eq!(vault.tags().graph().pages().count(), pages(notes));
+        assert_eq!(vault.snapshot().tags.graph().pages().count(), pages(notes));
         vault
     });
 }
 
 fn with_tags(bencher: Bencher, notes: usize, run: impl Fn(&Tags) -> usize + Sync) {
     let (_dir, vault) = vault(notes);
-    let tags = vault.tags();
-    bencher.bench(|| run(&tags));
+    let tags = &vault.snapshot().tags;
+    bencher.bench(|| run(tags));
 }
 
 #[divan::bench(args = SIZES)]
@@ -91,8 +91,8 @@ fn plan_de_renombrar_un_tag_con_pagina(bencher: Bencher, notes: usize) {
 #[divan::bench(args = SIZES)]
 fn clonar_los_tags(bencher: Bencher, notes: usize) {
     let (_dir, vault) = vault(notes);
-    let tags = vault.tags();
-    bencher.bench(|| Tags::clone(&tags));
+    let tags = &vault.snapshot().tags;
+    bencher.bench(|| Tags::clone(tags));
 }
 
 /// Publicar los tags tras cambiar una nota (#60): debería costar lo que
@@ -100,8 +100,8 @@ fn clonar_los_tags(bencher: Bencher, notes: usize) {
 #[divan::bench(args = SIZES)]
 fn publicar_una_nota_cambiada(bencher: Bencher, notes: usize) {
     let (dir, vault) = vault(notes);
-    let tags = vault.tags();
-    let (path, text) = changed_note(&dir, &tags);
+    let tags = &vault.snapshot().tags;
+    let (path, text) = changed_note(&dir, tags);
     bencher.bench(|| tags.with_unsaved([(&path, text.as_str())]));
 }
 
@@ -109,7 +109,7 @@ fn publicar_una_nota_cambiada(bencher: Bencher, notes: usize) {
 #[divan::bench(args = SIZES)]
 fn reescanear_una_nota(bencher: Bencher, notes: usize) {
     let (dir, vault) = vault(notes);
-    let (_, text) = changed_note(&dir, &vault.tags());
+    let (_, text) = changed_note(&dir, &vault.snapshot().tags);
     bencher.bench(|| metalmind_syntax::scan(&text));
 }
 

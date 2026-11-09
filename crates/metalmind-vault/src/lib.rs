@@ -31,6 +31,7 @@ mod refresh;
 mod saved_jumps;
 mod scan;
 mod searchable;
+mod snapshot;
 mod summary;
 mod summary_index;
 pub mod tags;
@@ -64,10 +65,11 @@ pub use properties::PropertyIndex;
 pub use refresh::VaultChange;
 pub use saved_jumps::{SaveJumpsError, SavedJump, SavedJumps};
 pub use scan::walk_notes;
+pub use snapshot::{VaultSnapshot, VaultUpdate};
 pub use summary::Summary;
 pub use summary_index::SummaryIndex;
 pub use vault::{
     HistoryOptions, PendingVersion, SaveError, SaveKind, Vault, VaultError, VaultOptions,
-    VaultRoot, VaultUpdate, VersionError,
+    VaultRoot, VersionError,
 };
 pub use watcher::Unwatched;

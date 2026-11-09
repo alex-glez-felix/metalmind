@@ -98,7 +98,7 @@ impl VaultChanges {
     ) -> Self {
         let edits = cx.observe(&workspace, |changes, _, cx| changes.refresh_unsaved(cx));
         let batches = cx.subscribe(&session, |changes, _, VaultChanged(update), cx| {
-            changes.refresh_rename_preview(&update.links, cx);
+            changes.refresh_rename_preview(&update.snapshot.links, cx);
         });
         Self {
             workspace,
