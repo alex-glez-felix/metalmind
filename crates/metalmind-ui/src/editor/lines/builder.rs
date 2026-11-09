@@ -54,12 +54,15 @@ impl Builder<'_, '_> {
                         x = cut.text(&mut laid, range, x, slicer);
                     }
                 }
-                Part::Formula { spot, source } => {
+                Part::Formula {
+                    spot: index,
+                    source,
+                } => {
                     if let Some((spot, Ok(formula))) = measured
-                        .get(*spot)
+                        .get(*index)
                         .filter(|_| row.source.contains(&source.start))
                     {
-                        x = self.formula(&mut laid, spot, *formula, source.clone(), x);
+                        x = self.formula(&mut laid, *index, spot, *formula, source.clone(), x);
                     } else if let Some(piece) = self.continued(source, start) {
                         x = piece.x + piece.width;
                         laid.pieces.push(piece);
@@ -79,12 +82,13 @@ impl Builder<'_, '_> {
         piece.filter(|_| source.contains(&start)).cloned()
     }
 
-    /// Una fórmula en lugar de su fuente: alineada con el texto de su fila
-    /// o, si es un bloque solo en su línea, centrada. La que es la línea
+    /// La fórmula `index` en lugar de su fuente: alineada con el texto de su
+    /// fila o, si es un bloque solo en su línea, centrada. La que es la línea
     /// entera empieza en la primera fila y, si hay más, va sobre todas.
     fn formula(
         &mut self,
         row: &mut LaidRow,
+        index: usize,
         spot: &MathSpot,
         formula: FormulaBox,
         source: Range<usize>,
@@ -92,7 +96,7 @@ impl Builder<'_, '_> {
     ) -> Pixels {
         let width = px(formula.width);
         let alone = spot.place == MathPlace::Alone;
-        let split = self.line.splits(spot);
+        let split = self.line.measured.splits(index);
         let height = f32::from(if split {
             self.line.rows_height()
         } else {

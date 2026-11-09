@@ -213,6 +213,7 @@ impl Layout<'_> {
             None => LineRows {
                 rows: vec![self.row; count],
                 below: 0,
+                split: Vec::new(),
             },
         }
     }

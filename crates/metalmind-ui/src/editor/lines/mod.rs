@@ -5,7 +5,7 @@
 use std::ops::Range;
 
 use gpui_kit::{Bounds, Font, PaintQuad, Pixels, SharedString, Window, fill, point, px, size};
-use metalmind_syntax::{LineKind, LineStyle, MathSpot, wide_graphemes};
+use metalmind_syntax::{LineKind, LineRows, LineStyle, MathSpot, ScreenLine, wide_graphemes};
 use metalmind_vim::LineHeights as _;
 
 mod builder;
@@ -103,22 +103,7 @@ pub fn shape_visible_lines(
         };
         let measured = layout.rows(placed.line);
         let shown = layout.screen_line(placed.line);
-        let mut top = 0.0;
-        let rows = measured
-            .rows
-            .iter()
-            .enumerate()
-            .map(|(row, &height)| {
-                let source = shown.as_ref().map_or(0..text.len(), |shown| shown.row(row));
-                let row = RowBox {
-                    source,
-                    top: px(top),
-                    height: px(units(height)),
-                };
-                top += units(height);
-                row
-            })
-            .collect();
+        let rows = row_boxes(&measured, shown.as_deref(), text.len());
         let line = Line {
             number: placed.line,
             text: &text,
@@ -130,6 +115,7 @@ pub fn shape_visible_lines(
             ),
             height: px(placed.height),
             rows,
+            measured,
             width: viewport.bounds.size.width,
         };
         let index = shaped.lines.len();
@@ -154,6 +140,26 @@ struct RowBox {
     height: Pixels,
 }
 
+/// Las filas de una línea de `len` bytes con lo que mide cada una, partida
+/// como `shown`; sin él, una sola fila con todo.
+fn row_boxes(measured: &LineRows, shown: Option<&ScreenLine>, len: usize) -> Vec<RowBox> {
+    let mut top = 0.0;
+    measured
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(row, &height)| {
+            let row = RowBox {
+                source: shown.map_or(0..len, |shown| shown.row(row)),
+                top: px(top),
+                height: px(units(height)),
+            };
+            top += units(height);
+            row
+        })
+        .collect()
+}
+
 /// Una línea visible antes de darle forma.
 struct Line<'a> {
     number: usize,
@@ -163,6 +169,9 @@ struct Line<'a> {
     origin: gpui_kit::Point<Pixels>,
     height: Pixels,
     rows: Vec<RowBox>,
+    /// Lo que midió el motor: de ahí salen `rows` y qué fórmulas ocupan
+    /// varias.
+    measured: LineRows,
     /// El ancho del área de texto, para centrar un bloque.
     width: Pixels,
 }
@@ -211,7 +220,7 @@ impl Line<'_> {
                 measured.get(index).is_some_and(|(spot, formula)| {
                     formula
                         .as_ref()
-                        .is_ok_and(|formula| self.shows_image(spot, *formula))
+                        .is_ok_and(|formula| self.shows_image(index, spot, *formula))
                 })
             })
         };
@@ -272,21 +281,11 @@ impl Line<'_> {
             .collect()
     }
 
-    /// Si `formula` se pinta como imagen. Con su fuente partida en filas,
-    /// solo si es lo único de la línea y cabe a lo ancho: entre texto
+    /// Si la fórmula `index`, `spot`, se pinta como imagen. Partida en
+    /// filas, solo si es lo único de la línea y cabe a lo ancho: entre texto
     /// quedarían huecos.
-    fn shows_image(&self, spot: &MathSpot, formula: FormulaBox) -> bool {
-        !self.splits(spot) || (spot.fills_line() && px(formula.width) <= self.width)
-    }
-
-    /// Si `spot` ocupa varias filas: su fuente quedó partida o, si es la
-    /// línea entera, la línea tiene más de una.
-    fn splits(&self, spot: &MathSpot) -> bool {
-        if spot.fills_line() {
-            return self.rows.len() > 1;
-        }
-        let row_of = |byte: usize| self.rows.iter().position(|row| row.source.contains(&byte));
-        row_of(spot.range.start) != row_of(spot.range.end.saturating_sub(1))
+    fn shows_image(&self, index: usize, spot: &MathSpot, formula: FormulaBox) -> bool {
+        !self.measured.splits(index) || (spot.fills_line() && px(formula.width) <= self.width)
     }
 
     /// Lo que miden las filas, sin lo que suma debajo un bloque.
