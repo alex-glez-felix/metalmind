@@ -68,7 +68,7 @@ impl VaultChanges {
         let notes = texts
             .notes
             .iter()
-            .filter(|(path, _)| EntryKind::of_file(path) == EntryKind::Note)
+            .filter(|(path, _)| EntryKind::of_file(path).is_indexed())
             .map(|(path, text)| (path, text.as_str()));
         let tags = session.snapshot().tags.with_unsaved(notes);
         let config = texts.config(session.root());
@@ -158,7 +158,13 @@ impl VaultChanges {
 
     /// Agrega `tags` al frontmatter de `note`. Como un cambio de tags, si
     /// tiene cambios sin guardar va a su buffer, y `:vaultundo` lo deshace.
+    /// Una pizarra no tiene frontmatter: sus tags van en el texto de una caja.
     pub fn tag_note(&mut self, note: &VaultPath, tags: &[String], cx: &mut Context<Self>) {
+        if EntryKind::of_file(note) != EntryKind::Note {
+            let text =
+                format!("no se etiquetó {note}: en una pizarra el #tag se escribe en una caja");
+            return self.tell(Message::Info(text), cx);
+        }
         let root = self.session.read(cx).root().to_owned();
         let file = root.join(note.as_str());
         let buffer = self

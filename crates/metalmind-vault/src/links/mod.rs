@@ -1,5 +1,5 @@
-//! El índice de links: los links de cada nota ya resueltos, quién enlaza a
-//! cada archivo y los links sin resolver o ambiguos. Se arma con
+//! El índice de links: los links de cada nota y de cada pizarra ya resueltos,
+//! quién enlaza a cada archivo y los links sin resolver o ambiguos. Se arma con
 //! lo escaneado de cada nota al abrir el vault y se mantiene al día aplicando cada
 //! [`crate::VaultChange`].
 
@@ -15,7 +15,6 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use imbl::{HashMap, OrdSet};
-use metalmind_syntax::LinkSyntax;
 
 pub use follow::Destination;
 pub use rename::{RenameConflict, RenamePlan, RenamePlanError};
@@ -51,16 +50,28 @@ pub struct LinkContext {
     pub link: Range<usize>,
 }
 
-/// Un link de una nota, con sus rangos en bytes sobre el archivo tal como
-/// se leyó.
+/// Cómo está escrito el destino de un link: renombrar lo reescribe igual.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+enum Written {
+    Wiki,
+    Markdown,
+    /// Un destino markdown entre `<…>`, que admite espacios.
+    BracketedMarkdown,
+    /// El `file` de una tarjeta de pizarra: la ruta desde la raíz, sin `/`.
+    Card,
+}
+
+/// Un link de una nota o de una pizarra, con sus rangos en bytes sobre el
+/// texto que se indexa de ella ([`crate::FileEdits`]): el archivo tal como
+/// se leyó o, en una pizarra, el texto de sus nodos.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IndexedLink {
-    pub syntax: LinkSyntax,
     pub embed: bool,
     pub span: Range<usize>,
     /// El destino como está escrito.
     pub target_span: Range<usize>,
-    /// El destino sin escapes ni `%20`; vacío en `[[#Heading]]`.
+    /// El destino sin escapes ni `%20`; vacío en `[[#Heading]]`. El de una
+    /// tarjeta de pizarra es su ruta con `/` delante: desde la raíz.
     pub target_text: String,
     pub subpath: Option<LinkSubpath>,
     /// Desde cero.
@@ -71,8 +82,7 @@ pub struct IndexedLink {
     /// Depende del resto del vault: la caché no la guarda.
     #[serde(skip)]
     pub target: LinkTarget,
-    /// Un destino markdown entre `<…>`, que admite espacios.
-    bracketed: bool,
+    written: Written,
 }
 
 impl IndexedLink {
@@ -117,7 +127,8 @@ pub struct LinkIndex {
 }
 
 impl LinkIndex {
-    /// Los links de `note`, en orden de aparición. Vacío si no es una nota.
+    /// Los links de `note`, en orden de aparición. Vacío si no es una nota
+    /// ni una pizarra.
     #[must_use]
     pub fn outgoing(&self, note: &VaultPath) -> &[IndexedLink] {
         self.notes.get(note).map_or(&[], |links| links.as_slice())
@@ -131,14 +142,9 @@ impl LinkIndex {
         self.names.resolve(source, target)
     }
 
-    /// Si `path` es una nota del índice.
-    #[must_use]
-    pub fn is_note(&self, path: &VaultPath) -> bool {
-        self.notes.contains_key(path)
-    }
-
-    /// Los links que resuelven a `path` desde otras notas o desde ella misma
-    /// por su nombre, ordenados por nota y posición. No incluye `[[#Heading]]`.
+    /// Los links que resuelven a `path` desde otras notas, desde las pizarras
+    /// (sus tarjetas y el texto de sus cajas) o desde ella misma por su
+    /// nombre, ordenados por archivo y posición. No incluye `[[#Heading]]`.
     pub fn backlinks(&self, path: &VaultPath) -> impl Iterator<Item = NoteLink<'_>> {
         self.incoming
             .get(path)

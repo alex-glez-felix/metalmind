@@ -97,7 +97,7 @@ impl ModifiedTimes {
         for change in changes {
             match change {
                 VaultChange::Created { path, .. } | VaultChange::Modified { path } => {
-                    if index.kind(path) == Some(EntryKind::Note) {
+                    if index.kind(path).is_some_and(EntryKind::is_indexed) {
                         stale.push(path.clone());
                     }
                 }
@@ -137,7 +137,7 @@ fn notes_under<'i>(
 ) -> impl Iterator<Item = VaultPath> + 'i {
     index
         .files()
-        .filter(move |entry| entry.kind == EntryKind::Note && entry.path.starts_with(path))
+        .filter(move |entry| entry.kind.is_indexed() && entry.path.starts_with(path))
         .map(|entry| entry.path.clone())
 }
 

@@ -1,4 +1,5 @@
-//! De dónde salen las notas de la lista: el buzón, todas, una vista
+//! De dónde salen las notas de la lista, y las pizarras, que el vault indexa
+//! igual (09 §5): el buzón, todas, una vista
 //! guardada, un tag con sus descendientes o una carpeta con sus subcarpetas.
 
 use std::collections::BTreeSet;
@@ -222,7 +223,7 @@ pub fn query_notes<'t>(text: &str, tags: &'t Tags) -> Vec<&'t VaultPath> {
 fn notes_where(index: &VaultIndex, keep: impl Fn(&VaultPath) -> bool) -> Vec<VaultPath> {
     index
         .files()
-        .filter(|entry| entry.kind == EntryKind::Note && keep(entry.path))
+        .filter(|entry| entry.kind.is_indexed() && keep(entry.path))
         .map(|entry| entry.path.clone())
         .collect()
 }
@@ -245,6 +246,11 @@ mod tests {
         ("ui/suelta.md", "Tampoco."),
         ("tags/gpui.md", "---\nparents: [rust]\n---\n"),
         ("img.png", ""),
+        (
+            "mapa.canvas",
+            r##"{"nodes":[{"id":"a","type":"text","x":0,"y":0,"width":9,"height":9,"text":"#Rust"}]}"##,
+        ),
+        ("ui/vacia.canvas", ""),
     ];
 
     fn vault() -> (tempfile::TempDir, Vault) {
@@ -265,21 +271,21 @@ mod tests {
     }
 
     #[rstest]
-    #[case::buzon(ListSource::Inbox, &["sin-tags.md", "ui/suelta.md"])]
+    #[case::buzon(ListSource::Inbox, &["sin-tags.md", "ui/suelta.md", "ui/vacia.canvas"])]
     #[case::un_tag_con_sus_descendientes(
         ListSource::Tag("Rust".into()),
-        &["parser.md", "ui/gpui.md", "ui/hondo/viejo.md"]
+        &["mapa.canvas", "parser.md", "ui/gpui.md", "ui/hondo/viejo.md"]
     )]
     #[case::un_tag_que_no_existe(ListSource::Tag("nada".into()), &[])]
     #[case::un_tag_invalido(ListSource::Tag("a/b".into()), &[])]
     #[case::una_carpeta_y_sus_subcarpetas(
         ListSource::Folder("ui".into()),
-        &["ui/gpui.md", "ui/hondo/viejo.md", "ui/suelta.md"]
+        &["ui/gpui.md", "ui/hondo/viejo.md", "ui/suelta.md", "ui/vacia.canvas"]
     )]
     #[case::una_carpeta_que_no_esta(ListSource::Folder("nada".into()), &[])]
     #[case::una_vista(
         ListSource::View { name: "gs".into(), query: "#rust -#archivado".into() },
-        &["parser.md", "ui/gpui.md"]
+        &["mapa.canvas", "parser.md", "ui/gpui.md"]
     )]
     #[case::una_vista_con_texto(
         ListSource::View { name: "x".into(), query: "#rust parser".into() },
@@ -287,7 +293,16 @@ mod tests {
     )]
     #[case::todas(
         ListSource::All,
-        &["parser.md", "sin-tags.md", "tags/gpui.md", "ui/gpui.md", "ui/hondo/viejo.md", "ui/suelta.md"]
+        &[
+            "mapa.canvas",
+            "parser.md",
+            "sin-tags.md",
+            "tags/gpui.md",
+            "ui/gpui.md",
+            "ui/hondo/viejo.md",
+            "ui/suelta.md",
+            "ui/vacia.canvas",
+        ]
     )]
     fn cada_fuente_trae_sus_notas(#[case] source: ListSource, #[case] expected: &[&str]) {
         let (_dir, vault) = vault();

@@ -219,3 +219,38 @@ fn en_un_archivo_vacio_lo_agregado_trae_su_salto() {
         "---\ntags: [a]\n---\n"
     );
 }
+
+/// En una pizarra las ediciones van sobre el texto de sus nodos: al buffer
+/// pasa la línea del nodo, como un paso de su historial, y el motor ni se
+/// entera.
+#[test]
+fn en_una_pizarra_cambia_la_linea_del_nodo() {
+    const BOARD: &str = "{\n\t\"nodes\":[\n\t\t{\"id\":\"a\",\"type\":\"text\",\"x\":0,\"y\":0,\"width\":200,\"height\":80,\"text\":\"#rust uno\"},\n\t\t{\"id\":\"b\",\"type\":\"file\",\"x\":300,\"y\":0,\"width\":200,\"height\":80,\"file\":\"plan.md\"}\n\t],\n\t\"edges\":[]\n}\n";
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("idea.canvas");
+    fs::write(&path, BOARD).unwrap();
+    let mut session = Session::open(&path);
+    let edits = FileEdits {
+        path: VaultPath::new("idea.canvas").unwrap(),
+        ..one_edit(1..5, "rust", "lenguaje")
+    };
+    session.workspace.check_file_edits(&path, &edits).unwrap();
+    let undo = session.workspace.edit_file(&path, &edits).unwrap();
+    let renamed = BOARD.replace("#rust", "#lenguaje");
+    assert_eq!(session.workspace.file_text(&path).unwrap(), renamed);
+    assert!(session.is_modified());
+    assert_eq!(fs::read_to_string(&path).unwrap(), BOARD);
+
+    session.workspace.edit_file(&path, &undo).unwrap();
+    assert_eq!(session.workspace.file_text(&path).unwrap(), BOARD);
+    session.workspace.undo_board(session.pane()).unwrap();
+    assert_eq!(session.workspace.file_text(&path).unwrap(), renamed);
+
+    let stale = FileEdits {
+        path: VaultPath::new("idea.canvas").unwrap(),
+        ..one_edit(1..5, "rust", "otro")
+    };
+    let error = session.workspace.edit_file(&path, &stale).unwrap_err();
+    assert!(matches!(error, FileEditError::Stale(_)), "{error}");
+    assert_eq!(session.workspace.file_text(&path).unwrap(), renamed);
+}

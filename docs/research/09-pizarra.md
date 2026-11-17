@@ -1,6 +1,6 @@
 # 09 — Pizarra para pensar
 
-> **Estado: decidido; en implementación (fases 1 y 3 hechas).** Spike del 2026-10-26, decisiones del autor sobre la PR #171 (§6). Cambia la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
+> **Estado: decidido; en implementación (fases 1, 3 y 2 hechas).** Spike del 2026-10-26, decisiones del autor sobre la PR #171 (§6). Cambia la fila "Canvas" de [07](07-features-otras-apps.md) §2.5, que lo dejó como "No encaja por ahora". Versiones, fechas y licencias de crates.io y GitHub de ese día. Los números son del spike, en release, en una máquina de escritorio x86_64 con Linux y GPU NVIDIA (la de [performance.md](../performance.md)). El código está en [`spikes/pizarra/`](../../spikes/pizarra/README.md), fuera del workspace: no toca el editor ni el binario.
 
 ## TL;DR
 
@@ -54,6 +54,20 @@ Medido con 2 000 elementos, en release: un frame de arrastre reconstruye en **66
 | Zoom continuo con `ctrl` y la rueda, de ver todo a cerca y de vuelta | 16.7 / 34.0 ms | 3.32 / 15.99 ms |
 
 Arrastrar una caja cuesta lo mismo que mover la vista: el p99 de 33 ms de los dos es un frame perdido de vez en cuando con el ratón, no de la pizarra. El zoom continuo mantiene los 60 fps en la mediana y sus picos de CPU son los del §3.3, de componer los textos en cada tamaño.
+
+## Estado (fase 2, 2026-11-09)
+
+Hecha la fase 2 ([#271](https://github.com/alex-glez-felix/metalmind/issues/271)): las pizarras entran a los índices del vault. Lo que se decidió al implementar:
+
+- **`metalmind-vault` depende de `metalmind-board`**, los dos sin GUI. El vault no lee el JSON: le pide a la pizarra su texto (`Board::text`) y le devuelve los cambios por rango (`Board::replace_text`). El formato sigue en un solo crate.
+- **El texto de una pizarra** (`BoardText`) es el de cada caja y la ruta de cada tarjeta, en el orden de los nodos y cada uno desde su propia línea. Los índices guardan sus rangos sobre ese texto, igual que los de una nota sobre su archivo, y las ediciones (`FileEdits`) también van sobre él. Por eso el plan de renombre y los planes de tags no tienen un caso para pizarras. Grupos, links web, trazos y etiquetas de flecha no aportan texto.
+- **Una tarjeta es un link a su ruta exacta**, desde la raíz: no se resuelve por nombre, y mover la pizarra no la cambia. Renombrar o mover la nota reescribe su `file`; en disco cambia la línea de esa tarjeta (la pizarra se escribe en su forma canónica, como al editarla, y una de otra herramienta queda entera en esa forma). Deshacer devuelve los bytes de antes.
+- **La vista previa del renombre** muestra una fila por tarjeta, con la ruta de antes y la nueva, y una por cada línea de texto de una caja con un link que cambia. No muestra la línea de JSON.
+- **Backlinks**: el panel de contexto lista la pizarra entre las notas que enlazan. El contexto de una tarjeta es su ruta y la primera línea de cada nodo unido a ella por una flecha. Abrirla desde ahí abre la pizarra, todavía sin elegir el nodo.
+- **Tags**: un `#tag` del texto de una caja cuenta como el de una nota: la pizarra sale en el panel de tags, en la lista de notas (con su nombre de archivo, sin extracto) y en el finder con `#tag`, y renombrar o fusionar el tag lo cambia en la caja, en disco o en su buffer si tiene cambios sin guardar. Una pizarra sin tags está en el buzón, como una nota sin tags. Un frontmatter dentro de una caja no cuenta: solo las notas lo tienen.
+- **Lo que falta de la fase**: elegir el nodo al abrir un backlink, y `metalmind search` y `tags --json` con el id del nodo. La búsqueda de texto (`space /`) sigue recorriendo solo las notas.
+
+Abrir un vault de 5 000 notas con 100 pizarras de 200 elementos (120 nodos cada una), en release, en una máquina de escritorio x86_64 de 16 hilos: 33.6 ms, contra 29.9 ms sin ellas (unos 37 µs por pizarra); con la caché al día, 28.4 ms contra 28.4 ms (`cargo bench -p metalmind-vault --bench open`). Sin pizarras, abrir y publicar una nota cambiada cuestan lo mismo que antes.
 
 ## 1. Qué se pide y qué no
 
@@ -291,9 +305,9 @@ Rejilla de 10 al mover, al crear y al cambiar el tamaño, y guías de alineació
 
 - **Un crate de núcleo, `metalmind-board`** (sin GPUI): el formato, la geometría de las flechas, el acierto de clic y las operaciones de edición; el historial es el del buffer del documento (§4.3). Lo que hoy es `formato.rs`, `trazo.rs` y `geometria.rs`. El teselado y el pintado van en `metalmind-ui`: deciden cómo se ve. Agregar el crate actualiza la lista de [03](03-core-architecture.md) §6 y la de CLAUDE.md.
 - **El vault**: un `EntryKind::Board` para los `.canvas`, junto a `Note` y `Attachment`. El finder, el árbol y `:e idea.canvas` lo abren en la vista de pizarra. `board::new` (`:board [nombre]`, la paleta) y `file_tree::new_board` (`b` en el árbol y su menú) crean una vacía.
-- **Links y backlinks**: el índice de links (03 §4, "Estado (M3…)") lee de una pizarra los nodos `file` (ruta exacta, sin resolver nombres) y los `[[links]]` del texto de sus nodos, con el mismo scanner de `metalmind-syntax`. Los backlinks de una nota muestran la pizarra con el texto de los nodos unidos a la tarjeta como contexto.
+- **Links y backlinks**: el índice de links (03 §4, "Estado (M3…)") lee de una pizarra los nodos `file` (ruta exacta, sin resolver nombres) y los `[[links]]` del texto de sus nodos, con el mismo scanner de `metalmind-syntax`. Los backlinks de una nota muestran la pizarra con el texto de los nodos unidos a la tarjeta como contexto. Para eso **`metalmind-vault` depende de `metalmind-board`**: el vault le pide el texto de sus nodos y nunca lee el JSON (ver el estado de la fase 2).
 - **Tags**: un `#tag` en el texto de un nodo es un tag de la pizarra, como en una nota, y la pizarra aparece en el panel de tags.
-- **Renombrar una nota** reescribe el `file` de cada tarjeta que la apunta: una línea por tarjeta, con la vista previa de renombrar.
+- **Renombrar una nota** reescribe el `file` de cada tarjeta que la apunta: una línea por tarjeta, con la vista previa de renombrar. La edición se la hace `metalmind-board` (`Board::replace_text` y su escritura canónica); a un buffer abierto pasan sus líneas con `line_edits`, como en `Document::edit_board`.
 - **Embeber** `![[idea.canvas]]` en una nota (con la infraestructura de embeds de M5): una vista de solo lectura con toda la pizarra a la vista y nivel de detalle, de alto fijo (`![[idea.canvas|400]]` para cambiarlo). `enter`, `gd` o un clic la abren a pantalla completa para editar. `[[idea.canvas]]` es un link normal.
 - **CLI**: `metalmind search` y `tags` incluyen las pizarras; `--json` da la ruta y el id del nodo.
 

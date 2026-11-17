@@ -121,7 +121,10 @@ mod tests {
             .files()
             .map(|entry| {
                 let text = read(entry.path).unwrap_or_default();
-                (entry.path.clone(), NoteScan::of(&text).properties)
+                (
+                    entry.path.clone(),
+                    NoteScan::of(entry.path, &text).properties,
+                )
             })
             .collect();
         PropertyIndex::from_scans(scans)

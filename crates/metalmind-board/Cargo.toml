@@ -1,6 +1,6 @@
 [package]
 name = "metalmind-board"
-description = "La pizarra sin GUI: el formato .canvas con escritura canónica, la geometría de las flechas, el acierto de clic y las operaciones de edición."
+description = "La pizarra sin GUI: el formato .canvas con escritura canónica, la geometría de las flechas, el acierto de clic, las operaciones de edición y el texto de sus nodos para quien la indexa."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

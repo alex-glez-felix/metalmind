@@ -4198,6 +4198,7 @@ dependencies = [
  "insta",
  "jiff",
  "log",
+ "metalmind-board",
  "metalmind-perf",
  "metalmind-syntax",
  "miniz_oxide 0.9.1",

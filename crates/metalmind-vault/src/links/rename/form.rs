@@ -3,10 +3,10 @@
 
 use std::fmt::Write as _;
 
-use metalmind_syntax::{LinkSyntax, note_name};
+use metalmind_syntax::note_name;
 
-use crate::links::IndexedLink;
 use crate::links::note::subpath;
+use crate::links::{IndexedLink, Written};
 use crate::path::VaultPath;
 
 /// Destinos para `target`, escrito desde `source`, en la forma de `original`
@@ -56,10 +56,12 @@ fn relative(source: &VaultPath, path: &str) -> String {
 /// `candidate` escrito en la sintaxis de `link`, si al volver a escanearlo
 /// da un solo link entero con ese destino y la misma subruta.
 pub(super) fn write(link: &IndexedLink, candidate: &str) -> Option<String> {
-    let written = match (link.syntax, link.bracketed) {
-        (LinkSyntax::Wiki, _) => candidate.to_owned(),
-        (LinkSyntax::Markdown, true) => escape_bracketed(candidate),
-        (LinkSyntax::Markdown, false) => escape_plain(candidate),
+    let written = match link.written {
+        // Una ruta entera no tiene sintaxis que volver a escanear.
+        Written::Card => return candidate.strip_prefix('/').map(str::to_owned),
+        Written::Wiki => candidate.to_owned(),
+        Written::BracketedMarkdown => escape_bracketed(candidate),
+        Written::Markdown => escape_plain(candidate),
     };
     let context = &link.context.text;
     let span = link.in_context(&link.span);

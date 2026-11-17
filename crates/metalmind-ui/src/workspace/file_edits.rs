@@ -38,7 +38,12 @@ impl Workspace {
     /// que las ediciones esperan.
     pub fn check_file_edits(&self, path: &Path, edits: &FileEdits) -> Result<(), FileEditError> {
         let id = self.editable_document(path)?;
-        buffer_edits(path, self.document(id)?, edits)?;
+        let document = self.document(id)?;
+        if document.is_board() {
+            edits.apply(&document.file_text())?;
+        } else {
+            buffer_edits(path, document, edits)?;
+        }
         Ok(())
     }
 
@@ -64,6 +69,9 @@ impl Workspace {
         edits: &FileEdits,
     ) -> Result<FileEdits, FileEditError> {
         let id = self.editable_document(path)?;
+        if self.document(id)?.is_board() {
+            return self.edit_board_file(id, edits);
+        }
         let (edits, undo) = buffer_edits(path, self.document(id)?, edits)?;
         let shown = self.panes_showing(id).next();
         match shown {
@@ -76,6 +84,22 @@ impl Workspace {
             }
             None => self.edit_hidden(id, edits)?,
         }
+        Ok(undo)
+    }
+
+    /// Las ediciones de una pizarra van sobre el texto de sus nodos: el
+    /// archivo nuevo lo arma el vault y al buffer pasan sus líneas.
+    fn edit_board_file(
+        &mut self,
+        id: DocumentId,
+        edits: &FileEdits,
+    ) -> Result<FileEdits, FileEditError> {
+        let document = self.document_mut(id)?;
+        let (written, undo) = edits.apply(&document.file_text())?;
+        document
+            .rewrite_board(&written)
+            .map_err(WorkspaceError::Buffer)?;
+        self.edited(id);
         Ok(undo)
     }
 

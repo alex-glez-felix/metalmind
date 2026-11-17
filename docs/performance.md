@@ -75,6 +75,7 @@ Medido el 2026-10-18 con `divan` en release, mediana de cada benchmark, en una m
 | Pegar una imagen de 200 KB (escribirla, `fsync`, comprobar que el vault la ve y armar su embed), vault de 5 k / 50 k notas, en SSD | ≤ 16 ms | 2.8 / 3.1 ms (el `fsync` llega a ~100 ms: va en el fondo, como guardar) | ✅ | `metalmind-vault` `pegar_una_imagen` |
 | Plan de renombre: una nota / mover una carpeta de 500 notas | ≤ 16 ms | 8.3 µs / 9.3 ms | ✅ | `metalmind-vault` `plan_de_renombrar_una_nota`, `plan_de_mover_una_carpeta` |
 | Mover esa carpeta con cada nombre en las 100 carpetas (peor caso) | lineal | 24 ms | ✅ | test `planear_mover_una_carpeta_es_lineal` |
+| Abrir el vault, 5 k notas y 100 pizarras de 200 elementos, que también se indexan ([09](research/09-pizarra.md) §5): leyéndolas / con la caché al día | ≤ 200 ms | 33.6 / 28.4 ms (sin pizarras, 29.9 / 28.4 ms) | ✅ | `metalmind-vault` `abrir_5k_notas_y_100_pizarras`, `abrir_5k_notas_y_100_pizarras_con_cache` |
 | Abrir con tags: 5 k notas y 200 páginas de tag / 50 k y 2 000 | ≤ 200 ms / ≤ 2 s | 32 / 345 ms | ✅ | `metalmind-vault` `abrir_con_tags` |
 | Consulta de tags `#t1 -#t3`, un tag cuyos descendientes cubren el 99 % de las notas, 5 k / 50 k | ≤ 16 ms | 0.67 / 13 ms | ⚠️ | `metalmind-vault` `consulta_por_tag_con_descendientes` |
 | Panel de tags entero (conteos y orden), 5 k / 50 k | ≤ 16 / 160 ms | 1.15 / 28 ms | ✅ | `metalmind-vault` `panel_de_tags` |

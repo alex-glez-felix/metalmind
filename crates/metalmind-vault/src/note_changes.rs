@@ -67,7 +67,7 @@ pub(crate) fn apply_changes(
         }
     }
     for (path, how) in settle {
-        if vault.kind(&path) != Some(EntryKind::Note) {
+        if !vault.kind(&path).is_some_and(EntryKind::is_indexed) {
             index.forget(&path);
         } else if how == Settle::Rescan || !index.holds(&path) {
             index.rescan(&path, notes);
@@ -78,9 +78,9 @@ pub(crate) fn apply_changes(
 /// Las notas indexadas que son `path` o, si es carpeta, están dentro de él.
 fn indexed_under(index: &impl PerNoteIndex, path: &VaultPath, kind: EntryKind) -> Vec<VaultPath> {
     match kind {
-        EntryKind::Note => vec![path.clone()],
-        EntryKind::Board | EntryKind::Attachment => Vec::new(),
         EntryKind::Folder => index.notes_within(path),
+        kind if kind.is_indexed() => vec![path.clone()],
+        _ => Vec::new(),
     }
 }
 
@@ -89,7 +89,7 @@ pub(crate) fn notes_under(vault: &VaultIndex, path: &VaultPath) -> Vec<VaultPath
     vault
         .subtree(path)
         .into_iter()
-        .filter(|(_, kind)| *kind == EntryKind::Note)
+        .filter(|(_, kind)| kind.is_indexed())
         .map(|(note, _)| note)
         .collect()
 }
