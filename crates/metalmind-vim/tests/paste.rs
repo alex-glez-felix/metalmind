@@ -28,6 +28,7 @@ use rstest::rstest;
 #[case::termina_en_salto_de_linea_en_texto_vacio("|", "<PasteStart>1\n<PasteEnd>", "1\n|")]
 #[case::vacio_no_mueve_el_cursor("ab|c", "<PasteStart><PasteEnd>", "ab|c")]
 #[case::vacio_al_inicio_de_una_linea("a\n|b", "<PasteStart><PasteEnd>", "a\n|b")]
+#[case::vacio_en_la_ultima_linea_vacia("\u{1a}\n|", "<PasteStart><PasteEnd>", "\u{1a}\n|")]
 #[case::vacio_en_visual_sobre_el_fin_de_linea("|-", "vl<PasteStart><PasteEnd>", "|-")]
 fn pasting_outside_insert(#[case] before: &str, #[case] keys: &str, #[case] after: &str) {
     let state = support::run_engine(before, keys);
