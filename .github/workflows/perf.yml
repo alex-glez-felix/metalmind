@@ -54,10 +54,9 @@ jobs:
           fetch-depth: 2
       # valgrind, lo que GPUI necesita para compilar y una fuente monoespaciada
       # para el tema del editor (benchmark de metalmind-ui).
-      - uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: valgrind libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev fonts-dejavu-core
-          version: perf-1
+      # Sin caché de apt, como en ci.yml (#283).
+      - name: Valgrind y librerías de GPUI
+        run: sudo apt-get update && sudo apt-get install -y valgrind libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev fonts-dejavu-core
       - run: valgrind --version
       - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
