@@ -66,11 +66,10 @@ jobs:
       - run: nvim --version
       # Lo que GPUI necesita para compilar en Linux (metalmind-ui y el binario),
       # valgrind para las pruebas de complejidad y una fuente monoespaciada para
-      # la del render del editor.
-      - uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: valgrind libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev fonts-dejavu-core
-          version: test-1
+      # la del render del editor. Sin caché de apt: cache-apt-pkgs-action guardó
+      # una caché vacía cuando apt falló y la restauraba en cada corrida (#283).
+      - name: Valgrind y librerías de GPUI
+        run: sudo apt-get update && sudo apt-get install -y valgrind libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libvulkan-dev fonts-dejavu-core
       # Sin valgrind las pruebas de complejidad se ignorarían en silencio.
       - run: valgrind --version
       - run: rustup toolchain install
