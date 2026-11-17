@@ -249,7 +249,7 @@ Lo que encontró:
 
 > **Decisión de Alex (2026-10-19):** el CI se queda en los **runners gratis de GitHub** (nada de Blacksmith ni runners de pago) y **prefiere un CI lento a una app lenta**. Las guardas no se aflojan para que el CI tarde menos: si contar instrucciones en cada PR lo hace más lento, se paga en tiempo de CI.
 
-Por eso las guardas del CI cuentan instrucciones y no miden tiempo: en un runner compartido el reloj varía más que las regresiones que se quieren atrapar, y contar no depende de la máquina. valgrind se instala en cada job que lo usa (`test` y `instrucciones`), con sus paquetes de apt en caché (`awalsh128/cache-apt-pkgs-action`). Lo que costó, en una PR del 2026-10-19 contra la anterior sin estas guardas: el job `test` pasó de 6 a 20 min (la suite, de 249 a 976 s, casi todo bajo callgrind) e `instrucciones` de 3.5 a 18.5 min, compilando GPUI en release sin caché, que en `main` queda guardado.
+Por eso las guardas del CI cuentan instrucciones y no miden tiempo: en un runner compartido el reloj varía más que las regresiones que se quieren atrapar, y contar no depende de la máquina. valgrind se instala con `apt-get` en cada job que lo usa (`test` e `instrucciones`), sin caché de apt: `awalsh128/cache-apt-pkgs-action` ahorraba unos segundos, pero cuando apt falló guardó una caché vacía y la restauraba en cada corrida (#283). Lo que costó, en una PR del 2026-10-19 contra la anterior sin estas guardas: el job `test` pasó de 6 a 20 min (la suite, de 249 a 976 s, casi todo bajo callgrind) e `instrucciones` de 3.5 a 18.5 min, compilando GPUI en release sin caché, que en `main` queda guardado.
 
 ## Tres capas contra regresiones
 
