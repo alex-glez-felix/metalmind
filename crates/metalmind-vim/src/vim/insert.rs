@@ -15,7 +15,7 @@ impl Vim {
     /// comandos entra por el mismo camino que lo tecleado, así que en Insert
     /// también lo repiten el count y `.`. Si no, como un clic cancela lo
     /// pendiente y sale de Visual, y lo pegado es un paso propio de undo con
-    /// el cursor sobre su último carácter.
+    /// el cursor sobre su último carácter (tras él si es un salto de línea).
     ///
     /// # Errors
     /// Solo si una edición resulta inválida para el buffer, lo que sería un bug.

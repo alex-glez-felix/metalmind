@@ -3,7 +3,7 @@ use metalmind_syntax::Step;
 
 use crate::columns::Columns;
 use crate::dot::{BlockChange, Change, Dot};
-use crate::lines::first_non_blank;
+use crate::lines::{clamp_normal, first_non_blank};
 use crate::markdown::{
     After, LazyStyles, Move, Newline, align_tables, opened_item, renumber_items,
 };
@@ -28,7 +28,9 @@ impl Typing {
 }
 
 /// Lo pegado fuera de Insert: un paso propio de undo en el cursor
-/// principal, que queda sobre el último carácter pegado.
+/// principal, que queda sobre el último carácter pegado. Si es un salto de
+/// línea o no hay ninguno, queda tras lo pegado, como en nvim, sin pasar
+/// del último carácter de la línea.
 pub(crate) fn paste_at_cursor(
     buffer: &mut Buffer,
     selections: &Selections,
@@ -38,7 +40,11 @@ pub(crate) fn paste_at_cursor(
     let at = selections.primary().head;
     let map = buffer.apply(vec![Edit::insert(at, text)])?;
     let end = map.map(at, Bias::After);
-    let pasted = Selections::single(Selection::cursor(buffer.prev_boundary(end)));
+    let cursor = match text.chars().next_back() {
+        Some(last) if last != '\n' => buffer.prev_boundary(end),
+        _ => clamp_normal(buffer, end),
+    };
+    let pasted = Selections::single(Selection::cursor(cursor));
     buffer.commit_transaction(pasted.clone())?;
     Ok(pasted)
 }
